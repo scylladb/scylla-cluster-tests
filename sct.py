@@ -636,5 +636,34 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
                 server.create_pipeline_job(jenkins_file, group_name)
 
 
+@cli.command('create-test-release-jobs-enterprise', help="Create pipeline jobs for a new branch")
+@click.argument('branch', type=str)
+@click.argument('username', envvar='JENKINS_USERNAME', type=str)
+@click.argument('password', envvar='JENKINS_PASSWORD', type=str)
+@click.option('--sct_branch', default='master', type=str)
+@click.option('--sct_repo', default='git@github.com:scylladb/scylla-cluster-tests.git', type=str)
+def create_test_release_jobs_enterprise(branch, username, password, sct_branch, sct_repo):
+    add_file_logger()
+
+    base_job_dir = f'{branch}'
+    server = JenkinsPipelines(username=username, password=password, base_job_dir=base_job_dir,
+                              sct_branch_name=sct_branch, sct_repo=sct_repo)
+
+    server.create_directory('SCT_Enterprise_Features', 'SCT Enterprise Features')
+    for group_name, match, group_desc in [
+        ('EncryptionAtRest', 'EaR-*', 'Encryption At Rest'),
+        ('ICS', '*ics*', 'ICS'),
+        ('Workload_Prioritization', 'features-sla-*', 'Workload Prioritization')
+    ]:
+        current_dir = f'SCT_Enterprise_Features/{group_name}'
+        server.create_directory(name=current_dir, display_name=group_desc)
+
+        for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/{match}.jenkinsfile'):
+            server.create_pipeline_job(jenkins_file, current_dir)
+
+    server.create_pipeline_job(
+        f'{server.base_sct_dir}/jenkins-pipelines/longevity-in-memory-36gb-4d.jenkinsfile', 'SCT_Enterprise_Features')
+
+
 if __name__ == '__main__':
     cli()
