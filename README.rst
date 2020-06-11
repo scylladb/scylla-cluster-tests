@@ -405,6 +405,9 @@ Creating pipeline jobs for new branch
 Once a new branch is create, we could build all the need job for this branch with the following script ::
 
     JENKINS_USERNAME=[jenkins username] JENKINS_PASSWORD=[token from jenkins] hydra create-test-release-jobs scylla-4.0 --sct_branch branch-4.0
+    # enterprise features
+    JENKINS_USERNAME=[jenkins username] JENKINS_PASSWORD=[token from jenkins] hydra create-test-release-jobs-enterprise enterprise-2020.1 --sct_branch branch-2020.1
+
 
 FAQ
 ====
