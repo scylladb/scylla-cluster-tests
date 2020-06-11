@@ -22,24 +22,24 @@ __all__ = [
 ]
 
 
-def lib_function_sleep():
+def lib2_function_sleep():
     time.sleep(3)
 
 
-def lib_function_while():
+def lib2_function_while():
     end_time = time.time() + 3
     while time.time() <= end_time:
         pass
 
 
 def thread_body():
-    lib_function_sleep()
-    lib_function_while()
+    lib2_function_sleep()
+    lib2_function_while()
 
 
 def lib_process_body():
-    lib_function_sleep()
-    lib_function_while()
+    lib2_function_sleep()
+    lib2_function_while()
 
 
 class LibProfileableThreadCustomClass(LibProfileableThread):

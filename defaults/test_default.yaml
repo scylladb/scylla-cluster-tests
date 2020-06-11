@@ -16,7 +16,7 @@ append_scylla_setup_args: ''
 # for for version selection
 scylla_linux_distro: 'centos'
 scylla_linux_distro_loader: 'centos'
-
+ssh_transport: 'fabric'
 system_auth_rf: 3
 
 monitor_branch: 'branch-3.4'

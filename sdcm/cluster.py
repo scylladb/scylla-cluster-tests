@@ -25,24 +25,25 @@ import time
 import traceback
 import uuid
 import itertools
+
 from collections import defaultdict
 from typing import List, Optional, Dict
 from textwrap import dedent
 from datetime import datetime
 from functools import cached_property, wraps
 
-from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
 import yaml
 import requests
+
+from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
 from paramiko import SSHException
 from paramiko.ssh_exception import NoValidConnectionsError
-
 
 from sdcm.collectd import ScyllaCollectdSetup
 from sdcm.mgmt import ScyllaManagerError, get_scylla_manager_tool, update_config_file
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
-from sdcm.remote import RemoteCmdRunner, LOCALRUNNER, NETWORK_EXCEPTIONS
+from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS
 from sdcm import wait, mgmt
 from sdcm.utils import alternator
 from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
@@ -448,7 +449,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.set_keep_alive()
 
     def _init_remoter(self, ssh_login_info):
-        self.remoter = RemoteCmdRunner(**ssh_login_info)
+        self.remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
         self.log.debug(self.remoter.ssh_debug_cmd())
 
     def _init_port_mapping(self):

@@ -151,6 +151,7 @@
 | **<a name="cs_user_profiles">cs_user_profiles</a>**  |  | N/A | SCT_CS_USER_PROFILES
 | **<a name="cs_duration">cs_duration</a>**  |  | N/A | SCT_CS_DURATION
 | **<a name="enable_test_profiling">enable_test_profiling</a>**  | Turn on profiling for python code | False | SCT_ENABLE_TEST_PROFILING
+| **<a name="ssh_transport">ssh_transport</a>**  | Set type of ssh library to use. Could be 'fabric' or 'libssh2' | 'fabric' | SSH_TRANSPORT
 | **<a name="stress_cmd_mv">stress_cmd_mv</a>**  | cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_STRESS_CMD_MV
 | **<a name="prepare_stress_cmd">prepare_stress_cmd</a>**  | cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_PREPARE_STRESS_CMD
 | **<a name="skip_download">skip_download</a>**  |  | N/A | SCT_SKIP_DOWNLOAD

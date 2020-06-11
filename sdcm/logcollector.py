@@ -23,7 +23,7 @@ from sdcm.utils.common import (S3Storage, list_instances_aws, list_instances_gce
 from sdcm.utils.decorators import retrying
 from sdcm.utils.get_username import get_username
 from sdcm.db_stats import PrometheusDBStats
-from sdcm.remote import RemoteCmdRunner, LocalCmdRunner
+from sdcm.remote import RemoteCmdRunnerBase, LocalCmdRunner
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.remotewebbrowser import RemoteBrowser, WebDriverContainerMixin
 from sdcm.utils.docker_utils import get_docker_bridge_gateway
@@ -45,7 +45,7 @@ class CollectingNode(AutoSshContainerMixin, WebDriverContainerMixin):
         if ssh_login_info is None:
             self.remoter = LocalCmdRunner()
         else:
-            self.remoter = RemoteCmdRunner(**ssh_login_info)
+            self.remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
         self.ssh_login_info = ssh_login_info
         self._instance = instance
         self.external_address = global_ip

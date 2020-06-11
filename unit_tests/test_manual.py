@@ -8,7 +8,7 @@ import logging
 import requests
 
 from sdcm.prometheus import start_metrics_server, nemesis_metrics_obj
-from sdcm.remote import RemoteCmdRunner
+from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events import start_events_device, stop_events_device
 
 from sdcm.ec2_client import EC2Client
@@ -25,7 +25,7 @@ class Node:  # pylint: disable=no-init,too-few-public-methods
                                'user': 'centos',
                                'key_file': '~/.ssh/scylla-qa-ec2'}
 
-        self.remoter = RemoteCmdRunner(**self.ssh_login_info)
+        self.remoter = RemoteCmdRunnerBase.create_remoter(**self.ssh_login_info)
         self.ip_address = '34.253.205.91'
         self.cassandra_stress_version = '3.11'
 
