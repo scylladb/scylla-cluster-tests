@@ -215,7 +215,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.check_regression()
 
     def prepare_mv(self, on_populated=False):
-        with self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60) as session:
+        with self.cql_connection_patient_exclusive(self.db_cluster.nodes[0]) as session:
 
             ks_name = 'keyspace1'
             base_table_name = 'standard1'
@@ -526,7 +526,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             query = 'drop materialized view {}'.format(mv_name)
 
             try:
-                with self.cql_connection_patient_exclusive(self.db_cluster.nodes[0], timeout=60) as session:
+                with self.cql_connection_patient_exclusive(self.db_cluster.nodes[0]) as session:
                     self.log.debug('Run query: {}'.format(query))
                     session.execute(query)
             except Exception as ex:
