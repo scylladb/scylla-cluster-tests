@@ -1048,8 +1048,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def cql_connection(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
                        password=None, compression=True, protocol_version=None,
                        port=None, ssl_opts=None, connect_timeout=100, verbose=True):
-        # TODO: ask Bentsi why it was reverted (PR #1236)
-        node_ips = self.db_cluster.get_node_external_ips()
+        node_ips = node.parent_cluster.get_node_external_ips()
         wlrr = WhiteListRoundRobinPolicy(node_ips)
         return self._create_session(node, keyspace, user, password,
                                     compression, protocol_version, wlrr,
@@ -1084,7 +1083,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient_exclusive(self, node, keyspace=None,  # pylint: disable=invalid-name,too-many-arguments,unused-argument
-                                         user=None, password=None, timeout=30,
+                                         user=None, password=None,
                                          compression=True,
                                          protocol_version=None,
                                          port=None, ssl_opts=None, connect_timeout=100, verbose=True):
