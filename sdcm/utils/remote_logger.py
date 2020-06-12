@@ -67,7 +67,6 @@ class SSHLoggerBase(LoggerBase):
 
     @raise_event_on_failure
     def _journal_thread(self):
-        self._remoter = self._remoter_params.pop('__class__')(**self._remoter_params)
         self._remoter = RemoteCmdRunner(**self._remoter_params)
         read_from_timestamp = None
         while not self._termination_event.is_set():
