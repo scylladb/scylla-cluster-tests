@@ -1877,3 +1877,16 @@ def clean_enospc_on_node(target_node, sleep_time):
     time.sleep(sleep_time / 2)
     target_node.remoter.run('sudo systemctl restart scylla-server.service')
     target_node.wait_db_up()
+
+
+class PublicIpNotReady(Exception):
+    pass
+
+
+@retrying(n=7, sleep_time=10, allowed_exceptions=(PublicIpNotReady,),
+          message="Waiting for instance to get public ip")
+def ec2_instance_wait_public_ip(instance):
+    instance.reload()
+    if instance.public_ip_address is None:
+        raise PublicIpNotReady(instance)
+    LOGGER.debug(f"[{instance}] Got public ip: {instance.public_ip_address}")
