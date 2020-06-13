@@ -7,6 +7,7 @@ import glob
 import time
 import subprocess
 import traceback
+from pathlib import Path
 
 import pytest
 import click
@@ -15,6 +16,7 @@ from prettytable import PrettyTable
 
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
+from sdcm.sct_runner import SctRunner
 from sdcm.utils.cloud_monitor import cloud_report
 from sdcm.utils.common import (list_instances_aws, list_instances_gce, list_resources_docker, clean_cloud_resources,
                                all_aws_regions, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
@@ -707,6 +709,47 @@ def prepare_aws_region(region):
     add_file_logger()
     aws_region = AwsRegion(region_name=region)
     aws_region.configure()
+
+
+@cli.command("create-runner-image", help="Create an SCT runner image in selected AWS region. "
+                                         f"If the requested region is not a source region "
+                                         f"({SctRunner.SOURCE_IMAGE_REGION}) the image will be first created in the"
+                                         f" source region and then copied to the chosen one.")
+@click.option("-r", "--region", required=True, type=click.Choice(all_aws_regions(cached=True)),
+              help="Name of the region")
+def create_runner_image(region):
+    add_file_logger()
+    sct_runner = SctRunner(region_name=region)
+    sct_runner.create_image()
+
+
+@cli.command("create-runner-instance", help="Create an SCT runner instance in selected AWS region")
+@click.option("-c", "--cloud-provider", required=True, type=str, default="aws",
+              help="Cloud provider, currently only AWS is supported")
+@click.option("-r", "--region", required=True, type=click.Choice(all_aws_regions(cached=True)),
+              help="Name of the region")
+@click.option("-z", "--availability-zone", required=False, default="", type=str,
+              help="Name of availability zone, ex. 'a'")
+@click.option("-t", "--test-id", required=True, type=str, help="Test ID")
+@click.option("-d", "--duration", required=True, type=int, help="Test duration in MINUTES")
+def create_runner_instance(cloud_provider, region, availability_zone, test_id, duration):
+    assert cloud_provider.lower() == "aws", "Only AWS is supported"
+    assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}"
+    add_file_logger()
+    sct_runner_ip_path = Path("sct_runner_ip")
+    sct_runner_ip_path.unlink(missing_ok=True)
+    sct_runner = SctRunner(region_name=region)
+    instance = sct_runner.create_instance(test_id=test_id, test_duration=duration, region_az=region + availability_zone)
+    LOGGER.info("Verifying SSH connectivity...")
+    remoter = sct_runner.get_remoter(host=instance.public_ip_address)
+    result = remoter.run("true", timeout=60, verbose=False, ignore_status=True)
+    if result.exit_status == 0:
+        LOGGER.info(f"Successfully connected the SCT Runner. Public IP:  {instance.public_ip_address}")
+        with sct_runner_ip_path.open("w") as sct_runner_ip_file:
+            sct_runner_ip_file.write(instance.public_ip_address)
+    else:
+        LOGGER.error(f"Unable to SSH to {instance.public_ip_address}! Exiting...")
+        sys.exit(1)
 
 
 if __name__ == '__main__':

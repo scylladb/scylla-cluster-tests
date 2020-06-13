@@ -125,6 +125,11 @@ To configure a region: create VPC and all related environment elements (Subnet, 
 
     hydra prepare-aws-region --region <region_name>
 
+SCT can run locally and on remote Runner instance.
+To run SCT using runner create an image using::
+
+    hydra create-runner-image --region <region_name>
+
 Run a test
 ----------
 
