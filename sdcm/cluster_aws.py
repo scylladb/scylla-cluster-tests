@@ -22,7 +22,7 @@ from mypy_boto3_ec2 import EC2Client
 from sdcm import cluster
 from sdcm import ec2_client
 from sdcm.cluster import INSTANCE_PROVISION_ON_DEMAND
-from sdcm.utils.common import list_instances_aws, get_ami_tags
+from sdcm.utils.common import list_instances_aws, get_ami_tags, ec2_instance_wait_public_ip
 from sdcm.utils.decorators import retrying
 from sdcm.sct_events import SpotTerminationEvent, DbEventsFilter
 from sdcm import wait
@@ -43,10 +43,6 @@ LOCAL_CMD_RUNNER = LocalCmdRunner()
 
 def _tags_as_ec2_tags(tags: Dict[str, str]) -> List[Dict[str, str]]:
     return [{"Key": key, "Value": value} for key, value in tags.items()]
-
-
-class PublicIpNotReady(Exception):
-    pass
 
 
 class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attributes,abstract-method,
@@ -561,13 +557,8 @@ class AWSNode(cluster.BaseNode):
                     method_name=method_name, instance_id=instance_id)
                 raise cluster.NodeError(msg)
 
-    @retrying(n=7, sleep_time=10, allowed_exceptions=(PublicIpNotReady,),
-              message="Waiting for instance to get public ip")
     def _wait_public_ip(self):
-        self._instance.reload()
-        if self._instance.public_ip_address is None:
-            raise PublicIpNotReady(self._instance)
-        LOGGER.debug("[{0._instance}] Got public ip: {0._instance.public_ip_address}".format(self))
+        ec2_instance_wait_public_ip(self._instance)
 
     def config_ipv6_as_persistent(self):
         cidr = dedent("""
