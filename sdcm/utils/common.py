@@ -61,6 +61,7 @@ from sdcm.utils.decorators import retrying
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
 DOCKER_CGROUP_RE = re.compile("/docker/([0-9a-f]+)")
+SCYLLA_AMI_OWNER_ID = "797456418907"
 
 
 def deprecation(message):
@@ -1114,6 +1115,12 @@ def get_branched_ami(ami_version, region_name):
         return amis
     else:
         return amis[:1]
+
+
+def ami_built_by_scylla(ami_id: str, region_name: str) -> bool:
+    ec2_resource = boto3.resource("ec2", region_name=region_name)
+    image = ec2_resource.Image(ami_id)
+    return image.owner_id == SCYLLA_AMI_OWNER_ID
 
 
 def get_ami_tags(ami_id, region_name):
