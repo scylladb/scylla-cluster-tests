@@ -1,5 +1,5 @@
 from datetime import datetime
-
+from math import ceil
 
 CLOUD_PROVIDERS = ("aws", "gce")
 
@@ -28,7 +28,7 @@ class CloudInstance:  # pylint: disable=too-few-public-methods,too-many-instance
     def hours_running(self):
         if self.state == "running":
             dt_since_created = datetime.now(self.create_time.tzinfo) - self.create_time
-            return int(dt_since_created.total_seconds()/3600)
+            return ceil(dt_since_created.total_seconds() / 3600)
         return 0
 
     @property
