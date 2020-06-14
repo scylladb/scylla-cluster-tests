@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import lru_cache
 from logging import getLogger
 import boto3
@@ -62,17 +62,26 @@ class AWSPricing:
     def get_spot_instance_price(region_name, instance_type):
         """currently doesn't take AZ into consideration"""
         client = boto3.client('ec2', region_name=region_name)
-        prices = client.describe_spot_price_history(InstanceTypes=[instance_type],
-                                                    ProductDescriptions=['Linux/UNIX (Amazon VPC)'],
-                                                    StartTime=datetime.now(), EndTime=datetime.now())
-        return float(prices['SpotPriceHistory'][0]['SpotPrice'])
+        result = client.describe_spot_price_history(InstanceTypes=[instance_type],
+                                                    ProductDescriptions=['Linux/UNIX (Amazon VPC)', 'Linux/UNIX'],
+                                                    StartTime=datetime.now() - timedelta(hours=3),
+                                                    EndTime=datetime.now())
+        prices = result['SpotPriceHistory']
+        if prices:
+            # average between different AZs
+            all_prices = [float(p['SpotPrice']) for p in prices]
+            return sum(all_prices) / len(all_prices)
+        else:
+            LOGGER.warning(f"Spot price not found for '{instance_type}' in '{region_name}':\n{result}")
+            return 0
 
     def get_instance_price(self, region, instance_type, state, lifecycle):
         if state == "running":
             if lifecycle == InstanceLifecycle.ON_DEMAND:
                 return self.get_on_demand_instance_price(region_name=region, instance_type=instance_type)
             if lifecycle == InstanceLifecycle.SPOT:
-                return self.get_spot_instance_price(region_name=region, instance_type=instance_type)
+                spot_price = self.get_spot_instance_price(region_name=region, instance_type=instance_type)
+                return spot_price
             else:
                 raise Exception("Unsupported instance lifecycle")
         else:
