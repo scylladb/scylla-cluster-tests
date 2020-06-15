@@ -17,7 +17,7 @@ from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.cloud_monitor import cloud_report
 from sdcm.utils.common import (list_instances_aws, list_instances_gce, list_resources_docker, clean_cloud_resources,
-                               AWS_REGIONS, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
+                               all_aws_regions, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
                                list_logs_by_test_id, get_branched_ami, gce_meta_to_dict,
                                aws_tags_to_dict, list_elastic_ips_aws, get_builder_by_test_id,
                                clean_resources_according_post_behavior,
@@ -278,7 +278,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
 
 
 @cli.command('list-ami-versions', help='list Amazon Scylla formal AMI versions')
-@click.option('-r', '--region', type=click.Choice(AWS_REGIONS), default='eu-west-1')
+@click.option('-r', '--region', type=click.Choice(all_aws_regions(cached=True)), default='eu-west-1')
 def list_ami_versions(region):
     add_file_logger()
 
@@ -295,7 +295,7 @@ def list_ami_versions(region):
 
 @cli.command('list-ami-branch', help="""list Amazon Scylla branched AMI versions
     \n\n[VERSION] is a branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:all'""")
-@click.option('-r', '--region', type=click.Choice(AWS_REGIONS), default='eu-west-1')
+@click.option('-r', '--region', type=click.Choice(all_aws_regions(cached=True)), default='eu-west-1')
 @click.argument('version', type=str, default='branch-3.1:all')
 def list_ami_branch(region, version):
     add_file_logger()
