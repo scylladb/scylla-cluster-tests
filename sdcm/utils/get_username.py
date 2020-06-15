@@ -24,7 +24,7 @@ def get_email_user(email_addr: str) -> str:
     return email_addr.strip().split("@")[0]
 
 
-def get_username() -> str:
+def get_username() -> str:  # pylint: disable=too-many-return-statements
     # First check that we running on Jenkins try to get user email
     email = os.environ.get('BUILD_USER_EMAIL')
     if is_email_in_scylladb_domain(email):
@@ -37,6 +37,8 @@ def get_username() -> str:
     current_linux_user = getpass.getuser()
     if current_linux_user == "jenkins":
         return current_linux_user
+    if current_linux_user == "ubuntu":
+        return "sct-runner"
 
     # We are not on Jenkins and running in Hydra, try to get email from Git
     # when running in Hydra there are env issues so we pass it using SCT_GIT_USER_EMAIL variable before docker run
