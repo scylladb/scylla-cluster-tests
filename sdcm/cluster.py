@@ -381,6 +381,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             DatabaseLogEvent(type='REACTOR_STALLED', regex='Reactor stalled', severity=Severity.WARNING),
             DatabaseLogEvent(type='BOOT', regex='Starting Scylla Server', severity=Severity.NORMAL),
             DatabaseLogEvent(type='SUPPRESSED_MESSAGES', regex='journal: Suppressed', severity=Severity.WARNING),
+            DatabaseLogEvent(type='stream_exception', regex='stream_exception'),
         ]
 
         self.termination_event = threading.Event()
