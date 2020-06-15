@@ -1083,6 +1083,11 @@ class SCTConfiguration(dict):
             if 'ami_id_db_oracle' not in self and self.get('cluster_backend') == 'aws':
                 ami_list = []
                 for region in self.get('region_name').split():
+                    if ':' in oracle_scylla_version:
+                        amis = get_branched_ami(oracle_scylla_version, region_name=region)
+                        ami_list.append(amis[0].id)
+                        continue
+
                     amis = get_scylla_ami_versions(region)
                     for ami in amis:
                         if oracle_scylla_version in ami['Name']:
