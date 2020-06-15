@@ -7,7 +7,7 @@ rollingUpgradePipeline(
     params: params,
 
     backend: 'gce',
-    base_versions: ['4.0'],
+    base_versions: ['2019.1', '4.0'],
     linux_distro: 'ubuntu-xenial',
     gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1604-lts',
 
