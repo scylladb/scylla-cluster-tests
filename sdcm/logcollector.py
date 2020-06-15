@@ -682,6 +682,8 @@ class LogCollector:
             return None
 
         final_archive = self.archive_dir_with_zip64(self.local_dir)
+        if not final_archive:
+            return None
         s3_link = self.upload_logs(final_archive, "{0.test_id}/{0.current_run}".format(self))
         remove_files(self.local_dir)
         remove_files(final_archive)
@@ -725,7 +727,7 @@ class LogCollector:
                         arch.write(full_path, full_path.replace(logdir, ""))
                 os.chdir(cur_dir)
         except Exception as details:  # pylint: disable=broad-except
-            LOGGER.error("Error durint creating archive. Error details: \n%s", details)
+            LOGGER.error("Error during creating archive. Error details: \n%s", details)
             archive_full_name = None
         return archive_full_name
 
