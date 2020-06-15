@@ -588,31 +588,40 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis/keyspace1.standard1.100M.tar.gz'
             sstable_file = '/tmp/keyspace1.standard1.100M.tar.gz'
             sstable_md5 = '9c5dd19cfc78052323995198b0817270'
+            keys_num = 1000
         else:
             sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis/keyspace1.standard1.tar.gz'
             sstable_file = "/tmp/keyspace1.standard1.tar.gz"
             sstable_md5 = 'c033a3649a1aec3ba9b81c446c6eecfd'
-        if not skip_download:
-            key_store = KeyStore()
-            creds = key_store.get_scylladb_upload_credentials()
-            remote_get_file(self.target_node.remoter, sstable_url, sstable_file,
-                            hash_expected=sstable_md5, retries=2,
-                            user_agent=creds['user_agent'])
+            keys_num = 501000
 
         self.log.debug('Prepare keyspace1.standard1 if it does not exist')
         self._prepare_test_table(ks='keyspace1')
         result = self.target_node.run_nodetool(sub_cmd="cfstats", args="keyspace1.standard1")
-        if result is not None and result.exit_status == 0:
-            result = self.target_node.remoter.run("sudo ls -t /var/lib/scylla/data/keyspace1/")
+
+        def do_refresh(node):
+            if not skip_download:
+                key_store = KeyStore()
+                creds = key_store.get_scylladb_upload_credentials()
+                # Download the sstable files from S3
+                remote_get_file(node.remoter, sstable_url, sstable_file,
+                                hash_expected=sstable_md5, retries=2,
+                                user_agent=creds['user_agent'])
+            result = node.remoter.run("sudo ls -t /var/lib/scylla/data/keyspace1/")
             upload_dir = result.stdout.split()[0]
-            self.target_node.remoter.run('sudo tar xvfz {} -C /var/lib/scylla/data/keyspace1/{}/upload/'.format(
+            node.remoter.run('sudo tar xvfz {} -C /var/lib/scylla/data/keyspace1/{}/upload/'.format(
                 sstable_file, upload_dir))
             # Scylla Enterprise 2019.1 doesn't support to load schema.cql and manifest.json, let's remove them
-            self.target_node.remoter.run(
+            node.remoter.run(
                 'sudo rm -f /var/lib/scylla/data/keyspace1/{}/upload/schema.cql'.format(upload_dir))
-            self.target_node.remoter.run(
+            node.remoter.run(
                 'sudo rm -f /var/lib/scylla/data/keyspace1/{}/upload/manifest.json'.format(upload_dir))
-            self.target_node.run_nodetool(sub_cmd="refresh", args="-- keyspace1 standard1")
+            self.log.debug(f'Loading {keys_num} keys to {node.name} by refresh')
+            node.run_nodetool(sub_cmd="refresh", args="-- keyspace1 standard1")
+
+        if result is not None and result.exit_status == 0:
+            for node in self.cluster.nodes:
+                do_refresh(node)
             cmd = "select * from keyspace1.standard1 where key=0x32373131364f334f3830"
             result = self.target_node.run_cqlsh(cmd)
             assert '(1 rows)' in result.stdout, 'The key is not loaded by `nodetool refresh`'
