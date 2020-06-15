@@ -292,12 +292,29 @@ def list_logs_by_test_id(test_id):
     return results
 
 
-def all_aws_regions():
-    client: EC2Client = boto3.client('ec2', region_name=DEFAULT_AWS_REGION)
-    return [region['RegionName'] for region in client.describe_regions()['Regions']]
-
-
-AWS_REGIONS = all_aws_regions()
+def all_aws_regions(cached=False):
+    if cached:
+        return [
+            'eu-north-1',
+            'ap-south-1',
+            'eu-west-3',
+            'eu-west-2',
+            'eu-west-1',
+            'ap-northeast-2',
+            'ap-northeast-1',
+            'sa-east-1',
+            'ca-central-1',
+            'ap-southeast-1',
+            'ap-southeast-2',
+            'eu-central-1',
+            'us-east-1',
+            'us-east-2',
+            'us-west-1',
+            'us-west-2'
+        ]
+    else:
+        client: EC2Client = boto3.client('ec2', region_name=DEFAULT_AWS_REGION)
+        return [region['RegionName'] for region in client.describe_regions()['Regions']]
 
 
 class ParallelObject:
@@ -601,7 +618,7 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
     :return: instances dict where region is a key
     """
     instances = {}
-    aws_regions = [region_name] if region_name else AWS_REGIONS
+    aws_regions = [region_name] if region_name else all_aws_regions()
 
     def get_instances(region):
         if verbose:
@@ -671,7 +688,7 @@ def list_elastic_ips_aws(tags_dict=None, region_name=None, group_as_region=False
     :return: instances dict where region is a key
     """
     elastic_ips = {}
-    aws_regions = [region_name] if region_name else AWS_REGIONS
+    aws_regions = [region_name] if region_name else all_aws_regions()
 
     def get_elastic_ips(region):
         if verbose:
