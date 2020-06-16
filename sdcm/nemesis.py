@@ -577,6 +577,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_nodetool_refresh(self, big_sstable=True, skip_download=False):
         self._set_current_disruption('Refresh keyspace1.standard1 on {}'.format(self.target_node.name))
+        # The snapshot has 5 columns
         if big_sstable:
             # 100G, the big file will be saved to GCE image
             # Fixme: It's very slow and unstable to download 100G files from S3 to GCE instances,
@@ -595,17 +596,21 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             sstable_md5 = 'c033a3649a1aec3ba9b81c446c6eecfd'
             keys_num = 1000
 
-        # Use special schema (one column) for refresh before https://github.com/scylladb/scylla/issues/6617 is fixed
-        if big_sstable:
-            sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis_c0/keyspace1.standard1.100M.tar.gz'
-            sstable_file = '/tmp/keyspace1.standard1.100M.tar.gz'
-            sstable_md5 = 'e4f6addc2db8e9af3a906953288ef676'
-            keys_num = 1001000
-        else:
-            sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis_c0/keyspace1.standard1.tar.gz'
-            sstable_file = "/tmp/keyspace1.standard1.tar.gz"
-            sstable_md5 = 'c4aee10691fa6343a786f52663e7f758'
-            keys_num = 1000
+        query_cmd = "SELECT * FROM keyspace1.standard1 LIMIT 1"
+        result = self.target_node.run_cqlsh(query_cmd)
+        cols = re.findall("(\| C\d+)", result.stdout)
+        if len(cols) == 1:
+            # Use special schema (one column) for refresh before https://github.com/scylladb/scylla/issues/6617 is fixed
+            if big_sstable:
+                sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis_c0/keyspace1.standard1.100M.tar.gz'
+                sstable_file = '/tmp/keyspace1.standard1.100M.tar.gz'
+                sstable_md5 = 'e4f6addc2db8e9af3a906953288ef676'
+                keys_num = 1001000
+            else:
+                sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis_c0/keyspace1.standard1.tar.gz'
+                sstable_file = "/tmp/keyspace1.standard1.tar.gz"
+                sstable_md5 = 'c4aee10691fa6343a786f52663e7f758'
+                keys_num = 1000
 
         self.log.debug('Prepare keyspace1.standard1 if it does not exist')
         self._prepare_test_table(ks='keyspace1', table='standard1')
@@ -641,9 +646,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
             for node in self.cluster.nodes:
                 do_refresh(node)
-            # Verify that the special key is loaded by refresh
-            result = self.target_node.run_cqlsh(query_verify)
-            assert '(1 rows)' in result.stdout, 'The key is not loaded by `nodetool refresh`'
+            if len(cols) in [1, 5]:
+                # Verify that the special key is loaded by refresh
+                result = self.target_node.run_cqlsh(query_verify)
+                assert '(1 rows)' in result.stdout, 'The key is not loaded by `nodetool refresh`'
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
         if all_nodes:
