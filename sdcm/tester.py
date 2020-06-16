@@ -1693,14 +1693,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         actions_per_cluster_type = get_post_behavior_actions(self.params)
         critical_events = self.get_test_results(source='test')
         if self.db_cluster is not None:
-            self.log.info("Action for db nodes is %s", actions_per_cluster_type['db_nodes'])
-            if (actions_per_cluster_type['db_nodes'] == 'destroy') or \
-               (actions_per_cluster_type['db_nodes'] == 'keep-on-failure' and not critical_events):
+            action = actions_per_cluster_type['db_nodes']['action']
+            self.log.info("Action for db nodes is %s", action)
+            if (action == 'destroy') or (action == 'keep-on-failure' and not critical_events):
                 self.destroy_cluster(self.db_cluster)
                 self.db_cluster = None
                 if self.cs_db_cluster:
                     self.destroy_cluster(self.cs_db_cluster)
-            elif actions_per_cluster_type['db_nodes'] == 'keep-on-failure' and critical_events:
+            elif action == 'keep-on-failure' and critical_events:
                 self.log.info('Critical errors found. Set keep flag for db nodes')
                 Setup.keep_cluster(node_type='db_nodes', val='keep')
                 self.set_keep_alive_on_failure(self.db_cluster)
@@ -1708,23 +1708,23 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     self.set_keep_alive_on_failure(self.cs_db_cluster)
 
         if self.loaders is not None:
-            self.log.info("Action for loader nodes is %s", actions_per_cluster_type['loader_nodes'])
-            if (actions_per_cluster_type['loader_nodes'] == 'destroy') or \
-               (actions_per_cluster_type['loader_nodes'] == 'keep-on-failure' and not critical_events):
+            action = actions_per_cluster_type['loader_nodes']['action']
+            self.log.info("Action for loader nodes is %s", action)
+            if (action == 'destroy') or (action == 'keep-on-failure' and not critical_events):
                 self.destroy_cluster(self.loaders)
                 self.loaders = None
-            elif actions_per_cluster_type['loader_nodes'] == 'keep-on-failure' and critical_events:
+            elif action == 'keep-on-failure' and critical_events:
                 self.log.info('Critical errors found. Set keep flag for loader nodes')
                 Setup.keep_cluster(node_type='loader_nodes', val='keep')
                 self.set_keep_alive_on_failure(self.loaders)
 
         if self.monitors is not None:
-            self.log.info("Action for monitor nodes is %s", actions_per_cluster_type['monitor_nodes'])
-            if (actions_per_cluster_type['monitor_nodes'] == 'destroy') or \
-               (actions_per_cluster_type['monitor_nodes'] == 'keep-on-failure' and not critical_events):
+            action = actions_per_cluster_type['monitor_nodes']['action']
+            self.log.info("Action for monitor nodes is %s", action)
+            if (action == 'destroy') or (action == 'keep-on-failure' and not critical_events):
                 self.destroy_cluster(self.monitors)
                 self.monitors = None
-            elif actions_per_cluster_type['monitor_nodes'] == 'keep-on-failure' and critical_events:
+            elif action == 'keep-on-failure' and critical_events:
                 self.log.info('Critical errors found. Set keep flag for monitor nodes')
                 Setup.keep_cluster(node_type='monitor_nodes', val='keep')
                 self.set_keep_alive_on_failure(self.monitors)
