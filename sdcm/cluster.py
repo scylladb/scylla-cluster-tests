@@ -1634,6 +1634,37 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         cmd = cmd.format(datacenters[self.dc_idx], dc_suffix)
         self.remoter.run(cmd)
 
+    def patch_scylla_yaml(self, yaml_file=SCYLLA_YAML_PATH, **kwargs):
+        """
+        A user can send a dictionary of values ​​(just like the function "config_setup") and thus only change the
+        values he has chosen. If one of the keys contains a "None" value, the same value will be removed from the Yaml
+        file.
+        """
+        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
+        wait.wait_for(self.remoter.receive_files, step=10, text='Waiting for copying scylla.yaml',
+                      timeout=300, throw_exc=True, src=yaml_file, dst=yaml_dst_path)
+        with open(file=yaml_dst_path, mode='r') as scylla_yaml_file:
+            scylla_yml = yaml.safe_load(scylla_yaml_file)
+
+        for key, value in kwargs.items():
+            if value is None:
+                self.log.debug(f"The variable '{key}'is successfully removed")
+                scylla_yml.pop(key, None)
+            else:
+                if scylla_yml.get(key, None) is None:
+                    self.log.debug(f"Create new variable '{key}' with value '{value}'")
+                else:
+                    self.log.debug(f"Change variable '{key}' from '{scylla_yml.get(key)}' to '{value}'")
+                scylla_yml[key] = value
+
+        scylla_yaml_contents = yaml.safe_dump(scylla_yml)
+        with open(yaml_dst_path, 'w') as scylla_yaml_file:
+            scylla_yaml_file.write(scylla_yaml_contents)
+        self.log.debug("Scylla YAML configuration:\n%s", scylla_yaml_contents)
+        wait.wait_for(self.remoter.send_files, step=10, text='Waiting for copying scylla.yaml to node',
+                      timeout=300, throw_exc=True, src=yaml_dst_path, dst='/tmp/scylla.yaml')
+        self.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
+
     # pylint: disable=invalid-name,too-many-arguments,too-many-locals,too-many-branches,too-many-statements
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
                      yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None, server_encrypt=None,
@@ -2423,8 +2454,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def restart_node_with_resharding(self, murmur3_partitioner_ignore_msb_bits=12):
         self.stop_scylla()
         # Change murmur3_partitioner_ignore_msb_bits parameter to cause resharding.
-        self.parent_cluster.node_config_setup(
-            node=self, murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
+        self.patch_scylla_yaml(
+            murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits)
         self.start_scylla()
 
         resharding_started = wait.wait_for(func=self._resharding_status, step=5, timeout=3600,
