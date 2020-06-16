@@ -596,7 +596,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             keys_num = 501000
 
         self.log.debug('Prepare keyspace1.standard1 if it does not exist')
-        self._prepare_test_table(ks='keyspace1')
+        self._prepare_test_table(ks='keyspace1', table='standard1')
         result = self.target_node.run_nodetool(sub_cmd="cfstats", args="keyspace1.standard1")
 
         def do_refresh(node):
@@ -727,12 +727,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             for keyspace in test_keyspaces:
                 node.run_nodetool(sub_cmd="cleanup", args=keyspace)
 
-    def _prepare_test_table(self, ks='keyspace1'):
-        # get the count of the truncate table
-        test_keyspaces = self.cluster.get_test_keyspaces()
+    def _prepare_test_table(self, ks='keyspace1', table=None):
+        ks_cfs = get_non_system_ks_cf_list(db_node=self.target_node)
+        table_exist = f'{ks}.{table}' in ks_cfs if table else True
 
-        # if keyspace doesn't exist, create it by cassandra-stress
-        if ks not in test_keyspaces:
+        test_keyspaces = self.cluster.get_test_keyspaces()
+        # if keyspace or table doesn't exist, create it by cassandra-stress
+        if ks not in test_keyspaces or not table_exist:
             stress_cmd = "cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 -schema 'replication(factor=3)' -log interval=5"
             cs_thread = self.tester.run_stress_thread(
                 stress_cmd=stress_cmd, keyspace_name=ks, stop_test_on_failure=False)
