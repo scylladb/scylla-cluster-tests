@@ -450,9 +450,8 @@ class GrafanaSnapshot(GrafanaEntity):
 
     snapshot_locators_sequence = [
         (By.XPATH, """//button[contains(@class, "navbar-button--share")]"""),
-        (By.LINK_TEXT, """Snapshot"""),
-        (By.XPATH, """//a[contains(text(), "Snapshot") and contains(@class, "gf-tabs-link")]"""),
-        (By.XPATH, """//button[contains(text(), "Publish to snapshot.raintank.io") and contains(@class, "gf-form-btn")]"""),
+        (By.XPATH, """//ul/li[contains(text(), "Snapshot")]"""),
+        (By.XPATH, """//button//span[contains(text(), "Publish to snapshot.raintank.io")]"""),
         (By.XPATH, """//a[contains(@href, "https://snapshot.raintank.io")]""")
     ]
 
