@@ -135,11 +135,20 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
         return stress_cmd
 
     @staticmethod
-    def _add_errors_option(stress_cmd: str, to_add: list):
-        to_add = (' '.join(to_add))
-        if ' -errors' not in stress_cmd:
-            return stress_cmd + ' -errors ' + to_add
-        return re.sub('-errors([ ]+[^-][a-zA-Z0-9-]+)+([ ]* -[a-z]+|[ ]*)', '-errors\\1 ' + to_add + '\\2', stress_cmd)
+    def _add_errors_option(stress_cmd: str, to_add: list) -> str:
+        """
+        Add suboption to -errors option, if such suboption is there, does not add or change it
+        """
+        to_add = list(to_add)
+        current_error_option = next((option for option in stress_cmd.split(' -') if option.startswith('errors ')), None)
+        if current_error_option is None:
+            return f"{stress_cmd} -errors {' '.join(to_add)}"
+        current_error_suboptions = current_error_option.split()[1:]
+        new_error_suboptions = \
+            list({suboption.split('=', 1)[0]: suboption for suboption in to_add + current_error_suboptions}.values())
+        if len(new_error_suboptions) == len(current_error_suboptions):
+            return stress_cmd
+        return stress_cmd.replace(current_error_option, 'errors ' + ' '.join(new_error_suboptions))
 
     def _get_available_suboptions(self, node, option):
         try:
