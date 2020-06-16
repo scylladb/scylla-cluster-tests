@@ -620,10 +620,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             node.run_nodetool(sub_cmd="refresh", args="-- keyspace1 standard1")
 
         if result is not None and result.exit_status == 0:
+            # Drop one special key before refresh, we will verify refresh by query in the end
+            delete_cmd = "DELETE FROM keyspace1.standard1 WHERE key=0x32373131364f334f3830"
+            self.target_node.run_cqlsh(delete_cmd)
+            query_verify = "SELECT * FROM keyspace1.standard1 WHERE key=0x32373131364f334f3830"
+            result = self.target_node.run_cqlsh(query_verify)
+            assert '(0 rows)' in result.stdout, 'Expected key 0x32373131364f334f3830 to not exist after deletion before refresh'
+
             for node in self.cluster.nodes:
                 do_refresh(node)
-            cmd = "select * from keyspace1.standard1 where key=0x32373131364f334f3830"
-            result = self.target_node.run_cqlsh(cmd)
+            # Verify that the special key is loaded by refresh
+            result = self.target_node.run_cqlsh(query_verify)
             assert '(1 rows)' in result.stdout, 'The key is not loaded by `nodetool refresh`'
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
