@@ -61,6 +61,7 @@ from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, 
     TestFrameworkEvent, TestResultEvent, get_logger_event_summary, EVENTS_PROCESSES, stop_events_analyzer
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
+from sdcm.utils.prepare_region import AwsRegion
 from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.ndbench_thread import NdBenchStressThread
 from sdcm.localhost import LocalHost
@@ -684,8 +685,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         user_credentials = self.params.get('user_credentials_path', None)
         services = []
-        for i in self.params.get('region_name').split():
-            session = boto3.session.Session(region_name=i)
+        regions = self.params.get('region_name').split()
+        for region in regions:
+            session = boto3.session.Session(region_name=region)
             service = session.resource('ec2')
             services.append(service)
             self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
@@ -693,14 +695,26 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         ami_ids = self.params.get('ami_id_db_scylla', default='').split()
         for idx, ami_id in enumerate(ami_ids):
             wait_ami_available(services[idx].meta.client, ami_id)
-
         ec2_security_group_ids = []
-        for i in self.params.get('security_group_ids').split():
-            ec2_security_group_ids.append(i.split(','))
-        ec2_subnet_id = self.params.get('subnet_id').split()
+        ec2_subnet_ids = []
+        cluster_backend = self.params.get('cluster_backend')
+        if cluster_backend == "aws":
+            availability_zone = self.params.get("availability_zone")
+            for region in regions:
+                aws_region = AwsRegion(region_name=region)
+                sct_subnet = aws_region.sct_subnet(region_az=region + availability_zone)
+                assert sct_subnet, f"No SCT subnet configured for {region}! Run 'hydra prepare-aws-region'"
+                ec2_subnet_ids.append(sct_subnet.subnet_id)
+                sct_sg = aws_region.sct_security_group
+                assert sct_sg, f"No SCT security group configured for {region}! Run 'hydra prepare-aws-region'"
+                ec2_security_group_ids.append([sct_sg.group_id])
+        else:
+            for i in self.params.get('security_group_ids').split():
+                ec2_security_group_ids.append(i.split(','))
+            ec2_subnet_ids = self.params.get('subnet_id').split()
 
         common_params = dict(ec2_security_group_ids=ec2_security_group_ids,
-                             ec2_subnet_id=ec2_subnet_id,
+                             ec2_subnet_id=ec2_subnet_ids,
                              services=services,
                              credentials=self.credentials,
                              user_prefix=user_prefix,
