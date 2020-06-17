@@ -268,7 +268,8 @@ class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attribu
         args = f' args={self.args}' if self.args else ''
         kwargs = f' kwargs={self.kwargs}' if self.kwargs else ''
         params = ','.join([args, kwargs]) if kwargs or args else ''
-        return f"{super().__str__()}, source={self.source}.{self.source_method}({params}) {message}"
+        source_method = f'.{self.source_method}({params})' if self.source_method else ''
+        return f"{super().__str__()}, source={self.source}{source_method} {message}"
 
 
 class TestResultEvent(SctEvent):
