@@ -191,6 +191,21 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         with self.subTest('STEP 5: Client Encryption'):
             self.test_client_encryption()
 
+    def get_email_data(self):
+        self.log.info("Prepare data for email")
+
+        email_data = self._get_common_email_data()
+        email_data.update({"manager_server_repo": self.params.get("scylla_mgmt_repo"),
+                           "manager_agent_repo": self.params.get("scylla_mgmt_agent_repo",
+                                                                 self.params.get("scylla_mgmt_repo")),
+                           "number_of_db_nodes": self.params.get('n_db_nodes'),
+                           "node_regions": self.params.get("region_name"),
+                           "scylla_version": self.db_cluster.nodes[0].scylla_version if self.db_cluster else "N/A",
+                           "scylla_instance_type": self.params.get('instance_type_db',
+                                                                   self.params.get('gce_instance_type_db'))})
+
+        return email_data
+
     def test_backup_feature(self):
         with self.subTest('Backup Multiple KS\' and Tables'):
             self.test_backup_multiple_ks_tables()
