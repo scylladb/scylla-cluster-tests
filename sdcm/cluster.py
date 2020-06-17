@@ -45,7 +45,7 @@ from sdcm import wait
 from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
     get_latest_gemini_version, makedirs, normalize_ipv6_url, download_dir_from_cloud, generate_random_string
 from sdcm.utils.distro import Distro
-from sdcm.utils.docker_utils import ContainerManager
+from sdcm.utils.docker_utils import ContainerManager, NotFound
 from sdcm.utils.thread import raise_event_on_failure
 from sdcm.utils.decorators import cached_property, retrying, log_run_info
 from sdcm.utils.get_username import get_username
@@ -424,9 +424,18 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def _init_port_mapping(self):
         if (IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION) and Setup.RSYSLOG_ADDRESS:
+            try:
+                ContainerManager.destroy_container(self, "auto_ssh:rsyslog", ignore_keepalive=True)
+            except NotFound:
+                pass
             ContainerManager.run_container(self, "auto_ssh:rsyslog",
                                            local_port=Setup.RSYSLOG_ADDRESS[1],
                                            remote_port=RSYSLOG_SSH_TUNNEL_LOCAL_PORT)
+
+    def refresh_ip_address(self):
+        self.ssh_login_info["hostname"] = self.external_address
+        self.remoter.hostname = self.external_address
+        self._init_port_mapping()
 
     @cached_property
     def tags(self) -> Dict[str, str]:
