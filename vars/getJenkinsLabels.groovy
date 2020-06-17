@@ -11,6 +11,7 @@ def call(String backend, String aws_region=null) {
 
 
     def jenkins_labels = ['aws-eu-west-1': 'aws-sct-builders-eu-west-1',
+                          'aws-eu-west-2': 'aws-sct-builders-eu-west-2',
                           'aws-us-east-1' : 'aws-sct-builders-us-east-1',
                           'gce': 'gce-sct-builders',
                           'docker': 'sct-builders']
