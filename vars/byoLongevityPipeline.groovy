@@ -35,6 +35,9 @@ def call() {
             string(defaultValue: "eu-west-1",
                description: 'us-east-1|eu-west-1',
                name: 'aws_region')
+            string(defaultValue: "a",
+               description: 'Availability zone',
+               name: 'availability_zone')
             string(defaultValue: '', description: '', name: 'loader_ami_id')
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'scylla_version')
@@ -89,6 +92,27 @@ def call() {
                   }
                }
             }
+            stage('Create SCT Runner') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+                                    def cloud_provider = params.backend.trim().toLowerCase()
+                                    sh """
+                                    if [[ "$cloud_provider" == "aws" ]]; then
+                                        ./docker/env/hydra.sh create-runner-instance --cloud-provider ${cloud_provider} --region ${aws_region} --availability-zone ${params.availability_zone} --test-id \${SCT_TEST_ID} --duration ${params.timeout}
+                                    else
+                                        echo "Currently, <$cloud_provider> not supported to. Will run on regular builder."
+                                    fi
+                                    """
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             stage('Run SCT Test') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
@@ -111,7 +135,7 @@ def call() {
                                     export SCT_REGION_NAME=${aws_region}
                                     export SCT_CONFIG_FILES=${test_config}
 
-                                    if [[ ! -z "" ]] ; then
+                                    if [[ ! -z "${params.loader_ami_id}" ]] ; then
                                         export SCT_AMI_ID_LOADER="${params.loader_ami_id}"
                                     fi
 
@@ -135,8 +159,22 @@ def call() {
                                     export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
                                     export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
 
+                                    export SCT_TEST_ID=\$(uuidgen)
+
+                                    ./docker/env/hydra.sh create-runner-instance --cloud-provider ${params.backend} --region ${aws_region} --availability-zone ${params.availability_zone} --test-id \${SCT_TEST_ID} --duration ${params.timeout}
+
                                     echo "start test ......."
-                                    ./docker/env/hydra.sh run-test ${params.test_name} --backend ${params.backend}  --logdir "`pwd`"
+                                    if [[ "$cloud_provider" == "aws" ]]; then
+                                        SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
+                                        if [[ ! -z "\${SCT_RUNNER_IP}" ]] ; then
+                                            ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} run-test ${params.test_name} --backend ${params.backend}
+                                        else
+                                            echo "SCT runner IP file is empty. Probably SCT Runner was not created."
+                                            exit 1
+                                        fi
+                                    else
+                                        ./docker/env/hydra.sh run-test ${params.test_name} --backend ${params.backend}  --logdir "`pwd`"
+                                    fi
                                     echo "end test ....."
                                     """
                                 }
@@ -153,6 +191,7 @@ def call() {
                                 dir('scylla-cluster-tests') {
                                     def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
                                     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
+                                    def cloud_provider = params.backend.trim().toLowerCase()
 
                                     sh """
                                     #!/bin/bash
@@ -165,7 +204,17 @@ def call() {
                                     export SCT_CONFIG_FILES=${test_config}
 
                                     echo "start collect logs ..."
-                                    ./docker/env/hydra.sh collect-logs --logdir "`pwd`"
+                                    if [[ "$cloud_provider" == "aws" ]]; then
+                                        SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
+                                        if [[ ! -z "\${SCT_RUNNER_IP}" ]] ; then
+                                            ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} collect-logs
+                                        else
+                                            echo "SCT runner IP file is empty. Probably SCT Runner was not created."
+                                            exit 1
+                                        fi
+                                    else
+                                        ./docker/env/hydra.sh collect-logs --logdir "`pwd`"
+                                    fi
                                     echo "end collect logs"
                                     """
                                 }
@@ -182,6 +231,7 @@ def call() {
                                 dir('scylla-cluster-tests') {
                                     def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
                                     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
+                                    def cloud_provider = params.backend.trim().toLowerCase()
 
                                     sh """
                                     #!/bin/bash
@@ -195,9 +245,19 @@ def call() {
                                     export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
                                     export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
 
-                                    echo "start clean resources ..."
-                                    ./docker/env/hydra.sh clean-resources --logdir "`pwd`"
-                                    echo "end clean resources"
+                                    echo "Starting to clean resources ..."
+                                    if [[ "$cloud_provider" == "aws" ]]; then
+                                        SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
+                                        if [[ ! -z "\${SCT_RUNNER_IP}" ]] ; then
+                                            ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} clean-resources --test-id \$SCT_TEST_ID
+                                        else
+                                            echo "SCT runner IP file is empty. Probably SCT Runner was not created."
+                                            exit 1
+                                        fi
+                                    else
+                                        ./docker/env/hydra.sh clean-resources --logdir "`pwd`"
+                                    fi
+                                    echo "Finished cleaning resources."
                                     """
                                 }
                             }
@@ -212,16 +272,30 @@ def call() {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
-
+                                    def cloud_provider = params.backend.trim().toLowerCase()
+                                    def start_time = currentBuild.startTimeInMillis.intdiv(1000)
+                                    def test_status = currentBuild.currentResult
                                     sh """
                                     #!/bin/bash
 
                                     set -xe
                                     env
 
-                                    echo "Start send email ..."
-                                    ./docker/env/hydra.sh send-email --logdir "`pwd`" --email-recipients "${email_recipients}"
-                                    echo "Email sent"
+                                    echo "Sending email..."
+                                    if [[ "$cloud_provider" == "aws" ]]; then
+                                        SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
+                                        if [[ ! -z "\${SCT_RUNNER_IP}" ]] ; then
+                                            ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} send-email --email-recipients "${email_recipients}"
+                                        else
+                                            echo "SCT runner IP file is empty. Probably SCT Runner was not created."
+                                            ./docker/env/hydra.sh send-email ${test_status} ${start_time} --logdir "`pwd`" --email-recipients "${email_recipients}"
+                                            exit 1
+                                        fi
+                                    else
+                                        ./docker/env/hydra.sh send-email ${test_status} ${start_time} --logdir "`pwd`" --email-recipients "${email_recipients}"
+                                    fi
+
+                                    echo "Email sent."
                                     """
                                 }
                             }
