@@ -27,7 +27,7 @@ LOGGER = logging.getLogger(__name__)
 class RSyslogContainerMixin:  # pylint: disable=too-few-public-methods
     def rsyslog_container_run_args(self, logdir: str) -> dict:
         basedir, logdir = os.path.split(logdir)
-        logdir = os.path.abspath(os.path.join(os.environ.get("_SCT_BASE_DIR", basedir), logdir))
+        logdir = os.path.abspath(os.path.join(os.environ.get("_SCT_LOGDIR", basedir), logdir))
         os.makedirs(logdir, exist_ok=True)
         LOGGER.info("rsyslog will store logs at %s", logdir)
 
