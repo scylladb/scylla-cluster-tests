@@ -286,6 +286,16 @@ class BaseEmailReporter:
         return False
 
 
+class MgmtEmailReporter(BaseEmailReporter):
+    _fields = ("manager_server_repo",
+               "manager_agent_repo",
+               "scylla_version",
+               "scylla_instance_type",
+               "number_of_db_nodes",
+               "node_regions")
+    email_template_file = "results_manager.html"
+
+
 class LongevityEmailReporter(BaseEmailReporter):
     _fields = ("grafana_screenshots",
                "grafana_snapshots",
@@ -421,6 +431,8 @@ def build_reporter(name: str,
         return ArtifactsEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "PrivateRepo" in name:
         return PrivateRepoEmailReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "Mgmt" in name:
+        return MgmtEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "TestAborted" in name:
         return TestAbortedEmailReporter(email_recipients=email_recipients, logdir=logdir)
     else:
