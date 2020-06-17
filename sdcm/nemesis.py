@@ -733,8 +733,10 @@ class Nemesis(object):  # pylint: disable=too-many-instance-attributes,too-many-
         """
         # pylint: disable=too-many-locals
         list_additional_params = get_compaction_random_additional_params()
-        all_ks_cfs = get_non_system_ks_cf_list(db_node=self.target_node)
-        non_mview_ks_cfs = get_non_system_ks_cf_list(db_node=self.target_node, filter_out_mv=True)
+        all_ks_cfs = get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
+                                               db_node=self.target_node)
+        non_mview_ks_cfs = get_non_system_ks_cf_list(loader_node=random.choice(self.loaders.nodes),
+                                                     db_node=self.target_node, filter_out_mv=True)
 
         if not all_ks_cfs:
             raise UnsupportedNemesis(
