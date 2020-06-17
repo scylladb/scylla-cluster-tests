@@ -979,6 +979,9 @@ class SCTConfiguration(dict):
 
         dict(name="use_legacy_cluster_init", env="SCT_USE_LEGACY_CLUSTER_INIT", type=bool,
              help="""Use legacy cluster initialization with autobootsrap disabled and parallel node setup"""),
+        dict(name="availability_zone", env="SCT_AVAILABILITY_ZONE",
+             type=str,
+             help="Availability zone to use. Same for multi-region scenario."),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
@@ -987,8 +990,9 @@ class SCTConfiguration(dict):
     # those can be added to a json scheme to validate / or write the validation code for it to be a bit clearer output
     backend_required_params = {
         'aws': ['user_prefix', "instance_type_loader", "instance_type_monitor", "instance_type_db",
-                "region_name", "security_group_ids", "subnet_id", "ami_id_db_scylla", "ami_id_loader",
-                "ami_id_monitor", "aws_root_disk_size_monitor", "ami_db_scylla_user", "ami_monitor_user"],
+                "region_name", "ami_id_db_scylla", "ami_id_loader",
+                "ami_id_monitor", "aws_root_disk_size_monitor", "aws_root_disk_name_monitor", "ami_db_scylla_user",
+                "ami_monitor_user"],
 
         'gce': ['user_prefix', 'gce_network', 'gce_image', 'gce_image_username', 'gce_instance_type_db',
                 'gce_root_disk_type_db', 'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db',
@@ -1023,7 +1027,7 @@ class SCTConfiguration(dict):
     }
 
     multi_region_params = [
-        'region_name', 'n_db_nodes', 'security_group_ids', 'subnet_id', 'ami_id_db_scylla', 'ami_id_loader'
+        'region_name', 'n_db_nodes', 'ami_id_db_scylla', 'ami_id_loader'
     ]
 
     def __init__(self):

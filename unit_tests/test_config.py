@@ -53,12 +53,13 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_N_DB_NODES'] = '2 2'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb ami-eae4f795'
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
 
         conf = SCTConfiguration()
         conf.verify_configuration()
         conf.dump_config()
 
-        self.assertEqual(conf.get('security_group_ids'), 'sg-059a7f66a947d4b5c sg-c5e1f7a0')
+        self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-06f919eb ami-eae4f795')
 
     def test_05_docker(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
@@ -284,16 +285,27 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
         self.assertEqual(conf['store_results_in_elasticsearch'], False)
 
-    def test_14_(self):
-        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+    def test_14_aws_siren_from_env(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws-siren'
         os.environ['SCT_REGION_NAME'] = 'us-east-1'
         os.environ['SCT_N_DB_NODES'] = '2'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-eae4f795'
+        os.environ['SCT_AUTHENTICATOR_USER'] = "user"
+        os.environ['SCT_AUTHENTICATOR_PASSWORD'] = "pass"
+        os.environ['SCT_CLOUD_CLUSTER_ID'] = "193712947904378"
+        os.environ['SCT_SECURITY_GROUP_IDS'] = "sg-89fi3rkl"
+        os.environ['SCT_SUBNET_ID'] = "sub-d32f09sdf"
+
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
 
         conf = SCTConfiguration()
         conf.verify_configuration()
-        self.assertEqual(conf.get('security_group_ids'), 'sg-c5e1f7a0')
+        self.assertEqual(conf.get('cloud_cluster_id'), 193712947904378)
+        assert conf["authenticator_user"] == "user"
+        assert conf["authenticator_password"] == "pass"
+        assert conf["security_group_ids"] == ["sg-89fi3rkl"]
+        assert conf["subnet_id"] == ["sub-d32f09sdf"]
 
     def test_15_new_scylla_repo(self):
         centos_repo = 'https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/' \
