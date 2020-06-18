@@ -462,6 +462,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 if new_node:
                     new_node.running_nemesis = None
 
+    def disrupt_nodetool_seed_decommission(self, add_node=True):
+        if self.cluster.seed_nodes < 2:
+            raise UnsupportedNemesis("To running seed decommission the cluster must contains at least 2 seed nodes")
+        if not self.target_node.is_seed:
+            self.target_node = random.choice(self.cluster.seed_nodes)
+
+        target_ip = self.target_node.private_ip_address
+        [node.remove_seed_ips(removed_seed_ips={target_ip}) for node in self.cluster.nodes]
+        self.disrupt_nodetool_decommission(add_node=add_node)
+
     def disrupt_terminate_and_replace_node(self):  # pylint: disable=invalid-name
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
         self._set_current_disruption('TerminateAndReplaceNode %s' % self.target_node)
@@ -829,7 +839,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     del added_columns_info['column_names'][column_name]
         if add:
             cmd = f"ALTER TABLE {self._add_drop_column_target_table[1]} " \
-                  f"ADD ( {', '.join(['%s %s' % (col[0], col[1]) for col in add])} );"
+                f"ADD ( {', '.join(['%s %s' % (col[0], col[1]) for col in add])} );"
             if self._add_drop_column_run_cql_query(cmd, self._add_drop_column_target_table[0]):
                 for column_name, column_type in add:
                     added_columns_info['column_names'][column_name] = column_type
@@ -2132,6 +2142,14 @@ class DecommissionMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_nodetool_decommission()
+
+
+class DecommissionSeedNode(Nemesis):
+    disruptive = True
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_nodetool_seed_decommission()
 
 
 class NoCorruptRepairMonkey(Nemesis):

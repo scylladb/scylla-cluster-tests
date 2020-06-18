@@ -2841,6 +2841,26 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                 return node
         return None
 
+    def remove_seed_ips(self, removed_seed_ips):
+        if not isinstance(removed_seed_ips, set):
+            removed_seed_ips = set(removed_seed_ips)
+        seed_ips_regex = re.compile(pattern=r"(^\s+)?-\s?seeds:\s?(?P<seed_ips>.*)")
+        node_config_data = self.remoter.run(f"sudo cat {SCYLLA_YAML_PATH}").splitlines()
+
+        for line_idx, line in enumerate(node_config_data):
+            match = seed_ips_regex.match(string=line)
+            if match:
+                seed_ips = match.groupdict()['seed_ips']
+                new_seed_ips = ','.join(set(seed_ips.split(sep=",")) - set(removed_seed_ips))
+                node_config_data[line_idx] = node_config_data[line_idx].replace(seed_ips, new_seed_ips)
+                break
+        else:
+            raise KeyError(f"The section of seed ips not found inside '{SCYLLA_YAML_PATH}'")
+
+        self.log.info(f"Chaining the seed ips of node '{self.name}' from '{seed_ips}' to '{new_seed_ips}'")
+        new_scylla_yaml_data = "\n".join(node_config_data)
+        self.remoter.run(f"sudo echo '{new_scylla_yaml_data}' > {SCYLLA_YAML_PATH}")
+
 
 class NodeSetupFailed(Exception):
     def __init__(self, node, error_msg, traceback_str=""):
