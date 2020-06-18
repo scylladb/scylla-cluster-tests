@@ -28,6 +28,7 @@ class SctRunner:
     """Provisions and configures the SCT runner"""
     VERSION = 1.1  # Version of the Image
     IMAGE_NAME = f"sct-runner-{VERSION}"
+    NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
     BASE_IMAGE_ID = "ami-0ffac660dd0cb2973"  # ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-20200609
     SOURCE_IMAGE_REGION = "eu-west-2"  # where the source Runner image will be created and copied to other regions
@@ -249,9 +250,10 @@ class SctRunner:
             tags_list=[
                 {"Key": "Name", "Value": self.RUNNER_NAME},
                 {"Key": "TestId", "Value": test_id},
+                {"Key": "NodeType", "Value": self.NODE_TYPE},
                 {"Key": "RunByUser", "Value": get_username()},
-                {"Key": "keep", "Value": str(ceil(test_duration / 60))},
-                {"Key": "keep_action", "Value": "stop"},
+                {"Key": "keep", "Value": str(ceil(test_duration / 60) + 6)},
+                {"Key": "keep_action", "Value": "terminate"},
             ],
             region_az=region_az,
         )

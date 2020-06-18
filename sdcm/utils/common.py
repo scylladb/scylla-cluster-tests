@@ -671,7 +671,11 @@ def clean_instances_aws(tags_dict):
         for instance in instance_list:
             tags = aws_tags_to_dict(instance.get('Tags'))
             name = tags.get("Name", "N/A")
+            node_type = tags.get("NodeType")
             instance_id = instance['InstanceId']
+            if node_type and node_type == "sct-runner":
+                LOGGER.info(f"Skipping Sct Runner instance '{instance_id}'")
+                continue
             LOGGER.info("Going to delete '{instance_id}' [name={name}] ".format(instance_id=instance_id, name=name))
             response = client.terminate_instances(InstanceIds=[instance_id])
             LOGGER.debug("Done. Result: %s\n", response['TerminatingInstances'])
