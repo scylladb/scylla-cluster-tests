@@ -23,6 +23,18 @@ aws_root_disk_size_monitor: 100
 
 user_prefix: 'longevity-1000-keyspaces'
 
+# loader AMI with c-s ver. 4 and few fixes:
+#  - fix NoSuchElementException
+#  - enable control over both consistency levels: regular and serial
+#  - bring shard awareness
+regions_data:
+  us-east-1:
+    ami_id_loader: 'ami-0b94f0e897d884b1b'
+  eu-west-1:
+    ami_id_loader: 'ami-0ea704a8c9ec08e57'
+  us-west-2:
+    ami_id_loader: 'ami-063a97bde47353690'
+
 store_results_in_elasticsearch: False
 
 # disables coredump on bad alloc temporary cause of https://github.com/scylladb/scylla/issues/4951
