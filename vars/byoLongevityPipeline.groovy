@@ -11,6 +11,7 @@ def call() {
         environment {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+            SCT_TEST_ID = UUID.randomUUID().toString()
 		}
 
          parameters {
@@ -33,7 +34,7 @@ def call() {
                description: 'aws|gce',
                name: 'backend')
             string(defaultValue: "eu-west-1",
-               description: 'us-east-1|eu-west-1',
+               description: 'us-east-1|eu-west-1|eu-west-2',
                name: 'aws_region')
             string(defaultValue: "a",
                description: 'Availability zone',
@@ -74,7 +75,7 @@ def call() {
             timestamps()
             disableConcurrentBuilds()
             timeout([time: params.timeout, unit: "MINUTES"])
-            buildDiscarder(logRotator(numToKeepStr: '20'))
+            buildDiscarder(logRotator(numToKeepStr: '5'))
         }
         stages {
             stage('Checkout') {
@@ -123,6 +124,7 @@ def call() {
                                     // handle params which can be a json list
                                     def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
                                     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
+                                    def cloud_provider = params.backend.trim().toLowerCase()
 
                                     sh """
                                     #!/bin/bash
@@ -158,10 +160,6 @@ def call() {
                                     export SCT_INSTANCE_PROVISION="${params.provision_type}"
                                     export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
                                     export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
-
-                                    export SCT_TEST_ID=\$(uuidgen)
-
-                                    ./docker/env/hydra.sh create-runner-instance --cloud-provider ${params.backend} --region ${aws_region} --availability-zone ${params.availability_zone} --test-id \${SCT_TEST_ID} --duration ${params.timeout}
 
                                     echo "start test ......."
                                     if [[ "$cloud_provider" == "aws" ]]; then
@@ -238,7 +236,7 @@ def call() {
 
                                     set -xe
                                     env
-
+                                    export SCT_CONFIG_FILES=${test_config}
                                     export SCT_CLUSTER_BACKEND="${params.backend}"
                                     export SCT_REGION_NAME=${aws_region}
                                     export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
@@ -305,5 +303,4 @@ def call() {
             }
         }
     }
-
 }
