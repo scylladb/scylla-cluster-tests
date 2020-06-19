@@ -69,6 +69,7 @@ from sdcm.send_email import build_reporter, read_email_data_from_file, get_runni
 configure_logging()
 
 try:
+    from botocore.exceptions import ClientError
     from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3
 
     # Don't use pyOpenSSL in urllib3 - it causes an ``OpenSSL.SSL.Error``
@@ -452,10 +453,37 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def get_cluster_aws(self, loader_info, db_info, monitor_info):
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches
+        regions = self.params.get('region_name').split()
+
+        def get_root_device_name(ami_image_id):
+            for region in regions:
+                ec2 = boto3.resource('ec2', region)
+                image = ec2.Image(ami_image_id)
+                try:
+                    if image.root_device_name:
+                        return image.root_device_name
+                except (TypeError, ClientError):
+                    self.log.warning(f'Could not find ami image {ami_image_id} on {region}')
+            raise AssertionError(f'Image {ami_image_id} details not found in none of the regions at '
+                                 f'{self.params.get("region_name")}')
         if loader_info['n_nodes'] is None:
             loader_info['n_nodes'] = int(self.params.get('n_loaders'))
         if loader_info['type'] is None:
             loader_info['type'] = self.params.get('instance_type_loader')
+        if loader_info['disk_size'] is None:
+            loader_info['disk_size'] = self.params.get('aws_root_disk_size_loader', default=None)
+        if loader_info['device_mappings'] is None:
+            if loader_info['disk_size']:
+                loader_info['device_mappings'] = [{
+                    "DeviceName": get_root_device_name(self.params.get('ami_id_loader').split()[0]),
+                    "Ebs": {
+                        "VolumeSize": loader_info['disk_size'],
+                        "VolumeType": "gp2"
+                    }
+                }]
+            else:
+                loader_info['device_mappings'] = []
+
         if db_info['n_nodes'] is None:
             n_db_nodes = self.params.get('n_db_nodes')
             if isinstance(n_db_nodes, int):  # legacy type
@@ -471,7 +499,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if db_info['device_mappings'] is None:
             if db_info['disk_size']:
                 db_info['device_mappings'] = [{
-                    "DeviceName": self.params.get("aws_root_disk_name_db", default="/dev/sda1"),
+                    "DeviceName": get_root_device_name(self.params.get('ami_id_db_scylla').split()[0]),
                     "Ebs": {
                         "VolumeSize": db_info['disk_size'],
                         "VolumeType": "gp2"
@@ -489,7 +517,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if monitor_info['device_mappings'] is None:
             if monitor_info['disk_size']:
                 monitor_info['device_mappings'] = [{
-                    "DeviceName": self.params.get("aws_root_disk_name_monitor", default="/dev/sda1"),
+                    "DeviceName": get_root_device_name(self.params.get('ami_id_monitor').split()[0]),
                     "Ebs": {
                         "VolumeSize": monitor_info['disk_size'],
                         "VolumeType": "gp2"
