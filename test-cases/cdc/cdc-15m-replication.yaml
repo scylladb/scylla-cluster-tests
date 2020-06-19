@@ -1,0 +1,25 @@
+test_duration: 60
+
+user_prefix: 'cdc-replication'
+db_type: mixed_scylla
+
+use_legacy_cluster_init: false
+
+n_db_nodes: 3
+instance_type_db: 'i3.large'
+
+n_test_oracle_db_nodes: 1
+instance_type_db_oracle: 'i3.large'
+
+n_loaders: 1
+instance_type_loader: 'c4.large'
+
+n_monitor_nodes: 0
+# instance_type_monitor: 't3.small'
+
+nemesis_class_name: 'RandomInterruptionNetworkMonkey'
+nemesis_interval: 1
+# Required by the nemesis:
+extra_network_interface: true
+
+stress_cmd: "cassandra-stress user no-warmup profile=/tmp/cdc_replication_profile.yaml 'ops(update=1)' cl=QUORUM duration=15m -port jmx=6868 -mode cql3 native -rate threads=10 -log interval=5 -errors retries=999"

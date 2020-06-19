@@ -1,0 +1,30 @@
+keyspace: ks1
+
+keyspace_definition: |
+
+  CREATE KEYSPACE IF NOT EXISTS ks1 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'} AND durable_writes = true;
+
+table: table1
+
+table_definition: |
+
+  CREATE TABLE ks1.table1 (
+    pk int,
+    ck int,
+    v text,
+    primary key (pk, ck)) WITH cdc = {'enabled': true}
+
+columnspec:
+  - name: pk
+    population: uniform(1..1k)
+
+  - name: ck
+    population: uniform(1..1k)
+
+  - name: v
+    size: exp(1..5)
+
+queries:
+  update:
+    cql: update ks1.table1 set v = ? where pk = ? and ck = ?
+    fields: samerow
