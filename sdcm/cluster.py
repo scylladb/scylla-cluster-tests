@@ -55,15 +55,6 @@ from sdcm.auto_ssh import start_auto_ssh, RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack
 
 
-SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
-                                   "Ebs": {"VolumeSize": 40,
-                                           "DeleteOnTermination": True,
-                                           "Encrypted": False}},
-                                  {"DeviceName": "/dev/xvdc",
-                                   "Ebs": {"VolumeSize": 40,
-                                           "DeleteOnTermination": True,
-                                           "Encrypted": False}}]
-
 CREDENTIALS = []
 DEFAULT_USER_PREFIX = getpass.getuser()
 # Test duration (min). Parameter used to keep instances produced by tests that
@@ -2150,7 +2141,7 @@ server_encryption_options:
             sed -i 's/#tls_cert_file/tls_cert_file/' /etc/scylla-manager/scylla-manager.yaml
             sed -i 's/#tls_key_file/tls_key_file/' /etc/scylla-manager/scylla-manager.yaml
             systemctl restart scylla-manager
-            """.format(auth_token))  # pylint: disable=too-many-format-args
+            """)
             self.remoter.run('sudo bash -cxe "%s"' % configuring_manager_command)
 
         if not res or "Active: failed" in res.stdout:
