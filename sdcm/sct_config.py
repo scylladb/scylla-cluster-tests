@@ -480,19 +480,10 @@ class SCTConfiguration(dict):
         dict(name="aws_root_disk_size_db", env="SCT_AWS_ROOT_DISK_SIZE_DB", type=int,
              help=""),
 
-        dict(name="aws_root_disk_name_db", env="SCT_AWS_ROOT_DISK_NAME_DB", type=str,
-             help=""),
-
         dict(name="aws_root_disk_size_monitor", env="SCT_AWS_ROOT_DISK_SIZE_MONITOR", type=int,
              help=""),
 
-        dict(name="aws_root_disk_name_monitor", env="SCT_AWS_ROOT_DISK_NAME_MONITOR", type=str,
-             help=""),
-
         dict(name="aws_root_disk_size_loader", env="SCT_AWS_ROOT_DISK_SIZE_LOADER", type=int,
-             help=""),
-
-        dict(name="aws_root_disk_name_loader", env="SCT_AWS_ROOT_DISK_NAME_LOADER", type=str,
              help=""),
 
         dict(name="ami_db_scylla_user", env="SCT_AMI_DB_SCYLLA_USER", type=str,
@@ -917,8 +908,7 @@ class SCTConfiguration(dict):
     backend_required_params = {
         'aws': ['user_prefix', "instance_type_loader", "instance_type_monitor", "instance_type_db",
                 "region_name", "security_group_ids", "subnet_id", "ami_id_db_scylla", "ami_id_loader",
-                "ami_id_monitor", "aws_root_disk_size_monitor", "aws_root_disk_name_monitor", "ami_db_scylla_user",
-                "ami_monitor_user"],
+                "ami_id_monitor", "aws_root_disk_size_monitor", "ami_db_scylla_user", "ami_monitor_user"],
 
         'gce': ['user_prefix', 'gce_network', 'gce_image', 'gce_image_username', 'gce_instance_type_db',
                 'gce_root_disk_type_db', 'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db',

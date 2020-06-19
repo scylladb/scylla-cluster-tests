@@ -57,15 +57,6 @@ from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack
 
-SCYLLA_CLUSTER_DEVICE_MAPPINGS = [{"DeviceName": "/dev/xvdb",
-                                   "Ebs": {"VolumeSize": 40,
-                                           "DeleteOnTermination": True,
-                                           "Encrypted": False}},
-                                  {"DeviceName": "/dev/xvdc",
-                                   "Ebs": {"VolumeSize": 40,
-                                           "DeleteOnTermination": True,
-                                           "Encrypted": False}}]
-
 CREDENTIALS = []
 DEFAULT_USER_PREFIX = getpass.getuser()
 # Test duration (min). Parameter used to keep instances produced by tests that
