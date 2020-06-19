@@ -1,0 +1,180 @@
+#!groovy
+
+// Import shared libraries
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+pipeline {
+    parameters {
+        string(defaultValue: "eu-west-1",
+           description: 'us-east-1|eu-west-1',
+           name: 'aws_region')
+
+        string(defaultValue: 'master:latest', description: '', name: 'master_scylla_version')
+        string(defaultValue: 'master:latest', description: '', name: 'oracle_scylla_version')
+
+        string(defaultValue: "spot_low_price",
+               description: 'spot_low_price|on_demand|spot_fleet|spot_duration',
+               name: 'provision_type')
+
+        string(defaultValue: "private",
+               description: 'private|public|ipv6',
+               name: 'ip_ssh_connections')
+
+        string(defaultValue: "qa@scylladb.com",
+               description: 'email recipients of email report',
+               name: 'email_recipients')
+    }
+    agent {
+        label getJenkinsLabels('aws', params.aws_region)
+    }
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        timeout(time: 60, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+    environment {
+        AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
+        AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+
+        SCT_LOGS_TRANSPORT="ssh"
+        SCT_CLUSTER_BACKEND="aws"
+        SCT_REGION_NAME="${params.aws_region}"
+        SCT_CONFIG_FILES="test-cases/cdc/cdc-15m-replication.yaml"
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                dir('scylla-cluster-tests') {
+                    checkout scm
+
+                    dir("scylla-qa-internal") {
+                        git(url: 'git@github.com:scylladb/scylla-qa-internal.git',
+                            credentialsId:'b8a774da-0e46-4c91-9f74-09caebaea261',
+                            branch: 'master')
+                    }
+                }
+            }
+        }
+
+        stage('Run SCT Test') {
+            environment  {
+                // Logs are collected in another stage.
+                SCT_COLLECT_LOGS=false
+                SCT_SCYLLA_VERSION="${params.master_scylla_version}"
+                SCT_ORACLE_SCYLLA_VERSION="${params.oracle_scylla_version}"
+                SCT_INSTANCE_PROVISION="${params.provision_type}"
+                SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
+                SCT_STORE_RESULTS_IN_ELASTICSEARCH="false"
+            }
+            steps {
+                catchError(stageResult: 'FAILURE') {
+                    wrap([$class: 'BuildUser']) {
+                        dir('scylla-cluster-tests') {
+                            sh """
+                            #!/bin/bash
+                            set -xe
+                            env
+
+                            rm -fv ./latest
+
+                            echo "start test ......."
+                            ./docker/env/hydra.sh run-test cdc_replication_test.CDCReplicationTest.test_replication --backend aws  --logdir "`pwd`"
+                            echo "end test ....."
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage("Collect log data") {
+            steps {
+                catchError(stageResult: 'FAILURE') {
+                    wrap([$class: 'BuildUser']) {
+                        dir('scylla-cluster-tests') {
+                            sh """
+                            #!/bin/bash
+
+                            set -xe
+                            env
+
+                            echo "start collect logs ..."
+                            ./docker/env/hydra.sh collect-logs --logdir "`pwd`"
+                            echo "end collect logs"
+                            """
+                        }
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            archiveArtifacts artifacts: 'scylla-cluster-tests/latest/**'
+        }
+        failure {
+            echo "Sending email with results..."
+            wrap([$class: 'BuildUser']) {
+                dir('scylla-cluster-tests') {
+                    script {
+                        def test_status = currentBuild.currentResult
+                        if (test_status) {
+                            test_status = "--test-status " + test_status
+                        }
+
+                        def start_time = currentBuild.startTimeInMillis.intdiv(1000)
+                        if (start_time) {
+                            start_time = "--start-time " + start_time
+                        }
+
+
+                        def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
+
+                        sh """
+                        #!/bin/bash
+                        set -xe
+                        env
+                        echo "Start send email ..."
+                        ./docker/env/hydra.sh send-email ${test_status} ${start_time} --logdir "`pwd`" --email-recipients "${email_recipients}"
+                        echo "Email sent"
+                        """
+                    }
+                }
+            }
+        }
+        cleanup {
+            wrap([$class: 'BuildUser']) {
+                dir('scylla-cluster-tests') {
+                    // Keep the cluster running if and only if the build has failed
+                    // (due to any reason: a framework error, the test itself failing, or failure of log collection).
+                    // I'm not using SCT_POST_BEHAVIOR_DB_NODES=keep-on-failure since it decides basing only on critical
+                    // (framework) errors. I want the cluster running if any part of the test fails.
+                    script {
+                        if (currentBuild.currentResult != 'SUCCESS') {
+                            echo "Build failed, leaving cluster intact."
+                            return
+                        }
+
+                        echo "Build succeeded, cleaning resources..."
+
+                        sh """
+                        #!/bin/bash
+
+                        set -xe
+                        env
+
+                        export SCT_POST_BEHAVIOR_DB_NODES="destroy"
+                        export SCT_POST_BEHAVIOR_LOADER_NODES="destroy"
+                        export SCT_POST_BEHAVIOR_MONITOR_NODES="destroy"
+
+                        echo "start clean resources ..."
+                        ./docker/env/hydra.sh clean-resources --logdir "`pwd`"
+                        echo "end clean resources"
+                        """
+                    }
+                }
+            }
+        }
+    }
+}
