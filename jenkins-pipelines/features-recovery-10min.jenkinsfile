@@ -1,0 +1,15 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    params: params,
+
+    backend: 'aws',
+    aws_region: 'eu-west-1',
+    test_name: 'refresh_test.RefreshTest.test_node_recovery',
+    test_config: 'test-cases/features/recovery_10min.yaml',
+
+    timeout: [time: 40, unit: 'MINUTES']
+)

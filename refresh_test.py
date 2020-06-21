@@ -145,3 +145,27 @@ class RefreshTest(ClusterTester):
         self.end = self.get_current_timestamp()
 
         self.check_timeout()
+
+    def test_node_recovery(self):
+
+        self.log.info('DB cluster is: %s', self.db_cluster)
+        assert len(self.db_cluster.nodes) == 2, "The test requires 2 DB nodes!"
+        stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_cmd'))
+        self.get_stress_results(queue=stress_queue)
+        self.verify_stress_thread(cs_thread_pool=stress_queue)
+
+        # stop all nodes
+        nodes = self.db_cluster.nodes
+        for node in nodes:
+            node.stop_scylla(verify_up=False, verify_down=True)
+
+        time.sleep(10)
+        # start all nodes
+        for node in nodes:
+            node.start_scylla()
+
+        time.sleep(10)
+        start_time = time.time()
+        stress_queue = self.run_stress_thread(stress_cmd=self.params.get('stress_read_cmd'))
+        self.verify_stress_thread(cs_thread_pool=stress_queue)
+        self.verify_no_drops_and_errors(starting_from=start_time)

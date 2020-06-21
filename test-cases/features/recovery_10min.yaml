@@ -1,0 +1,20 @@
+# TODO: need to qualify
+test_duration: 40
+
+stress_cmd: "cassandra-stress write no-warmup cl=QUORUM duration=3m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=50 -pop seq=1..10000000 -log interval=5"
+stress_read_cmd: "cassandra-stress read cl=QUORUM duration=3m -port jmx=6868 -mode cql3 native  -rate threads=50 -pop seq=1..100000000 -log interval=5"
+
+
+n_db_nodes: 2
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.large'
+user_prefix: 'cases-recovery'
+scylla_version: "4.0"
+
+
+logs_transport: "ssh"
+post_behavior_db_nodes: "keep-on-failure"
+post_behavior_loader_nodes: "keep-on-failure"
+post_behavior_monitor_nodes: "keep-on-failure"
