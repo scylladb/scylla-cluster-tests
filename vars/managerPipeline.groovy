@@ -137,14 +137,6 @@ def call(Map pipelineParams) {
                                         export SCT_TARGET_SCYLLA_MGMT_REPO="${params.target_scylla_mgmt_repo}"
                                     fi
 
-                                    if [[ ! -z "${params.ami_id_monitor}" ]] ; then
-                                        export SCT_AMI_ID_MONITOR="${params.ami_id_monitor}"
-                                    fi
-
-                                    if [[ ! -z "${params.ami_monitor_user}" ]] ; then
-                                        export SCT_AMI_MONITOR_USER="${params.ami_monitor_user}"
-                                    fi
-
                                     if [[ ! -z "${params.scylla_mgmt_agent_repo}" ]] ; then
                                         export SCT_SCYLLA_MGMT_AGENT_REPO="${params.scylla_mgmt_agent_repo}"
                                     fi
