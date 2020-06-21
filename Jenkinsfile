@@ -145,7 +145,7 @@ pipeline {
             steps {
                 script {
                     try {
-                        sh ''' ./utils/lint_test_cases.sh '''
+                        sh ''' ./docker/env/hydra.sh bash ./utils/lint_test_cases.sh '''
                         pullRequestSetResult('success', 'jenkins/lint_test_cases', 'All test cases are passed')
                     } catch(Exception ex) {
                         pullRequestSetResult('failure', 'jenkins/lint_test_cases', 'Some test cases failed')
