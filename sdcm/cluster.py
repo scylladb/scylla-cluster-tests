@@ -4359,7 +4359,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         def _register_grafana_json(json_filename):
             url = "'http://{0}:{1.grafana_port}/api/dashboards/db'".format(normalize_ipv6_url(node.external_address),
                                                                            self)
-            result = LOCALRUNNER.run('curl -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' %
+            result = LOCALRUNNER.run('curl -g -XPOST -i %s --data-binary @%s -H "Content-Type: application/json"' %
                                      (url, json_filename))
             return result.exited == 0
 
