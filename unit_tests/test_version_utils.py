@@ -15,8 +15,6 @@ RPM_URL = \
     f'f592edaf15e028faf3b7f695f39ebc1-525a0255f73d454f8f97f32b8bdd71c8dec35d3d-a6b2b2355c666b1893f702a587287da' \
     f'978aeec22/71/scylla.repo'
 
-ISSUE_5288_RPM_URL = 'http://scratch.scylladb.com/amos/yum_repos/master/piotrj_issue5288_v3/scylla.repo'
-
 BROKEN_URL = 'https://www.google.com'
 
 
@@ -35,7 +33,7 @@ class TestVersionUtils(unittest.TestCase):
         self.assertEqual(get_branch_version(DEB_URL), '2019.1.1')
 
     def test_02_get_branch_version_from_repo(self):
-        self.check_multiple_urls(urls=[(RPM_URL, "2019.1.1"), (ISSUE_5288_RPM_URL, "666.development")])
+        self.check_multiple_urls(urls=[(RPM_URL, "2019.1.1")])
 
     def test_03_get_branch_version(self):
         self.check_multiple_urls(urls=[(RPM_URL, "2019.1.1"), (DEB_URL, "2019.1.1")])
