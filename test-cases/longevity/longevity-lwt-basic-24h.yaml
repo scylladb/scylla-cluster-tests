@@ -20,7 +20,7 @@ regions_data:
   us-east-1:
     ami_id_loader: 'ami-0b94f0e897d884b1b'
   eu-west-1:
-    ami_id_loader: 'ami-0ea704a8c9ec08e57'
+    ami_id_loader: 'ami-0bf19545bc7bc9e1f'
   us-west-2:
     ami_id_loader: 'ami-063a97bde47353690'
 
