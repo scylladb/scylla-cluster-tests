@@ -3206,6 +3206,11 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         time_elapsed = time.time() - start_time
         self.log.debug('Update DB packages duration -> %s s', int(time_elapsed))
 
+    def update_seed_provider(self):
+        seed_address = ",".join([node.ip_address for node in self.seed_nodes])
+        for node in self.nodes:
+            node.patch_scylla_yaml_with_seeds(seed_address)
+
     def update_db_binary(self, node_list=None):
         if node_list is None:
             node_list = self.nodes
@@ -3369,6 +3374,31 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 up_statuses.append(False)
         if not all(up_statuses):
             raise ClusterNodesNotReady("Not all nodes joined the cluster")
+
+    def get_nodes_up_and_normal(self, verification_node=None):
+        """Checks via nodetool that node joined the cluster and reached 'UN' state"""
+        status = self.get_nodetool_status(verification_node=verification_node)
+        up_nodes = []
+        for node in self.nodes:
+            for dc_status in status.values():
+                ip_status = dc_status.get(node.ip_address)
+                if ip_status:
+                    if ip_status["state"] == "UN":
+                        up_nodes.append(node)
+        return up_nodes
+
+    def get_node_status_dictionary(self, ip_address=None, verification_node=None):
+        """Get node status dictionary via nodetool (in case it's not found return None)"""
+        node_status = None
+        if ip_address is None:
+            return node_status
+        status = self.get_nodetool_status(verification_node=verification_node)
+        for dc_status in status.values():
+            ip_status = dc_status.get(ip_address)
+            if ip_status:
+                node_status = ip_status
+                break
+        return node_status
 
     @retrying(n=60, sleep_time=3, allowed_exceptions=(ClusterNodesNotReady, UnexpectedExit),
               message="Waiting for nodes to join the cluster")
