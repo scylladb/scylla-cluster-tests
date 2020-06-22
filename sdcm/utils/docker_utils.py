@@ -29,6 +29,8 @@ from sdcm.utils.common import deprecation
 from sdcm.utils.decorators import retrying, Retry
 
 
+DOCKER_API_CALL_TIMEOUT = 180  # seconds
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -49,7 +51,7 @@ class DockerClient(docker.DockerClient):
         return res
 
 
-_docker = DockerClient.from_env()  # pylint: disable=invalid-name
+_docker = DockerClient.from_env(timeout=DOCKER_API_CALL_TIMEOUT)  # pylint: disable=invalid-name
 
 
 class _Name(SimpleNamespace):
