@@ -1641,6 +1641,82 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         finally:
             self.target_node.traffic_control(None)
 
+    def disrupt_remove_node_then_add_node(self):
+        """
+        https://docs.scylladb.com/operating-scylla/procedures/cluster-management/remove_node/
+
+        1.Terminate node
+        2.Run full repair
+        3.Nodetool removenode
+        4.Add new node
+        """
+
+        self._set_current_disruption('TerminateAndRemoveNodeMonkey')
+        node_to_remove = self.target_node
+        up_normal_nodes = self.cluster.get_nodes_up_and_normal(verification_node=node_to_remove)
+        # node_to_remove must be different than node
+        node = random.choice([n for n in self.cluster.nodes if n is not node_to_remove])
+
+        # node_to_remove must not be the only seed in cluster
+        num_of_seed_nodes = len(self.cluster.seed_nodes)
+        if node_to_remove.is_seed and num_of_seed_nodes < 2:
+            raise UnsupportedNemesis("Removing the only seed node is not yet supported")
+
+        # get node's host_id
+        removed_node_status = self.cluster.get_node_status_dictionary(
+            ip_address=node_to_remove.ip_address, verification_node=node)
+        assert removed_node_status is not None, "failed to get host_id using nodetool status"
+        host_id = removed_node_status["host_id"]
+
+        # node stop and make sure its "DN"
+        node_to_remove.stop_scylla_server(verify_up=True, verify_down=True)
+
+        # terminate node
+        self._terminate_cluster_node(node_to_remove)
+
+        # full cluster repair
+        for node in up_normal_nodes:
+            if node is not node_to_remove:
+                try:
+                    self.repair_nodetool_repair(node=node)
+                except Exception as details:  # pylint: disable=broad-except
+                    self.log.error(f"failed to execute repair command "
+                                   f"on node {node} due to the following error: {str(details)}")
+
+        def remove_node():
+            # nodetool removenode 'host_id'
+            rnd_node = random.choice([n for n in self.cluster.nodes if n is not self.target_node])
+            self.log.info("Running removenode command on {}, Removing node with the following host_id: {}"
+                          .format(rnd_node.ip_address,host_id))
+            res = rnd_node.run_nodetool("removenode {}".format(host_id), ignore_status=True, verbose=True)
+            return res.exit_status
+
+        exit_status = remove_node()
+        assert exit_status == 0, "nodetool removenode command exited with status {}".format(exit_status)
+
+        # verify node is removed by nodetool status
+        removed_node_status = self.cluster.get_node_status_dictionary(
+            ip_address=node_to_remove.ip_address, verification_node=node)
+        assert removed_node_status is None, "Node was not removed properly (Node status:{})".format(removed_node_status)
+
+        # add new node
+        new_node = self._add_and_init_new_cluster_node()
+        # in case the removed node was a seed
+        if node_to_remove.is_seed:
+            new_node.is_seed = True
+            self.cluster.update_seed_provider()
+        # after add_node, the left nodes have data that isn't part of their tokens anymore.
+        # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
+        # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
+        try:
+            test_keyspaces = self.cluster.get_test_keyspaces()
+            for node in self.cluster.nodes:
+                for keyspace in test_keyspaces:
+                    node.run_nodetool(sub_cmd='cleanup', args=keyspace)
+        finally:
+            if new_node:
+                new_node.running_nemesis = None
+
     # Temporary disable due to  https://github.com/scylladb/scylla/issues/6522
     def _disrupt_network_reject_inter_node_communication(self):
         """
@@ -2794,6 +2870,14 @@ class NemesisSequence(Nemesis):
     def disrupt(self):
         self.disrupt_run_unique_sequence()
 
+
+class TerminateAndRemoveNodeMonkey(Nemesis):
+    """Remove a Node from a Scylla Cluster (Down Scale)"""
+    disruptive = False
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_remove_node_then_add_node()
 
 # Disable unstable streaming err nemesises
 #
