@@ -24,10 +24,9 @@ from functools import wraps
 import threading
 import signal
 import sys
+import atexit
 
 import boto3.session
-from libcloud.compute.providers import get_driver
-from libcloud.compute.types import Provider
 from invoke.exceptions import UnexpectedExit, Failure
 
 from cassandra.concurrent import execute_concurrent_with_args  # pylint: disable=no-name-in-module
@@ -39,8 +38,7 @@ from cassandra.cluster import NoHostAvailable  # pylint: disable=no-name-in-modu
 from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy
 
-from sdcm.keystore import KeyStore
-from sdcm import nemesis, cluster_docker, cluster_baremetal, db_stats, wait
+from sdcm import nemesis, cluster_docker, cluster_baremetal, cluster_k8s, db_stats, wait
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR, Setup, UserRemoteCredentials, set_duration as set_cluster_duration, \
     set_ip_ssh_connections as set_cluster_ip_ssh_connections, BaseLoaderSet, BaseMonitorSet, BaseScyllaCluster
 from sdcm.cluster_gce import ScyllaGCECluster
@@ -73,7 +71,9 @@ from sdcm.send_email import build_reporter, read_email_data_from_file, get_runni
 from sdcm.utils import alternator
 from sdcm.utils.profiler import ProfilerFactory
 from sdcm.remote import RemoteCmdRunnerBase
-
+from sdcm.utils.gce_utils import get_gce_services
+from sdcm.utils.k8s import KubernetesOps
+from sdcm.remote import LOCALRUNNER
 
 try:
     import cluster_cloud
@@ -394,6 +394,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.cs_db_cluster = None
         self.loaders = None
         self.monitors = None
+        self.k8s_cluster = None
         self.connections = []
 
         self.update_certificates()
@@ -538,27 +539,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             monitor_info['n_local_ssd'] = self.params.get('gce_n_local_ssd_disk_monitor')
 
         user_prefix = self.params.get('user_prefix', None)
-        regions = self.params.get('gce_datacenter', None).split()
-        service_cls = get_driver(Provider.GCE)
-        key_store = KeyStore()
-        gcp_credentials = key_store.get_gcp_credentials()
-        services = []
-        gce_datacenter = []
-        for region_az in regions:
-            # dc can be "us-east1-b" or "us-east1"
-            assert "us-east1" in region_az, "only 'us-east1' region is supported"
-            if region_az.count("-") == 1:
-                # Available zones: b,c,d. Details: https://cloud.google.com/compute/docs/regions-zones#locations
-                zone = random.choice("bccdd")  # make zone 'c' and 'd' selectable with higher probability than 'b'
-                region_az = f"{region_az}-{zone}"
 
-            gce_datacenter.append(region_az)
-            services.append(service_cls(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
-                                        gcp_credentials["private_key"], datacenter=region_az,
-                                        project=gcp_credentials["project_id"]))
-        TEST_LOG.info(f"Using GCE AZs: {gce_datacenter}")
-        if len(services) > 1:
-            assert len(services) == len(db_info['n_nodes'])
+        services = get_gce_services(self.params.get('gce_datacenter').split())
+        assert len(services) in (1, len(db_info['n_nodes']), )
+        gce_datacenter, services = list(services.keys()), list(services.values())
+        TEST_LOG.info("Using GCE AZs: %s", gce_datacenter)
+
         user_credentials = self.params.get('user_credentials_path', None)
         self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
 
@@ -843,6 +829,105 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         params['private_ips'] = self.params.get('monitor_nodes_private_ip')
         self.monitors = cluster_baremetal.MonitorSetPhysical(**params)
 
+    def get_cluster_k8s_gce_minikube(self):
+        self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
+
+        services = get_gce_services(self.params.get('gce_datacenter').split())
+        assert len(services) == 1, "Doesn't support multi DC setup for `k8s-gce-minikube' backend"
+
+        services, gce_datacenter = list(services.values()), list(services.keys())
+
+        self.k8s_cluster = \
+            cluster_k8s.GceMinikubeCluster(minikube_version=self.params.get("minikube_version"),
+                                           gce_image=self.params.get("gce_image_minikube"),
+                                           gce_image_type=self.params.get("gce_root_disk_type_minikube"),
+                                           gce_image_size=self.params.get("gce_root_disk_size_minikube"),
+                                           gce_network=self.params.get("gce_network"),
+                                           services=services,
+                                           credentials=self.credentials,
+                                           gce_instance_type=self.params.get("gce_instance_type_minikube"),
+                                           gce_image_username=self.params.get("gce_image_username"),
+                                           user_prefix=self.params.get("user_prefix"),
+                                           params=self.params,
+                                           gce_datacenter=gce_datacenter)
+
+        self.k8s_cluster.wait_for_init()
+
+        # This should remove some of the unpredictability of pods startup time.
+        scylla_docker_image = f'scylladb/scylla:{self.params.get("scylla_version")}'
+        self.log.info("Pull `%s' to Minikube' Docker environment", scylla_docker_image)
+        self.k8s_cluster.run(f"eval $(minikube docker-env) && docker pull -q {scylla_docker_image}")
+
+        self.log.info("Deploy Scylla Operator")
+        KubernetesOps.apply_file(self.k8s_cluster, cluster_k8s.SCYLLA_OPERATOR_CONFIG)
+
+        self.log.info("Create and initialize a Scylla cluster")
+        KubernetesOps.apply_file(self.k8s_cluster, cluster_k8s.SCYLLA_CLUSTER_CONFIG)
+
+        for _ in range(self.params.get("n_db_nodes")):
+            time.sleep(30)
+            self.k8s_cluster.run("kubectl -n scylla wait --timeout=3m --all --for=condition=Ready pod", verbose=True)
+
+        self.log.debug("Check Scylla cluster")
+        self.k8s_cluster.run("kubectl -n scylla get clusters.scylla.scylladb.com", verbose=True)
+        self.k8s_cluster.run("kubectl -n scylla get pods", verbose=True)
+
+        self.db_cluster = cluster_k8s.ScyllaPodCluster(k8s_cluster=self.k8s_cluster,
+                                                       user_prefix=self.params.get("user_prefix"),
+                                                       n_nodes=self.params.get("n_db_nodes"),
+                                                       params=self.params)
+
+        hydra_dest_ip = self.k8s_cluster.nodes[0].external_address
+        nodes_dest_ip = self.k8s_cluster.nodes[0].ip_address
+
+        hydra_iptables_rules = []
+        nodes_iptables_rules = []
+
+        for node in self.db_cluster.nodes:
+            KubernetesOps.expose_pod_ports(self.k8s_cluster, node.name, ports=[3000, 9042, 9180, ],
+                                           namespace=self.db_cluster.namespace)
+            hydra_iptables_rules.append(node.iptables_node_redirect_rules(hydra_dest_ip))
+            nodes_iptables_rules.append(node.iptables_node_redirect_rules(nodes_dest_ip))
+        hydra_iptables_rules = "\n".join(hydra_iptables_rules).replace("iptables", "iptables-legacy")
+        nodes_iptables_rules = "\n".join(nodes_iptables_rules)
+
+        LOCALRUNNER.run(f'bash -cxe "{hydra_iptables_rules}"')
+        atexit.register(LOCALRUNNER.run, f'''bash -cxe "{hydra_iptables_rules.replace(' -A ', ' -D ')}"''')
+
+        startup_script = "\n".join((Setup.get_startup_script(), nodes_iptables_rules, ))
+        Setup.get_startup_script = lambda: startup_script
+
+        self.loaders = LoaderSetGCE(gce_image=self.params.get("gce_image"),
+                                    gce_image_type=self.params.get("gce_root_disk_type_loader"),
+                                    gce_image_size=None,
+                                    gce_network=self.params.get("gce_network"),
+                                    service=services[:1],
+                                    credentials=self.credentials,
+                                    gce_instance_type=self.params.get("gce_instance_type_loader"),
+                                    gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_loader"),
+                                    gce_image_username=self.params.get("gce_image_username"),
+                                    user_prefix=self.params.get("user_prefix"),
+                                    n_nodes=self.params.get('n_loaders'),
+                                    params=self.params,
+                                    gce_datacenter=gce_datacenter)
+        if self.params.get("n_monitor_nodes") > 0:
+            self.monitors = MonitorSetGCE(gce_image=self.params.get("gce_image"),
+                                          gce_image_type=self.params.get("gce_root_disk_type_monitor"),
+                                          gce_image_size=self.params.get('gce_root_disk_size_monitor'),
+                                          gce_network=self.params.get("gce_network"),
+                                          service=services[:1],
+                                          credentials=self.credentials,
+                                          gce_instance_type=self.params.get("gce_instance_type_monitor"),
+                                          gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_monitor"),
+                                          gce_image_username=self.params.get("gce_image_username"),
+                                          user_prefix=self.params.get("user_prefix"),
+                                          n_nodes=self.params.get('n_monitor_nodes'),
+                                          targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
+                                          params=self.params,
+                                          gce_datacenter=gce_datacenter)
+        else:
+            self.monitors = NoMonitorSet()
+
     def init_resources(self, loader_info=None, db_info=None,
                        monitor_info=None):
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches
@@ -871,6 +956,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.get_cluster_docker()
         elif cluster_backend == 'baremetal':
             self.get_cluster_baremetal()
+        elif cluster_backend == 'k8s-gce-minikube':
+            self.get_cluster_k8s_gce_minikube()
 
     def _cs_add_node_flag(self, stress_cmd):
         if '-node' not in stress_cmd:
