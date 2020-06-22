@@ -9,6 +9,8 @@ repos:
     -   id: end-of-file-fixer
         exclude: .git/*
     -   id: check-yaml
+        args:
+        - --allow-multiple-documents
         exclude: >
             (?x)^(
                 tests/.*|

@@ -19,6 +19,7 @@ RUN mkdir /build && \
     pip3 install -r requirements-python.txt --root=/build --prefix=./ --ignore-installed --no-warn-script-location
 
 FROM python:$PYTHON_IMAGE_TAG
+ARG KUBECTL_VERSION=1.18.5
 ENV PYTHONWARNINGS=ignore:unclosed \
     PYTHONFAULTHANDLER=1 \
     PYTHONUNBUFFERED=1 \
@@ -28,6 +29,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     apt-get install -y --no-install-recommends \
         binutils \
         curl \
+        gettext \
         git \
         iproute2 \
         openssh-client \
@@ -35,7 +37,10 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
         sudo \
         unzip \
         wget \
+        iptables \
         docker-ce-cli && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+RUN curl -fsSLo /usr/local/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/v$KUBECTL_VERSION/bin/linux/amd64/kubectl && \
+    chmod +x /usr/local/bin/kubectl
 COPY --from=python_packages /build /usr/local

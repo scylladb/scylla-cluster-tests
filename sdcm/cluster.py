@@ -768,6 +768,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return self.external_address
 
     @property
+    def scylla_listen_address(self) -> str:
+        """The address the Scylla is bound.
+
+        Use it for localhost connections (e.g., cqlsh)
+        """
+        return self.ip_address
+
+    @property
     def is_spot(self):
         return False
 
@@ -2651,7 +2659,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                   connect_timeout=60):
         """Runs CQL command using cqlsh utility"""
         cmd = self._gen_cqlsh_cmd(command=cmd, keyspace=keyspace, timeout=timeout,
-                                  host=self.ip_address if not target_db_node else target_db_node.ip_address,
+                                  host=self.scylla_listen_address if not target_db_node else target_db_node.ip_address,
                                   port=port if port else self.CQL_PORT,
                                   connect_timeout=connect_timeout)
         cqlsh_out = self.remoter.run(cmd, timeout=timeout + 30,  # we give 30 seconds to cqlsh timeout mechanism to work

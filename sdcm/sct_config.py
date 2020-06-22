@@ -88,7 +88,7 @@ class SCTConfiguration(dict):
     Class the hold the SCT configuration
     """
 
-    available_backends = ['aws', 'gce', 'docker', 'baremetal', 'aws-siren']
+    available_backends = ['aws', 'gce', 'docker', 'baremetal', 'aws-siren', 'k8s-gce-minikube', ]
 
     config_options = [
         dict(name="config_files", env="SCT_CONFIG_FILES", type=str_or_list,
@@ -192,6 +192,9 @@ class SCTConfiguration(dict):
         dict(name="scylla_mgmt_agent_repo", env="SCT_SCYLLA_MGMT_AGENT_REPO",
              type=str,
              help="Url to the repo of scylla manager agent version to install for management tests"),
+
+        dict(name="scylla_mgmt_agent_version", env="SCT_SCYLLA_MGMT_AGENT_VERSION", type=str,
+             help=""),
 
         dict(name="scylla_mgmt_pkg", env="SCT_SCYLLA_MGMT_PKG",
              type=str,
@@ -583,6 +586,43 @@ class SCTConfiguration(dict):
         dict(name="gce_n_local_ssd_disk_db", env="SCT_GCE_N_LOCAL_SSD_DISK_DB", type=int,
              help=""),
 
+        # k8s-gce-minikube options
+        dict(name="gce_image_minikube", env="SCT_GCE_IMAGE_MINIKUBE", type=str,
+             help=""),
+
+        dict(name="gce_instance_type_minikube", env="SCT_GCE_INSTANCE_TYPE_MINIKUBE", type=str,
+             help=""),
+
+        dict(name="gce_root_disk_type_minikube", env="SCT_GCE_ROOT_DISK_TYPE_MINIKUBE", type=str,
+             help=""),
+
+        dict(name="gce_root_disk_size_minikube", env="SCT_GCE_ROOT_DISK_SIZE_MINIKUBE", type=int,
+             help=""),
+
+        # k8s options
+        dict(name="k8s_scylla_operator_docker_image", env="SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE", type=str,
+             help=""),
+
+        dict(name="k8s_scylla_datacenter", env="SCT_K8S_SCYLLA_DATACENTER", type=str,
+             help=""),
+
+        dict(name="k8s_scylla_rack", env="SCT_K8S_SCYLLA_RACK", type=str,
+             help=""),
+
+        dict(name="k8s_scylla_cluster_name", env="SCT_K8S_SCYLLA_CLUSTER_NAME", type=str,
+             help=""),
+
+        dict(name="k8s_scylla_cpu_n", env="SCT_K8S_SCYLLA_CPU_N", type=int,
+             help=""),
+
+        dict(name="k8s_scylla_mem_gi", env="SCT_K8S_SCYLLA_MEM_GI", type=int,
+             help=""),
+
+        dict(name="k8s_scylla_disk_gi", env="SCT_K8S_SCYLLA_DISK_GI", type=int,
+             help=""),
+
+        dict(name="minikube_version", env="SCT_MINIKUBE_VERSION", type=str,
+             help=""),
 
         # docker config options
 
@@ -962,7 +1002,15 @@ class SCTConfiguration(dict):
 
         'aws-siren': ["user_prefix", "instance_type_loader", "region_name", "security_group_ids", "subnet_id",
                       "cloud_credentials_path", "authenticator_user", "authenticator_password", "cloud_cluster_id",
-                      "nemesis_filter_seeds"]
+                      "nemesis_filter_seeds"],
+
+        'k8s-gce-minikube': ['gce_image_minikube', 'gce_instance_type_minikube', 'gce_root_disk_type_minikube',
+                             'gce_root_disk_size_minikube', 'user_credentials_path', 'scylla_version',
+                             'scylla_mgmt_agent_version', 'k8s_scylla_operator_docker_image', 'k8s_scylla_datacenter',
+                             'k8s_scylla_rack', 'k8s_scylla_cluster_name', 'k8s_scylla_cpu_n', 'k8s_scylla_mem_gi',
+                             'k8s_scylla_disk_gi', 'gce_image', 'gce_instance_type_loader', 'gce_root_disk_type_loader',
+                             'gce_n_local_ssd_disk_loader', 'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
+                             'gce_root_disk_size_monitor', 'gce_n_local_ssd_disk_monitor', 'minikube_version'],
     }
 
     defaults_config_files = {
@@ -970,7 +1018,8 @@ class SCTConfiguration(dict):
         "gce": [sct_abs_path('defaults/gce_config.yaml')],
         "docker": [sct_abs_path('defaults/docker_config.yaml')],
         "baremetal": [sct_abs_path('defaults/baremetal_config.yaml')],
-        "aws-siren": [sct_abs_path('defaults/aws_config.yaml')]
+        "aws-siren": [sct_abs_path('defaults/aws_config.yaml')],
+        "k8s-gce-minikube": [sct_abs_path('defaults/k8s_gce_minikube_config.yaml')],
     }
 
     multi_region_params = [
@@ -1141,6 +1190,8 @@ class SCTConfiguration(dict):
         if self.get('instance_provision') == 'mixed':
             self.log.warning('Selected instance_provision type "MIXED" is not supported!')
 
+        self._update_environment_variables()
+
     @classmethod
     def get_config_option(cls, name):
         return [o for o in cls.config_options if o['name'] == name][0]
@@ -1163,6 +1214,11 @@ class SCTConfiguration(dict):
                 except Exception as ex:
                     raise ValueError("failed to parse {} from environment variable:\n\t\t{}".format(opt['env'], ex))
         return environment_vars
+
+    def _update_environment_variables(self, replace=False):
+        for opt in self.config_options:
+            if opt["name"] in self and (opt["env"] not in os.environ or replace):
+                os.environ[opt["env"]] = str(self[opt["name"]])
 
     def get(self, key, default=UnsetMarker):
         """

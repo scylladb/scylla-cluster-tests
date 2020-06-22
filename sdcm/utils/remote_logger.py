@@ -129,7 +129,7 @@ class SSHGeneralFileLogger(SSHLoggerBase):
         super()._retrieve(since)
 
 
-class DockerLoggerBase(LoggerBase):
+class CommandLoggerBase(LoggerBase):
     _cached_logger_cmd = None
     _child_process = None
 
@@ -153,14 +153,28 @@ class DockerLoggerBase(LoggerBase):
             self._child_process.kill()
 
 
-class DockerScyllaLogger(DockerLoggerBase):
+class DockerScyllaLogger(CommandLoggerBase):
     def _build_logger_cmd(self, node, target_log_file):
         self._cached_logger_cmd = f'docker logs -f {node.name} 2>&1 | grep scylla >{target_log_file}'
 
 
-class DockerGeneralLogger(DockerLoggerBase):
+class DockerGeneralLogger(CommandLoggerBase):
     def _build_logger_cmd(self, node, target_log_file):
         self._cached_logger_cmd = f'docker logs -f {node.name} >{target_log_file} 2>&1'
+
+
+class KubectlScyllaLogger(CommandLoggerBase):
+    def _build_logger_cmd(self, node, target_log_file):
+        self._cached_logger_cmd = \
+            f"kubectl -s {node.parent_cluster.k8s_cluster.k8s_server_url} -n {node.parent_cluster.namespace} " \
+            f"logs -f {node.name} -c {node.parent_cluster.container} 2>&1 | grep scylla >{target_log_file}"
+
+
+class KubectlGeneralLogger(CommandLoggerBase):
+    def _build_logger_cmd(self, node, target_log_file):
+        self._cached_logger_cmd = \
+            f"kubectl -s {node.parent_cluster.k8s_cluster.k8s_server_url} -n {node.parent_cluster.namespace} " \
+            f"logs -f {node.name} -c {node.parent_cluster.container} > {target_log_file} 2>&1"
 
 
 def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint: disable=too-many-return-statements
@@ -168,6 +182,10 @@ def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint:
         if 'db-node' in node.name:
             return DockerScyllaLogger(node, target_log_file)
         return DockerGeneralLogger(node, target_log_file)
+    if logs_transport == 'kubectl':
+        if 'db-node' in node.name:
+            return KubectlScyllaLogger(node, target_log_file)
+        return KubectlGeneralLogger(node, target_log_file)
     if logs_transport == 'ssh':
         if node.init_system == 'systemd':
             if 'db-node' in node.name:
