@@ -15,6 +15,7 @@ yum install -y gcc
 
 # Install OpenSSH client - needed to ssh to DB servers/ Loaders/ monitors
 yum install -y openssh-clients
+
 # Install Git - needed to get current SCT branch
 yum install -y git
 
@@ -29,6 +30,18 @@ curl -fsSL get.docker.com -o get-docker.sh
 sh get-docker.sh
 groupadd docker || true
 usermod -aG docker $USER || true
+
+# Install kubectl and gettext - needed for k8s-* backends
+cat <<EOF > /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+EOF
+yum install -y kubectl gettext
 
 # Make sdcm available in python path due to avocado runner bug
 if [ "$1" == "docker" ]; then
