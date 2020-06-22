@@ -27,7 +27,7 @@ import os
 import re
 import traceback
 
-from typing import List
+from typing import List, Optional
 from collections import OrderedDict, defaultdict
 
 from invoke import UnexpectedExit
@@ -1460,11 +1460,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                         msg="Wrong number of requested and expected toppartitions for {} sampler".format(
                                             sampler))
 
-    def disrupt_network_random_interruptions(self):  # pylint: disable=invalid-name
-        # pylint: disable=too-many-locals
-        self._set_current_disruption('NetworkRandomInterruption')
-        if not self.cluster.extra_network_interface:
-            raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
+    def get_rate_limit_for_network_disruption(self) -> Optional[str]:
+        if not self.monitoring_set.nodes:
+            return None
 
         # get the last 10min avg network bandwidth used, and limit  30% to 70% of it
         prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
@@ -1486,7 +1484,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             max_limit = int(round(avg_kbps_per_node * 0.70))
             rate_limit_suffix = "kbps"
 
-        rate_limit = "{}{}".format(random.randrange(min_limit, max_limit), rate_limit_suffix)
+        return "{}{}".format(random.randrange(min_limit, max_limit), rate_limit_suffix)
+
+    def disrupt_network_random_interruptions(self):  # pylint: disable=invalid-name
+        # pylint: disable=too-many-locals
+        self._set_current_disruption('NetworkRandomInterruption')
+        if not self.cluster.extra_network_interface:
+            raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
+
+        rate_limit : Optional[str] = self.get_rate_limit_for_network_disruption()
+        if not rate_limit:
+            self.log.warn("NetworkRandomInterruption won't limit network bandwith due to lack of monitoring nodes.")
 
         # random packet loss - between 1% - 15%
         loss_percentage = random.randrange(1, 15)
@@ -1502,8 +1510,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             ("NetworkRandomInterruption_{}%-corrupt".format(corrupt_percentage),
              "--corrupt {}%".format(corrupt_percentage)),
             ("NetworkRandomInterruption_{}sec-delay".format(delay_in_secs),
-             "--delay {}s --delay-distro 500ms".format(delay_in_secs)),
-            ("NetworkRandomInterruption_{}-limit".format(rate_limit), "--rate {}".format(rate_limit))]
+             "--delay {}s --delay-distro 500ms".format(delay_in_secs))]
+        if rate_limit:
+            list_of_tc_options.append(
+                ("NetworkRandomInterruption_{}-limit".format(rate_limit), "--rate {}".format(rate_limit)))
 
         list_of_timeout_options = [10, 60, 120, 300, 500]
         option_name, selected_option = random.choice(list_of_tc_options)
