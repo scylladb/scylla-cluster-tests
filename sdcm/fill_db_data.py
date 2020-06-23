@@ -2609,7 +2609,7 @@ class FillDatabaseData(ClusterTester):
         # only tests normal non-frozen UDT. Non-frozen UDT isn't supported inside collection.
         {
             'create_tables': ["""
-              CREATE TYPE address (
+              CREATE TYPE home_address (
               street text,
               city text,
               zip_code int,
@@ -2624,7 +2624,7 @@ class FillDatabaseData(ClusterTester):
               CREATE TABLE non_frozen_user_types_test (
                id uuid PRIMARY KEY,
                name non_frozen_fullname,
-               addresses map<text, frozen<address>>
+               addresses map<text, frozen<home_address>>
               )
            """],
             'truncates': ["TRUNCATE non_frozen_user_types_test"],
@@ -2633,12 +2633,12 @@ class FillDatabaseData(ClusterTester):
             'queries': [
                 "SELECT name.firstname FROM non_frozen_user_types_test WHERE id = ea0b7cc8-dee9-437e-896c-c14ed34ce9cd",
                 "SELECT name.lastname FROM non_frozen_user_types_test WHERE id = ea0b7cc8-dee9-437e-896c-c14ed34ce9cd",
-                "UPDATE non_frozen_user_types_test SET addresses = addresses + { 'home': ( '...', 'SF',  94102, {'123456'} ) } WHERE id=ea0b7cc8-dee9-437e-896c-c14ed34ce9cd",
+                "UPDATE non_frozen_user_types_test SET addresses = home_addresses + { 'home': ( '...', 'SF',  94102, {'123456'} ) } WHERE id=ea0b7cc8-dee9-437e-896c-c14ed34ce9cd",
                 "#STR SELECT addresses FROM non_frozen_user_types_test WHERE id = ea0b7cc8-dee9-437e-896c-c14ed34ce9cd"],
             'results': [[['Paul']],
                         [['smith']],
                         [],
-                        "[[OrderedMapSerializedKey([('home', address(street='...', city='SF', zip_code=94102, phones=SortedSet(['123456'])))])]]"],
+                        "[[OrderedMapSerializedKey([('home', home_address(street='...', city='SF', zip_code=94102, phones=SortedSet(['123456'])))])]]"],
             'min_version': '',
             'max_version': '',
             'skip': ''},
