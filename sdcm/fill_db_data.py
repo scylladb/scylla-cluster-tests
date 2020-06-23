@@ -2605,43 +2605,6 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # non-frozen user_types_test
-        # only tests normal non-frozen UDT. Non-frozen UDT isn't supported inside collection.
-        {
-            'create_tables': ["""
-              CREATE TYPE address (
-              street text,
-              city text,
-              zip_code int,
-              phones set<text>
-              )
-           """, """
-              CREATE TYPE non_frozen_fullname (
-               firstname text,
-               lastname text
-              )
-           """, """
-              CREATE TABLE non_frozen_user_types_test (
-               id uuid PRIMARY KEY,
-               name non_frozen_fullname,
-               addresses map<text, frozen<address>>
-              )
-           """],
-            'truncates': ["TRUNCATE non_frozen_user_types_test"],
-            'inserts': [
-                "INSERT INTO non_frozen_user_types_test (id, name) VALUES (ea0b7cc8-dee9-437e-896c-c14ed34ce9cd, ('Paul', 'smith'))"],
-            'queries': [
-                "SELECT name.firstname FROM non_frozen_user_types_test WHERE id = ea0b7cc8-dee9-437e-896c-c14ed34ce9cd",
-                "SELECT name.lastname FROM non_frozen_user_types_test WHERE id = ea0b7cc8-dee9-437e-896c-c14ed34ce9cd",
-                "UPDATE non_frozen_user_types_test SET addresses = addresses + { 'home': ( '...', 'SF',  94102, {'123456'} ) } WHERE id=ea0b7cc8-dee9-437e-896c-c14ed34ce9cd",
-                "#STR SELECT addresses FROM non_frozen_user_types_test WHERE id = ea0b7cc8-dee9-437e-896c-c14ed34ce9cd"],
-            'results': [[['Paul']],
-                        [['smith']],
-                        [],
-                        "[[OrderedMapSerializedKey([('home', address(street='...', city='SF', zip_code=94102, phones=SortedSet(['123456'])))])]]"],
-            'min_version': '',
-            'max_version': '',
-            'skip': ''},
         # more_user_types_test
         {
             'create_tables': ["""
