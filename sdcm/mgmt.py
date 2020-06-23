@@ -113,6 +113,7 @@ def update_config_file(node, region, config_file='/etc/scylla-manager-agent/scyl
     new_configuration = yaml.dump(configuration, default_flow_style=False)
     node.remoter.run(f'sudo echo -e \"{new_configuration}\" > {config_file}')
     node.remoter.run('sudo systemctl restart scylla-manager-agent')
+    node.wait_manager_agent_up()
 
 
 class ScyllaManagerBase():  # pylint: disable=too-few-public-methods
