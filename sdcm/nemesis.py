@@ -1487,7 +1487,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self.cluster.extra_network_interface:
             raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
 
-        rate_limit : Optional[str] = self.get_rate_limit_for_network_disruption()
+        rate_limit: Optional[str] = self.get_rate_limit_for_network_disruption()
         if not rate_limit:
             self.log.warn("NetworkRandomInterruption won't limit network bandwith due to lack of monitoring nodes.")
 
