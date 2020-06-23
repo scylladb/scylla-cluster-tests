@@ -646,12 +646,17 @@ class AWSNode(cluster.BaseNode):
     def hard_reboot(self):
         self._instance_wait_safe(self._instance.reboot)
 
+    def release_address(self):
+        self._instance.wait_until_terminated()
+
+        client: EC2Client = boto3.client('ec2', region_name=self.parent_cluster.region_names[self.dc_idx])
+        client.release_address(AllocationId=self.eip_allocation_id)
+
     def destroy(self):
         self.stop_task_threads()
         self._instance.terminate()
         if self.eip_allocation_id:
-            client: EC2Client = boto3.client('ec2', region_name=self.parent_cluster.region_names[self.dc_idx])
-            client.release_address(AllocationId=self.eip_allocation_id)
+            self.release_address()
         super().destroy()
 
     def get_console_output(self):
