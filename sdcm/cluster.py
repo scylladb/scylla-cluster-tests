@@ -37,7 +37,7 @@ from paramiko.ssh_exception import NoValidConnectionsError
 
 
 from sdcm.collectd import ScyllaCollectdSetup
-from sdcm.mgmt import ScyllaManagerError, get_scylla_manager_tool
+from sdcm.mgmt import ScyllaManagerError, get_scylla_manager_tool, update_config_file
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunner, LOCALRUNNER, NETWORK_EXCEPTIONS
@@ -325,6 +325,7 @@ class UserRemoteCredentials():
 
 class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     CQL_PORT = 9042
+    MANAGER_AGENT_PORT = 10001
 
     log = LOGGER
 
@@ -1312,6 +1313,19 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self._report_housekeeping_uuid()
         except Exception as details:  # pylint: disable=broad-except
             self.log.error('Failed to report housekeeping uuid. Error details: %s', details)
+
+    def manager_agent_up(self):
+        if self.is_port_used(port=self.MANAGER_AGENT_PORT, service_name="scylla-manager-agent"):
+            # When the agent is IP, it should answer an http request of https://NODE_IP:10001/ping with status code 204
+            response = requests.get(f"https://{self.ip_address}:10001/ping", verify=False)
+            return response.status_code == 204
+        return False
+
+    def wait_manager_agent_up(self, verbose=True, timeout=180):
+        text = None
+        if verbose:
+            text = '%s: Waiting for manager agent to be up' % self
+        wait.wait_for(func=self.manager_agent_up, step=10, text=text, timeout=timeout, throw_exc=True)
 
     # Configuration node-exporter.service when use IPv6
     def set_web_listen_address(self):
@@ -3343,6 +3357,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
             node.remoter.run('sudo cat /etc/scylla.d/io.conf')
 
             if self.params.get('use_mgmt', None):
+                region = self.params.get('region_name').split()
                 pkgs_url = self.params.get('scylla_mgmt_pkg', None)
                 pkg_path = None
                 if pkgs_url:
@@ -3350,6 +3365,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
                     node.remoter.run('mkdir -p {}'.format(pkg_path))
                     node.remoter.send_files(src='{}*.rpm'.format(pkg_path), dst=pkg_path)
                 node.install_manager_agent(package_path=pkg_path)
+                update_config_file(node=node, region=region[0])
         else:
             self._reuse_cluster_setup(node)
 
