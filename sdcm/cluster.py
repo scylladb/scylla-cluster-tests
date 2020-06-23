@@ -2894,7 +2894,7 @@ def wait_for_init_wrap(method):
                                             args=(node,))
             setup_thread.daemon = True
             setup_thread.start()
-            time.sleep(30)
+            setup_thread.join(timeout=300)
 
         results = []
         while len(results) != len(node_list):
