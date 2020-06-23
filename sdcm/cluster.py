@@ -3181,7 +3181,14 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
                     if line.startswith('--'):  # ignore the title line in result
                         continue
                     try:
-                        state, ip, load, load_unit, tokens, owns, host_id, rack = line.split()
+                        splitted_line = line.split()
+                        # Regulary nodetool status returns node load as "21.71 GB"
+                        # Example: "UN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a"
+                        # But it may be the "?" instead and has no load_unit. Add empty string to prevent the failure
+                        # Example: "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a"
+                        if len(splitted_line) == 7 and splitted_line[3].isdigit():
+                            splitted_line.insert(3, '')
+                        state, ip, load, load_unit, tokens, owns, host_id, rack = splitted_line
                         node_info = {'state': state,
                                      'load': '%s%s' % (load, load_unit),
                                      'tokens': tokens,
