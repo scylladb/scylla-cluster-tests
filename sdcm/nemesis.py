@@ -35,7 +35,7 @@ from cassandra import ConsistencyLevel  # pylint: disable=ungrouped-imports
 
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, Setup
-from sdcm.mgmt import TaskStatus, update_config_file
+from sdcm.mgmt import TaskStatus
 from sdcm.utils.common import remote_get_file, get_non_system_ks_cf_list, get_db_tables, generate_random_string, \
     update_certificates
 from sdcm.utils.decorators import retrying
@@ -1227,9 +1227,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=targets[0][1], disable_automatic_repair=True,
                                                    auth_token=self.monitoring_set.mgmt_auth_token)
         bucket_location_name = self.cluster.params.get('backup_bucket_location').split()
-        region = self.cluster.params.get('region_name').split()
-        for node in self.cluster.nodes:
-            update_config_file(node=node, region=region[0])
         mgr_task = mgr_cluster.create_backup_task(location_list=['s3:{}'.format(bucket_location_name[0])])
 
         succeeded, status = mgr_task.wait_for_task_done_status(timeout=54000)
@@ -1492,7 +1489,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self.cluster.extra_network_interface:
             raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
 
-        rate_limit : Optional[str] = self.get_rate_limit_for_network_disruption()
+        rate_limit: Optional[str] = self.get_rate_limit_for_network_disruption()
         if not rate_limit:
             self.log.warn("NetworkRandomInterruption won't limit network bandwith due to lack of monitoring nodes.")
 
