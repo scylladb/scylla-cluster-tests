@@ -1937,8 +1937,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5e08fbd8b5d6ec9c
                     add-apt-repository -y ppa:scylladb/ppa
                     apt-get update
-                    apt-get install -y openjdk-8-jre-headless
-                    update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64
                 """)
                 self.remoter.run('sudo bash -cxe "%s"' % install_prereqs)
             elif self.is_debian8():
