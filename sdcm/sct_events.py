@@ -178,7 +178,7 @@ class EventsDevice(Process):
                     return True
             except zmq.ZMQError:
                 continue
-        raise TimeoutError(f"Event {str(self)} was not delivered")
+        raise TimeoutError(f"Event {str(type(event))} was not delivered")
 
 
 # monkey patch JSONEncoder make enums jsonable
@@ -252,7 +252,7 @@ class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attribu
                  exception=None, message=None, args=None, kwargs=None, severity=None):
         super().__init__()
         if severity is None:
-            self.severity = Severity.CRITICAL
+            self.severity = Severity.ERROR
         else:
             self.severity = severity
         self.source = str(source) if source else None
@@ -271,35 +271,53 @@ class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attribu
         return f"{super().__str__()}, source={self.source}.{self.source_method}({params}) {message}"
 
 
-class TestResultEvent(SctEvent):
+class TestResultEvent(SctEvent, Exception):
+    """An event that is published and raised at the end of the test.
+    It holds and displays all errors of the tests and framework happened.
+    """
     __test__ = False  # Mark this class to be not collected by pytest.
 
-    def __init__(self, test_name, errors):
+    def __init__(self, test_errors, framework_errors):
         super().__init__()
-        self.test_name = test_name
-        self.errors = errors
-        self.ok = not errors
+        self.test_errors = test_errors
+        self.framework_errors = framework_errors
+        self.ok = not test_errors and not framework_errors
         self.severity = Severity.NORMAL if self.ok else Severity.ERROR
 
     def __str__(self):
-        header = dedent(f"""
-            {"=" * 70}
-            {self.test_name}
-            {"-" * 70}""")
-        footer = f"\n{'-' * 70}\n"
-        test_status, err_text = ('ERROR', '\n'.join(self.errors)) if self.errors else ('PASSED', '')
-        failed_msg = dedent(f"""
-            {header}
-            \n{test_status}:
-            \n{err_text}
-            {footer}
-        """)
-        ok_msg = dedent(f"""
-            {header}
-            \nPASSED :)
-            {footer}
-        """)
-        return ok_msg if self.ok else failed_msg
+        if self.ok:
+            return dedent(f"""
+            {"-" * 78}
+            PASSED :)
+            """)
+        if self.test_errors:
+            test_errors = f"""{"-" * 30} TEST ERRORS {"-" * 40}
+            """ + '\n            '.join(self.test_errors)
+        else:
+            test_errors = ''
+        if self.framework_errors:
+            framework_errors = f"""{"-" * 30} FRAMEWORK ERRORS {"-" * 30}
+            """ + '\n            '.join(self.framework_errors)
+        else:
+            framework_errors = ''
+
+        return dedent(f"""
+            {test_errors}
+            {framework_errors}
+            {"-" * 78}
+            FAILED :(
+            """)
+
+    def __reduce__(self):
+        """Needed to be able to serialize and deserialize this event via pickle
+        """
+        return self.__class__, (self.test_errors, self.framework_errors)
+
+    def __eq__(self, other):
+        """Needed to be able to find this event in publish_event_guaranteed cycle
+        """
+        return isinstance(other, type(self)) and self.test_errors == other.test_errors and \
+            self.framework_errors == other.framework_errors
 
 
 class BaseFilter(SystemEvent):
@@ -916,8 +934,8 @@ class EventsFileLogger(Process):  # pylint: disable=too-many-instance-attributes
                 self.level_summary[Severity(message_data.severity).name] += 1
                 with open(self.events_summary_filename, 'w') as summary_file:
                     json.dump(dict(self.level_summary), summary_file, indent=4)
-
-                LOGGER.info(msg)
+                if not isinstance(message_data, TestResultEvent):
+                    LOGGER.info(msg)
             except Exception:  # pylint: disable=broad-except
                 LOGGER.exception("Failed to write event to event.log")
 
