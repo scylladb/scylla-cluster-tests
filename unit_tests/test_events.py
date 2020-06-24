@@ -495,7 +495,10 @@ class TesterFailure(BaseEventsTest):
     def tearDown(self) -> None:
         ClusterTester.get_test_failures(self)
         test_errors = ClusterTester.get_test_results(self, source='test')
-        tre = TestResultEvent(test_name=self.id(), errors=test_errors)
+        tre = TestResultEvent(
+            test_errors=test_errors,
+            framework_errors=ClusterTester.get_test_results(self, source='framework')
+        )
         assert tre.severity == Severity.ERROR
         tre.publish(guaranteed=True)
         print(str(tre))
@@ -514,7 +517,10 @@ class TesterNoErrors(BaseEventsTest):
     def tearDown(self) -> None:
         ClusterTester.get_test_failures(self)
         test_errors = ClusterTester.get_test_results(self, source='test')
-        tre = TestResultEvent(test_name=self.id(), errors=test_errors)
+        tre = TestResultEvent(
+            test_errors=test_errors,
+            framework_errors=ClusterTester.get_test_results(self, source='framework')
+        )
         assert tre.severity == Severity.NORMAL
         tre.publish(guaranteed=True)
         print(str(tre))
@@ -535,7 +541,10 @@ class TesterErrorDuringSetUp(BaseEventsTest):
         ClusterTester.get_test_failures(self)
         test_errors = ClusterTester.get_test_results(self, source='test')
         assert test_errors is not None
-        tre = TestResultEvent(test_name=self.id(), errors=test_errors)
+        tre = TestResultEvent(
+            test_errors=test_errors,
+            framework_errors=ClusterTester.get_test_results(self, source='framework')
+        )
         assert tre.severity == Severity.ERROR
 
 
@@ -559,7 +568,10 @@ class TesterMultiSubTest(unittest.TestCase):
         test_errors = ClusterTester.get_test_results(self, source='test')
         assert "test3" in test_errors
         assert "test2" in test_errors
-        tre = TestResultEvent(test_name=self.id(), errors=test_errors)
+        tre = TestResultEvent(
+            test_errors=test_errors,
+            framework_errors=ClusterTester.get_test_results(self, source='framework')
+        )
         assert tre.severity == Severity.CRITICAL
         self._outcome.errors = []  # we don't want to fail test
 

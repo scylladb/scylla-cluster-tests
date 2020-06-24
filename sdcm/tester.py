@@ -357,7 +357,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         try:
             self.init_resources()
 
-            if self.db_cluster.nodes:
+            if self.db_cluster and self.db_cluster.nodes:
                 self.init_nodes(db_cluster=self.db_cluster)
                 self.set_system_auth_rf()
 
@@ -373,15 +373,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 # sync test_start_time with ES
                 self.start_time = self.get_test_start_time()
 
-            self.monitors.wait_for_init()
+            if self.monitors:
+                self.monitors.wait_for_init()
 
             # cancel reuse cluster - for new nodes added during the test
             Setup.reuse_cluster(False)
-            if self.monitors.nodes:
+            if self.monitors and self.monitors.nodes:
                 self.prometheus_db = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
             self.start_time = time.time()
 
-            self.db_cluster.validate_seeds_on_all_nodes()
+            if self.db_cluster:
+                self.db_cluster.validate_seeds_on_all_nodes()
         except Exception:
             TestFrameworkEvent(
                 source=self.__class__.__name__,
@@ -1752,24 +1754,33 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.stop_resources()
         self.get_test_failing_events()
         self.get_test_failures()
-        self.save_email_data()
         if self.params.get('collect_logs'):
             self.collect_logs()
         self.clean_resources()
         if self.create_stats:
             self.update_test_with_errors()
-        self.publish_final_event()
-        self.stop_event_device()
-        self.destroy_localhost()
-        self.send_email()
         self.tag_ami_with_result()
+        self.destroy_localhost()
+        self.publish_final_event()
+        time.sleep(1)  # Sleep is needed to let final event being saved into files
+        self.save_email_data()
+        self.send_email()
+        self.stop_event_device()
         if self.params.get('collect_logs'):
             self.collect_sct_logs()
-        framework_errors = self.get_test_results('framework')
-        if framework_errors:
-            framework_errors = "\n".join(framework_errors)
-            self.log.error('%s\nFRAMEWORK ERRORS:\n%s\n%s', (">" * 70), framework_errors, (">" * 70))
+        self.finalize_teardown()
         self.log.info('Test ID: {}'.format(Setup.test_id()))
+
+    def finalize_teardown(self):
+        for _ in range(len(self._outcome.errors) - 1):
+            self._outcome.errors.pop()
+        self._outcome.errors.append((self, (
+            TestResultEvent,
+            TestResultEvent(
+                test_errors=self.get_test_results('test'),
+                framework_errors=self.get_test_results('framework')
+            ),
+            None)))
 
     @silence()
     def destroy_localhost(self):
@@ -1806,8 +1817,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     @silence()
     def publish_final_event(self):
         test_result_event = TestResultEvent(
-            test_name=self.id(),
-            errors=self.get_test_results('test'))
+            test_errors=self.get_test_results('test'),
+            framework_errors=self.get_test_results('framework')
+        )
         test_result_event.publish()
 
     def populate_data_parallel(self, size_in_gb, blocking=True, read=False):
