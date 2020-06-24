@@ -55,7 +55,7 @@ def call(Map pipelineParams) {
                    description: 'Link to the repository of the manager that will be used as a target of the manager upgrade test',
                    name: 'target_scylla_mgmt_repo')
 
-            string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
+            string(defaultValue: "'qa@scylladb.com','mgmt@scylladb.com'",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
 
