@@ -38,7 +38,8 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
         return mgr_cluster, current_manager_version
 
     def test_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
-        target_upgrade_version = self.params.get('target_scylla_mgmt_repo')
+        target_upgrade_server_version = self.params.get('target_scylla_mgmt_server_repo')
+        target_upgrade_agent_version = self.params.get('target_scylla_mgmt_agent_repo')
         manager_node = self.monitors.nodes[0]
         manager_tool = get_scylla_manager_tool(manager_node=manager_node)
         manager_tool.add_cluster(name="cluster_under_test", db_cluster=self.db_cluster,
@@ -85,7 +86,8 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
                 f"Unknown failure in task {rerunning_backup_task.id}"
 
         upgrade_scylla_manager(pre_upgrade_manager_version=current_manager_version,
-                               target_upgrade_version=target_upgrade_version,
+                               target_upgrade_server_version=target_upgrade_server_version,
+                               target_upgrade_agent_version=target_upgrade_agent_version,
                                manager_node=manager_node,
                                db_cluster=self.db_cluster)
 
@@ -165,7 +167,8 @@ def validate_previous_task_details(task, previous_task_details):
             f"previous task {detail_name} is not identical to the current history"
 
 
-def upgrade_scylla_manager(pre_upgrade_manager_version, target_upgrade_version, manager_node, db_cluster):
+def upgrade_scylla_manager(pre_upgrade_manager_version, target_upgrade_server_version, target_upgrade_agent_version,
+                           manager_node, db_cluster):
     LOGGER.debug("Stopping manager server")
     if manager_node.is_docker():
         manager_node.remoter.run('sudo supervisorctl stop scylla-manager')
@@ -177,11 +180,11 @@ def upgrade_scylla_manager(pre_upgrade_manager_version, target_upgrade_version, 
         node.remoter.run("sudo systemctl stop scylla-manager-agent")
 
     LOGGER.debug("Upgrading manager server")
-    manager_node.upgrade_mgmt(target_upgrade_version, start_manager_after_upgrade=False)
+    manager_node.upgrade_mgmt(target_upgrade_server_version, start_manager_after_upgrade=False)
 
     LOGGER.debug("Upgrading and starting manager agents")
     for node in db_cluster.nodes:
-        node.upgrade_manager_agent(target_upgrade_version)
+        node.upgrade_manager_agent(target_upgrade_agent_version)
 
     LOGGER.debug("Starting manager server")
     if manager_node.is_docker():

@@ -252,8 +252,11 @@ class SCTConfiguration(dict):
         dict(name="manager_prometheus_port", env="SCT_MANAGER_PROMETHEUS_PORT", type=int,
              help="Port to be used by the manager to contact Prometheus"),
 
-        dict(name="target_scylla_mgmt_repo", env="SCT_TARGET_SCYLLA_MGMT_REPO", type=str,
-             help="Url to the repo of scylla manager version used to upgrade the manager and agents"),
+        dict(name="target_scylla_mgmt_server_repo", env="SCT_TARGET_SCYLLA_MGMT_SERVER_REPO", type=str,
+             help="Url to the repo of scylla manager version used to upgrade the manager server"),
+
+        dict(name="target_scylla_mgmt_agent_repo", env="SCT_TARGET_SCYLLA_MGMT_AGENT_REPO", type=str,
+             help="Url to the repo of scylla manager version used to upgrade the manager agents"),
 
         dict(name="update_db_packages", env="SCT_UPDATE_DB_PACKAGES", type=str,
              help="""A local directory of rpms to install a custom version on top of
