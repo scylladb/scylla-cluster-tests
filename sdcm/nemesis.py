@@ -1433,6 +1433,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             }
 
         self._set_current_disruption("ShowTopPartitions")
+        result = self.target_node.run_nodetool(sub_cmd='help', args='toppartitions')
+        if 'Unknown command toppartitions' in result.stdout:
+            raise UnsupportedNemesis("nodetool doesn't support toppartitions")
+
         # workaround for issue #4519
         self.target_node.run_nodetool('cfstats')
 
