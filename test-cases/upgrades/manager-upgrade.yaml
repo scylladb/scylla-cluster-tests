@@ -7,7 +7,6 @@ region_name: 'us-east-1'
 n_db_nodes: '3'
 n_loaders: 1
 n_monitor_nodes: 1
-scylla_mgmt_repo: "https://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-manager-2.0.repo"
 
 post_behavior_db_nodes: "destroy"
 post_behavior_loader_nodes: "destroy"
@@ -19,6 +18,7 @@ ip_ssh_connections: 'private'
 
 use_mgmt: true
 mgmt_port: 10090
+scylla_mgmt_agent_repo: "https://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-manager-2.0.repo"
 
 aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'
 store_results_in_elasticsearch: False

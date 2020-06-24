@@ -51,17 +51,21 @@ def call(Map pipelineParams) {
                    description: 'If empty - the default manager version will be taken',
                    name: 'scylla_mgmt_repo')
 
+            string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_repo', '')}",
+                   description: 'manager agent repo',
+                   name: 'scylla_mgmt_agent_repo')
+
             string(defaultValue: '',
-                   description: 'Link to the repository of the manager that will be used as a target of the manager upgrade test',
-                   name: 'target_scylla_mgmt_repo')
+                   description: 'Link to the repository of the manager that will be used as a target of the manager server in the manager upgrade test',
+                   name: 'target_scylla_mgmt_server_repo')
+
+            string(defaultValue: '',
+                   description: 'Link to the repository of the manager that will be used as a target of the manager agents in the manager upgrade test',
+                   name: 'target_scylla_mgmt_agent_repo')
 
             string(defaultValue: "'qa@scylladb.com','mgmt@scylladb.com'",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
-
-            string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_repo', '')}",
-                   description: 'manager agent repo',
-                   name: 'scylla_mgmt_agent_repo')
 
             string(defaultValue: "${pipelineParams.get('scylla_mgmt_pkg', '')}",
                    description: 'Url to the scylla manager packages',
@@ -134,8 +138,12 @@ def call(Map pipelineParams) {
                                         export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
                                     fi
 
-                                    if [[ ! -z "${params.target_scylla_mgmt_repo}" ]] ; then
-                                        export SCT_TARGET_SCYLLA_MGMT_REPO="${params.target_scylla_mgmt_repo}"
+                                    if [[ ! -z "${params.target_scylla_mgmt_server_repo}" ]] ; then
+                                        export SCT_TARGET_SCYLLA_MGMT_SERVER_REPO="${params.target_scylla_mgmt_server_repo}"
+                                    fi
+
+                                    if [[ ! -z "${params.target_scylla_mgmt_agent_repo}" ]] ; then
+                                        export SCT_TARGET_SCYLLA_MGMT_AGENT_REPO="${params.target_scylla_mgmt_agent_repo}"
                                     fi
 
                                     if [[ ! -z "${params.scylla_mgmt_agent_repo}" ]] ; then

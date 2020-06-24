@@ -1899,7 +1899,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run('sudo yum update scylla-manager-agent -y')
         else:
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
-            self.remoter.run('sudo apt-get --only-upgrade install -y scylla-manager-agent')
+            self.remoter.run('sudo apt-get install -y scylla-manager-agent')
         self.remoter.run("sudo scyllamgr_agent_setup -y")
         if start_agent_after_upgrade:
             if self.is_docker():
@@ -2174,7 +2174,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             # 1) scylla-manager
             # 2) scylla-manager-client
             # 3) scylla-manager-server
-            self.remoter.run('sudo apt-get --only-upgrade install -y scylla-manager*')
+            self.remoter.run('sudo apt-get dist-upgrade scylla-manager-server scylla-manager-client -y -o '
+                             'Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes'
+                             ' --allow-unauthenticated')
         time.sleep(3)
         if start_manager_after_upgrade:
             if self.is_docker():
