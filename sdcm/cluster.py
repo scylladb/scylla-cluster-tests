@@ -3699,12 +3699,14 @@ class BaseLoaderSet():
         if node.is_rhel_like():
             node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
             node.remoter.run('sudo yum install -y screen')
+            node.remoter.run('sudo yum install -y tmux')
         else:
             node.remoter.run('sudo apt-get update')
             node.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef"'
                              ' -o Dpkg::Options::="--force-confold" --force-yes'
                              ' --allow-unauthenticated {}-tools'.format(node.scylla_pkg()))
             node.remoter.run('sudo apt-get install -y screen')
+            node.remoter.run('sudo apt-get install -y tmux')
 
         if db_node_address is not None:
             node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" % db_node_address)
