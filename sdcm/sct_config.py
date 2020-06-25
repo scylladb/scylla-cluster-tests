@@ -921,6 +921,12 @@ class SCTConfiguration(dict):
              type=boolean,
              help="""Add cdclog reader stats to ES for future performance result calculating"""),
 
+        dict(name="stop_test_on_stress_failure", env="SCT_STOP_TEST_ON_STRESS_FAILURE",
+             type=boolean,
+             help="""If set to True the test will be stopped immediately when stress command failed.
+                     When set to False the test will continue to run even when there are errors in the
+                     stress process"""),
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
