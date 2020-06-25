@@ -868,7 +868,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, prefix, stresser="cassandra-stress",
                                            aggregate=stats_aggregate_cmds)
-
+        stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
         cs_thread = CassandraStressThread(loader_set=self.loaders,
                                           stress_cmd=stress_cmd,
                                           timeout=timeout,
