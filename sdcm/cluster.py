@@ -398,7 +398,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             DatabaseLogEvent(type='SUPPRESSED_MESSAGES', regex='journal: Suppressed', severity=Severity.WARNING),
             DatabaseLogEvent(type='stream_exception', regex='stream_exception'),
         ]
-
+        self._exclude_system_log_from_being_logged = [
+            ' !INFO    | sshd[',
+            ' !INFO    | systemd:',
+            ' !INFO    | systemd-logind:',
+            ' !INFO    | sudo:',
+            ' !INFO    | sshd[',
+            ' !INFO    | dhclient['
+        ]
         self.termination_event = threading.Event()
         self.lock = threading.Lock()
 
@@ -1008,7 +1015,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         while not self.termination_event.isSet():
             self.termination_event.wait(15)
             try:
-                self.search_system_log(start_from_beginning=False, publish_events=True)
+                self.search_system_log(start_from_beginning=False,
+                                       publish_events=True,
+                                       exclude_from_logging=self._exclude_system_log_from_being_logged)
             except Exception:  # pylint: disable=broad-except
                 self.log.exception("failed to read db log")
             except (SystemExit, KeyboardInterrupt) as ex:
@@ -1371,13 +1380,15 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             log_file.seek(0, os.SEEK_END)
             return log_file.tell()
 
-    def search_system_log(self, search_pattern=None, start_from_beginning=False, publish_events=True, severity=Severity.ERROR):
+    def search_system_log(self, search_pattern=None, start_from_beginning=False, publish_events=True,
+                          exclude_from_logging: List[str] = None, severity=Severity.ERROR):
         """
         Search for all known patterns listed in  `_system_error_events`
 
         :param start_from_beginning: if True will search log from first line
         :param publish_events: if True will publish events
         :param severity: event severity if search_pattern is assigned
+        :param exclude_from_logging: lis of patterns to exclude from being logged
         :return: list of (line, error) tuples
         """
         # pylint: disable=too-many-branches,too-many-locals,too-many-statements
@@ -1412,8 +1423,17 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 db_file.seek(start_search_from_byte)
             for index, line in enumerate(db_file, start=last_line_no):
                 if not start_from_beginning and Setup.RSYSLOG_ADDRESS:
-                    LOGGER.debug(line.strip())
-
+                    line = line.strip()
+                    if not exclude_from_logging:
+                        LOGGER.debug(line)
+                    else:
+                        exclude = False
+                        for pattern in exclude_from_logging:
+                            if pattern in line:
+                                exclude = True
+                                break
+                        if not exclude:
+                            LOGGER.debug(line)
                 match = backtrace_regex.search(line)
                 if match and backtraces:
                     data = match.groupdict()
