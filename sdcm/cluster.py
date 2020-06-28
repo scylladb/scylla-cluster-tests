@@ -43,7 +43,7 @@ from sdcm.mgmt import ScyllaManagerError, get_scylla_manager_tool, update_config
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunner, LOCALRUNNER, NETWORK_EXCEPTIONS
-from sdcm import wait
+from sdcm import wait, mgmt
 from sdcm.utils.alternator import WriteIsolation
 from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
     get_latest_gemini_version, makedirs, normalize_ipv6_url, download_dir_from_cloud, generate_random_string
@@ -3622,6 +3622,21 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         LOGGER.info('Decommission %s PASS', node)
         self.terminate_node(node)  # pylint: disable=no-member
         Setup.tester_obj().monitors.reconfigure_scylla_monitoring()
+
+    def get_cluster_manager(self):
+        if not self.params.get('use_mgmt', default=None):
+            raise ScyllaManagerError('Scylla-manager configuration is not defined!')
+        manager_node = Setup.tester_obj().monitors.nodes[0]
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
+        LOGGER.debug("sctool version is : {}".format(manager_tool.version))
+        cluster_name = self.name  # pylint: disable=no-member
+        mgr_cluster = manager_tool.get_cluster(cluster_name)
+        if not mgr_cluster:
+            self.log.debug("Could not find cluster : {} on Manager. Adding it to Manager".format(cluster_name))
+            targets = [[n, n.ip_address] for n in self.nodes]
+            mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=targets[0], disable_automatic_repair=True,
+                                                   auth_token=Setup.tester_obj().monitors.mgmt_auth_token)
+        return mgr_cluster
 
 
 class BaseLoaderSet():
