@@ -21,6 +21,7 @@ import random
 import time
 from collections import OrderedDict
 from uuid import UUID
+from distutils.version import LooseVersion
 
 from cassandra import InvalidRequest
 from cassandra.util import sortedset, SortedSet  # pylint: disable=no-name-in-module
@@ -39,6 +40,9 @@ class FillDatabaseData(ClusterTester):
     Fill scylla with many types of records, tables and data types (taken from dtest) originally by Andrei.
 
     """
+    NON_FROZEN_SUPPORT_OS_MIN_VERSION = '4.1'  # open source version with non-frozen user_types support
+    NON_FROZEN_SUPPORT_ENTERPRISE_MIN_VERSION = '2020'  # enterprise version with non-frozen user_types support
+
     # List of dictionaries for all items tables and their data
     all_verification_items = [
         # order_by_with_in_test: Check that order-by works with IN
@@ -2930,12 +2934,20 @@ class FillDatabaseData(ClusterTester):
     def cql_create_tables(self, session):
         truncates = []
         # Run through the list of items and create all tables
-        for item in self.all_verification_items:
+        for i, item in enumerate(self.all_verification_items):
+            # Check if current cluster version supports non-frozed UDT
+            if 'skip_condition' in item and 'non_frozen_udt' in item['skip_condition'] \
+                    and not eval(item['skip_condition']):
+                item['skip'] = 'skip'
+                self.all_verification_items[i]['skip'] = 'skip'
+                self.log.debug(f"Version doesn't support the item, skip it: {item['create_tables']}.")
+
             if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
                 for create_table in item['create_tables']:
                     # wait a while before creating index, there is a delay of create table for waiting the schema agreement
                     if 'CREATE INDEX' in create_table.upper():
                         time.sleep(15)
+                    self.log.debug(f"create table: {create_table}")
                     session.execute(create_table)
                     if 'CREATE TYPE' in create_table.upper():
                         time.sleep(15)
@@ -2946,6 +2958,26 @@ class FillDatabaseData(ClusterTester):
         time.sleep(30)
         for truncate in truncates:
             session.execute(truncate)
+
+    def version_non_frozen_udt_support(self):
+        """
+        Check if current version supports non-frozen user type
+        Issue: https://github.com/scylladb/scylla/pull/4934
+        """
+        node = self.db_cluster.nodes[0]
+        if not node.scylla_version:
+            node.get_scylla_version()
+
+        scylla_version = node.scylla_version
+        if node.is_enterprise:
+            version_with_support = self.NON_FROZEN_SUPPORT_ENTERPRISE_MIN_VERSION
+        else:
+            version_with_support = self.NON_FROZEN_SUPPORT_OS_MIN_VERSION
+
+        if LooseVersion(scylla_version) < LooseVersion(version_with_support):
+            return False  # current version doesn't support non-frozen UDT
+        else:
+            return True  # current version supports non-frozen UDT
 
     @retrying(n=3, sleep_time=20, allowed_exceptions=ProtocolException)
     def truncate_table(self, session, truncate):  # pylint: disable=no-self-use
@@ -3027,6 +3059,7 @@ class FillDatabaseData(ClusterTester):
         and after upgrade of every node to check the consistency of data
         """
         node = self.db_cluster.nodes[0]
+
         with self.cql_connection_patient(node) as session:
             # pylint: disable=no-member
             # override driver consistency level
@@ -3047,6 +3080,7 @@ class FillDatabaseData(ClusterTester):
         """
         # Prepare connection and keyspace
         node = self.db_cluster.nodes[0]
+
         with self.cql_connection_patient(node) as session:
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
