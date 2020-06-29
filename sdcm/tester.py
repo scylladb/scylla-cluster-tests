@@ -618,7 +618,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             db_info['type'] = self.params.get('instance_type_db')
         if db_info['disk_size'] is None:
             db_info['disk_size'] = self.params.get('aws_root_disk_size_db', default=None)
-        if db_info['device_mappings'] is None:
+        if db_info['device_mappings'] is None and self.params.get('ami_id_db_scylla'):
             if db_info['disk_size']:
                 db_info['device_mappings'] = [{
                     "DeviceName": get_root_device_name(self.params.get('ami_id_db_scylla').split()[0]),
