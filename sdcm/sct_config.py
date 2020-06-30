@@ -242,6 +242,9 @@ class SCTConfiguration(dict):
              type=str,
              help="Stress command for LWT performance test for mixed lwt load baseline"),
 
+        dict(name="use_cloud_manager", env="SCT_USE_CLOUD_MANAGER", type=boolean,
+             help="When define true, will install scylla cloud manager"),
+
         dict(name="use_mgmt", env="SCT_USE_MGMT", type=boolean,
              help="When define true, will install scylla management"),
 
