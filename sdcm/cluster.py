@@ -2957,9 +2957,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.nemesis = []
         self.nemesis_threads = []
         self.nemesis_count = 0
-        self._seed_nodes_ips = []
-        self._seed_nodes = []
-        self._non_seed_nodes = []
         self._node_cycle = None
         super(BaseScyllaCluster, self).__init__(*args, **kwargs)
 
@@ -3004,23 +3001,19 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     @property
     def seed_nodes_ips(self):
-        if not self._seed_nodes_ips:
-            self._seed_nodes_ips = [node.ip_address for node in self.nodes if node.is_seed]
-            assert self._seed_nodes_ips, "We should have at least one selected seed by now"
-        return self._seed_nodes_ips
+        seed_nodes_ips = [node.ip_address for node in self.nodes if node.is_seed]
+        assert seed_nodes_ips, "We should have at least one selected seed by now"
+        return seed_nodes_ips
 
     @property
     def seed_nodes(self):
-        if not self._seed_nodes:
-            self._seed_nodes = [node for node in self.nodes if node.is_seed]
-            assert self._seed_nodes, "We should have at least one selected seed by now"
-        return self._seed_nodes
+        seed_nodes = [node for node in self.nodes if node.is_seed]
+        assert seed_nodes, "We should have at least one selected seed by now"
+        return seed_nodes
 
     @property
     def non_seed_nodes(self):
-        if not self._non_seed_nodes:
-            self._non_seed_nodes = [node for node in self.nodes if not node.is_seed]
-        return self._non_seed_nodes
+        return [node for node in self.nodes if not node.is_seed]
 
     def validate_seeds_on_all_nodes(self):
         for node in self.nodes:
