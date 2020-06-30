@@ -539,12 +539,15 @@ class SCTConfiguration(dict):
              help=""),
 
         dict(name="gce_image", env="SCT_GCE_IMAGE", type=str,
-             help=""),
+             help="GCE image to use for all node types: db, loader and monitor"),
 
         dict(name="gce_image_db", env="SCT_GCE_IMAGE_DB", type=str,
              help=""),
 
         dict(name="gce_image_monitor", env="SCT_GCE_IMAGE_MONITOR", type=str,
+             help=""),
+
+        dict(name="gce_image_loader", env="SCT_GCE_IMAGE_LOADER", type=str,
              help=""),
 
         dict(name="gce_image_username", env="SCT_GCE_IMAGE_USERNAME", type=str,
@@ -994,11 +997,11 @@ class SCTConfiguration(dict):
                 "ami_id_monitor", "aws_root_disk_size_monitor", "aws_root_disk_name_monitor", "ami_db_scylla_user",
                 "ami_monitor_user"],
 
-        'gce': ['user_prefix', 'gce_network', 'gce_image', 'gce_image_username', 'gce_instance_type_db',
+        'gce': ['user_prefix', 'gce_network', 'gce_image_db', 'gce_image_username', 'gce_instance_type_db',
                 'gce_root_disk_type_db', 'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db',
                 'gce_instance_type_loader', 'gce_root_disk_type_loader', 'gce_n_local_ssd_disk_loader',
                 'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'gce_root_disk_size_monitor',
-                'gce_n_local_ssd_disk_monitor', 'gce_datacenter', 'scylla_repo'],
+                'gce_n_local_ssd_disk_monitor', 'gce_datacenter'],
 
         'docker': ['docker_image', 'user_credentials_path'],
 
