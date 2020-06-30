@@ -26,6 +26,7 @@
 | **<a name="scylla_mgmt_repo">scylla_mgmt_repo</a>**  | Url to the repo of scylla manager version to install for management tests | https://repositories.scylladb.com/scylla/repo/qa-test/centos/scylladb-manager-2.0.repo | SCT_SCYLLA_MGMT_REPO
 | **<a name="scylla_mgmt_agent_repo">scylla_mgmt_agent_repo</a>**  | Url to the repo of scylla manager agent version to install for management tests | N/A | SCT_SCYLLA_MGMT_AGENT_REPO
 | **<a name="scylla_mgmt_pkg">scylla_mgmt_pkg</a>**  | Url to the scylla manager packages to install for management tests | N/A | SCT_SCYLLA_MGMT_PKG
+| **<a name="use_cloud_manager">use_cloud_manager</a>**  | When define true, will install scylla cloud manager | N/A | SCT_USE_CLOUD_MANAGER
 | **<a name="use_mgmt">use_mgmt</a>**  | When define true, will install scylla management | N/A | SCT_USE_MGMT
 | **<a name="mgmt_port">mgmt_port</a>**  | The port of scylla management | 10090 | SCT_MGMT_PORT
 | **<a name="mgmt_segments_per_repair">mgmt_segments_per_repair</a>**  | the number of segments per repair used for the manager's repair | 10 | MGMT_SEGMENTS_PER_REPAIR

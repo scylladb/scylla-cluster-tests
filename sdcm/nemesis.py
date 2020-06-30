@@ -1233,6 +1233,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_mgmt_backup(self):
         self._set_current_disruption('ManagementBackup')
+        if not self.cluster.params.get('use_mgmt', default=None) and not self.cluster.params.get('use_cloud_manager',
+                                                                                                 default=None):
+            raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
         if not self.cluster.params.get('backup_bucket_location'):
             raise UnsupportedNemesis('backup bucket location configuration is not defined!')
 
@@ -1252,6 +1255,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_mgmt_repair_cli(self):
         self._set_current_disruption('ManagementRepair')
+        if not self.cluster.params.get('use_mgmt', default=None) and not self.cluster.params.get('use_cloud_manager',
+                                                                                                 default=None):
+            raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
         mgr_cluster = self.cluster.get_cluster_manager()
         mgr_task = mgr_cluster.create_repair_task()
         task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
