@@ -397,6 +397,8 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             raise CreateGCENodeError('Failed to create node: %s' % ex)
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
+        if count <= 0:
+            return []
         self.log.info("Adding nodes to cluster")
         nodes = []
         if cluster.Setup.REUSE_CLUSTER:

@@ -583,7 +583,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                            **common_params)
 
         loader_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_loader', default=0)}
-        self.loaders = LoaderSetGCE(gce_image=self.params.get('gce_image'),
+        self.loaders = LoaderSetGCE(gce_image=self.params.get('gce_image_loader'),
                                     gce_image_type=loader_info['disk_type'],
                                     gce_image_size=loader_info['disk_size'],
                                     gce_n_local_ssd=loader_info['n_local_ssd'],
