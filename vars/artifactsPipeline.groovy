@@ -26,6 +26,9 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'a Scylla AMI to run against (for AMI test, should be blank otherwise)',
                    name: 'scylla_ami_id')
+            string(defaultValue: '',
+                   description: 'a GCE Image to run against (for GCE Image test, should be blank)',
+                   name: 'gce_image_db')
             string(defaultValue: "${pipelineParams.get('region_name', '')}",
                    description: 'AWS region with Scylla AMI (for AMI test, ignored otherwise)',
                    name: 'region_name')
@@ -85,6 +88,8 @@ def call(Map pipelineParams) {
                                                 if [[ ! -z "${params.scylla_ami_id}" ]]; then
                                                     export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
                                                     export SCT_REGION_NAME="${params.region_name}"
+                                                elif [[ ! -z "${params.gce_image_db}" ]]; then
+                                                    export SCT_GCE_IMAGE_DB="${params.gce_image_db}"
                                                 elif [[ ! -z "${params.scylla_version}" ]]; then
                                                     export SCT_SCYLLA_VERSION="${params.scylla_version}"
                                                 elif [[ ! -z "${params.scylla_repo}" ]]; then
@@ -95,7 +100,7 @@ def call(Map pipelineParams) {
                                                         export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
                                                     fi
                                                 else
-                                                    echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO"
+                                                    echo "need to choose one of SCT_GCE_IMAGE_DB | SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO"
                                                     exit 1
                                                 fi
 
