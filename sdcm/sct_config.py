@@ -930,6 +930,9 @@ class SCTConfiguration(dict):
         dict(name="stress_cdc_log_reader_batching_enable", env="SCT_STRESS_CDC_LOG_READER_BATCHING_ENABLE",
              type=boolean,
              help="""retrieving data from multiple streams in one poll"""),
+
+        dict(name="use_legacy_cluster_init", env="SCT_USE_LEGACY_CLUSTER_INIT", type=bool,
+             help="""Use legacy cluster initialization with autobootsrap disabled and parallel node setup"""),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
