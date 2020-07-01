@@ -326,6 +326,7 @@ def conf(config_file, backend):
         config.verify_configuration()
         config.check_required_files()
     except Exception as ex:  # pylint: disable=broad-except
+        logging.exception(str(ex))
         click.secho(str(ex), fg='red')
         sys.exit(1)
     else:
