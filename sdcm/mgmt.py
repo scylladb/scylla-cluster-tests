@@ -213,7 +213,7 @@ class ManagerTask(ScyllaManagerBase):
         Gets the task's status
         """
         cmd = "task list -c {}".format(self.cluster_id)
-        res = self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
+        res = self.sctool.run(cmd=cmd)
         str_status = self.get_property(parsed_table=res, column_name='status')
         str_accurate_status = str_status.split()[0]
         # The manager will sometimes retry a task a few times if it's defined this way, and so in the case of
