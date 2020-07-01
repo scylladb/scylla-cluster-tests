@@ -1233,8 +1233,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_mgmt_backup(self):
         self._set_current_disruption('ManagementBackup')
-        if not self.cluster.params.get('use_mgmt', default=None) and not self.cluster.params.get('use_cloud_manager',
-                                                                                                 default=None):
+        # TODO: When cloud backup is supported - add this to the belowq 'if' statement:
+        #  and not self.cluster.params.get('use_cloud_manager', default=None)
+        if not self.cluster.params.get('use_mgmt', default=None):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
         if not self.cluster.params.get('backup_bucket_location'):
             raise UnsupportedNemesis('backup bucket location configuration is not defined!')
