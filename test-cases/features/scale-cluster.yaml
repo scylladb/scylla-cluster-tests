@@ -3,11 +3,13 @@ cassandra_stress_population_size: 10000000
 space_node_threshold: 100
 
 add_node_cnt: 1
-seeds_num: 5
+seeds_num: 3
 seeds_selector: 'first'
 
+n_db_nodes: 3
 n_loaders: 1
 n_monitor_nodes: 1
+cluster_target_size: 5
 
 instance_type_db: 'i3.large'
 
