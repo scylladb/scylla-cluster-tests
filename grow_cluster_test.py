@@ -31,8 +31,8 @@ class GrowClusterTest(ClusterTester):
 
     def __init__(self, *args, **kwargs):
         super(GrowClusterTest, self).__init__(*args, **kwargs)
-        self._cluster_starting_size = self.params.get('n_db_nodes', default=3)
-        self._cluster_target_size = self.params.get('cluster_target_size', default=5)
+        self._cluster_starting_size = self.params.get('n_db_nodes')
+        self._cluster_target_size = self.params.get('cluster_target_size')
         self.metrics_srv = prometheus.nemesis_metrics_obj()
 
     def get_stress_cmd_profile(self):
