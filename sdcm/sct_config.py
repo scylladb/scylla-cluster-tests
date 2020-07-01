@@ -1187,7 +1187,7 @@ class SCTConfiguration(dict):
     def check_required_files(self):
         # pylint: disable=too-many-nested-blocks
         for param_name in ['stress_cmd', 'stress_read_cmd', 'stress_cmd_w', 'stress_cmd_r', 'stress_cmd_m',
-                           'prepare_write_cmd', 'stress_cmd_no_mv', 'stress_cmd_no_mv_profile', 'stress_cmd_mv',
+                           'prepare_write_cmd', 'stress_cmd_no_mv', 'stress_cmd_no_mv_profile',
                            'prepare_stress_cmd', 'stress_cmd_1', 'stress_cmd_complex_prepare', 'prepare_write_stress',
                            'stress_cmd_read_10m', 'stress_cmd_read_cl_one', 'stress_cmd_read_80m',
                            'stress_cmd_complex_verify_read', 'stress_cmd_complex_verify_more',
