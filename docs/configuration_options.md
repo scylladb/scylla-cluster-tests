@@ -197,3 +197,5 @@
 | **<a name="use_preinstalled_scylla">use_preinstalled_scylla</a>**  | Don't install/update ScyllaDB on DB nodes | False | SCT_USE_PREINSTALLED_SCYLLA
 | **<a name="stress_cdclog_reader_cmd">stress_cdclog_reader_cmd</a>**  | cdc-stressor command to read cdc_log table.<br>You can specify everything but the -node , -keyspace, -table, parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_STRESS_CDCLOG_READER_CMD
 | **<a name="store_cdclog_reader_stats_in_es">store_cdclog_reader_stats_in_es</a>**  | Add cdclog reader stats to ES for future performance result calculating | N/A | SCT_STORE_CDCLOG_READER_STATS_IN_ES
+| **<a name="use_legacy_cluster_init">use_legacy_cluster_init</a>**  | Use legacy cluster initialization with autobootsrap disabled and parallel node setup | True | SCT_USE_LEGACY_CLUSTER_INIT
+
