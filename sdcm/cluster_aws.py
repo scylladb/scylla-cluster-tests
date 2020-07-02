@@ -132,7 +132,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                            aws_instance_profile=self.params.get('aws_instance_profile_name'))
         if self.instance_provision == INSTANCE_PROVISION_SPOT_DURATION:
             # duration value must be a multiple of 60
-            spot_params.update({'duration': cluster.TEST_DURATION / 60 * 60 + 60})
+            spot_params.update({'duration': round(cluster.TEST_DURATION / 60) * 60 + 60})
 
         limit = SPOT_FLEET_LIMIT if self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET else SPOT_CNT_LIMIT
         request_cnt = 1
