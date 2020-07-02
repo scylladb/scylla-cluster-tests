@@ -3365,7 +3365,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
                           murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
                           alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'))
 
-    def node_setup(self, node, verbose=False, timeout=3600):
+    def node_setup(self, node, verbose=False, timeout=3600):  # pylint: disable=too-many-branches
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
 
         install_scylla = True
@@ -3398,7 +3398,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
             node.remoter.run('sudo cat /etc/scylla.d/io.conf')
 
             if self.params.get('use_mgmt', None):
-                region = self.params.get('region_name').split()
                 pkgs_url = self.params.get('scylla_mgmt_pkg', None)
                 pkg_path = None
                 if pkgs_url:
@@ -3406,7 +3405,12 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
                     node.remoter.run('mkdir -p {}'.format(pkg_path))
                     node.remoter.send_files(src='{}*.rpm'.format(pkg_path), dst=pkg_path)
                 node.install_manager_agent(package_path=pkg_path)
-                update_config_file(node=node, region=region[0])
+                cluster_backend = self.params.get("cluster_backend")
+                if cluster_backend == "aws":
+                    region = self.params.get('region_name').split()
+                    update_config_file(node=node, region=region[0])
+                else:
+                    self.log.warning("Backend '%s' not support. Won't configure manager backups!", cluster_backend)
         else:
             self._reuse_cluster_setup(node)
 
