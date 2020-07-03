@@ -19,11 +19,6 @@ from sdcm.utils.common import get_s3_scylla_repos_mapping, get_scylla_ami_versio
     ami_built_by_scylla
 from sdcm.utils.version_utils import get_branch_version, get_branch_version_for_multiple_repositories
 
-logging.getLogger("anyconfig").setLevel(logging.ERROR)
-
-
-LOGGER = logging.getLogger(__name__)
-
 
 # pylint: disable=too-few-public-methods
 class UnsetMarker():
@@ -972,7 +967,7 @@ class SCTConfiguration(dict):
     def __init__(self):
         # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         super(SCTConfiguration, self).__init__()
-
+        self.log = logging.getLogger(__name__)
         env = self._load_environment_variables()
         config_files = env.get('config_files', [])
         config_files = [sct_abs_path(f) for f in config_files]
@@ -1033,7 +1028,7 @@ class SCTConfiguration(dict):
 
         if scylla_version:
             if self.get("cluster_backend") == "docker":
-                LOGGER.info("Assume that Scylla Docker image has repo file pre-installed.")
+                self.log.info("Assume that Scylla Docker image has repo file pre-installed.")
             elif 'ami_id_db_scylla' not in self and self.get('cluster_backend') == 'aws':
                 ami_list = []
                 for region in self.get('region_name').split():
@@ -1127,11 +1122,11 @@ class SCTConfiguration(dict):
         new_scylla_repo = self.get('new_scylla_repo', None)
         if new_scylla_repo and 'target_upgrade_version' not in self:
             self['target_upgrade_version'] = get_branch_version(new_scylla_repo)
-        LOGGER.info(self.dump_config())
+        self.log.info(self.dump_config())
 
         # 9) instance_provision MIXED is not supported
         if self.get('instance_provision') == 'mixed':
-            LOGGER.warning('Selected instance_provision type "MIXED" is not supported!')
+            self.log.warning('Selected instance_provision type "MIXED" is not supported!')
 
     @classmethod
     def get_config_option(cls, name):

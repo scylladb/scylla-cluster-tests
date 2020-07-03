@@ -5,7 +5,7 @@ import re
 import logging
 import json
 from functools import wraps
-from traceback import format_exc
+from traceback import format_exc, format_stack
 from json import JSONEncoder
 import signal
 import time
@@ -248,8 +248,8 @@ class StartupTestEvent(SystemEvent):
 class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
     __test__ = False  # Mark this class to be not collected by pytest.
 
-    def __init__(self, source, source_method,  # pylint: disable=redefined-builtin,too-many-arguments
-                 exception=None, message=None, args=None, kwargs=None, severity=None):
+    def __init__(self, source, source_method=None,  # pylint: disable=redefined-builtin,too-many-arguments
+                 exception=None, message=None, args=None, kwargs=None, severity=None, trace=None):
         super().__init__()
         if severity is None:
             self.severity = Severity.ERROR
@@ -259,6 +259,7 @@ class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attribu
         self.source_method = str(source_method) if source_method else None
         self.exception = str(exception) if exception else None
         self.message = str(message) if message else None
+        self.trace = ''.join(format_stack(trace)) if trace else None
         self.args = args
         self.kwargs = kwargs
 
@@ -269,7 +270,18 @@ class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attribu
         kwargs = f' kwargs={self.kwargs}' if self.kwargs else ''
         params = ','.join([args, kwargs]) if kwargs or args else ''
         source_method = f'.{self.source_method}({params})' if self.source_method else ''
+        message += f'\nTraceback (most recent call last):\n{self.trace}' if self.trace else ''
         return f"{super().__str__()}, source={self.source}{source_method} {message}"
+
+    def publish_or_dump(self, default_logger=None):
+        if 'MainDevice' in EVENTS_PROCESSES:
+            if EVENTS_PROCESSES['MainDevice'].is_alive():
+                super().publish()
+            else:
+                EVENTS_PROCESSES['EVENTS_FILE_LOGGER'].dump_event_into_files(self)
+            return
+        if default_logger:
+            default_logger.error(str(self))
 
 
 class TestResultEvent(SctEvent, Exception):
@@ -277,48 +289,42 @@ class TestResultEvent(SctEvent, Exception):
     It holds and displays all errors of the tests and framework happened.
     """
     __test__ = False  # Mark this class to be not collected by pytest.
+    _head = f'{"=" * 30} TEST RESULTS {"=" * 35}'
+    _ending = "=" * 80
 
-    def __init__(self, test_errors, framework_errors):
+    def __init__(self, test_status: str, events: dict):
         super().__init__()
-        self.test_errors = test_errors
-        self.framework_errors = framework_errors
-        self.ok = not test_errors and not framework_errors
+        self.test_status = test_status
+        self.events = events
+        self.ok = test_status == 'SUCCESS'
         self.severity = Severity.NORMAL if self.ok else Severity.ERROR
 
     def __str__(self):
         if self.ok:
             return dedent(f"""
-            {"-" * 78}
-            PASSED :)
+            {self._head}
+            {self._ending}
+            SUCCESS :)
             """)
-        if self.test_errors:
-            test_errors = f"""{"-" * 30} TEST ERRORS {"-" * 40}
-            """ + '\n            '.join(self.test_errors)
-        else:
-            test_errors = ''
-        if self.framework_errors:
-            framework_errors = f"""{"-" * 30} FRAMEWORK ERRORS {"-" * 30}
-            """ + '\n            '.join(self.framework_errors)
-        else:
-            framework_errors = ''
-
-        return dedent(f"""
-            {test_errors}
-            {framework_errors}
-            {"-" * 78}
-            FAILED :(
-            """)
+        result = f'\n{self._head}\n'
+        for event_group, events in self.events.items():
+            if not events:
+                continue
+            result += f'\n{"-" * 5} LAST {event_group} EVENT {"-" * (62 - len(event_group)) }\n'
+            result += '\n'.join(events)
+        result += f'{self._ending}\n{self.test_status} :('
+        return result
 
     def __reduce__(self):
         """Needed to be able to serialize and deserialize this event via pickle
         """
-        return self.__class__, (self.test_errors, self.framework_errors)
+        return self.__class__, (self.test_status, self.events)
 
-    def __eq__(self, other):
+    def __eq__(self, other: 'TestResultEvent'):
         """Needed to be able to find this event in publish_event_guaranteed cycle
         """
-        return isinstance(other, type(self)) and self.test_errors == other.test_errors and \
-            self.framework_errors == other.framework_errors
+        return isinstance(other, type(self)) and self.test_status == other.test_status and \
+            self.events == other.events
 
 
 class BaseFilter(SystemEvent):
@@ -922,23 +928,25 @@ class EventsFileLogger(Process):  # pylint: disable=too-many-instance-attributes
 
         for _, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events():
             try:
-                msg = "{}: {}".format(message_data.formatted_timestamp, str(message_data).strip())
-                with open(self.events_filename, 'a+') as log_file:
-                    log_file.write(msg + '\n')
-
-                # update each level log file
-                events_filename = self.level_to_file_mapping[message_data.severity]
-                with open(events_filename, 'a+') as events_level_file:
-                    events_level_file.write(msg + '\n')
-
-                # update the summary file
-                self.level_summary[Severity(message_data.severity).name] += 1
-                with open(self.events_summary_filename, 'w') as summary_file:
-                    json.dump(dict(self.level_summary), summary_file, indent=4)
+                msg = self.dump_event_into_files(message_data)
                 if not isinstance(message_data, TestResultEvent):
                     LOGGER.info(msg)
             except Exception:  # pylint: disable=broad-except
                 LOGGER.exception("Failed to write event to event.log")
+
+    def dump_event_into_files(self, message_data: SctEvent):
+        msg = "{}: {}".format(message_data.formatted_timestamp, str(message_data).strip())
+        with open(self.events_filename, 'a+') as log_file:
+            log_file.write(msg + '\n')
+        # update each level log file
+        events_filename = self.level_to_file_mapping[message_data.severity]
+        with open(events_filename, 'a+') as events_level_file:
+            events_level_file.write(msg + '\n')
+        # update the summary file
+        self.level_summary[Severity(message_data.severity).name] += 1
+        with open(self.events_summary_filename, 'w') as summary_file:
+            json.dump(dict(self.level_summary), summary_file, indent=4)
+        return msg
 
     def get_events_by_category(self, limit=0):
         output = {}
@@ -949,7 +957,8 @@ class EventsFileLogger(Process):  # pylint: disable=too-many-instance-attributes
                     output[severity.name] = events_bucket = []
                     event = ''
                     for event_data in events_file:
-                        if not event_data.strip(' \n\t\r'):
+                        event_data = event_data.strip(' \n\t\r')
+                        if not event_data:
                             continue
                         if not line_start.match(event_data):
                             event += '\n' + event_data
@@ -980,12 +989,12 @@ def start_events_device(log_dir, timeout=5):  # pylint: disable=redefined-outer-
     EVENTS_PROCESSES['MainDevice'] = EventsDevice(log_dir)
     EVENTS_PROCESSES['MainDevice'].start()
 
-    EVENTS_PROCESSES['EVENTS_FILE_LOOGER'] = EventsFileLogger(log_dir)
+    EVENTS_PROCESSES['EVENTS_FILE_LOGGER'] = EventsFileLogger(log_dir)
     EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'] = GrafanaAnnotator()
     EVENTS_PROCESSES['EVENTS_GRAFANA_AGGRAGATOR'] = GrafanaEventAggragator()
     EVENTS_PROCESSES['EVENTS_ANALYZER'] = EventsAnalyzer()
 
-    EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].start()
+    EVENTS_PROCESSES['EVENTS_FILE_LOGGER'].start()
     EVENTS_PROCESSES['EVENTS_GRAFANA_ANNOTATOR'].start()
     EVENTS_PROCESSES['EVENTS_GRAFANA_AGGRAGATOR'].start()
     EVENTS_PROCESSES['EVENTS_ANALYZER'].start()
@@ -1004,7 +1013,7 @@ def start_events_device(log_dir, timeout=5):  # pylint: disable=redefined-outer-
 
 def stop_events_device():
     LOGGER.debug("Stopping Events consumers...")
-    processes = ['EVENTS_FILE_LOOGER', 'EVENTS_GRAFANA_ANNOTATOR',
+    processes = ['EVENTS_FILE_LOGGER', 'EVENTS_GRAFANA_ANNOTATOR',
                  'EVENTS_GRAFANA_AGGRAGATOR', 'EVENTS_ANALYZER', 'MainDevice']
     LOGGER.debug("Signalling events consumers to terminate...")
     for proc_name in processes:
@@ -1022,7 +1031,7 @@ def set_grafana_url(url):
 
 
 def get_logger_event_summary():
-    with open(EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].events_summary_filename) as summary_file:
+    with open(EVENTS_PROCESSES['EVENTS_FILE_LOGGER'].events_summary_filename) as summary_file:
         output = json.load(summary_file)
     return output
 

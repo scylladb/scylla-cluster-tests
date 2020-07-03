@@ -21,7 +21,6 @@ import unittest
 import warnings
 from uuid import uuid4
 from functools import wraps
-import traceback
 import threading
 import signal
 import sys
@@ -56,7 +55,7 @@ from sdcm.utils.common import ScyllaCQLSession, get_non_system_ks_cf_list, maked
     get_testrun_status, download_encrypt_keys, PageFetcher, rows_to_list, normalize_ipv6_url
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
-from sdcm.utils.log import configure_logging
+from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
 from sdcm.sct_config import SCTConfiguration
@@ -79,7 +78,7 @@ try:
 except ImportError:
     cluster_cloud = None
 
-configure_logging()
+configure_logging(exception_handler=handle_exception, variables={'log_dir': Setup.logdir()})
 
 try:
     from botocore.exceptions import ClientError
@@ -141,9 +140,13 @@ def teardown_on_exception(method):
     def wrapper(*args, **kwargs):
         try:
             return method(*args, **kwargs)
-        except Exception:
+        except Exception as exc:
+            TestFrameworkEvent(
+                source=args[0].__class__.__name__,
+                source_method='SetUp',
+                exception=exc
+            ).publish_or_dump()
             TEST_LOG.exception("Exception in %s. Will call tearDown", method.__name__)
-            args[0].setup_failure = traceback.format_exc()
             args[0].tearDown()
             raise
     return wrapper
@@ -171,9 +174,8 @@ class silence:  # pylint: disable=invalid-name
     test = None
     name: str = None
 
-    def __init__(self, parent=None, source: str = 'framework', name: str = None, verbose: bool = False):
+    def __init__(self, parent=None, name: str = None, verbose: bool = False):
         self.parent = parent
-        self.source = source
         self.name = name
         self.verbose = verbose
         self.log = logging.getLogger(self.__class__.__name__)
@@ -204,16 +206,18 @@ class silence:  # pylint: disable=invalid-name
             self._store_test_result(self.parent, exc_val, exc_tb, self.name)
         return True
 
-    def _store_test_result(self, parent, exc_val, exc_tb, name):
+    @staticmethod
+    def _store_test_result(parent, exc_val, exc_tb, name):
         if exc_tb.tb_next:
             exc_tb = exc_tb.tb_next
-        parent.store_test_result(
-            source=self.source,
-            message=f'==== {name} ====',
+        TestFrameworkEvent(
+            source=parent.__class__.__name__,
+            source_method=name,
+            message=f'{name} (silenced) failed with:',
             exception=exc_val,
             severity=getattr(exc_val, 'severity', Severity.ERROR),
-            trace=exc_tb.tb_frame
-        )
+            trace=exc_tb.tb_frame,
+        ).publish_or_dump(default_logger=parent.log)
 
 
 def critical_failure_handler(signum, frame):  # pylint: disable=unused-argument
@@ -224,15 +228,15 @@ signal.signal(signal.SIGUSR2, critical_failure_handler)
 
 
 class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
+    log = None
+    localhost = None
+
     def __init__(self, *args):  # pylint: disable=too-many-statements
         super(ClusterTester, self).__init__(*args)
         self.result = None
         self._results = []
-        self.setup_failure = None  # is set when exception occurs during setUp
         self.status = "RUNNING"
-        self.params = SCTConfiguration()
-        self.params.verify_configuration()
-        self.params.check_required_files()
+        self._init_params()
         reuse_cluster_id = self.params.get('reuse_cluster', default=False)
         if reuse_cluster_id:
             Setup.reuse_cluster(True)
@@ -242,8 +246,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             Setup.set_test_id(self.params.get('test_id', default=uuid4()))
         Setup.set_test_name(self.id())
         Setup.set_tester_obj(self)
-        self.log = logging.getLogger(__name__)
-        self.logdir = Setup.logdir()
+        self._init_logging()
 
         self._profile_factory = None
         if self.params.get('enable_test_profiling'):
@@ -288,13 +291,25 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                              self.logdir)
         self.start_time = time.time()
 
-        self.localhost = LocalHost(user_prefix=self.params.get("user_prefix", None), test_id=Setup.test_id())
+        self.localhost = self._init_localhost()
         if self.params.get("logs_transport") == 'rsyslog':
             Setup.configure_rsyslog(self.localhost, enable_ngrok=False)
 
-        start_events_device(Setup.logdir())
+        start_events_device(self.logdir)
         time.sleep(0.5)
         InfoEvent('TEST_START test_id=%s' % Setup.test_id())
+
+    def _init_localhost(self):
+        return LocalHost(user_prefix=self.params.get("user_prefix", None), test_id=Setup.test_id())
+
+    def _init_params(self):
+        self.params = SCTConfiguration()
+        self.params.verify_configuration()
+        self.params.check_required_files()
+
+    def _init_logging(self):
+        self.log = logging.getLogger(self.__class__.__name__)
+        self.logdir = Setup.logdir()
 
     def run(self, result=None):
         self.result = self.defaultTestResult() if result is None else result
@@ -335,6 +350,24 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if db_cluster.non_seed_nodes:
             db_cluster.wait_for_init(node_list=db_cluster.non_seed_nodes)
 
+    @staticmethod
+    def update_certificates():
+        update_certificates()
+
+    @staticmethod
+    def get_events_grouped_by_category(limit=0) -> dict:
+        return EVENTS_PROCESSES['EVENTS_FILE_LOGGER'].get_events_by_category(limit)
+
+    @staticmethod
+    def get_event_summary() -> dict:
+        return get_logger_event_summary()
+
+    def get_test_status(self) -> str:
+        summary = self.get_event_summary()
+        if summary.get('ERROR', 0) or summary.get('CRITICAL', 0):
+            return 'FAILED'
+        return 'SUCCESS'
+
     @teardown_on_exception
     @log_run_info
     def setUp(self):
@@ -345,7 +378,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.monitors = None
         self.connections = []
 
-        update_certificates()
+        self.update_certificates()
 
         # download rpms for update_db_packages
         update_db_packages = self.params.get('update_db_packages', default=None)
@@ -354,43 +387,35 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         append_scylla_yaml = self.params.get('append_scylla_yaml')
         if append_scylla_yaml and ('system_key_directory' in append_scylla_yaml or 'system_info_encryption' in append_scylla_yaml or 'kmip_hosts:' in append_scylla_yaml):
             download_encrypt_keys()
-        try:
-            self.init_resources()
+        self.init_resources()
 
-            if self.db_cluster and self.db_cluster.nodes:
-                self.init_nodes(db_cluster=self.db_cluster)
-                self.set_system_auth_rf()
+        if self.db_cluster and self.db_cluster.nodes:
+            self.init_nodes(db_cluster=self.db_cluster)
+            self.set_system_auth_rf()
 
-                db_node_address = self.db_cluster.nodes[0].ip_address
-                self.loaders.wait_for_init(db_node_address=db_node_address)
+            db_node_address = self.db_cluster.nodes[0].ip_address
+            self.loaders.wait_for_init(db_node_address=db_node_address)
 
-            # cs_db_cluster is created in case MIXED_CLUSTER. For example, gemini test
-            if self.cs_db_cluster:
-                self.init_nodes(db_cluster=self.cs_db_cluster)
+        # cs_db_cluster is created in case MIXED_CLUSTER. For example, gemini test
+        if self.cs_db_cluster:
+            self.init_nodes(db_cluster=self.cs_db_cluster)
 
-            if self.create_stats:
-                self.create_test_stats()
-                # sync test_start_time with ES
-                self.start_time = self.get_test_start_time()
+        if self.create_stats:
+            self.create_test_stats()
+            # sync test_start_time with ES
+            self.start_time = self.get_test_start_time()
 
-            if self.monitors:
-                self.monitors.wait_for_init()
+        if self.monitors:
+            self.monitors.wait_for_init()
 
-            # cancel reuse cluster - for new nodes added during the test
-            Setup.reuse_cluster(False)
-            if self.monitors and self.monitors.nodes:
-                self.prometheus_db = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
-            self.start_time = time.time()
+        # cancel reuse cluster - for new nodes added during the test
+        Setup.reuse_cluster(False)
+        if self.monitors and self.monitors.nodes:
+            self.prometheus_db = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
+        self.start_time = time.time()
 
-            if self.db_cluster:
-                self.db_cluster.validate_seeds_on_all_nodes()
-        except Exception:
-            TestFrameworkEvent(
-                source=self.__class__.__name__,
-                source_method='SetUp',
-                exception=traceback.format_exc()
-            ).publish()
-            raise
+        if self.db_cluster:
+            self.db_cluster.validate_seeds_on_all_nodes()
 
     def set_system_auth_rf(self):
         # change RF of system_auth
@@ -1632,14 +1657,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def get_nemesis_report(self, cluster):
         for current_nemesis in cluster.nemesis:
-            try:
+            with silence(parent=self, name=f"get_nemesis_report(cluster={str(cluster)})"):
                 current_nemesis.report()
-            except Exception as exc:  # pylint: disable=broad-except
-                self.store_test_result(
-                    source='framework',
-                    message='failed to generate nemesis report',
-                    exception=exc,
-                    severity=Severity.ERROR)
 
     @silence()
     def stop_nemesis(self, cluster):  # pylint: disable=no-self-use
@@ -1649,14 +1668,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def stop_resources_stop_tasks_threads(self, cluster):  # pylint: disable=no-self-use
         # TODO: this should be run in parallel
         for node in cluster.nodes:
-            try:
+            with silence(parent=self, name=f'stop_resources_stop_tasks_threads(cluster={str(cluster)})'):
                 node.stop_task_threads(timeout=60)
-            except Exception as exc:  # pylint: disable=broad-except
-                self.store_test_result(
-                    source='framework',
-                    message=f'failed to stop_task_threads on {node}',
-                    exception=exc,
-                    severity=Severity.ERROR)
 
     @silence()
     def get_backtraces(self, cluster):  # pylint: disable=no-self-use
@@ -1706,7 +1719,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             return
 
         actions_per_cluster_type = get_post_behavior_actions(self.params)
-        critical_events = self.get_test_results(source='test')
+        critical_events = get_testrun_status(Setup.test_id(), self.logdir, only_critical=True)
         if self.db_cluster is not None:
             action = actions_per_cluster_type['db_nodes']['action']
             self.log.info("Action for db nodes is %s", action)
@@ -1752,7 +1765,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.info('TearDown is starting...')
         self.stop_event_analyzer()
         self.stop_resources()
-        self.get_test_failing_events()
         self.get_test_failures()
         if self.params.get('collect_logs'):
             self.collect_logs()
@@ -1761,7 +1773,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.update_test_with_errors()
         self.tag_ami_with_result()
         self.destroy_localhost()
-        self.publish_final_event()
         time.sleep(1)  # Sleep is needed to let final event being saved into files
         self.save_email_data()
         self.send_email()
@@ -1771,16 +1782,28 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.finalize_teardown()
         self.log.info('Test ID: {}'.format(Setup.test_id()))
 
+    def _get_test_result_event(self) -> TestResultEvent:
+        return TestResultEvent(
+            test_status=self.get_test_status(),
+            events=self.get_events_grouped_by_category(limit=1))
+
+    @staticmethod
+    def _remove_errors_from_unittest_results(result):
+        to_remove = []
+        for error in result.errors:
+            if error[1] is not None:
+                to_remove.append(error)
+        for error in to_remove:
+            result.errors.remove(error)
+
     def finalize_teardown(self):
-        for _ in range(len(self._outcome.errors) - 1):
-            self._outcome.errors.pop()
-        self._outcome.errors.append((self, (
-            TestResultEvent,
-            TestResultEvent(
-                test_errors=self.get_test_results('test'),
-                framework_errors=self.get_test_results('framework')
-            ),
-            None)))
+        final_event = self._get_test_result_event()
+        if final_event.test_status == 'SUCCESS':
+            self.log.info(str(final_event))
+            return
+        self._remove_errors_from_unittest_results(self._outcome)
+        self.log.error(str(final_event))
+        self._outcome.errors.append((self, (TestResultEvent, final_event, None)))
 
     @silence()
     def destroy_localhost(self):
@@ -1810,17 +1833,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         coredumps = []
         if self.db_cluster:
             coredumps = self.db_cluster.coredumps
+        test_events = self.get_events_grouped_by_category()
         self.update_test_details(
-            errors=self.get_test_results('test'),
+            errors=test_events['ERROR'] + test_events['CRITICAL'],
             coredumps=coredumps)
-
-    @silence()
-    def publish_final_event(self):
-        test_result_event = TestResultEvent(
-            test_errors=self.get_test_results('test'),
-            framework_errors=self.get_test_results('framework')
-        )
-        test_result_event.publish()
 
     def populate_data_parallel(self, size_in_gb, blocking=True, read=False):
 
@@ -2083,45 +2099,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             https://stackoverflow.com/questions/4414234/getting-pythons-unittest-results-in-a-teardown-method/39606065#39606065
             :returns tuple(error, test_failure)
         """
-
-        if self.setup_failure:
-            self.store_test_result(
-                source='test',
-                message=self.setup_failure,
-                severity=Severity.CRITICAL
-            )
-            return
-
-        def list2reason(exc_list):
-            """
-            Gets last backtrace string from `exc_list`
-
-            :param exc_list: unittest list of failures or errors
-            :return: string of backtrace
-            """
-            if exc_list:
-                return "\n--------\n".join(f"{i[0]}:\n{i[1]}" for i in exc_list)
-            return None
-
         if hasattr(self, '_outcome'):  # Python 3.4+
             result = self.defaultTestResult()  # these 2 methods have no side effects
             self._feedErrorsToResult(result, self._outcome.errors)  # pylint: disable=no-member
         else:  # Python 3.2 - 3.3 or 3.0 - 3.1 and 2.7
             result = getattr(self, '_outcomeForDoCleanups', self._resultForDoCleanups)  # pylint: disable=no-member
-        error = list2reason(result.errors)  # Python exceptions during tests
-        test_failure = list2reason(result.failures)  # Assertion errors
-        if error:
-            self.store_test_result(
-                source='test',
-                message=error,
-                severity=Severity.CRITICAL
-            )
-        if test_failure:
-            self.store_test_result(
-                source='test',
-                message=test_failure,
-                severity=Severity.CRITICAL
-            )
+        for error in result.errors + result.failures:
+            if len(error) > 1 and error[1]:
+                TestFrameworkEvent(
+                    source=self.__class__.__name__,
+                    source_method=error[0],
+                    message=error[1],
+                    severity=Severity.ERROR,
+                ).publish_or_dump(default_logger=self.log)
 
     def stop_all_nodes_except_for(self, node):
         self.log.debug("Stopping all nodes except for: {}".format(node.name))
@@ -2282,12 +2272,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         start_time = format_timestamp(self.start_time)
         config_file_name = ";".join(os.path.splitext(os.path.basename(cfg))[0] for cfg in self.params["config_files"])
-        critical = self.get_test_results('test')
-        test_status = "FAILED" if critical else "SUCCESS"
+        test_status = self.get_test_status()
         return {"build_url": os.environ.get("BUILD_URL"),
                 "end_time": format_timestamp(time.time()),
-                "events_summary": get_logger_event_summary(),
-                "last_events": EVENTS_PROCESSES['EVENTS_FILE_LOOGER'].get_events_by_category(100),
+                "events_summary": self.get_event_summary(),
+                "last_events": self.get_events_grouped_by_category(100),
                 "nodes": [],
                 "start_time": start_time,
                 "subject": f"{test_status}: {os.environ.get('JOB_NAME') or config_file_name}: {start_time}",
@@ -2300,47 +2289,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def tag_ami_with_result(self):
         if self.params.get('cluster_backend', '') != 'aws' or not self.params.get('tag_ami_with_result', False):
             return
-        test_result = 'ERROR' if self.get_test_results('test') else 'PASSED'
+        test_result = 'PASSED' if self.get_test_status() == 'SUCCESS' else 'ERROR'
         job_base_name = os.environ.get('JOB_BASE_NAME', 'UnknownJob')
         ami_id = self.params.get('ami_id_db_scylla').split()[0]
         region_name = self.params.get('aws_region').split()[0]
 
         tag_ami(ami_id=ami_id, region_name=region_name, tags_dict={"JOB:{}".format(job_base_name): test_result})
-
-    @silence(source='test')
-    def get_test_failing_events(self):
-        failing_events = get_testrun_status(self.test_id, self.logdir)
-        if failing_events:
-            self.store_test_result(
-                source='test',
-                message='Found following critical errors:\n' + ''.join(failing_events),
-                severity=Severity.CRITICAL)
-
-    def store_test_result(  # pylint: disable=too-many-arguments
-            self,
-            source,
-            message='',
-            exception: Exception = '',
-            trace='',
-            severity=Severity.ERROR):
-        if exception:
-            exception = repr(exception)
-            if exception[0] != '\n' and message[-1] != '\n':
-                message += '\n'
-            message += repr(exception)
-        if trace:
-            if message[0] != '\n':
-                message += '\n'
-            message += ('Traceback (most recent call last):\n' + ''.join(traceback.format_stack(trace)))
-        results = getattr(self, '_results', None)
-        if results is None:
-            results = []
-            setattr(self, '_results', results)
-        results.append({
-            'source': source,
-            'message': message,
-            'severity': severity,
-        })
 
     def get_test_results(self, source, severity=None):
         output = []
