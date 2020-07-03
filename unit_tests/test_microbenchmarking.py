@@ -67,7 +67,7 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
     def setUp(self):
         self.mbra = MicroBenchmarkingResultsAnalyzerMock(email_recipients=('alex.bykov@scylladb.com', ))
         self.mbra.hostname = 'godzilla.cloudius-systems.com'
-        self.cwd = '/sct/sdcm'
+        self.cwd = os.path.join(os.path.dirname(__file__), '..', 'sdcm')
         self.mbra.test_run_date = "2019-06-27_11:39:40"
 
     @staticmethod

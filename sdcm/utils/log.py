@@ -68,26 +68,51 @@ class FilterRemote(logging.Filter):  # pylint: disable=too-few-public-methods
         return not record.name == 'sdcm.remote'
 
 
-def configure_logging():
-    from sdcm.cluster import Setup
-    sys.excepthook = handle_exception
+def replace_vars(obj, variables, obj_type=None):
+    if variables is None:
+        return obj
+    if obj_type is None:
+        obj_type = type(obj)
+    if issubclass(obj_type, dict):
+        output = {}
+        for attr_name, attr_value in obj.items():
+            attr_name = replace_vars(attr_name, variables)
+            attr_value = replace_vars(attr_value, variables)
+            output[attr_name] = attr_value  # deepcode ignore UnhashableKey: you get same keys type as source
+        return output
+    if issubclass(obj_type, list):
+        output = []
+        for element in obj:
+            element = replace_vars(element, variables)
+            output.append(element)  # deepcode ignore InfiniteLoopByCollectionModification: Not even close
+        return output
+    if issubclass(obj_type, tuple):
+        return tuple(replace_vars(obj, variables, list))
+    if issubclass(obj_type, str):
+        return obj.format(**variables)
+    return obj
 
-    logging.config.dictConfig({
-        'version': 1,
-        'disable_existing_loggers': False,
 
-        'formatters': {
+def configure_logging(exception_handler=None,  # pylint: disable=too-many-arguments
+                      formatters=None, filters=None, handlers=None, loggers=None, config=None, variables=None):
+    # sys.excepthook = handle_exception
+    if exception_handler:
+        sys.excepthook = exception_handler
+    if formatters is None:
+        formatters = {
             'default': {
                 '()': MultilineMessagesFormatter,
                 'format': '< t:%(asctime)s f:%(filename)-15s l:%(lineno)-4s c:%(name)-20s p:%(levelname)-5s > %(message)s'
             },
-        },
-        'filters': {
+        }
+    if filters is None:
+        filters = {
             'filter_remote': {
                 '()': FilterRemote
             }
-        },
-        'handlers': {
+        }
+    if handlers is None:
+        handlers = {
             'console': {
                 'level': 'INFO',
                 'formatter': 'default',
@@ -98,12 +123,13 @@ def configure_logging():
             'outfile': {
                 'level': 'DEBUG',
                 'class': 'logging.FileHandler',
-                'filename': '{}/sct.log'.format(Setup.logdir()),
+                'filename': '{log_dir}/sct.log',
                 'mode': 'a',
                 'formatter': 'default',
             }
-        },
-        'loggers': {
+        }
+    if loggers is None:
+        loggers = {
             '': {  # root logger
                 'handlers': ['console', 'outfile'],
                 'level': 'DEBUG',
@@ -126,6 +152,18 @@ def configure_logging():
             },
             'invoke': {
                 'level': 'CRITICAL'
+            },
+            'anyconfig': {
+                'level': 'ERROR'
             }
         }
-    })
+    if config is None:
+        config = {
+            'version': 1,
+            'disable_existing_loggers': False,
+            'formatters': formatters,
+            'filters': filters,
+            'handlers': handlers,
+            'loggers': loggers
+        }
+    logging.config.dictConfig(replace_vars(config, variables))
