@@ -9,13 +9,12 @@ import datetime
 from pathlib import Path
 from multiprocessing import Event
 
-from sdcm.tester import ClusterTester, teardown_on_exception
 from sdcm.utils.decorators import timeout
 from sdcm.prometheus import start_metrics_server
 from sdcm.sct_events import (start_events_device, stop_events_device, TestKiller, InfoEvent, CassandraStressEvent,
                              CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
                              KillTestEvent, Severity, ThreadFailedEvent, TestFrameworkEvent, get_logger_event_summary,
-                             ScyllaBenchEvent, TestResultEvent, PrometheusAlertManagerEvent, EventsFilter, YcsbStressEvent,
+                             ScyllaBenchEvent, PrometheusAlertManagerEvent, EventsFilter, YcsbStressEvent,
                              EventsSeverityChangerFilter)
 
 from sdcm.cluster import Setup
@@ -72,41 +71,6 @@ class BaseEventsTest(unittest.TestCase):
             process.terminate()
             process.join()
         stop_events_device()
-
-    def get_test_results(self, source, severity=None):
-        # It is a copy of the routing from ClusterTester
-        # It has been done in such way because it is impossible to reuse ClusterTester for testing purpose
-        output = []
-        for result in getattr(self, '_results', []):
-            if result.get('source', None) != source:
-                continue
-            if severity is not None and severity != result['severity']:
-                continue
-            output.append(result['message'])
-        return output
-
-    def store_test_result(  # pylint: disable=too-many-arguments
-            self, source, message='', exception: Exception = '', trace='', severity=Severity.ERROR):
-        # It is a copy of the routing from ClusterTester
-        # It has been done in such way because it is impossible to reuse ClusterTester for testing purpose
-        if exception:
-            exception = repr(exception)
-            if exception[0] != '\n' and message[-1] != '\n':
-                message += '\n'
-            message += repr(exception)
-        if trace:
-            if message[0] != '\n':
-                message += '\n'
-            message += ('Traceback (most recent call last):\n' + ''.join(traceback.format_stack(trace)))
-        results = getattr(self, '_results', None)
-        if results is None:
-            results = []
-            setattr(self, '_results', results)
-        results.append({
-            'source': source,
-            'message': message,
-            'severity': severity,
-        })
 
 
 class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
@@ -484,96 +448,6 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
 
         LOGGER.info('sent kill')
         self.assertTrue(self.killed.wait(20), "kill wasn't sent")
-
-
-class TesterFailure(BaseEventsTest):
-    setup_failure = None
-
-    def test_failure_found(self):
-        self.assertTrue(1 == 0)
-
-    def tearDown(self) -> None:
-        ClusterTester.get_test_failures(self)
-        test_errors = ClusterTester.get_test_results(self, source='test')
-        tre = TestResultEvent(
-            test_errors=test_errors,
-            framework_errors=ClusterTester.get_test_results(self, source='framework')
-        )
-        assert tre.severity == Severity.ERROR
-        tre.publish(guaranteed=True)
-        print(str(tre))
-        assert test_errors
-        events_log = self.get_event_logs()
-        assert "ERROR" in events_log
-        self._outcome.errors = []  # we don't want to fail test
-
-
-class TesterNoErrors(BaseEventsTest):
-    setup_failure = None
-
-    def test_no_errors_found(self):  # pylint: disable=no-self-use
-        print("happy test")
-
-    def tearDown(self) -> None:
-        ClusterTester.get_test_failures(self)
-        test_errors = ClusterTester.get_test_results(self, source='test')
-        tre = TestResultEvent(
-            test_errors=test_errors,
-            framework_errors=ClusterTester.get_test_results(self, source='framework')
-        )
-        assert tre.severity == Severity.NORMAL
-        tre.publish(guaranteed=True)
-        print(str(tre))
-        assert not test_errors
-        events_log = self.get_event_logs()
-        assert "FAILURE" not in events_log and "ERROR" not in events_log
-
-
-class TesterErrorDuringSetUp(BaseEventsTest):
-    __unittest_expecting_failure__ = True
-
-    @teardown_on_exception
-    def test_noop(self):  # pylint: disable=no-self-use
-        raise Exception("Something bad happened during setUp!")
-
-    def tearDown(self) -> None:
-        assert self.setup_failure is not None, "setup_failure should contain traceback"  # pylint: disable=no-member
-        ClusterTester.get_test_failures(self)
-        test_errors = ClusterTester.get_test_results(self, source='test')
-        assert test_errors is not None
-        tre = TestResultEvent(
-            test_errors=test_errors,
-            framework_errors=ClusterTester.get_test_results(self, source='framework')
-        )
-        assert tre.severity == Severity.ERROR
-
-
-class TesterMultiSubTest(unittest.TestCase):
-    setup_failure = None
-    __unittest_expecting_failure__ = True
-
-    @unittest.skip("integration")
-    def test_multi_subtest(self):
-        with self.subTest("test1"):
-            print("test1")
-
-        with self.subTest("test2"):
-            assert 1 == 0
-
-        with self.subTest("test3"):
-            assert 1 == 0
-
-    def tearDown(self) -> None:
-        ClusterTester.get_test_failures(self)
-        test_errors = ClusterTester.get_test_results(self, source='test')
-        assert "test3" in test_errors
-        assert "test2" in test_errors
-        tre = TestResultEvent(
-            test_errors=test_errors,
-            framework_errors=ClusterTester.get_test_results(self, source='framework')
-        )
-        assert tre.severity == Severity.CRITICAL
-        self._outcome.errors = []  # we don't want to fail test
 
 
 class TestEventAnalyzer(BaseEventsTest):

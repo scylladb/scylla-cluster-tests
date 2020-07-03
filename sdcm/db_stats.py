@@ -332,10 +332,14 @@ class Stats():
         self._test_index = kwargs.get('test_index', None)
         self._test_id = kwargs.get('test_id', None)
         self._es_doc_type = "test_stats"
-        self.elasticsearch = ES()
+        self.elasticsearch = self._create_es_connection()
         self._stats = {}
         if not self._test_id:
             super(Stats, self).__init__(*args, **kwargs)
+
+    @staticmethod
+    def _create_es_connection():
+        return ES()
 
     def get_doc_id(self):
         return self._test_id

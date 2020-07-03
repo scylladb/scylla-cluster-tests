@@ -823,7 +823,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     source=self.__class__.__name__,
                     source_method='start_journal_thread',
                     message="Got no logging daemon by unknown reason"
-                ).publish()
+                ).publish_or_dump()
 
     @retrying(n=10, sleep_time=20, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying on getting coredump backtrace")
     def _get_coredump_backtraces(self, pid):

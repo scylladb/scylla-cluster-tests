@@ -144,7 +144,7 @@ class BaseEmailReporter:
 
     def render_to_html(self, results, template_str=None):
         """
-        Render analysis results to html template
+        Render analysis results to html template_init_es
         :param results: results dictionary
         :param template_str: template string
         :return: html string
@@ -308,7 +308,7 @@ class LongevityEmailReporter(BaseEmailReporter):
     email_template_file = "results_longevity.html"
     last_events_body_limit_per_severity_in_attachment = 10000
     last_events_limit_in_attachment = 10
-    last_events_severities_in_attachment = ['CRITICAL', 'ERROR', 'WARNING', 'NORMAL']
+    last_events_severities_in_attachment = BaseEmailReporter.last_events_severities + ['NORMAL']
 
     def cut_report_data(self, report_data, attachments_data, reason):
         if attachments_data is not None:
