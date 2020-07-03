@@ -1960,6 +1960,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self.log.info('hot reloading internode ssl nemesis finished')
 
+    def disrupt_run_unique_sequence(self):
+        self.disrupt_mgmt_repair_cli()
+        time.sleep(180)
+        self.disrupt_terminate_and_replace_node()
+        time.sleep(180)
+        self.disrupt_grow_shrink_cluster()
+
 
 class NotSpotNemesis(Nemesis):
     def set_target_node(self):
@@ -2684,6 +2691,17 @@ class GeminiNonDisruptiveChaosMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
+
+
+class NemesisSequence(Nemesis):
+    disruptive = True
+    networking = False
+    run_with_gemini = False
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_run_unique_sequence()
+
 
 
 # Disable unstable streaming err nemesises
