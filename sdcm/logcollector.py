@@ -351,14 +351,14 @@ class GrafanaEntity(BaseLogEntity):  # pylint: disable=too-few-public-methods
     """
     base_grafana_entity_names = [
         {
-            'name': 'scylla-per-server-metrics-nemesis',
-            'path': 'dashboard/db/{dashboard_name}-{version}',
-            'resolution': '1920px*7000px',
-        },
-        {
             'name': 'overview',
             'path': 'd/overview-{version}/scylla-{dashboard_name}',
             'resolution': '1920px*4000px'
+        },
+        {
+            'name': 'scylla-per-server-metrics-nemesis',
+            'path': 'dashboard/db/{dashboard_name}-{version}',
+            'resolution': '1920px*7000px',
         }
     ]
     grafana_port = 3000
@@ -447,13 +447,29 @@ class GrafanaSnapshot(GrafanaEntity):
     Extends:
         GrafanaEntity
     """
-
+    panels_load_timeout = 10
+    scroll_step = 1000
     snapshot_locators_sequence = [
         (By.XPATH, """//button[contains(@class, "navbar-button--share")]"""),
         (By.XPATH, """//ul/li[contains(text(), "Snapshot")]"""),
         (By.XPATH, """//button//span[contains(text(), "Publish to snapshot.raintank.io")]"""),
         (By.XPATH, """//a[contains(@href, "https://snapshot.raintank.io")]""")
     ]
+
+    scroll_ready_locator = (By.XPATH, """//span[contains(text(), "Total Nodes")]""")
+    scroll_element_locator = (By.XPATH, "//div[@class='view']")
+
+    def scrolldown_dashboards_view(self, remote_browser: RemoteBrowser):
+
+        WebDriverWait(remote_browser, 60).until(EC.visibility_of_element_located(self.scroll_ready_locator))
+
+        scroll_element = remote_browser.find_element(*self.scroll_element_locator)
+
+        scroll_height = remote_browser.execute_script("return arguments[0].scrollHeight", scroll_element)
+
+        for scroll_size in range(0, scroll_height, self.scroll_step):
+            remote_browser.execute_script(f'arguments[0].scrollTop = {scroll_size}', scroll_element)
+            time.sleep(self.panels_load_timeout)
 
     def _get_shared_snapshot_link(self, remote_browser, grafana_url):
         """Get link from page to remote snapshot on https://snapshot.raintank.io
@@ -470,6 +486,7 @@ class GrafanaSnapshot(GrafanaEntity):
         :rtype: {str}
         """
         remote_browser.get(grafana_url)
+        self.scrolldown_dashboards_view(remote_browser)
 
         for element in self.snapshot_locators_sequence[:-1]:
             WebDriverWait(remote_browser, 60).until(EC.visibility_of_element_located(element))
