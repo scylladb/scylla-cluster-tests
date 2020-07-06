@@ -3403,7 +3403,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                           murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
                           alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'))
 
-    def node_setup(self, node, verbose=False, timeout=3600):  # pylint: disable=too-many-branches
+    def node_setup(self, node, verbose=False, timeout=3600, wait_db_up=True):  # pylint: disable=too-many-branches
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
 
         install_scylla = True
@@ -3452,11 +3452,11 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         else:
             self._reuse_cluster_setup(node)
 
-        node.wait_db_up(verbose=verbose, timeout=timeout)
-        nodes_status = node.get_nodes_status()
-        check_nodes_status(nodes_status=nodes_status, current_node=node)
-
-        self.clean_replacement_node_ip(node)
+        if wait_db_up:
+            node.wait_db_up(verbose=verbose, timeout=timeout)
+            nodes_status = node.get_nodes_status()
+            check_nodes_status(nodes_status=nodes_status, current_node=node)
+            self.clean_replacement_node_ip(node)
 
     def _scylla_install(self, node):
         node.update_repo_cache()
@@ -3509,12 +3509,13 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         return True
 
     @wait_for_init_wrap
-    def wait_for_init(self, node_list=None, verbose=False, timeout=None):  # pylint: disable=unused-argument
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None, wait_db_up=True):  # pylint: disable=unused-argument
         """
         Scylla cluster setup.
         :param node_list: List of nodes to watch for init.
         :param verbose: Whether to print extra info while watching for init.
         :param timeout: timeout in minutes to wait for init to be finished
+        :param wait_db_up: select if wait for db to start up or not
         :return:
         """
         node_list = node_list or self.nodes

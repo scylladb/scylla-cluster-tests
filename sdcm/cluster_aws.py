@@ -930,7 +930,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                                                                  dc_idx=dc_idx)
         return added_nodes
 
-    def node_setup(self, node, verbose=False, timeout=3600):
+    def node_setup(self, node, verbose=False, timeout=3600, wait_db_up=True):
         node.wait_ssh_up(verbose=verbose)
         node.wait_db_up(verbose=verbose)
 
@@ -945,7 +945,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         node.remoter.run('sudo apt-get install -y openjdk-6-jdk')
 
     @cluster.wait_for_init_wrap
-    def wait_for_init(self, node_list=None, verbose=False, timeout=None):
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None, wait_db_up=True):
         self.get_seed_nodes()
 
 
