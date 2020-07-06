@@ -429,14 +429,26 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.monitoring_set.reconfigure_scylla_monitoring()
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
         new_node.replacement_node_ip = old_node_ip
+        disable_autocompaction = random.choice([True, False])
+        keyspaces = self.cluster.get_test_keyspaces()
         try:
-            self.cluster.wait_for_init(node_list=[new_node], timeout=timeout)
+            self.cluster.wait_for_init(node_list=[new_node], timeout=timeout, wait_db_up=False)
+            if disable_autocompaction:
+                self.log.info(f'During bootstrap, autocompaction will be disabled for keyspaces {keyspaces}')
+                for keyspace in keyspaces:
+                    new_node.run_nodetool(sub_cmd='disableautocompaction', args=keyspace, ignore_status=True)
+            new_node.wait_db_up(timeout=timeout)
+            self.cluster.clean_replacement_node_ip(new_node)
         except (NodeSetupFailed, NodeSetupTimeout):
             self.log.warning("Setup of the '%s' failed, removing it from list of nodes" % new_node)
             self.cluster.nodes.remove(new_node)
             self.log.warning("Node will not be terminated. Please terminate manually!!!")
             raise
         self.cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
+        if disable_autocompaction:
+            self.log.info(f'Bootstrap is finished and will enable autocompaction for keyspaces {keyspaces}')
+            for keyspace in keyspaces:
+                new_node.run_nodetool(sub_cmd='enableautocompaction', args=keyspace)
         return new_node
 
     def _terminate_cluster_node(self, node):
