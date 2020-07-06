@@ -2425,8 +2425,7 @@ class ToggleTableIcsMonkey(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self.call_random_disrupt_method(
-            disrupt_methods=['disrupt_toggle_table_ics', 'disrupt_hard_reboot_node'])
+        self.disrupt_toggle_table_ics()
 
 
 class MgmtBackup(Nemesis):
