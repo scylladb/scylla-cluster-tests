@@ -2658,7 +2658,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             cmd = "rpm -qa 'scylla*'"
         else:
             cmd = "dpkg-query --show 'scylla*'"
-        return self.remoter.run(cmd).stdout.splitlines()
+        result = self.remoter.run(cmd, ignore_status=True)
+        if result.exited == 0:
+            return result.stdout.splitlines()
+        return []
 
     def get_scylla_config_param(self, config_param_name, verbose=True):
         """
