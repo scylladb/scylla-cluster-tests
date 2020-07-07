@@ -189,4 +189,4 @@ def test_04_insert_new_data(docker_scylla):
     ALTERNATOR.batch_write_actions(node=docker_scylla, new_items=new_items,
                                    schema=alternator.schemas.HASH_AND_STR_RANGE_SCHEMA)
     diff = ALTERNATOR.compare_table_data(node=docker_scylla, table_data=new_items)
-    assert diff
+    assert not diff

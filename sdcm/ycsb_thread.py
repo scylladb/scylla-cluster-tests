@@ -123,19 +123,19 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                        self.params.get('alternator_port')))
 
             dynamodb_primarykey_type = self.params.get('dynamodb_primarykey_type')
-            if isinstance(dynamodb_primarykey_type, alternator.enums.YCSVSchemaTypes):
+            if isinstance(dynamodb_primarykey_type, alternator.enums.YCSBSchemaTypes):
                 dynamodb_primarykey_type = dynamodb_primarykey_type.value
 
-            if dynamodb_primarykey_type == alternator.enums.YCSVSchemaTypes.HASH_AND_RANGE.value:
+            if dynamodb_primarykey_type == alternator.enums.YCSBSchemaTypes.HASH_AND_RANGE.value:
                 dynamodb_teample += dedent(f'''
                     dynamodb.primaryKey = {alternator.consts.HASH_KEY_NAME}
                     dynamodb.hashKeyName = {alternator.consts.RANGE_KEY_NAME}
-                    dynamodb.primaryKeyType = {alternator.enums.YCSVSchemaTypes.HASH_AND_RANGE.value}
+                    dynamodb.primaryKeyType = {alternator.enums.YCSBSchemaTypes.HASH_AND_RANGE.value}
                 ''')
-            elif dynamodb_primarykey_type == alternator.enums.YCSVSchemaTypes.HASH_SCHEMA.value:
+            elif dynamodb_primarykey_type == alternator.enums.YCSBSchemaTypes.HASH_SCHEMA.value:
                 dynamodb_teample += dedent(f'''
                     dynamodb.primaryKey = {alternator.consts.HASH_KEY_NAME}
-                    dynamodb.primaryKeyType = {alternator.enums.YCSVSchemaTypes.HASH_SCHEMA.value}
+                    dynamodb.primaryKeyType = {alternator.enums.YCSBSchemaTypes.HASH_SCHEMA.value}
                 ''')
 
             aws_empty_file = dedent(f""""
