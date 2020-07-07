@@ -57,13 +57,15 @@ class ArtifactsTest(ClusterTester):
         # Normalize backend name, e.g., `aws' -> `AWS', `gce' -> `GCE', `docker' -> `Docker'.
         backend = self.params.get("cluster_backend")
         backend = {"aws": "AWS", "gce": "GCE", "docker": "Docker"}.get(backend, backend)
-
+        scylla_packages = self.node.scylla_packages_installed
+        if not scylla_packages:
+            scylla_packages = ['No scylla packages are installed. Please check log file.']
         email_data.update({"backend": backend,
                            "region_name": self.params.get("region_name"),
                            "scylla_instance_type": self.params.get('instance_type_db',
                                                                    self.params.get('gce_instance_type_db')),
                            "scylla_node_image": self.node.image,
-                           "scylla_packages_installed": self.node.scylla_packages_installed,
+                           "scylla_packages_installed": scylla_packages,
                            "scylla_repo": self.params.get("scylla_repo"),
                            "scylla_version": self.node.scylla_version, })
 
