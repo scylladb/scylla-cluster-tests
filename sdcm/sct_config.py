@@ -12,9 +12,9 @@ import getpass
 import pathlib
 
 from distutils.util import strtobool  # pylint: disable=import-error,no-name-in-module
-
 import anyconfig
 
+from sdcm.utils import alternator
 from sdcm.utils.common import get_s3_scylla_repos_mapping, get_scylla_ami_versions, get_branched_ami, get_ami_tags, \
     ami_built_by_scylla
 from sdcm.utils.version_utils import get_branch_version, get_branch_version_for_multiple_repositories
@@ -369,8 +369,9 @@ class SCTConfiguration(dict):
         dict(name="alternator_port", env="SCT_ALTERNATOR_PORT", type=int,
              help="Port to configure for alternator in scylla.yaml"),
         dict(name="dynamodb_primarykey_type", env="SCT_DYNAMODB_PRIMARYKEY_TYPE", type=str,
-             help="Type of dynamodb table to create with range key or not, can be HASH or HASH_AND_RANGE",
-             choices=['HASH', 'HASH_AND_RANGE']),
+             help=f"Type of dynamodb table to create with range key or not, can be:\n"
+                  f"{','.join([schema.value for schema in alternator.enums.YCSVSchemaTypes])}",
+             choices=[schema.value for schema in alternator.enums.YCSVSchemaTypes]),
         dict(name="alternator_write_isolation", env="SCT_ALTERNATOR_WRITE_ISOLATION", type=str,
              help="Set the write isolation for the alternator table, see https://github.com/scylladb/scylla/blob"
                   "/master/docs/alternator/alternator.md#write-isolation-policies for more details"),
@@ -979,6 +980,49 @@ class SCTConfiguration(dict):
 
         dict(name="use_legacy_cluster_init", env="SCT_USE_LEGACY_CLUSTER_INIT", type=bool,
              help="""Use legacy cluster initialization with autobootsrap disabled and parallel node setup"""),
+
+        dict(name="alternator_write_stress_during_entire_test", env="SCT_ALTERNATOR_WRITE_STRESS_DURING_ENTIRE_TEST",
+             type=str,
+             help="""YCSB-stress commands.
+                    You can specify everything but the -node parameter, which is going to
+                    be provided by the test suite infrastructure.
+                    multiple commands can passed as a list"""),
+
+        dict(name="alternator_verify_stress_after_cluster_upgrade",
+             env="SCT_ALTERNATOR_VERIFY_STRESS_AFTER_CLUSTER_UPGRADE",
+             type=str,
+             help="""YCSB-stress commands.
+                You can specify everything but the -node parameter, which is going to
+                be provided by the test suite infrastructure.
+                multiple commands can passed as a list"""),
+
+        dict(name="alternator_prepare_write_stress", env="SCT_ALTERNATOR_PREPARE_WRITE_STRESS",
+             type=str,
+             help="""YCSB-stress commands.
+                You can specify everything but the -node parameter, which is going to
+                be provided by the test suite infrastructure.
+                multiple commands can passed as a list"""),
+
+        dict(name="alternator_stress_cmd_read_cl_quorum", env="SCT_ALTERNATOR_STRESS_CMD_READ_CL_QUORUM",
+             type=str,
+             help="""YCSB-stress commands.
+                    You can specify everything but the -node parameter, which is going to
+                    be provided by the test suite infrastructure.
+                    multiple commands can passed as a list"""),
+
+        dict(name="alternator_stress_cmd_read_10m", env="SCT_ALTERNATOR_STRESS_CMD_READ_10_M",
+             type=str,
+             help="""YCSB-stress commands.
+                    You can specify everything but the -node parameter, which is going to
+                    be provided by the test suite infrastructure.
+                    multiple commands can passed as a list"""),
+
+        dict(name="alternator_stress_cmd_read_60m", env="SCT_ALTERNATOR_STRESS_CMD_READ_60_M",
+             type=str,
+             help="""YCSB-stress commands.
+                You can specify everything but the -node parameter, which is going to
+                be provided by the test suite infrastructure.
+                multiple commands can passed as a list"""),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
@@ -1259,7 +1303,10 @@ class SCTConfiguration(dict):
                            'stress_cmd_read_cl_quorum', 'verify_stress_after_cluster_upgrade',
                            'stress_cmd_complex_verify_delete', 'stress_cmd_lwt_mixed', 'stress_cmd_lwt_de',
                            'stress_cmd_lwt_dc', 'stress_cmd_lwt_ue', 'stress_cmd_lwt_uc', 'stress_cmd_lwt_ine',
-                           'stress_cmd_lwt_d', 'stress_cmd_lwt_u', 'stress_cmd_lwt_i']:
+                           'stress_cmd_lwt_d', 'stress_cmd_lwt_u', 'stress_cmd_lwt_i',
+                           'alternator_write_stress_during_entire_test', 'alternator_prepare_write_stress',
+                           'alternator_verify_stress_after_cluster_upgrade', 'alternator_stress_cmd_read_cl_quorum',
+                           'alternator_stress_cmd_read_10m', 'alternator_stress_cmd_read_60m']:
             stress_cmds = self.get(param_name, default=None)
             if stress_cmds is None:
                 continue

@@ -120,9 +120,9 @@ class Alternator:
                     batch.delete_item({key: item[key] for key in table_keys})
         return table
 
-    def compare_table_data(self, node, table_data, table_name=consts.TABLE_NAME) -> bool:
+    def compare_table_data(self, node, table_data, table_name=consts.TABLE_NAME) -> set:
         data = self.scan_table(node=node, table_name=table_name)
-        return set(hash(tuple(str(xxx))) for xxx in table_data) == set(hash(tuple(str(xxx))) for xxx in data)
+        return set(hash(str(xxx)) for xxx in table_data) - set(hash(str(xxx)) for xxx in data)
 
     def is_table_exists(self, node, table_name: consts.TABLE_NAME, endpoint_url=None):
         dynamodb_api = self.get_dynamodb_api(node=node)

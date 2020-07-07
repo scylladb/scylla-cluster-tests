@@ -17,12 +17,15 @@ import random
 import time
 import re
 import os
+from pprint import pformat
+from string import ascii_letters
 from functools import wraps
 
 from pkg_resources import parse_version
 
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm import wait
+from sdcm.utils import alternator
 from sdcm.utils.version_utils import is_enterprise
 from sdcm.sct_events import DbEventsFilter, IndexSpecialColumnErrorEvent
 
@@ -420,6 +423,40 @@ class UpgradeTest(FillDatabaseData):
             self.log.info('Re-Populate DB with many types of tables and data')
             self.fill_db_data()
 
+    def fill_and_verify_alternator_db_data(self, node, note, schema, pre_fill=False, rewrite_data=True):
+        items, items2 = [], []
+        schema_keys = [key_details["AttributeName"]
+                       for key_details in alternator.schemas.ALTERNATOR_SCHEMAS[schema]["KeySchema"]]
+        key_format = "test_{}"
+        table_name = alternator.consts.TABLE_NAME
+        items_size = 10
+
+        number_of_existing_items = len(self.alternator.scan_table(node=node, table_name=table_name))
+        for idx in range(items_size):
+            item_value = "".join(random.choices(population=ascii_letters, k=10))
+            item_value2 = "".join(random.choices(population=ascii_letters, k=10))
+            items.append({schema_keys[0]:  key_format.format(number_of_existing_items + idx),
+                          schema_keys[1]: item_value})
+            items2.append({schema_keys[0]:  key_format.format(number_of_existing_items + items_size + idx),
+                           schema_keys[1]: item_value2})
+
+        if pre_fill:
+            self.log.info(f"Adding new items to Alternator '{table_name}' table")
+            self.alternator.batch_write_actions(node=node, table_name=table_name, schema=schema, new_items=items)
+        items += self.alternator.scan_table(node=node, table_name=table_name)
+        self.log.info('Run some Queries to verify data %s', note)
+        diff = self.alternator.compare_table_data(node=node, table_data=items, table_name=table_name)
+        assert not diff, f"The new data entered in the table is not the same as the one inside the table. The diff " \
+                         f"'{pformat(diff)}'"
+
+        if rewrite_data:
+            self.log.info(f"Ending exist items of Alternator '{table_name}' table with new values")
+            self.alternator.batch_write_actions(
+                node=node, table_name=table_name, schema=schema, new_items=items2)
+            diff = self.alternator.compare_table_data(node=node, table_data=items + items2, table_name=table_name)
+            assert not diff, f"The new data entered in the table is not the same as the one inside the table. The " \
+                             f"diff '{pformat(diff)}'"
+
     # Added to cover the issue #5621: upgrade from 3.1 to 3.2 fails on std::logic_error (Column idx_token doesn't exist
     # in base and this view is not backing a secondary index)
     # @staticmethod
@@ -433,17 +470,28 @@ class UpgradeTest(FillDatabaseData):
                                          'Found error: index special column "idx_token" is not recognized' %
                                          (node.name, step))
 
-    def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
+    def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements,too-many-branches
         """
         Upgrade half of nodes in the cluster, and start special read workload
         during the stage. Checksum method is changed to xxhash from Scylla 2.2,
         we want to use this case to verify the read (cl=ALL) workload works
         well, upgrade all nodes to new version in the end.
         """
+        node = self.db_cluster.nodes[0]
+        alternator_prepare_write_thread_pool = None
+        alternator_entire_write_thread_pool = None
+        alternator_schema = alternator.enums.YCSVSchemaTypes.HASH_AND_RANGE.value
 
         # In case the target version >= 3.1 we need to perform test for truncate entries
         target_upgrade_version = self.params.get('target_upgrade_version', default='')
+        current_version = self.params.get("scylla_version", default="")
+
         self.truncate_entries_flag = False
+        if is_enterprise(version=current_version):
+            is_alternator_supported = parse_version(current_version) > parse_version("2020.0")
+        else:
+            is_alternator_supported = parse_version(current_version) > parse_version("4.0")
+
         if target_upgrade_version and parse_version(target_upgrade_version) >= parse_version('3.1') and \
                 not is_enterprise(target_upgrade_version):
             self.truncate_entries_flag = True
@@ -452,11 +500,25 @@ class UpgradeTest(FillDatabaseData):
         # prepare test keyspaces and tables before upgrade to avoid schema change during mixed cluster.
         self.prepare_keyspaces_and_tables()
         self.fill_and_verify_db_data('BEFORE UPGRADE', pre_fill=True)
+        if is_alternator_supported:
+            if self.params.get('alternator_enforce_authorization'):
+                with self.cql_connection_patient(node=node) as session:
+                    session.execute("""
+                                   INSERT INTO system_auth.roles (role, salted_hash) VALUES (%s, %s)
+                               """, (self.params.get('alternator_access_key_id'),
+                                     self.params.get('alternator_secret_access_key')))
+            self.alternator.create_table(node=node, table_name=alternator.consts.TABLE_NAME, schema=alternator_schema)
+            self.fill_and_verify_alternator_db_data(
+                node=node, note="ALTERNATOR BEFORE UPGRADE", schema=alternator_schema, pre_fill=True)
 
         # write workload during entire test
         self.log.info('Starting c-s write workload during entire test')
         write_stress_during_entire_test = self.params.get('write_stress_during_entire_test')
         entire_write_cs_thread_pool = self.run_stress_thread(stress_cmd=write_stress_during_entire_test)
+        if is_alternator_supported:
+            self.log.info('Starting YCSV write workload during entire test')
+            alternator_entire_write_thread_pool = self.run_stress_thread(stress_cmd=self.params.get(
+                "alternator_write_stress_during_entire_test"))
 
         # Let to write_stress_during_entire_test complete the schema changes
         time.sleep(300)
@@ -487,6 +549,10 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Starting c-s prepare write workload (n=10000000)')
         prepare_write_stress = self.params.get('prepare_write_stress')
         prepare_write_cs_thread_pool = self.run_stress_thread(stress_cmd=prepare_write_stress)
+        if is_alternator_supported:
+            alternator_prepare_write_stress = self.params.get('alternator_prepare_write_stress')
+            alternator_prepare_write_thread_pool = self.run_stress_thread(
+                stress_cmd=alternator_prepare_write_stress)
         self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
         time.sleep(60)
 
@@ -505,15 +571,30 @@ class UpgradeTest(FillDatabaseData):
             self.db_cluster.node_to_upgrade.check_node_health()
 
             # wait for the prepare write workload to finish
+            self.log.info("Waiting until c-s prepare write is finished")
             self.verify_stress_thread(prepare_write_cs_thread_pool)
+            if is_alternator_supported:
+                self.log.info("Waiting until Alternator prepare write is finished")
+                self.verify_stress_thread(alternator_prepare_write_thread_pool)
 
             # read workload (cl=QUORUM)
             self.log.info('Starting c-s read workload (cl=QUORUM n=10000000)')
             stress_cmd_read_cl_quorum = self.params.get('stress_cmd_read_cl_quorum')
             read_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_cl_quorum)
+            if is_alternator_supported:
+                alternator_stress_cmd_read_cl_quorum = self.params.get('alternator_stress_cmd_read_cl_quorum')
+                self.log.info(f"Starting Alternator read workload ('{alternator_stress_cmd_read_cl_quorum}')")
+                alternator_read_stress_queue = self.run_stress_thread(
+                    stress_cmd=alternator_stress_cmd_read_cl_quorum)
+
             # wait for the read workload to finish
             self.verify_stress_thread(read_stress_queue)
             self.fill_and_verify_db_data('after upgraded one node')
+            if is_alternator_supported:
+                self.verify_stress_thread(alternator_read_stress_queue)
+                self.fill_and_verify_alternator_db_data(
+                    node=node, note='Alternator after upgraded one node', schema=alternator_schema)
+
             self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                           step=step+' - after upgraded one node')
 
@@ -521,6 +602,10 @@ class UpgradeTest(FillDatabaseData):
             self.log.info('Starting c-s read workload for 10m')
             stress_cmd_read_10m = self.params.get('stress_cmd_read_10m')
             read_10m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_10m)
+            if is_alternator_supported:
+                self.log.info('Starting Alternator read workload for 10m')
+                alternator_stress_cmd_read_10m = self.params.get('alternator_stress_cmd_read_10m')
+                alternator_read_10m_thread_pool = self.run_stress_thread(stress_cmd=alternator_stress_cmd_read_10m)
 
             self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
             time.sleep(60)
@@ -537,6 +622,11 @@ class UpgradeTest(FillDatabaseData):
             # wait for the 10m read workload to finish
             self.verify_stress_thread(read_10m_cs_thread_pool)
             self.fill_and_verify_db_data('after upgraded two nodes')
+            if is_alternator_supported:
+                self.verify_stress_thread(alternator_read_10m_thread_pool)
+                self.fill_and_verify_alternator_db_data(
+                    node=node, note='Alternator after upgraded two nodes', schema=alternator_schema)
+
             self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                           step=step+' - after upgraded two nodes')
 
@@ -544,6 +634,10 @@ class UpgradeTest(FillDatabaseData):
             self.log.info('Starting c-s read workload for 60m')
             stress_cmd_read_60m = self.params.get('stress_cmd_read_60m')
             read_60m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_60m)
+            if is_alternator_supported:
+                self.log.info('Starting Alternator read workload for 60m')
+                alternator_stress_cmd_read_60m = self.params.get('alternator_stress_cmd_read_60m')
+                alternator_read_60m_thread_pool = self.run_stress_thread(stress_cmd=alternator_stress_cmd_read_60m)
             self.log.info('Sleeping for 60s to let cassandra-stress start before the rollback...')
             time.sleep(60)
 
@@ -557,6 +651,9 @@ class UpgradeTest(FillDatabaseData):
         step = 'Step4 - Verify data during mixed cluster mode '
         self.log.info(step)
         self.fill_and_verify_db_data('after rollback the second node')
+        if is_alternator_supported:
+            self.fill_and_verify_alternator_db_data(
+                node=node, note='Alternator after rollback the second node', schema=alternator_schema)
         self.log.info('Repair the first upgraded Node')
         self.db_cluster.nodes[indexes[0]].run_nodetool(sub_cmd='repair')
         self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
@@ -576,6 +673,10 @@ class UpgradeTest(FillDatabaseData):
                 self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
                 self.db_cluster.node_to_upgrade.check_node_health()
                 self.fill_and_verify_db_data('after upgraded %s' % self.db_cluster.node_to_upgrade.name)
+                if is_alternator_supported:
+                    self.fill_and_verify_alternator_db_data(
+                        node=node, note=f"Alternator after upgraded '{self.db_cluster.node_to_upgrade.name}'",
+                        schema=alternator_schema)
                 self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                               step=step)
 
@@ -583,8 +684,12 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Waiting for stress threads to complete after upgrade')
         # wait for the 60m read workload to finish
         self.verify_stress_thread(read_60m_cs_thread_pool)
-
         self.verify_stress_thread(entire_write_cs_thread_pool)
+        if is_alternator_supported:
+            self.log.info('Waiting for Alternator stress threads to complete after upgrade')
+            # wait for the 60m read workload to finish
+            self.verify_stress_thread(alternator_read_60m_thread_pool)
+            self.verify_stress_thread(alternator_entire_write_thread_pool)
 
         self.log.info('Step7 - Upgrade sstables to latest supported version ')
         # figure out what is the last supported sstable version
@@ -612,6 +717,13 @@ class UpgradeTest(FillDatabaseData):
             'verify_stress_after_cluster_upgrade')
         verify_stress_cs_thread_pool = self.run_stress_thread(stress_cmd=verify_stress_after_cluster_upgrade)
         self.verify_stress_thread(verify_stress_cs_thread_pool)
+        if is_alternator_supported:
+            self.log.info("Verifying Alternator data after cluster upgraded")
+            alternator_verify_stress_after_cluster_upgrade = self.params.get(  # pylint: disable=invalid-name
+                'alternator_verify_stress_after_cluster_upgrade')
+            alternator_verify_stress_thread_pool = \
+                self.run_stress_thread(stress_cmd=alternator_verify_stress_after_cluster_upgrade)
+            self.verify_stress_thread(alternator_verify_stress_thread_pool)
 
         # complex workload: verify data by simple read cl=ALL
         self.log.info('Starting c-s complex workload to verify data by simple read')
