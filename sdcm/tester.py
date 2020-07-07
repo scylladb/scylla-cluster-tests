@@ -208,8 +208,6 @@ class silence:  # pylint: disable=invalid-name
 
     @staticmethod
     def _store_test_result(parent, exc_val, exc_tb, name):
-        if exc_tb.tb_next:
-            exc_tb = exc_tb.tb_next
         TestFrameworkEvent(
             source=parent.__class__.__name__,
             source_method=name,
