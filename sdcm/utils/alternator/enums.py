@@ -27,6 +27,6 @@ class GeneratorType(Enum):
     STR_BINARY = auto()
 
 
-class YCSVSchemaTypes(Enum):
+class YCSBSchemaTypes(Enum):
     HASH_SCHEMA = "HASH"
     HASH_AND_RANGE = "HASH_AND_RANGE"

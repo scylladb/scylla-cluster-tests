@@ -54,7 +54,7 @@ def call(Map pipelineParams) {
                     script {
                         def tasks = [:]
 
-                        for (version in supportedUpgradeFromVersions(env.GIT_BRANCH, pipelineParams.base_versions)) {
+                        for (version in pipelineParams.base_versions) {
                             def base_version = version
                             tasks["${base_version}"] = {
                                 node(builder.label) {

@@ -14,11 +14,45 @@ stress_cmd_complex_verify_read: cassandra-stress user no-warmup profile=/tmp/com
 stress_cmd_complex_verify_more: cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml  ops'(read1=1,read2=1,update_static=1,update_ttl=1,update_diff1_ts=1,update_diff2_ts=1,update_same1_ts=1,update_same2_ts=1)' cl=ALL n=5000000 -mode cql3 native -rate threads=200 -pop seq=1..5000000
 stress_cmd_complex_verify_delete: cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml  ops'(delete_row=1)' cl=ALL n=500000 -mode cql3 native -rate threads=200 -pop seq=1..500000
 
+# Alternator stress
+alternator_write_stress_during_entire_test: >-2
+  bin/ycsb run dynamodb -P workloads/workloada -threads 100 -p recordcount=2010020
+  -p readproportion=0 -p updateproportion=1 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+  -p fieldcount=10 -p fieldlength=512 -p operationcount=2010020 -p table=alternator_entire_test
+alternator_verify_stress_after_cluster_upgrade: >-2
+  bin/ycsb run dynamodb -P workloads/workloada -threads 100 -p recordcount=2010020
+  -p readproportion=1 -p updateproportion=0 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+  -p fieldcount=10 -p fieldlength=512 -p operationcount=2010020 -p table=alternator_entire_test
+alternator_prepare_write_stress: >-2
+  bin/ycsb run dynamodb -P workloads/workloada -threads 100 -p recordcount=1010020
+  -p readproportion=0 -p updateproportion=1 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+  -p fieldcount=10 -p fieldlength=512 -p operationcount=1010020 -p table=usertable
+alternator_prepare_read_stress: >-2
+  bin/ycsb run dynamodb -P workloads/workloada -threads 100 -p recordcount=1010020
+  -p readproportion=1 -p updateproportion=0 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+  -p fieldcount=10 -p fieldlength=512 -p operationcount=1010020 -p table=usertable
+alternator_stress_cmd_read_10m: >-2
+  bin/ycsb run dynamodb -P workloads/workloada -threads 100 -p recordcount=1010020
+  -p readproportion=1 -p updateproportion=0 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+  -p fieldcount=10 -p fieldlength=512 -p operationcount=1010020 - maxexecutiontime=600 -p table=usertable
+alternator_stress_cmd_read_60m: >-2
+  bin/ycsb run dynamodb -P workloads/workloada -threads 100 -p recordcount=1010020
+  -p readproportion=1 -p updateproportion=0 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+  -p fieldcount=10 -p fieldlength=512 -p operationcount=1010020 - maxexecutiontime=3600 -p table=usertable
+
 n_db_nodes: 4
 n_loaders: 1
 n_monitor_nodes: 1
 
 user_prefix: 'rolling-upgrade'
+
+alternator_port: 8080
+alternator_use_dns_routing: true
+
+dynamodb_primarykey_type: HASH_AND_RANGE
+alternator_enforce_authorization: true
+alternator_access_key_id: 'alternator'
+alternator_secret_access_key: 'password'
 
 server_encrypt: true
 authenticator: 'PasswordAuthenticator'

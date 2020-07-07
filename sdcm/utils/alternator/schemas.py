@@ -19,6 +19,6 @@ HASH_AND_STR_RANGE_SCHEMA = dict(
     ])
 
 ALTERNATOR_SCHEMAS = {
-    enums.YCSVSchemaTypes.HASH_SCHEMA.value: HASH_SCHEMA,
-    enums.YCSVSchemaTypes.HASH_AND_RANGE.value: HASH_AND_STR_RANGE_SCHEMA,
+    enums.YCSBSchemaTypes.HASH_SCHEMA.value: HASH_SCHEMA,
+    enums.YCSBSchemaTypes.HASH_AND_RANGE.value: HASH_AND_STR_RANGE_SCHEMA,
 }
