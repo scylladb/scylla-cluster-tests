@@ -2067,7 +2067,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         result = self.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
         devname = result.stdout.strip()
         extra_setup_args = self.parent_cluster.params.get('append_scylla_setup_args')
-        if self.parent_cluster.params.get('workaround_kernel_bug_for_iotune'):
+        if self.parent_cluster.params.get('workaround_kernel_bug_for_iotune') and '2018.1' not in self.scylla_version:
             self.log.warning(dedent("""
                 Kernel version is {}. Due to known kernel bug in this version using predefined iotune.
                 related issue: https://github.com/scylladb/scylla/issues/5181
