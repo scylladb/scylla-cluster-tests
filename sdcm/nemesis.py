@@ -765,9 +765,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _add_drop_column_generate_columns_to_drop(self, added_columns_info):  # pylint: disable=too-many-branches
         drop = []
-        for num in range(random.randrange(1, min(  # pylint: disable=unused-variable
-                len(added_columns_info['column_names']) + 1, self._add_drop_column_max_per_drop + 1
-        ))):
+        columns_to_drop = min(len(added_columns_info['column_names']) + 1, self._add_drop_column_max_per_drop + 1)
+        if columns_to_drop > 1:
+            columns_to_drop = random.randrange(1, columns_to_drop)
+        for _ in range(columns_to_drop):
             choice = [n for n in added_columns_info['column_names'] if n not in drop]
             if choice:
                 column_name = random.choice(choice)
@@ -786,12 +787,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _add_drop_column_generate_columns_to_add(self, added_columns_info):
         add = []
-        #  pylint: disable=unused-variable
-        upper_limit_columns_to_add = min(
+        columns_to_add = min(
             self._add_drop_column_max_columns - len(added_columns_info['column_names']),
             self._add_drop_column_max_per_add
         )
-        for num in range(random.randrange(1, upper_limit_columns_to_add)):
+        if columns_to_add > 1:
+            columns_to_add = random.randrange(1, columns_to_add)
+        for _ in range(columns_to_add):
             new_column_name = self._random_column_name(added_columns_info['column_names'].keys(),
                                                        self._add_drop_column_max_column_name_size)
             new_column_type = CQLTypeBuilder.get_random(added_columns_info['column_types'], allow_levels=10,
