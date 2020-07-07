@@ -21,3 +21,4 @@ use_mgmt: true
 mgmt_port: 10090
 
 aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'
+store_results_in_elasticsearch: False
