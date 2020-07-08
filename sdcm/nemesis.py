@@ -16,7 +16,6 @@
 """
 Classes that introduce disruption in clusters.
 """
-
 import inspect
 import logging
 import random
@@ -29,6 +28,7 @@ import traceback
 
 from typing import List, Optional
 from collections import OrderedDict, defaultdict
+from functools import wraps, partial
 
 from invoke import UnexpectedExit
 from cassandra import ConsistencyLevel  # pylint: disable=ungrouped-imports
@@ -116,6 +116,35 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # TODO: issue https://github.com/scylladb/scylla/issues/6074. Waiting for dev conclusions
             'cqlstress_lwt_example': '*'  # Ignore LWT user-profile tables
         }
+
+    @classmethod
+    def add_disrupt_method(cls, func=None):
+        """
+        Add disrupt methods to Nemesis class, so those can be randomlly selected by `Nemesis.call_random_disrupt_method`
+        or `Nemesis.get_list_of_disrupt_methods_for_nemesis_subclasses`.
+
+        example of usage:
+        >>> class AddRemoveDCMonkey(Nemesis):
+        >>>    @Nemesis.add_disrupt_method
+        >>>    def disrupt_add_remove_dc(self):
+        >>>        return 'Worked'
+        >>>
+        >>>    def disrupt(self):
+        >>>        self.disrupt_add_remove_dc()
+
+        :param func: if not None, function was used with parantasis @Nemesis.add_disrupt_method()
+        :return: the original function
+        """
+        if func is None:
+            # if func is not defined, return a this function wrapped see https://stackoverflow.com/a/39335652
+            return partial(cls.add_disrupt_method)
+
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            return func(self, *args, **kwargs)
+
+        setattr(cls, func.__name__, wrapper)  # bind it to Nemesis class
+        return func  # returning func means func can still be used normally
 
     def update_stats(self, disrupt, status=True, data=None):
         if not data:
