@@ -1914,7 +1914,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         ]
         self.log.debug("Clean all files from scylla data dirs")
         for cmd in clean_commands_list:
-            self.remoter.run(cmd)
+            self.remoter.run(cmd, ignore_status=True)
 
     def clean_scylla(self):
         """
