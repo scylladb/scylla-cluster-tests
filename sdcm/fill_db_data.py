@@ -2641,7 +2641,7 @@ class FillDatabaseData(ClusterTester):
                         "[[OrderedMapSerializedKey([('home', home_address(street='...', city='SF', zip_code=94102, phones=SortedSet(['123456'])))])]]"],
             'min_version': '',
             'max_version': '',
-            'skip': ''},
+            'skip': 'skip non-frozen test for 2019.1 upgrade'},
         # more_user_types_test
         {
             'create_tables': ["""
