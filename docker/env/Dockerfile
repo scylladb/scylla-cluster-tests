@@ -1,18 +1,41 @@
-FROM python:3.8
+ARG PYTHON_IMAGE_TAG=3.8.3-slim-buster
 
+FROM python:$PYTHON_IMAGE_TAG as apt_base
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update
+
+# Add 3rd-party APT repositories.
+FROM apt_base as apt_repos
+RUN apt-get install -y --no-install-recommends apt-transport-https gnupg2 software-properties-common curl
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
+RUN add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
+
+# Download, build and install Python packages.
+FROM apt_base as python_packages
+ENV PIP_NO_CACHE_DIR=1
+RUN apt-get install -y --no-install-recommends build-essential
+ADD requirements-python.txt .
+RUN mkdir /build && \
+    pip3 install -r requirements-python.txt --root=/build --prefix=./ --ignore-installed --no-warn-script-location
+
+FROM python:$PYTHON_IMAGE_TAG
+ENV PYTHONWARNINGS=ignore:unclosed \
+    PYTHONFAULTHANDLER=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+COPY --from=apt_repos /etc/apt/trusted.gpg /etc/apt/sources.list /etc/apt/
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
-    apt-get install -y git openssl iproute2 sudo apt-transport-https \
-    ca-certificates curl gnupg2 software-properties-common rsync
-
-# Install Docker cli only
-RUN curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add - && \
-    DEBIAN_FRONTEND=noninteractive add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable" && \
-    DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y docker-ce-cli  && \
-    sudo groupadd docker && \
-    sudo usermod -aG docker `whoami`
-
-ADD requirements-python.txt requirements-python.txt
-RUN pip3 install setuptools==46.4.0 pip==20.1.1
-RUN pip3 install -r requirements-python.txt
-
-ENV PYTHONWARNINGS ignore:unclosed
+    apt-get install -y --no-install-recommends \
+        binutils \
+        curl \
+        git \
+        iproute2 \
+        openssh-client \
+        rsync \
+        sudo \
+        unzip \
+        wget \
+        docker-ce-cli && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+COPY --from=python_packages /build /usr/local
