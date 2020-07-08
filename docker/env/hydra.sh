@@ -28,13 +28,13 @@ if ! docker --version; then
     exit 1
 fi
 
-
-if [[ ! -z "`docker images ${DOCKER_REPO}:${VERSION} -q`" ]]; then
-    echo "Image up-to-date"
-else
-    echo "Image with version $VERSION not found. Pulling..."
+if [[ ${USER} == "jenkins" || -z "`docker images ${DOCKER_REPO}:${VERSION} -q`" ]]; then
+    echo "Pull version $VERSION from Docker Hub..."
     docker pull ${DOCKER_REPO}:${VERSION}
+else
+    echo "There is ${DOCKER_REPO}:${VERSION} in local cache, use it."
 fi
+
 # Check for SSH keys
 "${SCT_DIR}/get-qa-ssh-keys.sh"
 
