@@ -67,6 +67,9 @@ class ClusterTesterForTests(ClusterTester):
 
     def tearDown(self):
         super().tearDown()
+        self._validate_results()
+
+    def _validate_results(self):
         final_event = self.final_event
         self._remove_errors_from_unittest_results(self._outcome)
         events_by_category = self.events
@@ -79,12 +82,9 @@ class ClusterTesterForTests(ClusterTester):
             assert len(events_by_category[event_category]) == total_events, \
                 f"{event_category}: Contains ({len(events_by_category[event_category])}) while ({total_events}) expected:\n{''.join(events_by_category[event_category])}"
             assert final_event.events[event_category][0] == events_by_category[event_category][-1]
-        assert str(final_event._head) in sct_log  # pylint: disable=protected-access
-        assert str(final_event._ending) in sct_log  # pylint: disable=protected-access
-        assert str(final_event.test_status) in sct_log
         if final_event.test_status == 'SUCCESS':
             assert self.unittest_final_event is None
-        assert str(final_event) in self.sct_log
+            assert str(final_event) in sct_log
 
     @property
     def final_event(self) -> TestResultEvent:
@@ -140,8 +140,8 @@ class SubtestAndTeardownFailsTest(ClusterTesterForTests):
     def send_email(self):
         raise ValueError()
 
-    def tearDown(self):
-        super().tearDown()
+    def _validate_results(self):
+        super()._validate_results()
         assert self.final_event.test_status == 'FAILED'
         # While running from pycharm and from hydra run-test exception inside subTest won't stop the test,
         #  under hydra unit_test it stops running it and you don't see exception from next subtest.
@@ -162,8 +162,8 @@ class SubtestAssertAndTeardownFailsTest(ClusterTesterForTests):
     def send_email(self):
         raise ValueError()
 
-    def tearDown(self):
-        super().tearDown()
+    def _validate_results(self):
+        super()._validate_results()
         assert self.final_event.test_status == 'FAILED'
         # While running from pycharm and from hydra run-test exception inside subTest won't stop the test,
         #  under hydra unit_test it stops running it and you don't see exception from next subtest.
@@ -180,8 +180,8 @@ class TeardownFailsTest(ClusterTesterForTests):
     def send_email(self):
         raise ValueError()
 
-    def tearDown(self):
-        super().tearDown()
+    def _validate_results(self):
+        super()._validate_results()
         assert self.event_summary == {'NORMAL': 2, 'ERROR': 1}
         assert self.final_event.test_status == 'FAILED'
         assert 'send_email' in self.final_event.events['ERROR'][0]
@@ -190,7 +190,7 @@ class TeardownFailsTest(ClusterTesterForTests):
 class SetupFailsTest(ClusterTesterForTests):
     def __init__(self, *args):
         super().__init__(*args)
-        self.addCleanup(self._tear_down)
+        self.addCleanup(self._validate_results)
 
     def update_certificates(self):
         raise RuntimeError('update_certificates failed')
@@ -198,7 +198,11 @@ class SetupFailsTest(ClusterTesterForTests):
     def test(self):
         pass
 
-    def _tear_down(self):
+    def tearDown(self):
+        ClusterTester.tearDown(self)
+
+    def _validate_results(self):
+        super()._validate_results()
         self._remove_errors_from_unittest_results(self._outcome)
         assert self.event_summary == {'NORMAL': 2, 'ERROR': 1}
         assert self.final_event.test_status == 'FAILED'
@@ -209,8 +213,8 @@ class SuccessTest(ClusterTesterForTests):
     def test(self):
         pass
 
-    def tearDown(self):
-        super().tearDown()
+    def _validate_results(self):
+        super(SuccessTest, self)._validate_results()
         assert self.unittest_final_event is None
         assert self.event_summary == {'NORMAL': 2}
         assert self.final_event.test_status == 'SUCCESS'
@@ -223,8 +227,8 @@ class SubtestsSuccessTest(ClusterTesterForTests):
         with self.subTest('SUBTEST2'):
             pass
 
-    def tearDown(self):
-        super().tearDown()
+    def _validate_results(self):
+        super(SubtestsSuccessTest, self)._validate_results()
         assert self.unittest_final_event is None
         assert self.event_summary == {'NORMAL': 2}
         assert self.final_event.test_status == 'SUCCESS'
