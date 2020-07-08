@@ -1788,6 +1788,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if append_scylla_yaml and ('system_key_directory' in append_scylla_yaml or 'system_info_encryption' in append_scylla_yaml or 'kmip_hosts:' in append_scylla_yaml):
             self.remoter.send_files(src='./data_dir/encrypt_conf',  # pylint: disable=not-callable
                                     dst='/tmp/')
+            self.remoter.run('sudo mkdir -p /etc/scylla/encrypt_conf')
+            self.remoter.run('sudo chown -R scylla:scylla /etc/scylla/')
             self.remoter.run('sudo rm -rf /etc/encrypt_conf')
             self.remoter.run('sudo mv -f /tmp/encrypt_conf /etc/')
             self.remoter.run('sudo mkdir /etc/encrypt_conf/system_key_dir/')
