@@ -384,10 +384,10 @@ class LongevityDataValidator:
             statement=f"SELECT * FROM {self.view_name_for_not_updated_data}",
             verbose=not during_nemesis)
         if not actual_result:
-            DataValidatorEvent(type='error', name='ImmutableRowsValidator', status=Severity.ERROR,
-                               error=f"Can't validate immutable rows. "
-                                     f"Fetch all rows from {self.view_name_for_not_updated_data} failed. "
-                                     f"See error above in the sct.log")
+            DataValidatorEvent(type='warning', name='ImmutableRowsValidator', status=Severity.WARNING,
+                               message=f"Can't validate immutable rows. "
+                               f"Fetch all rows from {self.view_name_for_not_updated_data} failed. "
+                               f"See error above in the sct.log")
             return
 
         expected_result = self.longevity_self_object.fetch_all_rows(
@@ -395,10 +395,10 @@ class LongevityDataValidator:
             statement=f"SELECT * FROM {self.expected_data_table_name}",
             verbose=not during_nemesis)
         if not expected_result:
-            DataValidatorEvent(type='error', name='ImmutableRowsValidator', status=Severity.ERROR,
-                               error=f"Can't validate immutable rows. "
-                                     f"Fetch all rows from {self.expected_data_table_name} failed. "
-                                     f"See error above in the sct.log")
+            DataValidatorEvent(type='warning', name='ImmutableRowsValidator', status=Severity.WARNING,
+                               message=f"Can't validate immutable rows. "
+                               f"Fetch all rows from {self.expected_data_table_name} failed. "
+                               f"See error above in the sct.log")
             return
 
         # Issue https://github.com/scylladb/scylla/issues/6181
@@ -472,9 +472,9 @@ class LongevityDataValidator:
             if not during_nemesis:
                 LOGGER.debug(f'Verify updated row. View {views_set[0]}')
             if not views_set[3]:
-                DataValidatorEvent(type='error', name='UpdatedRowsValidator', status=Severity.ERROR,
-                                   error=f"Can't start validation for {views_set[0]}. "
-                                         f"Copying expected data failed. See error above in the sct.log")
+                DataValidatorEvent(type='warning', name='UpdatedRowsValidator', status=Severity.WARNING,
+                                   message=f"Can't start validation for {views_set[0]}. "
+                                   f"Copying expected data failed. See error above in the sct.log")
                 return
 
             before_update_rows = self.longevity_self_object.fetch_all_rows(
@@ -482,9 +482,9 @@ class LongevityDataValidator:
                 statement=f"SELECT {partition_keys} FROM {views_set[0]}",
                 verbose=not during_nemesis)
             if not before_update_rows:
-                DataValidatorEvent(type='error', name='UpdatedRowsValidator', status=Severity.ERROR,
-                                   error=f"Can't validate updated rows. "
-                                         f"Fetch all rows from {views_set[0]} failed. See error above in the sct.log")
+                DataValidatorEvent(type='warning', name='UpdatedRowsValidator', status=Severity.WARNING,
+                                   message=f"Can't validate updated rows. "
+                                   f"Fetch all rows from {views_set[0]} failed. See error above in the sct.log")
                 return
 
             after_update_rows = self.longevity_self_object.fetch_all_rows(
@@ -492,9 +492,9 @@ class LongevityDataValidator:
                 statement=f"SELECT {partition_keys} FROM {views_set[1]}",
                 verbose=not during_nemesis)
             if not after_update_rows:
-                DataValidatorEvent(type='error', name='UpdatedRowsValidator', status=Severity.ERROR,
-                                   error=f"Can't validate updated rows. "
-                                         f"Fetch all rows from {views_set[1]} failed. See error above in the sct.log")
+                DataValidatorEvent(type='warning', name='UpdatedRowsValidator', status=Severity.WARNING,
+                                   message=f"Can't validate updated rows. "
+                                   f"Fetch all rows from {views_set[1]} failed. See error above in the sct.log")
                 return
 
             expected_rows = self.longevity_self_object.fetch_all_rows(
@@ -502,9 +502,9 @@ class LongevityDataValidator:
                 statement=f"SELECT {partition_keys} FROM {views_set[2]}",
                 verbose=not during_nemesis)
             if not expected_rows:
-                DataValidatorEvent(type='error', name='UpdatedRowsValidator', status=Severity.ERROR,
-                                   error=f"Can't validate updated row. "
-                                         f"Fetch all rows from {views_set[2]} failed. See error above in the sct.log")
+                DataValidatorEvent(type='warning', name='UpdatedRowsValidator', status=Severity.WARNING,
+                                   message=f"Can't validate updated row. "
+                                   f"Fetch all rows from {views_set[2]} failed. See error above in the sct.log")
                 return
 
             # Issue https://github.com/scylladb/scylla/issues/6181
@@ -545,7 +545,7 @@ class LongevityDataValidator:
         was saved in self.rows_before_deletion
         """
         if not self.rows_before_deletion:
-            LOGGER.debug('Verify deleted rows can\'t be performed as expected rows count was had not been saved')
+            LOGGER.debug('Verify deleted rows can\'t be performed as expected rows count had not been saved')
             return
 
         pk_name = self.base_table_partition_keys[0]
