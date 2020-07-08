@@ -179,7 +179,7 @@ def build_reporter(tester):
     logdir = tester.logdir
     if "Gemini" in tester.__class__.__name__:
         return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)
-    elif "Longevity" in tester.__class__.__name__:
+    elif "Longevity" in tester.__class__.__name__ or 'SlaPerUser' in tester.__class__.__name__:
         return LongevityEmailReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
