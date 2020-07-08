@@ -1801,7 +1801,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.info(str(final_event))
             return
         self._remove_errors_from_unittest_results(self._outcome)
-        self.log.error(str(final_event))
         self._outcome.errors.append((self, (TestResultEvent, final_event, None)))
 
     @silence()
