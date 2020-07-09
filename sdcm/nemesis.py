@@ -507,6 +507,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         try:
             if new_node.get_scylla_config_param("enable_repair_based_node_ops") == 'false':
                 self.repair_nodetool_repair(new_node)
+
+            # wait until node gives up on the old node, the default timeout is `ring_delay_ms: 300000`
+            # scylla: [shard 0] gossip - FatClient 10.0.22.115 has been silent for 30000ms, removing from gossip
+            @retrying(n=20, sleep_time=20, allowed_exceptions=(AssertionError,))
+            def wait_for_old_node_to_removed():
+                status = self.cluster.get_nodetool_status(verification_node=new_node)
+                nodes_ips = [ip for dc in status.values() for ip in dc.keys()]
+                assert old_node_ip not in nodes_ips, f"'{old_node_ip}' shouldn't be in: {nodes_ips}"
+
+            wait_for_old_node_to_removed()
+
         finally:
             new_node.running_nemesis = None
 
