@@ -987,7 +987,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 # Workaround for https://github.com/scylladb/scylla/issues/6159
                 # TIME                            PID   UID   GID SIG PRESENT EXE
                 # Sun 2020-04-19 12:27:29 UTC   28987     0     0  11 * /usr/bin/bash
-                self.remoter.run("sudo rm -vf /var/lib/systemd/coredump/core.bash.*", ignore_status=True)
                 continue
             columns = re.split(r'[ ]{2,}', line)
             if len(columns) < 2:
