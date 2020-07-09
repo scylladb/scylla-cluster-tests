@@ -419,7 +419,7 @@ class FillDatabaseData(ClusterTester):
             ],
             'min_version': '3.0',
             'max_version': '',
-            'skip': ''},
+            'skip': 'Index support is not enabled'},
         # mv_with_eq_test: Check that you can query from materialized view
         {
             'create_tables': ["""
