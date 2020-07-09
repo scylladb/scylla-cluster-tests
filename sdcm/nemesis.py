@@ -554,6 +554,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         finally:
             new_node.running_nemesis = None
 
+    def disrupt_kill_scylla(self):
+        self._set_current_disruption('ScyllaKillMonkey %s' % self.target_node)
+        self._kill_scylla_daemon()
+
     def disrupt_no_corrupt_repair(self):
         self._set_current_disruption('NoCorruptRepair %s' % self.target_node)
         self.repair_nodetool_repair()
@@ -2494,6 +2498,14 @@ class NodeTerminateAndReplace(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_terminate_and_replace_node()
+
+
+class ScyllaKillMonkey(Nemesis):
+    disruptive = True
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_kill_scylla()
 
 
 class ValidateHintedHandoffShortDowntime(Nemesis):
