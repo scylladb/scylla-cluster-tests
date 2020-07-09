@@ -22,8 +22,7 @@ class EventsAnalyzer(threading.Thread):
 
     @raise_event_on_failure
     def run(self):
-        for event_class, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events(
-                stop_event=self.stop_event):
+        for event_class, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events(stop_event=self.stop_event):
             try:
                 if event_class == 'TestResultEvent':
                     # don't send kill test cause of those event, test is already done when those are sent out
@@ -44,6 +43,10 @@ class EventsAnalyzer(threading.Thread):
 
     def terminate(self):
         self.stop_event.set()
+
+    def stop(self, timeout: float = None):
+        self.stop_event.set()
+        self.join(timeout)
 
     def kill_test(self, backtrace_with_reason):
         if not Setup.tester_obj():

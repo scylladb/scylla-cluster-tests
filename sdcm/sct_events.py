@@ -1,5 +1,6 @@
 # pylint: disable=too-many-lines
 from __future__ import absolute_import
+from typing import Optional, Generic, TypeVar, Type, List, Union
 import os
 import re
 import logging
@@ -7,15 +8,14 @@ import json
 from functools import wraps
 from traceback import format_exc, format_stack
 from json import JSONEncoder
-import signal
 import time
-from multiprocessing import Event, Process, Value, current_process
+import multiprocessing
+import threading
 import atexit
 import datetime
 import collections
 from contextlib import contextmanager, ExitStack
 from pathlib import Path
-from typing import Optional, Generic, TypeVar, Type, List
 
 import enum
 from enum import Enum
@@ -23,8 +23,8 @@ from textwrap import dedent
 import zmq
 import dateutil.parser
 
-from sdcm.utils.common import safe_kill, pid_exists, makedirs
-from sdcm.utils.decorators import retrying, timeout
+from sdcm.utils.common import makedirs
+from sdcm.utils.decorators import retrying, timeout as retry_timeout
 
 
 EVENTS_DEVICE_START_TIMEOUT = 30  # seconds
@@ -32,14 +32,14 @@ EVENTS_DEVICE_START_TIMEOUT = 30  # seconds
 LOGGER = logging.getLogger(__name__)
 
 
-class EventsDevice(Process):
+class EventsDevice(multiprocessing.Process):
 
     def __init__(self, log_dir):
         super(EventsDevice, self).__init__()
 
-        self._ready = Event()
-        self._pub_port = Value('d', 0)
-        self._sub_port = Value('d', 0)
+        self._ready = multiprocessing.Event()
+        self._pub_port = multiprocessing.Value('d', 0)
+        self._sub_port = multiprocessing.Value('d', 0)
 
         self.event_log_base_dir = os.path.join(log_dir, 'events_log')
         makedirs(self.event_log_base_dir)
@@ -81,7 +81,7 @@ class EventsDevice(Process):
                 context.term()
 
     @staticmethod
-    @timeout(timeout=120)
+    @retry_timeout(timeout=120)
     def wait_till_event_loop_is_working(number_of_events):
         """
         It waits 120 seconds till row of {number_of_events} events is delivered with no loss
@@ -111,14 +111,18 @@ class EventsDevice(Process):
         socket.setsockopt(zmq.SUBSCRIBE, filter_type)  # pylint: disable=no-member
         return socket
 
-    def subscribe_events(self, filter_type=b'', stop_event=None):
+    def subscribe_events(self, filter_type=b'', stop_event: Union[multiprocessing.Event, threading.Event] = None):
         # pylint: disable=too-many-nested-blocks,too-many-branches
         LOGGER.info("subscribe to server with port %d", self.sub_port.value)
         socket = self.get_client_socket(filter_type)
         filters = dict()
+        reiterate = False
         try:
-            while stop_event is None or not stop_event.isSet():
-                if socket.poll(timeout=1):
+            while reiterate or stop_event is None or not stop_event.is_set():
+                # If there is an object scheduled, reiterate cycle, not looking if stop_event is set
+                #   Done in order to make sure that all events end up at the files when stop() is called
+                reiterate = socket.poll(timeout=1)
+                if reiterate:
                     obj = socket.recv_pyobj()
 
                     # remove filter objects when log event timestamp on the
@@ -147,7 +151,8 @@ class EventsDevice(Process):
 
                         yield obj.__class__.__name__, obj
         except (KeyboardInterrupt, SystemExit) as ex:
-            LOGGER.debug("%s - subscribe_events was halted by %s", current_process().name, ex.__class__.__name__)
+            LOGGER.debug("%s - subscribe_events was halted by %s",
+                         multiprocessing.current_process().name, ex.__class__.__name__)
         socket.close()
 
     def publish_event(self, event):
@@ -512,17 +517,6 @@ class CoreDumpEvent(SctEvent):
             super(CoreDumpEvent, self).__str__(), self)
 
 
-class KillTestEvent(SctEvent):
-    def __init__(self, reason):
-        super(KillTestEvent, self).__init__()
-        self.reason = reason
-        self.severity = Severity.CRITICAL
-        self.publish()
-
-    def __str__(self):
-        return "{0}: reason={1.reason}".format(super(KillTestEvent, self).__str__(), self)
-
-
 class DisruptionEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
     def __init__(self, type, name, status, start=None, end=None, duration=None, node=None, error=None, full_traceback=None, **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
         super(DisruptionEvent, self).__init__()
@@ -877,31 +871,11 @@ class PrometheusAlertManagerEvent(SctEvent):  # pylint: disable=too-many-instanc
         return True
 
 
-class TestKiller(Process):
-    __test__ = False  # Mark this class to be not collected by pytest.
-
-    def __init__(self, timeout_before_kill=2, test_callback=None):
-        super(TestKiller, self).__init__()
-        self._test_pid = os.getpid()
-        self.test_callback = test_callback
-        self.timeout_before_kill = timeout_before_kill
-
-    def run(self):
-        for event_type, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events():
-            if event_type == 'KillTestEvent':
-                time.sleep(self.timeout_before_kill)
-                LOGGER.debug("Killing the test")
-                if callable(self.test_callback):
-                    self.test_callback(message_data)
-                    continue
-                if not safe_kill(self._test_pid, signal.SIGTERM) or pid_exists(self._test_pid):
-                    safe_kill(self._test_pid, signal.SIGKILL)
-
-
-class EventsFileLogger(Process):  # pylint: disable=too-many-instance-attributes
+class EventsFileLogger(multiprocessing.Process):  # pylint: disable=too-many-instance-attributes
     def __init__(self, log_dir):
         super(EventsFileLogger, self).__init__()
         self._test_pid = os.getpid()
+        self._stop_event = multiprocessing.Event()
         self.event_log_base_dir = Path(log_dir, 'events_log')
         self.events_filename = Path(self.event_log_base_dir, 'events.log')
         self.critical_events_filename = Path(self.event_log_base_dir, 'critical.log')
@@ -926,7 +900,7 @@ class EventsFileLogger(Process):  # pylint: disable=too-many-instance-attributes
     def run(self):
         LOGGER.info("writing to %s", self.events_filename)
 
-        for _, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events():
+        for _, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events(stop_event=self._stop_event):
             try:
                 msg = self.dump_event_into_files(message_data)
                 if not isinstance(message_data, TestResultEvent):
@@ -978,6 +952,10 @@ class EventsFileLogger(Process):  # pylint: disable=too-many-instance-attributes
                     output[severity.name] = [f"failed to read {events_file_path} file, due to the {str(exc)}"]
         return output
 
+    def stop(self, timeout: float = None):
+        self._stop_event.set()
+        self.join(timeout)
+
 
 EVENTS_PROCESSES = dict()
 
@@ -1018,7 +996,10 @@ def stop_events_device():
     LOGGER.debug("Signalling events consumers to terminate...")
     for proc_name in processes:
         if proc_name in EVENTS_PROCESSES:
-            EVENTS_PROCESSES[proc_name].terminate()
+            if hasattr(EVENTS_PROCESSES[proc_name], 'stop'):
+                EVENTS_PROCESSES[proc_name].stop(10)
+            else:
+                EVENTS_PROCESSES[proc_name].terminate()
     LOGGER.debug("Waiting for Events consumers to finish...")
     for proc_name in processes:
         if proc_name in EVENTS_PROCESSES:
