@@ -1979,6 +1979,23 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.disrupt_grow_shrink_cluster()
         InfoEvent(message='Finished grow_shrink disruption')
 
+    def disrupt_memory_stress(self):
+        """
+        Try to run stress-ng to preempt allocated memory of scylla process,
+        we don't monitor swap usage in /proc/$scylla_pid/status, just make sure
+        no coredump, serious db error occur during the heavy load of memory.
+        """
+        self.target_node.remoter.run('sudo yum install -y epel-release', retry=3)
+        self.target_node.remoter.run('sudo yum install -y stress-ng')
+
+        self.log.info('Try to allocate 120% available memory, the allocated memory will be swaped out')
+        self.target_node.remoter.run(
+            "stress-ng --vm-bytes $(awk '/MemAvailable/{printf \"%d\\n\", $2 * 1.2;}' < /proc/meminfo)k --vm-keep -m 1 -t 100")
+
+        self.log.info('Try to allocate 90% total memory, the allocated memory will be swaped out')
+        self.target_node.remoter.run(
+            "stress-ng --vm-bytes $(awk '/MemTotal/{printf \"%d\\n\", $2 * 0.9;}' < /proc/meminfo)k --vm-keep -m 1 -t 100")
+
 
 class NotSpotNemesis(Nemesis):
     def set_target_node(self):
@@ -2769,3 +2786,12 @@ COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,
 #     @log_time_elapsed_and_status
 #     def disrupt(self):
 #         self.disable_disrupt_corrupt_then_scrub()
+
+
+class MemoryStressMonkey(Nemesis):
+
+    disruptive = True
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_memory_stress()
