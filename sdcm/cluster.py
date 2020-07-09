@@ -2055,7 +2055,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         :param nvme: NVMe(True) or SCSI(False) disk
         :return: list of disk names
         """
-        patt = (r'nvme0n*', r'nvme0n\w+') if nvme else (r'sd[b-z]', r'sd\w+')
+        patt = (r'nvme*n*', r'nvme*n\w+') if nvme else (r'sd[b-z]', r'sd\w+')
         result = self.remoter.run('ls /dev/{}'.format(patt[0]))
         disks = re.findall(r'/dev/{}'.format(patt[1]), result.stdout)
         assert disks, 'Failed to find disks!'
