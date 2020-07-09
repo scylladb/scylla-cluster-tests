@@ -11,9 +11,9 @@ from multiprocessing import Event
 
 from sdcm.utils.decorators import timeout
 from sdcm.prometheus import start_metrics_server
-from sdcm.sct_events import (start_events_device, stop_events_device, TestKiller, InfoEvent, CassandraStressEvent,
+from sdcm.sct_events import (start_events_device, stop_events_device, InfoEvent, CassandraStressEvent,
                              CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
-                             KillTestEvent, Severity, ThreadFailedEvent, TestFrameworkEvent, get_logger_event_summary,
+                             Severity, ThreadFailedEvent, TestFrameworkEvent, get_logger_event_summary,
                              ScyllaBenchEvent, PrometheusAlertManagerEvent, EventsFilter, YcsbStressEvent,
                              EventsSeverityChangerFilter)
 
@@ -54,22 +54,13 @@ class BaseEventsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.temp_dir = tempfile.mkdtemp()
-
         start_metrics_server()
         start_events_device(cls.temp_dir, timeout=5)
-
         cls.killed = Event()
-
-        cls.test_killer = TestKiller(timeout_before_kill=5,
-                                     test_callback=cls.killed.set)
-        cls.test_killer.start()
         time.sleep(5)
 
     @classmethod
     def tearDownClass(cls):
-        for process in [cls.test_killer]:
-            process.terminate()
-            process.join()
         stop_events_device()
 
 
@@ -440,14 +431,6 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         guaranteed_avg = sum(guaranteed_delivery) / len(guaranteed_delivery)
         print(
             f"Rate of publishing 1000 events in guaranteed mode vs non guaranteed mode is {guaranteed_avg}/{non_guaranteed_avg}={(guaranteed_avg/non_guaranteed_avg) * 100}")
-
-    @unittest.skip("this test need some more work")
-    def test_kill_test_event(self):
-        self.assertTrue(self.test_killer.is_alive())
-        str(KillTestEvent(reason="Don't like this test"))
-
-        LOGGER.info('sent kill')
-        self.assertTrue(self.killed.wait(20), "kill wasn't sent")
 
 
 class TestEventAnalyzer(BaseEventsTest):

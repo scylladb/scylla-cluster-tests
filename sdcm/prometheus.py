@@ -286,3 +286,7 @@ class PrometheusDumper(threading.Thread):
 
     def terminate(self):
         self.stop_event.set()
+
+    def stop(self, timeout: float = None):
+        self.stop_event.set()
+        self.join(timeout)
