@@ -10,6 +10,7 @@ from textwrap import dedent
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import YcsbStressEvent, Severity
 from sdcm.remote import FailuresWatcher
+from sdcm.utils import alternator
 from sdcm.utils.common import FileFollowerThread
 from sdcm.utils.docker_utils import RemoteDocker
 from sdcm.utils.common import generate_random_string
@@ -122,17 +123,19 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                        self.params.get('alternator_port')))
 
             dynamodb_primarykey_type = self.params.get('dynamodb_primarykey_type')
+            if isinstance(dynamodb_primarykey_type, alternator.enums.YCSVSchemaTypes):
+                dynamodb_primarykey_type = dynamodb_primarykey_type.value
 
-            if dynamodb_primarykey_type == 'HASH_AND_RANGE':
-                dynamodb_teample += dedent('''
-                    dynamodb.primaryKey = p
-                    dynamodb.hashKeyName = c
-                    dynamodb.primaryKeyType = HASH_AND_RANGE
+            if dynamodb_primarykey_type == alternator.enums.YCSVSchemaTypes.HASH_AND_RANGE.value:
+                dynamodb_teample += dedent(f'''
+                    dynamodb.primaryKey = {alternator.consts.HASH_KEY_NAME}
+                    dynamodb.hashKeyName = {alternator.consts.RANGE_KEY_NAME}
+                    dynamodb.primaryKeyType = {alternator.enums.YCSVSchemaTypes.HASH_AND_RANGE.value}
                 ''')
-            elif dynamodb_primarykey_type == 'HASH':
-                dynamodb_teample += dedent('''
-                    dynamodb.primaryKey = p
-                    dynamodb.primaryKeyType = HASH
+            elif dynamodb_primarykey_type == alternator.enums.YCSVSchemaTypes.HASH_SCHEMA.value:
+                dynamodb_teample += dedent(f'''
+                    dynamodb.primaryKey = {alternator.consts.HASH_KEY_NAME}
+                    dynamodb.primaryKeyType = {alternator.enums.YCSVSchemaTypes.HASH_SCHEMA.value}
                 ''')
 
             aws_empty_file = dedent(f""""
