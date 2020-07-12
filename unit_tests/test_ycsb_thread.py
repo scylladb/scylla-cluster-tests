@@ -3,11 +3,10 @@ import re
 import pytest
 import requests
 
-from sdcm.ycsb_thread import YcsbStressThread
-from sdcm.utils.alternator import create_table as alternator_create_table
+import sdcm.utils.alternator as alternator
 from sdcm.utils.decorators import timeout
 from sdcm.utils.docker_utils import running_in_docker
-
+from sdcm.ycsb_thread import YcsbStressThread
 from unit_tests.dummy_remote import LocalLoaderSetDummy
 
 pytestmark = [pytest.mark.usefixtures('events', 'create_table', 'create_cql_ks_and_table'),
@@ -16,16 +15,17 @@ pytestmark = [pytest.mark.usefixtures('events', 'create_table', 'create_cql_ks_a
 ALTERNATOR_PORT = 8000
 TEST_PARAMS = dict(dynamodb_primarykey_type='HASH_AND_RANGE',
                    alternator_use_dns_routing=True, alternator_port=ALTERNATOR_PORT)
+ALTERNATOR = alternator.api.Alternator()
 
 
 @pytest.fixture(scope='session')
 def create_table(docker_scylla):
     if running_in_docker():
-        alternator_create_table(f'http://{docker_scylla.internal_ip_address}:{ALTERNATOR_PORT}', 'HASH_AND_RANGE',
-                                TEST_PARAMS)
+        ALTERNATOR.endpoint_url = f'http://{docker_scylla.internal_ip_address}:{ALTERNATOR_PORT}'
     else:
         address = docker_scylla.get_port(f'{ALTERNATOR_PORT}')
-        alternator_create_table(f'http://{address}', 'HASH_AND_RANGE', TEST_PARAMS)
+        ALTERNATOR.endpoint_url = f'http://{address}'
+    ALTERNATOR.create_table(table_name=alternator.consts.TABLE_NAME)
 
 
 @pytest.fixture(scope='session')
@@ -35,6 +35,7 @@ def create_cql_ks_and_table(docker_scylla):
     else:
         address = docker_scylla.get_port('9042')
     node_ip, port = address.split(':')
+    port = int(port)
 
     from cassandra.cluster import Cluster
     cluster_driver = Cluster([node_ip], port=port)
@@ -63,6 +64,7 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address):
 
     def cleanup_thread():
         ycsb_thread.kill()
+
     request.addfinalizer(cleanup_thread)
 
     ycsb_thread.run()
@@ -98,6 +100,7 @@ def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, eve
 
     def cleanup_thread1():
         ycsb_thread1.kill()
+
     request.addfinalizer(cleanup_thread1)
 
     ycsb_thread1.run()
@@ -105,11 +108,12 @@ def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, eve
     ycsb_thread1.kill()
 
     # 3. do read with dataintegrity=true
-    cmd = 'bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=10000 -p fieldcount=10 -p fieldlength=512 -p dataintegrity=true -p hdrhistogram.summary.addstatus=true -p operationcount=100000000'
+    cmd = 'bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=10000 -p fieldcount=10 -p fieldlength=512 -p dataintegrity=true -p operationcount=100000000'
     ycsb_thread2 = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=20, params=TEST_PARAMS)
 
     def cleanup_thread2():
         ycsb_thread2.kill()
+
     request.addfinalizer(cleanup_thread2)
 
     ycsb_thread2.run()
@@ -141,6 +145,7 @@ def test_03_cql(request, docker_scylla, prom_address):
 
     def cleanup_thread():
         ycsb_thread.kill()
+
     request.addfinalizer(cleanup_thread)
 
     ycsb_thread.run()
@@ -157,3 +162,22 @@ def test_03_cql(request, docker_scylla, prom_address):
 
     check_metrics()
     ycsb_thread.get_results()
+
+
+def test_04_insert_new_data():
+    schema = alternator.schemas.HASH_AND_STR_RANGE_SCHEMA
+    schema_keys = [key_details["AttributeName"] for key_details in schema["KeySchema"]]
+    new_items = [{schema_keys[0]: 'test_0', schema_keys[1]: 'NFinQpNuCnaNOxsAkyrZ'},
+                 {schema_keys[0]: 'test_1', schema_keys[1]: 'hScfTVnCctqqTQcLrIQd'},
+                 {schema_keys[0]: 'test_2', schema_keys[1]: 'OpvrbHJNNMHptWYQSWvm'},
+                 {schema_keys[0]: 'test_3', schema_keys[1]: 'nzxHPebRwNaxLlXUbbCW'},
+                 {schema_keys[0]: 'test_4', schema_keys[1]: 'WfHQIwRNHflFHYWwOcFA'},
+                 {schema_keys[0]: 'test_5', schema_keys[1]: 'ipcTlIvLbcbrOFDynEBU'},
+                 {schema_keys[0]: 'test_6', schema_keys[1]: 'judYKbqgDAejlpPdqLdx'},
+                 {schema_keys[0]: 'test_7', schema_keys[1]: 'mMYdekljccLeOMWLBTLL'},
+                 {schema_keys[0]: 'test_8', schema_keys[1]: 'NqsNVTtJeWRzrjHmOwop'},
+                 {schema_keys[0]: 'test_9', schema_keys[1]: 'YrRvsqXAtppgCLiHhiQn'}]
+
+    ALTERNATOR.batch_write_actions(new_items=new_items, schema=alternator.schemas.HASH_AND_STR_RANGE_SCHEMA)
+    diff = ALTERNATOR.compare_table_data(table_data=new_items)
+    assert diff
