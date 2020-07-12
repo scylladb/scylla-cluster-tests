@@ -429,7 +429,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.monitoring_set.reconfigure_scylla_monitoring()
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
         new_node.replacement_node_ip = old_node_ip
-        disable_autocompaction = random.choice([True, False])
+        result = new_node.run_nodetool(sub_cmd='help', args='enableautocompaction')
+        if 'Unknown command enableautocompaction' in result.stdout:
+            disable_autocompaction = False
+        else:
+            disable_autocompaction = random.choice([True, False])
         keyspaces = self.cluster.get_test_keyspaces()
         try:
             self.cluster.wait_for_init(node_list=[new_node], timeout=timeout, wait_db_up=False)
