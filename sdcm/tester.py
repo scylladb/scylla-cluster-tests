@@ -1959,7 +1959,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         queries_to_check = [q_dropped, q_errors]
         for query in queries_to_check:
             results = self.prometheus_db.query(query=query, start=starting_from, end=time.time())
-            err_msg = "There were hint manager %s detected during the test!" % "drops" if "dropped" in query else "errors"
+            err_msg = "There were hint manager %s detected during the test!" % (
+                "drops" if "dropped" in query else "errors")
             assert any([float(v[1]) for v in results[0]["values"]]) is False, err_msg
 
     def get_data_set_size(self, cs_cmd):
