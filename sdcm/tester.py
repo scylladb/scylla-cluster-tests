@@ -24,6 +24,7 @@ from functools import wraps
 import threading
 import signal
 import sys
+from typing import Tuple
 
 import boto3.session
 from libcloud.compute.providers import get_driver
@@ -226,9 +227,6 @@ signal.signal(signal.SIGUSR2, critical_failure_handler)
 
 
 class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
-    log = None
-    localhost = None
-
     def __init__(self, *args):  # pylint: disable=too-many-statements
         super(ClusterTester, self).__init__(*args)
         self.result = None
@@ -244,7 +242,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             Setup.set_test_id(self.params.get('test_id', default=uuid4()))
         Setup.set_test_name(self.id())
         Setup.set_tester_obj(self)
-        self._init_logging()
+
+        self.log, self.logdir = self._init_logging()
 
         self._profile_factory = None
         if self.params.get('enable_test_profiling'):
@@ -309,9 +308,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.params.verify_configuration()
         self.params.check_required_files()
 
-    def _init_logging(self):
-        self.log = logging.getLogger(self.__class__.__name__)
-        self.logdir = Setup.logdir()
+    def _init_logging(self) -> Tuple[logging.Logger, str]:
+        return logging.getLogger(self.__class__.__name__), Setup.logdir()
 
     def run(self, result=None):
         self.result = self.defaultTestResult() if result is None else result

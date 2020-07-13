@@ -2,6 +2,7 @@ from time import sleep
 import os
 import shutil
 import logging
+from typing import Tuple
 
 from sdcm.tester import ClusterTester, silence, TestResultEvent
 from sdcm.sct_config import SCTConfiguration
@@ -41,7 +42,6 @@ class ClusterTesterForTests(ClusterTester):
         super().__init__(*args)
 
     def _init_params(self):
-        self.log = logging.getLogger(self.__class__.__name__)
         self.params = FakeSCTConfiguration()
 
     def init_resources(self, loader_info=None, db_info=None, monitor_info=None):
@@ -50,8 +50,9 @@ class ClusterTesterForTests(ClusterTester):
     def _init_localhost(self):
         return None
 
-    def _init_logging(self):
-        pass
+    def _init_logging(self) -> Tuple[logging.Logger, str]:
+        # self.logdir set in __init__ above
+        return logging.getLogger(self.__class__.__name__), self.logdir
 
     @staticmethod
     def update_certificates():
