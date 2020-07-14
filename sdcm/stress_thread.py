@@ -24,7 +24,7 @@ from sdcm.loader import CassandraStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.cluster import BaseLoaderSet
 from sdcm.sct_events import CassandraStressEvent
-from sdcm.utils.common import FileFollowerThread, makedirs, generate_random_string, get_profile_content
+from sdcm.utils.common import FileFollowerThread, generate_random_string, get_profile_content
 from sdcm.sct_events import CassandraStressLogEvent, Severity
 
 
@@ -173,7 +173,7 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
         LOGGER.info('Stress command:\n%s', stress_cmd)
 
         if not os.path.exists(node.logdir):
-            makedirs(node.logdir)
+            os.makedirs(node.logdir, exist_ok=True)
         log_file_name = os.path.join(node.logdir,
                                      f'cassandra-stress-l{loader_idx}-c{cpu_idx}-k{keyspace_idx}-{uuid.uuid4()}.log')
 

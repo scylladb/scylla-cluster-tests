@@ -46,7 +46,7 @@ from sdcm.remote import RemoteCmdRunner, LOCALRUNNER, NETWORK_EXCEPTIONS
 from sdcm import wait, mgmt
 from sdcm.utils.alternator import WriteIsolation
 from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
-    get_latest_gemini_version, makedirs, normalize_ipv6_url, download_dir_from_cloud, generate_random_string
+    get_latest_gemini_version, normalize_ipv6_url, download_dir_from_cloud, generate_random_string
 from sdcm.utils.distro import Distro
 from sdcm.utils.docker_utils import ContainerManager, NotFound
 
@@ -2785,7 +2785,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def init_log_directory(self):
         assert '_SCT_TEST_LOGDIR' in os.environ
         self.logdir = os.path.join(os.environ['_SCT_TEST_LOGDIR'], self.name)
-        makedirs(self.logdir)
+        os.makedirs(self.logdir, exist_ok=True)
 
     def nodes_by_region(self, nodes=None) -> dict:
         """:returns {region_name: [list of nodes]}"""
@@ -4065,7 +4065,7 @@ class BaseLoaderSet():
 
             ScyllaBenchEvent(type='start', node=str(node), stress_cmd=stress_cmd)
 
-            makedirs(node.logdir)
+            os.makedirs(node.logdir, exist_ok=True)
 
             log_file_name = os.path.join(node.logdir,
                                          'scylla-bench-l%s-%s.log' %

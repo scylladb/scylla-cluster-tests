@@ -8,7 +8,7 @@ import re
 import time
 
 from sdcm.sct_events import GeminiEvent, GeminiLogEvent, Severity
-from sdcm.utils.common import FileFollowerThread, makedirs
+from sdcm.utils.common import FileFollowerThread
 
 LOGGER = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
 
     def _run_gemini(self, node, loader_idx):
         logdir = os.path.join(self.outputdir, node.name)
-        makedirs(logdir)
+        os.makedirs(logdir, exist_ok=True)
 
         log_file_name = os.path.join(logdir,
                                      'gemini-l%s-%s.log' %

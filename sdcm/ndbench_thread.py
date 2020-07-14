@@ -93,7 +93,7 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
         if not os.path.exists(loader.logdir):
-            os.makedirs(loader.logdir)
+            os.makedirs(loader.logdir, exist_ok=True)
         log_file_name = os.path.join(loader.logdir, f'ndbench-l{loader_idx}-c{cpu_idx}-{uuid.uuid4()}.log')
         LOGGER.debug('ndbench local log: %s', log_file_name)
 

@@ -222,7 +222,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         stress_cmd = self.build_stress_cmd()
 
         if not os.path.exists(loader.logdir):
-            os.makedirs(loader.logdir)
+            os.makedirs(loader.logdir, exist_ok=True)
         log_file_name = os.path.join(loader.logdir, 'ycsb-l%s-c%s-%s.log' %
                                      (loader_idx, cpu_idx, uuid.uuid4()))
         LOGGER.debug('ycsb-stress local log: %s', log_file_name)
