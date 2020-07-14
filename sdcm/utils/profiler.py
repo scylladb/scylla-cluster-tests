@@ -414,7 +414,7 @@ class ProfilerFactory:
             group_dir = os.path.join(self._target_dir, group_name)
             if os.path.exists(group_dir):
                 shutil.rmtree(group_dir, ignore_errors=True)
-            os.makedirs(group_dir)
+            os.makedirs(group_dir, exist_ok=True)
             with open(os.path.join(group_dir, 'stats.txt'), 'w') as stat_file:
                 self._dump_text_stats(*stat_holders, dst=stat_file)
             with open(os.path.join(group_dir, 'stats.bin'), 'wb') as stat_file:

@@ -1277,22 +1277,6 @@ def format_timestamp(timestamp):
     return datetime.datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
 
 
-def makedirs(path):
-    """
-
-    TODO: when move to python3, this function will be replaced
-    with os.makedirs function:
-        os.makedirs(name, mode=0o777, exist_ok=False)
-
-    """
-    try:
-        os.makedirs(path)
-    except OSError:
-        if os.path.exists(path):
-            return
-        raise
-
-
 def wait_ami_available(client, ami_id):
     """Wait while ami_id become available
 
@@ -1349,7 +1333,7 @@ def s3_download_dir(bucket, path, target):
             local_file_path = os.path.join(target, rel_path)
             # Make sure directories exist
             local_file_dir = os.path.dirname(local_file_path)
-            makedirs(local_file_dir)
+            os.makedirs(local_file_dir, exist_ok=True)
             LOGGER.info("Downloading %s from s3 to %s", key['Key'], local_file_path)
             client.download_file(bucket, key['Key'], local_file_path)
 
@@ -1382,7 +1366,7 @@ def gce_download_dir(bucket, path, target):
         local_file_path = os.path.join(target, rel_path)
 
         local_file_dir = os.path.dirname(local_file_path)
-        makedirs(local_file_dir)
+        os.makedirs(local_file_dir, exist_ok=True)
         LOGGER.info("Downloading %s from gcp to %s", obj.name, local_file_path)
         obj.download(destination_path=local_file_path, overwrite_existing=True)
 

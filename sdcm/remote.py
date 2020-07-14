@@ -471,7 +471,7 @@ class RemoteCmdRunner(CommandRunner):  # pylint: disable=too-many-instance-attri
             # scp has no equivalent to --delete, just drop the entire dest dir
             if delete_dst and os.path.isdir(dst):
                 shutil.rmtree(dst)
-                os.makedirs(dst)
+                os.makedirs(dst, exist_ok=True)
 
             remote_source = self._make_rsync_compatible_source(src, False)
             if remote_source:
