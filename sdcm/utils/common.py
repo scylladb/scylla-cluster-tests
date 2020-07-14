@@ -681,6 +681,47 @@ def clean_instances_aws(tags_dict):
             LOGGER.debug("Done. Result: %s\n", response['TerminatingInstances'])
 
 
+def clean_sct_runners():
+    LOGGER.info("Looking for SCT runner instances...")
+    all_instances = list_instances_aws(verbose=True)
+    sorted_by_test_id = {}
+    sct_runners = []
+
+    for instance in all_instances:
+        tags = aws_tags_to_dict(instance.get('Tags'))
+        node_type = tags.get("NodeType", "")
+        if node_type == "sct-runner":
+            sct_runners.append(instance)
+        else:
+            test_id = tags.get("TestId")
+            if test_id:
+                sorted_by_test_id[test_id] = instance
+    if sct_runners:
+        LOGGER.info("SCT Runners found: %s",
+                    "\n".join(["%s (%s)" % (i['InstanceId'], i['Placement']['AvailabilityZone']) for i in sct_runners]))
+    else:
+        LOGGER.info("No SCT runner instances found! Nothing to clean.")
+
+    for sct_runner in sct_runners:
+        tags = aws_tags_to_dict(sct_runner.get('Tags'))
+        test_id = tags.get("TestId")
+        keep = tags.get("keep", None)
+        launch_time = sct_runner['LaunchTime']
+        utc_now = datetime.datetime.now(tz=datetime.timezone.utc)
+        seconds_running = (utc_now - launch_time).total_seconds()
+        #  running less than an hour and more than 15 minutes but no test instances created
+        #  means that something bad happened with a test
+        if (keep is None) or (keep and seconds_running < int(keep) * 3600 and not sorted_by_test_id.get(test_id)) or \
+                (seconds_running > int(keep) * 3600):
+            region = sct_runner['Placement']['AvailabilityZone'][:-1]
+            LOGGER.info("Runner instance '%s' in '%s' is unused/expired, cleaning ...",
+                        sct_runner['InstanceId'], region)
+            client = boto3.client('ec2', region_name=region)
+            response = client.terminate_instances(InstanceIds=[sct_runner['InstanceId']])
+            LOGGER.info("Done.")
+            LOGGER.debug("Result: %s\n", response['TerminatingInstances'])
+
+
 def list_elastic_ips_aws(tags_dict=None, region_name=None, group_as_region=False, verbose=False):
     """
     list all elastic ips with specific tags AWS

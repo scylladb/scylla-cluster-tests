@@ -255,6 +255,7 @@ def call() {
                                     else
                                         ./docker/env/hydra.sh clean-resources --logdir "`pwd`"
                                     fi
+                                    ./docker/env/hydra.sh clean-runner-instances
                                     echo "Finished cleaning resources."
                                     """
                                 }
