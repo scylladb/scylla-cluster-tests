@@ -23,7 +23,6 @@ from textwrap import dedent
 import zmq
 import dateutil.parser
 
-from sdcm.utils.common import makedirs
 from sdcm.utils.decorators import retrying, timeout as retry_timeout
 
 
@@ -42,7 +41,7 @@ class EventsDevice(multiprocessing.Process):
         self._sub_port = multiprocessing.Value('d', 0)
 
         self.event_log_base_dir = os.path.join(log_dir, 'events_log')
-        makedirs(self.event_log_base_dir)
+        os.makedirs(self.event_log_base_dir, exist_ok=True)
         self.raw_events_filename = os.path.join(self.event_log_base_dir, 'raw_events.log')
 
     def run(self):

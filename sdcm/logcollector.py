@@ -607,7 +607,7 @@ class LogCollector:
         local_dir = os.path.join(base_local_dir, self.current_run,
                                  "{}-{}".format(self.cluster_log_type, self.test_id[:8]))
         try:
-            os.makedirs(local_dir)
+            os.makedirs(local_dir, exist_ok=True)
         except OSError as details:
             if not os.path.exists(local_dir):
                 LOGGER.error("Folder is not created. {}".format(details))

@@ -50,7 +50,7 @@ from sdcm.cluster_aws import CassandraAWSCluster
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
-from sdcm.utils.common import ScyllaCQLSession, get_non_system_ks_cf_list, makedirs, format_timestamp, \
+from sdcm.utils.common import ScyllaCQLSession, get_non_system_ks_cf_list, format_timestamp, \
     wait_ami_available, tag_ami, update_certificates, download_dir_from_cloud, get_post_behavior_actions, \
     get_testrun_status, download_encrypt_keys, PageFetcher, rows_to_list, normalize_ipv6_url
 from sdcm.utils.get_username import get_username
@@ -2072,10 +2072,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                      "prometheus_data": "",
                      "monitoring_stack": ""}
         storage_dir = os.path.join(self.logdir, "collected_logs")
-        makedirs(storage_dir)
+        os.makedirs(storage_dir, exist_ok=True)
 
         if not os.path.exists(storage_dir):
-            os.makedirs(storage_dir)
+            os.makedirs(storage_dir, exist_ok=True)
 
         self.log.info("Storage dir is {}".format(storage_dir))
         if self.db_cluster:
