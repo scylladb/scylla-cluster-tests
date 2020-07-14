@@ -13,7 +13,7 @@ n_db_nodes: 1
 add_node_cnt: 5
 
 instance_type_db: 'i3.8xlarge'
-instance_type_loader: 'c5.2xlarge'
+instance_type_loader: 'c5.4xlarge'
 user_prefix: 'longevity-5000-tables'
 
 # loader AMI with c-s ver. 4 and few fixes:
