@@ -22,7 +22,7 @@ from sdcm.utils.common import (list_instances_aws, list_instances_gce, list_reso
                                all_aws_regions, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
                                list_logs_by_test_id, get_branched_ami, gce_meta_to_dict,
                                aws_tags_to_dict, list_elastic_ips_aws, get_builder_by_test_id,
-                               clean_resources_according_post_behavior,
+                               clean_resources_according_post_behavior, clean_sct_runners,
                                search_test_id_in_latest, get_testrun_dir, format_timestamp)
 from sdcm.utils.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
                                      kill_running_monitoring_stack_services)
@@ -750,6 +750,12 @@ def create_runner_instance(cloud_provider, region, availability_zone, test_id, d
     else:
         LOGGER.error(f"Unable to SSH to {instance.public_ip_address}! Exiting...")
         sys.exit(1)
+
+
+@cli.command("clean-runner-instances", help="Clean all unused SCT runner instances")
+def clean_runner_instances():
+    add_file_logger()
+    clean_sct_runners()
 
 
 if __name__ == '__main__':
