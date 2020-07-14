@@ -29,7 +29,7 @@ from collections import defaultdict
 from typing import List, Optional, Dict
 from textwrap import dedent
 from datetime import datetime
-from functools import cached_property
+from functools import cached_property, wraps
 
 from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
 import yaml
@@ -2929,7 +2929,7 @@ def wait_for_init_wrap(method):
     Run setup of nodes simultaneously and wait for all the setups finished.
     Raise exception if setup failed or timeout expired.
     """
-
+    @wraps(method)
     def wrapper(*args, **kwargs):
         cl_inst = args[0]
         LOGGER.debug('Class instance: %s', cl_inst)
@@ -2974,9 +2974,6 @@ def wait_for_init_wrap(method):
         for node in node_list:
             if isinstance(cl_inst, BaseScyllaCluster) and not Setup.USE_LEGACY_CLUSTER_INIT:
                 init_nodes.append(node)
-                if node.is_scylla_installed():
-                    node.stop_scylla()
-                    node.clean_scylla_data()
                 start_time = time.perf_counter()
                 node_setup(node)
                 verify_node_setup(start_time)
@@ -3463,7 +3460,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                           murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
                           alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'))
 
-    def node_setup(self, node, verbose=False, timeout=3600, wait_db_up=True):  # pylint: disable=too-many-branches
+    def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600, wait_db_up: bool = True):  # pylint: disable=too-many-branches
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
 
         install_scylla = True
@@ -3490,6 +3487,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             self._scylla_post_install(node, install_scylla)
 
             node.stop_scylla_server(verify_down=False)
+            node.clean_scylla_data()
             node.start_scylla_server(verify_up=False)
 
             self.log.info('io.conf right after reboot')
