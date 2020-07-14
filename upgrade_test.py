@@ -676,7 +676,7 @@ class UpgradeTest(FillDatabaseData):
     def count_log_errors(self, search_pattern, step, search_for_idx_token_error=True):
         schema_load_error_num = 0
         for node in self.db_cluster.nodes:
-            errors = node.search_system_log(search_pattern=search_pattern,
+            errors = node.search_database_log(search_pattern=search_pattern,
                                             start_from_beginning=True,
                                             publish_events=False)
             schema_load_error_num += len(errors)
