@@ -5,7 +5,7 @@ from sdcm.sct_events import ClusterHealthValidatorEvent, Severity
 LOGGER = logging.getLogger(__name__)
 
 
-def check_nodes_status(nodes_status, current_node):
+def check_nodes_status(nodes_status, current_node, removed_nodes_list=None):
     node_type = 'target' if current_node.running_nemesis else 'regular'
     if not nodes_status:
         LOGGER.warning("Node status info is not available. Search for the warning above")
@@ -16,7 +16,13 @@ def check_nodes_status(nodes_status, current_node):
     for node_ip, node_properties in nodes_status.items():
         if node_properties['status'] != "UN":
             is_target = current_node.print_node_running_nemesis(node_ip)
-            ClusterHealthValidatorEvent(type='critical', name='NodeStatus', status=Severity.CRITICAL,
+            LOGGER.info(f'REMOVED NODES LIST = {[node.ip_address for node in removed_nodes_list]}')
+            if node_ip in [node.ip_address for node in removed_nodes_list]:
+                severity = Severity.ERROR
+            else:
+                severity = Severity.CRITICAL
+            # FIXME: https://github.com/scylladb/scylla-enterprise/issues/1419 must be reverted once it is fixed.
+            ClusterHealthValidatorEvent(type='critical', name='NodeStatus', status=severity,
                                         node=current_node.name,
                                         error=f"Current node {current_node.ip_address}. Node with {node_ip}{is_target} "
                                         f"status is {node_properties['status']}")
