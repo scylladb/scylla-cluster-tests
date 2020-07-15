@@ -2504,7 +2504,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         peers_details = self.get_peers_info() or {}
         gossip_info = self.get_gossip_info() or {}
 
-        check_nodes_status(nodes_status, current_node=self)
+        check_nodes_status(nodes_status, current_node=self, removed_nodes_list=self.parent_cluster.removed_nodes)
         check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, current_node=self)
         check_schema_version(gossip_info, peers_details, nodes_status, current_node=self)
         check_nulls_in_peers(gossip_info, peers_details, current_node=self)
@@ -2939,6 +2939,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self._seed_nodes = []
         self._non_seed_nodes = []
         self._node_cycle = None
+        self.removed_nodes = set()
         super(BaseScyllaCluster, self).__init__(*args, **kwargs)
 
     @staticmethod
@@ -3434,7 +3435,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         node.wait_db_up(verbose=verbose, timeout=timeout)
         nodes_status = node.get_nodes_status()
-        check_nodes_status(nodes_status=nodes_status, current_node=node)
+        check_nodes_status(nodes_status=nodes_status, current_node=node, removed_nodes_list=self.removed_nodes)
 
         self.clean_replacement_node_ip(node)
 

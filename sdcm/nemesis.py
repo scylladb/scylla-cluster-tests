@@ -450,6 +450,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_nodetool_decommission(self, add_node=True):
         self._set_current_disruption('Decommission %s' % self.target_node)
         self.cluster.decommission(self.target_node)
+        self.cluster.removed_nodes.add(self.target_node)
         if add_node:
             # When adding node after decommission the node is declared as up only after it completed bootstrapping,
             # increasing the timeout for now
@@ -471,6 +472,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('TerminateAndReplaceNode %s' % self.target_node)
         old_node_ip = self.target_node.ip_address
         self._terminate_cluster_node(self.target_node)
+        self.cluster.removed_nodes.add(self.target_node)
         new_node = self._add_and_init_new_cluster_node(old_node_ip)
 
         try:
@@ -1746,6 +1748,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.log.error(
                     'The target node is decommission unexpectedly, decommission might complete before stopping it. Re-add a new node')
                 self._terminate_cluster_node(self.target_node)
+                self.cluster.removed_nodes.add(self.target_node)
                 new_node = self._add_and_init_new_cluster_node()
                 new_node.running_nemesis = None
                 return new_node
@@ -1902,6 +1905,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.metrics_srv.event_start('del_node')
             try:
                 self.cluster.decommission(self.target_node)
+                self.cluster.removed_nodes.add(self.target_node)
             finally:
                 self.metrics_srv.event_stop('del_node')
 
