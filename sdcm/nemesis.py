@@ -43,7 +43,7 @@ from sdcm.log import SDCMAdapter
 from sdcm.keystore import KeyStore
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm import mgmt, wait
-from sdcm.sct_events import DisruptionEvent, DbEventsFilter, Severity
+from sdcm.sct_events import DisruptionEvent, DbEventsFilter, Severity, InfoEvent
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.utils.alternator import ignore_alternator_client_errors
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
@@ -425,6 +425,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def _add_and_init_new_cluster_node(self, old_node_ip=None, timeout=HOUR_IN_SEC * 6):
         """When old_node_private_ip is not None replacement node procedure is initiated"""
         self.log.info("Adding new node to cluster...")
+        InfoEvent(message='StartEvent - Adding new node to cluster')
         new_node = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True)[0]
         self.monitoring_set.reconfigure_scylla_monitoring()
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
@@ -437,6 +438,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.warning("Node will not be terminated. Please terminate manually!!!")
             raise
         self.cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
+        InfoEvent(message='FinishEvent - New Node is up and normal')
         return new_node
 
     def _terminate_cluster_node(self, node):
@@ -489,7 +491,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
         self._set_current_disruption('TerminateAndReplaceNode %s' % self.target_node)
         old_node_ip = self.target_node.ip_address
+        InfoEvent(message='StartEvent - Terminate node and wait 5 minutes')
         self._terminate_cluster_node(self.target_node)
+        InfoEvent(message='FinishEvent - target_node was terminated')
         new_node = self._add_and_init_new_cluster_node(old_node_ip)
 
         try:
@@ -1899,10 +1903,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption("GrowCluster")
         self.log.info("Start grow cluster on %s nodes", add_nodes_number)
         for _ in range(add_nodes_number):
-            self.metrics_srv.event_start('add_node')
+            InfoEvent(message='GrowCluster - Add New node')
             added_node = self._add_and_init_new_cluster_node()
             added_node.running_nemesis = None
-            self.metrics_srv.event_stop('add_node')
+            InfoEvent(message='GrowCluster - Done adding New node')
             self.log.info("New node added %s", added_node.name)
         self.log.info("Finish cluster grow")
 
@@ -1913,11 +1917,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for _ in range(add_nodes_number):
             self.set_target_node()
             self.log.info("Next node will be removed %s", self.target_node)
-            self.metrics_srv.event_start('del_node')
             try:
+                InfoEvent(message='StartEvent - ShrinkCluster started decommissioning a node')
                 self.cluster.decommission(self.target_node)
             finally:
-                self.metrics_srv.event_stop('del_node')
+                InfoEvent(message='FinishEvent - ShrinkCluster has done decommissioning a node')
 
         self.log.info("Finish cluster shrink. Current number of nodes %s", len(self.cluster.nodes))
 
@@ -1961,11 +1965,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info('hot reloading internode ssl nemesis finished')
 
     def disrupt_run_unique_sequence(self):
+        InfoEvent(message='StarEvent - start a repair by ScyllaManager')
         self.disrupt_mgmt_repair_cli()
+        InfoEvent(message='FinishEvent - Manager repair has finished')
         time.sleep(180)
+        InfoEvent(message='Starting terminate_and_replace disruption')
         self.disrupt_terminate_and_replace_node()
+        InfoEvent(message='Finished terminate_and_replace disruption')
         time.sleep(180)
+        InfoEvent(message='Starting grow_shrink disruption')
         self.disrupt_grow_shrink_cluster()
+        InfoEvent(message='Finished grow_shrink disruption')
 
 
 class NotSpotNemesis(Nemesis):
