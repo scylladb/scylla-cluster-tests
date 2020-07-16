@@ -945,7 +945,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         node.remoter.run('sudo apt-get install -y openjdk-6-jdk')
 
     @cluster.wait_for_init_wrap
-    def wait_for_init(self, node_list=None, verbose=False, timeout=None):  # pylint: disable=arguments-differ
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):  # pylint: disable=too-many-arguments
         self.get_seed_nodes()
 
 

@@ -2504,7 +2504,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         peers_details = self.get_peers_info() or {}
         gossip_info = self.get_gossip_info() or {}
 
-        check_nodes_status(nodes_status, current_node=self, removed_nodes_list=self.parent_cluster.removed_nodes)
+        check_nodes_status(nodes_status, current_node=self,
+                           removed_nodes_list=self.parent_cluster.dead_nodes_ip_address_list)
         check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, current_node=self)
         check_schema_version(gossip_info, peers_details, nodes_status, current_node=self)
         check_nulls_in_peers(gossip_info, peers_details, current_node=self)
@@ -2698,6 +2699,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.instance_provision = params.get('instance_provision')
         self.params = params
         self.datacenter = region_names or []
+        self.dead_nodes_ip_address_list = set()
+
         if Setup.REUSE_CLUSTER:
             # get_node_ips_param should be defined in child
             self._node_public_ips = self.params.get(self.get_node_ips_param(public_ip=True), None) or []
@@ -2811,6 +2814,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             node.destroy()
 
     def terminate_node(self, node):
+        self.dead_nodes_ip_address_list.add(node.ip_address)
         self.nodes.remove(node)
         node.destroy()
 
@@ -2939,7 +2943,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self._seed_nodes = []
         self._non_seed_nodes = []
         self._node_cycle = None
-        self.removed_nodes = set()
         super(BaseScyllaCluster, self).__init__(*args, **kwargs)
 
     @staticmethod
@@ -3435,7 +3438,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         node.wait_db_up(verbose=verbose, timeout=timeout)
         nodes_status = node.get_nodes_status()
-        check_nodes_status(nodes_status=nodes_status, current_node=node, removed_nodes_list=self.removed_nodes)
+        check_nodes_status(nodes_status=nodes_status, current_node=node,
+                           removed_nodes_list=self.removed_nodes)  # pylint: disable=no-member
 
         self.clean_replacement_node_ip(node)
 
@@ -3496,6 +3500,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         :param node_list: List of nodes to watch for init.
         :param verbose: Whether to print extra info while watching for init.
         :param timeout: timeout in minutes to wait for init to be finished
+        :param check_node_health: select if run node health check or not
         :return:
         """
         node_list = node_list or self.nodes
