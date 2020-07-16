@@ -1522,7 +1522,8 @@ def get_builder_by_test_id(test_id):
                                                                                             test_id=test_id),
                              ignore_status=True, verbose=False)
 
-        if not result.exited and not result.stderr:
+        if not result.exited and result.stdout:
+            builder["remoter"] = remoter
             path = result.stdout.strip()
             LOGGER.info("Builder name %s, ip %s, folder %s", builder['name'], builder['public_ip'], path)
             return {
