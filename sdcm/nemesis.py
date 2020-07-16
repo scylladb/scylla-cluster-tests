@@ -465,7 +465,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             disable_autocompaction = random.choice([True, False])
         keyspaces = self.cluster.get_test_keyspaces()
         try:
-            self.cluster.wait_for_init(node_list=[new_node], timeout=timeout, wait_db_up=False)
+            self.cluster.wait_for_init(node_list=[new_node], timeout=timeout, wait_db_up=False, check_node_health=False)
             if disable_autocompaction:
                 self.log.info(f'During bootstrap, autocompaction will be disabled for keyspaces {keyspaces}')
                 for keyspace in keyspaces:
