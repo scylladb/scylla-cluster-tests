@@ -458,6 +458,39 @@ def search_builder(test_id):
     click.echo(tbl.get_string(title='Found builders for Test-id: {}'.format(test_id)))
 
 
+@investigate.command('show-events', help='Return content of file events_log/events for running job by test-id')
+@click.argument('test-id')
+@click.option("--follow", type=bool, required=False, is_flag=True, default=False, help="Follow job events log file (similar tail -f <file>)")
+@click.option("--last-n", type=int, required=False, help="return last n lines from events.log file")
+@click.option("--save-to", type=str, required=False, help="Download events.log file and save to provided dir")
+def show_events(test_id: str, follow: bool = False, last_n: int = None, save_to: str = None):
+    logging.getLogger("paramiko").setLevel(logging.CRITICAL)
+    add_file_logger()
+    builders = get_builder_by_test_id(test_id)
+
+    if not builders:
+        LOGGER.info(f"Builder was not found for provided test-id {test_id}")
+
+    for builder in builders:
+        LOGGER.info(
+            f"Applying action for events.log on builder {builder['builder']['name']}:{builder['builder']['public_ip']}...")
+        remoter = builder["builder"]["remoter"]
+
+        if follow or last_n:
+            options = "-f " if follow else ""
+            options += f"-n {last_n} " if last_n else ""
+            try:
+                remoter.run(f"tail {options} {builder['path']}/events_log/events.log")
+            except KeyboardInterrupt:
+                LOGGER.info(f'Monitoring events.log for test-id {test_id} stopped!')
+        elif save_to:
+            remoter.receive_files(f"{builder['path']}/events_log/events.log", save_to)
+            LOGGER.info(f"Events saved to {save_to}")
+        else:
+            remoter.run(f"cat {builder['path']}/events_log/events.log")
+    click.echo("Show events done.")
+
+
 cli.add_command(investigate)
 
 
