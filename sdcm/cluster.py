@@ -3567,7 +3567,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         return True
 
     @wait_for_init_wrap
-    def wait_for_init(self, node_list=None, verbose=False, timeout=None, wait_db_up=True):  # pylint: disable=unused-argument
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None, wait_db_up=True, check_node_health=True):  # pylint: disable=unused-argument, too-many-arguments
         """
         Scylla cluster setup.
         :param node_list: List of nodes to watch for init.
@@ -3585,7 +3585,12 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                       text="wait for db logs", step=20, timeout=300, throw_exc=True)
 
         self.log.info("{} nodes configured and stated.".format(node_list))
-        node_list[0].check_node_health()
+
+        # If wait_for_init is called during cluster initialization we may want this validation will be performed,
+        # but if it was called from nemesis, we don't need it in the middle of nemesis. It may cause to not relevant
+        # failures
+        if check_node_health:
+            node_list[0].check_node_health()
 
     def restart_scylla(self, nodes=None):
         if nodes:
