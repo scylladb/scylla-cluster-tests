@@ -16,8 +16,8 @@ def check_nodes_status(nodes_status, current_node, removed_nodes_list=None):
     for node_ip, node_properties in nodes_status.items():
         if node_properties['status'] != "UN":
             is_target = current_node.print_node_running_nemesis(node_ip)
-            LOGGER.info(f'REMOVED NODES LIST = {[node.ip_address for node in removed_nodes_list]}')
-            if node_ip in [node.ip_address for node in removed_nodes_list]:
+            LOGGER.debug(f'REMOVED NODES LIST = {removed_nodes_list}')
+            if node_ip in removed_nodes_list:
                 severity = Severity.ERROR
             else:
                 severity = Severity.CRITICAL
