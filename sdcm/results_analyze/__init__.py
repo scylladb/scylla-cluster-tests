@@ -310,7 +310,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
     @staticmethod
     def _get_setup_details(test_doc, is_gce):
         setup_details = {'cluster_backend': test_doc['_source']['setup_details'].get('cluster_backend')}
-        if "aws" in setup_details['cluster_backend']:
+        if setup_details['cluster_backend'] == "aws":
             setup_details['ami_id_db_scylla'] = test_doc['_source']['setup_details']['ami_id_db_scylla']
         for setup_param in QueryFilter(test_doc, is_gce).setup_instance_params():
             setup_details.update(
