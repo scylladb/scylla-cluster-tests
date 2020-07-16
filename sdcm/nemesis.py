@@ -430,7 +430,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
         new_node.replacement_node_ip = old_node_ip
         try:
-            self.cluster.wait_for_init(node_list=[new_node], timeout=timeout)
+            self.cluster.wait_for_init(node_list=[new_node], timeout=timeout, check_node_health=False)
         except (NodeSetupFailed, NodeSetupTimeout):
             self.log.warning("Setup of the '%s' failed, removing it from list of nodes" % new_node)
             self.cluster.nodes.remove(new_node)
