@@ -1608,7 +1608,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def patch_scylla_yaml(self, yaml_file=SCYLLA_YAML_PATH, **kwargs):
         """
-        A user can send a dictionary of values ​​(just like the function "config_setup") and thus only change the
+        A user can send a dictionary of values (just like the function "config_setup") and thus only change the
         values he has chosen. If one of the keys contains a "None" value, the same value will be removed from the Yaml
         file.
         """
@@ -2875,7 +2875,8 @@ def wait_for_init_wrap(method):
         LOGGER.debug('Method kwargs: %s', kwargs)
         node_list = kwargs.get('node_list', None) or cl_inst.nodes
         timeout = kwargs.get('timeout', None)
-        setup_kwargs = {k: kwargs[k] for k in kwargs if k != 'node_list'}
+        # remove all arguments which is not supported by BaseScyllaCluster.node_setup method
+        setup_kwargs = {k: kwargs[k] for k in kwargs if k not in ["node_list", "check_node_health"]}
 
         _queue = queue.Queue()
 
