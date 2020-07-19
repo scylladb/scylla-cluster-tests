@@ -1192,6 +1192,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 raise UnsupportedNemesis("for this nemesis to work, you need ICS supported scylla version.")
             raise unexpected_exit
 
+        self.cluster.wait_for_schema_agreement()
+
     def modify_table_compaction(self):
         """
             The compaction property defines the compaction strategy class for this table.

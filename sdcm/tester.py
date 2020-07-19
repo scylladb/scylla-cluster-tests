@@ -1038,6 +1038,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             # Configure encryption at-rest for all test tables, sleep a while to wait the workload starts and test tables are created
             time.sleep(60)
             self.alter_test_tables_encryption(scylla_encryption_options=scylla_encryption_options)
+            self.db_cluster.wait_for_schema_agreement()
         return cs_thread
 
     def run_stress_thread_bench(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments,unused-argument
