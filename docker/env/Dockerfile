@@ -1,4 +1,4 @@
-ARG PYTHON_IMAGE_TAG=3.8.3-slim-buster
+ARG PYTHON_IMAGE_TAG=3.8.4-slim-buster
 
 FROM python:$PYTHON_IMAGE_TAG as apt_base
 ENV DEBIAN_FRONTEND=noninteractive
