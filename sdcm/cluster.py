@@ -52,7 +52,7 @@ from sdcm.utils.distro import Distro
 from sdcm.utils.docker_utils import ContainerManager, NotFound
 
 from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_gossip_and_nodetool_status, \
-    check_schema_version, check_nulls_in_peers
+    check_schema_version, check_nulls_in_peers, check_schema_agreement_in_gossip_and_peers
 from sdcm.utils.decorators import retrying, log_run_info
 from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
@@ -3347,6 +3347,14 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                             for node in nodes_running_nemesis)
         ClusterHealthValidatorEvent(type='warning', name='NodesNemesis', status=Severity.WARNING,
                                     message=f"There are more then expected nodes running nemesis: {message}")
+
+    @retrying(n=6, sleep_time=10, allowed_exceptions=(AssertionError,))
+    def wait_for_schema_agreement(self):
+
+        for node in self.nodes:
+            assert check_schema_agreement_in_gossip_and_peers(node), 'Schema agreement is not reached'
+        self.log.debug('Schema agreement is reached')
+        return True
 
     def check_nodes_up_and_normal(self, nodes=None, verification_node=None):
         """Checks via nodetool that node joined the cluster and reached 'UN' state"""
