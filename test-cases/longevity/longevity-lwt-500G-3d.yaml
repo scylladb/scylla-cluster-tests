@@ -1,6 +1,6 @@
 # Test duration 25 hours temporary. Should be 3 days. Will be changed later
 test_duration: 1500
-prepare_write_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data.yaml n=400000000 ops'(insert=1)' cl=QUORUM -mode native cql3 -rate threads=1000" ]
+prepare_write_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data.yaml n=400000000 ops'(insert_query=1)' cl=QUORUM -mode native cql3 -rate threads=1000" ]
 stress_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1,lwt_deletes=1)' cl=QUORUM duration=900m -mode native cql3 -rate threads=10" ,
              "cassandra-stress user profile=/tmp/c-s_lwt_big_data.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1,lwt_deletes=1)' cl=QUORUM duration=900m -mode native cql3 -rate threads=10"
             ]
@@ -13,18 +13,6 @@ round_robin: true
 
 instance_type_db: 'i3.4xlarge'
 instance_type_loader: 'c5.2xlarge'
-
-# loader AMI with c-s ver. 4 and few fixes:
-#  - fix NoSuchElementException
-#  - enable control over both consistency levels: regular and serial
-#  - bring shard awareness
-regions_data:
-  us-east-1:
-    ami_id_loader: 'ami-0b94f0e897d884b1b'
-  eu-west-1:
-    ami_id_loader: 'ami-0bf19545bc7bc9e1f'
-  us-west-2:
-    ami_id_loader: 'ami-063a97bde47353690'
 
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 5
