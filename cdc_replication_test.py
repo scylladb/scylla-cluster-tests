@@ -25,11 +25,14 @@ from cassandra.query import SimpleStatement
 from sdcm import cluster
 from sdcm.tester import ClusterTester
 
+
 def print_file_to_stdout(path: str) -> None:
     with open(path, "r") as file:
         shutil.copyfileobj(file, sys.stdout)
 
 # Write a CQL select result to a file.
+
+
 def write_cql_result(res, path: str):
     with open(path, 'w') as file:
         for row in res:
@@ -37,16 +40,18 @@ def write_cql_result(res, path: str):
         file.flush()
         os.fsync(file.fileno())
 
+
 SCYLLA_MIGRATE_URL = "https://kbr-scylla.s3-eu-west-1.amazonaws.com/scylla-migrate"
 REPLICATOR_URL = "https://kbr-scylla.s3-eu-west-1.amazonaws.com/scylla-cdc-replicator-0.0.1-SNAPSHOT-jar-with-dependencies.jar"
+
 
 class CDCReplicationTest(ClusterTester):
     KS_NAME = 'ks1'
     TABLE_NAME = 'table1'
 
     def collect_data_for_analysis(self,
-            migrate_log_path: str, replicator_log_path: str,
-            master_node: cluster.BaseNode, replica_node: cluster.BaseNode) -> None:
+                                  migrate_log_path: str, replicator_log_path: str,
+                                  master_node: cluster.BaseNode, replica_node: cluster.BaseNode) -> None:
         self.log.info('scylla-migrate log:')
         print_file_to_stdout(migrate_log_path)
         self.log.info('Replicator log:')
@@ -55,13 +60,13 @@ class CDCReplicationTest(ClusterTester):
         with self.cql_connection_patient(node=master_node) as sess:
             self.log.info('Fetching master table...')
             res = sess.execute(SimpleStatement(f'select * from {self.KS_NAME}.{self.TABLE_NAME}',
-                consistency_level=ConsistencyLevel.QUORUM, fetch_size=1000))
+                                               consistency_level=ConsistencyLevel.QUORUM, fetch_size=1000))
             write_cql_result(res, os.path.join(self.logdir, 'master-table'))
 
         with self.cql_connection_patient(node=replica_node) as sess:
             self.log.info('Fetching replica table...')
             res = sess.execute(SimpleStatement(f'select * from {self.KS_NAME}.{self.TABLE_NAME}',
-                consistency_level=ConsistencyLevel.QUORUM, fetch_size=1000))
+                                               consistency_level=ConsistencyLevel.QUORUM, fetch_size=1000))
             write_cql_result(res, os.path.join(self.logdir, 'replica-table'))
 
     # pylint: disable=too-many-statements,too-many-branches,too-many-locals
@@ -102,7 +107,7 @@ class CDCReplicationTest(ClusterTester):
         replica_node = self.cs_db_cluster.nodes[0]
         with self.cql_connection_patient(node=replica_node) as sess:
             sess.execute(f"create keyspace if not exists {self.KS_NAME}"
-                          " with replication = {'class': 'SimpleStrategy', 'replication_factor': 1}")
+                         " with replication = {'class': 'SimpleStrategy', 'replication_factor': 1}")
             for stmt in ut_ddls + table_ddls:
                 sess.execute(stmt)
 
@@ -177,11 +182,10 @@ class CDCReplicationTest(ClusterTester):
         loader_node.remoter.receive_files(src='replicatorlog', dst=replicator_log_path)
 
         self.log.info('Comparing table contents using scylla-migrate...')
-        res = loader_node.remoter.run(cmd=
-            './scylla-migrate check --master-address {} --replica-address {}'
-            ' --ignore-schema-difference {}.{} 2>&1 | tee migratelog'.format(
-                    master_node.external_address, replica_node.external_address,
-                    self.KS_NAME, self.TABLE_NAME))
+        res = loader_node.remoter.run(cmd='./scylla-migrate check --master-address {} --replica-address {}'
+                                      ' --ignore-schema-difference {}.{} 2>&1 | tee migratelog'.format(
+                                          master_node.external_address, replica_node.external_address,
+                                          self.KS_NAME, self.TABLE_NAME))
 
         migrate_log_path = os.path.join(self.logdir, 'scylla-migrate.log')
         loader_node.remoter.receive_files(src='migratelog', dst=migrate_log_path)
@@ -197,6 +201,6 @@ class CDCReplicationTest(ClusterTester):
             self.log.info('Consistency check successful.')
         else:
             self.collect_data_for_analysis(
-                    migrate_log_path, replicator_log_path,
-                    master_node, replica_node)
+                migrate_log_path, replicator_log_path,
+                master_node, replica_node)
             self.fail('Consistency check failed.')
