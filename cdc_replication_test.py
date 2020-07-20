@@ -149,7 +149,7 @@ class CDCReplicationTest(ClusterTester):
         time.sleep(30)
 
         self.log.info('Stopping nemesis before bootstrapping a new node.')
-        self.db_cluster.stop_nemesis(timeout=60)
+        self.db_cluster.stop_nemesis(timeout=600)
 
         self.log.info('Let stressor run for a while...')
         time.sleep(30)
@@ -171,7 +171,7 @@ class CDCReplicationTest(ClusterTester):
         time.sleep(60)
 
         self.log.info('Stopping nemesis.')
-        self.db_cluster.stop_nemesis(timeout=60)
+        self.db_cluster.stop_nemesis(timeout=600)
 
         self.log.info('Fetching replicator logs.')
         replicator_log_path = os.path.join(self.logdir, 'replicator.log')
