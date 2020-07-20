@@ -8,19 +8,19 @@ regions_data:
   us-east-1:
     security_group_ids: 'sg-c5e1f7a0'
     subnet_id: 'subnet-ec4a72c4'
-    ami_id_loader: 'ami-0fd5b310a58d39dcc' # Loader dedicated AMI v10 with golang 1.13
+    ami_id_loader: 'ami-03c856a491257cb7f' # Loader dedicated AMI v11
     ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
     backup_bucket_location: 'manager-backup-tests-us-east-1'
   eu-west-1:
     security_group_ids: 'sg-059a7f66a947d4b5c'
     subnet_id: 'subnet-088fddaf520e4c7a8'
-    ami_id_loader: 'ami-0ce9dc296997751b7' # Loader dedicated AMI v10 with golang 1.13
+    ami_id_loader: 'ami-0ac1d5f2066dfc9b4' # Loader dedicated AMI v11
     ami_id_monitor: 'ami-0ff760d16d9497662' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
     backup_bucket_location: 'manager-backup-tests-eu-west-1'
   us-west-2:
     security_group_ids: 'sg-81703ae4'
     subnet_id: 'subnet-5207ee37'
-    ami_id_loader: 'ami-0ec72c85a0b3b105b' # Loader dedicated AMI v10 with golang 1.13
+    ami_id_loader: 'ami-0de1ee51de25ac133' # Loader dedicated AMI v11
     ami_id_monitor: 'ami-01ed306a12b7d1c96' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
     backup_bucket_location: 'manager-backup-tests-eu-west-2'
 
