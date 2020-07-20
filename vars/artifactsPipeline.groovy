@@ -1,10 +1,12 @@
 #! groovy
 
 def call(Map pipelineParams) {
+    def builder = getJenkinsLabels(params.backend, params.get('region_name', 'eu-west-1'))
+
     pipeline {
         agent {
             label {
-                label getJenkinsLabels(params.backend, params.get('region_name', 'eu-west-1'))
+                label builder.label
             }
         }
         environment {
@@ -65,7 +67,7 @@ def call(Map pipelineParams) {
                         params.instance_type.split(' ').each {
                             def instance_type = it
                             tasks["${instance_type}"] = {
-                                node(getJenkinsLabels(params.backend, params.get('region_name', 'eu-west-1'))) {
+                                node(builder.label) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",]) {
                                         stage("Checkout (${instance_type})") {

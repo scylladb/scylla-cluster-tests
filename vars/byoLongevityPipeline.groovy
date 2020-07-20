@@ -1,10 +1,14 @@
 #!groovy
 
 def call() {
+
+    def builder = getJenkinsLabels(params.backend, params.aws_region)
+
     pipeline {
+
         agent {
             label {
-                label getJenkinsLabels(params.backend, params.aws_region)
+                label builder.label
             }
         }
 
@@ -34,7 +38,7 @@ def call() {
                description: 'aws|gce',
                name: 'backend')
             string(defaultValue: "eu-west-1",
-               description: 'us-east-1|eu-west-1|eu-west-2',
+               description: 'Supported: us-east-1|eu-west-1|eu-west-2|random (randomly select region)',
                name: 'aws_region')
             string(defaultValue: "a",
                description: 'Availability zone',
@@ -99,11 +103,12 @@ def call() {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
                                     def cloud_provider = params.backend.trim().toLowerCase()
+                                    println("AWS region: " + builder.region)
                                     sh """
                                     if [[ "$cloud_provider" == "aws" ]]; then
-                                        ./docker/env/hydra.sh create-runner-instance --cloud-provider ${cloud_provider} --region ${aws_region} --availability-zone ${params.availability_zone} --test-id \${SCT_TEST_ID} --duration ${params.timeout}
+                                        rm -fv sct_runner_ip
+                                        ./docker/env/hydra.sh create-runner-instance --cloud-provider ${cloud_provider} --region ${builder.region} --availability-zone ${params.availability_zone} --test-id \${SCT_TEST_ID} --duration ${params.timeout}
                                     else
                                         echo "Currently, <$cloud_provider> not supported to. Will run on regular builder."
                                     fi
@@ -122,7 +127,7 @@ def call() {
                                 dir('scylla-cluster-tests') {
 
                                     // handle params which can be a json list
-                                    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+                                    def aws_region = initAwsRegionParam(params.aws_region, builder.region)
                                     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
                                     def cloud_provider = params.backend.trim().toLowerCase()
 
@@ -187,7 +192,7 @@ def call() {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+                                    def aws_region = initAwsRegionParam(params.aws_region, builder.region)
                                     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
                                     def cloud_provider = params.backend.trim().toLowerCase()
 
@@ -227,7 +232,7 @@ def call() {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+                                    def aws_region = initAwsRegionParam(params.aws_region, builder.region)
                                     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
                                     def cloud_provider = params.backend.trim().toLowerCase()
 
@@ -285,15 +290,12 @@ def call() {
                                         SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
                                         if [[ ! -z "\${SCT_RUNNER_IP}" ]] ; then
                                             ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} send-email --email-recipients "${email_recipients}"
+                                            exit \$?
                                         else
                                             echo "SCT runner IP file is empty. Probably SCT Runner was not created."
-                                            ./docker/env/hydra.sh send-email ${test_status} ${start_time} --logdir "`pwd`" --email-recipients "${email_recipients}"
-                                            exit 1
                                         fi
-                                    else
-                                        ./docker/env/hydra.sh send-email ${test_status} ${start_time} --logdir "`pwd`" --email-recipients "${email_recipients}"
                                     fi
-
+                                    ./docker/env/hydra.sh send-email --test-status ${test_status} --start-time ${start_time} --logdir "`pwd`" --email-recipients "${email_recipients}"
                                     echo "Email sent."
                                     """
                                 }

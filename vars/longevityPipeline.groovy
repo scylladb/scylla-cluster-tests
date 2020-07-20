@@ -2,10 +2,10 @@
 
 def completed_stages = [:]
 
-def runSctTest(Map params){
+def runSctTest(Map params, Map builder){
     // handle params which can be a json list
     params = params.params
-    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+    def aws_region = initAwsRegionParam(params.aws_region, builder.region)
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = params.backend.trim().toLowerCase()
 
@@ -62,9 +62,9 @@ def runSctTest(Map params){
     """
 }
 
-def runCollectLogs(Map params){
+def runCollectLogs(Map params, Map builder){
     params = params.params
-    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+    def aws_region = initAwsRegionParam(params.aws_region, builder.region)
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = params.backend.trim().toLowerCase()
     sh """
@@ -129,9 +129,9 @@ def runSendEmail(Map params){
     """
 }
 
-def runCleanupResource(Map params){
+def runCleanupResource(Map params, Map builder){
     params = params.params
-    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+    def aws_region = initAwsRegionParam(params.aws_region, builder.region)
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = params.backend.trim().toLowerCase()
 
@@ -167,10 +167,12 @@ def runCleanupResource(Map params){
 
 def call(Map pipelineParams) {
 
+    def builder = getJenkinsLabels(params.backend, params.aws_region)
+
     pipeline {
         agent {
             label {
-                label getJenkinsLabels(params.backend, params.aws_region)
+                   label builder.label
             }
         }
         environment {
@@ -257,11 +259,10 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
                                     def cloud_provider = params.backend.trim().toLowerCase()
                                     sh """
                                     if [[ "$cloud_provider" == "aws" ]]; then
-                                        ./docker/env/hydra.sh create-runner-instance --cloud-provider ${cloud_provider} --region ${aws_region} --availability-zone ${params.availability_zone} --test-id \${SCT_TEST_ID} --duration ${pipelineParams.timeout.time}
+                                        ./docker/env/hydra.sh create-runner-instance --cloud-provider ${cloud_provider} --region ${builder.region} --availability-zone ${params.availability_zone} --test-id \${SCT_TEST_ID} --duration ${pipelineParams.timeout.time}
                                     else
                                         echo "Currently, <$cloud_provider> not supported to. Will run on regular builder."
                                     fi
@@ -278,7 +279,7 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    runSctTest(params: params)
+                                    runSctTest(params: params, builder: builder)
                                 }
                             }
                         }
@@ -291,7 +292,7 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    runCollectLogs(params: params)
+                                    runCollectLogs(params: params, builder: builder)
                                 }
                             }
                         }
@@ -304,7 +305,7 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    runCleanupResource(params: params)
+                                    runCleanupResource(params: params, builder: builder)
                                     completed_stages['clean_resources'] = true
                                 }
                             }
@@ -344,7 +345,7 @@ def call(Map pipelineParams) {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
-                                        runCleanupResource(params: params)
+                                        runCleanupResource(params: params, builder: builder)
                                     }
                                 }
                             }
