@@ -184,13 +184,13 @@ class OutputWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
 
         while '\n' in stream_buffer:
             out_buf, rest_buf = stream_buffer.split('\n', 1)
-            self.log.info(out_buf)
+            self.log.debug(out_buf)
             stream_buffer = rest_buf
         self.len = len(stream) - len(stream_buffer)
         return []
 
     def submit_line(self, line: str):
-        self.log.info(line.rstrip('\n'))
+        self.log.debug(line.rstrip('\n'))
 
 
 class LogWriteWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
