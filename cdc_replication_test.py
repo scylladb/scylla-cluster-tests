@@ -17,27 +17,25 @@ import shutil
 import sys
 import os
 import time
-from tempfile import TemporaryDirectory
 from textwrap import dedent
 
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement
-from cassandra.cluster import Cluster
 
 from sdcm import cluster
 from sdcm.tester import ClusterTester
 
 def print_file_to_stdout(path: str) -> None:
-    with open(path, "r") as f:
-       shutil.copyfileobj(f, sys.stdout)
+    with open(path, "r") as file:
+        shutil.copyfileobj(file, sys.stdout)
 
 # Write a CQL select result to a file.
 def write_cql_result(res, path: str):
-    with open(path, 'w') as f:
-        for r in res:
-            f.write(str(r) + '\n')
-        f.flush()
-        os.fsync(f.fileno())
+    with open(path, 'w') as file:
+        for row in res:
+            file.write(str(row) + '\n')
+        file.flush()
+        os.fsync(file.fileno())
 
 SCYLLA_MIGRATE_URL = "https://kbr-scylla.s3-eu-west-1.amazonaws.com/scylla-migrate"
 REPLICATOR_URL = "https://kbr-scylla.s3-eu-west-1.amazonaws.com/scylla-cdc-replicator-0.0.1-SNAPSHOT-jar-with-dependencies.jar"
@@ -66,6 +64,7 @@ class CDCReplicationTest(ClusterTester):
                 consistency_level=ConsistencyLevel.QUORUM, fetch_size=1000))
             write_cql_result(res, os.path.join(self.logdir, 'replica-table'))
 
+    # pylint: disable=too-many-statements,too-many-branches,too-many-locals
     def test_replication(self) -> None:
         self.log.info('Waiting for the latest CDC generation to start...')
         # 2 * ring_delay (ring_delay = 30s) + leeway
@@ -165,7 +164,7 @@ class CDCReplicationTest(ClusterTester):
 
         self.log.info('Waiting for stressor to finish...')
         stress_results = stress_thread.get_results()
-        self.log.info('cassandra-stress results: {}'.format([r for r in stress_results]))
+        self.log.info('cassandra-stress results: {}'.format(list(stress_results)))
 
         self.log.info('Waiting for replicator to finish (sleeping 60s)...')
         time.sleep(60)
@@ -186,13 +185,13 @@ class CDCReplicationTest(ClusterTester):
 
         migrate_log_path = os.path.join(self.logdir, 'scylla-migrate.log')
         loader_node.remoter.receive_files(src='migratelog', dst=migrate_log_path)
-        with open(migrate_log_path) as f:
-            consistency_ok = 'Consistency check OK.\n' in (line for line in f)
+        with open(migrate_log_path) as file:
+            consistency_ok = 'Consistency check OK.\n' in (line for line in file)
 
         if not consistency_ok:
             self.log.error('Inconsistency detected.')
         if res.exit_status != 0:
-            self.log.error('scylla-migrate command returned status', res.exit_status)
+            self.log.error('scylla-migrate command returned status {}'.format(res.exit_status))
 
         if consistency_ok and res.exit_status == 0:
             self.log.info('Consistency check successful.')
@@ -201,4 +200,3 @@ class CDCReplicationTest(ClusterTester):
                     migrate_log_path, replicator_log_path,
                     master_node, replica_node)
             self.fail('Consistency check failed.')
-
