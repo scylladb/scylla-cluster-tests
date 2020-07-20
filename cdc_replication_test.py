@@ -30,10 +30,15 @@ def print_file_to_stdout(path: str) -> None:
     with open(path, "r") as file:
         shutil.copyfileobj(file, sys.stdout)
 
-# Write a CQL select result to a file.
-
 
 def write_cql_result(res, path: str):
+    """Write a CQL select result to a file.
+
+    :param res: cql results
+    :type res: ResultSet
+    :param path: path to file
+    :type path: str
+    """
     with open(path, 'w') as file:
         for row in res:
             file.write(str(row) + '\n')
@@ -71,6 +76,8 @@ class CDCReplicationTest(ClusterTester):
 
     # pylint: disable=too-many-statements,too-many-branches,too-many-locals
     def test_replication(self) -> None:
+        self.consistency_ok = False
+
         self.log.info('Waiting for the latest CDC generation to start...')
         # 2 * ring_delay (ring_delay = 30s) + leeway
         time.sleep(70)
@@ -190,17 +197,41 @@ class CDCReplicationTest(ClusterTester):
         migrate_log_path = os.path.join(self.logdir, 'scylla-migrate.log')
         loader_node.remoter.receive_files(src='migratelog', dst=migrate_log_path)
         with open(migrate_log_path) as file:
-            consistency_ok = 'Consistency check OK.\n' in (line for line in file)
+            self.consistency_ok = 'Consistency check OK.\n' in (line for line in file)
 
-        if not consistency_ok:
+        if not self.consistency_ok:
             self.log.error('Inconsistency detected.')
         if res.exit_status != 0:
             self.log.error('scylla-migrate command returned status {}'.format(res.exit_status))
 
-        if consistency_ok and res.exit_status == 0:
+        if self.consistency_ok and res.exit_status == 0:
             self.log.info('Consistency check successful.')
         else:
             self.collect_data_for_analysis(
                 migrate_log_path, replicator_log_path,
                 master_node, replica_node)
             self.fail('Consistency check failed.')
+
+    def get_email_data(self):
+        self.log.info("Prepare data for email")
+
+        email_data = self._get_common_email_data()
+        grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(self.start_time) if self.monitors else {}
+        email_data.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
+                           "grafana_snapshots": grafana_dataset.get("snapshots", []),
+                           "nemesis_details": self.get_nemesises_stats(),
+                           "nemesis_name": self.params.get("nemesis_class_name"),
+                           "number_of_db_nodes": self.params.get('n_db_nodes'),
+                           "scylla_ami_id": self.params.get("ami_id_db_scylla", "-"),
+                           "scylla_instance_type": self.params.get('instance_type_db',
+                                                                   self.params.get('gce_instance_type_db')),
+                           "scylla_version": self.db_cluster.nodes[0].scylla_version if self.db_cluster else "N/A",
+                           "number_of_oracle_nodes": self.params.get("n_test_oracle_db_nodes", 1),
+                           "oracle_ami_id": self.params.get("ami_id_db_oracle"),
+                           "oracle_db_version":
+                               self.cs_db_cluster.nodes[0].scylla_version if self.cs_db_cluster else "N/A",
+                           "oracle_instance_type": self.params.get("instance_type_db_oracle"),
+                           "consistency_status": self.consistency_ok
+                           })
+
+        return email_data

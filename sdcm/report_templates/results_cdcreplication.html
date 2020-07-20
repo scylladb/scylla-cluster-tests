@@ -1,0 +1,111 @@
+{% extends 'results_base.html' %}
+{% block body %}
+    <h3>
+        <span>System under test </span>
+    </h3>
+    <div>
+        <ul>
+            <li>Scylla version: {{ scylla_version }} ({{ scylla_ami_id }})</li>
+            <li>Instance type: {{ scylla_instance_type }}</li>
+            <li>Number of scylladb nodes: {{ number_of_db_nodes }}</li>
+        </ul>
+    </div>
+    {% if oracle_db_version != "N/A" %}
+    <h3>
+        <span>Test oracle</span>
+    </h3>
+    <div>
+        <ul>
+            <li>Scylla v{{ oracle_db_version }} ({{ oracle_ami_id }})</li>
+            <li>Instance type: {{ oracle_instance_type }}</li>
+            <li>Number of test oracle db nodes: {{ number_of_oracle_nodes }}</li>
+        </ul>
+    </div>
+    {% endif %}
+
+
+    {% block consistency_status %}
+        <h3>
+            <span>Consistency status</span>
+        </h3>
+        {% if consistency_status %}
+            <span class='green'>Consistency OK</span>
+        {% else %}
+            <span class='red'>Consistency FAILED</span>
+        {% endif %}
+    {% endblock %}
+
+    <h3>Nemesis Details</h3>
+    <h4>Running nemesis: {{ nemesis_name }}</h4>
+    {% if nemesis_details %}
+        <div>
+            <table class='longevity_result_table'>
+                <tr>
+                    <th>Name</th>
+                    <th>Count</th>
+                    <th>Runs</th>
+                    <th>Failures</th>
+                </tr>
+
+                {% for name, detail in nemesis_details.items() %}
+                    {% if short_report %}
+                        <tr>
+                            <td>{{ name }}</td>
+                            <td>{{ detail['cnt'] }}</td>
+                            <td>{{ detail['runs']|length }}</td>
+                            <td>{{ detail['failures']|length }}</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td>{{ name }}</td>
+                            <td>{{ detail['cnt'] }}</td>
+                            <td class="longevity_result_runs">
+                                <table class='longevity_run_failure_table'>
+                                    <tr>
+                                        <th>node</th>
+                                        <th>start</th>
+                                        <th>end</th>
+                                        <th>duration</th>
+                                    </tr>
+                                    {% for run in detail['runs'] %}
+                                        <tr>
+                                            <td>{{ run['node'] }}</td>
+                                            <td>{{ run['start'] }}</td>
+                                            <td>{{ run['end'] }}</td>
+                                            <td>{{ run['duration'] }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </table>
+                            </td>
+                            <td class="longevity_result_runs">
+                                <table class='longevity_run_failure_table'>
+                                    <tr>
+                                        <th>node</th>
+                                        <th>start</th>
+                                        <th>end</th>
+                                        <th>duration</th>
+                                        <th>error</th>
+                                    </tr>
+                                    {% for failure in detail['failures'] %}
+                                        <tr>
+                                            <td>{{ failure['node'] }}</td>
+                                            <td>{{ failure['start'] }}</td>
+                                            <td>{{ failure['end'] }}</td>
+                                            <td>{{ failure['duration'] }}</td>
+                                            <td>{{ failure['error'] }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </table>
+                            </td>
+                        </tr>
+                    {% endif %}
+                    {% if short_report and loop.index > 4 %}
+                        <tr><td colspan="4">See full report in attached file</td></tr>
+                        {% break %}
+                    {% endif %}
+                {% endfor %}
+            </table>
+        </div>
+    {% endif %}
+
+{% endblock %}
