@@ -621,7 +621,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                 user_agent=creds['user_agent'])
             result = node.remoter.run("sudo ls -t /var/lib/scylla/data/keyspace1/")
             upload_dir = result.stdout.split()[0]
-            node.remoter.run('sudo tar xvfz {} -C /var/lib/scylla/data/keyspace1/{}/upload/'.format(
+            node.remoter.run('sudo -u scylla tar xvfz {} -C /var/lib/scylla/data/keyspace1/{}/upload/'.format(
                 sstable_file, upload_dir))
             # Scylla Enterprise 2019.1 doesn't support to load schema.cql and manifest.json, let's remove them
             node.remoter.run(
