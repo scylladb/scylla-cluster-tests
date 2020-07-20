@@ -118,7 +118,7 @@ pipeline {
             steps {
                 script {
                     try {
-                        sh './docker/env/hydra.sh bash -c "cd \"`pwd`\"; pre-commit run -a"'
+                        sh './docker/env/hydra.sh bash -c "cd \"`pwd`\"; sudo apt-get update; sudo apt-get install -y --no-install-recommends build-essential cmake libssl-dev zlib1g-dev ; pre-commit run -a"'
                         // also check the commit-messge for the rules we want
                         sh 'git show -s --format=%B  > commit-msg'
                         sh './docker/env/hydra.sh bash -c "cd \"`pwd`\"; pre-commit run --hook-stage commit-msg --commit-msg-filename commit-msg"'
