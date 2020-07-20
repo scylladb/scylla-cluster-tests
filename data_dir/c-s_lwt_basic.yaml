@@ -61,13 +61,14 @@ insert:
 
   batchtype: UNLOGGED             # Unlogged batches
 
-  condition: IF title = NULL       # LWT: Do not override
-
 
 #
 # A list of queries you wish to run against the schema
 #
 queries:
+   insert_query:
+      cql: insert into blogposts (domain, published_date, lwt_indicator, url, author, title) values (?,?,?,?,?,?) if not exists
+      fields: samerow
    select:
       cql: select * from blogposts where domain = ? LIMIT 1
       fields: samerow
