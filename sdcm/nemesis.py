@@ -588,12 +588,24 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis/keyspace1.standard1.100M.tar.gz'
             sstable_file = '/tmp/keyspace1.standard1.100M.tar.gz'
             sstable_md5 = '9c5dd19cfc78052323995198b0817270'
-            keys_num = 1000
+            keys_num = 501000
         else:
             sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis/keyspace1.standard1.tar.gz'
             sstable_file = "/tmp/keyspace1.standard1.tar.gz"
             sstable_md5 = 'c033a3649a1aec3ba9b81c446c6eecfd'
-            keys_num = 501000
+            keys_num = 1000
+
+        # Use special schema (one column) for refresh before https://github.com/scylladb/scylla/issues/6617 is fixed
+        if big_sstable:
+            sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis_c0/keyspace1.standard1.100M.tar.gz'
+            sstable_file = '/tmp/keyspace1.standard1.100M.tar.gz'
+            sstable_md5 = 'e4f6addc2db8e9af3a906953288ef676'
+            keys_num = 1001000
+        else:
+            sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis_c0/keyspace1.standard1.tar.gz'
+            sstable_file = "/tmp/keyspace1.standard1.tar.gz"
+            sstable_md5 = 'c4aee10691fa6343a786f52663e7f758'
+            keys_num = 1000
 
         self.log.debug('Prepare keyspace1.standard1 if it does not exist')
         self._prepare_test_table(ks='keyspace1', table='standard1')
