@@ -431,6 +431,24 @@ class TestAbortedEmailReporter(BaseEmailReporter):
         """.format(**report_data)
 
 
+class CDCReplicationReporter(LongevityEmailReporter):
+    _fields = ("grafana_screenshots",
+               "grafana_snapshots",
+               "nemesis_details",
+               "nemesis_name",
+               "number_of_db_nodes",
+               "scylla_ami_id",
+               "scylla_instance_type",
+               "scylla_version",
+               "oracle_ami_id",
+               "oracle_db_version",
+               "oracle_instance_type",
+               "number_of_oracle_nodes",
+               "consistency_status",
+               )
+    email_template_file = "results_cdcreplication.html"
+
+
 def build_reporter(name: str,
                    email_recipients: Sequence[str] = (),
                    logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
@@ -449,6 +467,8 @@ def build_reporter(name: str,
         return MgmtEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "TestAborted" in name:
         return TestAbortedEmailReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "CDCReplication" in name:
+        return CDCReplicationReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
 
