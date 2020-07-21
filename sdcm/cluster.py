@@ -1686,7 +1686,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                      client_encrypt=None, append_scylla_yaml=None, append_scylla_args=None, debug_install=False,
                      hinted_handoff='enabled', murmur3_partitioner_ignore_msb_bits=None, authorizer=None,
                      alternator_port=None, listen_on_all_interfaces=False, ip_ssh_connections=None,
-                     alternator_enforce_authorization=False):
+                     alternator_enforce_authorization=False, internode_compression=None):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         wait.wait_for(self.remoter.receive_files, step=10, text='Waiting for copying scylla.yaml',
                       timeout=300, throw_exc=True, src=yaml_file, dst=yaml_dst_path)
@@ -1789,6 +1789,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             scylla_yml['alternator_enforce_authorization'] = True
         else:
             scylla_yml['alternator_enforce_authorization'] = False
+
+        if internode_compression:
+            scylla_yml['internode_compression'] = internode_compression
 
         scylla_yaml_contents = yaml.safe_dump(scylla_yml)
 
@@ -3463,7 +3466,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                           authorizer=self.params.get('authorizer'),
                           alternator_port=self.params.get('alternator_port'),
                           murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
-                          alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'))
+                          alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'),
+                          internode_compression=self.params.get('internode_compression'))
 
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600, wait_db_up: bool = True):  # pylint: disable=too-many-branches
         node.wait_ssh_up(verbose=verbose, timeout=timeout)

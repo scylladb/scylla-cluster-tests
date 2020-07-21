@@ -900,6 +900,8 @@ class SCTConfiguration(dict):
         dict(name="workaround_kernel_bug_for_iotune", env="SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE", type=bool,
              help="Workaround a known kernel bug which causes iotune to fail in scylla_io_setup, "
                   "only effect GCE backend"),
+        dict(name="internode_compression", env="SCT_INTERNODE_COMPRESSION", type=str,
+             help="scylla option: internode_compression"),
 
         dict(name="loader_swap_size", env="SCT_LOADER_SWAP_SIZE", type=int,
              help="The size of the swap file for the loaders. Its size in bytes calculated by x * 1MB"),
