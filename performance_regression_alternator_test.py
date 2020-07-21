@@ -48,13 +48,15 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self.update_test_details(scylla_conf=True, alternator=is_alternator)
 
     def create_alternator_table(self, schema, alternator_write_isolation):
+        node = self.db_cluster.nodes[0]
+
         # drop tables
         table_name = alternator.consts.TABLE_NAME
-        if self.alternator.is_table_exists(table_name=table_name):
-            self.alternator.delete_table(table_name=table_name)
+        if self.alternator.is_table_exists(node=node, table_name=table_name):
+            self.alternator.delete_table(node=node, table_name=table_name)
         # create new tables
         self.log.info("Going to create alternator tables")
-        self.alternator.create_table(schema=schema, alternator_write_isolation=alternator_write_isolation)
+        self.alternator.create_table(node=node, schema=schema, alternator_write_isolation=alternator_write_isolation)
 
         self.run_fstrim_on_all_db_nodes()
         self.wait_no_compactions_running()
@@ -146,6 +148,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         3. Run a read workload without lwt
         4. Run a read workload with lwt enabled
         """
+        node = self.db_cluster.nodes[0]
 
         base_cmd_r = self.params.get('stress_cmd_r')
         stress_multiplier = self.params.get('stress_multiplier', default=1)
@@ -162,11 +165,11 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                        stress_num=stress_multiplier, keyspace_num=1, is_alternator=False)
 
         # run a workload without lwt as baseline
-        self.alternator.set_write_isolation(isolation=alternator.enums.WriteIsolation.FORBID_RMW)
+        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
         self._workload(sub_type='without-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier, keyspace_num=1)
 
         # run a workload with lwt
-        self.alternator.set_write_isolation(isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
+        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
         self._workload(sub_type='with-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier, keyspace_num=1)
 
         self.check_regression_with_baseline('cql')
@@ -180,6 +183,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         3. Run a mixed workload without lwt
         4. Run a mixed workload with lwt
         """
+        node = self.db_cluster.nodes[0]
 
         base_cmd_m = self.params.get('stress_cmd_m')
         stress_multiplier = self.params.get('stress_multiplier', default=1)
@@ -197,11 +201,11 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
         # run a mixed workload
         # run a workload without lwt as baseline
-        self.alternator.set_write_isolation(isolation=alternator.enums.WriteIsolation.FORBID_RMW)
+        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
         self._workload(sub_type='without-lwt', stress_cmd=base_cmd_m, stress_num=stress_multiplier, keyspace_num=1)
 
         # run a workload with lwt
-        self.alternator.set_write_isolation(isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
+        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
         self._workload(sub_type='with-lwt', stress_cmd=base_cmd_m, stress_num=stress_multiplier, keyspace_num=1)
 
         self.check_regression_with_baseline('cql')
@@ -222,10 +226,11 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         9. Run MIXED workload without lwt.
         10. Run MIXED workload with lwt.
         """
+        node = self.db_cluster.nodes[0]
 
         self.create_alternator_table(schema=self.params.get("dynamodb_primarykey_type"),
                                      alternator_write_isolation=alternator.enums.WriteIsolation.FORBID_RMW)
-        self.alternator.set_write_isolation(isolation=alternator.enums.WriteIsolation.FORBID_RMW)
+        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
 
         self.create_cql_ks_and_table(field_number=10)
         self.run_fstrim_on_all_db_nodes()
@@ -244,14 +249,14 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             keyspace_num=1, is_alternator=False)
 
         # run a workload without lwt as baseline
-        self.alternator.set_write_isolation(isolation=alternator.enums.WriteIsolation.FORBID_RMW)
+        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
         self._workload(
             test_name=self.id() + '_read', sub_type='without-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
             keyspace_num=1)
 
         self.wait_no_compactions_running()
         # run a workload with lwt
-        self.alternator.set_write_isolation(isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
+        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
         self._workload(
             test_name=self.id() + '_read', sub_type='with-lwt', stress_cmd=base_cmd_r, stress_num=stress_multiplier,
             keyspace_num=1)
@@ -267,14 +272,14 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
         self.wait_no_compactions_running()
         # run a workload without lwt as baseline
-        self.alternator.set_write_isolation(isolation=alternator.enums.WriteIsolation.FORBID_RMW)
+        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
         self._workload(
             test_name=self.id() + '_write', sub_type='without-lwt', stress_cmd=base_cmd_w + " -target 10000",
             stress_num=stress_multiplier, keyspace_num=1)
 
         self.wait_no_compactions_running(n=120)
         # run a workload with lwt
-        self.alternator.set_write_isolation(isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
+        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
         self._workload(
             test_name=self.id() + '_write', sub_type='with-lwt', stress_cmd=base_cmd_w + " -target 3000",
             stress_num=stress_multiplier, keyspace_num=1)
@@ -290,13 +295,13 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
         self.wait_no_compactions_running()
         # run a workload without lwt as baseline
-        self.alternator.set_write_isolation(isolation=alternator.enums.WriteIsolation.FORBID_RMW)
+        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.FORBID_RMW)
         self._workload(test_name=self.id() + '_mixed', sub_type='without-lwt',
                        stress_cmd=base_cmd_m + " -target 10000", stress_num=stress_multiplier, keyspace_num=1)
 
         self.wait_no_compactions_running()
         # run a workload with lwt
-        self.alternator.set_write_isolation(isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
+        self.alternator.set_write_isolation(node=node, isolation=alternator.enums.WriteIsolation.ALWAYS_USE_LWT)
         self._workload(test_name=self.id() + '_mixed', sub_type='with-lwt',
                        stress_cmd=base_cmd_m + " -target 5000", stress_num=stress_multiplier, keyspace_num=1)
 

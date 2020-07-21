@@ -15,17 +15,25 @@ pytestmark = [pytest.mark.usefixtures('events', 'create_table', 'create_cql_ks_a
 ALTERNATOR_PORT = 8000
 TEST_PARAMS = dict(dynamodb_primarykey_type='HASH_AND_RANGE',
                    alternator_use_dns_routing=True, alternator_port=ALTERNATOR_PORT)
-ALTERNATOR = alternator.api.Alternator()
+ALTERNATOR = alternator.api.Alternator(sct_params={"alternator_access_key_id": None,
+                                                   "alternator_secret_access_key": None,
+                                                   "alternator_port": ALTERNATOR_PORT})
 
 
 @pytest.fixture(scope='session')
 def create_table(docker_scylla):
-    if running_in_docker():
-        ALTERNATOR.endpoint_url = f'http://{docker_scylla.internal_ip_address}:{ALTERNATOR_PORT}'
-    else:
-        address = docker_scylla.get_port(f'{ALTERNATOR_PORT}')
-        ALTERNATOR.endpoint_url = f'http://{address}'
-    ALTERNATOR.create_table(table_name=alternator.consts.TABLE_NAME)
+    def create_endpoint_url(node):
+        if running_in_docker():
+            endpoint_url = f'http://{node.internal_ip_address}:{ALTERNATOR_PORT}'
+        else:
+            address = node.get_port(f'{ALTERNATOR_PORT}')
+            endpoint_url = f'http://{address}'
+        return endpoint_url
+
+    setattr(docker_scylla, "name", "mock-node")
+
+    ALTERNATOR.create_endpoint_url = create_endpoint_url
+    ALTERNATOR.create_table(node=docker_scylla, table_name=alternator.consts.TABLE_NAME)
 
 
 @pytest.fixture(scope='session')
@@ -37,7 +45,7 @@ def create_cql_ks_and_table(docker_scylla):
     node_ip, port = address.split(':')
     port = int(port)
 
-    from cassandra.cluster import Cluster  # pylint: disable=no-name-in-module
+    from cassandra.cluster import Cluster  # pylint: disable=no-name-in-module,import-outside-toplevel
     cluster_driver = Cluster([node_ip], port=port)
     session = cluster_driver.connect()
     session.execute(
@@ -164,7 +172,7 @@ def test_03_cql(request, docker_scylla, prom_address):
     ycsb_thread.get_results()
 
 
-def test_04_insert_new_data():
+def test_04_insert_new_data(docker_scylla):
     schema = alternator.schemas.HASH_AND_STR_RANGE_SCHEMA
     schema_keys = [key_details["AttributeName"] for key_details in schema["KeySchema"]]
     new_items = [{schema_keys[0]: 'test_0', schema_keys[1]: 'NFinQpNuCnaNOxsAkyrZ'},
@@ -178,6 +186,7 @@ def test_04_insert_new_data():
                  {schema_keys[0]: 'test_8', schema_keys[1]: 'NqsNVTtJeWRzrjHmOwop'},
                  {schema_keys[0]: 'test_9', schema_keys[1]: 'YrRvsqXAtppgCLiHhiQn'}]
 
-    ALTERNATOR.batch_write_actions(new_items=new_items, schema=alternator.schemas.HASH_AND_STR_RANGE_SCHEMA)
-    diff = ALTERNATOR.compare_table_data(table_data=new_items)
+    ALTERNATOR.batch_write_actions(node=docker_scylla, new_items=new_items,
+                                   schema=alternator.schemas.HASH_AND_STR_RANGE_SCHEMA)
+    diff = ALTERNATOR.compare_table_data(node=docker_scylla, table_data=new_items)
     assert diff

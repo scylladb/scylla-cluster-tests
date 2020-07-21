@@ -10,6 +10,7 @@ from mypy_boto3_dynamodb.service_resource import Table
 
 from sdcm.sct_events import EventsSeverityChangerFilter, YcsbStressEvent, PrometheusAlertManagerEvent, Severity
 from sdcm.utils.alternator import schemas, enums, consts
+from sdcm.utils.common import normalize_ipv6_url
 
 LOGGER = logging.getLogger(__name__)
 
@@ -20,24 +21,25 @@ class AlternatorApi(NamedTuple):
 
 
 class Alternator:
-    def __init__(self, endpoint_url=None, aws_access_key_id=None, aws_secret_access_key=None):
-        self.endpoint_url = endpoint_url
-        self.aws_access_key_id = aws_access_key_id
-        self.aws_secret_access_key = aws_secret_access_key
+    def __init__(self, sct_params):
+        self.params = sct_params
         self.alternator_apis = {}
 
-    def get_dynamodb_api(self, endpoint_url=None) -> AlternatorApi:
-        endpoint_url = endpoint_url or self.endpoint_url
+    def create_endpoint_url(self, node):
+        return 'http://{}:{}'.format(normalize_ipv6_url(node.external_address), self.params.get("alternator_port"))
+
+    def get_dynamodb_api(self, node) -> AlternatorApi:
+        endpoint_url = self.create_endpoint_url(node=node)
         if endpoint_url not in self.alternator_apis:
-            aws_params = dict(endpoint_url=endpoint_url, aws_access_key_id=self.aws_access_key_id,
-                              aws_secret_access_key=self.aws_secret_access_key)
+            aws_params = dict(endpoint_url=endpoint_url, aws_access_key_id=self.params.get("alternator_access_key_id"),
+                              aws_secret_access_key=self.params.get("alternator_secret_access_key"))
             resource: DynamoDBServiceResource = boto3.resource('dynamodb', **aws_params)
             client: DynamoDBClient = boto3.client('dynamodb', **aws_params)
             self.alternator_apis[endpoint_url] = AlternatorApi(resource=resource, client=client)
         return self.alternator_apis[endpoint_url]
 
-    def set_write_isolation(self, isolation, endpoint_url=None, table_name=consts.TABLE_NAME):
-        dynamodb_api = self.get_dynamodb_api(endpoint_url=endpoint_url)
+    def set_write_isolation(self, node, isolation, table_name=consts.TABLE_NAME):
+        dynamodb_api = self.get_dynamodb_api(node=node)
         isolation = isolation if not isinstance(isolation, enums.WriteIsolation) else isolation.value
         got = dynamodb_api.client.describe_table(TableName=table_name)['Table']
         arn = got['TableArn']
@@ -49,14 +51,14 @@ class Alternator:
         ]
         dynamodb_api.client.tag_resource(ResourceArn=arn, Tags=tags)
 
-    def create_table(self, endpoint_url=None,  # pylint: disable=too-many-arguments
+    def create_table(self, node,  # pylint: disable=too-many-arguments
                      schema=enums.YCSVSchemaTypes.HASH_AND_RANGE, isolation=None, table_name=consts.TABLE_NAME,
                      wait_until_table_exists=True, **kwargs) -> Table:
         if isinstance(schema, enums.YCSVSchemaTypes):
             schema = schema.value
         schema = schemas.ALTERNATOR_SCHEMAS[schema]
-        dynamodb_api = self.get_dynamodb_api(endpoint_url=endpoint_url)
-        LOGGER.debug(f"Creating a new table '{table_name}' using endpoint '{endpoint_url}'")
+        dynamodb_api = self.get_dynamodb_api(node=node)
+        LOGGER.debug(f"Creating a new table '{table_name}' using node '{node.name}'")
         table = dynamodb_api.resource.create_table(
             TableName=table_name, BillingMode="PAY_PER_REQUEST", **schema, **kwargs)
         if wait_until_table_exists:
@@ -67,14 +69,13 @@ class Alternator:
         response = dynamodb_api.client.describe_table(TableName=table_name)
 
         if isolation:
-            self.set_write_isolation(isolation=isolation, endpoint_url=endpoint_url, table_name=table_name)
+            self.set_write_isolation(node=node, isolation=isolation, table_name=table_name)
         LOGGER.debug(f"Table's schema and configuration are: {response}")
         return table
 
-    def scan_table(self, endpoint_url=None, table_name=consts.TABLE_NAME, threads_num=None, **kwargs):
-        scan_result = []
+    def scan_table(self, node, table_name=consts.TABLE_NAME, threads_num=None, **kwargs):
         is_parallel_scan = threads_num and threads_num > 0
-        dynamodb_api = self.get_dynamodb_api(endpoint_url=endpoint_url)
+        dynamodb_api = self.get_dynamodb_api(node=node)
         table = dynamodb_api.resource.Table(name=table_name)
 
         def _scan_table(part_scan_idx=None):
@@ -98,10 +99,10 @@ class Alternator:
             return list(chain(*scan_result)) if len(scan_result) > 1 else scan_result
         return _scan_table()
 
-    def batch_write_actions(self, endpoint_url=None,  # pylint:disable=too-many-arguments,dangerous-default-value
+    def batch_write_actions(self, node,  # pylint:disable=too-many-arguments,dangerous-default-value
                             table_name=consts.TABLE_NAME, new_items=None, delete_items=None,
                             schema=schemas.HASH_SCHEMA):
-        dynamodb_api = self.get_dynamodb_api(endpoint_url=endpoint_url)
+        dynamodb_api = self.get_dynamodb_api(node=node)
         assert new_items or delete_items, "should pass new_items or delete_items, other it's a no-op"
         new_items, delete_items = new_items or [], delete_items or []
         if new_items:
@@ -119,12 +120,12 @@ class Alternator:
                     batch.delete_item({key: item[key] for key in table_keys})
         return table
 
-    def compare_table_data(self, table_data, endpoint_url=None, table_name=consts.TABLE_NAME) -> bool:
-        data = self.scan_table(table_name=table_name, endpoint_url=endpoint_url)
+    def compare_table_data(self, node, table_data, table_name=consts.TABLE_NAME) -> bool:
+        data = self.scan_table(node=node, table_name=table_name)
         return set(hash(tuple(str(xxx))) for xxx in table_data) == set(hash(tuple(str(xxx))) for xxx in data)
 
-    def is_table_exists(self, table_name: consts.TABLE_NAME, endpoint_url=None):
-        dynamodb_api = self.get_dynamodb_api(endpoint_url=endpoint_url)
+    def is_table_exists(self, node, table_name: consts.TABLE_NAME, endpoint_url=None):
+        dynamodb_api = self.get_dynamodb_api(node=node)
         is_table_exists = True
 
         try:
@@ -134,8 +135,8 @@ class Alternator:
         LOGGER.info(f"The table '{table_name}'{'' if is_table_exists else 'not'} exists in endpoint {endpoint_url}..")
         return is_table_exists
 
-    def delete_table(self, table_name: consts.TABLE_NAME, endpoint_url=None, wait_until_table_removed=True):
-        dynamodb_api = self.get_dynamodb_api(endpoint_url=endpoint_url)
+    def delete_table(self, node, table_name: consts.TABLE_NAME, wait_until_table_removed=True):
+        dynamodb_api = self.get_dynamodb_api(node=node)
         table = dynamodb_api.resource.Table(name=table_name)
         table.delete()
         if wait_until_table_removed:
