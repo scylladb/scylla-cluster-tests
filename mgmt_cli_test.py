@@ -382,8 +382,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         assert new_user_login_message in res_new_user_login_cmd.stdout, "unexpected login-returned-message: {} . (expected: {}) ".format(
             res_new_user_login_cmd.stdout, new_user_login_message)
 
-        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME+"_ssh_setup", host=selected_host_ip,
-                                               single_node=True, auth_token=self.monitors.mgmt_auth_token)
+        mgr_cluster = manager_tool.add_cluster(  # pylint: disable=unexpected-keyword-arg
+            name=self.CLUSTER_NAME+"_ssh_setup", host=selected_host_ip,
+            single_node=True, auth_token=self.monitors.mgmt_auth_token)
         # self.log.debug('mgr_cluster: {}'.format(mgr_cluster))
         healthcheck_task = mgr_cluster.get_healthcheck_task()
         self.log.debug("Health-check task history is: {}".format(healthcheck_task.history))

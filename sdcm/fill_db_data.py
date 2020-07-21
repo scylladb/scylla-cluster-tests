@@ -26,7 +26,7 @@ from distutils.version import LooseVersion
 from cassandra import InvalidRequest
 from cassandra.util import sortedset, SortedSet  # pylint: disable=no-name-in-module
 from cassandra import ConsistencyLevel
-from cassandra.protocol import ProtocolException
+from cassandra.protocol import ProtocolException  # pylint: disable=no-name-in-module
 
 from sdcm.tester import ClusterTester
 from sdcm.utils.decorators import retrying

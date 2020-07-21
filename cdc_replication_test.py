@@ -20,7 +20,7 @@ import time
 from textwrap import dedent
 
 from cassandra import ConsistencyLevel
-from cassandra.query import SimpleStatement
+from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
 from sdcm import cluster
 from sdcm.tester import ClusterTester

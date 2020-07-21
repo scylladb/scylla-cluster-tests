@@ -30,7 +30,7 @@ from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 from invoke.exceptions import UnexpectedExit, Failure
 
-from cassandra.concurrent import execute_concurrent_with_args
+from cassandra.concurrent import execute_concurrent_with_args  # pylint: disable=no-name-in-module
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from cassandra.auth import PlainTextAuthProvider
@@ -42,7 +42,7 @@ from cassandra.policies import WhiteListRoundRobinPolicy
 from sdcm.keystore import KeyStore
 from sdcm import nemesis, cluster_docker, cluster_baremetal, db_stats, wait
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR, Setup, UserRemoteCredentials, set_duration as set_cluster_duration, \
-    set_ip_ssh_connections as set_cluster_ip_ssh_connections
+    set_ip_ssh_connections as set_cluster_ip_ssh_connections, BaseLoaderSet, BaseMonitorSet, BaseScyllaCluster
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_gce import LoaderSetGCE
 from sdcm.cluster_gce import MonitorSetGCE
@@ -230,6 +230,9 @@ signal.signal(signal.SIGUSR2, critical_failure_handler)
 class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     log = None
     localhost = None
+    monitors: BaseMonitorSet
+    loaders: BaseLoaderSet
+    db_cluster: BaseScyllaCluster
 
     def __init__(self, *args):  # pylint: disable=too-many-statements
         super(ClusterTester, self).__init__(*args)

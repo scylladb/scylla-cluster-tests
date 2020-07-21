@@ -37,7 +37,7 @@ def create_cql_ks_and_table(docker_scylla):
     node_ip, port = address.split(':')
     port = int(port)
 
-    from cassandra.cluster import Cluster
+    from cassandra.cluster import Cluster  # pylint: disable=no-name-in-module
     cluster_driver = Cluster([node_ip], port=port)
     session = cluster_driver.connect()
     session.execute(
