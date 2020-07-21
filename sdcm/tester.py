@@ -52,7 +52,7 @@ from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.utils.common import ScyllaCQLSession, get_non_system_ks_cf_list, format_timestamp, \
     wait_ami_available, tag_ami, update_certificates, download_dir_from_cloud, get_post_behavior_actions, \
-    get_testrun_status, download_encrypt_keys, PageFetcher, rows_to_list, normalize_ipv6_url
+    get_testrun_status, download_encrypt_keys, PageFetcher, rows_to_list
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.log import configure_logging, handle_exception
@@ -303,9 +303,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.params.get("logs_transport") == 'rsyslog':
             Setup.configure_rsyslog(self.localhost, enable_ngrok=False)
 
-        self.alternator = alternator.api.Alternator(
-            aws_access_key_id=self.params.get("alternator_access_key_id"),
-            aws_secret_access_key=self.params.get("alternator_secret_access_key"))
+        self.alternator = alternator.api.Alternator(sct_params=self.params)
         start_events_device(self.logdir)
         time.sleep(0.5)
         InfoEvent('TEST_START test_id=%s' % Setup.test_id())
@@ -458,23 +456,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             node.run_nodetool(sub_cmd="repair", args="-- system_auth")
 
     def pre_create_alternator_tables(self):
-
-        alternator_port = self.params.get('alternator_port', default=None)
-        if alternator_port:
+        node = self.db_cluster.nodes[0]
+        if self.params.get('alternator_port', default=None):
             self.log.info("Going to create alternator tables")
-            self.alternator.endpoint_url = 'http://{}:{}'.format(
-                normalize_ipv6_url(self.db_cluster.nodes[0].external_address), alternator_port)
-
             if self.params.get('alternator_enforce_authorization'):
-                with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+                with self.cql_connection_patient(node) as session:
                     session.execute("""
                         INSERT INTO system_auth.roles (role, salted_hash) VALUES (%s, %s)
                     """, (self.params.get('alternator_access_key_id'),
                           self.params.get('alternator_secret_access_key')))
 
             schema = self.params.get("dynamodb_primarykey_type")
-            self.alternator.create_table(schema=schema)
-            self.alternator.create_table(schema=schema, isolation=alternator.enums.WriteIsolation.FORBID_RMW,
+            self.alternator.create_table(node=node, schema=schema)
+            self.alternator.create_table(node=node, schema=schema, isolation=alternator.enums.WriteIsolation.FORBID_RMW,
                                          table_name='usertable_no_lwt')
 
     def get_nemesis_class(self):
