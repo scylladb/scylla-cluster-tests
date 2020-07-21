@@ -12,12 +12,16 @@
 # Copyright (c) 2020 ScyllaDB
 
 from abc import abstractmethod
-from typing import Type, Tuple, List
+from typing import Type, Tuple, List, Optional
 from shlex import quote
 import glob
 import os
 import shutil
 import tempfile
+import time
+
+from invoke.watchers import StreamWatcher
+from invoke.runners import Result
 
 from sdcm.utils.decorators import retrying
 
@@ -484,3 +488,61 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         command = "rsync %s %s --timeout=%s --rsh='%s' -az %s %s"
         return command % (symlink_flag, delete_flag, timeout, ssh_cmd,
                           " ".join(src), dst)
+
+    def _run_execute(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
+                     ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
+                     watchers: Optional[List[StreamWatcher]] = None):
+        if verbose:
+            self.log.debug('Running command "%s"...', cmd)
+        start_time = time.perf_counter()
+        command_kwargs = dict(
+            command=cmd, warn=ignore_status,
+            encoding='utf-8', hide=True,
+            watchers=watchers, timeout=timeout,
+            in_stream=False
+        )
+        if new_session:
+            with self._create_connection() as connection:
+                result = connection.run(**command_kwargs)
+        else:
+            result = self.connection.run(**command_kwargs)
+        result.duration = time.perf_counter() - start_time
+        result.exit_status = result.exited
+        return result
+
+    def _run_pre_run(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
+                     ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
+                     log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None):
+        pass
+
+    @abstractmethod
+    def _run_on_retryable_exception(self, exc: Exception, new_session: bool) -> bool:
+        pass
+
+    def _run_on_exception(self, exc: Exception, verbose: bool, ignore_status: bool) -> bool:
+        if hasattr(exc, "result"):
+            self._print_command_results(exc.result, verbose, ignore_status)  # pylint: disable=no-member
+        return True
+
+    @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
+    def run(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
+            ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
+            log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None) -> Result:
+
+        watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
+
+        @retrying(n=retry)
+        def _run():
+            self._run_pre_run(cmd, timeout, ignore_status, verbose, new_session, log_file, retry, watchers)
+            try:
+                return self._run_execute(cmd, timeout, ignore_status, verbose, new_session, watchers)
+            except self.exception_retryable as exc:
+                if self._run_on_retryable_exception(exc, new_session):
+                    raise
+            except Exception as exc:  # pylint: disable=broad-except
+                if self._run_on_exception(exc, verbose, ignore_status):
+                    raise
+
+        result = _run()
+        self._print_command_results(result, verbose, ignore_status)
+        return result
