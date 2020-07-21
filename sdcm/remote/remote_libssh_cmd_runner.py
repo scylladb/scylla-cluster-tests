@@ -67,57 +67,6 @@ class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport='libssh2'):  # p
             timings=Timings(keepalive_timeout=300, connect_timeout=self.connect_timeout)
         )
 
-    @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
-    def run(self, cmd: str, timeout: Optional[float] = None, ignore_status: bool = False,  # pylint: disable=too-many-arguments
-            verbose: bool = True, new_session: bool = False, log_file: Optional[str] = None, retry: int = 1,
-            watchers: Optional[List[StreamWatcher]] = None) -> Result:
-
-        watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
-
-        @retrying(n=retry)
-        def _run():
-            try:
-                if verbose:
-                    self.log.debug('Running command "%s"...', cmd)
-                start_time = time.perf_counter()
-                command_kwargs = dict(
-                    command=cmd, warn=ignore_status,
-                    encoding='utf-8', hide=True,
-                    watchers=watchers, timeout=timeout,
-                    in_stream=False
-                )
-                if new_session:
-                    with self._create_connection() as connection:
-                        result = connection.run(**command_kwargs)
-                else:
-                    result = self.connection.run(**command_kwargs)
-                result.duration = time.perf_counter() - start_time
-                result.exit_status = result.exited
-                return result
-            except self.exception_retryable as ex:
-                self.log.error(ex)
-                if isinstance(ex, FailedToRunCommand) and not new_session:
-                    self.log.debug('Reestablish the session...')
-                    try:
-                        self.connection.disconnect()
-                    except:  # pylint: disable=bare-except
-                        pass
-                    try:
-                        self.connection.connect()
-                    except:  # pylint: disable=bare-except
-                        pass
-                if self._is_error_retryable(str(ex)) or isinstance(ex, self.exception_retryable):
-                    raise RetryableNetworkException(str(ex), original=ex)
-                raise
-            except Exception as details:  # pylint: disable=broad-except
-                if hasattr(details, "result"):
-                    self._print_command_results(details.result, verbose, ignore_status)  # pylint: disable=no-member
-                raise
-
-        result = _run()
-        self._print_command_results(result, verbose, ignore_status)
-        return result
-
     def is_up(self, timeout: float = 30) -> bool:
         end_time = time.perf_counter() + timeout
         while time.perf_counter() <= end_time:
@@ -131,3 +80,19 @@ class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport='libssh2'):  # p
                 except:  # pylint: disable=bare-except
                     pass
         return False
+
+    def _run_on_retryable_exception(self, exc: Exception, new_session: bool) -> bool:
+        self.log.error(exc)
+        if isinstance(exc, FailedToRunCommand) and not new_session:
+            self.log.debug('Reestablish the session...')
+            try:
+                self.connection.disconnect()
+            except:  # pylint: disable=bare-except
+                pass
+            try:
+                self.connection.connect()
+            except:  # pylint: disable=bare-except
+                pass
+        if self._is_error_retryable(str(exc)) or isinstance(exc, self.exception_retryable):
+            raise RetryableNetworkException(str(exc), original=exc)
+        return True
