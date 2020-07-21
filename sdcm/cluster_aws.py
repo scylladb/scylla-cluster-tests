@@ -886,7 +886,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                      '--totalnodes %s --version community '
                      '--release 2.1.15' % (name, sum(n_nodes)))
 
-        super(CassandraAWSCluster, self).__init__(ec2_ami_id=ec2_ami_id,
+        super(CassandraAWSCluster, self).__init__(ec2_ami_id=ec2_ami_id,  # pylint: disable=unexpected-keyword-arg
                                                   ec2_subnet_id=ec2_subnet_id,
                                                   ec2_security_group_ids=ec2_security_group_ids,
                                                   ec2_instance_type=ec2_instance_type,
