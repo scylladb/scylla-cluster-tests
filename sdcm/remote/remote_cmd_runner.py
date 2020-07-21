@@ -98,52 +98,21 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
         self.stop_ssh_up_thread()
         super().stop()
 
-    @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
-    def run(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
-            ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
-            log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None) -> Result:
+    def _run_pre_run(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
+                     ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
+                     log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None):
+        if not self.is_up(timeout=self.connect_timeout):
+            raise SSHConnectTimeoutError(
+                'Unable to run "%s": failed connecting to "%s" during %ss' %
+                (cmd, self.hostname, self.connect_timeout)
+            )
 
-        watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
-
-        @retrying(n=retry)
-        def _run():
-            if not self.is_up(timeout=self.connect_timeout):
-                raise SSHConnectTimeoutError(
-                    'Unable to run "%s": failed connecting to "%s" during %ss' %
-                    (cmd, self.hostname, self.connect_timeout)
-                )
-            try:
-                if verbose:
-                    self.log.debug('Running command "%s"...', cmd)
-                start_time = time.perf_counter()
-                command_kwargs = dict(
-                    command=cmd, warn=ignore_status,
-                    encoding='utf-8', hide=True,
-                    watchers=watchers, timeout=timeout,
-                    in_stream=False
-                )
-                if new_session:
-                    with self._create_connection() as connection:
-                        result = connection.run(**command_kwargs)
-                else:
-                    result = self.connection.run(**command_kwargs)
-                result.duration = time.perf_counter() - start_time
-                result.exit_status = result.exited
-                return result
-            except self.exception_retryable as ex:
-                self.log.error(ex)
-                self.ssh_is_up.clear()
-                if self._is_error_retryable(str(ex)):
-                    raise RetryableNetworkException(str(ex), original=ex)
-                raise
-            except Exception as details:  # pylint: disable=broad-except
-                if hasattr(details, "result"):
-                    self._print_command_results(details.result, verbose, ignore_status)  # pylint: disable=no-member
-                raise
-
-        result = _run()
-        self._print_command_results(result, verbose, ignore_status)
-        return result
+    def _run_on_retryable_exception(self, exc: Exception, new_session: bool) -> bool:
+        self.log.error(exc)
+        self.ssh_is_up.clear()
+        if self._is_error_retryable(str(exc)):
+            raise RetryableNetworkException(str(exc), original=exc)
+        return True
 
     def _create_connection(self) -> Connection:
         return Connection(
