@@ -1925,6 +1925,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self.cluster.params.get('server_encrypt', None):
             raise UnsupportedNemesis('Server Encryption is not enabled, hence skipping')
 
+        if self.cluster.params.get('cluster_backend') == 'aws-siren':
+            raise UnsupportedNemesis(
+                'Hot reloading of SSL certificates is not supported on cloud backend with scylla enterprise 2019.x')
+
         @retrying(allowed_exceptions=LogContentNotFound)
         def check_ssl_reload_log(target_node, file_path, since_time):
             msg = target_node.remoter.run(f'journalctl -u scylla-server --since="{since_time}" | '
