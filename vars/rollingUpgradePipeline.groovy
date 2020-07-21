@@ -34,6 +34,7 @@ def call(Map pipelineParams) {
             booleanParam(defaultValue: "${pipelineParams.get('workaround_kernel_bug_for_iotune', false)}",
                  description: 'Workaround a known kernel bug which causes iotune to fail in scylla_io_setup, only effect GCE backend',
                  name: 'workaround_kernel_bug_for_iotune')
+            string(defaultValue: '', description: 'scylla option: internode_compression', name: 'internode_compression')
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
@@ -87,6 +88,7 @@ def call(Map pipelineParams) {
                                                         export SCT_AMI_ID_DB_SCYLLA_DESC="\$SCT_AMI_ID_DB_SCYLLA_DESC-\$SCT_SCYLLA_LINUX_DISTRO"
 
                                                         export SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE=${pipelineParams.workaround_kernel_bug_for_iotune}
+                                                        export SCT_INTERNODE_COMPRESSION=${pipelineParams.internode_compression}
 
                                                         echo "start test ......."
                                                         ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir "`pwd`"
