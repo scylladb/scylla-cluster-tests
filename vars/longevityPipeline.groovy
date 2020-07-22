@@ -2,168 +2,6 @@
 
 def completed_stages = [:]
 
-def runSctTest(Map params, Map builder){
-    // handle params which can be a json list
-    params = params.params
-    def aws_region = initAwsRegionParam(params.aws_region, builder.region)
-    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
-    def cloud_provider = params.backend.trim().toLowerCase()
-
-    sh """
-    #!/bin/bash
-    set -xe
-    env
-
-    rm -fv ./latest
-
-    export SCT_CLUSTER_BACKEND="${params.backend}"
-    export SCT_REGION_NAME=${aws_region}
-    export SCT_CONFIG_FILES=${test_config}
-    export SCT_COLLECT_LOGS=false
-
-    if [[ ! -z "${params.scylla_ami_id}" ]] ; then
-        export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
-    elif [[ ! -z "${params.scylla_version}" ]] ; then
-        export SCT_SCYLLA_VERSION="${params.scylla_version}"
-    elif [[ ! -z "${params.scylla_repo}" ]] ; then
-        export SCT_SCYLLA_REPO="${params.scylla_repo}"
-    else
-        echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO"
-        exit 1
-    fi
-
-    export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
-    export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
-    export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
-    export SCT_INSTANCE_PROVISION="${params.get('provision_type', '')}"
-    export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
-    export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
-
-    export SCT_TAG_AMI_WITH_RESULT="${params.tag_ami_with_result}"
-    export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
-
-    if [[ ! -z "${params.scylla_mgmt_repo}" ]] ; then
-        export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
-    fi
-
-    echo "start test ......."
-    if [[ "$cloud_provider" == "aws" ]]; then
-        SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
-        if [[ ! -z "\${SCT_RUNNER_IP}" ]] ; then
-            ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} run-test ${params.test_name} --backend ${params.backend}
-        else
-            echo "SCT runner IP file is empty. Probably SCT Runner was not created."
-            exit 1
-        fi
-    else
-        ./docker/env/hydra.sh run-test ${params.test_name} --backend ${params.backend}  --logdir "`pwd`"
-    fi
-    echo "end test ....."
-    """
-}
-
-def runCollectLogs(Map params, Map builder){
-    params = params.params
-    def aws_region = initAwsRegionParam(params.aws_region, builder.region)
-    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
-    def cloud_provider = params.backend.trim().toLowerCase()
-    sh """
-    #!/bin/bash
-
-    set -xe
-    env
-
-    echo "${params.test_config}"
-    export SCT_CLUSTER_BACKEND="${params.backend}"
-    export SCT_REGION_NAME=${aws_region}
-    export SCT_CONFIG_FILES=${test_config}
-
-    echo "start collect logs ..."
-    if [[ "$cloud_provider" == "aws" ]]; then
-        SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
-        if [[ ! -z "\${SCT_RUNNER_IP}" ]] ; then
-            ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} collect-logs
-        else
-            echo "SCT runner IP file is empty. Probably SCT Runner was not created."
-            exit 1
-        fi
-    else
-        ./docker/env/hydra.sh collect-logs --logdir "`pwd`"
-    fi
-    echo "end collect logs"
-    """
-}
-
-def runSendEmail(Map params){
-    def test_status = params.get("test_status", "")
-    def start_time = params.get("start_time", "")
-    params = params.params
-    if (test_status) {
-        test_status = "--test-status " + test_status
-    }
-    if (start_time) {
-        start_time = "--start-time " + start_time
-    }
-
-    def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
-    def cloud_provider = params.backend.trim().toLowerCase()
-
-    sh """
-    #!/bin/bash
-    set -xe
-    env
-    echo "Start send email ..."
-    if [[ "$cloud_provider" == "aws" ]]; then
-        SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
-        if [[ ! -z "\${SCT_RUNNER_IP}" ]] ; then
-            ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} send-email --email-recipients "${email_recipients}"
-        else
-            echo "SCT runner IP file is empty. Probably SCT Runner was not created."
-            ./docker/env/hydra.sh send-email ${test_status} ${start_time} --logdir "`pwd`" --email-recipients "${email_recipients}"
-            exit 1
-        fi
-    else
-        ./docker/env/hydra.sh send-email ${test_status} ${start_time} --logdir "`pwd`" --email-recipients "${email_recipients}"
-    fi
-    echo "Email sent."
-    """
-}
-
-def runCleanupResource(Map params, Map builder){
-    params = params.params
-    def aws_region = initAwsRegionParam(params.aws_region, builder.region)
-    def test_config = groovy.json.JsonOutput.toJson(params.test_config)
-    def cloud_provider = params.backend.trim().toLowerCase()
-
-    sh """
-    #!/bin/bash
-
-    set -xe
-    env
-
-    export SCT_CONFIG_FILES=${test_config}
-    export SCT_CLUSTER_BACKEND="${params.backend}"
-    export SCT_REGION_NAME=${aws_region}
-    export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
-    export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
-    export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
-
-    echo "Starting to clean resources ..."
-    if [[ "$cloud_provider" == "aws" ]]; then
-        SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
-        if [[ ! -z "\${SCT_RUNNER_IP}" ]] ; then
-            ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} clean-resources --test-id \$SCT_TEST_ID
-        else
-            echo "SCT runner IP file is empty. Probably SCT Runner was not created."
-            exit 1
-        fi
-    else
-        ./docker/env/hydra.sh clean-resources --logdir "`pwd`"
-    fi
-    ./docker/env/hydra.sh clean-runner-instances
-    echo "Finished cleaning resources."
-    """
-}
 
 def call(Map pipelineParams) {
 
@@ -186,7 +24,7 @@ def call(Map pipelineParams) {
                name: 'backend')
 
             string(defaultValue: "${pipelineParams.get('aws_region', 'eu-west-1')}",
-               description: 'us-east-1|eu-west-1|eu-west-2',
+               description: 'Supported: us-east-1|eu-west-1|eu-west-2|eu-north-1|random (randomly select region)',
                name: 'aws_region')
             string(defaultValue: "a",
                description: 'Availability zone',
@@ -216,7 +54,10 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('ip_ssh_connections', 'private')}",
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
-            string(defaultValue: '', description: 'If empty - the default manager version will be taken', name: 'scylla_mgmt_repo')
+
+            string(defaultValue: '',
+                   description: 'If empty - the default manager version will be taken',
+                   name: 'scylla_mgmt_repo')
 
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
@@ -259,14 +100,7 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    def cloud_provider = params.backend.trim().toLowerCase()
-                                    sh """
-                                    if [[ "$cloud_provider" == "aws" ]]; then
-                                        ./docker/env/hydra.sh create-runner-instance --cloud-provider ${cloud_provider} --region ${builder.region} --availability-zone ${params.availability_zone} --test-id \${SCT_TEST_ID} --duration ${pipelineParams.timeout.time}
-                                    else
-                                        echo "Currently, <$cloud_provider> not supported to. Will run on regular builder."
-                                    fi
-                                    """
+                                    createSctRunner(params, pipelineParams.timeout.time , builder.region)
                                 }
                             }
                         }
@@ -279,7 +113,7 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    runSctTest(params: params, builder: builder)
+                                    runSctTest(params, builder.region)
                                 }
                             }
                         }
@@ -292,7 +126,7 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    runCollectLogs(params: params, builder: builder)
+                                    runCollectLogs(params, builder.region)
                                 }
                             }
                         }
@@ -305,7 +139,7 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    runCleanupResource(params: params, builder: builder)
+                                    runCleanupResource(params, builder.region)
                                     completed_stages['clean_resources'] = true
                                 }
                             }
@@ -319,7 +153,7 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    runSendEmail(params: params, start_time: currentBuild.startTimeInMillis.intdiv(1000), test_status: currentBuild.currentResult)
+                                    runSendEmail(params, currentBuild)
                                     completed_stages['send_email'] = true
                                 }
                             }
@@ -345,7 +179,7 @@ def call(Map pipelineParams) {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
-                                        runCleanupResource(params: params, builder: builder)
+                                    runCleanupResource(params, builder.region)
                                     }
                                 }
                             }
@@ -356,7 +190,7 @@ def call(Map pipelineParams) {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
-                                        runSendEmail(params: params, start_time: currentBuild.startTimeInMillis.intdiv(1000), test_status: currentBuild.currentResult)
+                                    runSendEmail(params, currentBuild)
                                     }
                                 }
                             }

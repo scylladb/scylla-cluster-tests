@@ -14,10 +14,10 @@ regions_data:
     ami_id_monitor: 'ami-0ff760d16d9497662' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
     backup_bucket_location: 'manager-backup-tests-eu-west-1'
   eu-west-2:
-    ami_id_loader: 'ami-05f5e60a958ed70d6' # Loader dedicated AMI v10 with golang 1.13
+    ami_id_loader: 'ami-05f5e60a958ed70d6' # Loader dedicated AMI v11
     ami_id_monitor: 'ami-0eab3a90fc693af19' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
   eu-north-1:
-    ami_id_loader: 'ami-047a96eb9be325519' # Loader dedicated AMI v10 with golang 1.13
+    ami_id_loader: 'ami-03389f1ec374f22d3' # Loader dedicated AMI v10 with golang 1.13
     ami_id_monitor: 'ami-5ee66f20' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
   us-west-2:
     ami_id_loader: 'ami-0de1ee51de25ac133' # Loader dedicated AMI v11
