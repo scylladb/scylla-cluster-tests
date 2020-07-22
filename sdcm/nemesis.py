@@ -1434,11 +1434,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             pattern1 = r"(?P<sampler>[A-Z]+)\sSampler:\W+Cardinality:\s~(?P<cardinality>[0-9]+)\s\((?P<capacity>[0-9]+)\scapacity\)\W+Top\s(?P<toppartitions>[0-9]+)\spartitions:"
             pattern2 = r"(?P<partition>[\w:]+)\s+(?P<count>[\d]+)\s+(?P<margin>[\d]+)"
             toppartitions = {}
-            for out in output.split('\n\n'):
+            for out in output.strip().split('\n\n'):
                 partition = OrderedDict()
                 sampler_data = re.match(pattern1, out, re.MULTILINE)
+                assert sampler_data, f"Pattern:{pattern1} are not matched on string:\n {out}"
                 sampler_data = sampler_data.groupdict()
                 partitions = re.findall(pattern2, out, re.MULTILINE)
+                self.log.debug(f"Next list of top partitions are found {partitions}")
                 for val in partitions:
                     partition.update({val[0]: {'count': val[1], 'margin': val[2]}})
                 sampler_data.update({'partitions': partition})
