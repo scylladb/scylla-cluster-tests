@@ -3439,7 +3439,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         node.wait_db_up(verbose=verbose, timeout=timeout)
         nodes_status = node.get_nodes_status()
         check_nodes_status(nodes_status=nodes_status, current_node=node,
-                           removed_nodes_list=self.removed_nodes)  # pylint: disable=no-member
+                           removed_nodes_list=self.dead_nodes_ip_address_list)  # pylint: disable=no-member
 
         self.clean_replacement_node_ip(node)
 
