@@ -64,7 +64,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         Return instance parameters required to rebuild instance
         """
         return {'hostname': self.hostname, 'user': self.user, 'password': self.password, 'port': self.port,
-                'connect_timeout': self.connect_timeout, 'keyfile': self.key_file,
+                'connect_timeout': self.connect_timeout, 'key_file': self.key_file,
                 'extra_ssh_options': self.extra_ssh_options, 'auth_sleep_time': self.auth_sleep_time}
 
     def __init_subclass__(cls, ssh_transport: str = None, default: bool = False):
