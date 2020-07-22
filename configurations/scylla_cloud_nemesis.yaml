@@ -2,3 +2,4 @@ nemesis_class_name: ChaosMonkey
 nemesis_interval: 15
 nemesis_during_prepare: false
 cluster_health_check: false
+server_encrypt: false
