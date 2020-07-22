@@ -602,6 +602,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             upload_dir = result.stdout.split()[0]
             self.target_node.remoter.run('sudo tar xvfz {} -C /var/lib/scylla/data/keyspace1/{}/upload/'.format(
                 sstable_file, upload_dir))
+            # Scylla Enterprise 2019.1 doesn't support to load schema.cql and manifest.json, let's remove them
+            self.target_node.remoter.run(
+                'sudo rm -f /var/lib/scylla/data/keyspace1/{}/upload/schema.cql'.format(upload_dir))
+            self.target_node.remoter.run(
+                'sudo rm -f /var/lib/scylla/data/keyspace1/{}/upload/manifest.json'.format(upload_dir))
             self.target_node.run_nodetool(sub_cmd="refresh", args="-- keyspace1 standard1")
             cmd = "select * from keyspace1.standard1 where key=0x32373131364f334f3830"
             result = self.target_node.run_cqlsh(cmd)
