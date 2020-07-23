@@ -20,7 +20,7 @@ import random
 import unittest
 import warnings
 from uuid import uuid4
-from functools import wraps
+from functools import wraps, partial
 import threading
 import signal
 import sys
@@ -858,19 +858,33 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.info("Pull `%s' to Minikube' Docker environment", scylla_docker_image)
         self.k8s_cluster.run(f"eval $(minikube docker-env) && docker pull -q {scylla_docker_image}")
 
+        helm = partial(KubernetesOps.helm, self.k8s_cluster, remoter=self.k8s_cluster.nodes[0].remoter)
+        kubectl = partial(KubernetesOps.kubectl, self.k8s_cluster)
+        apply_file = partial(KubernetesOps.apply_file, self.k8s_cluster)
+
+        self.log.info("Deploy cert-manager")
+        kubectl("create namespace cert-manager")
+        helm("repo add jetstack https://charts.jetstack.io")
+        helm("install cert-manager jetstack/cert-manager --version v0.15.2 --set installCRDs=true",
+             namespace="cert-manager")
+        time.sleep(10)
+        kubectl("wait --timeout=1m --all --for=condition=Ready pod", namespace="cert-manager")
+
         self.log.info("Deploy Scylla Operator")
-        KubernetesOps.apply_file(self.k8s_cluster, cluster_k8s.SCYLLA_OPERATOR_CONFIG)
+        apply_file(cluster_k8s.SCYLLA_OPERATOR_CONFIG)
+        time.sleep(10)
+        kubectl("wait --timeout=1m --all --for=condition=Ready pod", namespace="scylla-operator-system")
 
         self.log.info("Create and initialize a Scylla cluster")
-        KubernetesOps.apply_file(self.k8s_cluster, cluster_k8s.SCYLLA_CLUSTER_CONFIG)
+        apply_file(cluster_k8s.SCYLLA_CLUSTER_CONFIG)
 
         for _ in range(self.params.get("n_db_nodes")):
             time.sleep(30)
-            self.k8s_cluster.run("kubectl -n scylla wait --timeout=3m --all --for=condition=Ready pod", verbose=True)
+            kubectl("wait --timeout=3m --all --for=condition=Ready pod", namespace="scylla")
 
         self.log.debug("Check Scylla cluster")
-        self.k8s_cluster.run("kubectl -n scylla get clusters.scylla.scylladb.com", verbose=True)
-        self.k8s_cluster.run("kubectl -n scylla get pods", verbose=True)
+        kubectl("get clusters.scylla.scylladb.com", namespace="scylla")
+        kubectl("get pods", namespace="scylla")
 
         self.db_cluster = cluster_k8s.ScyllaPodCluster(k8s_cluster=self.k8s_cluster,
                                                        user_prefix=self.params.get("user_prefix"),

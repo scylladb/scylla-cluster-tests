@@ -77,6 +77,10 @@ class MinikubeOps:
             curl -fsSLo /usr/local/bin/minikube \
                 https://storage.googleapis.com/minikube/releases/v{minikube_version}/minikube-linux-amd64
             chmod +x /usr/local/bin/minikube
+
+            # Install Helm 3.
+            snap install helm --classic
+            ln -s /snap/bin/helm /usr/local/bin/helm
         """)
         node.remoter.run(f'sudo bash -cxe "{minikube_setup_script}"')
 
