@@ -122,8 +122,9 @@ class BaseEmailReporter:
                            "username",)
     _fields = ()
     email_template_file = 'results_base.html'
-    last_events_limit = 5
-    last_events_body_limit_per_severity = 3000
+    last_events_body_limit_per_severity = 35000
+    last_events_body_limit_total = 70000
+    last_events_limit = 10000000  # This limit won't be reached, to be relay only on body limits
     last_events_severities = ['CRITICAL', 'ERROR', 'WARNING']
 
     def __init__(self, email_recipients=(), email_template_fp=None, logger=None, logdir=None):
@@ -232,6 +233,7 @@ class BaseEmailReporter:
         report_data['last_events'] = self._get_last_events(
             report_data,
             self.last_events_body_limit_per_severity,
+            self.last_events_body_limit_total,
             self.last_events_limit,
             self.last_events_severities
         )
@@ -248,8 +250,9 @@ class BaseEmailReporter:
         return None, None
 
     @staticmethod
-    def _get_last_events(report_data, category_size_limit, events_in_category_limit, severities):
+    def _get_last_events(report_data, category_size_limit, total_size_limit, events_in_category_limit, severities):
         output = {}
+        total_size = 0
         last_events = report_data.get('last_events')
         if last_events and isinstance(last_events, dict):
             for severity, events in last_events.items():
@@ -262,27 +265,32 @@ class BaseEmailReporter:
                 output[severity] = severity_events = []
                 for event in reversed(events):
                     if len(event) >= category_size_limit - severity_events_length or \
-                            len(severity_events) >= events_in_category_limit:
+                            len(severity_events) >= events_in_category_limit or \
+                            total_size + len(event) > total_size_limit:
                         severity_events.append('There are more events. See log file.')
                         break
                     severity_events.insert(0, event)
                     severity_events_length += len(event)
+                    total_size += len(event)
                 if len(severity_events) == 0 and len(events) >= 1:
                     severity_events.append(events[-1][category_size_limit])
                     severity_events.append('There are more events. See log file.')
         return output
 
     @staticmethod
-    def _check_if_last_events_over_the_limit(report_data, category_size_limit, events_in_category_limit):
+    def _check_if_last_events_over_the_limit(report_data, category_size_limit, total_size_limit, events_in_category_limit):
+        total_size = 0
         last_events = report_data.get('last_events')
         if last_events and isinstance(last_events, dict):
             for events in last_events.values():
                 severity_events_length = 0
                 for event in reversed(events):
                     if len(event) >= category_size_limit - severity_events_length or \
-                            severity_events_length >= events_in_category_limit:
+                            severity_events_length >= events_in_category_limit or \
+                            total_size + len(event) > total_size_limit:
                         return True
                     severity_events_length += len(event)
+                    total_size += len(event)
         return False
 
 
@@ -306,8 +314,9 @@ class LongevityEmailReporter(BaseEmailReporter):
                "scylla_instance_type",
                "scylla_version",)
     email_template_file = "results_longevity.html"
-    last_events_body_limit_per_severity_in_attachment = 10000
-    last_events_limit_in_attachment = 10
+    last_events_body_limit_per_severity_in_attachment = 3000000
+    last_events_body_limit_total_in_attachment = 10000000
+    last_events_limit_in_attachment = 10000000  # This limit won't be reached, to be relay only on body limits
     last_events_severities_in_attachment = BaseEmailReporter.last_events_severities + ['NORMAL']
 
     def cut_report_data(self, report_data, attachments_data, reason):
@@ -315,21 +324,25 @@ class LongevityEmailReporter(BaseEmailReporter):
             if self._check_if_last_events_over_the_limit(
                     attachments_data,
                     self.last_events_body_limit_per_severity_in_attachment // 3,
+                    self.last_events_body_limit_total_in_attachment // 3,
                     self.last_events_limit_in_attachment // 3):
                 attachments_data['last_events'] = self._get_last_events(
                     attachments_data,
                     self.last_events_body_limit_per_severity_in_attachment // 3,
-                    self.last_events_limit_in_attachment,
+                    self.last_events_body_limit_total_in_attachment // 3,
+                    self.last_events_limit_in_attachment // 3,
                     self.last_events_severities_in_attachment)
                 return report_data, attachments_data
             return report_data, None
         if self._check_if_last_events_over_the_limit(
                 report_data,
                 self.last_events_body_limit_per_severity // 3,
+                self.last_events_body_limit_total // 3,
                 self.last_events_limit // 3):
-            attachments_data['last_events'] = self._get_last_events(
+            report_data['last_events'] = self._get_last_events(
                 report_data,
                 self.last_events_body_limit_per_severity // 3,
+                self.last_events_body_limit_total // 3,
                 self.last_events_limit // 3,
                 self.last_events_severities)
             return report_data, None
@@ -344,6 +357,7 @@ class LongevityEmailReporter(BaseEmailReporter):
         attachments_data['last_events'] = self._get_last_events(
             attachments_data,
             self.last_events_body_limit_per_severity_in_attachment,
+            self.last_events_body_limit_total_in_attachment,
             self.last_events_limit_in_attachment,
             self.last_events_severities_in_attachment)
         self.save_html_to_file(attachments_data, report_file, template_str=template_str)
