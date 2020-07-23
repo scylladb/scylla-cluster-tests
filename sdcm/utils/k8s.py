@@ -21,6 +21,7 @@ from sdcm.remote import LOCALRUNNER
 
 
 KUBECTL_BIN = "kubectl"
+HELM_BIN = "helm"
 
 
 logging.getLogger("kubernetes.client.rest").setLevel(logging.INFO)
@@ -58,14 +59,28 @@ class KubernetesOps:
         return cls.core_v1_api(kluster).list_namespaced_service(namespace=namespace, watch=False, **kwargs).items
 
     @staticmethod
-    def kubectl(kluster, *command, namespace=None, timeout=300):
+    def kubectl(kluster, *command, namespace=None, timeout=300, remoter=None):
         cmd = [KUBECTL_BIN, ]
-        if kluster.k8s_server_url is not None:
-            cmd.append(f"--server={kluster.k8s_server_url}")
+        if remoter is None:
+            if kluster.k8s_server_url is not None:
+                cmd.append(f"--server={kluster.k8s_server_url}")
+            remoter = LOCALRUNNER
         if namespace:
             cmd.append(f"--namespace={namespace}")
         cmd.extend(command)
-        return LOCALRUNNER.run(" ".join(cmd), timeout=timeout)
+        return remoter.run(" ".join(cmd), timeout=timeout)
+
+    @staticmethod
+    def helm(kluster, *command, namespace=None, timeout=300, remoter=None):
+        cmd = [HELM_BIN, ]
+        if remoter is None:
+            if kluster.k8s_server_url is not None:
+                cmd.append(f"--kube-apiserver {kluster.k8s_server_url}")
+            remoter = LOCALRUNNER
+        if namespace:
+            cmd.append(f"--namespace {namespace}")
+        cmd.extend(command)
+        return remoter.run(" ".join(cmd), timeout=timeout)
 
     @classmethod
     def apply_file(cls, kluster, config_path, namespace=None, timeout=300):
