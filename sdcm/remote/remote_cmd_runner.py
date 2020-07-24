@@ -30,6 +30,7 @@ from .remote_base import RemoteCmdRunnerBase
 
 
 class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True):  # pylint: disable=too-many-instance-attributes
+    connection: Connection
     ssh_config: Config = None
     ssh_is_up: threading.Event = None
     ssh_up_thread: Optional[threading.Thread] = None
