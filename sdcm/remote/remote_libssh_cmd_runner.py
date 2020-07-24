@@ -37,7 +37,7 @@ class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport='libssh2'):  # p
     Whenever remoter read self.connection, we return value from _connection_thread_map associated with current thread,
       And if it is not there, we create it.
     """
-    connection_thread_map = threading.local()
+    connection: LibSSH2Client
     exception_unexpected = UnexpectedExit
     exception_failure = Failure
     exception_retryable = (
@@ -45,18 +45,6 @@ class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport='libssh2'):  # p
         AuthenticationException, UnknownHostException, ConnectError, FailedToReadCommandOutput,
         CommandTimedOut, FailedToRunCommand, OpenChannelTimeout, SocketRecvError, socket.timeout
     )
-
-    @property
-    def connection(self) -> LibSSH2Client:
-        """
-        Map connection to current thread.
-        If there is no such thread, create it.
-        """
-        connection = getattr(self.connection_thread_map, str(id(self)), None)
-        if connection is None:
-            connection = self._create_connection()
-            setattr(self.connection_thread_map, str(id(self)), connection)
-        return connection
 
     def _create_connection(self) -> LibSSH2Client:
         return LibSSH2Client(
