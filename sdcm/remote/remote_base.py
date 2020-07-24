@@ -19,6 +19,7 @@ import os
 import shutil
 import tempfile
 import time
+import threading
 
 from invoke.watchers import StreamWatcher
 from invoke.runners import Result
@@ -42,6 +43,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
     exception_unexpected: Type[Exception] = None
     exception_failure: Type[Exception] = None
     exception_retryable: Tuple[Type[Exception]] = None
+    connection_thread_map = threading.local()
 
     def __init__(self, hostname: str, user: str = 'root',  # pylint: disable=too-many-arguments
                  password: str = None, port: int = None, connect_timeout: int = None, key_file: str = None,
@@ -58,6 +60,18 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             self.auth_sleep_time = auth_sleep_time
         self.known_hosts_file = tempfile.mkstemp()[1]
         super().__init__(hostname=hostname, user=user, password=password)
+
+    @property
+    def connection(self):
+        """
+        Map connection to current thread.
+        If there is no such thread, create it.
+        """
+        connection = getattr(self.connection_thread_map, str(id(self)), None)
+        if connection is None:
+            connection = self._create_connection()
+            setattr(self.connection_thread_map, str(id(self)), connection)
+        return connection
 
     @classmethod
     def get_retryable_exceptions(cls) -> Tuple[Type[Exception]]:
