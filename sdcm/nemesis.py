@@ -493,6 +493,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         old_node_ip = self.target_node.ip_address
         InfoEvent(message='StartEvent - Terminate node and wait 5 minutes')
         self._terminate_cluster_node(self.target_node)
+        time.sleep(300)  # Sleeping for 5 mins to let the cluster live with a missing node for a while
         InfoEvent(message='FinishEvent - target_node was terminated')
         new_node = self._add_and_init_new_cluster_node(old_node_ip)
 
@@ -2713,7 +2714,6 @@ class NemesisSequence(Nemesis):
         self.disrupt_run_unique_sequence()
 
 
-
 # Disable unstable streaming err nemesises
 #
 # class DecommissionStreamingErrMonkey(Nemesis):
@@ -2741,7 +2741,6 @@ class NemesisSequence(Nemesis):
 #     @log_time_elapsed_and_status
 #     def disrupt(self):
 #         self.disrupt_repair_streaming_err()
-
 
 RELATIVE_NEMESIS_SUBCLASS_LIST = [NotSpotNemesis]
 
