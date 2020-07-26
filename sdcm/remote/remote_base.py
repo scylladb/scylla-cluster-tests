@@ -185,7 +185,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
                 rsync = self._make_rsync_cmd([remote_source], local_dest,
                                              delete_dst, preserve_symlinks, timeout)
                 result = LocalCmdRunner().run(rsync, timeout=timeout)
-                self.log.info(result.exited)
+                self.log.debug(result.exited)
                 try_scp = False
             except (self.exception_failure, self.exception_unexpected) as ex:
                 self.log.warning("Trying scp, rsync failed: %s", ex)
@@ -211,12 +211,12 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
                     if self._is_error_retryable(ex.result.stderr):
                         raise RetryableNetworkException(ex.result.stderr, original=ex)
                     raise
-                self.log.info("Command %s with status %s", result.command, result.exited)
+                self.log.debug("Command %s with status %s", result.command, result.exited)
                 if result.exited:
                     files_received = False
                 # Avoid "already printed" message without real error
                 if result.stderr:
-                    self.log.info("Stderr: %s", result.stderr)
+                    self.log.deubg("Stderr: %s", result.stderr)
                     files_received = False
 
         if not preserve_perm:
@@ -324,7 +324,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
                     if self._is_error_retryable(ex.result.stderr):
                         raise RetryableNetworkException(ex.result.stderr, original=ex)
                     raise
-                self.log.info('Command %s with status %s', result.command, result.exited)
+                self.log.debug('Command %s with status %s', result.command, result.exited)
                 if result.exited:
                     files_sent = False
         return files_sent
