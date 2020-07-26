@@ -102,9 +102,9 @@ class CommandRunner(metaclass=ABCMeta):
         """When verbose=True and ignore_status=True that means nothing will be printed in any case"""
         if verbose and not result.failed:
             if result.stderr:
-                self.log.info('STDERR: %s', result.stderr)
+                self.log.debug('STDERR: %s', result.stderr)
 
-            self.log.info('Command "%s" finished with status %s', result.command, result.exited)
+            self.log.debug('Command "%s" finished with status %s', result.command, result.exited)
             return
 
         if verbose and result.failed and not ignore_status:
