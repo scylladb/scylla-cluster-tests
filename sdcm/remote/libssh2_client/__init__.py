@@ -20,6 +20,7 @@ from io import StringIO
 from warnings import warn
 from socket import socket, AF_INET, SOCK_STREAM, gaierror, error as sock_error
 from threading import Thread, Lock
+from abc import abstractmethod, ABC
 from multiprocessing import Queue, BoundedSemaphore, Event
 from ssh2.channel import Channel  # pylint: disable=no-name-in-module
 from ssh2.exceptions import AuthenticationError  # pylint: disable=no-name-in-module
@@ -41,6 +42,10 @@ class __DEFAULT__:  # pylint: disable=invalid-name, too-few-public-methods
     """ Default value for function attribute when None is not an option """
 
 
+class StreamWatcher(ABC):
+    @abstractmethod
+    def submit_line(self, line: str):
+        pass
 
 
 class SSHReaderThread(Thread):  # pylint: disable=too-many-instance-attributes
@@ -402,7 +407,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
 
     @staticmethod
     def _process_output(  # pylint: disable=too-many-arguments, too-many-branches
-            watchers: List['StreamWatcher'], encoding: str, stdout_stream: StringIO, stderr_stream: StringIO,
+            watchers: List[StreamWatcher], encoding: str, stdout_stream: StringIO, stderr_stream: StringIO,
             reader: SSHReaderThread, timeout: NullableTiming, timeout_read_data_chunk: NullableTiming):
         """Separate different approach for the case when watchers are present, since watchers are slow,
           we can loose data due to the socket buffer limit, if endpoint sending it faster than watchers can read it.
