@@ -12,7 +12,9 @@
 # Copyright (c) 2020 ScyllaDB
 
 import traceback
+
 from ssh2.exceptions import SocketRecvError  # pylint: disable=no-name-in-module
+
 from .result import Result
 
 
