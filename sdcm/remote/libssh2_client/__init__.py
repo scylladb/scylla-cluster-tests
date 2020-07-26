@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-# pylint: disable=duplicate-code
 from typing import List, Optional, Dict
 from time import perf_counter, sleep
 from os.path import normpath, expanduser, exists
@@ -22,9 +21,11 @@ from socket import socket, AF_INET, SOCK_STREAM, gaierror, error as sock_error
 from threading import Thread, Lock
 from abc import abstractmethod, ABC
 from multiprocessing import Queue, BoundedSemaphore, Event
+
 from ssh2.channel import Channel  # pylint: disable=no-name-in-module
 from ssh2.exceptions import AuthenticationError  # pylint: disable=no-name-in-module
 from ssh2.error_codes import LIBSSH2_ERROR_EAGAIN  # pylint: disable=no-name-in-module
+
 from .exceptions import AuthenticationException, UnknownHostException, ConnectError, PKeyFileError, UnexpectedExit, \
     CommandTimedOut, FailedToReadCommandOutput, ConnectTimeout, FailedToRunCommand, OpenChannelTimeout
 from .result import Result
@@ -621,6 +622,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
             except Exception as exc:  # pylint: disable=broad-except
                 print(f'Failed to close channel due to the following error: {exc}')
             exit_status = channel.get_exit_status()
+            self.session.drop_channel(channel)
             result.exited = exit_status
         if exception:
             raise exception
