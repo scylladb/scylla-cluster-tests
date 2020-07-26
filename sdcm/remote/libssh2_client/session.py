@@ -11,11 +11,15 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+from gc import collect as gc_collect
 from select import select
 from threading import Lock
+
 from ssh2.session import Session as LibSSH2Session, LIBSSH2_SESSION_BLOCK_INBOUND, LIBSSH2_SESSION_BLOCK_OUTBOUND  # pylint: disable=no-name-in-module
 from ssh2.exceptions import SocketRecvError  # pylint: disable=no-name-in-module
 from ssh2.error_codes import LIBSSH2_ERROR_EAGAIN  # pylint: disable=no-name-in-module
+from ssh2.channel import Channel  # pylint: disable=no-name-in-module
+
 from .timings import NullableTiming
 
 
@@ -29,6 +33,7 @@ class Session(LibSSH2Session):  # pylint: disable=too-few-public-methods
     def __init__(self):
         # A lock that is used to make it thread safe
         self.lock = Lock()
+        self.channels = []
         super().__init__()
 
     def simple_select(self, timeout: NullableTiming = None):
@@ -57,3 +62,18 @@ class Session(LibSSH2Session):  # pylint: disable=too-few-public-methods
                 self.simple_select(timeout=timeout)
                 ret = func(*args, **kwargs)
             return ret
+
+    def open_session(self):
+        channel = super().open_session()
+        if isinstance(channel, Channel):
+            self.channels.append(channel)
+        return channel
+
+    def drop_channel(self, channel: Channel):
+        if channel in self.channels:
+            self.channels.remove(channel)
+
+    def __del__(self):
+        if self.channels:
+            self.channels.clear()
+            gc_collect()
