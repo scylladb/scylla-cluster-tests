@@ -1,8 +1,8 @@
-test_duration: 6550
+test_duration: 1500
 prepare_write_cmd:  ["cassandra-stress write                         cl=QUORUM n=21000000     -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=500 -pop seq=1..21000000 -col 'size=FIXED(200) n=FIXED(5)' -log interval=10"]
 prepare_verify_cmd: ["cassandra-stress read                          cl=QUORUM n=21000000     -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=500 -pop seq=1..21000000 -col 'size=FIXED(200) n=FIXED(5)' -log interval=10"]
-stress_cmd:         ["cassandra-stress mixed 'ratio(write=1,read=8)' cl=QUORUM duration=5760m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..21000000 -col 'size=FIXED(200) n=FIXED(5)' -log interval=10"]
-stress_read_cmd:    ["cassandra-stress read                          cl=QUORUM duration=5760m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=100 -pop seq=1..21000000 -col 'size=FIXED(200) n=FIXED(5)' -log interval=10"]
+stress_cmd:         ["cassandra-stress mixed 'ratio(write=1,read=8)' cl=QUORUM duration=1400m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=1..21000000 -col 'size=FIXED(200) n=FIXED(5)' -log interval=10"]
+stress_read_cmd:    ["cassandra-stress read                          cl=QUORUM duration=1400m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=100 -pop seq=1..21000000 -col 'size=FIXED(200) n=FIXED(5)' -log interval=10"]
 
 run_fullscan: 'random, 30' # 'ks.cf|random, interval(min)''
 
