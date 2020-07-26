@@ -11,5 +11,5 @@ longevityPipeline(
     test_name: 'longevity_in_memory_test.InMemoryLongevityTest.test_in_mem_longevity',
     test_config: 'test-cases/longevity/longevity-in-memory-36GB-4days.yaml',
 
-    timeout: [time: 6610, unit: 'MINUTES']
+    timeout: [time: 1560, unit: 'MINUTES']
 )
