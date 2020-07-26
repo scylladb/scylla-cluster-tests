@@ -12,24 +12,23 @@
 # Copyright (c) 2020 ScyllaDB
 
 # pylint: disable=duplicate-code
-from typing import List, Union, Iterable, Optional, Dict
-from dataclasses import dataclass, field
+from typing import List, Optional, Dict
 from time import perf_counter, sleep
 from os.path import normpath, expanduser, exists
 from sys import float_info
 from io import StringIO
 from warnings import warn
 from socket import socket, AF_INET, SOCK_STREAM, gaierror, error as sock_error
-from select import select
 from threading import Thread, Lock
 from multiprocessing import Queue, BoundedSemaphore, Event
 from ssh2.channel import Channel  # pylint: disable=no-name-in-module
-from ssh2.exceptions import SocketRecvError, AuthenticationError  # pylint: disable=no-name-in-module
-from ssh2.session import Session as LibSSH2Session, LIBSSH2_SESSION_BLOCK_INBOUND, LIBSSH2_SESSION_BLOCK_OUTBOUND  # pylint: disable=no-name-in-module
+from ssh2.exceptions import AuthenticationError  # pylint: disable=no-name-in-module
 from ssh2.error_codes import LIBSSH2_ERROR_EAGAIN  # pylint: disable=no-name-in-module
 from .exceptions import AuthenticationException, UnknownHostException, ConnectError, PKeyFileError, UnexpectedExit, \
     CommandTimedOut, FailedToReadCommandOutput, ConnectTimeout, FailedToRunCommand, OpenChannelTimeout
 from .result import Result
+from .session import Session
+from .timings import Timings, NullableTiming
 
 
 __all__ = ['Session', 'Timings', 'Client', 'Channel', 'FailedToRunCommand']
@@ -38,73 +37,10 @@ __all__ = ['Session', 'Timings', 'Client', 'Channel', 'FailedToRunCommand']
 LINESEP = b'\n'
 
 
-NullableTiming = Optional[float]
-Timing = float
-Delays = Iterable[float]
-
-
 class __DEFAULT__:  # pylint: disable=invalid-name, too-few-public-methods
     """ Default value for function attribute when None is not an option """
 
 
-class Session(LibSSH2Session):  # pylint: disable=too-few-public-methods
-    """Custom SSH2 Session class with Lock in it, to make it thread safe where it is needed """
-
-    def __init__(self):
-        # A lock that is used to make it thread safe
-        self.lock = Lock()
-        super().__init__()
-
-    def simple_select(self, timeout: NullableTiming = None):
-        """Perform single select on ssh2 session socket.
-        It is standalone-function because it is an candidate to be compiled via Cython
-        """
-        try:
-            _socket = self.sock
-            directions = self.block_directions()
-            if directions == 0:
-                return
-            readfds = (_socket,) \
-                if (directions & LIBSSH2_SESSION_BLOCK_INBOUND) else ()
-            writefds = (_socket,) \
-                if (directions & LIBSSH2_SESSION_BLOCK_OUTBOUND) else ()
-            select(readfds, writefds, (), timeout)
-        except (ValueError, SocketRecvError):  # under high load it can throw these errors, on next try it will be ok
-            pass
-
-    def eagain(self, func, args=(), kwargs={},  # pylint: disable=dangerous-default-value
-               timeout: NullableTiming = None) -> int:
-        """Running function followed by simple_select up until it return anything but `LIBSSH2_ERROR_EAGAIN`"""
-        with self.lock:
-            ret = func(*args, **kwargs)
-            while ret == LIBSSH2_ERROR_EAGAIN:
-                self.simple_select(timeout=timeout)
-                ret = func(*args, **kwargs)
-            return ret
-
-
-@dataclass
-class Timings:  # pylint: disable=too-many-instance-attributes
-    """A store for timeouts and delays
-    """
-    keepalive_timeout: Timing = 30
-    keepalive_sending_timeout: Timing = 1
-    socket_timeout: NullableTiming = 10
-    connect_timeout: NullableTiming = 60
-    connect_delays: Delays = field(default_factory=lambda: [0, 0.1, 0.5, 1, 15])
-    interactive_read_data_chunk_timeout: NullableTiming = 0.5
-    read_data_chunk_timeout: NullableTiming = 1
-    read_command_output_timeout: NullableTiming = None
-    check_if_alive_timeout: NullableTiming = 5
-    # Timeout on all basic ssh session operation like authentications, open_session, etc...
-    ssh_session_timeout: NullableTiming = 10
-    ssh_handshake_timeout: NullableTiming = 3
-    auth_timeout: NullableTiming = 10
-    open_channel_timeout: NullableTiming = 15
-    channel_close_timeout: NullableTiming = 0.5
-    close_channel_timeout: NullableTiming = 1
-    # Delays for open_channel, if open_channel failed it sleeps for amount of seconds it got from the list
-    open_channel_delays: Delays = field(default_factory=lambda: [0, 0.1, 0.5, 1, 15])
 
 
 class SSHReaderThread(Thread):  # pylint: disable=too-many-instance-attributes
@@ -619,7 +555,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
             stdout='',
             stderr=''
         )
-        channel: Channel = None
+        channel: Optional[Channel] = None
         try:
             if self.session is None:
                 self.connect()
