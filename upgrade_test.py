@@ -480,9 +480,9 @@ class UpgradeTest(FillDatabaseData):
         we want to use this case to verify the read (cl=ALL) workload works
         well, upgrade all nodes to new version in the end.
         """
-        node = self.db_cluster.nodes[0]
         alternator_prepare_write_thread_pool = None
         alternator_entire_write_thread_pool = None
+        alternator_verify_stress_thread_pool = None
 
         # In case the target version >= 3.1 we need to perform test for truncate entries
         target_upgrade_version = self.params.get('target_upgrade_version', default='')
@@ -501,15 +501,17 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('pre-test - prepare test keyspaces and tables')
         # prepare test keyspaces and tables before upgrade to avoid schema change during mixed cluster.
         self.prepare_keyspaces_and_tables()
-        self.fill_and_verify_db_data('BEFORE UPGRADE', pre_fill=True)
         if is_alternator_supported:
+            self.db_cluster.node_to_upgrade = self.db_cluster.nodes[0]
             if self.params.get('alternator_enforce_authorization'):
-                with self.cql_connection_patient(node=node) as session:
+                with self.cql_connection_patient(node=self.db_cluster.node_to_upgrade) as session:
                     session.execute("""
                                    INSERT INTO system_auth.roles (role, salted_hash) VALUES (%s, %s)
                                """, (self.params.get('alternator_access_key_id'),
                                      self.params.get('alternator_secret_access_key')))
-            self.fill_and_verify_alternator_db_data(node=node, note="ALTERNATOR BEFORE UPGRADE", pre_fill=True)
+            self.fill_and_verify_alternator_db_data(
+                node=self.db_cluster.node_to_upgrade, note="ALTERNATOR BEFORE UPGRADE", pre_fill=True)
+        self.fill_and_verify_db_data('BEFORE UPGRADE', pre_fill=True)
 
         # write workload during entire test
         self.log.info('Starting c-s write workload during entire test')
@@ -592,7 +594,8 @@ class UpgradeTest(FillDatabaseData):
             self.fill_and_verify_db_data('after upgraded one node')
             if is_alternator_supported:
                 self.verify_stress_thread(alternator_read_stress_queue)
-                self.fill_and_verify_alternator_db_data(node=node, note='Alternator after upgraded one node')
+                self.fill_and_verify_alternator_db_data(
+                    node=self.db_cluster.node_to_upgrade, note='Alternator after upgraded one node')
 
             self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                           step=step+' - after upgraded one node')
@@ -620,10 +623,13 @@ class UpgradeTest(FillDatabaseData):
 
             # wait for the 10m read workload to finish
             self.verify_stress_thread(read_10m_cs_thread_pool)
-            self.fill_and_verify_db_data('after upgraded two nodes')
             if is_alternator_supported:
                 self.verify_stress_thread(alternator_read_10m_thread_pool)
-                self.fill_and_verify_alternator_db_data(node=node, note='Alternator after upgraded two nodes')
+
+            self.fill_and_verify_db_data('after upgraded two nodes')
+            if is_alternator_supported:
+                self.fill_and_verify_alternator_db_data(
+                    node=self.db_cluster.node_to_upgrade, note='Alternator after upgraded two nodes')
 
             self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                           step=step+' - after upgraded two nodes')
@@ -650,7 +656,8 @@ class UpgradeTest(FillDatabaseData):
         self.log.info(step)
         self.fill_and_verify_db_data('after rollback the second node')
         if is_alternator_supported:
-            self.fill_and_verify_alternator_db_data(node=node, note='Alternator after rollback the second node')
+            self.fill_and_verify_alternator_db_data(
+                node=self.db_cluster.node_to_upgrade, note='Alternator after rollback the second node')
         self.log.info('Repair the first upgraded Node')
         self.db_cluster.nodes[indexes[0]].run_nodetool(sub_cmd='repair')
         self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
@@ -672,7 +679,8 @@ class UpgradeTest(FillDatabaseData):
                 self.fill_and_verify_db_data('after upgraded %s' % self.db_cluster.node_to_upgrade.name)
                 if is_alternator_supported:
                     self.fill_and_verify_alternator_db_data(
-                        node=node, note=f"Alternator after upgraded '{self.db_cluster.node_to_upgrade.name}'")
+                        node=self.db_cluster.node_to_upgrade,
+                        note=f"Alternator after upgraded '{self.db_cluster.node_to_upgrade.name}'")
                 self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                               step=step)
 
@@ -712,13 +720,14 @@ class UpgradeTest(FillDatabaseData):
         verify_stress_after_cluster_upgrade = self.params.get(  # pylint: disable=invalid-name
             'verify_stress_after_cluster_upgrade')
         verify_stress_cs_thread_pool = self.run_stress_thread(stress_cmd=verify_stress_after_cluster_upgrade)
-        self.verify_stress_thread(verify_stress_cs_thread_pool)
         if is_alternator_supported:
             self.log.info("Verifying Alternator data after cluster upgraded")
             alternator_verify_stress_after_cluster_upgrade = self.params.get(  # pylint: disable=invalid-name
                 'alternator_verify_stress_after_cluster_upgrade')
             alternator_verify_stress_thread_pool = \
                 self.run_stress_thread(stress_cmd=alternator_verify_stress_after_cluster_upgrade)
+        self.verify_stress_thread(verify_stress_cs_thread_pool)
+        if is_alternator_supported:
             self.verify_stress_thread(alternator_verify_stress_thread_pool)
 
         # complex workload: verify data by simple read cl=ALL

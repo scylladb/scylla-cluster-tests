@@ -124,7 +124,7 @@ class Alternator:
         data = self.scan_table(node=node, table_name=table_name)
         return set(hash(str(xxx)) for xxx in table_data) - set(hash(str(xxx)) for xxx in data)
 
-    def is_table_exists(self, node, table_name: consts.TABLE_NAME, endpoint_url=None):
+    def is_table_exists(self, node, table_name: consts.TABLE_NAME):
         dynamodb_api = self.get_dynamodb_api(node=node)
         is_table_exists = True
 
@@ -132,7 +132,7 @@ class Alternator:
             dynamodb_api.client.describe_table(TableName=table_name)
         except dynamodb_api.client.exceptions.ResourceNotFoundException:
             is_table_exists = False
-        LOGGER.info(f"The table '{table_name}'{'' if is_table_exists else 'not'} exists in endpoint {endpoint_url}..")
+        LOGGER.info(f"The table '{table_name}'{'' if is_table_exists else 'not'} exists in endpoint {node.name}..")
         return is_table_exists
 
     def delete_table(self, node, table_name: consts.TABLE_NAME, wait_until_table_removed=True):
