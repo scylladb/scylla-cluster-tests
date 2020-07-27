@@ -697,7 +697,7 @@ def create_test_release_jobs_enterprise(branch, username, password, sct_branch, 
             server.create_pipeline_job(jenkins_file, current_dir)
 
     server.create_pipeline_job(
-        f'{server.base_sct_dir}/jenkins-pipelines/longevity-in-memory-36gb-4d.jenkinsfile', 'SCT_Enterprise_Features')
+        f'{server.base_sct_dir}/jenkins-pipelines/longevity-in-memory-36gb-1d.jenkinsfile', 'SCT_Enterprise_Features')
 
 
 if __name__ == '__main__':
