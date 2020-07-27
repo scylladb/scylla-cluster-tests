@@ -32,12 +32,13 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
         gettext \
         git \
         iproute2 \
+        iptables \
+        libnss-myhostname \
         openssh-client \
         rsync \
         sudo \
         unzip \
         wget \
-        iptables \
         docker-ce-cli && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
