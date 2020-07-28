@@ -1,6 +1,6 @@
 #! /bin/bash
 
-for f in `find ./test-cases/ \\( -iname "*.yaml" ! -iname "*multi-dc.yaml" ! -iname *multiDC*.yaml ! -iname *multiple-dc*.yaml ! -iname *rolling* ! -iregex .*docker.* ! -iregex .*artifacts.* !  -iregex .*private-repo.* ! -iregex .*ics/long.* \\)` ; do
+for f in `find ./test-cases/ \\( -iname "*.yaml" ! -iname "*multi-dc.yaml" ! -iname *multiDC*.yaml ! -iname *multiple-dc*.yaml ! -iname *rolling* ! -iregex .*docker.* ! -iregex .*artifacts.* !  -iregex .*private-repo.* ! -iregex .*ics/long.* ! -iregex .*k8s.* \\)` ; do
     echo "---- linting: $f -----"
     RES=$( script --flush --quiet --return /tmp/test-case.txt --command "SCT_SCYLLA_VERSION=4.0.0 python3 ./sct.py conf $f" )
     if [[ "$?" == "1" ]]; then
