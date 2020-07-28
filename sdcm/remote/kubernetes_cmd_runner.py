@@ -58,16 +58,17 @@ class KubernetesRunner(Runner):
         pass
 
     def start(self, command: str, shell: str, env: dict) -> None:
-        self.process = k8s.stream.stream(self._k8s_core_v1_api.connect_get_namespaced_pod_exec,
-                                         name=self.context.config.k8s_pod,
-                                         container=self.context.config.k8s_container,
-                                         namespace=self.context.config.k8s_namespace,
-                                         command=[shell, "-c", command],
-                                         stderr=True,
-                                         stdin=True,
-                                         stdout=True,
-                                         tty=False,
-                                         _preload_content=False)
+        with self._ws_lock:
+            self.process = k8s.stream.stream(self._k8s_core_v1_api.connect_get_namespaced_pod_exec,
+                                             name=self.context.config.k8s_pod,
+                                             container=self.context.config.k8s_container,
+                                             namespace=self.context.config.k8s_namespace,
+                                             command=[shell, "-c", command],
+                                             stderr=True,
+                                             stdin=True,
+                                             stdout=True,
+                                             tty=False,
+                                             _preload_content=False)
 
     def kill(self) -> None:
         self.stop()
@@ -84,7 +85,8 @@ class KubernetesRunner(Runner):
 
     def stop(self) -> None:
         with self._ws_lock:
-            self.process.close()
+            if self.process:
+                self.process.close()
 
 
 class KubernetesCmdRunner(CommandRunner):

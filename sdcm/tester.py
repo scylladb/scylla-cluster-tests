@@ -856,7 +856,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         # This should remove some of the unpredictability of pods startup time.
         scylla_docker_image = f'scylladb/scylla:{self.params.get("scylla_version")}'
         self.log.info("Pull `%s' to Minikube' Docker environment", scylla_docker_image)
-        self.k8s_cluster.run(f"eval $(minikube docker-env) && docker pull -q {scylla_docker_image}")
+        self.k8s_cluster.run(f"docker pull -q {scylla_docker_image}")
 
         helm = partial(KubernetesOps.helm, self.k8s_cluster, remoter=self.k8s_cluster.nodes[0].remoter)
         kubectl = partial(KubernetesOps.kubectl, self.k8s_cluster)
