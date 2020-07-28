@@ -2881,6 +2881,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
         self.coredumps = dict()
         self.ldap_configured = False
+        self.latency_results = dict()
         super(BaseCluster, self).__init__()
 
     @cached_property
