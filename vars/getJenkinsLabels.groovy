@@ -24,7 +24,13 @@ def call(String backend, String aws_region=null) {
             aws_region = aws_supported_regions[0]
         }
 
-        return [ "label": jenkins_labels["${backend}-${aws_region}"], "region": aws_region ]
+        label = jenkins_labels.get("${backend}-${aws_region}", null)
+        if (label != null){
+            return [ "label": label, "region": aws_region ]
+        }
+        else{
+            throw new Exception("=================== AWS region ${aws_region} not supported ! ===================")
+        }
 
     }
     else
