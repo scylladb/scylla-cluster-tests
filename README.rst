@@ -126,9 +126,14 @@ To configure a region: create VPC and all related environment elements (Subnet, 
     hydra prepare-aws-region --region <region_name>
 
 SCT can run locally and on remote Runner instance.
-To run SCT using runner create an image using::
+First of all we before creating a Runner instance we need to  create an image using::
 
     hydra create-runner-image --region <region_name>
+
+Then create a Runner instance::
+
+    hydra create-runner-instance -r <region_name> -z <az> -t <test-id> -d <run_duration>
+
 
 Run a test
 ----------
@@ -138,6 +143,10 @@ Example running test using Hydra using `test-cases/PR-provision-test.yaml` confi
 on AWS::
 
     hydra "run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/PR-provision-test.yaml"
+
+on AWS using SCT Runner::
+
+    hydra --execute-on-runner <runner-ip|`cat sct_runner_ip> "run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/PR-provision-test.yaml"
 
 on GCE::
 
