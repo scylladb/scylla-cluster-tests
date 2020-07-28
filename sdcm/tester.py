@@ -1341,7 +1341,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             # will default to lz4 compression
             query += ' AND compression = {}'
 
-        if compaction is not None or sstable_size:
+        if not in_memory and (compaction is not None or sstable_size):
             compaction = compaction or self.params.get('compaction_strategy')
             prefix = ' AND compaction={'
             postfix = '}'
@@ -1988,7 +1988,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         assert res, "No results from Prometheus"
         used = int(res[0]["values"][0][1]) / (2 ** 10)
         assert used >= size, f"Waiting for Scylla data dir to reach '{size}', " \
-                             f"current size is: '{used}'"
+            f"current size is: '{used}'"
 
     def check_regression(self):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
