@@ -377,6 +377,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             DatabaseLogEvent(type='FILESYSTEM_ERROR', regex='filesystem_error'),
             DatabaseLogEvent(type='STACKTRACE', regex='stacktrace'),
             DatabaseLogEvent(type='BACKTRACE', regex='backtrace', severity=Severity.ERROR),
+            DatabaseLogEvent(type='ABORTING_ON_SHARD', regex='Aborting on shard'),
             DatabaseLogEvent(type='SEGMENTATION', regex='segmentation'),
             DatabaseLogEvent(type='INTEGRITY_CHECK', regex='integrity check failed'),
             DatabaseLogEvent(type='REACTOR_STALLED', regex='Reactor stalled', severity=Severity.WARNING),
