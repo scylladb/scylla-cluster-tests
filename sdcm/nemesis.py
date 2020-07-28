@@ -577,6 +577,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_nodetool_refresh(self, big_sstable=True, skip_download=False):
         self._set_current_disruption('Refresh keyspace1.standard1 on {}'.format(self.target_node.name))
+
         # The snapshot has 5 columns
         if big_sstable:
             # 100G, the big file will be saved to GCE image
@@ -637,19 +638,23 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             node.run_nodetool(sub_cmd="refresh", args="-- keyspace1 standard1")
 
         if result is not None and result.exit_status == 0:
-            # Drop one special key before refresh, we will verify refresh by query in the end
-            delete_cmd = "DELETE FROM keyspace1.standard1 WHERE key=0x32373131364f334f3830"
-            self.target_node.run_cqlsh(delete_cmd)
+            # Check one special key before refresh, we will verify refresh by query in the end
+            # Note: we can't DELETE the key before refresh, otherwise the old sstable won't be loaded
+            #       TRUNCATE can be used the clean the table, but we can't do it for keyspace1.standard1
             query_verify = "SELECT * FROM keyspace1.standard1 WHERE key=0x32373131364f334f3830"
             result = self.target_node.run_cqlsh(query_verify)
-            assert '(0 rows)' in result.stdout, 'Expected key 0x32373131364f334f3830 to not exist after deletion before refresh'
+            if '(0 rows)' in result.stdout:
+                self.log.debug('Key 0x32373131364f334f3830 does not exist before refresh')
+            else:
+                self.log.debug('Key 0x32373131364f334f3830 already exists before refresh')
 
+            # Executing rolling refresh one by one
             for node in self.cluster.nodes:
                 do_refresh(node)
-            if len(cols) in [1, 5]:
-                # Verify that the special key is loaded by refresh
-                result = self.target_node.run_cqlsh(query_verify)
-                assert '(1 rows)' in result.stdout, 'The key is not loaded by `nodetool refresh`'
+
+            # Verify that the special key is loaded by SELECT query
+            result = self.target_node.run_cqlsh(query_verify)
+            assert '(1 rows)' in result.stdout, 'The key is not loaded by `nodetool refresh`'
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
         if all_nodes:
