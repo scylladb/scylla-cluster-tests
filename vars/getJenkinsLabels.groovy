@@ -12,6 +12,7 @@ def call(String backend, String aws_region=null) {
     def jenkins_labels = ['aws-eu-west-1': 'aws-sct-builders-eu-west-1',
                           'aws-eu-west-2': 'aws-sct-builders-eu-west-2',
                           'aws-eu-north-1': 'aws-sct-builders-eu-north-1',
+                          'aws-eu-central-1': 'aws-sct-builders-eu-central-1',
                           'aws-us-east-1' : 'aws-sct-builders-us-east-1',
                           'gce': 'gce-sct-builders',
                           'docker': 'sct-builders']
@@ -19,7 +20,7 @@ def call(String backend, String aws_region=null) {
     if (backend == 'aws' && aws_region)
     {
         if (aws_region == "random"){
-            def aws_supported_regions = ["eu-west-2", "eu-north-1"]
+            def aws_supported_regions = ["eu-west-2", "eu-north-1", "eu-central-1"]
             Collections.shuffle(aws_supported_regions)
             aws_region = aws_supported_regions[0]
         }
