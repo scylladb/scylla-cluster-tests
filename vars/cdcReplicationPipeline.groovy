@@ -202,7 +202,6 @@ def call(Map pipelineParams) {
         }
         post {
             always {
-                archiveArtifacts artifacts: 'scylla-cluster-tests/latest/**'
                 script {
                     def collect_logs = completed_stages['collect_logs']
                     def clean_resources = completed_stages['clean_resources']
