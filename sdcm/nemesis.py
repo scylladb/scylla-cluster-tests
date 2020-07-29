@@ -578,29 +578,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_nodetool_refresh(self, big_sstable=True, skip_download=False):
         self._set_current_disruption('Refresh keyspace1.standard1 on {}'.format(self.target_node.name))
 
-        # The snapshot has 5 columns
-        if big_sstable:
-            # 100G, the big file will be saved to GCE image
-            # Fixme: It's very slow and unstable to download 100G files from S3 to GCE instances,
-            #        currently we actually uploaded a small file (3.6 K) to S3.
-            #        We had a solution to save the file in GCE image, it requires bigger boot disk.
-            #        In my old test, the instance init is easy to fail. We can try to use a
-            #        split shared disk to save the 100GB file.
-            # 100M (500000 rows)
-            sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis/keyspace1.standard1.100M.tar.gz'
-            sstable_file = '/tmp/keyspace1.standard1.100M.tar.gz'
-            sstable_md5 = '9c5dd19cfc78052323995198b0817270'
-            keys_num = 501000
-        else:
-            sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis/keyspace1.standard1.tar.gz'
-            sstable_file = "/tmp/keyspace1.standard1.tar.gz"
-            sstable_md5 = 'c033a3649a1aec3ba9b81c446c6eecfd'
-            keys_num = 1000
-
+        # Checking the columns number of keyspace1.standard1
         query_cmd = "SELECT * FROM keyspace1.standard1 LIMIT 1"
         result = self.target_node.run_cqlsh(query_cmd)
-        cols = re.findall("(\| C\d+)", result.stdout)
-        if len(cols) == 1:
+        col_num = len(re.findall("(\| C\d+)", result.stdout))
+
+        if col_num == 1:
             # Use special schema (one column) for refresh before https://github.com/scylladb/scylla/issues/6617 is fixed
             if big_sstable:
                 sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis_c0/keyspace1.standard1.100M.tar.gz'
@@ -612,6 +595,31 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 sstable_file = "/tmp/keyspace1.standard1.tar.gz"
                 sstable_md5 = 'c4aee10691fa6343a786f52663e7f758'
                 keys_num = 1000
+        elif col_num >= 5:
+            # The snapshot has 5 columns, the snapshot (col=5) can be loaded to table (col > 5).
+            # they rest columns will be filled to 'null'.
+            if big_sstable:
+                # 100G, the big file will be saved to GCE image
+                # Fixme: It's very slow and unstable to download 100G files from S3 to GCE instances,
+                #        currently we actually uploaded a small file (3.6 K) to S3.
+                #        We had a solution to save the file in GCE image, it requires bigger boot disk.
+                #        In my old test, the instance init is easy to fail. We can try to use a
+                #        split shared disk to save the 100GB file.
+                # 100M (500000 rows)
+                sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis/keyspace1.standard1.100M.tar.gz'
+                sstable_file = '/tmp/keyspace1.standard1.100M.tar.gz'
+                sstable_md5 = '9c5dd19cfc78052323995198b0817270'
+                keys_num = 501000
+            else:
+                sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis/keyspace1.standard1.tar.gz'
+                sstable_file = "/tmp/keyspace1.standard1.tar.gz"
+                sstable_md5 = 'c033a3649a1aec3ba9b81c446c6eecfd'
+                keys_num = 1000
+        else:
+            # Note: when issue #6617 is fixed, we can try to load snapshot (cols=5) to a table (1 < cols < 5),
+            #       expect that refresh will fail (no serious db error).
+            raise UnsupportedNemesis(
+                'Scylla does not support to load snapshot that has more columns than current table, Known issue: scylla/issues#6617')
 
         self.log.debug('Prepare keyspace1.standard1 if it does not exist')
         self._prepare_test_table(ks='keyspace1', table='standard1')
