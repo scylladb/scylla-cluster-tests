@@ -1547,8 +1547,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
             session.default_consistency_level = ConsistencyLevel.QUORUM
 
-            execute_concurrent_with_args(session=session, statement=insert_statement, parameters=source_table_rows,
-                                         concurrency=max_workers)
+            results = execute_concurrent_with_args(session=session, statement=insert_statement, parameters=source_table_rows,
+                                                   concurrency=max_workers, results_generator=True)
+
+            try:
+                succeeded_rows = sum(1 for (success, result) in results if success)
+                if succeeded_rows != len(source_table_rows):
+                    self. log.warning(f'Problem during copying data. Not all rows were inserted.'
+                                      f'Rows expected to be inserted: {len(source_table_rows)}; '
+                                      f'Actually inserted rows: {succeeded_rows}.')
+                    return False
+            except Exception as exc:
+                self.log.warning(f'Problem during copying data: {exc}')
+                return False
 
             result = session.execute(f"SELECT count(*) FROM {dest_keyspace}.{dest_table}")
             if result:
