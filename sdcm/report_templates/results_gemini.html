@@ -1,26 +1,5 @@
 {% extends './results_base.html' %}
 {% block body %}
-    <h3>Nemesis Details</h3>
-    <h4>Running nemesis: {{ nemesis_name }}</h4>
-    {% if nemesis_details %}
-        <div>
-            <table id='results_table'>
-                <tr>
-                    <th>Nemesis name</th>
-                    <th>Count</th>
-                    <th>Successful Runs</th>
-                    <th>Failures</th></tr>
-            {% for name, detail in nemesis_details.items() %}
-                <tr>
-                    <td>{{ name }}</td>
-                    <td>{{ detail['cnt'] }}</td>
-                    <td>{{ detail['runs']|length }}</td>
-                    <td>{{ detail['failures']|length }}</td>
-                </tr>
-            {% endfor %}
-            </table>
-        </div>
-    {% endif %}
     <h3>
         <span>System under test </span>
     </h3>
@@ -43,15 +22,11 @@
         </ul>
     </div>
     {% endif %}
-{% endblock %}
 
-{% block test_results %}
+    {% include "results_nemesis_stats.html" %}
+
     <h3>
-        <span>SCT test results </span>
-    </h3>
-    <div> {{ test_status }} </div>
-    <h3>
-    <span>Gemini test results </span>
+        <span>Gemini test results </span>
     </h3>
     <table class='gemini_result_table'>
         <tr>

@@ -365,7 +365,7 @@ class LongevityEmailReporter(BaseEmailReporter):
         return attachments
 
 
-class GeminiEmailReporter(BaseEmailReporter):
+class GeminiEmailReporter(LongevityEmailReporter):
     _fields = ("gemini_cmd",
                "gemini_version",
                "nemesis_details",
@@ -379,7 +379,9 @@ class GeminiEmailReporter(BaseEmailReporter):
                "scylla_ami_id",
                "scylla_instance_type",
                "scylla_version",
-               "status",)
+               "status",
+               "grafana_screenshots",
+               "grafana_snapshots",)
     email_template_file = "results_gemini.html"
 
 
