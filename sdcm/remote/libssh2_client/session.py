@@ -72,8 +72,18 @@ class Session(LibSSH2Session):  # pylint: disable=too-few-public-methods
     def drop_channel(self, channel: Channel):
         if channel in self.channels:
             self.channels.remove(channel)
+        try:
+            channel.close()
+        except:
+            pass
+        try:
+            channel.wait_closed()
+        except:  # pylint: disable=bare-except
+            pass
+        del channel
 
     def __del__(self):
         if self.channels:
-            self.channels.clear()
+            while self.channels:
+                self.drop_channel(self.channels.pop())
             gc_collect()
