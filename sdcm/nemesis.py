@@ -618,8 +618,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         else:
             # Note: when issue #6617 is fixed, we can try to load snapshot (cols=5) to a table (1 < cols < 5),
             #       expect that refresh will fail (no serious db error).
-            raise UnsupportedNemesis(
-                'Scylla does not support to load snapshot that has more columns than current table, Known issue: scylla/issues#6617')
+            raise UnsupportedNemesis("Schema doesn't match the snapshot, not uploading")
 
         self.log.debug('Prepare keyspace1.standard1 if it does not exist')
         self._prepare_test_table(ks='keyspace1', table='standard1')
