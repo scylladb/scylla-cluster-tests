@@ -18,9 +18,9 @@ from sys import float_info
 from io import StringIO
 from warnings import warn
 from socket import socket, AF_INET, SOCK_STREAM, gaierror, error as sock_error
-from threading import Thread, Lock
+from threading import Thread, Lock, Event, BoundedSemaphore
 from abc import abstractmethod, ABC
-from multiprocessing import Queue, BoundedSemaphore, Event
+from queue import SimpleQueue as Queue
 
 from ssh2.channel import Channel  # pylint: disable=no-name-in-module
 from ssh2.exceptions import AuthenticationError  # pylint: disable=no-name-in-module
@@ -69,9 +69,9 @@ class SSHReaderThread(Thread):  # pylint: disable=too-many-instance-attributes
         self.raised = None
         self._can_run = Event()
         self._can_run.set()
-        super().__init__(target=self._thread_body, daemon=True)
+        super().__init__(daemon=True)
 
-    def _thread_body(self):
+    def run(self):
         try:
             self._read_output(self._session, self._channel, self._timeout,
                               self._timeout_read_data, self.stdout, self.stderr)
@@ -145,15 +145,11 @@ class KeepAliveThread(Thread):
         super().__init__(daemon=True)
 
     def run(self):
-        time_to_wait = self._keepalive_timeout
-        while self._keep_running.is_set():
-            if self._session:
-                try:
-                    time_to_wait = self._session.eagain(
-                        self._session.keepalive_send, timeout=self._keepalive_timeout)
-                except:  # pylint: disable=bare-except
-                    pass
-            else:
+        while self._session and self._keep_running.is_set():
+            try:
+                time_to_wait = self._session.eagain(
+                    self._session.keepalive_send, timeout=self._keepalive_timeout)
+            except:  # pylint: disable=bare-except
                 time_to_wait = self._keepalive_timeout
             sleep(time_to_wait)
 
@@ -163,6 +159,10 @@ class KeepAliveThread(Thread):
     def stop_and_wait(self, timeout: float = None):
         self.stop()
         self.join(timeout)
+
+    def __del__(self):
+        self.stop_and_wait(1)
+        self._keep_running = None
 
 
 class FloodPreventingFacility(dict):
@@ -315,9 +315,6 @@ class Client:  # pylint: disable=too-many-instance-attributes
         return self.__class__, (
             self.host, self.user, self.password, self.port, self.pkey, self.allow_agent, self.forward_ssh_agent,
             self.proxy_host, self.keepalive_seconds, self.timings, self.flood_preventing)
-
-    def __del__(self):
-        self.disconnect()
 
     def __enter__(self):
         return self
@@ -521,14 +518,20 @@ class Client:  # pylint: disable=too-many-instance-attributes
         """Disconnect session, close socket if needed."""
         if self.keepalive_thread:
             self.keepalive_thread.stop()
+            self.keepalive_thread = None
         if self.session is not None:
             try:
                 self.session.eagain(self.session.disconnect)
             except:  # pylint: disable=bare-except
                 pass
+            del self.session
             self.session = None
         if self.sock is not None:
-            self.sock.close()
+            try:
+                self.sock.close()
+            except:  # pylint: disable=bare-except
+                pass
+            self.sock = None
 
     def run(  # pylint: disable=unused-argument,too-many-arguments,too-many-locals
             self, command: str, warn: bool = False, encoding: str = 'utf-8',  # pylint: disable=redefined-outer-name
