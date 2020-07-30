@@ -2150,6 +2150,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         result = self.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
         devname = result.stdout.strip()
         extra_setup_args = self.parent_cluster.params.get('append_scylla_setup_args')
+        result = self.remoter.run('sudo /usr/lib/scylla/scylla_setup --help')
+        if '--swap-directory' in result.stdout:
+            # swap setup is supported
+            extra_setup_args += ' --swap-directory / '
+
         if self.parent_cluster.params.get('workaround_kernel_bug_for_iotune'):
             self.log.warning(dedent("""
                 Kernel version is {}. Due to known kernel bug in this version using predefined iotune.
@@ -2158,14 +2163,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 The kernel bug doesn't occur all the time, so we can get some succeed gce instance.
                 the config files are copied from a succeed GCE instance (same instance type, same test
             """.format(self.kernel_version)))
-            self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --no-io-setup {} --swap-directory /'
+            self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --no-io-setup {}'
                              .format(devname, ','.join(disks), extra_setup_args))
             for conf in ['io.conf', 'io_properties.yaml']:
                 self.remoter.send_files(src=os.path.join('./configurations/', conf),  # pylint: disable=not-callable
                                         dst='/tmp/')
                 self.remoter.run('sudo mv /tmp/{0} /etc/scylla.d/{0}'.format(conf))
         else:
-            self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} {} --swap-directory /'
+            self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} {}'
                              .format(devname, ','.join(disks), extra_setup_args))
 
         result = self.remoter.run('cat /proc/mounts')
