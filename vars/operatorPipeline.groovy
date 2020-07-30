@@ -1,10 +1,13 @@
 #!groovy
 
 def call(Map pipelineParams) {
+
+    def builder = getJenkinsLabels('gce', null)
+
     pipeline {
         agent {
             label {
-                label getJenkinsLabels('gce', 'us-east1')
+                label builder.label
             }
         }
         environment {

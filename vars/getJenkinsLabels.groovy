@@ -16,9 +16,10 @@ def call(String backend, String aws_region=null) {
                           'aws-us-east-1' : 'aws-sct-builders-us-east-1',
                           'gce': 'gce-sct-builders',
                           'docker': 'sct-builders']
-    println("Finding builder for region: " + aws_region)
+
     if (backend == 'aws' && aws_region)
     {
+        println("Finding builder for AWS region: " + aws_region)
         if (aws_region == "random"){
             def aws_supported_regions = ["eu-west-2", "eu-north-1", "eu-central-1"]
             Collections.shuffle(aws_supported_regions)
@@ -27,6 +28,7 @@ def call(String backend, String aws_region=null) {
 
         label = jenkins_labels.get("${backend}-${aws_region}", null)
         if (label != null){
+            println("Found AWS builder with label: " + label)
             return [ "label": label, "region": aws_region ]
         }
         else{

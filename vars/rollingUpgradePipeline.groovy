@@ -1,10 +1,13 @@
 #!groovy
 
 def call(Map pipelineParams) {
+
+    def builder = getJenkinsLabels(params.backend, params.aws_region)
+
     pipeline {
         agent {
             label {
-                label getJenkinsLabels(params.backend, pipelineParams.aws_region)
+                label builder.label
             }
         }
         environment {
@@ -54,7 +57,7 @@ def call(Map pipelineParams) {
                         for (version in supportedUpgradeFromVersions(env.GIT_BRANCH, pipelineParams.base_versions)) {
                             def base_version = version
                             tasks["${base_version}"] = {
-                                node(getJenkinsLabels(params.backend, pipelineParams.aws_region)) {
+                                node(builder.label) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",]) {
 
