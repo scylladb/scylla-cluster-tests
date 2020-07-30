@@ -25,8 +25,9 @@ def call(String backend, String aws_region=null) {
             Collections.shuffle(aws_supported_regions)
             aws_region = aws_supported_regions[0]
         }
-
-        label = jenkins_labels.get("${backend}-${aws_region}", null)
+        def cp_region = backend + "-" + aws_region
+        println("Checking if we have a label for " + cp_region)
+        def label = jenkins_labels.get(cp_region, null)
         if (label != null){
             println("Found AWS builder with label: " + label)
             return [ "label": label, "region": aws_region ]
