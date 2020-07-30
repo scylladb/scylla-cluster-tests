@@ -133,6 +133,11 @@ if [[ ${subcommand} == "--execute-on-runner" ]]; then
         fi
         SCT_DIR="/home/ubuntu/scylla-cluster-tests"
         USER_ID=1000
+        group_args=()
+        for gid in $(ssh -o StrictHostKeyChecking=no ubuntu@${SCT_RUNNER_IP} id -G); do
+           group_args+=(--group-add "$gid")
+        done
+
         DOCKER_HOST="-H ssh://ubuntu@${SCT_RUNNER_IP}"
         CMD=${@:3}
         subcommand=$CMD
