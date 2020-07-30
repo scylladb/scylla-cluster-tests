@@ -698,7 +698,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         ec2_security_group_ids = []
         ec2_subnet_ids = []
         cluster_backend = self.params.get('cluster_backend')
-        if cluster_backend == "aws":
+        if "aws" in cluster_backend:
             availability_zone = self.params.get("availability_zone")
             for region in regions:
                 aws_region = AwsRegion(region_name=region)
