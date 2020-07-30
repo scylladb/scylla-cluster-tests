@@ -2,11 +2,10 @@
 
 def completed_stages = [:]
 
-def runSctTest(Map params){
-    // handle params which can be a json list
-    params = params.params
-    def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+def runSctTest(Map params, String region){
+    def aws_region = initAwsRegionParam(params.aws_region, region)
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
+    def cloud_provider = params.backend.trim().toLowerCase()
 
     sh """
     #!/bin/bash
@@ -53,7 +52,17 @@ def runSctTest(Map params){
     fi
 
     echo "start test ......."
-    ./docker/env/hydra.sh run-test ${params.test_name} --backend ${params.backend}  --logdir "`pwd`"
+    if [[ "$cloud_provider" == "aws" ]]; then
+        SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
+        if [[ ! -z "\${SCT_RUNNER_IP}" ]] ; then
+            ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} run-test ${params.test_name} --backend ${params.backend}
+        else
+            echo "SCT runner IP file is empty. Probably SCT Runner was not created."
+            exit 1
+        fi
+    else
+        ./docker/env/hydra.sh run-test ${params.test_name} --backend ${params.backend}  --logdir "`pwd`"
+    fi
     echo "end test ....."
     """
 }
@@ -71,6 +80,7 @@ def call(Map pipelineParams) {
         environment {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+            SCT_TEST_ID = UUID.randomUUID().toString()
         }
         parameters {
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
@@ -78,9 +88,11 @@ def call(Map pipelineParams) {
                name: 'backend')
 
             string(defaultValue: "${pipelineParams.get('aws_region', 'eu-west-1')}",
-               description: 'us-east-1|eu-west-1',
+               description: 'Supported: us-east-1|eu-west-1|eu-west-2|eu-north-1|random (randomly select region)',
                name: 'aws_region')
-
+            string(defaultValue: "a",
+               description: 'Availability zone',
+               name: 'availability_zone')
 
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'scylla_version')
@@ -88,7 +100,6 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('oracle_scylla_version', '')}",
                    description: "",
                    name: "oracle_scylla_version")
-
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
                    description: 'spot_low_price|on_demand|spot_fleet|spot_duration',
                    name: 'provision_type')
@@ -110,7 +121,10 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('ip_ssh_connections', 'private')}",
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
-            string(defaultValue: '', description: 'If empty - the default manager version will be taken', name: 'scylla_mgmt_repo')
+
+            string(defaultValue: '',
+                   description: 'If empty - the default manager version will be taken',
+                   name: 'scylla_mgmt_repo')
 
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
@@ -147,13 +161,26 @@ def call(Map pipelineParams) {
                     }
                 }
             }
+            stage('Create SCT Runner') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    createSctRunner(params, pipelineParams.timeout.time , builder.region)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             stage('Run SCT Test') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    runSctTest(params: params)
+                                    runSctTest(params, builder.region)
                                 }
                             }
                         }
@@ -166,7 +193,7 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    longevityPipeline.runCollectLogs(params: params)
+                                    runCollectLogs(params, builder.region)
                                 }
                             }
                         }
@@ -179,7 +206,7 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    longevityPipeline.runCleanupResource(params: params)
+                                    runCleanupResource(params, builder.region)
                                     completed_stages['clean_resources'] = true
                                 }
                             }
@@ -193,7 +220,7 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    longevityPipeline.runSendEmail(params: params, start_time: currentBuild.startTimeInMillis.intdiv(1000), test_status: currentBuild.currentResult)
+                                    runSendEmail(params, currentBuild)
                                     completed_stages['send_email'] = true
                                 }
                             }
@@ -218,7 +245,7 @@ def call(Map pipelineParams) {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
-                                        longevityPipeline.runCleanupResource(params: params)
+                                    runCleanupResource(params, builder.region)
                                     }
                                 }
                             }
@@ -229,7 +256,7 @@ def call(Map pipelineParams) {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
-                                        longevityPipeline.runSendEmail(params: params, start_time: currentBuild.startTimeInMillis.intdiv(1000), test_status: currentBuild.currentResult)
+                                    runSendEmail(params, currentBuild)
                                     }
                                 }
                             }
