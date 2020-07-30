@@ -697,29 +697,43 @@ def clean_sct_runners():
             if test_id:
                 sorted_by_test_id[test_id] = instance
     if sct_runners:
-        LOGGER.info("SCT Runners found: %s",
-                    "\n".join(["%s (%s)" % (i['InstanceId'], i['Placement']['AvailabilityZone']) for i in sct_runners]))
+        runners_info = []
+        for i in sct_runners:
+            runners_info.append((i['Placement']['AvailabilityZone'], i['InstanceId'], i['LaunchTime']))
+        LOGGER.info("%s SCT Runners found:\n%s", len(sct_runners),
+                    "\n".join(["[%s] (%s), launched at %s UTC" % i for i in runners_info]))
+        LOGGER.info("Checking if there are expired/orphaned Runners...")
     else:
         LOGGER.info("No SCT runner instances found! Nothing to clean.")
 
+    utc_now = datetime.datetime.now(tz=datetime.timezone.utc)
+    LOGGER.info("UTC now: %s", utc_now)
+    runners_cleaned = []
     for sct_runner in sct_runners:
         tags = aws_tags_to_dict(sct_runner.get('Tags'))
         test_id = tags.get("TestId")
-        keep = tags.get("keep", None)
+        keep = tags.get("keep", "")
+        region = sct_runner['Placement']['AvailabilityZone'][:-1]
+        instance_id = sct_runner['InstanceId']
+        if "alive" in keep:
+            LOGGER.warning(f"Skipping {instance_id} in {region}: keep={keep}")
+            continue
         launch_time = sct_runner['LaunchTime']
-        utc_now = datetime.datetime.now(tz=datetime.timezone.utc)
         seconds_running = (utc_now - launch_time).total_seconds()
-        #  running less than an hour and more than 15 minutes but no test instances created
+        #  running less than an hour and more than 20 minutes but no test instances created
         #  means that something bad happened with a test
-        if (keep is None) or (keep and seconds_running < int(keep) * 3600 and not sorted_by_test_id.get(test_id)) or \
-                (seconds_running > int(keep) * 3600):
-            region = sct_runner['Placement']['AvailabilityZone'][:-1]
-            LOGGER.info("Runner instance '%s' in '%s' is unused/expired, cleaning ...",
-                        sct_runner['InstanceId'], region)
+        if not keep or seconds_running > (int(keep) * 3600 if sorted_by_test_id.get(test_id) else 1200):
+            LOGGER.info(f"[{region}] Runner instance '{instance_id}'<keep={keep}> that launched at '{launch_time}' UTC "
+                        f"is unused/expired, cleaning ...")
             client = boto3.client('ec2', region_name=region)
             response = client.terminate_instances(InstanceIds=[sct_runner['InstanceId']])
             LOGGER.info("Done.")
             LOGGER.debug("Result: %s\n", response['TerminatingInstances'])
+            runners_cleaned.append(sct_runner)
+    if runners_cleaned:
+        LOGGER.info("Cleaned '%s' runners.", len(runners_cleaned))
+    else:
+        LOGGER.info("There are no runners to clean.")
 
 
 def list_elastic_ips_aws(tags_dict=None, region_name=None, group_as_region=False, verbose=False):
