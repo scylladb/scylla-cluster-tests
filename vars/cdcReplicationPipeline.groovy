@@ -60,10 +60,12 @@ def runSctTest(Map params){
 
 def call(Map pipelineParams) {
 
+    def builder = getJenkinsLabels(params.backend, params.aws_region)
+
     pipeline {
         agent {
             label {
-                label getJenkinsLabels(params.backend, params.aws_region)
+                label builder.label
             }
         }
         environment {

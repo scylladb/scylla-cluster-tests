@@ -167,7 +167,8 @@ pipeline {
                         def region = 'eu-west-1'
                         if (pullRequestContainsLabels("test-provision,test-provision-${backend}")) {
                             sctParallelTests["provision test on ${backend}"] = {
-                                node(getJenkinsLabels("${backend}", "${region}")) {
+                                def builder = getJenkinsLabels("${backend}", "${region}")
+                                node(builder.label) {
                                     script {
                                         def result = null
                                         try {
