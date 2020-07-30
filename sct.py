@@ -742,7 +742,7 @@ def create_runner_instance(cloud_provider, region, availability_zone, test_id, d
     instance = sct_runner.create_instance(test_id=test_id, test_duration=duration, region_az=region + availability_zone)
     LOGGER.info("Verifying SSH connectivity...")
     remoter = sct_runner.get_remoter(host=instance.public_ip_address)
-    result = remoter.run("true", timeout=60, verbose=False, ignore_status=True)
+    result = remoter.run("true", timeout=100, verbose=False, ignore_status=True)
     if result.exit_status == 0:
         LOGGER.info(f"Successfully connected the SCT Runner. Public IP:  {instance.public_ip_address}")
         with sct_runner_ip_path.open("w") as sct_runner_ip_file:
