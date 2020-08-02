@@ -399,17 +399,26 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
 
+        destroyed_files = 0
         try:
             # Remove 5 data files
-            for _ in range(5):
-                file_for_destroy = self._choose_file_for_destroy(ks_cfs)
+            for i in range(5):
+                try:
+                    file_for_destroy = self._choose_file_for_destroy(ks_cfs)
 
-                result = self.target_node.remoter.run('sudo rm -f %s' % file_for_destroy)
-                if result.stderr:
-                    raise FilesNotCorrupted('Files were not corrupted. CorruptThenRepair nemesis can\'t be run. '
-                                            'Error: {}'.format(result))
-                self.log.debug('Files {} were destroyed'.format(file_for_destroy))
+                    result = self.target_node.remoter.run('sudo rm -f %s' % file_for_destroy)
+                    if result.stderr:
+                        raise FilesNotCorrupted('Files were not corrupted. CorruptThenRepair nemesis can\'t be run. '
+                                                'Error: {}'.format(result))
+                    self.log.debug('Files {} were destroyed'.format(file_for_destroy))
+                    destroyed_files += 1
+                except (NoKeyspaceFound, NoFilesFoundToDestroy, FilesNotCorrupted):
+                    if i == 4:
+                        raise
 
+        except (NoKeyspaceFound, NoFilesFoundToDestroy, FilesNotCorrupted):
+            if destroyed_files == 0:
+                raise
         finally:
             self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
@@ -890,7 +899,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     del added_columns_info['column_names'][column_name]
         if add:
             cmd = f"ALTER TABLE {self._add_drop_column_target_table[1]} " \
-                  f"ADD ( {', '.join(['%s %s' % (col[0], col[1]) for col in add])} );"
+                f"ADD ( {', '.join(['%s %s' % (col[0], col[1]) for col in add])} );"
             if self._add_drop_column_run_cql_query(cmd, self._add_drop_column_target_table[0]):
                 for column_name, column_type in add:
                     added_columns_info['column_names'][column_name] = column_type
