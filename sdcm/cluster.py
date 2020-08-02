@@ -63,6 +63,8 @@ from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack
 from sdcm.utils.remote_logger import get_system_logging_thread
+from sdcm.utils.scylla_args import ScyllaArgParser
+
 
 CREDENTIALS = []
 DEFAULT_USER_PREFIX = getpass.getuser()
@@ -1827,6 +1829,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
 
         if append_scylla_args:
+            scylla_help = self.remoter.run("scylla --help", ignore_status=True).stdout
+            scylla_arg_parser = ScyllaArgParser.from_scylla_help(scylla_help)
+            append_scylla_args = scylla_arg_parser.filter_args(append_scylla_args)
+            self.log.debug("Append following args to scylla: `%s'", append_scylla_args)
+
             if self.is_rhel_like():
                 result = self.remoter.run("sudo grep '\\%s' /etc/sysconfig/scylla-server" %
                                           append_scylla_args, ignore_status=True)
