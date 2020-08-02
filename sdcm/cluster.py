@@ -58,7 +58,7 @@ from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version
 from sdcm.sct_events import Severity, CoreDumpEvent, DatabaseLogEvent, \
-    ClusterHealthValidatorEvent, set_grafana_url, ScyllaBenchEvent, raise_event_on_failure, TestFrameworkEvent
+    ClusterHealthValidatorEvent, set_grafana_url, ScyllaBenchEvent, raise_event_on_failure, TestFrameworkEvent, DbEvents
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack
@@ -384,25 +384,24 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         self._system_log_errors_index = []
         self._system_error_events = [
-            DatabaseLogEvent(type='NO_SPACE_ERROR', regex='No space left on device'),
-            DatabaseLogEvent(type='UNKNOWN_VERB', regex='unknown verb exception', severity=Severity.WARNING),
-            DatabaseLogEvent(type='BROKEN_PIPE', severity=Severity.WARNING,
-                             regex='cql_server - exception while processing connection:.*Broken pipe'),
-            DatabaseLogEvent(type='SEMAPHORE_TIME_OUT', regex='semaphore_timed_out', severity=Severity.WARNING),
-            DatabaseLogEvent(type='DATABASE_ERROR', regex='Exception '),
-            DatabaseLogEvent(type='BAD_ALLOC', regex='std::bad_alloc'),
-            DatabaseLogEvent(type='SCHEMA_FAILURE', regex='Failed to load schema version'),
-            DatabaseLogEvent(type='RUNTIME_ERROR', regex='std::runtime_error'),
-            DatabaseLogEvent(type='FILESYSTEM_ERROR', regex='filesystem_error'),
-            DatabaseLogEvent(type='STACKTRACE', regex='stacktrace'),
-            DatabaseLogEvent(type='BACKTRACE', regex='backtrace', severity=Severity.ERROR),
-            DatabaseLogEvent(type='ABORTING_ON_SHARD', regex='Aborting on shard'),
-            DatabaseLogEvent(type='SEGMENTATION', regex='segmentation'),
-            DatabaseLogEvent(type='INTEGRITY_CHECK', regex='integrity check failed'),
-            DatabaseLogEvent(type='REACTOR_STALLED', regex='Reactor stalled', severity=Severity.WARNING),
-            DatabaseLogEvent(type='BOOT', regex='Starting Scylla Server', severity=Severity.NORMAL),
-            DatabaseLogEvent(type='SUPPRESSED_MESSAGES', regex='journal: Suppressed', severity=Severity.WARNING),
-            DatabaseLogEvent(type='stream_exception', regex='stream_exception'),
+            DatabaseLogEvent(*DbEvents.NO_SPACE_ERROR__NO_SPACE_LEFT.value),
+            DatabaseLogEvent(*DbEvents.UNKNOWN_VERB__UNKNOWN_VERB_EXCEPTION.value, severity=Severity.WARNING),
+            DatabaseLogEvent(*DbEvents.BROKEN_PIPE__CQL_SERVER_BROKEN_PIPE.value, severity=Severity.WARNING),
+            DatabaseLogEvent(*DbEvents.SEMAPHORE_TIME_OUT__SEMAPHORE_TIMED_OUT.value, severity=Severity.WARNING),
+            DatabaseLogEvent(*DbEvents.DATABASE_ERROR__EXCEPTION.value),
+            DatabaseLogEvent(*DbEvents.BAD_ALLOC__BAD_ALLOC.value),
+            DatabaseLogEvent(*DbEvents.SCHEMA_FAILURE__LOAD_SCHEMA_VERSION_FAILED.value),
+            DatabaseLogEvent(*DbEvents.RUNTIME_ERROR__RUNTIME_ERROR.value),
+            DatabaseLogEvent(*DbEvents.FILESYSTEM_ERROR__FILESYSTEM_ERROR.value),
+            DatabaseLogEvent(*DbEvents.STACKTRACE__STACKTRACE.value),
+            DatabaseLogEvent(*DbEvents.BACKTRACE__BACKTRACE.value),
+            DatabaseLogEvent(*DbEvents.ABORTING_ON_SHARD__ABORTING_ON_SHARD.value),
+            DatabaseLogEvent(*DbEvents.SEGMENTATION__SEGMENTATION.value),
+            DatabaseLogEvent(*DbEvents.INTEGRITY_CHECK__INTEGRITY_CHECK_FAILED.value),
+            DatabaseLogEvent(*DbEvents.REACTOR_STALLED__REACTOR_STALLED.value, severity=Severity.NORMAL),
+            DatabaseLogEvent(*DbEvents.BOOT__STARTING_SCYLLA_SERVER.value, severity=Severity.WARNING),
+            DatabaseLogEvent(*DbEvents.SUPPRESSED_MESSAGES__JOURNAL_SUPPRESSED.value, severity=Severity.WARNING),
+            DatabaseLogEvent(*DbEvents.STREAM_EXCEPTION__STREAM_EXCEPTION.value),
         ]
         self._exclude_system_log_from_being_logged = [
             ' !INFO    | sshd[',
@@ -1436,10 +1435,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # prepare/compile all regexes
         if search_pattern:
             expression = DatabaseLogEvent(type="user-query", regex=search_pattern, severity=severity)
-            patterns += [(re.compile(expression.regex, re.IGNORECASE), expression)]
+            patterns.append((re.compile(expression.regex, re.IGNORECASE), expression))
         else:
             for expression in self._system_error_events:
-                patterns += [(re.compile(expression.regex, re.IGNORECASE), expression)]
+                expression = expression
+                patterns.append((re.compile(expression.regex, re.IGNORECASE), expression))
 
         backtrace_regex = re.compile(r'(?P<other_bt>/lib.*?\+0x[0-f]*\n)|(?P<scylla_bt>0x[0-f]*\n)', re.IGNORECASE)
 

@@ -21,6 +21,7 @@ from invoke import exceptions
 from sdcm import mgmt
 from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus, TaskStatus, ScyllaManagerError, ScyllaManagerTool
 from sdcm.nemesis import MgmtRepair, DbEventsFilter
+from sdcm.sct_events import DbEvents
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
 from sdcm.tester import ClusterTester
 
@@ -314,10 +315,12 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
             assert host_health.ssl == HostSsl.OFF, "Not all hosts ssl is 'OFF'"
-        with DbEventsFilter(type='DATABASE_ERROR', line="failed to do checksum for"), \
-                DbEventsFilter(type='RUNTIME_ERROR', line="failed to do checksum for"), \
-                DbEventsFilter(type='DATABASE_ERROR', line="Reactor stalled"), \
-                DbEventsFilter(type='RUNTIME_ERROR', line='get_repair_meta: repair_meta_id'):
+
+        #  type='DATABASE_ERROR', line="failed to do checksum for"
+        with DbEventsFilter(DbEvents.DATABASE_ERROR__CHECKSUM_FAILED), \
+                DbEventsFilter(DbEvents.RUNTIME_ERROR__CHECKSUM_FAILED), \
+                DbEventsFilter(DbEvents.DATABASE_ERROR__REACTOR_STALLED), \
+                DbEventsFilter(DbEvents.RUNTIME_ERROR__REPAIR_META):
             self.db_cluster.enable_client_encrypt()
         mgr_cluster.update(client_encrypt=True)
         repair_task.start(use_continue=True)
@@ -495,10 +498,10 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
         self.generate_load_and_wait_for_results()
         has_enospc_been_reached = False
-        with DbEventsFilter(type='NO_SPACE_ERROR', node=target_node),\
-                DbEventsFilter(type='BACKTRACE', line='No space left on device', node=target_node), \
-                DbEventsFilter(type='DATABASE_ERROR', line='No space left on device', node=target_node), \
-                DbEventsFilter(type='FILESYSTEM_ERROR', line='No space left on device', node=target_node):
+        with DbEventsFilter(DbEvents.NO_SPACE_ERRORS, node=target_node),\
+                DbEventsFilter(DbEvents.BACKTRACE__NO_SPACE_LEFT, node=target_node), \
+                DbEventsFilter(DbEvents.RUNTIME_ERROR__NO_SPACE_LEFT, node=target_node), \
+                DbEventsFilter(DbEvents.FILESYSTEM_ERROR__NO_SPACE_LEFT, node=target_node):
             try:
                 backup_task = mgr_cluster.create_backup_task(location_list=location_list)
                 backup_task.wait_for_uploading_stage()

@@ -24,7 +24,7 @@ from sdcm import ec2_client
 from sdcm.cluster import INSTANCE_PROVISION_ON_DEMAND
 from sdcm.utils.common import list_instances_aws, get_ami_tags, ec2_instance_wait_public_ip
 from sdcm.utils.decorators import retrying
-from sdcm.sct_events import SpotTerminationEvent, DbEventsFilter
+from sdcm.sct_events import SpotTerminationEvent, DbEventsFilter, DbEvents
 from sdcm import wait
 from sdcm.remote import LocalCmdRunner, NETWORK_EXCEPTIONS
 
@@ -586,11 +586,11 @@ class AWSNode(cluster.BaseNode):
         event_filters = ()
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
             # since there's no disk yet in those type, lots of the errors here are acceptable, and we'll ignore them
-            event_filters = DbEventsFilter(type="DATABASE_ERROR", node=self), \
-                DbEventsFilter(type="SCHEMA_FAILURE", node=self), \
-                DbEventsFilter(type="NO_SPACE_ERROR", node=self), \
-                DbEventsFilter(type="FILESYSTEM_ERROR", node=self), \
-                DbEventsFilter(type="RUNTIME_ERROR", node=self)
+            event_filters = DbEventsFilter(DbEvents.DATABASE_ERRORS, node=self), \
+                DbEventsFilter(DbEvents.SCHEMA_FAILURES, node=self), \
+                DbEventsFilter(DbEvents.NO_SPACE_ERRORS, node=self), \
+                DbEventsFilter(DbEvents.FILESYSTEM_ERRORS, node=self), \
+                DbEventsFilter(DbEvents.RUNTIME_ERRORS, node=self)
 
             clean_script = dedent("""
                 sudo sed -e '/.*scylla/s/^/#/g' -i /etc/fstab

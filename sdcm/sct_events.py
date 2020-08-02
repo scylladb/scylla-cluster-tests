@@ -18,7 +18,6 @@ from contextlib import contextmanager, ExitStack
 from pathlib import Path
 
 import enum
-from enum import Enum
 from textwrap import dedent
 import zmq
 import dateutil.parser
@@ -190,7 +189,7 @@ _SAVED_DEFAULT = JSONEncoder().default  # Save default method.
 
 
 def _new_default(self, obj):  # pylint: disable=unused-argument
-    if isinstance(obj, Enum):
+    if isinstance(obj, enum.Enum):
         return obj.name  # Could also be obj.value
     else:
         return _SAVED_DEFAULT
@@ -207,6 +206,7 @@ class Severity(enum.Enum):
 
 
 EventType = TypeVar('EventType', bound='SctEvent')
+ReduceSeverityEvent = collections.namedtuple("ReduceSeverityEvent", field_names=["event_class", "regex", "severity"])
 
 
 class SctEvent(Generic[EventType]):
@@ -358,112 +358,6 @@ class BaseFilter(SystemEvent):
         raise NotImplementedError()
 
 
-class DbEventsFilter(BaseFilter):
-    def __init__(self, type, line=None, node=None):  # pylint: disable=redefined-builtin
-        self.type = type
-        self.line = line
-        self.node = str(node) if node else None
-        super(DbEventsFilter, self).__init__()
-
-    def cancel_filter(self):
-        if self.node:
-            self.expire_time = time.time()
-        super().cancel_filter()
-
-    def eval_filter(self, event):
-        line = getattr(event, 'line', '')
-        _type = getattr(event, 'type', '')
-        node = getattr(event, 'node', '')
-        is_name_matching = self.type and _type and self.type == _type
-        is_line_matching = self.line and line and self.line in line
-        is_node_matching = self.node and node and self.node == node
-
-        result = is_name_matching
-        if self.line:
-            result = result and is_line_matching
-        if self.node:
-            result = result and is_node_matching
-        return result
-
-
-class EventsFilter(BaseFilter):
-    def __init__(self, event_class: Optional[Type[EventType]] = None, regex: Optional[str] = None,
-                 extra_time_to_expiration: Optional[int] = None):
-        """
-        A filter used to stop events to being raised in `subscribe_events()` calls
-
-        :param event_class: the event class to filter
-        :param regex: a regular expression to filter (used on the output of __str__ function of the event)
-        :param extra_time_to_expiration: extra time to add for the event expriation
-
-        example of usage:
-        >>> events_filter = EventsFilter(event_class=CoreDumpEvent, regex=r'.*bash.core.*')
-        >>> CoreDumpEvent("code creating coredump")
-        >>> events_filter.cancel_filter()
-
-        example as context manager, that will last 30sec more after exiting the context:
-        >>> with EventsFilter(event_class=CoreDumpEvent, regex=r'.*bash.core.*', extra_time_to_expiration=30):
-        ...     CoreDumpEvent("code creating coredump")
-        """
-
-        assert event_class or regex, "Should call with event_class or regex, or both"
-        if event_class:
-            assert issubclass(event_class, SctEvent), "event_class should be a class inherits from SctEvent"
-            self.event_class = str(event_class.__name__)
-        else:
-            self.event_class = event_class
-        self.regex = regex
-        self.extra_time_to_expiration = extra_time_to_expiration
-        super().__init__()
-
-    def cancel_filter(self):
-        if self.extra_time_to_expiration:
-            self.expire_time = time.time() + self.extra_time_to_expiration
-        super().cancel_filter()
-
-    def eval_filter(self, event):
-        is_class_matching = self.event_class and str(event.__class__.__name__) == self.event_class
-        is_regex_matching = self.regex and re.match(self.regex, str(event), re.MULTILINE | re.DOTALL) is not None
-
-        result = True
-        if self.event_class:
-            result = is_class_matching
-        if self.regex:
-            result = result and is_regex_matching
-        return result
-
-
-class EventsSeverityChangerFilter(EventsFilter):
-    def __init__(self, event_class: Optional[Type[EventType]] = None, regex: Optional[str] = None, extra_time_to_expiration: Optional[int] = None, severity: Optional[Severity] = None):
-        """
-        A filter that if matches, can change the severity of the matched event
-
-        :param event_class: the event class to filter
-        :param regex: a regular expression to filter (used on the output of __str__ function of the event)
-        :param extra_time_to_expiration: extra time to add for the event expriation
-        :param severity: the new sevirity to assign to the matched events
-
-        exmaple of lower all TestFrameworkEvent to WARNING severity
-        >>> severity_filter = EventsSeverityChangerFilter(event_class=TestFrameworkEvent, severity=Severity.WARNING)
-        >>> TestFrameworkEvent(source='setup', source_method='cluster_setup', severity=Severity.ERROR)
-        >>> severity_filter.cancel_filter()
-
-        example as context manager:
-        >>> with EventsSeverityChangerFilter(event_class=TestFrameworkEvent, severity=Severity.WARNING):
-        ...     TestFrameworkEvent(source='setup', source_method='cluster_setup', severity=Severity.ERROR)
-        """
-
-        assert severity, "EventsSeverityChangerFilter can't work without severity configured"
-        self.severity = severity
-        super().__init__(event_class=event_class, regex=regex, extra_time_to_expiration=extra_time_to_expiration)
-
-    def eval_filter(self, event):
-        should_change = super().eval_filter(event)
-        if should_change and self.severity:
-            event.severity = self.severity
-        return False
-
-
 class InfoEvent(SctEvent):
     def __init__(self, message):
         super(InfoEvent, self).__init__()
@@ -514,6 +408,139 @@ class CoreDumpEvent(SctEvent):
     def __str__(self):
         return "{0}: node={1.node}\ncorefile_url=\n{1.corefile_url}\nbacktrace={1.backtrace}\ndownload_instructions=\n{1.download_instructions}".format(
             super(CoreDumpEvent, self).__str__(), self)
+
+
+class DbEventType(enum.Enum):
+    DATABASE_ERROR = "DATABASE_ERROR"
+    RUNTIME_ERROR = "RUNTIME_ERROR"
+    NO_SPACE_ERROR = "NO_SPACE_ERROR"
+    BACKTRACE = "BACKTRACE"
+    FILESYSTEM_ERROR = "FILESYSTEM_ERROR"
+    SCHEMA_FAILURE = "SCHEMA_FAILURE"
+    DATABASE_LOG_EVENT = "DatabaseLogEvent"
+    REACTOR_STALLED = "REACTOR_STALLED"
+    UNKNOWN_VERB = "UNKNOWN_VERB"
+    BROKEN_PIPE = "BROKEN_PIPE"
+    SEMAPHORE_TIME_OUT = "SEMAPHORE_TIME_OUT"
+    BAD_ALLOC = "BAD_ALLOC"
+    STACKTRACE = "STACKTRACE"
+    ABORTING_ON_SHARD = "ABORTING_ON_SHARD"
+    SEGMENTATION = "SEGMENTATION"
+    INTEGRITY_CHECK = "INTEGRITY_CHECK"
+    BOOT = "BOOT"
+    SUPPRESSED_MESSAGES = "SUPPRESSED_MESSAGES"
+    STREAM_EXCEPTION = "STREAM_EXCEPTION"
+    CORE_DUMP = CoreDumpEvent.__name__
+
+
+class DbEventMsg(enum.Enum):
+    CHECKSUM_FAILED = "failed to do checksum for"
+    REACTOR_STALLED = "Reactor stalled"
+    REPAIR_META = "get_repair_meta: repair_meta_id"
+    NO_SPACE_LEFT = "No space left on device"
+    REPAIR_STREAM = "repair's stream failed: streaming::stream_exception"
+    CAN_NOT_FIND_STREAM_MANAGER = "Can not find stream_manager"
+    IS_ABORTED = "is aborted"
+    REPAIR_FAILED = "Failed to repair"
+    RATE_LIMIT_SUPRESSED = "Rate-limit: supressed"
+    RATE_LIMIT_SUPPRESSED = "Rate-limit: suppressed"
+    LOAD_SCHEMA_FAILED = "Failed to load schema"
+    UNKNOWN_VERB_EXCEPTION = "unknown verb exception"
+    CQL_SERVER_BROKEN_PIPE = "cql_server - exception while processing connection:.*Broken pipe"
+    SEMAPHORE_TIMED_OUT = "semaphore_timed_out"
+    EXCEPTION = "Exception "
+    BAD_ALLOC = "std::bad_alloc"
+    LOAD_SCHEMA_VERSION_FAILED = "Failed to load schema version"
+    RUNTIME_ERROR = "std::runtime_error"
+    FILESYSTEM_ERROR = "filesystem_error"
+    STACKTRACE = "stacktrace"
+    BACKTRACE = "backtrace"
+    ABORTING_ON_SHARD = "Aborting on shard"
+    SEGMENTATION = "segmentation"
+    INTEGRITY_CHECK_FAILED = "integrity check failed"
+    STARTING_SCYLLA_SERVER = "Starting Scylla Server"
+    JOURNAL_SUPPRESSED = "journal: Suppressed"
+    STREAM_EXCEPTION = "stream_exception"
+    CAN_NOT_FIND_COLUMN_FAMILY = "Can't find a column family with UUID"
+
+
+class DbEvents(enum.Enum):
+    # The prefix words until the "__" char is the event's type. The other words is event's message.
+    DATABASE_ERROR__CHECKSUM_FAILED = (DbEventType.DATABASE_ERROR, DbEventMsg.CHECKSUM_FAILED)
+    RUNTIME_ERROR__CHECKSUM_FAILED = (DbEventType.RUNTIME_ERROR, DbEventMsg.CHECKSUM_FAILED)
+    DATABASE_ERROR__REACTOR_STALLED = (DbEventType.DATABASE_ERROR, DbEventMsg.REACTOR_STALLED)
+    RUNTIME_ERROR__REPAIR_META = (DbEventType.RUNTIME_ERROR, DbEventMsg.REPAIR_META)
+    BACKTRACE__NO_SPACE_LEFT = (DbEventType.BACKTRACE, DbEventMsg.NO_SPACE_LEFT)
+    RUNTIME_ERROR__NO_SPACE_LEFT = (DbEventType.RUNTIME_ERROR, DbEventMsg.NO_SPACE_LEFT)
+    DATABASE_ERROR__NO_SPACE_LEFT = (DbEventType.DATABASE_ERROR, DbEventMsg.NO_SPACE_LEFT)
+    FILESYSTEM_ERROR__NO_SPACE_LEFT = (DbEventType.FILESYSTEM_ERROR, DbEventMsg.NO_SPACE_LEFT)
+    DATABASE_LOG_EVENT__REPAIR_STREAM = (DbEventType.DATABASE_LOG_EVENT, DbEventMsg.REPAIR_STREAM)
+    RUNTIME_ERROR__CAN_NOT_FIND_STREAM_MANAGER = (DbEventType.RUNTIME_ERROR, DbEventMsg.CAN_NOT_FIND_STREAM_MANAGER)
+    RUNTIME_ERROR__IS_ABORTED = (DbEventType.RUNTIME_ERROR, DbEventMsg.IS_ABORTED)
+    RUNTIME_ERROR__REPAIR_FAILED = (DbEventType.RUNTIME_ERROR, DbEventMsg.REPAIR_FAILED)
+    BACKTRACE__RATE_LIMIT_SUPRESSED = (DbEventType.BACKTRACE, DbEventMsg.RATE_LIMIT_SUPRESSED)
+    BACKTRACE__RATE_LIMIT_SUPPRESSED = (DbEventType.BACKTRACE, DbEventMsg.RATE_LIMIT_SUPPRESSED)
+    RUNTIME_ERROR__LOAD_SCHEMA_FAILED = (DbEventType.RUNTIME_ERROR, DbEventMsg.LOAD_SCHEMA_FAILED)
+    DATABASE_ERROR__LOAD_SCHEMA_FAILED = (DbEventType.DATABASE_ERROR, DbEventMsg.LOAD_SCHEMA_FAILED)
+    SCHEMA_FAILURE__LOAD_SCHEMA_FAILED = (DbEventType.SCHEMA_FAILURE, DbEventMsg.LOAD_SCHEMA_FAILED)
+    NO_SPACE_ERROR__NO_SPACE_LEFT = (DbEventType.NO_SPACE_ERROR, DbEventMsg.NO_SPACE_LEFT)
+    UNKNOWN_VERB__UNKNOWN_VERB_EXCEPTION = (DbEventType.UNKNOWN_VERB, DbEventMsg.UNKNOWN_VERB_EXCEPTION)
+    BROKEN_PIPE__CQL_SERVER_BROKEN_PIPE = (DbEventType.BROKEN_PIPE, DbEventMsg.CQL_SERVER_BROKEN_PIPE)
+    SEMAPHORE_TIME_OUT__SEMAPHORE_TIMED_OUT = (DbEventType.SEMAPHORE_TIME_OUT, DbEventMsg.SEMAPHORE_TIMED_OUT)
+    DATABASE_ERROR__EXCEPTION = (DbEventType.DATABASE_ERROR, DbEventMsg.EXCEPTION)
+    BAD_ALLOC__BAD_ALLOC = (DbEventType.BAD_ALLOC, DbEventMsg.BAD_ALLOC)
+    SCHEMA_FAILURE__LOAD_SCHEMA_VERSION_FAILED = (DbEventType.SCHEMA_FAILURE, DbEventMsg.LOAD_SCHEMA_VERSION_FAILED)
+    RUNTIME_ERROR__RUNTIME_ERROR = (DbEventType.RUNTIME_ERROR, DbEventMsg.RUNTIME_ERROR)
+    FILESYSTEM_ERROR__FILESYSTEM_ERROR = (DbEventType.FILESYSTEM_ERROR, DbEventMsg.FILESYSTEM_ERROR)
+    STACKTRACE__STACKTRACE = (DbEventType.STACKTRACE, DbEventMsg.STACKTRACE)
+    BACKTRACE__BACKTRACE = (DbEventType.BACKTRACE, DbEventMsg.BACKTRACE)
+    ABORTING_ON_SHARD__ABORTING_ON_SHARD = (DbEventType.ABORTING_ON_SHARD, DbEventMsg.ABORTING_ON_SHARD)
+    SEGMENTATION__SEGMENTATION = (DbEventType.SEGMENTATION, DbEventMsg.SEGMENTATION)
+    INTEGRITY_CHECK__INTEGRITY_CHECK_FAILED = (DbEventType.INTEGRITY_CHECK, DbEventMsg.INTEGRITY_CHECK_FAILED)
+    REACTOR_STALLED__REACTOR_STALLED = (DbEventType.REACTOR_STALLED, DbEventMsg.REACTOR_STALLED)
+    BOOT__STARTING_SCYLLA_SERVER = (DbEventType.BOOT, DbEventMsg.STARTING_SCYLLA_SERVER)
+    SUPPRESSED_MESSAGES__JOURNAL_SUPPRESSED = (DbEventType.SUPPRESSED_MESSAGES, DbEventMsg.JOURNAL_SUPPRESSED)
+    STREAM_EXCEPTION__STREAM_EXCEPTION = (DbEventType.STREAM_EXCEPTION, DbEventMsg.STREAM_EXCEPTION)
+    DATABASE_LOG_EVENT__CAN_NOT_FIND_COLUMN_FAMILY = (
+        DbEventType.DATABASE_LOG_EVENT, DbEventMsg.CAN_NOT_FIND_COLUMN_FAMILY)
+
+    # Find all events with specific type
+    NO_SPACE_ERRORS = (DbEventType.NO_SPACE_ERROR, None)
+    DATABASE_ERRORS = (DbEventType.DATABASE_ERROR, None)
+    SCHEMA_FAILURES = (DbEventType.SCHEMA_FAILURE, None)
+    FILESYSTEM_ERRORS = (DbEventType.FILESYSTEM_ERROR, None)
+    RUNTIME_ERRORS = (DbEventType.RUNTIME_ERROR, None)
+    CORE_DUMP_ERRORS = (DbEventType.CORE_DUMP, None)
+    DUMMY_TEST_GENERAL_FILTER_REGEX = (None, r".*1234567890.*")
+
+
+class DbEventsFilter(BaseFilter):
+    def __init__(self, event_details, node=None):  # pylint: disable=redefined-builtin
+        event_type, event_msg = event_details.value
+        self.type = event_type.value
+        self.line = event_msg and event_msg.value
+        self.node = str(node) if node else None
+        super(DbEventsFilter, self).__init__()
+
+    def cancel_filter(self):
+        if self.node:
+            self.expire_time = time.time()
+        super().cancel_filter()
+
+    def eval_filter(self, event):
+        line = getattr(event, 'line', '')
+        _type = getattr(event, 'type', '')
+        node = getattr(event, 'node', '')
+        is_name_matching = self.type and _type and self.type == _type
+        is_line_matching = self.line and line and self.line in line
+        is_node_matching = self.node and node and self.node == node
+
+        result = is_name_matching
+        if self.line:
+            result = result and is_line_matching
+        if self.node:
+            result = result and is_node_matching
+        return result
 
 
 class DisruptionEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
@@ -707,8 +734,8 @@ class CDCReaderStressEvent(YcsbStressEvent):
 class DatabaseLogEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
     def __init__(self, type, regex, severity=Severity.ERROR):  # pylint: disable=redefined-builtin
         super(DatabaseLogEvent, self).__init__()
-        self.type = type
-        self.regex = regex
+        self.type = type.value if isinstance(type, (enum.Enum, enum.EnumMeta)) else type
+        self.regex = regex.value if isinstance(regex, (enum.Enum, enum.EnumMeta)) else regex
         self.line_number = 0
         self.line = None
         self.node = None
@@ -870,6 +897,93 @@ class PrometheusAlertManagerEvent(SctEvent):  # pylint: disable=too-many-instanc
         return True
 
 
+class ReduceToWarningEvents(enum.Enum):
+    TOO_MANY_ERRORS = ReduceSeverityEvent(
+        event_class=PrometheusAlertManagerEvent, regex=r".*YCSBTooManyErrors.*", severity=Severity.WARNING)
+    TOO_MANY_VERIFY_ERRORS = ReduceSeverityEvent(
+        event_class=PrometheusAlertManagerEvent, regex=r".*YCSBTooManyVerifyErrors.*", severity=Severity.WARNING)
+    ACHIEVE_CONSISTENCY_LEVEL_ERRORS = ReduceSeverityEvent(
+        event_class=PrometheusAlertManagerEvent, regex=r".*Cannot achieve consistency level.*",
+        severity=Severity.WARNING)
+    OPERATION_TIMED_OUT = ReduceSeverityEvent(
+        event_class=PrometheusAlertManagerEvent, regex=r".*Operation timed out.*", severity=Severity.WARNING)
+    MUTATION_WRITE = ReduceSeverityEvent(
+        event_class=DatabaseLogEvent, regex=r".*mutation_write_.*", severity=Severity.WARNING)
+    PAXOS_OPERATION_FAILED = ReduceSeverityEvent(
+        event_class=DatabaseLogEvent, regex=r".*Operation failed for system.paxos.*", severity=Severity.WARNING)
+    PAXOS_OPERATION_TIMED_OUT = ReduceSeverityEvent(
+        event_class=DatabaseLogEvent, regex=r".*Operation timed out for system.paxos.*", severity=Severity.WARNING)
+    DUMMY_INTERNAL_SERVER_ERROR = ReduceSeverityEvent(
+        event_class=YcsbStressEvent, regex='.*Internal server error: exceptions::unavailable_exception.*',
+        severity=Severity.NORMAL)
+    DUMMY_FRAMEWORK_ERROR = ReduceSeverityEvent(event_class=TestFrameworkEvent, regex=None, severity=Severity.WARNING)
+    DUMMY_DATABASE_NO_SPACE_ERROR = ReduceSeverityEvent(
+        event_class=DatabaseLogEvent, regex=r".*", severity=Severity.WARNING)
+
+
+class EventsFilter(BaseFilter):
+    def __init__(self, event: Union[ReduceToWarningEvents, DbEvents],
+                 extra_time_to_expiration: Optional[int] = None, is_reduce_event: bool = False):
+        """
+        A filter used to stop events to being raised in `subscribe_events()` calls
+
+        :param event: the event class to filter
+        :param extra_time_to_expiration: extra time to add for the event expriation
+
+        example of usage:
+        >>> events_filter = EventsFilter(ReduceSeverityEvent.BASH_CORE, extra_time_to_expiration=30)
+        >>> CoreDumpEvent("code creating coredump")
+        >>> events_filter.cancel_filter()
+
+        example as context manager, that will last 30sec more after exiting the context:
+        >>> with EventsFilter(ReduceSeverityEvent.BASH_CORE, extra_time_to_expiration=30):
+        ...     CoreDumpEvent("code creating coredump")
+        """
+        severity = None
+        if isinstance(event, ReduceToWarningEvents):
+            event = event.value
+            event_class = event.event_class.__name__
+            regex = event.regex
+            severity = event.severity
+        elif isinstance(event, DbEvents):
+            event_class, regex = event.value
+            event_class = event_class and event_class.value
+        else:
+            supported_types = ",".join(class_type.__name__
+                                       for class_type in [ReduceToWarningEvents, DbEvents])
+            raise TypeError(f"Only the following types are supported '{supported_types}' (got '{type(event)}' type)")
+        assert event_class or regex, "Should call with event_class or regex, or both"
+
+        self.is_reduce_event = is_reduce_event
+        self.event_class = event_class
+        self.regex = regex
+        self.severity = severity
+        self.extra_time_to_expiration = extra_time_to_expiration
+        super().__init__()
+
+    def cancel_filter(self):
+        if not self.is_reduce_event and self.extra_time_to_expiration:
+            self.expire_time = time.time() + self.extra_time_to_expiration
+        super().cancel_filter()
+
+    def eval_filter(self, event):
+        if not isinstance(event, SctEvent):
+            raise TypeError(f"The event should be sub class of '{SctEvent.__name__}' class")
+        is_class_matching = self.event_class and str(event.__class__.__name__) == self.event_class
+        is_regex_matching = self.regex and re.match(self.regex, str(event), re.MULTILINE | re.DOTALL) is not None
+
+        result = True
+        if self.event_class:
+            result = is_class_matching
+        if self.regex:
+            result = result and is_regex_matching
+        if self.is_reduce_event and result:
+            if result and self.severity:
+                event.severity = self.severity
+            return False
+        return result
+
+
 class EventsFileLogger(multiprocessing.Process):  # pylint: disable=too-many-instance-attributes
     def __init__(self, log_dir):
         super(EventsFileLogger, self).__init__()
@@ -983,9 +1097,8 @@ def start_events_device(log_dir, timeout=5):  # pylint: disable=redefined-outer-
         raise
 
     # default filters
-    EVENTS_PROCESSES['default_filter'] = []
-    EVENTS_PROCESSES['default_filter'] += [DbEventsFilter(type='BACKTRACE', line='Rate-limit: supressed')]
-    EVENTS_PROCESSES['default_filter'] += [DbEventsFilter(type='BACKTRACE', line='Rate-limit: suppressed')]
+    EVENTS_PROCESSES['default_filter'] = [DbEventsFilter(DbEvents.BACKTRACE__RATE_LIMIT_SUPRESSED),
+                                          DbEventsFilter(DbEvents.BACKTRACE__RATE_LIMIT_SUPPRESSED)]
 
 
 def stop_events_device():
@@ -1033,10 +1146,9 @@ def apply_log_filters(*event_filters_list: List[BaseFilter]):
 
 def EVENT_FILTER_TIMEOUT():  # pylint: disable=invalid-name
     return [
-        EventsSeverityChangerFilter(event_class=DatabaseLogEvent, regex=r".*Operation timed out.*",
-                                    severity=Severity.WARNING, extra_time_to_expiration=30),
-        EventsSeverityChangerFilter(event_class=DatabaseLogEvent, regex=r'.*Operation failed for system.paxos.*',
-                                    severity=Severity.WARNING, extra_time_to_expiration=30)
+        EventsFilter(ReduceToWarningEvents.OPERATION_TIMED_OUT, extra_time_to_expiration=30, is_reduce_event=True),
+        EventsFilter(
+            ReduceToWarningEvents.PAXOS_OPERATION_TIMED_OUT, extra_time_to_expiration=30, is_reduce_event=True)
     ]
 
 

@@ -43,8 +43,8 @@ from sdcm.utils.decorators import retrying
 from sdcm.log import SDCMAdapter
 from sdcm.keystore import KeyStore
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm import mgmt, wait
-from sdcm.sct_events import DisruptionEvent, DbEventsFilter, Severity, InfoEvent
+from sdcm import wait
+from sdcm.sct_events import DisruptionEvent, DbEventsFilter, Severity, InfoEvent, DbEvents
 from sdcm.db_stats import PrometheusDBStats
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
@@ -286,7 +286,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('RestartThenRepairNode %s' % self.target_node)
         # Task https://trello.com/c/llRuLIOJ/2110-add-dbeventfilter-for-nosuchcolumnfamily-error
         # If this error happens during the first boot with the missing disk this issue is expected and it's not an issue
-        with DbEventsFilter(type='DatabaseLogEvent', line="Can't find a column family with UUID", node=self.target_node):
+        with DbEventsFilter(DbEvents.DATABASE_LOG_EVENT__CAN_NOT_FIND_COLUMN_FAMILY, node=self.target_node):
             self.target_node.restart()
 
         self.log.info('Waiting scylla services to start after node restart')
@@ -671,10 +671,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('Enospc test on {}'.format([n.name for n in nodes]))
 
         for node in nodes:
-            with DbEventsFilter(type='NO_SPACE_ERROR', node=node), \
-                    DbEventsFilter(type='BACKTRACE', line='No space left on device', node=node), \
-                    DbEventsFilter(type='DATABASE_ERROR', line='No space left on device', node=node), \
-                    DbEventsFilter(type='FILESYSTEM_ERROR', line='No space left on device', node=node):
+            with DbEventsFilter(DbEvents.NO_SPACE_ERRORS, node=node), \
+                    DbEventsFilter(DbEvents.BACKTRACE__NO_SPACE_LEFT, node=node), \
+                    DbEventsFilter(DbEvents.DATABASE_ERROR__NO_SPACE_LEFT, node=node), \
+                    DbEventsFilter(DbEvents.RUNTIME_ERROR__NO_SPACE_LEFT, node=node):
 
                 result = node.remoter.run('cat /proc/mounts')
                 if '/var/lib/scylla' not in result.stdout:
@@ -1377,11 +1377,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                       text='Wait for repair starts')
 
         self.log.debug("Abort repair streaming by storage_service/force_terminate_repair API")
-        with DbEventsFilter(type='DATABASE_ERROR', line="repair's stream failed: streaming::stream_exception",
-                            node=self.target_node), \
-                DbEventsFilter(type='RUNTIME_ERROR', line='Can not find stream_manager', node=self.target_node), \
-                DbEventsFilter(type='RUNTIME_ERROR', line='is aborted', node=self.target_node), \
-                DbEventsFilter(type='RUNTIME_ERROR', line='Failed to repair', node=self.target_node):
+        with DbEventsFilter(DbEvents.DATABASE_LOG_EVENT__REPAIR_STREAM, node=self.target_node), \
+                DbEventsFilter(DbEvents.RUNTIME_ERROR__CAN_NOT_FIND_STREAM_MANAGER, node=self.target_node), \
+                DbEventsFilter(DbEvents.RUNTIME_ERROR__IS_ABORTED, node=self.target_node), \
+                DbEventsFilter(DbEvents.RUNTIME_ERROR__REPAIR_FAILED, node=self.target_node):
             self.target_node.remoter.run(
                 'curl -X POST --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/storage_service/force_terminate_repair"')
             thread1.join(timeout=120)

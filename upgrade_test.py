@@ -24,7 +24,7 @@ from pkg_resources import parse_version
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm import wait
 from sdcm.utils.version_utils import is_enterprise
-from sdcm.sct_events import DbEventsFilter, IndexSpecialColumnErrorEvent
+from sdcm.sct_events import DbEventsFilter, IndexSpecialColumnErrorEvent, DbEvents
 
 
 def truncate_entries(func):
@@ -490,10 +490,10 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
         time.sleep(60)
 
-        with DbEventsFilter(type='DATABASE_ERROR', line='Failed to load schema'), \
-                DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
-                DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'), \
-                DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'):
+        with DbEventsFilter(DbEvents.DATABASE_ERROR__LOAD_SCHEMA_FAILED), \
+                DbEventsFilter(DbEvents.SCHEMA_FAILURE__LOAD_SCHEMA_FAILED), \
+                DbEventsFilter(DbEvents.DATABASE_ERROR__LOAD_SCHEMA_FAILED), \
+                DbEventsFilter(DbEvents.RUNTIME_ERROR__LOAD_SCHEMA_FAILED):
 
             step = 'Step1 - Upgrade First Node '
             self.log.info(step)
@@ -562,10 +562,10 @@ class UpgradeTest(FillDatabaseData):
         self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                       step=step)
 
-        with DbEventsFilter(type='DATABASE_ERROR', line='Failed to load schema'), \
-                DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
-                DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'), \
-                DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'):
+        with DbEventsFilter(DbEvents.DATABASE_ERROR__LOAD_SCHEMA_FAILED), \
+                DbEventsFilter(DbEvents.SCHEMA_FAILURE__LOAD_SCHEMA_FAILED), \
+                DbEventsFilter(DbEvents.DATABASE_ERROR__LOAD_SCHEMA_FAILED), \
+                DbEventsFilter(DbEvents.RUNTIME_ERROR__LOAD_SCHEMA_FAILED):
 
             step = 'Step5 - Upgrade rest of the Nodes '
             self.log.info(step)

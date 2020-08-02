@@ -14,7 +14,7 @@ from weakref import proxy as weakproxy
 from invoke import Result
 
 from sdcm.cluster import BaseNode
-from sdcm.sct_events import start_events_device, stop_events_device
+from sdcm.sct_events import start_events_device, stop_events_device, DbEventType
 from sdcm.sct_events import EVENTS_PROCESSES
 from sdcm.utils.distro import Distro
 
@@ -104,22 +104,18 @@ class TestBaseNode(unittest.TestCase):
 
     def test_search_system_interlace_reactor_stall(self):  # pylint: disable=invalid-name
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_interlace_stall.log')
+        self.node.search_system_log()
 
-        _ = self.node.search_system_log()
+        with open(file=EVENTS_PROCESSES['MainDevice'].raw_events_filename, mode='r') as events_file:
+            events = [json.loads(line) for line in events_file.readlines()]
 
-        events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
-        events = []
-        for line in events_file.readlines():
-
-            events.append(json.loads(line))
-
-        event_a, event_b = events[-2], events[-1]
+        event_a, event_b = events[-2:]
         print(event_a)
         print(event_b)
 
-        assert event_a["type"] == "REACTOR_STALLED"
+        assert event_a["type"] == DbEventType.REACTOR_STALLED.value
         assert event_a["line_number"] == 1
-        assert event_b["type"] == "REACTOR_STALLED"
+        assert event_b["type"] == DbEventType.REACTOR_STALLED.value
         assert event_b["line_number"] == 4
 
     def test_search_system_suppressed_messages(self):  # pylint: disable=invalid-name

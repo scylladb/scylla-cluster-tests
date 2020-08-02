@@ -8,7 +8,7 @@ import boto3
 from mypy_boto3_dynamodb import DynamoDBClient, DynamoDBServiceResource
 from mypy_boto3_dynamodb.service_resource import Table
 
-from sdcm.sct_events import EventsSeverityChangerFilter, YcsbStressEvent, PrometheusAlertManagerEvent, Severity
+from sdcm.sct_events import ReduceToWarningEvents, EventsFilter
 from sdcm.utils.alternator import schemas, enums, consts
 from sdcm.utils.common import normalize_ipv6_url
 
@@ -159,15 +159,11 @@ def ignore_alternator_client_errors():
     :return: context manager of all those filter
     """
     with ExitStack() as stack:
-        stack.enter_context(EventsSeverityChangerFilter(
-            event_class=PrometheusAlertManagerEvent, regex=".*YCSBTooManyErrors.*", severity=Severity.WARNING,
-            extra_time_to_expiration=60))
-        stack.enter_context(EventsSeverityChangerFilter(
-            event_class=PrometheusAlertManagerEvent, regex=".*YCSBTooManyVerifyErrors.*", severity=Severity.WARNING,
-            extra_time_to_expiration=60))
-        stack.enter_context(EventsSeverityChangerFilter(
-            event_class=YcsbStressEvent, regex=r".*Cannot achieve consistency level.*", severity=Severity.WARNING,
-            extra_time_to_expiration=30))
-        stack.enter_context(EventsSeverityChangerFilter(
-            event_class=YcsbStressEvent, regex=r".*Operation timed out.*", severity=Severity.WARNING,
-            extra_time_to_expiration=30))
+        stack.enter_context(EventsFilter(
+            ReduceToWarningEvents.TOO_MANY_ERRORS, extra_time_to_expiration=60, is_reduce_event=True))
+        stack.enter_context(EventsFilter(
+            ReduceToWarningEvents.TOO_MANY_VERIFY_ERRORS, extra_time_to_expiration=60, is_reduce_event=True))
+        stack.enter_context(EventsFilter(
+            ReduceToWarningEvents.ACHIEVE_CONSISTENCY_LEVEL_ERRORS, extra_time_to_expiration=30, is_reduce_event=True))
+        stack.enter_context(EventsFilter(
+            ReduceToWarningEvents.OPERATION_TIMED_OUT, extra_time_to_expiration=30, is_reduce_event=True))
