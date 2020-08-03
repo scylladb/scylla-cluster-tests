@@ -566,41 +566,92 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('MajorCompaction %s' % self.target_node)
         self.target_node.run_nodetool("compact")
 
-    def disrupt_nodetool_refresh(self, big_sstable=True, skip_download=False):
+    def disrupt_nodetool_refresh(self, big_sstable=True, skip_download=False):  # pylint: disable=too-many-statements
         self._set_current_disruption('Refresh keyspace1.standard1 on {}'.format(self.target_node.name))
-        if big_sstable:
-            # 100G, the big file will be saved to GCE image
-            # Fixme: It's very slow and unstable to download 100G files from S3 to GCE instances,
-            #        currently we actually uploaded a small file (3.6 K) to S3.
-            #        We had a solution to save the file in GCE image, it requires bigger boot disk.
-            #        In my old test, the instance init is easy to fail. We can try to use a
-            #        split shared disk to save the 100GB file.
-            # 100M (500000 rows)
-            sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis/keyspace1.standard1.100M.tar.gz'
-            sstable_file = '/tmp/keyspace1.standard1.100M.tar.gz'
-            sstable_md5 = '9c5dd19cfc78052323995198b0817270'
+
+        # Checking the columns number of keyspace1.standard1
+        query_cmd = "SELECT * FROM keyspace1.standard1 LIMIT 1"
+        result = self.target_node.run_cqlsh(query_cmd)
+        col_num = len(re.findall(r"(\| C\d+)", result.stdout))
+
+        if col_num == 1:
+            # Use special schema (one column) for refresh before https://github.com/scylladb/scylla/issues/6617 is fixed
+            if big_sstable:
+                sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis_c0/keyspace1.standard1.100M.tar.gz'
+                sstable_file = '/tmp/keyspace1.standard1.100M.tar.gz'
+                sstable_md5 = 'e4f6addc2db8e9af3a906953288ef676'
+                keys_num = 1001000
+            else:
+                sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis_c0/keyspace1.standard1.tar.gz'
+                sstable_file = "/tmp/keyspace1.standard1.tar.gz"
+                sstable_md5 = 'c4aee10691fa6343a786f52663e7f758'
+                keys_num = 1000
+        elif col_num >= 5:
+            # The snapshot has 5 columns, the snapshot (col=5) can be loaded to table (col > 5).
+            # they rest columns will be filled to 'null'.
+            if big_sstable:
+                # 100G, the big file will be saved to GCE image
+                # Fixme: It's very slow and unstable to download 100G files from S3 to GCE instances,
+                #        currently we actually uploaded a small file (3.6 K) to S3.
+                #        We had a solution to save the file in GCE image, it requires bigger boot disk.
+                #        In my old test, the instance init is easy to fail. We can try to use a
+                #        split shared disk to save the 100GB file.
+                # 100M (500000 rows)
+                sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis/keyspace1.standard1.100M.tar.gz'
+                sstable_file = '/tmp/keyspace1.standard1.100M.tar.gz'
+                sstable_md5 = '9c5dd19cfc78052323995198b0817270'
+                keys_num = 501000
+            else:
+                sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis/keyspace1.standard1.tar.gz'
+                sstable_file = "/tmp/keyspace1.standard1.tar.gz"
+                sstable_md5 = 'c033a3649a1aec3ba9b81c446c6eecfd'
+                keys_num = 1000
         else:
-            sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis/keyspace1.standard1.tar.gz'
-            sstable_file = "/tmp/keyspace1.standard1.tar.gz"
-            sstable_md5 = 'c033a3649a1aec3ba9b81c446c6eecfd'
-        if not skip_download:
-            key_store = KeyStore()
-            creds = key_store.get_scylladb_upload_credentials()
-            remote_get_file(self.target_node.remoter, sstable_url, sstable_file,
-                            hash_expected=sstable_md5, retries=2,
-                            user_agent=creds['user_agent'])
+            # Note: when issue #6617 is fixed, we can try to load snapshot (cols=5) to a table (1 < cols < 5),
+            #       expect that refresh will fail (no serious db error).
+            raise UnsupportedNemesis("Schema doesn't match the snapshot, not uploading")
 
         self.log.debug('Prepare keyspace1.standard1 if it does not exist')
-        self._prepare_test_table(ks='keyspace1')
+        self._prepare_test_table(ks='keyspace1', table='standard1')
         result = self.target_node.run_nodetool(sub_cmd="cfstats", args="keyspace1.standard1")
-        if result is not None and result.exit_status == 0:
-            result = self.target_node.remoter.run("sudo ls -t /var/lib/scylla/data/keyspace1/")
+
+        def do_refresh(node):
+            if not skip_download:
+                key_store = KeyStore()
+                creds = key_store.get_scylladb_upload_credentials()
+                # Download the sstable files from S3
+                remote_get_file(node.remoter, sstable_url, sstable_file,
+                                hash_expected=sstable_md5, retries=2,
+                                user_agent=creds['user_agent'])
+            result = node.remoter.run("sudo ls -t /var/lib/scylla/data/keyspace1/")
             upload_dir = result.stdout.split()[0]
-            self.target_node.remoter.run('sudo tar xvfz {} -C /var/lib/scylla/data/keyspace1/{}/upload/'.format(
+            node.remoter.run('sudo -u scylla tar xvfz {} -C /var/lib/scylla/data/keyspace1/{}/upload/'.format(
                 sstable_file, upload_dir))
-            self.target_node.run_nodetool(sub_cmd="refresh", args="-- keyspace1 standard1")
-            cmd = "select * from keyspace1.standard1 where key=0x32373131364f334f3830"
-            result = self.target_node.run_cqlsh(cmd)
+            # Scylla Enterprise 2019.1 doesn't support to load schema.cql and manifest.json, let's remove them
+            node.remoter.run(
+                'sudo rm -f /var/lib/scylla/data/keyspace1/{}/upload/schema.cql'.format(upload_dir))
+            node.remoter.run(
+                'sudo rm -f /var/lib/scylla/data/keyspace1/{}/upload/manifest.json'.format(upload_dir))
+            self.log.debug(f'Loading {keys_num} keys to {node.name} by refresh')
+            node.run_nodetool(sub_cmd="refresh", args="-- keyspace1 standard1")
+
+        if result is not None and result.exit_status == 0:
+            # Check one special key before refresh, we will verify refresh by query in the end
+            # Note: we can't DELETE the key before refresh, otherwise the old sstable won't be loaded
+            #       TRUNCATE can be used the clean the table, but we can't do it for keyspace1.standard1
+            query_verify = "SELECT * FROM keyspace1.standard1 WHERE key=0x32373131364f334f3830"
+            result = self.target_node.run_cqlsh(query_verify)
+            if '(0 rows)' in result.stdout:
+                self.log.debug('Key 0x32373131364f334f3830 does not exist before refresh')
+            else:
+                self.log.debug('Key 0x32373131364f334f3830 already exists before refresh')
+
+            # Executing rolling refresh one by one
+            for node in self.cluster.nodes:
+                do_refresh(node)
+
+            # Verify that the special key is loaded by SELECT query
+            result = self.target_node.run_cqlsh(query_verify)
             assert '(1 rows)' in result.stdout, 'The key is not loaded by `nodetool refresh`'
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
@@ -697,12 +748,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             for keyspace in test_keyspaces:
                 node.run_nodetool(sub_cmd="cleanup", args=keyspace)
 
-    def _prepare_test_table(self, ks='keyspace1'):
-        # get the count of the truncate table
-        test_keyspaces = self.cluster.get_test_keyspaces()
+    def _prepare_test_table(self, ks='keyspace1', table=None):
+        ks_cfs = get_non_system_ks_cf_list(db_node=self.target_node)
+        table_exist = f'{ks}.{table}' in ks_cfs if table else True
 
-        # if keyspace doesn't exist, create it by cassandra-stress
-        if ks not in test_keyspaces:
+        test_keyspaces = self.cluster.get_test_keyspaces()
+        # if keyspace or table doesn't exist, create it by cassandra-stress
+        if ks not in test_keyspaces or not table_exist:
             stress_cmd = "cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 -schema 'replication(factor=3)' -log interval=5"
             cs_thread = self.tester.run_stress_thread(
                 stress_cmd=stress_cmd, keyspace_name=ks, stop_test_on_failure=False)
