@@ -76,7 +76,7 @@ def call(Map pipelineParams) {
                             }
 
                             tasks["sub_test=${sub_test}"] = {
-                                node(getJenkinsLabels(params.backend, params.aws_region)) {
+                                node(builder.label) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                                  "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",]) {
                                         stage("Run ${sub_test}"){
