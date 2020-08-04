@@ -37,7 +37,7 @@ def truncate_entries(func):
             base_version = self.params.get('scylla_version', default='')
             system_truncated = bool(parse_version(base_version) >= parse_version('3.1')
                                     and not is_enterprise(base_version))
-            with self.cql_connection_patient(node, keyspace='truncate_ks') as session:
+            with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks') as session:
                 self.cql_truncate_simple_tables(session=session, rows=self.insert_rows)
                 self.validate_truncated_entries_for_table(session=session, system_truncated=system_truncated)
 
@@ -47,7 +47,7 @@ def truncate_entries(func):
         new_version = result.stdout
         if new_version and parse_version(new_version) >= parse_version('3.1'):
             # re-new connection
-            with self.cql_connection_patient(node, keyspace='truncate_ks') as session:
+            with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks') as session:
                 self.validate_truncated_entries_for_table(session=session, system_truncated=True)
                 self.read_data_from_truncated_tables(session=session)
                 self.cql_insert_data_to_simple_tables(session=session, rows=self.insert_rows)

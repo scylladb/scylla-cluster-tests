@@ -37,7 +37,8 @@ from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed
 from sdcm.group_common_events import ignore_alternator_client_errors, ignore_no_space_errors
 from sdcm.mgmt import TaskStatus
-from sdcm.utils.common import remote_get_file, get_non_system_ks_cf_list, get_db_tables, generate_random_string, \
+from sdcm.utils.alternator.api import ignore_alternator_client_errors
+from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_string, \
     update_certificates, reach_enospc_on_node, clean_enospc_on_node
 from sdcm.utils.decorators import retrying
 from sdcm.log import SDCMAdapter
@@ -391,7 +392,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _destroy_data_and_restart_scylla(self):
 
-        ks_cfs = get_non_system_ks_cf_list(db_node=self.target_node)
+        ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
         if not ks_cfs:
             raise UnsupportedNemesis(
                 'Non-system keyspace and table are not found. CorruptThenRepair nemesis can\'t be run')
@@ -755,7 +756,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 node.run_nodetool(sub_cmd="cleanup", args=keyspace)
 
     def _prepare_test_table(self, ks='keyspace1', table=None):
-        ks_cfs = get_non_system_ks_cf_list(db_node=self.target_node)
+        ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
         table_exist = f'{ks}.{table}' in ks_cfs if table else True
 
         test_keyspaces = self.cluster.get_test_keyspaces()
@@ -784,9 +785,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
         self._set_current_disruption('ModifyTableProperties%s %s' % (disruption_name, self.target_node))
 
-        ks_cfs = get_non_system_ks_cf_list(db_node=self.target_node,
-                                           filter_out_table_with_counter=filter_out_table_with_counter,
-                                           filter_out_mv=True)  # not allowed to modify MV
+        ks_cfs = self.cluster.get_non_system_ks_cf_list(
+            db_node=self.target_node, filter_out_table_with_counter=filter_out_table_with_counter,
+            filter_out_mv=True)  # not allowed to modify MV
 
         keyspace_table = random.choice(ks_cfs) if ks_cfs else ks_cfs
         if not keyspace_table:
@@ -796,7 +797,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         cmd = "ALTER TABLE {keyspace_table} WITH {name} = {val};".format(
             keyspace_table=keyspace_table, name=name, val=val)
         self.log.info('_modify_table_property: {}'.format(cmd))
-        with self.tester.cql_connection_patient(self.target_node) as session:
+        with self.cluster.cql_connection_patient(self.target_node) as session:
             session.execute(cmd)
 
     def _get_all_tables_with_no_compact_storage(self, tables_to_skip=None):
@@ -814,7 +815,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if tables_to_skip is None:
             tables_to_skip = {}
         to_be_skipped_default = tables_to_skip.get('*', '').split(',')
-        with self.tester.cql_connection_patient(self.tester.db_cluster.nodes[0]) as session:
+        with self.cluster.cql_connection_patient(self.tester.db_cluster.nodes[0]) as session:
             query_result = session.execute('SELECT keyspace_name FROM system_schema.keyspaces;')
             for result_rows in query_result:
                 keyspaces.extend([row.lower() for row in result_rows if not row.lower().startswith("system")])
@@ -884,7 +885,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _add_drop_column_run_cql_query(self, cmd, ks, consistency_level=ConsistencyLevel.ALL):  # pylint: disable=too-many-branches
         try:
-            with self.tester.cql_connection_patient(self.target_node, keyspace=ks) as session:
+            with self.cluster.cql_connection_patient(self.target_node, keyspace=ks) as session:
                 session.default_consistency_level = consistency_level
                 session.execute(cmd)
         except Exception as exc:  # pylint: disable=broad-except
@@ -979,7 +980,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 [i for i in range(int(partition_range_splitted[0]), int(partition_range_splitted[1]))])  # pylint: disable=unnecessary-comprehension
 
         partitions_for_delete = defaultdict(list)
-        with self.tester.cql_connection_patient(self.target_node, connect_timeout=300) as session:
+        with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
             session.default_consistency_level = ConsistencyLevel.ONE
 
             for partition_key in [i*2+50 for i in range(max_partitions_in_test_table)]:
@@ -1017,7 +1018,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def run_deletions(self, queries, ks_cf):
         for cmd in queries:
             self.log.debug(f'delete query: {cmd}')
-            with self.tester.cql_connection_patient(self.target_node, connect_timeout=300) as session:
+            with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
                 session.execute(cmd, timeout=3600)
 
         self.target_node.run_nodetool('flush', args=ks_cf.replace('.', ' '))
@@ -1157,8 +1158,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             Alters a non-system table compaction strategy from ICS to any-other and vise versa.
         """
         list_additional_params = get_compaction_random_additional_params()
-        all_ks_cfs = get_non_system_ks_cf_list(db_node=self.target_node)
-        non_mview_ks_cfs = get_non_system_ks_cf_list(db_node=self.target_node, filter_out_mv=True)
+        all_ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
+        non_mview_ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node, filter_out_mv=True)
 
         if not all_ks_cfs:
             raise UnsupportedNemesis(
@@ -1505,7 +1506,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             return toppartitions
 
         def generate_random_parameters_values():  # pylint: disable=invalid-name
-            ks_cf_list = get_non_system_ks_cf_list(self.target_node)
+            ks_cf_list = self.cluster.get_non_system_ks_cf_list(self.target_node)
             if not ks_cf_list:
                 raise UnsupportedNemesis('User-defined Keyspace and ColumnFamily are not found.')
             try:
@@ -1919,7 +1920,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _corrupt_data_file(self):
         """Randomly corrupt data file by dd"""
-        ks_cfs = get_non_system_ks_cf_list(db_node=self.target_node)
+        ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
         if not ks_cfs:
             raise UnsupportedNemesis(
                 'Non-system keyspace and table are not found. Nemesis can\'t be run')
@@ -1941,7 +1942,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._corrupt_data_file()
 
         self.log.debug("Rebuild sstable file by scrub, corrupted data file will be skipped.")
-        for ks_cf in get_non_system_ks_cf_list(self.target_node):
+        for ks_cf in self.cluster.get_non_system_ks_cf_list(self.target_node):
             scrub_cmd = 'curl -s -X GET --header "Content-Type: application/json" --header ' \
                         '"Accept: application/json" "http://127.0.0.1:10000/storage_service/keyspace_scrub/{}?skip_corrupted=true"'.format(
                             ks_cf.split('.')[0])
@@ -2081,7 +2082,8 @@ def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
     def data_validation_prints(args):
         try:
             if hasattr(args[0].tester, 'data_validator') and args[0].tester.data_validator:
-                with args[0].tester.cql_connection_patient(args[0].cluster.nodes[0], keyspace=args[0].tester.data_validator.keyspace_name) as session:
+                with args[0].cluster.cql_connection_patient(
+                        args[0].cluster.nodes[0], keyspace=args[0].tester.data_validator.keyspace_name) as session:
                     args[0].tester.data_validator.validate_range_not_expected_to_change(session, during_nemesis=True)
                     args[0].tester.data_validator.validate_range_expected_to_change(session, during_nemesis=True)
                     args[0].tester.data_validator.validate_deleted_rows(session, during_nemesis=True)

@@ -63,7 +63,7 @@ class LWTLongevityTest(LongevityTest):
 
     def validate_data(self):
         node = self.db_cluster.nodes[0]
-        with self.cql_connection_patient(node, keyspace=self.data_validator.keyspace_name) as session:
+        with self.db_cluster.cql_connection_patient(node, keyspace=self.data_validator.keyspace_name) as session:
             self.data_validator.validate_range_not_expected_to_change(session=session)
             self.data_validator.validate_range_expected_to_change(session=session)
             self.data_validator.validate_deleted_rows(session=session)

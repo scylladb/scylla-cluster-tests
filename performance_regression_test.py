@@ -242,7 +242,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.check_regression()
 
     def prepare_mv(self, on_populated=False):
-        with self.cql_connection_patient_exclusive(self.db_cluster.nodes[0]) as session:
+        with self.db_cluster.cql_connection_patient_exclusive(self.db_cluster.nodes[0]) as session:
 
             ks_name = 'keyspace1'
             base_table_name = 'standard1'
@@ -371,7 +371,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
     def _scylla_bench_prepare_table(self):
         node = self.db_cluster.nodes[0]
-        with self.cql_connection_patient(node) as session:
+        with self.db_cluster.cql_connection_patient(node) as session:
             session.execute("""
                 CREATE KEYSPACE scylla_bench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'}
                 AND durable_writes = true;
@@ -574,7 +574,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             query = 'drop materialized view {}'.format(mv_name)
 
             try:
-                with self.cql_connection_patient_exclusive(self.db_cluster.nodes[0]) as session:
+                with self.db_cluster.cql_connection_patient_exclusive(self.db_cluster.nodes[0]) as session:
                     self.log.debug('Run query: {}'.format(query))
                     session.execute(query)
             except Exception as ex:

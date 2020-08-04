@@ -2916,7 +2916,7 @@ class FillDatabaseData(ClusterTester):
 
     def fill_db_data_for_truncate_test(self, insert_rows):
         # Prepare connection and keyspace
-        with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+        with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
 
@@ -3061,7 +3061,7 @@ class FillDatabaseData(ClusterTester):
         """
         node = self.db_cluster.nodes[0]
 
-        with self.cql_connection_patient(node) as session:
+        with self.db_cluster.cql_connection_patient(node) as session:
             # pylint: disable=no-member
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
@@ -3082,7 +3082,7 @@ class FillDatabaseData(ClusterTester):
         # Prepare connection and keyspace
         node = self.db_cluster.nodes[0]
 
-        with self.cql_connection_patient(node) as session:
+        with self.db_cluster.cql_connection_patient(node) as session:
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
 
@@ -3098,7 +3098,7 @@ class FillDatabaseData(ClusterTester):
     def verify_db_data(self):
         # Prepare connection
         node = self.db_cluster.nodes[0]
-        with self.cql_connection_patient(node, keyspace='keyspace_fill_db_data') as session:
+        with self.db_cluster.cql_connection_patient(node, keyspace='keyspace_fill_db_data') as session:
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
             self.run_db_queries(session, session.default_fetch_size)

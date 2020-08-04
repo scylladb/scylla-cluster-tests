@@ -29,7 +29,7 @@ class CQLExampleTest(ClusterTester):
         Create a table, run a few sql statements
         """
         node = self.db_cluster.nodes[0]
-        with self.cql_connection_patient(node) as session:
+        with self.db_cluster.cql_connection_patient(node) as session:
             self.create_keyspace(keyspace_name='ks', replication_factor=1)
             # pylint: disable=no-member
             session.execute("""

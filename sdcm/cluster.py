@@ -34,6 +34,12 @@ from functools import cached_property, wraps
 
 import yaml
 import requests
+from cassandra import ConsistencyLevel
+from cassandra.auth import PlainTextAuthProvider
+from cassandra.cluster import Cluster as ClusterDriver  # pylint: disable=no-name-in-module
+from cassandra.cluster import NoHostAvailable  # pylint: disable=no-name-in-module
+from cassandra.policies import RetryPolicy
+from cassandra.policies import WhiteListRoundRobinPolicy
 
 from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
 from paramiko import SSHException
@@ -47,7 +53,7 @@ from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS
 from sdcm import wait, mgmt
 from sdcm.utils import alternator
 from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
-    get_latest_gemini_version, normalize_ipv6_url, download_dir_from_cloud, generate_random_string
+    get_latest_gemini_version, normalize_ipv6_url, download_dir_from_cloud, generate_random_string, ScyllaCQLSession
 from sdcm.utils.distro import Distro
 from sdcm.utils.docker_utils import ContainerManager, NotFound
 
@@ -2753,6 +2759,28 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return None
 
 
+class FlakyRetryPolicy(RetryPolicy):
+
+    """
+    A retry policy that retries 5 times
+    """
+
+    def _retry_message(self, msg, *args, **kwargs):  # pylint: disable=unused-argument,arguments-differ
+        if kwargs['retry_num'] < 5:
+            LOGGER.debug("%s. Attempt #%s", msg, str(kwargs['retry_num']))
+            return self.RETRY, None
+        return self.RETHROW, None
+
+    def on_read_timeout(self, *args, **kwargs):
+        return self._retry_message(msg="Retrying read after timeout", *args, **kwargs)
+
+    def on_write_timeout(self, *args, **kwargs):
+        return self._retry_message(msg="Retrying write after timeout", *args, **kwargs)
+
+    def on_unavailable(self, *args, **kwargs):
+        return self._retry_message(msg="Retrying request after UE", *args, **kwargs)
+
+
 class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     """
     Cluster of Node objects.
@@ -2930,6 +2958,145 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             if region_ip == full_node_ip:
                 return node
         return None
+
+    def _create_session(self, node, keyspace, user, password, compression,
+                        # pylint: disable=too-many-arguments, too-many-locals
+                        protocol_version, load_balancing_policy=None,
+                        port=None, ssl_opts=None, node_ips=None, connect_timeout=None,
+                        verbose=True):
+        if not port:
+            port = node.CQL_PORT
+
+        if protocol_version is None:
+            protocol_version = 3
+
+        authenticator = self.params.get('authenticator')
+        if user is None and password is None and (authenticator and authenticator == 'PasswordAuthenticator'):
+            user = self.params.get('authenticator_user', default='cassandra')
+            password = self.params.get('authenticator_password', default='cassandra')
+
+        if user is not None:
+            auth_provider = PlainTextAuthProvider(username=user, password=password)
+        else:
+            auth_provider = None
+
+        if ssl_opts is None and self.params.get('client_encrypt', default=None):
+            ssl_opts = {'ca_certs': './data_dir/ssl_conf/client/catest.pem'}
+        self.log.debug(str(ssl_opts))
+        cluster_driver = ClusterDriver(node_ips, auth_provider=auth_provider,
+                                       compression=compression,
+                                       protocol_version=protocol_version,
+                                       load_balancing_policy=load_balancing_policy,
+                                       default_retry_policy=FlakyRetryPolicy(),
+                                       port=port, ssl_options=ssl_opts,
+                                       connect_timeout=connect_timeout)
+        session = cluster_driver.connect()
+
+        # temporarily increase client-side timeout to 1m to determine
+        # if the cluster is simply responding slowly to requests
+        session.default_timeout = 60.0
+
+        if keyspace is not None:
+            session.set_keyspace(keyspace)
+
+        # override driver default consistency level of LOCAL_QUORUM
+        session.default_consistency_level = ConsistencyLevel.ONE
+
+        return ScyllaCQLSession(session, cluster_driver, verbose)
+
+    def cql_connection(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
+                       password=None, compression=True, protocol_version=None,
+                       port=None, ssl_opts=None, connect_timeout=100, verbose=True):
+        node_ips = self.get_node_external_ips()
+        return self._create_session(node=node, keyspace=keyspace, user=user, password=password,
+                                    compression=compression, protocol_version=protocol_version,
+                                    port=port, ssl_opts=ssl_opts, node_ips=self.get_node_external_ips(),
+                                    connect_timeout=connect_timeout, verbose=verbose)
+
+    def cql_connection_exclusive(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
+                                 password=None, compression=True,
+                                 protocol_version=None, port=None,
+                                 ssl_opts=None, connect_timeout=100, verbose=True):
+        node_ips = [node.external_address]
+        wlrr = WhiteListRoundRobinPolicy(node_ips)
+        return self._create_session(node=node, keyspace=keyspace, user=user, password=password,
+                                    compression=compression, protocol_version=protocol_version,
+                                    load_balancing_policy=wlrr, port=port, ssl_opts=ssl_opts, node_ips=node_ips,
+                                    connect_timeout=connect_timeout, verbose=verbose)
+
+    @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
+    def cql_connection_patient(self, node, keyspace=None,  # pylint: disable=too-many-arguments
+                               user=None, password=None,
+                               compression=True, protocol_version=None,
+                               port=None, ssl_opts=None, connect_timeout=100, verbose=True):
+        """
+        Returns a connection after it stops throwing NoHostAvailables.
+
+        If the timeout is exceeded, the exception is raised.
+        """
+        # pylint: disable=unused-argument
+        kwargs = locals()
+        del kwargs["self"]
+        return self.cql_connection(**kwargs)
+
+    @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
+    def cql_connection_patient_exclusive(self, node, keyspace=None,
+                                         # pylint: disable=invalid-name,too-many-arguments,unused-argument
+                                         user=None, password=None,
+                                         compression=True,
+                                         protocol_version=None,
+                                         port=None, ssl_opts=None, connect_timeout=100, verbose=True):
+        """
+        Returns a connection after it stops throwing NoHostAvailables.
+
+        If the timeout is exceeded, the exception is raised.
+        """
+        # pylint: disable=unused-argument
+        kwargs = locals()
+        del kwargs["self"]
+        return self.cql_connection_exclusive(**kwargs)
+
+    def get_non_system_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments
+                                  filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True):
+        regular_column_names = ["keyspace_name", "table_name"]
+        materialized_view_column_names = ["keyspace_name", "view_name"]
+        regular_table_names, materialized_view_table_names = set(), set()
+
+        def execute_cmd(cql_session, entity_type):
+            result = set()
+            is_column_type = entity_type == "column"
+            column_names = regular_column_names
+            if is_column_type:
+                cmd = f"SELECT {column_names[0]}, {column_names[1]} FROM system_schema.columns"
+            elif entity_type == "view":
+                column_names = materialized_view_column_names
+                cmd = f"SELECT {column_names[0]}, {column_names[1]} FROM system_schema.views"
+            else:
+                raise ValueError(f"The following value '{entity_type}' not supported")
+
+            for row in cql_session.execute(cmd).current_rows:
+                is_valid_table = True
+                table_name = f"{getattr(row, column_names[0])}.{getattr(row, column_names[1])}"
+
+                if getattr(row, column_names[0]).startswith(("system", "alternator_usertable")):
+                    is_valid_table = False
+                elif is_column_type and (filter_out_table_with_counter and "counter" in row.type):
+                    is_valid_table = False
+                elif is_column_type and (filter_empty_tables and not cql_session.execute(
+                        f"SELECT * FROM {table_name} LIMIT 1").current_rows):
+                    is_valid_table = False
+                if is_valid_table:
+                    result.add(table_name)
+            return result
+
+        with self.cql_connection_patient(db_node) as session:
+            regular_table_names = execute_cmd(cql_session=session, entity_type="column")
+            if regular_table_names and filter_out_mv:
+                materialized_view_table_names = execute_cmd(cql_session=session, entity_type="view")
+        if not regular_table_names:
+            return []
+
+        return regular_table_names - materialized_view_table_names
 
 
 class NodeSetupFailed(Exception):

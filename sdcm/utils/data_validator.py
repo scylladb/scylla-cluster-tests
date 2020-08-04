@@ -350,12 +350,11 @@ class LongevityDataValidator:
 
         LOGGER.debug(f'Get rows count in {self.view_name_for_deletion_data} MV before stress')
         pk_name = self.base_table_partition_keys[0]
-        with self.longevity_self_object.cql_connection_patient(self.longevity_self_object.db_cluster.nodes[0],
-                                                               keyspace=self.keyspace_name) as session:
-            rows_before_deletion = self.longevity_self_object.fetch_all_rows(session=session,
-                                                                             default_fetch_size=self.DEFAULT_FETCH_SIZE,
-                                                                             statement=f"SELECT {pk_name} FROM "
-                                                                                       f"{self.view_name_for_deletion_data}")
+        with self.longevity_self_object.db_cluster.cql_connection_patient(
+                self.longevity_self_object.db_cluster.nodes[0], keyspace=self.keyspace_name) as session:
+            rows_before_deletion = self.longevity_self_object.fetch_all_rows(
+                session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
+                statement=f"SELECT {pk_name} FROM {self.view_name_for_deletion_data}")
             if rows_before_deletion:
                 self.rows_before_deletion = len(rows_before_deletion)
                 LOGGER.debug(f"{self.rows_before_deletion} rows for deletion")

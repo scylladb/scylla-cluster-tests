@@ -63,13 +63,13 @@ class CDCReplicationTest(ClusterTester):
         self.log.info('Replicator log:')
         print_file_to_stdout(replicator_log_path)
 
-        with self.cql_connection_patient(node=master_node) as sess:
+        with self.db_cluster.cql_connection_patient(node=master_node) as sess:
             self.log.info('Fetching master table...')
             res = sess.execute(SimpleStatement(f'select * from {self.KS_NAME}.{self.TABLE_NAME}',
                                                consistency_level=ConsistencyLevel.QUORUM, fetch_size=1000))
             write_cql_result(res, os.path.join(self.logdir, 'master-table'))
 
-        with self.cql_connection_patient(node=replica_node) as sess:
+        with self.db_cluster.cql_connection_patient(node=replica_node) as sess:
             self.log.info('Fetching replica table...')
             res = sess.execute(SimpleStatement(f'select * from {self.KS_NAME}.{self.TABLE_NAME}',
                                                consistency_level=ConsistencyLevel.QUORUM, fetch_size=1000))
@@ -110,7 +110,7 @@ class CDCReplicationTest(ClusterTester):
 
         self.log.info('Fetching schema definitions from master cluster.')
         master_node = self.db_cluster.nodes[0]
-        with self.cql_connection_patient(node=master_node) as sess:
+        with self.db_cluster.cql_connection_patient(node=master_node) as sess:
             sess.cluster.refresh_schema_metadata()
             # For some reason, `refresh_schema_metadata` doesn't refresh immediatelly...
             time.sleep(10)
@@ -131,7 +131,7 @@ class CDCReplicationTest(ClusterTester):
 
         self.log.info('Creating schema on replica cluster.')
         replica_node = self.cs_db_cluster.nodes[0]
-        with self.cql_connection_patient(node=replica_node) as sess:
+        with self.db_cluster.cql_connection_patient(node=replica_node) as sess:
             sess.execute(f"create keyspace if not exists {self.KS_NAME}"
                          " with replication = {'class': 'SimpleStrategy', 'replication_factor': 1}")
             for stmt in ut_ddls + table_ddls:

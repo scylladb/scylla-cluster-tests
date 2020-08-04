@@ -396,7 +396,7 @@ class LongevityTest(ClusterTester):
         remove when resolved
         """
         node = self.db_cluster.nodes[0]
-        with self.cql_connection_patient(node) as session:
+        with self.db_cluster.cql_connection_patient(node) as session:
             session.execute("""
                 CREATE KEYSPACE IF NOT EXISTS keyspace1
                 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'} AND durable_writes = true;
@@ -485,7 +485,7 @@ class LongevityTest(ClusterTester):
             keyspace_name = profile_yaml['keyspace']
             table_template = string.Template(profile_yaml['table_definition'])
 
-            with self.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
+            with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
                 try:
                     session.execute(keyspace_definition)
                 except AlreadyExists:
@@ -516,7 +516,7 @@ class LongevityTest(ClusterTester):
         query = self.params.get('pre_create_keyspace')
         node = self.db_cluster.nodes[0]
         # pylint: disable=no-member
-        with self.cql_connection_patient(node) as session:
+        with self.db_cluster.cql_connection_patient(node) as session:
             session.execute(query)
 
     def _flush_all_nodes(self):
