@@ -138,9 +138,8 @@ class PrometheusAlertManagerListener(threading.Thread):
                                f"did not get up for {self._timeout}s")
 
     @log_run_info
-    def stop(self, timeout=None):
+    def stop(self):
         self._stop_flag.set()
-        self.join(timeout)
 
     @retrying(n=10)
     def _get_alerts(self, active=False):

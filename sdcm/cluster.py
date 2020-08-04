@@ -71,7 +71,7 @@ from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnap
 from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
-
+from sdcm.coredump import CoredumpExportThread
 
 CREDENTIALS = []
 DEFAULT_USER_PREFIX = getpass.getuser()
@@ -376,13 +376,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self._spot_monitoring_thread = None
         self._journal_thread = None
         self._docker_log_process = None
-        self.n_coredumps = 0
-        self._discovered_backtraces = []
         self._maximum_number_of_cores_to_publish = 10
 
         self.last_line_no = 1
         self.last_log_position = 0
-        self._backtrace_thread = None
+        self._coredump_thread: Optional[CoredumpExportThread] = None
         self._db_log_reader_thread = None
         self._scylla_manager_journal_thread = None
         self._decoding_backtraces_thread = None
@@ -390,7 +388,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.db_init_finished = False
 
         self._short_hostname = None
-        self._alert_manager = None
+        self._alert_manager: Optional[PrometheusAlertManagerListener] = None
 
         self._system_log_errors_index = []
         self._system_error_events = [
@@ -847,198 +845,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     message="Got no logging daemon by unknown reason"
                 ).publish_or_dump()
 
-    @retrying(n=10, sleep_time=20, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying on getting coredump backtrace")
-    def _get_coredump_backtraces(self, pid):
-        """
-        Get coredump backtraces.
-
-        :param pid: PID of the core.
-        :return: fabric.Result output
-        """
-        try:
-            backtrace_cmd = f'sudo coredumpctl info --no-pager --no-legend {pid}'
-            return self.remoter.run(backtrace_cmd, verbose=False, ignore_status=True)
-        except NETWORK_EXCEPTIONS:  # pylint: disable=try-except-raise
-            raise
-        except Exception as details:  # pylint: disable=broad-except
-            self.log.error('Error retrieving core dump backtraces : %s',
-                           details)
-
-    def _pack_coredump(self, coredump: str):
-        extensions = ['.lz4', '.zip', '.gz', '.gzip']
-        for extension in extensions:
-            if coredump.endswith(extension):
-                return coredump
-        try:  # pylint: disable=unreachable
-            if self.is_debian() or self.is_ubuntu():
-                self.remoter.run('sudo apt-get install -y pigz')
-            else:
-                self.remoter.run('sudo yum install -y pigz')
-            self.remoter.run('sudo pigz --fast --keep {}'.format(coredump))
-            coredump += '.gz'
-        except NETWORK_EXCEPTIONS:  # pylint: disable=try-except-raise
-            raise
-        except Exception as ex:  # pylint: disable=broad-except
-            self.log.warning("Failed to compress coredump '%s': %s", coredump, ex)
-        return coredump
-
-    @retrying(n=10, sleep_time=20, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying on uploading coredump")
-    def _upload_coredump(self, coredump):
-        coredump = self._pack_coredump(coredump)
-        base_upload_url = 'upload.scylladb.com/%s/%s'
-        coredump_id = os.path.basename(coredump)[:-3]
-        upload_url = base_upload_url % (coredump_id, os.path.basename(coredump))
-        self.log.info('Uploading coredump %s to %s' % (coredump, upload_url))
-        self.remoter.run("sudo curl --request PUT --upload-file "
-                         "'%s' '%s'" % (coredump, upload_url))
-        download_url = 'https://storage.cloud.google.com/%s' % upload_url
-        self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
-        download_instructions = 'gsutil cp gs://%s .\ngunzip %s' % (upload_url, coredump)
-        return download_url, download_instructions
-
-    def _notify_backtrace(self, pid):
-        """
-        Notify coredump backtraces to test log and coredump.log file.
-
-        :param last: Whether to show only the last backtrace.
-        """
-        result = self._get_coredump_backtraces(pid)
-        if result.exit_status == 127:  # coredumpctl command not found
-            return False
-        log_file = os.path.join(self.logdir, 'coredump.log')
-        output = result.stdout + result.stderr
-        coredump = None
-        timestamp = None
-        # Extracting Coredump and Timestamp from coredumpctl output:
-        #            PID: 37349 (scylla)
-        #            UID: 996 (scylla)
-        #            GID: 1001 (scylla)
-        #         Signal: 3 (QUIT)
-        #      Timestamp: Tue 2020-01-14 10:40:25 UTC (6min ago)
-        #   Command Line: /usr/bin/scylla --blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1
-        #       --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --log-to-syslog 1 --log-to-stdout 0
-        #       --default-log-level info --network-stack posix --io-properties-file=/etc/scylla.d/io_properties.yaml
-        #       --cpuset 1-7,9-15
-        #     Executable: /opt/scylladb/libexec/scylla
-        #  Control Group: /scylla.slice/scylla-server.slice/scylla-server.service
-        #           Unit: scylla-server.service
-        #          Slice: scylla-server.slice
-        #        Boot ID: 0dc7f4137d5f47a3bda07dd046937fc2
-        #     Machine ID: df877a200226bc47d06f26dae0736ec9
-        #       Hostname: longevity-10gb-3h-dkropachev-db-node-b9ebdfb0-1
-        #       Coredump: /var/lib/systemd/coredump/core.scylla.996.0dc7f4137d5f47a3bda07dd046937fc2.37349.1578998425000000
-        #        Message: Process 37349 (scylla) of user 996 dumped core.
-        #
-        #                 Stack trace of thread 37349:
-        #                 #0  0x00007ffc2e724704 n/a (linux-vdso.so.1)
-        #                 #1  0x00007ffc2e724992 __vdso_clock_gettime (linux-vdso.so.1)
-        #                 #2  0x00007f251c3082c3 __clock_gettime (libc.so.6)
-        #                 #3  0x00007f251c5f3b85 _ZNSt6chrono3_V212steady_clock3nowEv (libstdc++.so.6)
-        #                 #4  0x0000000002ab94e5 _ZN7seastar7reactor3runEv (scylla)
-        #                 #5  0x00000000029fc1ed _ZN7seastar12app_template14run_deprecatedEiPPcOSt8functionIFvvEE (scylla)
-        #                 #6  0x00000000029fcedf _ZN7seastar12app_template3runEiPPcOSt8functionIFNS_6futureIJiEEEvEE (scylla)
-        #                 #7  0x0000000000794222 main (scylla)
-        #
-        # Coredump could be absent when file was removed
-        for line in output.splitlines():
-            line = line.strip()
-            if line.startswith('Coredump:') or line.startswith('Storage:'):
-                if "(inaccessible)" in line:
-                    # Ignore inaccessible cores
-                    #       Storage: /var/lib/systemd/coredump/core.vi.1000.6c4de4c206a0476e88444e5ebaaac482.18554.1578994298000000.lz4 (inaccessible)
-                    continue
-                coredump = line.split()[-1]
-            elif line.startswith('Timestamp:'):
-                try:
-                    # Converting time string "Tue 2020-01-14 10:40:25 UTC (6min ago)" to timestamp
-                    tmp = re.match(r'Timestamp: ([^(]+)(\([^)]+\)|)', line).group(1)
-                    timestamp = time.mktime(datetime.strptime(tmp.strip(' '), "%a %Y-%m-%d %H:%M:%S UTC").timetuple())
-                except Exception:  # pylint: disable=broad-except
-                    self.log.error(f"Failed to convert date '{timestamp}'")
-        result = False
-        if coredump:
-            url = ""
-            download_instructions = "failed to upload"
-            try:
-                self.log.debug('Found coredump file: {}'.format(coredump))
-                CoreDumpEvent(corefile_url="", download_instructions=f"Coredump {coredump} upload in progress",
-                              backtrace=output, node=self, timestamp=timestamp)
-                url, download_instructions = self._upload_coredump(coredump)
-                result = True
-            except Exception as exc:  # pylint: disable=broad-except
-                self.log.error(f"Following error occured during uploading coredump {coredump}: {str(exc)}")
-            finally:
-                CoreDumpEvent(corefile_url=url, download_instructions=download_instructions,
-                              backtrace=output, node=self, timestamp=timestamp)
-
-        with open(log_file, 'a') as log_file_obj:
-            log_file_obj.write(output)
-        for line in output.splitlines():
-            self.log.error(line)
-        return result
-
-    def get_backtraces(self):
-        """
-        Get core files from node and report them
-        """
-        try:
-            self.wait_ssh_up(verbose=False)
-            if self.is_ubuntu14():
-                # fixme: ubuntu14 doesn't has coredumpctl, skip it.
-                return
-            core_pids = self._get_core_pids()
-            if not core_pids:
-                return
-            for core_pid in core_pids:
-                if core_pid in self._discovered_backtraces:
-                    continue
-                if len(self._discovered_backtraces) > self._maximum_number_of_cores_to_publish:
-                    break
-                self._notify_backtrace(core_pid)
-                self._discovered_backtraces.append(core_pid)
-        except NETWORK_EXCEPTIONS as exc:
-            self.log.error(f"Following network error occurred during getting back traces: {str(exc)}")
-
-    @retrying(n=10, sleep_time=20, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying on getting pid of cores")
-    def _get_core_pids(self):
-        result = self.remoter.run('sudo coredumpctl --no-pager --no-legend 2>&1', verbose=False, ignore_status=True)
-        if "No coredumps found" in result.stdout or result.exit_status == 127:  # exit_status 127: coredumpctl command not found
-            return None
-        pids_list = []
-        result = result.stdout + result.stderr
-        # Extracting PIDs from coredumpctl output as such:
-        #     TIME                            PID   UID   GID SIG COREFILE  EXE
-        #     Tue 2020-01-14 16:16:39 +07    3530  1000  1000   3 present   /usr/bin/scylla
-        #     Tue 2020-01-14 16:18:56 +07    6321  1000  1000   3 present   /usr/bin/scylla
-        #     Tue 2020-01-14 16:31:39 +07   18554  1000  1000   3 present   /usr/bin/scylla
-        for line in result.splitlines():
-            if "bash" in line:
-                # Remove bash core which generated by scylla_setup for internal test purpose.
-                # Workaround for https://github.com/scylladb/scylla/issues/6159
-                # TIME                            PID   UID   GID SIG PRESENT EXE
-                # Sun 2020-04-19 12:27:29 UTC   28987     0     0  11 * /usr/bin/bash
-                continue
-
-            columns = re.split(r'[ ]{2,}', line)
-            if len(columns) < 2:
-                continue
-            pid = columns[1]
-            if re.findall(r'[^0-9]', pid):
-                self.log.error("PID pattern matched non-numerical value. Looks like coredumpctl changed it's output")
-                continue
-            pids_list.append(pid)
-        return pids_list
-
-    @raise_event_on_failure
-    def backtrace_thread(self):
-        """
-        Keep reporting new coredumps found, every 30 seconds.
-        """
-
-        while not self.termination_event.isSet():
-            self.termination_event.wait(15)
-            self.get_backtraces()
-
     @raise_event_on_failure
     def db_log_reader_thread(self):
         """
@@ -1055,9 +861,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.log.debug("db_log_reader_thread() stopped by %s", ex.__class__.__name__)
 
     def start_backtrace_thread(self):
-        self._backtrace_thread = threading.Thread(target=self.backtrace_thread, name='BacktraceThread')
-        self._backtrace_thread.daemon = True
-        self._backtrace_thread.start()
+        self._coredump_thread = CoredumpExportThread(self, self._maximum_number_of_cores_to_publish)
+        self._coredump_thread.start()
 
     def start_db_log_reader_thread(self):
         self._db_log_reader_thread = threading.Thread(target=self.db_log_reader_thread, name='LogReaderThread')
@@ -1142,27 +947,53 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if Setup.BACKTRACE_DECODING:
                 self.start_decode_on_monitor_node_thread()
 
+    def get_backtraces(self):
+        if not self._coredump_thread:
+            return
+        self._coredump_thread.process_coredumps()
+
+    @property
+    def n_coredumps(self):
+        if not self._coredump_thread:
+            return 0
+        return self._coredump_thread.n_coredumps
+
     @log_run_info
-    def stop_task_threads(self, timeout=10):
+    def stop_task_threads(self):
         if self.termination_event.isSet():
             return
         self.log.info('Set termination_event')
         self.termination_event.set()
-        if self._spot_monitoring_thread:
-            self._spot_monitoring_thread.join(timeout)
-        if self._backtrace_thread:
-            self._backtrace_thread.join(timeout)
-        if self._db_log_reader_thread:
-            self._db_log_reader_thread.join(timeout)
+        if self._coredump_thread:
+            self._coredump_thread.stop()
         if self._alert_manager:
-            self._alert_manager.stop(timeout)
-        if self._journal_thread:
-            self._journal_thread.stop(timeout)
-        if self._scylla_manager_journal_thread:
-            self.stop_scylla_manager_log_capture(timeout)
+            self._alert_manager.stop()
+
+    @log_run_info
+    def wait_till_tasks_threads_are_stopped(self, timeout: float = 120):
+        await_bucket = []
+        if self._spot_monitoring_thread:
+            await_bucket.append(self._spot_monitoring_thread)
+        if self._db_log_reader_thread:
+            await_bucket.append(self._db_log_reader_thread)
+        if self._alert_manager:
+            await_bucket.append(self._alert_manager)
         if self._decoding_backtraces_thread:
-            self._decoding_backtraces_thread.join(timeout)
-            self._decoding_backtraces_thread = None
+            await_bucket.append(self._decoding_backtraces_thread)
+        end_time = time.perf_counter() + timeout
+        while await_bucket and end_time > time.perf_counter():
+            for thread in await_bucket.copy():
+                if not thread.is_alive():
+                    await_bucket.remove(thread)
+            time.sleep(1)
+
+        if self._coredump_thread:
+            self._coredump_thread.join(20*60)
+        if self._journal_thread:
+            self._journal_thread.stop(timeout // 10)
+        if self._scylla_manager_journal_thread:
+            self.stop_scylla_manager_log_capture(timeout // 10)
+        self._decoding_backtraces_thread = None
         if self._docker_log_process:
             self._docker_log_process.kill()
 
