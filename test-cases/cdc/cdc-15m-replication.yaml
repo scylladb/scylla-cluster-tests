@@ -1,6 +1,6 @@
 test_duration: 60
 
-user_prefix: 'cdc-replication'
+user_prefix: 'cdc-replication-cs'
 db_type: mixed_scylla
 
 use_legacy_cluster_init: false

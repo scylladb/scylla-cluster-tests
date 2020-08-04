@@ -24,6 +24,7 @@ from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
 from sdcm import cluster
 from sdcm.tester import ClusterTester
+from sdcm.gemini_thread import GeminiStressThread
 
 
 def print_file_to_stdout(path: str) -> None:
@@ -74,8 +75,16 @@ class CDCReplicationTest(ClusterTester):
                                                consistency_level=ConsistencyLevel.QUORUM, fetch_size=1000))
             write_cql_result(res, os.path.join(self.logdir, 'replica-table'))
 
+    def test_replication_cs(self) -> None:
+        self.log.info('Using cassandra-stress to generate workload.')
+        self.test_replication(False)
+
+    def test_replication_gemini(self) -> None:
+        self.log.info('Using gemini to generate workload.')
+        self.test_replication(True)
+
     # pylint: disable=too-many-statements,too-many-branches,too-many-locals
-    def test_replication(self) -> None:
+    def test_replication(self, is_gemini_test: bool) -> None:
         self.consistency_ok = False
 
         self.log.info('Waiting for the latest CDC generation to start...')
@@ -83,7 +92,17 @@ class CDCReplicationTest(ClusterTester):
         time.sleep(70)
 
         self.log.info('Starting stressor.')
-        stress_thread = self.run_stress_cassandra_thread(stress_cmd=self.params.get('stress_cmd'))
+        if is_gemini_test:
+            stress_thread = GeminiStressThread(
+                    test_cluster=self.db_cluster,
+                    oracle_cluster=None,
+                    loaders=self.loaders,
+                    gemini_cmd=self.params.get('gemini_cmd'),
+                    timeout=self.get_duration(None),
+                    outputdir=self.loaders.logdir,
+                    params=self.params).run()
+        else:
+            stress_thread = self.run_stress_cassandra_thread(stress_cmd=self.params.get('stress_cmd'))
 
         self.log.info('Let stressor run for a while...')
         # Wait for C-S to create keyspaces/tables/UTs
@@ -175,8 +194,12 @@ class CDCReplicationTest(ClusterTester):
         self.db_cluster.start_nemesis()
 
         self.log.info('Waiting for stressor to finish...')
-        stress_results = stress_thread.get_results()
-        self.log.info('cassandra-stress results: {}'.format(list(stress_results)))
+        if is_gemini_test:
+            stress_results = self.verify_gemini_results(queue=stress_thread)
+            self.log.info('gemini results: {}'.format(stress_results))
+        else:
+            stress_results = stress_thread.get_results()
+            self.log.info('cassandra-stress results: {}'.format(list(stress_results)))
 
         self.log.info('Waiting for replicator to finish (sleeping 60s)...')
         time.sleep(60)
