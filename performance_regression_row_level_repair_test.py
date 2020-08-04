@@ -135,7 +135,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         node = self.db_cluster.nodes[0]
         create_table_query = create_scylla_bench_table_query()
         # pylint: disable=no-member
-        with self.cql_connection_patient(node) as session:
+        with self.db_cluster.cql_connection_patient(node) as session:
             session.execute("""
                     CREATE KEYSPACE IF NOT EXISTS scylla_bench WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3}
             """)

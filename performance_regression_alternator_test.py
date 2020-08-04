@@ -60,7 +60,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
     def create_cql_ks_and_table(self, field_number):
         node = self.db_cluster.nodes[0]
-        with self.cql_connection_patient(node) as session:
+        with self.db_cluster.cql_connection_patient(node) as session:
             session.execute(
                 """create keyspace ycsb WITH REPLICATION = {'class' : 'SimpleStrategy', 'replication_factor': 3 };""")
             fields = ', '.join([f"field{i} varchar" for i in range(field_number)])

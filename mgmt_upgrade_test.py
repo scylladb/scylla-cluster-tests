@@ -14,7 +14,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
     CLUSTER_NAME = "cluster_under_test"
 
     def create_simple_table(self, table_name, keyspace_name="ks1"):
-        with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+        with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
             session.execute(f"""CREATE KEYSPACE IF NOT EXISTS {keyspace_name}
                 WITH replication = {{'class': 'SimpleStrategy', 'replication_factor': '3'}};""")
             session.execute(f"""CREATE table IF NOT EXISTS {keyspace_name}.{table_name} (
@@ -23,7 +23,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
                                 c2 text);""")
 
     def write_multiple_rows(self, table_name, key_range, keyspace_name="ks1"):
-        with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+        with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
             for num in range(*key_range):
                 session.execute(f"insert into {keyspace_name}.{table_name} (key, c1, c2) "
                                 f"VALUES ('k_{num}', 'v_{num}', 'v_{num}');")
@@ -117,7 +117,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
 
         with self.subTest("purging a 2.0 backup"):
             # Dropping one table
-            with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+            with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
                 session.execute("DROP TABLE ks1.cf1 ;")
 
             for i in range(2, 4):

@@ -32,11 +32,6 @@ from invoke.exceptions import UnexpectedExit, Failure
 from cassandra.concurrent import execute_concurrent_with_args  # pylint: disable=no-name-in-module
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
-from cassandra.auth import PlainTextAuthProvider
-from cassandra.cluster import Cluster as ClusterDriver  # pylint: disable=no-name-in-module
-from cassandra.cluster import NoHostAvailable  # pylint: disable=no-name-in-module
-from cassandra.policies import RetryPolicy
-from cassandra.policies import WhiteListRoundRobinPolicy
 
 from sdcm import nemesis, cluster_docker, cluster_baremetal, cluster_k8s, db_stats, wait
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR, Setup, UserRemoteCredentials, set_duration as set_cluster_duration, \
@@ -48,9 +43,9 @@ from sdcm.cluster_aws import CassandraAWSCluster
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
-from sdcm.utils.common import ScyllaCQLSession, get_non_system_ks_cf_list, format_timestamp, \
-    wait_ami_available, tag_ami, update_certificates, download_dir_from_cloud, get_post_behavior_actions, \
-    get_testrun_status, download_encrypt_keys, PageFetcher, rows_to_list, ec2_ami_get_root_device_name
+from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, update_certificates, \
+    download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, PageFetcher, \
+    rows_to_list, ec2_ami_get_root_device_name
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.log import configure_logging, handle_exception
@@ -97,37 +92,6 @@ except ImportError:
 warnings.filterwarnings(action="ignore", message="unclosed",
                         category=ResourceWarning)
 TEST_LOG = logging.getLogger(__name__)
-
-
-class FlakyRetryPolicy(RetryPolicy):
-
-    """
-    A retry policy that retries 5 times
-    """
-
-    def on_read_timeout(self, *args, **kwargs):  # pylint: disable=unused-argument,arguments-differ
-        if kwargs['retry_num'] < 5:
-            TEST_LOG.debug("Retrying read after timeout. Attempt #%s",
-                           str(kwargs['retry_num']))
-            return self.RETRY, None
-        else:
-            return self.RETHROW, None
-
-    def on_write_timeout(self, *args, **kwargs):  # pylint: disable=unused-argument,arguments-differ
-        if kwargs['retry_num'] < 5:
-            TEST_LOG.debug("Retrying write after timeout. Attempt #%s",
-                           str(kwargs['retry_num']))
-            return self.RETRY, None
-        else:
-            return self.RETHROW, None
-
-    def on_unavailable(self, *args, **kwargs):  # pylint: disable=unused-argument,arguments-differ
-        if kwargs['retry_num'] < 5:
-            TEST_LOG.debug("Retrying request after UE. Attempt #%s",
-                           str(kwargs['retry_num']))
-            return self.RETRY, None
-        else:
-            return self.RETHROW, None
 
 
 def teardown_on_exception(method):
@@ -461,7 +425,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             node = self.db_cluster.nodes[0]
             credentials = self.db_cluster.get_db_auth()
             username, password = credentials if credentials else (None, None)
-            with self.cql_connection_patient(node, user=username, password=password) as session:
+            with self.db_cluster.cql_connection_patient(node, user=username, password=password) as session:
                 session.execute("ALTER KEYSPACE system_auth WITH replication = "
                                 "{'class': 'org.apache.cassandra.locator.SimpleStrategy', "
                                 "'replication_factor': %s};" % system_auth_rf)
@@ -473,7 +437,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.params.get('alternator_port', default=None):
             self.log.info("Going to create alternator tables")
             if self.params.get('alternator_enforce_authorization'):
-                with self.cql_connection_patient(node) as session:
+                with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
                     session.execute("""
                         INSERT INTO system_auth.roles (role, salted_hash) VALUES (%s, %s)
                     """, (self.params.get('alternator_access_key_id'),
@@ -1213,7 +1177,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         Returns:
             object -- object with result of remoter.run command
         """
-        ks_cf_list = get_non_system_ks_cf_list(db_node)
+        ks_cf_list = self.db_cluster.get_non_system_ks_cf_list(db_node)
         if ks_cf not in ks_cf_list:
             ks_cf = 'random'
 
@@ -1228,7 +1192,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         cmd_bypass_cache = 'select * from {} bypass cache'
         cmd = random.choice([cmd_select_all, cmd_bypass_cache]).format(ks_cf)
         try:
-            with self.cql_connection_patient(db_node) as session:
+            with self.db_cluster.cql_connection_patient(db_node) as session:
                 self.log.info('Will run command "{}"'.format(cmd))
                 result = session.execute(SimpleStatement(cmd, fetch_size=page_size,
                                                          consistency_level=ConsistencyLevel.ONE))
@@ -1279,107 +1243,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         thread.start()
 
     @staticmethod
-    def get_auth_provider(user, password):
-        return PlainTextAuthProvider(username=user, password=password)
-
-    def _create_session(self, node, keyspace, user, password, compression,  # pylint: disable=too-many-arguments, too-many-locals
-                        protocol_version, load_balancing_policy=None,
-                        port=None, ssl_opts=None, node_ips=None, connect_timeout=None,
-                        verbose=True):
-        if not port:
-            port = node.CQL_PORT
-
-        if protocol_version is None:
-            protocol_version = 3
-
-        authenticator = self.params.get('authenticator')
-        if user is None and password is None and (authenticator and authenticator == 'PasswordAuthenticator'):
-            user = self.params.get('authenticator_user', default='cassandra')
-            password = self.params.get('authenticator_password', default='cassandra')
-
-        if user is not None:
-            auth_provider = self.get_auth_provider(user=user,
-                                                   password=password)
-        else:
-            auth_provider = None
-
-        if ssl_opts is None and self.params.get('client_encrypt', default=None):
-            ssl_opts = {'ca_certs': './data_dir/ssl_conf/client/catest.pem'}
-        self.log.debug(str(ssl_opts))
-        cluster_driver = ClusterDriver(node_ips, auth_provider=auth_provider,
-                                       compression=compression,
-                                       protocol_version=protocol_version,
-                                       load_balancing_policy=load_balancing_policy,
-                                       default_retry_policy=FlakyRetryPolicy(),
-                                       port=port, ssl_options=ssl_opts,
-                                       connect_timeout=connect_timeout)
-        session = cluster_driver.connect()
-
-        # temporarily increase client-side timeout to 1m to determine
-        # if the cluster is simply responding slowly to requests
-        session.default_timeout = 60.0
-
-        if keyspace is not None:
-            session.set_keyspace(keyspace)
-
-        # override driver default consistency level of LOCAL_QUORUM
-        session.default_consistency_level = ConsistencyLevel.ONE
-
-        return ScyllaCQLSession(session, cluster_driver, verbose)
-
-    def cql_connection(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
-                       password=None, compression=True, protocol_version=None,
-                       port=None, ssl_opts=None, connect_timeout=100, verbose=True):
-        node_ips = node.parent_cluster.get_node_external_ips()
-        wlrr = WhiteListRoundRobinPolicy(node_ips)
-        return self._create_session(node, keyspace, user, password,
-                                    compression, protocol_version, wlrr,
-                                    port=port, ssl_opts=ssl_opts, node_ips=node_ips,
-                                    connect_timeout=connect_timeout, verbose=verbose)
-
-    def cql_connection_exclusive(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
-                                 password=None, compression=True,
-                                 protocol_version=None, port=None,
-                                 ssl_opts=None, connect_timeout=100, verbose=True):
-
-        wlrr = WhiteListRoundRobinPolicy([node.external_address])
-        return self._create_session(node, keyspace, user, password,
-                                    compression, protocol_version, wlrr,
-                                    port=port, ssl_opts=ssl_opts, node_ips=[node.external_address],
-                                    connect_timeout=connect_timeout, verbose=verbose)
-
-    @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
-    def cql_connection_patient(self, node, keyspace=None,  # pylint: disable=too-many-arguments
-                               user=None, password=None,
-                               compression=True, protocol_version=None,
-                               port=None, ssl_opts=None, connect_timeout=100, verbose=True):
-        """
-        Returns a connection after it stops throwing NoHostAvailables.
-
-        If the timeout is exceeded, the exception is raised.
-        """
-        # pylint: disable=unused-argument
-        kwargs = locals()
-        del kwargs["self"]
-        return self.cql_connection(**kwargs)
-
-    @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
-    def cql_connection_patient_exclusive(self, node, keyspace=None,  # pylint: disable=invalid-name,too-many-arguments,unused-argument
-                                         user=None, password=None,
-                                         compression=True,
-                                         protocol_version=None,
-                                         port=None, ssl_opts=None, connect_timeout=100, verbose=True):
-        """
-        Returns a connection after it stops throwing NoHostAvailables.
-
-        If the timeout is exceeded, the exception is raised.
-        """
-        # pylint: disable=unused-argument
-        kwargs = locals()
-        del kwargs["self"]
-        return self.cql_connection_exclusive(**kwargs)
-
-    @staticmethod
     def is_keyspace_in_cluster(session, keyspace_name):
         query_result = session.execute("SELECT * FROM system_schema.keyspaces;")
         keyspace_list = [row.keyspace_name.lower() for row in query_result.current_rows]
@@ -1405,7 +1268,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         query = 'CREATE KEYSPACE IF NOT EXISTS %s WITH replication={%s}'
         execution_node, validation_node = self.db_cluster.nodes[0], self.db_cluster.nodes[-1]
-        with self.cql_connection_patient(execution_node) as session:
+        with self.db_cluster.cql_connection_patient(execution_node) as session:
             if isinstance(replication_factor, int):
                 execution_result = session.execute(
                     query % (keyspace_name, "'class':'{}', 'replication_factor':{}".format(
@@ -1424,7 +1287,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if execution_result:
             self.log.debug("keyspace creation result: {}".format(execution_result.response_future))
 
-        with self.cql_connection_patient(validation_node) as session:
+        with self.db_cluster.cql_connection_patient(validation_node) as session:
             does_keyspace_exist = self.wait_validate_keyspace_existence(session, keyspace_name)
         return does_keyspace_exist
 
@@ -1480,7 +1343,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if compact_storage:
             query += ' AND COMPACT STORAGE'
         self.log.debug('CQL query to execute: {}'.format(query))
-        with self.cql_connection_patient(node=self.db_cluster.nodes[0], keyspace=keyspace_name) as session:
+        with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0], keyspace=keyspace_name) as session:
             session.execute(query)
         time.sleep(0.2)
 
@@ -1630,7 +1493,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         """ Create table with same structure as another table or view
             If columns_list is supplied, the table with create with the columns that in the columns_list
         """
-        with self.cql_connection_patient(node) as session:
+        with self.db_cluster.cql_connection_patient(node) as session:
 
             result = rows_to_list(session.execute(create_statement))
             if result:
@@ -1698,7 +1561,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             Structure of the tables has to be same
         """
         self.log.debug('Start copying data')
-        with self.cql_connection_patient(node, verbose=False) as session:
+        with self.db_cluster.cql_connection_patient(node, verbose=False) as session:
             # Copy data from source to the destination table
             statement = "SELECT {columns} FROM {keyspace}.{table}".format(keyspace=src_keyspace,
                                                                           table=src_table,
@@ -2037,7 +1900,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if scylla_encryption_options is None:
             self.log.debug('scylla_encryption_options is not set, skipping to enable encryption at-rest for all test tables')
         else:
-            with self.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+            with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
                 query = "ALTER TABLE {table} WITH scylla_encryption_options = {scylla_encryption_options};".format(
                     table=table, scylla_encryption_options=scylla_encryption_options)
                 self.log.debug('enable encryption at-rest for table {table}, query:\n\t{query}'.format(**locals()))
@@ -2052,7 +1915,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             table, scylla_encryption_options="{'key_provider': 'none'}", upgradesstables=upgradesstables)
 
     def alter_test_tables_encryption(self, scylla_encryption_options=None, upgradesstables=True):
-        for table in get_non_system_ks_cf_list(self.db_cluster.nodes[0], filter_out_mv=True):
+        for table in self.db_cluster.get_non_system_ks_cf_list(self.db_cluster.nodes[0], filter_out_mv=True):
             self.alter_table_encryption(
                 table, scylla_encryption_options=scylla_encryption_options, upgradesstables=upgradesstables)
 
