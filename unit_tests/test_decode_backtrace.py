@@ -61,6 +61,7 @@ class TestDecodeBactraces(unittest.TestCase):
         self.node._read_system_log_and_publish_events()
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()
+        self.monitor_node.wait_till_tasks_threads_are_stopped()
 
         events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
 
@@ -82,6 +83,7 @@ class TestDecodeBactraces(unittest.TestCase):
 
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()
+        self.monitor_node.wait_till_tasks_threads_are_stopped()
 
         events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
 
@@ -106,6 +108,7 @@ class TestDecodeBactraces(unittest.TestCase):
 
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()
+        self.monitor_node.wait_till_tasks_threads_are_stopped()
 
         events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
         events = []
@@ -129,6 +132,7 @@ class TestDecodeBactraces(unittest.TestCase):
 
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()
+        self.monitor_node.wait_till_tasks_threads_are_stopped()
 
         events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
         events = []

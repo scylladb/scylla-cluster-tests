@@ -66,6 +66,7 @@ class PhysicalMachineNode(cluster.BaseNode):
 
     def destroy(self):
         self.stop_task_threads()  # For future implementation of destroy
+        self.wait_till_tasks_threads_are_stopped()
         super().destroy()
 
 

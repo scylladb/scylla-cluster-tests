@@ -1682,8 +1682,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def stop_resources_stop_tasks_threads(self, cluster):  # pylint: disable=no-self-use
         # TODO: this should be run in parallel
         for node in cluster.nodes:
+            node.stop_task_threads()
+        for node in cluster.nodes:
             with silence(parent=self, name=f'stop_resources_stop_tasks_threads(cluster={str(cluster)})'):
-                node.stop_task_threads(timeout=60)
+                node.wait_till_tasks_threads_are_stopped()
 
     @silence()
     def get_backtraces(self, cluster):  # pylint: disable=no-self-use

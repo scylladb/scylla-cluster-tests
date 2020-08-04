@@ -168,6 +168,7 @@ class GCENode(cluster.BaseNode):
 
     def destroy(self):
         self.stop_task_threads()
+        self.wait_till_tasks_threads_are_stopped()
         self._instance_wait_safe(self._safe_destroy)
         super().destroy()
 

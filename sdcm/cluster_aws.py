@@ -647,6 +647,7 @@ class AWSNode(cluster.BaseNode):
 
     def destroy(self):
         self.stop_task_threads()
+        self.wait_till_tasks_threads_are_stopped()
         self._instance.terminate()
         if self.eip_allocation_id:
             self.release_address()

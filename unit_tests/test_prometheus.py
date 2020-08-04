@@ -119,8 +119,8 @@ class PrometheusAlertManagerListenerRealTest(PrometheusAlertManagerListener):
             if time.time() > end_time:
                 raise TimeoutError("post_alerts_and_read_events reached timeout")
 
-    def stop(self, timeout=None):
-        super().stop(timeout)
+    def stop(self):
+        super().stop()
         stop_events_device()
 
 
