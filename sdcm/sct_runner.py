@@ -11,7 +11,7 @@ import boto3
 
 from sdcm.keystore import KeyStore
 from sdcm.remote import RemoteCmdRunnerBase
-from sdcm.utils.common import ec2_instance_wait_public_ip
+from sdcm.utils.common import ec2_instance_wait_public_ip, ec2_ami_get_root_device_name
 from sdcm.utils.get_username import get_username
 from sdcm.utils.prepare_region import AwsRegion
 
@@ -34,6 +34,7 @@ class SctRunner:
     SOURCE_IMAGE_REGION = "eu-west-2"  # where the source Runner image will be created and copied to other regions
     LOGIN_USER = "ubuntu"
     IMAGE_DESCRIPTION = "SCT runner image"
+    INSTANCE_ROOT_DISK_SIZE = 35  # GB
 
     def __init__(self, region_name: str):
         self.region_name = region_name
@@ -152,6 +153,13 @@ class SctRunner:
                 "DeleteOnTermination": True,
             }],
             TagSpecifications=[{"ResourceType": "instance", "Tags": tags_list}],
+            BlockDeviceMappings=[{
+                "DeviceName": ec2_ami_get_root_device_name(image_id=image_id, region=region),
+                "Ebs": {
+                    "VolumeSize": self.INSTANCE_ROOT_DISK_SIZE,
+                    "VolumeType": "gp2"
+                }
+            }]
         )
         instance = result[0]
         LOGGER.info("Instance created. Waiting until it becomes running... ")

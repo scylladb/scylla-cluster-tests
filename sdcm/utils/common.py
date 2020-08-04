@@ -46,6 +46,7 @@ import hashlib
 import boto3
 from mypy_boto3_s3 import S3Client, S3ServiceResource
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
+from botocore.exceptions import ClientError
 import docker  # pylint: disable=wrong-import-order; false warning because of docker import (local file vs. package)
 import libcloud.storage.providers
 import libcloud.storage.types
@@ -1949,3 +1950,13 @@ def ec2_instance_wait_public_ip(instance):
     if instance.public_ip_address is None:
         raise PublicIpNotReady(instance)
     LOGGER.debug(f"[{instance}] Got public ip: {instance.public_ip_address}")
+
+
+def ec2_ami_get_root_device_name(image_id, region):
+    ec2 = boto3.resource('ec2', region)
+    image = ec2.Image(image_id)
+    try:
+        if image.root_device_name:
+            return image.root_device_name
+    except (TypeError, ClientError):
+        raise AssertionError(f"Image '{image_id}' details not found in '{region}'")
