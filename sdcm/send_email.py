@@ -294,6 +294,18 @@ class BaseEmailReporter:
         return False
 
 
+class ManagerUpgradeEmailReporter(BaseEmailReporter):
+    _fields = ("manager_server_repo",
+               "manager_agent_repo",
+               "scylla_version",
+               "scylla_instance_type",
+               "number_of_db_nodes",
+               "node_regions",
+               "target_manager_server_repo",
+               "target_manager_agent_repo")
+    email_template_file = "results_manager_upgrade.html"
+
+
 class MgmtEmailReporter(BaseEmailReporter):
     _fields = ("manager_server_repo",
                "manager_agent_repo",
@@ -439,6 +451,8 @@ def build_reporter(name: str,
         return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Longevity" in name or 'SlaPerUser' in name:
         return LongevityEmailReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "ManagerUpgrade" in name:
+        return ManagerUpgradeEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Upgrade" in name:
         return UpgradeEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Artifacts" in name:
