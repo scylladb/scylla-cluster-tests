@@ -409,26 +409,8 @@ class PrivateRepoEmailReporter(BaseEmailReporter):
     email_template_file = "results_private_repo.html"
 
 
-class TestAbortedEmailReporter(BaseEmailReporter):
-    def send_report(self, results):
-        smtp = Email()
-        report_data = self.build_data_for_report(results)
-        report = self._generate_report(report_data)
-        email = smtp.prepare_email(
-            subject=report_data['subject'],
-            recipients=self.email_recipients,
-            content=report,
-        )
-        # Sending prepared email
-        if email is None:
-            self.log.error("Failed to prepare email", exc_info=True)
-            return
-        self.send_email(email)
-
-    def _generate_report(self, report_data):
-        return """
-        <html><body>Something went wrong during the run.<br>Please check following jenkins job: <a href='{build_url}'>link</a></body></html>
-        """.format(**report_data)
+class TestAbortedEmailReporter(LongevityEmailReporter):
+    email_template_file = "results_aborted.html"
 
 
 class CDCReplicationReporter(LongevityEmailReporter):

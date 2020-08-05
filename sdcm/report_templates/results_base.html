@@ -7,6 +7,7 @@
         .fbold  { font-weight: bold; }
         .red    { color: red; }
         .green  { color: green; }
+        .tan    { color: tan; }
         .lightgreen { color: #90EE90; }
         .orange { color: orange; }
         .black  { color: black; }
@@ -142,11 +143,21 @@
     <h3>Test details</h3>
     <div>
         <ul>
+            {% if test_name %}
             <li>Test: {{ test_name }}</li>
+            {% endif %}
+            {% if test_id %}
             <li>Test-id: {{ test_id }}</li>
+            {% endif %}
+            {% if start_time %}
             <li>Start time: {{ start_time }}</li>
+            {% endif %}
+            {% if end_time %}
             <li>End time: {{ end_time }}</li>
+            {% endif %}
+            {% if username %}
             <li>Started by user: {{ username }}</li>
+            {% endif %}
             {% if scylla_repo %}
             <li>Private repo: {{ scylla_repo }}</li>
             {% endif %}
@@ -179,6 +190,8 @@
         <span class='green'>{{ test_status }}</span>
     {% elif test_status == 'FAILED' %}
         <span class='red'>{{ test_status }}</span>
+    {% elif test_status == 'ABORTED' %}
+        <span class='tan'>{{ test_status }}</span>
     {% else %}
         <span>{{ test_status }}</span>
     {% endif %}
@@ -236,15 +249,17 @@
 {% endblock %}
 
 {% block hydra_commands %}
-    <h3>
-        Hydra commands:
-    </h3>
-    <div>
-        <ul>
-            <li>Restore Monitor Stack command: $ hydra investigate show-monitor {{ test_id }}</li>
-            <li>Show all stored logs command: $ hydra investigate show-logs {{ test_id }}</li>
-        </ul>
-    </div>
+    {% if test_id %}
+        <h3>
+            Hydra commands:
+        </h3>
+        <div>
+            <ul>
+                <li>Restore Monitor Stack command: $ hydra investigate show-monitor {{ test_id }}</li>
+                <li>Show all stored logs command: $ hydra investigate show-logs {{ test_id }}</li>
+            </ul>
+        </div>
+    {% endif %}
 {% endblock %}
 
 {% block links %}
