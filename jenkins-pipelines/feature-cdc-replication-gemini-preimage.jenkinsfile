@@ -8,8 +8,8 @@ cdcReplicationPipeline(
 
     backend: 'aws',
     aws_region: 'eu-west-1',
-    test_name: 'cdc_replication_test.CDCReplicationTest.test_replication_gemini_delta',
-    test_config: 'test-cases/cdc/cdc-15m-replication-gemini.yaml',
+    test_name: 'cdc_replication_test.CDCReplicationTest.test_replication_gemini_preimage',
+    test_config: 'test-cases/cdc/cdc-15m-replication-preimage.yaml',
 
     timeout: [time: 100, unit: 'MINUTES'],
     email_recipients: 'kbraun@scylladb.com,piotr@scylladb.com,alex.bykov@scylladb.com'

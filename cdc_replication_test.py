@@ -17,7 +17,9 @@ import shutil
 import sys
 import os
 import time
+from enum import Enum
 from textwrap import dedent
+from typing import Optional
 
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
@@ -26,6 +28,17 @@ from sdcm import cluster
 from sdcm.tester import ClusterTester
 from sdcm.gemini_thread import GeminiStressThread
 
+class Mode(Enum):
+    DELTA = 1
+    PREIMAGE = 2
+    POSTIMAGE = 3
+
+def mode_str(mode: Mode) -> str:
+    return {
+        Mode.DELTA: 'delta',
+        Mode.PREIMAGE: 'preimage',
+        Mode.POSTIMAGE: 'postimage'
+    }[mode]
 
 def print_file_to_stdout(path: str) -> None:
     with open(path, "r") as file:
@@ -46,7 +59,6 @@ def write_cql_result(res, path: str):
         file.flush()
         os.fsync(file.fileno())
 
-
 SCYLLA_MIGRATE_URL = "https://kbr-scylla.s3-eu-west-1.amazonaws.com/scylla-migrate"
 REPLICATOR_URL = "https://kbr-scylla.s3-eu-west-1.amazonaws.com/scylla-cdc-replicator-0.0.1-SNAPSHOT-jar-with-dependencies.jar"
 
@@ -56,10 +68,11 @@ class CDCReplicationTest(ClusterTester):
     TABLE_NAME = 'table1'
 
     def collect_data_for_analysis(self,
-                                  migrate_log_path: str, replicator_log_path: str,
+                                  migrate_log_path: Optional[str], replicator_log_path: str,
                                   master_node: cluster.BaseNode, replica_node: cluster.BaseNode) -> None:
-        self.log.info('scylla-migrate log:')
-        print_file_to_stdout(migrate_log_path)
+        if migrate_log_path:
+            self.log.info('scylla-migrate log:')
+            print_file_to_stdout(migrate_log_path)
         self.log.info('Replicator log:')
         print_file_to_stdout(replicator_log_path)
 
@@ -77,14 +90,25 @@ class CDCReplicationTest(ClusterTester):
 
     def test_replication_cs(self) -> None:
         self.log.info('Using cassandra-stress to generate workload.')
-        self.test_replication(False)
+        self.test_replication(False, Mode.DELTA)
 
-    def test_replication_gemini(self) -> None:
-        self.log.info('Using gemini to generate workload.')
-        self.test_replication(True)
+    def test_replication_gemini(self, mode: Mode) -> None:
+        self.log.info('Using gemini to generate workload. Mode: {}'.format(mode.name))
+        self.test_replication(True, mode)
+
+    def test_replication_gemini_delta(self) -> None:
+        self.test_replication_gemini(Mode.DELTA)
+
+    def test_replication_gemini_preimage(self) -> None:
+        self.test_replication_gemini(Mode.PREIMAGE)
+
+    def test_replication_gemini_postimage(self) -> None:
+        self.test_replication_gemini(Mode.POSTIMAGE)
 
     # pylint: disable=too-many-statements,too-many-branches,too-many-locals
-    def test_replication(self, is_gemini_test: bool) -> None:
+    def test_replication(self, is_gemini_test: bool, mode: Mode) -> None:
+        assert is_gemini_test or (mode == Mode.DELTA), "cassandra-stress doesn't work with preimage/postimage modes"
+
         self.consistency_ok = False
 
         self.log.info('Waiting for the latest CDC generation to start...')
@@ -164,9 +188,9 @@ class CDCReplicationTest(ClusterTester):
             (cat >runreplicator.sh && chmod +x runreplicator.sh && tmux new-session -d -s 'replicator' ./runreplicator.sh) <<'EOF'
             #!/bin/bash
 
-            java -cp replicator.jar com.scylladb.scylla.cdc.replicator.Main -k {} -t {} -s {} -d {} -cl {} 2>&1 | tee replicatorlog
+            java -cp replicator.jar com.scylladb.scylla.cdc.replicator.Main -k {} -t {} -s {} -d {} -cl {} -m {} 2>&1 | tee replicatorlog
             EOF
-        """.format(self.KS_NAME, self.TABLE_NAME, master_node.external_address, replica_node.external_address, 'one'))
+        """.format(self.KS_NAME, self.TABLE_NAME, master_node.external_address, replica_node.external_address, 'one', mode_str(mode)))
 
         self.log.info('Replicator script:\n{}'.format(replicator_script))
 
@@ -211,23 +235,32 @@ class CDCReplicationTest(ClusterTester):
         replicator_log_path = os.path.join(self.logdir, 'replicator.log')
         loader_node.remoter.receive_files(src='replicatorlog', dst=replicator_log_path)
 
-        self.log.info('Comparing table contents using scylla-migrate...')
-        res = loader_node.remoter.run(cmd='./scylla-migrate check --master-address {} --replica-address {}'
-                                      ' --ignore-schema-difference {}.{} 2>&1 | tee migratelog'.format(
-                                          master_node.external_address, replica_node.external_address,
-                                          self.KS_NAME, self.TABLE_NAME))
+        migrate_log_path = None
+        migrate_ok = True
+        if mode == Mode.PREIMAGE:
+            with open(replicator_log_path) as file:
+                self.consistency_ok = not 'Inconsistency detected.\n' in (line for line in file)
+        else:
+            self.log.info('Comparing table contents using scylla-migrate...')
+            res = loader_node.remoter.run(cmd='./scylla-migrate check --master-address {} --replica-address {}'
+                                          ' --ignore-schema-difference {} {}.{} 2>&1 | tee migratelog'.format(
+                                              master_node.external_address, replica_node.external_address,
+                                              # Timestamps don't have to match in postimage mode
+                                              '--no-writetime' if mode == Mode.POSTIMAGE else '',
+                                              self.KS_NAME, self.TABLE_NAME))
+            migrate_ok = res.ok
 
-        migrate_log_path = os.path.join(self.logdir, 'scylla-migrate.log')
-        loader_node.remoter.receive_files(src='migratelog', dst=migrate_log_path)
-        with open(migrate_log_path) as file:
-            self.consistency_ok = 'Consistency check OK.\n' in (line for line in file)
+            migrate_log_path = os.path.join(self.logdir, 'scylla-migrate.log')
+            loader_node.remoter.receive_files(src='migratelog', dst=migrate_log_path)
+            with open(migrate_log_path) as file:
+                self.consistency_ok = 'Consistency check OK.\n' in (line for line in file)
 
         if not self.consistency_ok:
             self.log.error('Inconsistency detected.')
-        if res.exit_status != 0:
+        if not migrate_ok:
             self.log.error('scylla-migrate command returned status {}'.format(res.exit_status))
 
-        if self.consistency_ok and res.exit_status == 0:
+        if self.consistency_ok and migrate_ok:
             self.log.info('Consistency check successful.')
         else:
             self.collect_data_for_analysis(
