@@ -1582,6 +1582,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self.cluster.extra_network_interface:
             raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
 
+        if not self.target_node.install_traffic_control():
+            raise UnsupportedNemesis("Traffic control package not installed on system")
+
         rate_limit: Optional[str] = self.get_rate_limit_for_network_disruption()
         if not rate_limit:
             self.log.warn("NetworkRandomInterruption won't limit network bandwith due to lack of monitoring nodes.")
@@ -1622,6 +1625,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('BlockNetwork')
         if not self.cluster.extra_network_interface:
             raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
+
+        if not self.target_node.install_traffic_control():
+            raise UnsupportedNemesis("Traffic control package not installed on system")
 
         selected_option = "--loss 100%"
         list_of_timeout_options = [10, 60, 120, 300, 500]

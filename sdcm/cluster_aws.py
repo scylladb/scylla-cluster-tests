@@ -693,6 +693,13 @@ class AWSNode(cluster.BaseNode):
             tc_command = LOCAL_CMD_RUNNER.run("tcset eth1 {} --tc-command".format(tcconfig_params)).stdout
             self.remoter.run('sudo bash -cxe "%s"' % tc_command)
 
+    def install_traffic_control(self):
+        if self.distro.is_amazon2:
+            self.log.debug("Installing iproute-tc package for AMAZON2")
+            self.remoter.run("sudo yum install -y iproute-tc", ignore_status=True)
+
+        return self.remoter.run("/sbin/tc -h", ignore_status=True).ok
+
     @property
     def image(self):
         return self._instance.image_id
