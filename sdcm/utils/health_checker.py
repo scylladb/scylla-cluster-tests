@@ -46,6 +46,10 @@ def check_nulls_in_peers(gossip_info, peers_details, current_node):
             f"node {ip}{is_target} with status {gossip_info[ip]['status']} : " \
             f"{peers_details[ip]}"
 
+        # By Asias request: https://github.com/scylladb/scylla/issues/6397#issuecomment-666893877
+        LOGGER.debug(f'Print all columns from system.peers for peer {ip}')
+        current_node.run_cqlsh(f"select * from system.peers where peer = '{ip}'", split=True, verbose=True)
+
         if ip in gossip_info and gossip_info[ip]['status'] not in current_node.GOSSIP_STATUSES_FILTER_OUT:
             ClusterHealthValidatorEvent(type='error', name='NodePeersNulls', status=Severity.ERROR,
                                         node=current_node.name,
