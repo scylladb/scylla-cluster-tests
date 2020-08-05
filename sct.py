@@ -29,6 +29,7 @@ from sdcm.utils.monitorstack import (restore_monitoring_stack, get_monitoring_st
 from sdcm.cluster import Setup
 from sdcm.utils.log import setup_stdout_logger
 from sdcm.utils.prepare_region import AwsRegion
+from sdcm.utils.get_username import get_username
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
 
 LOGGER = setup_stdout_logger()
@@ -604,9 +605,12 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 @click.option('--test-id', help='Test-id of run')
 @click.option('--test-status', help='Override test status FAILED|ABORTED')
 @click.option('--start-time', help='Override test start time')
+@click.option('--started-by', help='Default user that started the test')
 @click.option('--email-recipients', help="Send email to next recipients")
 @click.option('--logdir', help='Directory where to find testrun folder')
-def send_email(test_id=None, test_status=None, start_time=None, email_recipients=None, logdir=None):
+def send_email(test_id=None, test_status=None, start_time=None, started_by=None, email_recipients=None, logdir=None):
+    if started_by is None:
+        started_by = get_username()
     add_file_logger()
 
     from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter
@@ -624,6 +628,8 @@ def send_email(test_id=None, test_status=None, start_time=None, email_recipients
         start_time = format_timestamp(int(start_time))
     testrun_dir = get_testrun_dir(test_id=test_id, base_dir=logdir)
     if testrun_dir:
+        with open(os.path.join(testrun_dir, 'test_id'), 'r') as file:
+            test_id = file.read().strip()
         email_results_file = os.path.join(testrun_dir, "email_data.json")
         test_results = read_email_data_from_file(email_results_file)
     else:
@@ -631,16 +637,30 @@ def send_email(test_id=None, test_status=None, start_time=None, email_recipients
 
     if test_results:
         reporter = test_results.get("reporter", "")
-        test_results['nodes'] = get_running_instances_for_email_report(test_results['test_id'])
+        test_results['nodes'] = get_running_instances_for_email_report(test_id)
     else:
         LOGGER.warning("Failed to read test results for %s", test_id)
         reporter = "TestAborted"
         if not test_status:
-            test_status = 'FAILED'
+            test_status = 'ABORTED'
         test_results = {
             "build_url": os.environ.get("BUILD_URL"),
             "subject": f"{test_status}: {os.environ.get('JOB_NAME')}: {start_time}",
+            "start_time": start_time,
+            "end_time": format_timestamp(time.time()),
+            "grafana_screenshots": "",
+            "grafana_snapshots": "",
+            "nodes": "",
+            "test_id": "",
+            "username": ""
         }
+        if started_by:
+            test_results["username"] = started_by
+        if test_id:
+            test_results.update({
+                "test_id": test_id,
+                "nodes": get_running_instances_for_email_report(test_id)
+            })
     email_recipients = email_recipients.split(',')
     reporter = build_reporter(reporter, email_recipients, testrun_dir)
     if not reporter:
