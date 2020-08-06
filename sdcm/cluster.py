@@ -349,6 +349,7 @@ class UserRemoteCredentials():
 class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     CQL_PORT = 9042
     MANAGER_AGENT_PORT = 10001
+    MANAGER_SERVER_PORT = 56080
 
     log = LOGGER
 
@@ -1358,10 +1359,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         except Exception as details:  # pylint: disable=broad-except
             self.log.error('Failed to report housekeeping uuid. Error details: %s', details)
 
-    def manager_agent_up(self):
-        if self.is_port_used(port=self.MANAGER_AGENT_PORT, service_name="scylla-manager-agent"):
-            # When the agent is IP, it should answer an http request of https://NODE_IP:10001/ping with status code 204
-            response = requests.get(f"https://{self.ip_address}:10001/ping", verify=False)
+    def is_manager_agent_up(self, port=None):
+        port = port if port else self.MANAGER_AGENT_PORT
+        if self.is_port_used(port=port, service_name="scylla-manager-agent"):
+            # When the agent is IP, it should answer an https request of https://NODE_IP:10001/ping with status code 204
+            response = requests.get(f"https://{self.ip_address}:{port}/ping", verify=False)
             return response.status_code == 204
         return False
 
@@ -1369,9 +1371,28 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         text = None
         if verbose:
             text = '%s: Waiting for manager agent to be up' % self
-        wait.wait_for(func=self.manager_agent_up, step=10, text=text, timeout=timeout, throw_exc=True)
+        wait.wait_for(func=self.is_manager_agent_up, step=10, text=text, timeout=timeout, throw_exc=True)
+
+    def is_manager_server_up(self, port=None):
+        port = port if port else self.MANAGER_SERVER_PORT
+        if self.is_port_used(port=port, service_name="scylla-manager"):
+            # When the manager has started,
+            # it should answer an http request of https://127.0.0.1:56080/ping with status code 204
+            curl_output = self.remoter.run(
+                f'''curl --write-out "%{{http_code}}\n" --silent --output /dev/null "http://127.0.0.1:{port}/ping"''',
+                ignore_status=True)
+            http_status_code = int(curl_output.stdout.strip())
+            return http_status_code == 204
+        return False
+
+    def wait_manager_server_up(self, verbose=True, timeout=300):
+        text = None
+        if verbose:
+            text = '%s: Waiting for manager server to be up' % self
+        wait.wait_for(func=self.is_manager_server_up, step=10, text=text, timeout=timeout, throw_exc=True)
 
     # Configuration node-exporter.service when use IPv6
+
     def set_web_listen_address(self):
         node_exporter_file = '/usr/lib/systemd/system/node-exporter.service'
         find_web_param = self.remoter.run('grep "web.listen-address" %s' % node_exporter_file,
@@ -4464,16 +4485,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             node.install_mgmt(scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'), auth_token=auth_token,
                               segments_per_repair=self.params.get('mgmt_segments_per_repair'),
                               package_url=package_path)
-            wait.wait_for(func=self.is_manager_up, step=20, text='Waiting until the manager client is up',
-                          timeout=300, throw_exc=True)
-
-    def is_manager_up(self):
-        manager_tool = get_scylla_manager_tool(manager_node=self.nodes[0])  # pylint: disable=no-member
-        try:
-            LOGGER.debug(manager_tool.version)
-            return True
-        except ScyllaManagerError:
-            return False
+            self.nodes[0].wait_manager_server_up()
 
     def configure_ngrok(self):
         port = self.local_metrics_addr.split(':')[1]
