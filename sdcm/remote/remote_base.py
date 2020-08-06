@@ -284,7 +284,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         files_sent = True
         if self.use_rsync():
             try:
-                local_sources = [quote(path) for path in src]
+                local_sources = [quote(os.path.expanduser(path)) for path in src]
                 rsync = self._make_rsync_cmd(local_sources, remote_dest,
                                              delete_dst, preserve_symlinks)
                 LocalCmdRunner().run(rsync)
@@ -481,7 +481,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             set_file_privs(dest)
 
     def _make_rsync_cmd(  # pylint: disable=too-many-arguments
-            self, src: str, dst: str, delete_dst: bool, preserve_symlinks: bool, timeout: int = 300) -> str:
+            self, src: list, dst: str, delete_dst: bool, preserve_symlinks: bool, timeout: int = 300) -> str:
         """
         Given a list of source paths and a destination path, produces the
         appropriate rsync command for copying them. Remote paths must be
