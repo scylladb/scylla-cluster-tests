@@ -327,6 +327,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return result
 
     @property
+    def reliable_replication_factor(self) -> int:
+        """
+        Calculates reliable replication factor for tables to have for a test.
+        Needed in a case when you want to create a table to run queries on it,
+          but don't know what is the replication factor to set to make sure that
+          queries won't fail due to the lack of nodes in the cluster.
+        :return:
+        """
+        n_db_nodes = str(self.params.get('n_db_nodes'))
+        return min([int(nodes_num) for nodes_num in n_db_nodes.split() if int(nodes_num) > 0])
+
+    @property
     def test_id(self):
         return Setup.test_id()
 
