@@ -763,6 +763,29 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # do the actual truncation
         self.target_node.run_cqlsh(cmd='TRUNCATE {}.{}'.format(keyspace_truncate, table), timeout=120)
 
+    def disrupt_truncate_large_partition(self):
+        """
+        Introduced a new truncate nemesis, it truncates a large-partition table,
+        it's used to cover one improvement of compaction.
+        The increase frequency of checking abortion is very useful for truncate.
+        """
+        self._set_current_disruption('TruncateMonkeyLargePartition {}'.format(self.target_node))
+
+        ks_name = 'ks_truncate_large_partition'
+        table = 'test_table'
+        stress_cmd = "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=10 " + \
+                     "-clustering-row-count=5555 -clustering-row-size=uniform:10..20 -concurrency=10 " + \
+                     "-connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=60s " + \
+                     f"-keyspace {ks_name} -table {table}"
+        bench_thread = self.tester.run_stress_thread(
+            stress_cmd=stress_cmd, stop_test_on_failure=False)
+        self.tester.verify_stress_thread(bench_thread)
+
+        # In order to workaround issue #4924 when truncate timeouts, we try to flush before truncate.
+        self.target_node.run_nodetool("flush")
+        # do the actual truncation
+        self.target_node.run_cqlsh(cmd='TRUNCATE {}.{}'.format(ks_name, table), timeout=120)
+
     def _modify_table_property(self, name, val, filter_out_table_with_counter=False, modify_all_tables=False):
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
         self._set_current_disruption('ModifyTableProperties%s %s' % (disruption_name, self.target_node))
@@ -2390,6 +2413,14 @@ class TruncateMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_truncate()
+
+
+class TruncateLargeParititionMonkey(Nemesis):
+    disruptive = False
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_truncate_large_partition()
 
 
 class DeleteByPartitionsMonkey(Nemesis):
