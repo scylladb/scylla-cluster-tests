@@ -570,6 +570,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('Refresh keyspace1.standard1 on {}'.format(self.target_node.name))
 
         # Checking the columns number of keyspace1.standard1
+        self.log.debug('Prepare keyspace1.standard1 if it does not exist')
+        self._prepare_test_table(ks='keyspace1', table='standard1')
         query_cmd = "SELECT * FROM keyspace1.standard1 LIMIT 1"
         result = self.target_node.run_cqlsh(query_cmd)
         col_num = len(re.findall(r"(\| C\d+)", result.stdout))
@@ -611,8 +613,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             #       expect that refresh will fail (no serious db error).
             raise UnsupportedNemesis("Schema doesn't match the snapshot, not uploading")
 
-        self.log.debug('Prepare keyspace1.standard1 if it does not exist')
-        self._prepare_test_table(ks='keyspace1', table='standard1')
         result = self.target_node.run_nodetool(sub_cmd="cfstats", args="keyspace1.standard1")
 
         def do_refresh(node):
