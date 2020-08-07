@@ -677,8 +677,8 @@ class UpgradeTest(FillDatabaseData):
         schema_load_error_num = 0
         for node in self.db_cluster.nodes:
             errors = node.search_database_log(search_pattern=search_pattern,
-                                            start_from_beginning=True,
-                                            publish_events=False)
+                                              start_from_beginning=True,
+                                              publish_events=False)
             schema_load_error_num += len(errors)
             if search_for_idx_token_error:
                 self.search_for_idx_token_error_after_upgrade(node=node, step=step)

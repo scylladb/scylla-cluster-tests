@@ -1557,7 +1557,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                       f'Rows expected to be inserted: {len(source_table_rows)}; '
                                       f'Actually inserted rows: {succeeded_rows}.')
                     return False
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-except
                 self.log.warning(f'Problem during copying data: {exc}')
                 return False
 

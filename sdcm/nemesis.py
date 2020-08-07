@@ -524,13 +524,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('MajorCompaction %s' % self.target_node)
         self.target_node.run_nodetool("compact")
 
-    def disrupt_nodetool_refresh(self, big_sstable=True, skip_download=False):
+    def disrupt_nodetool_refresh(self, big_sstable=True, skip_download=False):  # pylint: disable=too-many-statements
         self._set_current_disruption('Refresh keyspace1.standard1 on {}'.format(self.target_node.name))
 
         # Checking the columns number of keyspace1.standard1
         query_cmd = "SELECT * FROM keyspace1.standard1 LIMIT 1"
         result = self.target_node.run_cqlsh(query_cmd)
-        col_num = len(re.findall("(\| C\d+)", result.stdout))
+        col_num = len(re.findall(r"(\| C\d+)", result.stdout))
 
         if col_num == 1:
             # Use special schema (one column) for refresh before https://github.com/scylladb/scylla/issues/6617 is fixed
