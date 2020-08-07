@@ -761,7 +761,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         test_keyspaces = self.cluster.get_test_keyspaces()
         # if keyspace or table doesn't exist, create it by cassandra-stress
         if ks not in test_keyspaces or not table_exist:
-            stress_cmd = "cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 -schema 'replication(factor=3)' -log interval=5"
+            stress_cmd = "cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 " \
+                         f"-schema 'replication(factor={self.tester.reliable_replication_factor})' -log interval=5"
             cs_thread = self.tester.run_stress_thread(
                 stress_cmd=stress_cmd, keyspace_name=ks, stop_test_on_failure=False)
             cs_thread.verify_results()
