@@ -59,6 +59,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         if auth_sleep_time is not None:
             self.auth_sleep_time = auth_sleep_time
         self.known_hosts_file = tempfile.mkstemp()[1]
+        self._context_generation = 0
         super().__init__(hostname=hostname, user=user, password=password)
 
     @property
@@ -114,6 +115,12 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
     @abstractmethod
     def _create_connection(self):
         pass
+
+    def _bind_generation_to_connection(self, connection: object):
+        setattr(connection, '_context_generation', self._context_generation)
+
+    def _is_connection_generation_ok(self, connection: object):
+        return getattr(connection, '_context_generation', self._context_generation) == self._context_generation
 
     def stop(self):
         self._close_connection()
@@ -519,6 +526,10 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             with self._create_connection() as connection:
                 result = connection.run(**command_kwargs)
         else:
+            if not self._is_connection_generation_ok(self.connection):
+                self.connection.close()
+                self.connection.open()
+                self._bind_generation_to_connection(self.connection)
             result = self.connection.run(**command_kwargs)
         result.duration = time.perf_counter() - start_time
         result.exit_status = result.exited
@@ -541,7 +552,23 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
     def run(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
             ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
-            log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None) -> Result:
+            log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None,
+            change_context: bool = False) -> Result:
+        """
+        Run command at the remote endpoint and return result
+        :param cmd: Command to execute
+        :param timeout: Seconds to complete the command
+        :param ignore_status: If False exception will be raised if command return non-zero code
+        :param verbose: If True start and end of the command will be logged
+        :param new_session: If True a new session will be generated to run the command
+        :param log_file: Path to the log file
+        :param retry: number of run retries if command fails
+        :param watchers: List of watchers
+        :param change_context: If True, next run will trigger reconnect on all threads.
+          Needed for cases when environment context is changed by the command,
+          for example group has been added to the user.
+        :return:
+        """
 
         watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
 
@@ -559,4 +586,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
 
         result = _run()
         self._print_command_results(result, verbose, ignore_status)
+        if change_context and result.ok:
+            # Will trigger reconnect on next run for any connection that belongs to the remoter
+            self._context_generation += 1
         return result
