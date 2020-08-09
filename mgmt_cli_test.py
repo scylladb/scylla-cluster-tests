@@ -19,6 +19,7 @@ from random import randint
 from invoke import exceptions
 
 from sdcm import mgmt
+from sdcm.group_common_events import ignore_no_space_errors
 from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus, TaskStatus, ScyllaManagerError, ScyllaManagerTool
 from sdcm.nemesis import MgmtRepair, DbEventsFilter
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
@@ -495,10 +496,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
         self.generate_load_and_wait_for_results()
         has_enospc_been_reached = False
-        with DbEventsFilter(type='NO_SPACE_ERROR', node=target_node),\
-                DbEventsFilter(type='BACKTRACE', line='No space left on device', node=target_node), \
-                DbEventsFilter(type='DATABASE_ERROR', line='No space left on device', node=target_node), \
-                DbEventsFilter(type='FILESYSTEM_ERROR', line='No space left on device', node=target_node):
+        with ignore_no_space_errors(node=target_node):
             try:
                 backup_task = mgr_cluster.create_backup_task(location_list=location_list)
                 backup_task.wait_for_uploading_stage()

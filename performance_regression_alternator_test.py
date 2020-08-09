@@ -14,8 +14,8 @@
 import contextlib
 
 from performance_regression_test import PerformanceRegressionTest
+from sdcm.group_common_events import ignore_operation_errors, ignore_alternator_client_errors
 from sdcm.utils import alternator
-from sdcm.sct_events import Severity, EventsSeverityChangerFilter, DatabaseLogEvent
 
 
 class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
@@ -24,11 +24,8 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
 
         # suppress YCSB client error and timeout to warnings for all the test in this class
         self.stack = contextlib.ExitStack()
-        self.stack.enter_context(alternator.api.ignore_alternator_client_errors())
-        self.stack.enter_context(EventsSeverityChangerFilter(event_class=DatabaseLogEvent, regex=r".*Operation timed out.*",
-                                                             severity=Severity.WARNING, extra_time_to_expiration=30))
-        self.stack.enter_context(EventsSeverityChangerFilter(event_class=DatabaseLogEvent, regex=r'.*Operation failed for system.paxos.*',
-                                                             severity=Severity.WARNING, extra_time_to_expiration=30))
+        self.stack.enter_context(ignore_alternator_client_errors())
+        self.stack.enter_context(ignore_operation_errors())
 
     def _workload(self, stress_cmd, stress_num, test_name=None, sub_type=None, keyspace_num=1, prefix='', debug_message='',  # pylint: disable=too-many-arguments,arguments-differ
                   save_stats=True, is_alternator=True):

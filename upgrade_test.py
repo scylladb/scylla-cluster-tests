@@ -23,8 +23,9 @@ from pkg_resources import parse_version
 
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm import wait
+from sdcm.group_common_events import ignore_upgrade_schema_errors
 from sdcm.utils.version_utils import is_enterprise
-from sdcm.sct_events import DbEventsFilter, IndexSpecialColumnErrorEvent
+from sdcm.sct_events import IndexSpecialColumnErrorEvent
 
 
 def truncate_entries(func):
@@ -440,7 +441,6 @@ class UpgradeTest(FillDatabaseData):
         we want to use this case to verify the read (cl=ALL) workload works
         well, upgrade all nodes to new version in the end.
         """
-
         # In case the target version >= 3.1 we need to perform test for truncate entries
         target_upgrade_version = self.params.get('target_upgrade_version', default='')
         self.truncate_entries_flag = False
@@ -490,10 +490,7 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
         time.sleep(60)
 
-        with DbEventsFilter(type='DATABASE_ERROR', line='Failed to load schema'), \
-                DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
-                DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'), \
-                DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'):
+        with ignore_upgrade_schema_errors():
 
             step = 'Step1 - Upgrade First Node '
             self.log.info(step)
@@ -562,10 +559,7 @@ class UpgradeTest(FillDatabaseData):
         self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                       step=step)
 
-        with DbEventsFilter(type='DATABASE_ERROR', line='Failed to load schema'), \
-                DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
-                DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'), \
-                DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'):
+        with ignore_upgrade_schema_errors():
 
             step = 'Step5 - Upgrade rest of the Nodes '
             self.log.info(step)

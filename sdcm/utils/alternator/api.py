@@ -1,6 +1,5 @@
 import logging
 from concurrent.futures.thread import ThreadPoolExecutor
-from contextlib import contextmanager, ExitStack
 from itertools import chain
 from typing import NamedTuple
 
@@ -8,7 +7,6 @@ import boto3
 from mypy_boto3_dynamodb import DynamoDBClient, DynamoDBServiceResource
 from mypy_boto3_dynamodb.service_resource import Table
 
-from sdcm.sct_events import EventsSeverityChangerFilter, YcsbStressEvent, PrometheusAlertManagerEvent, Severity
 from sdcm.utils.alternator import schemas, enums, consts
 from sdcm.utils.common import normalize_ipv6_url
 
@@ -145,29 +143,3 @@ class Alternator:
             LOGGER.info(f"The '{table_name}' table successfully removed")
         else:
             LOGGER.info(f"Send request to removed '{table_name}' table")
-
-
-@contextmanager
-def ignore_alternator_client_errors():
-    """
-    Suppress errors and alerts related to alternator YCSB client errors
-
-    Ref: https://github.com/scylladb/scylla/issues/5802, since we don't control which client connected to each
-    node (using DNS now), e might have client connect to a non working node in some cases (like when internal
-    port 7000 is disconnected, which make this not to not be able to do LWT ops)
-
-    :return: context manager of all those filter
-    """
-    with ExitStack() as stack:
-        stack.enter_context(EventsSeverityChangerFilter(
-            event_class=PrometheusAlertManagerEvent, regex=".*YCSBTooManyErrors.*", severity=Severity.WARNING,
-            extra_time_to_expiration=60))
-        stack.enter_context(EventsSeverityChangerFilter(
-            event_class=PrometheusAlertManagerEvent, regex=".*YCSBTooManyVerifyErrors.*", severity=Severity.WARNING,
-            extra_time_to_expiration=60))
-        stack.enter_context(EventsSeverityChangerFilter(
-            event_class=YcsbStressEvent, regex=r".*Cannot achieve consistency level.*", severity=Severity.WARNING,
-            extra_time_to_expiration=30))
-        stack.enter_context(EventsSeverityChangerFilter(
-            event_class=YcsbStressEvent, regex=r".*Operation timed out.*", severity=Severity.WARNING,
-            extra_time_to_expiration=30))

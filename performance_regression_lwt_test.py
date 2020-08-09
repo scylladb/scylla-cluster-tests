@@ -2,8 +2,8 @@ import pprint
 
 from invoke.exceptions import UnexpectedExit, Failure
 from performance_regression_test import PerformanceRegressionTest
+from sdcm.group_common_events import ignore_operation_errors
 from sdcm.utils.decorators import log_run_info, retrying
-from sdcm.sct_events import apply_log_filters, EVENT_FILTER_TIMEOUT
 
 PP = pprint.PrettyPrinter(indent=2)
 
@@ -108,7 +108,7 @@ class PerformanceRegressionLWTTest(PerformanceRegressionTest):
         return self._test_id
 
     def test_latency(self):
-        with apply_log_filters(*EVENT_FILTER_TIMEOUT()):
+        with ignore_operation_errors():
             self.preload_data()
             self.run_compaction_on_all_nodes()
             for subtest in self.lwt_subtests:
@@ -119,7 +119,7 @@ class PerformanceRegressionLWTTest(PerformanceRegressionTest):
             )
 
     def test_throughput(self):
-        with apply_log_filters(*EVENT_FILTER_TIMEOUT()):
+        with ignore_operation_errors():
             self.preload_data()
             self.run_compaction_on_all_nodes()
             for subtest in self.lwt_subtests:
