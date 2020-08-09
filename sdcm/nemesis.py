@@ -35,8 +35,8 @@ from cassandra import ConsistencyLevel  # pylint: disable=ungrouped-imports
 
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed
+from sdcm.group_common_events import ignore_alternator_client_errors, ignore_no_space_errors
 from sdcm.mgmt import TaskStatus
-from sdcm.utils.alternator.api import ignore_alternator_client_errors
 from sdcm.utils.common import remote_get_file, get_non_system_ks_cf_list, get_db_tables, generate_random_string, \
     update_certificates, reach_enospc_on_node, clean_enospc_on_node
 from sdcm.utils.decorators import retrying
@@ -671,10 +671,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('Enospc test on {}'.format([n.name for n in nodes]))
 
         for node in nodes:
-            with DbEventsFilter(type='NO_SPACE_ERROR', node=node), \
-                    DbEventsFilter(type='BACKTRACE', line='No space left on device', node=node), \
-                    DbEventsFilter(type='DATABASE_ERROR', line='No space left on device', node=node), \
-                    DbEventsFilter(type='FILESYSTEM_ERROR', line='No space left on device', node=node):
+            with ignore_no_space_errors(node=node):
 
                 result = node.remoter.run('cat /proc/mounts')
                 if '/var/lib/scylla' not in result.stdout:

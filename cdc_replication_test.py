@@ -94,13 +94,13 @@ class CDCReplicationTest(ClusterTester):
         self.log.info('Starting stressor.')
         if is_gemini_test:
             stress_thread = GeminiStressThread(
-                    test_cluster=self.db_cluster,
-                    oracle_cluster=None,
-                    loaders=self.loaders,
-                    gemini_cmd=self.params.get('gemini_cmd'),
-                    timeout=self.get_duration(None),
-                    outputdir=self.loaders.logdir,
-                    params=self.params).run()
+                test_cluster=self.db_cluster,
+                oracle_cluster=None,
+                loaders=self.loaders,
+                gemini_cmd=self.params.get('gemini_cmd'),
+                timeout=self.get_duration(None),
+                outputdir=self.loaders.logdir,
+                params=self.params).run()
         else:
             stress_thread = self.run_stress_cassandra_thread(stress_cmd=self.params.get('stress_cmd'))
 

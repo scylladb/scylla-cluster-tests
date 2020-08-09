@@ -1031,15 +1031,6 @@ def apply_log_filters(*event_filters_list: List[BaseFilter]):
         yield
 
 
-def EVENT_FILTER_TIMEOUT():  # pylint: disable=invalid-name
-    return [
-        EventsSeverityChangerFilter(event_class=DatabaseLogEvent, regex=r".*Operation timed out.*",
-                                    severity=Severity.WARNING, extra_time_to_expiration=30),
-        EventsSeverityChangerFilter(event_class=DatabaseLogEvent, regex=r'.*Operation failed for system.paxos.*',
-                                    severity=Severity.WARNING, extra_time_to_expiration=30)
-    ]
-
-
 atexit.register(stop_events_device)
 
 
