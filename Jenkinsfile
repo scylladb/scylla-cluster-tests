@@ -118,10 +118,8 @@ pipeline {
             steps {
                 script {
                     try {
-                        sh './docker/env/hydra.sh bash -c "cd \"`pwd`\"; pre-commit run -a"'
+                        sh './docker/env/hydra.sh pre-commit'
                         // also check the commit-messge for the rules we want
-                        sh 'git show -s --format=%B  > commit-msg'
-                        sh './docker/env/hydra.sh bash -c "cd \"`pwd`\"; pre-commit run --hook-stage commit-msg --commit-msg-filename commit-msg"'
                         pullRequestSetResult('success', 'jenkins/precommit', 'Precommit passed')
                     } catch(Exception ex) {
                         pullRequestSetResult('failure', 'jenkins/precommit', 'Precommit failed')

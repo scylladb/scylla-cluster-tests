@@ -506,6 +506,18 @@ def unit_tests(test):
     sys.exit(pytest.main(['-v', '-p', 'no:warnings', 'unit_tests/{}'.format(test)]))
 
 
+@cli.command('pre-commit', help="Run pre-commit checkers")
+def pre_commit():
+    result = 0
+    result += os.system(
+        'bash -c "git show -s --format=%B > /tmp/commit-msg; '
+        'pre-commit run --hook-stage commit-msg --commit-msg-filename /tmp/commit-msg"'
+    )
+    result += os.system('pre-commit run -a')
+    result = 1 if result else 0
+    sys.exit(result)
+
+
 class OutputLogger():
     def __init__(self, filename, terminal):
         self.terminal = terminal
