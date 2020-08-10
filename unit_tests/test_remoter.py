@@ -43,7 +43,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
         except Exception as exc:  # pylint: disable=broad-except
             result = exc
         paramiko_thread_results.append(result)
-        remoter.reconnect()
+        remoter._reconnect()
         try:
             result = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
@@ -58,7 +58,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
         except Exception as exc:  # pylint: disable=broad-except
             result = exc
         paramiko_thread_results.append(result)
-        remoter.reconnect()
+        remoter._reconnect()
         try:
             result = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
@@ -138,7 +138,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
             paramiko_result = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
             paramiko_result = exc
-        remoter.reconnect()
+        remoter._reconnect()
         try:
             paramiko_result2 = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
@@ -151,7 +151,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
             lib2ssh_result = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
             lib2ssh_result = exc
-        remoter.reconnect()
+        remoter._reconnect()
         try:
             lib2ssh_result2 = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
