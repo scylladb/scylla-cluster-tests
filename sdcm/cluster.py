@@ -3877,8 +3877,7 @@ class BaseLoaderSet():
         """)
         node.remoter.run('sudo bash -cxe "%s"' % docker_install)
 
-        node.remoter.run('sudo usermod -aG docker $USER')
-        node.remoter.reconnect()
+        node.remoter.run('sudo usermod -aG docker $USER', change_context=True)
 
     @wait_for_init_wrap
     def wait_for_init(self, verbose=False, db_node_address=None):
@@ -4367,12 +4366,11 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             raise ValueError('Unsupported Distribution type: {}'.format(str(node.distro)))
 
         node.remoter.run(cmd="sudo bash -ce '%s'" % prereqs_script)
-        node.remoter.run("sudo usermod -aG docker $USER")
+        node.remoter.run("sudo usermod -aG docker $USER", change_context=True)
         if node.is_debian9():
             node.reboot(hard=False)
         else:
-            node.remoter.reconnect()
-        node.remoter.run(cmd='sudo systemctl restart docker', timeout=60)
+            node.remoter.run(cmd='sudo systemctl restart docker', timeout=60)
 
     def download_scylla_monitoring(self, node):
         install_script = dedent("""
