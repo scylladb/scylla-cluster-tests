@@ -136,10 +136,11 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         self.stop()
 
     @retrying(n=5, sleep_time=1, allowed_exceptions=(Exception,), message="Reconnecting")
-    def reconnect(self):
+    def _reconnect(self):
         """
-            Use with caution!!! This method forcefully disconnects the SSH session so the commands may stay
-            running on the remote
+            Close and reopen connection to the remote endpoint.
+            It is done only for connection specific for given thread.
+            Connections for other threads are not affected.
         """
         self.log.debug("Reconnecting to '%s'", self.hostname)
         self._close_connection()

@@ -189,7 +189,7 @@ class GceMinikubeCluster(MinikubeCluster, cluster_gce.GCECluster):
     @cluster.wait_for_init_wrap
     def wait_for_init(self):
         for node in self.nodes:
-            node.remoter.reconnect()  # Reconnect to update user groups in main thread too.
+            node.remoter._reconnect()  # Reconnect to update user groups in main thread too.
 
     def get_node_ips_param(self, public_ip=True):
         raise NotImplementedError("Not implemented yet.")  # TODO: add implementation of this method
