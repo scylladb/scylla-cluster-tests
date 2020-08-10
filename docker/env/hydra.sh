@@ -102,8 +102,8 @@ function run_in_docker () {
 }
 
 
-subcommand="$1"
-if [[ ${subcommand} == "--execute-on-runner" ]]; then
+subcommand="$*"
+if [[ "$1" == "--execute-on-runner" ]]; then
     SCT_RUNNER_IP="$2"
     echo "SCT Runner IP: $SCT_RUNNER_IP"
     if [[ -n $SCT_RUNNER_IP ]] && [[ $SCT_RUNNER_IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
