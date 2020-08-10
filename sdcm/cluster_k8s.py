@@ -78,10 +78,7 @@ class MinikubeOps:
                 https://storage.googleapis.com/minikube/releases/v{minikube_version}/minikube-linux-amd64
             chmod +x /usr/local/bin/minikube
         """)
-        node.remoter.run(f'sudo bash -cxe "{minikube_setup_script}"')
-
-        # Reconnect to update user groups.
-        node.remoter.reconnect()
+        node.remoter.run(f'sudo bash -cxe "{minikube_setup_script}"', change_context=True)
 
     @staticmethod
     def start_minikube(node: cluster.BaseNode) -> None:
