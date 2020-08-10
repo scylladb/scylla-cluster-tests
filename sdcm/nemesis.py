@@ -1493,7 +1493,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             toppartitions = {}
             for out in output.strip().split('\n\n'):
                 partition = OrderedDict()
-                sampler_data = re.match(pattern1, out, re.MULTILINE)
+                sampler_data = re.search(pattern1, out, re.MULTILINE)
                 assert sampler_data, f"Pattern:{pattern1} are not matched on string:\n {out}"
                 sampler_data = sampler_data.groupdict()
                 partitions = re.findall(pattern2, out, re.MULTILINE)
