@@ -2039,7 +2039,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         we don't monitor swap usage in /proc/$scylla_pid/status, just make sure
         no coredump, serious db error occur during the heavy load of memory.
         """
-        self.target_node.remoter.run('sudo yum install -y epel-release', retry=3)
+        self.target_node.install_epel()
         self.target_node.remoter.run('sudo yum install -y stress-ng')
 
         self.log.info('Try to allocate 120% available memory, the allocated memory will be swaped out')

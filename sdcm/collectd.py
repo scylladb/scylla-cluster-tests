@@ -469,7 +469,7 @@ WantedBy=multi-user.target
         self.node = node
 
         if self.node.is_rhel_like():
-            self.node.remoter.run('sudo yum install -y epel-release', retry=3)
+            node.install_epel()
             self.node.remoter.run('sudo yum upgrade ca-certificates -y '
                                   '--disablerepo=epel',
                                   ignore_status=True,

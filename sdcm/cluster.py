@@ -2031,11 +2031,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         force = '--force-yes '
         if self.is_rhel_like():
             # `screen' package is missed in CentOS/RHEL 8. Should be installed from EPEL repository.
-            if self.distro.is_centos8:
-                self.remoter.run("sudo yum install -y epel-release")
-            elif self.distro.is_rhel8:
-                self.remoter.run(
-                    "sudo yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm")
+            if self.distro.is_centos8 or self.distro.is_rhel8:
+                self.install_epel()
             self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
             self.download_scylla_repo(scylla_repo)
             # hack cause of broken caused by EPEL
@@ -2256,7 +2253,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if not (self.is_rhel_like() or self.is_debian() or self.is_ubuntu()):
             raise ValueError('Unsupported Distribution type: {}'.format(str(self.distro)))
         if self.is_rhel_like():
-            self.remoter.run('sudo yum install -y epel-release', retry=3)
+            self.install_epel()
             self.remoter.run('sudo yum install python36-PyYAML -y', retry=3)
         else:
             self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B', retry=3)
@@ -2787,6 +2784,26 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         except Exception as e:  # pylint: disable=broad-except
             self.log.error(f'Failed to retreive value of {config_param_name} parameter. Error: {e}')
             return None
+
+    def install_epel(self):
+        """
+        Standard repositories might not provide all the packages that can be installed on CentOS, RHEL,
+        or Amazon Linux-based distributions. Enabling the EPEL repository provides additional options for
+        package installation.
+        """
+        if not self.distro.is_rhel_like:
+            raise Exception('EPEL can only be installed for RHEL like distros')
+
+        if self.distro.is_amazon2:
+            # Enable amazon2-extras repo for installing epel
+            # Reference: https://aws.amazon.com/amazon-linux-2/faqs/#Amazon_Linux_Extras
+            self.remoter.run('sudo amazon-linux-extras install epel')
+
+        if self.distro.is_rhel8:
+            self.remoter.run(
+                "sudo yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm")
+        else:
+            self.remoter.run('sudo yum install -y epel-release', retry=3)
 
 
 class FlakyRetryPolicy(RetryPolicy):
@@ -4523,7 +4540,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
     @staticmethod
     def install_scylla_monitoring_prereqs(node):  # pylint: disable=invalid-name
         if node.is_rhel_like():
-            node.remoter.run("sudo yum install -y epel-release")
+            node.install_epel()
             node.update_repo_cache()
             prereqs_script = dedent("""
                 yum install -y unzip wget
