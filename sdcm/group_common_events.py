@@ -47,7 +47,7 @@ def ignore_upgrade_schema_errors():
 @contextmanager
 def ignore_no_space_errors(node):
     with DbEventsFilter(type='NO_SPACE_ERROR', node=node), \
-         DbEventsFilter(type='BACKTRACE', line='No space left on device', node=node), \
-         DbEventsFilter(type='DATABASE_ERROR', line='No space left on device', node=node), \
-         DbEventsFilter(type='FILESYSTEM_ERROR', line='No space left on device', node=node):
+            DbEventsFilter(type='BACKTRACE', line='No space left on device', node=node), \
+            DbEventsFilter(type='DATABASE_ERROR', line='No space left on device', node=node), \
+            DbEventsFilter(type='FILESYSTEM_ERROR', line='No space left on device', node=node):
         yield
