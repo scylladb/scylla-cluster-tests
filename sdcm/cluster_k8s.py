@@ -82,10 +82,7 @@ class MinikubeOps:
             snap install helm --classic
             ln -s /snap/bin/helm /usr/local/bin/helm
         """)
-        node.remoter.run(f'sudo bash -cxe "{minikube_setup_script}"')
-
-        # Reconnect to update user groups.
-        node.remoter.reconnect()
+        node.remoter.run(f'sudo bash -cxe "{minikube_setup_script}"', change_context=True)
 
     @staticmethod
     def start_minikube(node: cluster.BaseNode) -> None:
