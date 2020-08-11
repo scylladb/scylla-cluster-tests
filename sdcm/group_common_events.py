@@ -36,7 +36,7 @@ def ignore_operation_errors():
 
 @contextmanager
 def ignore_upgrade_schema_errors():
-    with ExitStack as stack:
+    with ExitStack() as stack:
         stack.enter_context(DbEventsFilter(type='DATABASE_ERROR', line='Failed to load schema'))
         stack.enter_context(DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'))
         stack.enter_context(DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'))
