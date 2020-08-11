@@ -72,6 +72,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
         if connection is None:
             connection = self._create_connection()
             setattr(self.connection_thread_map, str(id(self)), connection)
+            self._bind_generation_to_connection(connection)
         return connection
 
     @classmethod
@@ -527,11 +528,12 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             with self._create_connection() as connection:
                 result = connection.run(**command_kwargs)
         else:
-            if not self._is_connection_generation_ok(self.connection):
-                self.connection.close()
-                self.connection.open()
-                self._bind_generation_to_connection(self.connection)
-            result = self.connection.run(**command_kwargs)
+            connection = self.connection
+            if not self._is_connection_generation_ok(connection):
+                connection.close()
+                connection.open()
+                self._bind_generation_to_connection(connection)
+            result = connection.run(**command_kwargs)
         result.duration = time.perf_counter() - start_time
         result.exit_status = result.exited
         return result
