@@ -36,6 +36,21 @@ class TestRemoteCmdRunners(unittest.TestCase):
     key_file = '~/.ssh/scylla-qa-ec2'
 
     @staticmethod
+    def _create_and_run_twice_in_same_thread(remoter_type, key_file, stmt, kwargs, paramiko_thread_results):
+        remoter = remoter_type(hostname='127.0.0.1', user=getpass.getuser(), key_file=key_file)
+        try:
+            result = remoter.run(stmt, **kwargs)
+        except Exception as exc:  # pylint: disable=broad-except
+            result = exc
+        paramiko_thread_results.append(result)
+        try:
+            result = remoter.run(stmt, **kwargs)
+        except Exception as exc:  # pylint: disable=broad-except
+            result = exc
+        paramiko_thread_results.append(result)
+        remoter.stop()
+
+    @staticmethod
     def _create_and_run_in_same_thread(remoter_type, key_file, stmt, kwargs, paramiko_thread_results):
         remoter = remoter_type(hostname='127.0.0.1', user=getpass.getuser(), key_file=key_file)
         try:
@@ -269,3 +284,29 @@ class TestRemoteCmdRunners(unittest.TestCase):
         for libssh2_result in libssh2_thread_results:
             self.log.error(str(libssh2_result))
             self._compare_results(expected, libssh2_result, stmt=stmt, kwargs=kwargs)
+
+    @parameterized.expand([
+        (RemoteLibSSH2CmdRunner, "export | grep SSH_CONNECTION ; false", True),
+        (RemoteCmdRunner, "export | grep SSH_CONNECTION ; false", True),
+        (RemoteLibSSH2CmdRunner, "export | grep SSH_CONNECTION ; true", True),
+        (RemoteCmdRunner, "export | grep SSH_CONNECTION ; true", True),
+        (RemoteLibSSH2CmdRunner, "export | grep SSH_CONNECTION ; false", False),
+        (RemoteCmdRunner, "export | grep SSH_CONNECTION ; false", False),
+        (RemoteLibSSH2CmdRunner, "export | grep SSH_CONNECTION ; true", False),
+        (RemoteCmdRunner, "export | grep SSH_CONNECTION ; true", False)
+    ])
+    @unittest.skip('To be ran manually')
+    def test_context_changing(self, remoter_type, stmt: str, change_context: bool):
+        kwargs = {
+            'verbose': True,
+            'ignore_status': True,
+            'timeout': 10,
+            'change_context': change_context
+        }
+        self.log.info(repr({stmt: stmt, **kwargs}))
+        paramiko_thread_results = []
+        self._create_and_run_twice_in_same_thread(remoter_type, self.key_file, stmt, kwargs, paramiko_thread_results)
+        if change_context and paramiko_thread_results[0].ok:
+            self.assertNotEqual(paramiko_thread_results[0].stdout, paramiko_thread_results[1].stdout)
+        else:
+            self.assertEqual(paramiko_thread_results[0].stdout, paramiko_thread_results[1].stdout)
