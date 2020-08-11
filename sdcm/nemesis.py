@@ -43,7 +43,7 @@ from sdcm.utils.decorators import retrying
 from sdcm.log import SDCMAdapter
 from sdcm.keystore import KeyStore
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm import mgmt, wait
+from sdcm import wait
 from sdcm.sct_events import DisruptionEvent, DbEventsFilter, Severity, InfoEvent
 from sdcm.db_stats import PrometheusDBStats
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
@@ -1815,8 +1815,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         Stop streaming task in middle and rebuild the data on the node.
         """
         def decommission_post_action():
-            decommission_done = self.target_node.search_system_log(
-                'DECOMMISSIONING: done', start_from_beginning=True, publish_events=False, severity=Severity.WARNING)
+            decommission_done = list(self.target_node.follow_system_log(
+                patterns=['DECOMMISSIONING: done'], start_from_beginning=True))
 
             ips = []
             seed_nodes = [node for node in self.cluster.nodes if node.is_seed]
@@ -1851,21 +1851,23 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.log.debug('%s is stopped' % nodetool_task)
 
         self.task_used_streaming = None
+        streaming_logs_stream = self.target_node.follow_system_log(
+            patterns=["range_streamer - Unbootstrap starts|range_streamer - Rebuild starts"])
+        repair_logs_stream = self.target_node.follow_system_log(patterns=['repair - Repair 1 out of'])
+        streaming_error_logs_stream = self.target_node.follow_system_log(patterns=['streaming.*err'])
+
         streaming_thread = threading.Thread(target=streaming_task_thread, kwargs={'nodetool_task': task},
                                             name='StreamingThread')
         streaming_thread.start()
 
         def is_streaming_started():
-            stream_pattern = "range_streamer - Unbootstrap starts|range_streamer - Rebuild starts"
-            streaming_logs = self.target_node.search_system_log(
-                stream_pattern, start_from_beginning=False, publish_events=False, severity=Severity.NORMAL)
+            streaming_logs = list(streaming_logs_stream)
             self.log.debug(streaming_logs)
             if streaming_logs:
                 self.task_used_streaming = True
 
             # In latest master, repair always won't use streaming
-            repair_logs = self.target_node.search_system_log(
-                'repair - Repair 1 out of', start_from_beginning=False, publish_events=False, severity=Severity.NORMAL)
+            repair_logs = list(repair_logs_stream)
             self.log.debug(repair_logs)
             return len(streaming_logs) > 0 or len(repair_logs) > 0
 
@@ -1881,8 +1883,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         new_node = decommission_post_action()
 
         if self.task_used_streaming:
-            err = self.target_node.search_system_log(
-                'streaming.*err', start_from_beginning=False, severity=Severity.ERROR)
+            err = list(streaming_error_logs_stream)
             self.log.debug(err)
         else:
             self.log.debug(

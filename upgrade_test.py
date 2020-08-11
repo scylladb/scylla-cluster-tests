@@ -426,9 +426,7 @@ class UpgradeTest(FillDatabaseData):
     # @staticmethod
     def search_for_idx_token_error_after_upgrade(self, node, step):
         self.log.debug('Search for idx_token error. Step {}'.format(step))
-        idx_token_error = node.search_system_log(
-            search_pattern='idx_token',
-            start_from_beginning=True)
+        idx_token_error = list(node.follow_system_log(patterns=['idx_token'], start_from_beginning=True))
         if idx_token_error:
             IndexSpecialColumnErrorEvent('Node: %s. Step: %s. '
                                          'Found error: index special column "idx_token" is not recognized' %
@@ -670,9 +668,7 @@ class UpgradeTest(FillDatabaseData):
     def count_log_errors(self, search_pattern, step, search_for_idx_token_error=True):
         schema_load_error_num = 0
         for node in self.db_cluster.nodes:
-            errors = node.search_system_log(search_pattern=search_pattern,
-                                            start_from_beginning=True,
-                                            publish_events=False)
+            errors = list(node.follow_system_log(patterns=[search_pattern], start_from_beginning=True))
             schema_load_error_num += len(errors)
             if search_for_idx_token_error:
                 self.search_for_idx_token_error_after_upgrade(node=node, step=step)

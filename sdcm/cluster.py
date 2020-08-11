@@ -27,7 +27,7 @@ import uuid
 import itertools
 
 from collections import defaultdict
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Union
 from textwrap import dedent
 from datetime import datetime
 from functools import cached_property, wraps
@@ -64,6 +64,7 @@ from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack
 from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.scylla_args import ScyllaArgParser
+from sdcm.utils.file import File
 
 
 CREDENTIALS = []
@@ -1039,9 +1040,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         while not self.termination_event.isSet():
             self.termination_event.wait(15)
             try:
-                self.search_system_log(start_from_beginning=False,
-                                       publish_events=True,
-                                       exclude_from_logging=self._exclude_system_log_from_being_logged)
+                self._read_system_log_and_publish_events(start_from_beginning=False,
+                                                         exclude_from_logging=self._exclude_system_log_from_being_logged)
             except Exception:  # pylint: disable=broad-except
                 self.log.exception("failed to read db log")
             except (SystemExit, KeyboardInterrupt) as ex:
@@ -1417,36 +1417,49 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             log_file.seek(0, os.SEEK_END)
             return log_file.tell()
 
-    def search_system_log(self, search_pattern=None, start_from_beginning=False, publish_events=True,
-                          exclude_from_logging: List[str] = None, severity=Severity.ERROR):
+    def follow_system_log(
+            self,
+            patterns: Optional[List[Union[str, re.Pattern, DatabaseLogEvent]]] = None,
+            start_from_beginning: bool = False
+    ) -> List[str]:
+        stream = File(self.system_log)
+        if not start_from_beginning:
+            stream.move_to_end()
+        if not patterns:
+            patterns = self._system_error_events
+        regexps = []
+        for pattern in patterns:
+            if isinstance(pattern, re.Pattern):
+                regexps.append(pattern)
+            elif isinstance(pattern, str):
+                regexps.append(re.compile(pattern, flags=re.IGNORECASE))
+            elif isinstance(pattern, DatabaseLogEvent):
+                regexps.append(re.compile(pattern.regex, flags=re.IGNORECASE))
+        return stream.read_lines_filtered(*regexps)
+
+    def _read_system_log_and_publish_events(
+            self, start_from_beginning: bool = False, exclude_from_logging: List[str] = None):
         """
         Search for all known patterns listed in  `_system_error_events`
 
         :param start_from_beginning: if True will search log from first line
         :param publish_events: if True will publish events
-        :param severity: event severity if search_pattern is assigned
         :param exclude_from_logging: lis of patterns to exclude from being logged
-        :return: list of (line, error) tuples
+        :return: None
         """
         # pylint: disable=too-many-branches,too-many-locals,too-many-statements
 
-        matches = []
         patterns = []
         backtraces = []
-
         index = 0
         # prepare/compile all regexes
-        if search_pattern:
-            expression = DatabaseLogEvent(type="user-query", regex=search_pattern, severity=severity)
+        for expression in self._system_error_events:
             patterns += [(re.compile(expression.regex, re.IGNORECASE), expression)]
-        else:
-            for expression in self._system_error_events:
-                patterns += [(re.compile(expression.regex, re.IGNORECASE), expression)]
 
         backtrace_regex = re.compile(r'(?P<other_bt>/lib.*?\+0x[0-f]*\n)|(?P<scylla_bt>0x[0-f]*\n)', re.IGNORECASE)
 
         if not os.path.exists(self.system_log):
-            return matches
+            return
 
         if start_from_beginning:
             start_search_from_byte = 0
@@ -1487,50 +1500,46 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                             self._system_log_errors_index.append(index)
                             cloned_event = event.clone_with_info(node=self, line_number=index, line=line)
                             backtraces.append(dict(event=cloned_event, backtrace=[]))
-                            matches.append((index, line))
                             break  # Stop iterating patterns to avoid creating two events for one line of the log
 
             if not start_from_beginning:
                 self.last_line_no = index if index else last_line_no
                 self.last_log_position = db_file.tell() + 1
 
-        if publish_events:
-            traces_count = 0
-            for backtrace in backtraces:
-                backtrace['event'].add_backtrace_info(raw_backtrace="\n".join(backtrace['backtrace']))
-                if backtrace['event'].type == 'BACKTRACE':
-                    traces_count += 1
+        traces_count = 0
+        for backtrace in backtraces:
+            backtrace['event'].add_backtrace_info(raw_backtrace="\n".join(backtrace['backtrace']))
+            if backtrace['event'].type == 'BACKTRACE':
+                traces_count += 1
 
-            # filter function to attach the backtrace to the correct error and not to the back traces
-            # if the error is within 10 lines and the last isn't backtrace type, the backtrace would be appended to the previous error
-            def filter_backtraces(backtrace):
-                last_error = filter_backtraces.last_error
-                try:
-                    if (last_error and
-                            backtrace['event'].line_number <= filter_backtraces.last_error.line_number + 20
-                            and not filter_backtraces.last_error.type == 'BACKTRACE' and backtrace['event'].type == 'BACKTRACE'):
-                        last_error.add_backtrace_info(raw_backtrace="\n".join(backtrace['backtrace']))
-                        return False
-                    return True
-                finally:
-                    filter_backtraces.last_error = backtrace['event']
+        # filter function to attach the backtrace to the correct error and not to the back traces
+        # if the error is within 10 lines and the last isn't backtrace type, the backtrace would be appended to the previous error
+        def filter_backtraces(backtrace):
+            last_error = filter_backtraces.last_error
+            try:
+                if (last_error and
+                        backtrace['event'].line_number <= filter_backtraces.last_error.line_number + 20
+                        and not filter_backtraces.last_error.type == 'BACKTRACE' and backtrace['event'].type == 'BACKTRACE'):
+                    last_error.add_backtrace_info(raw_backtrace="\n".join(backtrace['backtrace']))
+                    return False
+                return True
+            finally:
+                filter_backtraces.last_error = backtrace['event']
 
-            # support interlaced reactor stalled
-            for _ in range(traces_count):
-                filter_backtraces.last_error = None
-                backtraces = list(filter(filter_backtraces, backtraces))
+        # support interlaced reactor stalled
+        for _ in range(traces_count):
+            filter_backtraces.last_error = None
+            backtraces = list(filter(filter_backtraces, backtraces))
 
-            for backtrace in backtraces:
-                if Setup.BACKTRACE_DECODING:
-                    if backtrace['event'].raw_backtrace:
-                        scylla_debug_info = self.get_scylla_debuginfo_file()
-                        self.log.debug('Debug info file %s', scylla_debug_info)
-                        Setup.DECODING_QUEUE.put({"node": self, "debug_file": scylla_debug_info,
-                                                  "event": backtrace['event']})
-                else:
-                    backtrace['event'].publish()
-
-        return matches
+        for backtrace in backtraces:
+            if Setup.BACKTRACE_DECODING:
+                if backtrace['event'].raw_backtrace:
+                    scylla_debug_info = self.get_scylla_debuginfo_file()
+                    self.log.debug('Debug info file %s', scylla_debug_info)
+                    Setup.DECODING_QUEUE.put({"node": self, "debug_file": scylla_debug_info,
+                                              "event": backtrace['event']})
+            else:
+                backtrace['event'].publish()
 
     def start_decode_on_monitor_node_thread(self):
         self._decoding_backtraces_thread = threading.Thread(target=self.decode_backtrace,
@@ -2886,7 +2895,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def get_node_database_errors(self):
         errors = {}
         for node in self.nodes:
-            node_errors = node.search_system_log(start_from_beginning=True, publish_events=False)
+            node_errors = list(node.follow_system_log(start_from_beginning=True))
             if node_errors:
                 errors.update({node.name: node_errors})
         return errors
