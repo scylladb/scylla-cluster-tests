@@ -1,0 +1,108 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
+from typing import Optional, TextIO, List, Union, AnyStr
+from re import Pattern
+
+
+class File:
+    """
+    File object that support chaining and context managing
+
+    Example:
+        >>> assert File('/tmp/123', 'r+').writelines(['someline\\n', 'someline #1\\n', 'someline #2\\n']
+        >>> ).move_to_beginning().readlines() == ['someline\\n', 'someline #1\\n', 'someline #2\\n']
+    """
+
+    def __init__(self, path: str, mode: str = 'r', buffering: Optional[int] = None,
+                 encoding: Optional[str] = None, errors: Optional[str] = None, newline: Optional[str] = None,
+                 closefd: bool = True):
+        self.path = path
+        self.mode = mode
+        self.buffering = buffering
+        self.encoding = encoding
+        self.errors = errors
+        self.newline = newline
+        self.closefd = closefd
+        self._io = self._open()
+
+    def get_file_length(self) -> int:
+        return self._open().seek(0, 2)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._io.close()
+
+    def _open(self) -> TextIO:
+        kwargs = {attr_name: getattr(self, attr_name) for attr_name in
+                  ['mode', 'buffering', 'encoding', 'errors', 'closefd'] if getattr(self, attr_name, None) is not None}
+        return open(self.path, **kwargs)  # deepcode ignore missing~close~open: <comment the reason here>
+
+    def move_to(self, pos) -> 'File':
+        self._io.seek(pos)
+        return self
+
+    def move_to_end(self) -> 'File':
+        self._io.seek(0, 2)
+        return self
+
+    def move_to_beginning(self) -> 'File':
+        self._io.seek(0)
+        return self
+
+    def move_to_relative(self, pos: int) -> 'File':
+        self._io.seek(pos, 1)
+        return self
+
+    def move_to_relative_from_end(self, pos: int = 0) -> 'File':
+        self._io.seek(pos, 2)
+        return self
+
+    def write(self, s: AnyStr) -> 'File':
+        self._io.write(s)
+        return self
+
+    def writelines(self, s: List[AnyStr]) -> 'File':
+        self._io.writelines(s)
+        return self
+
+    def seek(self, offset: int, whence: int = 0) -> 'File':
+        self._io.seek(offset, whence)
+        return self
+
+    def read(self, n: int = -1) -> AnyStr:
+        return self._io.read(n)
+
+    def readline(self, limit: int = -1) -> AnyStr:
+        return self._io.readline(limit)
+
+    def readlines(self, hint: int = -1) -> List[AnyStr]:
+        return self._io.readlines(hint)
+
+    def read_lines_filtered(self, *patterns: Union[Pattern]) -> List[str]:
+        """
+        Read lines from the file, filter them and yield
+        :param patterns: List of patterns
+        :param return_pattern: If True, it will return tuple of string and pattern
+        :return:
+        """
+        for line in self._io:
+            for pattern in patterns:
+                if pattern.search(line):
+                    yield line
+                    break
+
+    def __getattr__(self, item):
+        return getattr(self._io, item)
