@@ -149,6 +149,7 @@
 | **<a name="k8s_scylla_mem_gi">k8s_scylla_mem_gi</a>**  |  | N/A | SCT_K8S_SCYLLA_MEM_GI
 | **<a name="k8s_scylla_disk_gi">k8s_scylla_disk_gi</a>**  |  | N/A | SCT_K8S_SCYLLA_DISK_GI
 | **<a name="minikube_version">minikube_version</a>**  |  | N/A | SCT_MINIKUBE_VERSION
+| **<a name="k8s_cert_manager_version">k8s_cert_manager_version</a>**  |  | N/A | SCT_K8S_CERT_MANAGER_VERSION
 | **<a name="docker_image">docker_image</a>**  |  | N/A | SCT_DOCKER_IMAGE
 | **<a name="db_nodes_private_ip">db_nodes_private_ip</a>**  |  | N/A | SCT_DB_NODES_PRIVATE_IP
 | **<a name="db_nodes_public_ip">db_nodes_public_ip</a>**  |  | N/A | SCT_DB_NODES_PUBLIC_IP

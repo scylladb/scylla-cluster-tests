@@ -14,29 +14,51 @@
 # pylint: disable=too-many-arguments
 
 import os
+import time
+import atexit
 import logging
-from typing import Optional, Union, List, Dict
+import contextlib
+from copy import deepcopy
+from typing import Optional, Union, List, Dict, Any, Literal, ContextManager
+from difflib import unified_diff
+from tempfile import NamedTemporaryFile
 from textwrap import dedent
-from functools import cached_property
+from functools import cached_property, partialmethod
+from itertools import chain
+from threading import RLock
+
+import yaml
+from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance
 
 from sdcm import cluster, cluster_gce, cluster_docker
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.sct_config import sct_abs_path
 from sdcm.sct_events import TestFrameworkEvent
-from sdcm.utils.k8s import KubernetesOps
+from sdcm.utils.k8s import KubernetesOps, JSON_PATCH_TYPE
 from sdcm.utils.common import get_free_port, wait_for_port
+from sdcm.utils.decorators import log_run_info
 from sdcm.utils.docker_utils import ContainerManager
-from sdcm.utils.remote_logger import get_system_logging_thread
+from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger
 
 
 KUBECTL_PROXY_PORT = 8001
 KUBECTL_PROXY_CONTAINER = "auto_ssh:kubectl_proxy"
 SCYLLA_OPERATOR_CONFIG = sct_abs_path("sdcm/k8s_configs/operator.yaml")
 SCYLLA_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/cluster.yaml")
+SCYLLA_API_VERSION = "scylla.scylladb.com/v1alpha1"
+SCYLLA_CLUSTER_RESOURCE_KIND = "Cluster"
+SCYLLA_POD_READINESS_DELAY = 30  # seconds
+SCYLLA_POD_READINESS_TIMEOUT = 5  # minutes
+SCYLLA_POD_TERMINATE_TIMEOUT = 30  # minutes
+SCYLLA_POD_EXPOSED_PORTS = [3000, 9042, 9180, ]
 IPTABLES_BIN = "iptables"
+IPTABLES_LEGACY_BIN = "iptables-legacy"
 
 LOGGER = logging.getLogger(__name__)
+
+
+IptablesChainCommand = Literal["A", "C", "D"]
 
 
 class MinikubeOps:
@@ -120,10 +142,69 @@ class MinikubeOps:
 
 class KubernetesCluster:  # pylint: disable=too-few-public-methods
     datacenter = ()
+    _cert_manager_journal_thread = None
+    _scylla_operator_journal_thread = None
 
-    @staticmethod
-    def k8s_server_url():
+    @property
+    def k8s_server_url(self) -> Optional[str]:
         return None
+
+    kubectl = partialmethod(KubernetesOps.kubectl)
+    apply_file = partialmethod(KubernetesOps.apply_file)
+    helm = partialmethod(KubernetesOps.helm)
+
+    @property
+    def cert_manager_log(self) -> str:
+        return os.path.join(self.logdir, "cert_manager.log")
+
+    def start_cert_manager_journal_thread(self) -> None:
+        self._cert_manager_journal_thread = CertManagerLogger(self, self.cert_manager_log)
+        self._cert_manager_journal_thread.start()
+
+    @log_run_info
+    def deploy_cert_manager(self) -> None:
+        LOGGER.info("Deploy cert-manager")
+        self.kubectl("create namespace cert-manager")
+        self.helm("repo add jetstack https://charts.jetstack.io")
+        self.helm(f"install cert-manager jetstack/cert-manager "
+                  f"--version v{self.params.get('k8s_cert_manager_version')} --set installCRDs=true",
+                  namespace="cert-manager")
+        time.sleep(10)
+        self.kubectl("wait --timeout=1m --all --for=condition=Ready pod", namespace="cert-manager")
+        self.start_cert_manager_journal_thread()
+
+    @property
+    def scylla_operator_log(self) -> str:
+        return os.path.join(self.logdir, "scylla_operator.log")
+
+    def start_scylla_operator_journal_thread(self) -> None:
+        self._scylla_operator_journal_thread = ScyllaOperatorLogger(self, self.scylla_operator_log)
+        self._scylla_operator_journal_thread.start()
+
+    @log_run_info
+    def deploy_scylla_operator(self) -> None:
+        LOGGER.info("Deploy Scylla Operator")
+        self.apply_file(SCYLLA_OPERATOR_CONFIG)
+        time.sleep(10)
+        self.kubectl("wait --timeout=1m --all --for=condition=Ready pod", namespace="scylla-operator-system")
+        self.start_scylla_operator_journal_thread()
+
+    @log_run_info
+    def deploy_scylla_cluster(self, config: str) -> None:
+        LOGGER.info("Create and initialize a Scylla cluster")
+        self.apply_file(config)
+
+        LOGGER.debug("Check Scylla cluster")
+        self.kubectl("get clusters.scylla.scylladb.com", namespace="scylla")
+        self.kubectl("get pods", namespace="scylla")
+
+    @log_run_info
+    def stop_k8s_task_threads(self, timeout=10):
+        LOGGER.info("Stop k8s task threads")
+        if self._cert_manager_journal_thread:
+            self._cert_manager_journal_thread.stop(timeout)
+        if self._scylla_operator_journal_thread:
+            self._scylla_operator_journal_thread.stop(timeout)
 
 
 class MinikubeCluster(KubernetesCluster):
@@ -158,6 +239,21 @@ class MinikubeCluster(KubernetesCluster):
                                        kubectl_version=self.local_kubectl_version,
                                        minikube_version=self.minikube_version)
             MinikubeOps.start_minikube(node)
+
+    @cached_property
+    def hydra_dest_ip(self) -> Optional[str]:
+        return self.nodes[-1].external_address
+
+    @cached_property
+    def nodes_dest_ip(self) -> Optional[str]:
+        return self.nodes[-1].ip_address
+
+    def helm(self, *args, **kwargs):
+        return KubernetesOps.helm(self, *args, **kwargs, remoter=self.nodes[-1].remoter)
+
+    def docker_pull(self, image):
+        LOGGER.info("Pull `%s' to Minikube' Docker environment", image)
+        self.nodes[-1].remoter.run(f"docker pull -q {image}")
 
 
 class GceMinikubeCluster(MinikubeCluster, cluster_gce.GCECluster):
@@ -194,6 +290,10 @@ class GceMinikubeCluster(MinikubeCluster, cluster_gce.GCECluster):
     def get_node_ips_param(self, public_ip=True):
         raise NotImplementedError("Not implemented yet.")  # TODO: add implementation of this method
 
+    def destroy(self) -> None:
+        super().destroy()
+        self.stop_k8s_task_threads()
+
 
 class BasePodContainer(cluster.BaseNode):
     def __init__(self, name: str, parent_cluster: "PodCluster", node_prefix: str = "node", node_index: int = 1,
@@ -205,6 +305,10 @@ class BasePodContainer(cluster.BaseNode):
                          node_prefix=node_prefix,
                          dc_idx=dc_idx)
 
+    @staticmethod
+    def is_docker() -> bool:
+        return True
+
     def tags(self) -> Dict[str, str]:
         return {**super().tags,
                 "NodeIndex": str(self.node_index), }
@@ -214,9 +318,6 @@ class BasePodContainer(cluster.BaseNode):
                                            container=self.parent_cluster.container,
                                            namespace=self.parent_cluster.namespace,
                                            k8s_server_url=self.parent_cluster.k8s_cluster.k8s_server_url)
-
-        # TODO: refactor our commands to use sudo in more organized way and remove `sudo' dependency
-        self.remoter.run("yum install -y sudo && yum clean all")
 
     def _init_port_mapping(self):
         pass
@@ -246,7 +347,8 @@ class BasePodContainer(cluster.BaseNode):
 
     @property
     def scylla_listen_address(self):
-        return self._pod_status.pod_ip
+        pod_status = self._pod_status
+        return pod_status and pod_status.pod_ip
 
     @property
     def _pod_status(self):
@@ -274,8 +376,10 @@ class BasePodContainer(cluster.BaseNode):
         return None
 
     def _refresh_instance_state(self):
-        return ([self._cluster_ip_service.spec.cluster_ip, ],
-                [self._cluster_ip_service.spec.cluster_ip, self._pod_status.pod_ip, ], )
+        cluster_ip_service = self._cluster_ip_service
+        cluster_ip = cluster_ip_service and cluster_ip_service.spec.cluster_ip
+        pod_status = self._pod_status
+        return ([cluster_ip, ], [cluster_ip, pod_status and pod_status.pod_ip, ], )
 
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=300):
         if verify_down:
@@ -291,7 +395,7 @@ class BasePodContainer(cluster.BaseNode):
     def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
         if verify_up:
             self.wait_db_up(timeout=timeout)
-        self.remoter.run('sudo supervisorctl stop scylla', timeout=timeout)
+        self.remoter.run('supervisorctl stop scylla', timeout=timeout)
         if verify_down:
             self.wait_db_down(timeout=timeout)
 
@@ -314,10 +418,17 @@ class BasePodContainer(cluster.BaseNode):
     def image(self) -> str:
         return self._container_status.image
 
-    def iptables_node_redirect_rules(self, dest_ip: str) -> str:
+    def iptables_node_redirect_rules(self,
+                                     dest_ip: str,
+                                     iptables_bin: str = IPTABLES_BIN,
+                                     command: IptablesChainCommand = "A") -> List[str]:
         to_ip = self._cluster_ip_service.spec.cluster_ip
-        ports = self._loadbalancer_service.spec.ports
-        return "\n".join(iptables_port_redirect_rule(to_ip, p.target_port, dest_ip, p.node_port) for p in ports)
+        return [iptables_port_redirect_rule(iptables_bin=iptables_bin,
+                                            command=command,
+                                            to_ip=to_ip,
+                                            to_port=p.target_port,
+                                            dest_ip=dest_ip,
+                                            dest_port=p.node_port) for p in self._loadbalancer_service.spec.ports]
 
     @property
     def ipv6_ip_address(self):
@@ -325,6 +436,29 @@ class BasePodContainer(cluster.BaseNode):
 
     def restart(self):
         raise NotImplementedError("Not implemented yet")  # TODO: implement this method.
+
+    @contextlib.contextmanager
+    def remote_scylla_yaml(self, path: str = cluster.SCYLLA_YAML_PATH) -> ContextManager:
+        """Update scylla.yaml, k8s way
+
+        Scylla Operator handles scylla.yaml updates using ConfigMap resource and we don't need to update it
+        manually on each node.  Just collect all required changes to parent_cluster.scylla_yaml dict and if it
+        differs from previous one, set parent_cluster.scylla_yaml_update_required flag.  No actual changes done here.
+        Need to do cluster rollout restart.
+
+        More details here: https://github.com/scylladb/scylla-operator/blob/master/docs/generic.md#configure-scylla
+        """
+        with self.parent_cluster.scylla_yaml_lock:
+            scylla_yaml_copy = deepcopy(self.parent_cluster.scylla_yaml)
+            yield self.parent_cluster.scylla_yaml
+            if scylla_yaml_copy == self.parent_cluster.scylla_yaml:
+                LOGGER.debug("%s: scylla.yaml hasn't been changed", self)
+                return
+            original = yaml.safe_dump(scylla_yaml_copy).splitlines(keepends=True)
+            changed = yaml.safe_dump(self.parent_cluster.scylla_yaml).splitlines(keepends=True)
+            diff = "".join(unified_diff(original, changed))
+            LOGGER.debug("%s: scylla.yaml requires to be updated with:\n%s", self, diff)
+            self.parent_cluster.scylla_yaml_update_required = True
 
 
 class PodCluster(cluster.BaseCluster):
@@ -365,15 +499,18 @@ class PodCluster(cluster.BaseCluster):
 
         return node
 
-    def add_nodes(self, count: int, ec2_user_data: str = "", dc_idx: int = 0,
+    def add_nodes(self,
+                  count: int,
+                  ec2_user_data: str = "",
+                  dc_idx: int = 0,
                   enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
         pods = KubernetesOps.list_pods(self, namespace=self.namespace)
 
         self.log.debug("Numbers of pods: %s", len(pods))
-        assert count == len(pods), "You can't alter number of pods here"
+        assert count <= len(pods), "You can't alter number of pods here"
 
         nodes = []
-        for node_index, pod in enumerate(pods):
+        for node_index, pod in enumerate(pods[-count:]):
             node = self._create_node(node_index, pod.metadata.name)
             nodes.append(node)
             self.nodes.append(node)
@@ -391,27 +528,239 @@ class PodCluster(cluster.BaseCluster):
 
 
 class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
+    node_setup_requires_scylla_restart = False
+
     def __init__(self,
                  k8s_cluster: KubernetesCluster,
+                 scylla_cluster_config: str,
+                 scylla_cluster_name: Optional[str] = None,
                  user_prefix: Optional[str] = None,
                  n_nodes: Union[list, int] = 3,
                  params: Optional[dict] = None) -> None:
-        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
-        node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
-
+        k8s_cluster.deploy_scylla_cluster(scylla_cluster_config)
+        self.scylla_yaml_lock = RLock()
+        self.scylla_yaml = {}
+        self.scylla_yaml_update_required = False
+        self.scylla_cluster_name = scylla_cluster_name
         super().__init__(k8s_cluster=k8s_cluster,
                          namespace="scylla",
                          container="scylla",
-                         cluster_prefix=cluster_prefix,
-                         node_prefix=node_prefix,
+                         cluster_prefix=cluster.prepend_user_prefix(user_prefix, 'db-cluster'),
+                         node_prefix=cluster.prepend_user_prefix(user_prefix, 'db-node'),
                          node_type="scylla-db",
                          n_nodes=n_nodes,
                          params=params)
 
-    wait_for_init = cluster_docker.ScyllaDockerCluster.wait_for_init
     get_scylla_args = cluster_docker.ScyllaDockerCluster.get_scylla_args
 
+    @cluster.wait_for_init_wrap
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None, *_, **__):
+        node_list = node_list if node_list else self.nodes
+        self.wait_for_nodes_up_and_normal(nodes=node_list)
+        if self.update_scylla_config():
+            self.wait_for_nodes_up_and_normal(nodes=node_list)
 
-def iptables_port_redirect_rule(to_ip, to_port, dest_ip, dest_port):
-    return f"sudo {IPTABLES_BIN} -t nat -A OUTPUT -d {to_ip} -p tcp --dport {to_port} " \
+    @cached_property
+    def _k8s_scylla_cluster_api(self) -> Resource:
+        return KubernetesOps.dynamic_api(self.k8s_cluster,
+                                         api_version=SCYLLA_API_VERSION,
+                                         kind=SCYLLA_CLUSTER_RESOURCE_KIND)
+
+    def replace_scylla_cluster_value(self, path: str, value: Any) -> ResourceInstance:
+        LOGGER.debug("Replace `%s' with `%s' in %s's spec", path, value, self.scylla_cluster_name)
+        return self._k8s_scylla_cluster_api.patch(body=[{"op": "replace", "path": path, "value": value}],
+                                                  name=self.scylla_cluster_name,
+                                                  namespace=self.namespace,
+                                                  content_type=JSON_PATCH_TYPE)
+
+    @property
+    def scylla_cluster_spec(self) -> ResourceField:
+        return self._k8s_scylla_cluster_api.get(namespace=self.namespace, name=self.scylla_cluster_name).spec
+
+    def update_seed_provider(self):
+        pass
+
+    def node_config_setup(self,
+                          node,
+                          seed_address=None,
+                          endpoint_snitch=None,
+                          murmur3_partitioner_ignore_msb_bits=None,
+                          client_encrypt=None):  # pylint: disable=too-many-arguments,invalid-name
+        if client_encrypt is None:
+            client_encrypt = self.params.get("client_encrypt")
+
+        if client_encrypt:
+            raise NotImplementedError("client_encrypt is not supported by k8s-* backends yet")
+
+        if self.get_scylla_args():
+            raise NotImplementedError("custom SCYLLA_ARGS is not supported by k8s-* backends yet")
+
+        for param in ("server_encrypt", "append_scylla_yaml", ):
+            if self.params.get(param):
+                raise NotImplementedError(f"{param} is not supported by k8s-* backends yet")
+
+        node.config_setup(enable_exp=self.params.get("experimental"),
+                          endpoint_snitch=endpoint_snitch,
+                          authenticator=self.params.get("authenticator"),
+                          server_encrypt=self.params.get("server_encrypt"),
+                          hinted_handoff=self.params.get("hinted_handoff"),
+                          authorizer=self.params.get("authorizer"),
+                          alternator_port=self.params.get("alternator_port"),
+                          murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
+                          alternator_enforce_authorization=self.params.get("alternator_enforce_authorization"),
+                          internode_compression=self.params.get("internode_compression"))
+
+    def validate_seeds_on_all_nodes(self):
+        pass
+
+    def set_seeds(self, wait_for_timeout=300, first_only=False):
+        assert self.nodes, "DB cluster should have at least 1 node"
+        self.nodes[0].is_seed = True
+
+    def add_nodes(self,
+                  count: int,
+                  ec2_user_data: str = "",
+                  dc_idx: int = 0,
+                  enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
+        current_members = self.scylla_cluster_spec.datacenter.racks[0].members
+        self.replace_scylla_cluster_value("/spec/datacenter/racks/0/members", current_members+count)
+        self.wait_for_pods_readiness(count)
+        return super().add_nodes(count=count,
+                                 ec2_user_data=ec2_user_data,
+                                 dc_idx=dc_idx,
+                                 enable_auto_bootstrap=enable_auto_bootstrap)
+
+    def terminate_node(self, node):
+        assert self.nodes[-1] == node, "Can withdraw the last node only"
+        current_members = self.scylla_cluster_spec.datacenter.racks[0].members
+        self.replace_scylla_cluster_value("/spec/datacenter/racks/0/members", current_members-1)
+        super().terminate_node(node)
+        self.k8s_cluster.kubectl(f"wait --timeout={SCYLLA_POD_TERMINATE_TIMEOUT}m --for=delete pod {node.name}",
+                                 namespace=self.namespace,
+                                 timeout=SCYLLA_POD_TERMINATE_TIMEOUT*60+10)
+
+    def decommission(self, node):
+        self.terminate_node(node)
+
+        if monitors := cluster.Setup.tester_obj().monitors:
+            monitors.reconfigure_scylla_monitoring()
+
+    def wait_for_pods_readiness(self, count: Optional[int] = None):
+        if count is None:
+            count = len(self.nodes)
+        LOGGER.debug("Wait for %d pod(s) to be ready...", count)
+        for _ in range(count):
+            time.sleep(SCYLLA_POD_READINESS_DELAY)
+            self.k8s_cluster.kubectl(f"wait --timeout={SCYLLA_POD_READINESS_TIMEOUT}m --all --for=condition=Ready pod",
+                                     namespace=self.namespace,
+                                     timeout=SCYLLA_POD_READINESS_TIMEOUT*60+10)
+
+    def upgrade_scylla_cluster(self, new_version: str) -> None:
+        self.replace_scylla_cluster_value("/spec/version", new_version)
+        self.wait_for_pods_readiness()
+
+    def update_scylla_config(self) -> bool:
+        with self.scylla_yaml_lock:
+            if not self.scylla_yaml_update_required:
+                return False
+            with NamedTemporaryFile("w", delete=False) as tmp:
+                tmp.write(yaml.safe_dump(self.scylla_yaml))
+            self.k8s_cluster.kubectl(f"create configmap scylla-config --from-file=scylla.yaml={tmp.name}",
+                                     namespace=self.namespace)
+            time.sleep(30)
+            self.rollout_restart()
+            os.remove(tmp.name)
+            self.scylla_yaml_update_required = False
+        return True
+
+    def rollout_restart(self):
+        self.k8s_cluster.kubectl("rollout restart statefulset", namespace=self.namespace)
+        self.wait_for_pods_readiness()
+
+
+class MinikubeScyllaPodCluster(ScyllaPodCluster):
+    k8s_cluster: MinikubeCluster
+
+    def _iptables_redirect_rules(self,
+                                 dest_ip: str,
+                                 iptables_bin: str = IPTABLES_BIN,
+                                 command: IptablesChainCommand = "A",
+                                 nodes: Optional[List[BasePodContainer]] = None) -> List[str]:
+        if nodes is None:
+            nodes = self.nodes
+        return list(chain.from_iterable(node.iptables_node_redirect_rules(dest_ip=dest_ip,
+                                                                          iptables_bin=iptables_bin,
+                                                                          command=command) for node in nodes))
+
+    def hydra_iptables_redirect_rules(self,
+                                      command: IptablesChainCommand = "A",
+                                      nodes: Optional[list] = None) -> List[str]:
+        return self._iptables_redirect_rules(dest_ip=self.k8s_cluster.hydra_dest_ip,
+                                             iptables_bin=IPTABLES_LEGACY_BIN,
+                                             command=command,
+                                             nodes=nodes)
+
+    def nodes_iptables_redirect_rules(self,
+                                      command: IptablesChainCommand = "A",
+                                      nodes: Optional[list] = None) -> List[str]:
+        return self._iptables_redirect_rules(dest_ip=self.k8s_cluster.nodes_dest_ip, command=command, nodes=nodes)
+
+    def update_nodes_iptables_redirect_rules(self,
+                                             command: IptablesChainCommand = "A",
+                                             nodes: Optional[list] = None) -> None:
+        nodes_to_update = []
+        if tester := cluster.Setup.tester_obj():
+            if tester.loaders:
+                nodes_to_update.extend(tester.loaders.nodes)
+            if tester.monitors:
+                nodes_to_update.extend(tester.monitors.nodes)
+
+        if nodes_to_update:
+            LOGGER.debug("Found following nodes to apply new iptables rules: %s", nodes_to_update)
+            iptables_rules = "\n".join(self.nodes_iptables_redirect_rules(command=command, nodes=nodes))
+            for node in nodes_to_update:
+                node.remoter.run_shell_script(cmd=iptables_rules, sudo=True)
+
+    def add_nodes(self,
+                  count: int,
+                  ec2_user_data: str = "",
+                  dc_idx: int = 0,
+                  enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
+        new_nodes = super().add_nodes(count=count,
+                                      ec2_user_data=ec2_user_data,
+                                      dc_idx=dc_idx,
+                                      enable_auto_bootstrap=enable_auto_bootstrap)
+        for node in new_nodes:
+            KubernetesOps.expose_pod_ports(self.k8s_cluster, node.name,
+                                           ports=SCYLLA_POD_EXPOSED_PORTS,
+                                           labels=f"statefulset.kubernetes.io/pod-name={node.name}",
+                                           selector=f"statefulset.kubernetes.io/pod-name={node.name}",
+                                           namespace=self.namespace)
+
+        LOCALRUNNER.run_shell_script(cmd="\n".join(self.hydra_iptables_redirect_rules(nodes=new_nodes)), sudo=True)
+        atexit.register(LOCALRUNNER.run_shell_script,
+                        cmd="\n".join(self.hydra_iptables_redirect_rules(command="D", nodes=new_nodes)),
+                        sudo=True)
+        self.update_nodes_iptables_redirect_rules(nodes=new_nodes)
+
+        return new_nodes
+
+    def terminate_node(self, node: BasePodContainer) -> None:
+        assert self.nodes[-1] == node, "Can withdraw the last node only"
+        self.update_nodes_iptables_redirect_rules(command="D", nodes=[node, ])
+        KubernetesOps.unexpose_pod_ports(self.k8s_cluster, node.name, namespace=self.namespace)
+        super().terminate_node(node)
+
+    def upgrade_scylla_cluster(self, new_version: str) -> None:
+        self.k8s_cluster.docker_pull(f"scylladb/scylla:{new_version}")
+        return super().upgrade_scylla_cluster(new_version)
+
+
+def iptables_port_redirect_rule(iptables_bin: str,
+                                command: IptablesChainCommand,
+                                to_ip: str,
+                                to_port: int,
+                                dest_ip: str,
+                                dest_port: int) -> str:
+    return f"{iptables_bin} -t nat -{command} OUTPUT -d {to_ip} -p tcp --dport {to_port} " \
            f"-j DNAT --to-destination {dest_ip}:{dest_port}"

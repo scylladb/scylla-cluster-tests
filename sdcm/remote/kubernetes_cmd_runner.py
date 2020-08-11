@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import time
+import inspect
 import threading
 from typing import Optional, Callable, Iterator
 
@@ -20,6 +21,7 @@ from invoke import Runner, Context, Config
 from invoke.exceptions import UnexpectedExit, Failure
 
 from sdcm.utils.k8s import KubernetesOps
+from sdcm.utils.common import deprecation
 from sdcm.utils.decorators import retrying
 
 from .base import CommandRunner, RetryableNetworkException
@@ -131,7 +133,15 @@ class KubernetesCmdRunner(CommandRunner):
             log_file=None, retry=1, watchers=None):
         watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
 
-        @retrying(n=retry)
+        # TODO: This should be removed than sudo calls will be done in more organized way.
+        if cmd.startswith("sudo "):
+            deprecation("Using `sudo' in cmd string is deprecated.  Use `remoter.sudo()' instead.")
+            frame = inspect.stack()[1]
+            self.log.error("Cut off `sudo' from the cmd string: %s (%s:%s: %s)",
+                           cmd, frame.filename, frame.lineno, frame.code_context[0].rstrip())
+            cmd = cmd[5:]
+
+        @retrying(n=retry or 1)
         def _run():
             start_time = time.perf_counter()
             if verbose:

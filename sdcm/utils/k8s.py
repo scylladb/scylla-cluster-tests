@@ -23,6 +23,11 @@ from sdcm.remote import LOCALRUNNER
 KUBECTL_BIN = "kubectl"
 HELM_BIN = "helm"
 
+KUBECTL_TIMEOUT = 300  # seconds
+HELM_TIMEOUT = 300  # seconds
+
+JSON_PATCH_TYPE = "application/json-patch+json"
+
 
 logging.getLogger("kubernetes.client.rest").setLevel(logging.INFO)
 
@@ -43,6 +48,14 @@ class KubernetesOps:
         return k8s.client.ApiClient(conf)
 
     @classmethod
+    def dynamic_client(cls, kluster):
+        return k8s.dynamic.DynamicClient(cls.api_client(kluster))
+
+    @classmethod
+    def dynamic_api(cls, kluster, api_version, kind):
+        return cls.dynamic_client(kluster).resources.get(api_version=api_version, kind=kind)
+
+    @classmethod
     def core_v1_api(cls, kluster):
         return getattr(kluster, "_k8s_core_v1_api", None) or k8s.client.CoreV1Api(cls.api_client(kluster))
 
@@ -59,7 +72,7 @@ class KubernetesOps:
         return cls.core_v1_api(kluster).list_namespaced_service(namespace=namespace, watch=False, **kwargs).items
 
     @staticmethod
-    def kubectl(kluster, *command, namespace=None, timeout=300, remoter=None):
+    def kubectl(kluster, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None):
         cmd = [KUBECTL_BIN, ]
         if remoter is None:
             if kluster.k8s_server_url is not None:
@@ -71,7 +84,7 @@ class KubernetesOps:
         return remoter.run(" ".join(cmd), timeout=timeout)
 
     @staticmethod
-    def helm(kluster, *command, namespace=None, timeout=300, remoter=None):
+    def helm(kluster, *command, namespace=None, timeout=HELM_TIMEOUT, remoter=None):
         cmd = [HELM_BIN, ]
         if remoter is None:
             if kluster.k8s_server_url is not None:
@@ -83,20 +96,27 @@ class KubernetesOps:
         return remoter.run(" ".join(cmd), timeout=timeout)
 
     @classmethod
-    def apply_file(cls, kluster, config_path, namespace=None, timeout=300):
+    def apply_file(cls, kluster, config_path, namespace=None, timeout=KUBECTL_TIMEOUT):
         cls.kubectl(kluster, "apply", "-f", f"<(envsubst<{config_path})", namespace=namespace, timeout=timeout)
 
     @classmethod
-    def copy_file(cls, kluster, src, dst, container=None, timeout=300):  # pylint: disable=too-many-arguments
+    def copy_file(cls, kluster, src, dst, container=None, timeout=KUBECTL_TIMEOUT):
         command = ["cp", src, dst]
         if container:
             command.extend(("-c", container))
         cls.kubectl(kluster, *command, timeout=timeout)
 
     @classmethod
-    def expose_pod_ports(cls, kluster, pod_name, ports, namespace=None, timeout=300):
-        ports = ",".join(map(str, ports))
-        cls.kubectl(kluster,
-                    f"expose pod {pod_name} --type=LoadBalancer --port={ports} --name={pod_name}-loadbalancer",
-                    namespace=namespace,
-                    timeout=timeout)
+    def expose_pod_ports(cls, kluster, pod_name, ports, labels=None, selector=None, namespace=None, timeout=KUBECTL_TIMEOUT):
+        command = ["expose pod", pod_name, "--type=LoadBalancer",
+                   "--port", ",".join(map(str, ports)),
+                   f"--name={pod_name}-loadbalancer", ]
+        if labels:
+            command.extend(("--labels", labels))
+        if selector:
+            command.extend(("--selector", selector))
+        cls.kubectl(kluster, *command, namespace=namespace, timeout=timeout)
+
+    @classmethod
+    def unexpose_pod_ports(cls, kluster, pod_name, namespace=None, timeout=KUBECTL_TIMEOUT):
+        cls.kubectl(kluster, f"delete service {pod_name}-loadbalancer", namespace=namespace, timeout=timeout)

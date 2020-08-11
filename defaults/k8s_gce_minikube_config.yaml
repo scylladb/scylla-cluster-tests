@@ -12,6 +12,7 @@ minikube_version: '1.11.0'
 n_db_nodes: 3
 
 k8s_scylla_operator_docker_image: 'scylladb/scylla-operator:v0.2.3'
+k8s_cert_manager_version: '0.15.2'
 scylla_version: '4.0.0'
 scylla_mgmt_agent_version: '2.0.2'
 k8s_scylla_datacenter: 'gce'
@@ -38,3 +39,5 @@ n_monitor_nodes: 1
 user_credentials_path: '~/.ssh/scylla-test'
 use_preinstalled_scylla: true
 backtrace_decoding: false
+
+append_scylla_args: ''

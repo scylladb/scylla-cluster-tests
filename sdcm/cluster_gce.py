@@ -63,6 +63,10 @@ class GCENode(cluster.BaseNode):
                                       node_prefix=node_prefix,
                                       dc_idx=dc_idx)
 
+    @staticmethod
+    def is_gce() -> bool:
+        return True
+
     def init(self):
         self._wait_public_ip()
 

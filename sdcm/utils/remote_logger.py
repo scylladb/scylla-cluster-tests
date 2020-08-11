@@ -177,6 +177,20 @@ class KubectlGeneralLogger(CommandLoggerBase):
             f"logs -f {node.name} -c {node.parent_cluster.container} > {target_log_file} 2>&1"
 
 
+class CertManagerLogger(CommandLoggerBase):
+    def _build_logger_cmd(self, node, target_log_file):
+        self._cached_logger_cmd = \
+            f"kubectl -s {node.k8s_server_url} -n cert-manager " \
+            f"logs -l app.kubernetes.io/instance=cert-manager --all-containers=true -f > {target_log_file} 2>&1"
+
+
+class ScyllaOperatorLogger(CommandLoggerBase):
+    def _build_logger_cmd(self, node, target_log_file):
+        self._cached_logger_cmd = \
+            f"kubectl -s {node.k8s_server_url} -n scylla-operator-system  " \
+            f"logs scylla-operator-controller-manager-0 --all-containers=true -f > {target_log_file} 2>&1"
+
+
 def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint: disable=too-many-return-statements
     if logs_transport == 'docker':
         if 'db-node' in node.name:

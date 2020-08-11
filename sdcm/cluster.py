@@ -434,7 +434,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.enable_auto_bootstrap = True
 
         self.scylla_version = ''
-        self._is_enterprise = None
 
         # If node is a replacement for a dead node, store dead node private ip here
         self.replacement_node_ip = None
@@ -679,40 +678,32 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.log.error('Install packages for unknown distro by yum')
         self.remoter.run('sudo yum install -y %s' % pkgs)
 
-    def is_docker(self):
-        return self.__class__.__name__ == 'DockerNode'
+    @staticmethod
+    def is_docker() -> bool:
+        return False
 
-    def is_gce(self):
-        return self.__class__.__name__ == "GCENode"
+    @staticmethod
+    def is_gce() -> bool:
+        return False
 
     def scylla_pkg(self):
         return 'scylla-enterprise' if self.is_enterprise else 'scylla'
 
-    def file_exists(self, file_path):
+    def file_exists(self, file_path: str) -> Optional[bool]:
         try:
-            result = self.remoter.run('sudo test -e %s' % file_path,
-                                      ignore_status=True)
-            return result.exit_status == 0
+            return self.remoter.sudo(f"test -e '{file_path}'", ignore_status=True).ok
         except Exception as details:  # pylint: disable=broad-except
-            self.log.error('Error checking if file %s exists: %s',
-                           file_path, details)
+            self.log.error("Error checking if file %s exists: %s", file_path, details)
+            return None
 
-    @property
+    @cached_property
     def is_enterprise(self):
-        if self._is_enterprise is None:
-            if self.is_rhel_like():
-                result = self.remoter.run("sudo yum search scylla-enterprise 2>&1", ignore_status=True)
-                if 'One of the configured repositories failed (Extra Packages for Enterprise Linux 7 - x86_64)' in result.stdout:
-                    result = self.remoter.run("sudo cat /etc/yum.repos.d/scylla.repo")
-                    self._is_enterprise = 'enterprise' in result.stdout
-                else:
-                    self._is_enterprise = bool('scylla-enterprise.x86_64' in result.stdout or
-                                               'No matches found' not in result.stdout)
-            else:
-                result = self.remoter.run("sudo apt-cache search scylla-enterprise", ignore_status=True)
-                self._is_enterprise = 'scylla-enterprise' in result.stdout
-
-        return self._is_enterprise
+        if self.distro.is_rhel_like:
+            result = self.remoter.sudo("yum search scylla-enterprise 2>&1", ignore_status=True).stdout
+            if 'One of the configured repositories failed (Extra Packages for Enterprise Linux 7 - x86_64)' in result:
+                return "enterprise" in self.remoter.sudo("cat /etc/yum.repos.d/scylla.repo").stdout
+            return "scylla-enterprise.x86_64" in result or "No matches found" not in result
+        return "scylla-enterprise" in self.remoter.sudo("apt-cache search scylla-enterprise", ignore_status=True).stdout
 
     @property
     def public_ip_address(self):
@@ -1182,20 +1173,15 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         mark_path = '/var/lib/scylla-housekeeping/housekeeping.uuid.marked'
         cmd = 'curl "https://i6a5h9l1kl.execute-api.us-east-1.amazonaws.com/prod/check_version?uu=%s&mark=scylla"'
 
-        uuid_result = self.remoter.run('test -e %s' % uuid_path,
-                                       ignore_status=True, verbose=verbose)
-        mark_result = self.remoter.run('test -e %s' % mark_path,
-                                       ignore_status=True, verbose=verbose)
-        if uuid_result.exit_status == 0 and mark_result.exit_status != 0:
+        uuid_exists = self.remoter.run('test -e %s' % uuid_path, ignore_status=True, verbose=verbose).ok
+        mark_exists = self.remoter.run('test -e %s' % mark_path, ignore_status=True, verbose=verbose).ok
+        if uuid_exists and not mark_exists:
             result = self.remoter.run('cat %s' % uuid_path, verbose=verbose)
             self.remoter.run(cmd % result.stdout.strip(), ignore_status=True)
-
             if self.is_docker():  # in docker we don't have scylla user and run as root
-                self.remoter.run('sudo touch %s' % mark_path,
-                                 verbose=verbose)
+                self.remoter.sudo('touch %s' % mark_path, verbose=verbose)
             else:
-                self.remoter.run('sudo -u scylla touch %s' % mark_path,
-                                 verbose=verbose)
+                self.remoter.run('sudo -u scylla touch %s' % mark_path, verbose=verbose)
 
     def wait_db_up(self, verbose=True, timeout=3600):
         text = None
@@ -1680,12 +1666,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                                                                "system_info_encryption",
                                                                "kmip_hosts:", )):
                 self.remoter.send_files(src="./data_dir/encrypt_conf", dst="/tmp/")
-                self.remoter.run_shell_script(dedent("""\
+                self.remoter.run_shell_script("""\
                     rm -rf /etc/encrypt_conf
                     mv -f /tmp/encrypt_conf /etc
                     mkdir -p /etc/scylla/encrypt_conf /etc/encrypt_conf/system_key_dir
                     chown -R scylla:scylla /etc/scylla /etc/encrypt_conf
-                """), sudo=True)
+                """, sudo=True)
                 self.remoter.sudo("md5sum /etc/encrypt_conf/*.pem", ignore_status=True)
 
         if append_scylla_args:
@@ -1787,14 +1773,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         See https://docs.scylladb.com/operating-scylla/procedures/cluster-management/clear_data/
         """
         clean_commands_list = [
-            "sudo rm -rf /var/lib/scylla/data",
-            "sudo find /var/lib/scylla/commitlog -type f -delete",
-            "sudo find /var/lib/scylla/hints -type f -delete",
-            "sudo find /var/lib/scylla/view_hints -type f -delete"
+            "rm -rf /var/lib/scylla/data",
+            "find /var/lib/scylla/commitlog -type f -delete",
+            "find /var/lib/scylla/hints -type f -delete",
+            "find /var/lib/scylla/view_hints -type f -delete"
         ]
         self.log.debug("Clean all files from scylla data dirs")
         for cmd in clean_commands_list:
-            self.remoter.run(cmd, ignore_status=True)
+            self.remoter.sudo(cmd, ignore_status=True)
 
     def clean_scylla(self):
         """
@@ -3054,6 +3040,7 @@ class ClusterNodesNotReady(Exception):
 
 
 class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-instance-attributes
+    node_setup_requires_scylla_restart = True
 
     def __init__(self, *args, **kwargs):
         self.termination_event = threading.Event()
@@ -3160,13 +3147,12 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             else:
                 binary_path = '/usr/bin/scylla'
             # replace the binary
-            prereqs_script = dedent("""
+            node.remoter.run_shell_script(f"""\
                 cp -f {binary_path} {binary_path}.origin
                 cp -f /tmp/scylla {binary_path}
-                chown root.root {binary_path}
+                chown root:root {binary_path}
                 chmod +x {binary_path}
-            """.format(binary_path=binary_path))
-            node.remoter.run("sudo bash -ce '%s'" % prereqs_script)
+            """, sudo=True)
             _queue.put(node)
             _queue.task_done()
 
@@ -3205,7 +3191,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.remoter.send_files(new_scylla_bin, '/tmp/scylla', verbose=True)
             # replace the packages
             node.remoter.run('yum list installed | grep scylla')
-            node.remoter.run('sudo rpm -URvh --replacefiles /tmp/scylla/*.rpm', ignore_status=False, verbose=True)
+            node.remoter.sudo('rpm -URvh --replacefiles /tmp/scylla/*.rpm', ignore_status=False, verbose=True)
             node.remoter.run('yum list installed | grep scylla')
             _queue.put(node)
             _queue.task_done()
@@ -3587,12 +3573,13 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
             self._scylla_post_install(node, install_scylla)
 
-            node.stop_scylla_server(verify_down=False)
-            node.clean_scylla_data()
-            node.start_scylla_server(verify_up=False)
+            if self.node_setup_requires_scylla_restart:
+                node.stop_scylla_server(verify_down=False)
+                node.clean_scylla_data()
+                node.start_scylla_server(verify_up=False)
 
             self.log.info('io.conf right after reboot')
-            node.remoter.run('sudo cat /etc/scylla.d/io.conf')
+            node.remoter.sudo('cat /etc/scylla.d/io.conf')
 
             if self.params.get('use_mgmt', None):
                 pkgs_url = self.params.get('scylla_mgmt_pkg', None)
@@ -3621,10 +3608,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
     def _scylla_install(self, node):
         node.update_repo_cache()
         if node.init_system == 'systemd' and (node.is_ubuntu() or node.is_debian()):
-            node.remoter.run('sudo systemctl disable apt-daily.timer')
-            node.remoter.run('sudo systemctl disable apt-daily-upgrade.timer')
-            node.remoter.run('sudo systemctl stop apt-daily.timer', ignore_status=True)
-            node.remoter.run('sudo systemctl stop apt-daily-upgrade.timer', ignore_status=True)
+            node.remoter.sudo('systemctl disable apt-daily.timer')
+            node.remoter.sudo('systemctl disable apt-daily-upgrade.timer')
+            node.remoter.sudo('systemctl stop apt-daily.timer', ignore_status=True)
+            node.remoter.sudo('systemctl stop apt-daily-upgrade.timer', ignore_status=True)
         node.clean_scylla()
         node.install_scylla(scylla_repo=self.params.get('scylla_repo'))
 
@@ -3733,7 +3720,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.stop_scylla_server()
 
         for node in self.nodes:
-            node.remoter.run(f'sudo cp -r "/var/lib/scylla/data/{ks}" "/var/lib/scylla/data/{backup_name}"')
+            node.remoter.sudo(f'cp -r "/var/lib/scylla/data/{ks}" "/var/lib/scylla/data/{backup_name}"')
 
         for node in self.nodes:
             node.start_scylla_server()
@@ -3746,8 +3733,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.stop_scylla_server()
 
         for node in self.nodes:
-            node.remoter.run(f'sudo rm -rf "/var/lib/scylla/data/{ks}";'
-                             f'sudo cp -r "/var/lib/scylla/data/{backup_name}" "/var/lib/scylla/data/{ks}"')
+            node.remoter.run_shell_script(f"""\
+                rm -rf '/var/lib/scylla/data/{ks}'
+                cp -r '/var/lib/scylla/data/{backup_name}' '/var/lib/scylla/data/{ks}'
+            """, sudo=True)
 
         for node in self.nodes:
             node.start_scylla_server()

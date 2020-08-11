@@ -621,6 +621,9 @@ class SCTConfiguration(dict):
         dict(name="minikube_version", env="SCT_MINIKUBE_VERSION", type=str,
              help=""),
 
+        dict(name="k8s_cert_manager_version", env="SCT_K8S_CERT_MANAGER_VERSION", type=str,
+             help=""),
+
         # docker config options
 
         dict(name="docker_image", env="SCT_DOCKER_IMAGE", type=str, help=""),

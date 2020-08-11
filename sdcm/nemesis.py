@@ -3009,3 +3009,12 @@ class MemoryStressMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_memory_stress()
+
+
+class ScyllaOperatorGrowShrinkClusterNemesis(GrowShrinkClusterNemesis):
+    kubernetes = True
+
+    def set_target_node(self):
+        self.target_node = self.cluster.nodes[-1]  # can withdraw last node only
+        self.set_current_running_nemesis(node=self.target_node)
+        self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)

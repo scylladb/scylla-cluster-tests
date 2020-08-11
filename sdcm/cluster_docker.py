@@ -75,6 +75,9 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
             assert int(container.labels["NodeIndex"]) == node_index, "Container labeled with wrong index."
             self._containers["node"] = container
 
+    def is_docker(self):
+        return True
+
     @cached_property
     def tags(self) -> Dict[str, str]:
         return {**super().tags,
@@ -97,7 +100,7 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=300):
         if verify_down:
             self.wait_db_down(timeout=timeout)
-        self.remoter.run('sudo supervisorctl start scylla', timeout=timeout)
+        self.remoter.sudo('supervisorctl start scylla', timeout=timeout)
         if verify_up:
             self.wait_db_up(timeout=verify_up_timeout)
 
@@ -108,7 +111,7 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
     def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
         if verify_up:
             self.wait_db_up(timeout=timeout)
-        self.remoter.run('sudo supervisorctl stop scylla', timeout=timeout)
+        self.remoter.sudo('supervisorctl stop scylla', timeout=timeout)
         if verify_down:
             self.wait_db_down(timeout=timeout)
 
@@ -119,7 +122,7 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
     def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=300, ignore_status=False):
         if verify_up_before:
             self.wait_db_up(timeout=timeout)
-        self.remoter.run("sudo supervisorctl restart scylla", timeout=timeout)
+        self.remoter.sudo("supervisorctl restart scylla", timeout=timeout)
         if verify_up_after:
             self.wait_db_up(timeout=timeout)
 
@@ -239,7 +242,7 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
         self.node_config_setup(node, seed_address, endpoint_snitch)
 
         node.stop_scylla_server(verify_down=False)
-        node.remoter.run('sudo rm -Rf /var/lib/scylla/data/*')  # Clear data folder to drop wrong cluster name data.
+        node.remoter.sudo('rm -Rf /var/lib/scylla/data/*')  # Clear data folder to drop wrong cluster name data.
         node.start_scylla_server(verify_up=False)
 
         node.wait_db_up(verbose=verbose, timeout=timeout)
@@ -261,7 +264,7 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
                 f"is less than recommended value ({recommended_value})")
 
     @cluster.wait_for_init_wrap
-    def wait_for_init(self, node_list=None, verbose=False, timeout=None):  # pylint: disable=unused-argument,arguments-differ
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None, *_, **__):
         node_list = node_list if node_list else self.nodes
         self.wait_for_nodes_up_and_normal(nodes=node_list)
 
@@ -314,6 +317,10 @@ class DockerMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method
                          base_logdir=base_logdir,
                          node_prefix=node_prefix)
         self.node_index = node_index
+
+    @staticmethod
+    def is_docker() -> bool:
+        return True
 
     @cached_property
     def tags(self) -> Dict[str, str]:
@@ -392,7 +399,7 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disabl
             except Exception as exc:  # pylint: disable=broad-except
                 self.log.error(f"Stopping scylla monitoring failed with {str(exc)}")
             try:
-                node.remoter.run(f"sudo rm -rf '{self._monitor_install_path_base}'")
+                node.remoter.sudo(f"rm -rf '{self._monitor_install_path_base}'")
                 self.log.error(f"Cleaning up scylla monitoring succeeded")
             except Exception as exc:  # pylint: disable=broad-except
                 self.log.error(f"Cleaning up scylla monitoring failed with {str(exc)}")
