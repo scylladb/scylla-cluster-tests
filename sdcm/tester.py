@@ -20,11 +20,10 @@ import random
 import unittest
 import warnings
 from uuid import uuid4
-from functools import wraps, partial
+from functools import wraps
 import threading
 import signal
 import sys
-import atexit
 
 import boto3.session
 from invoke.exceptions import UnexpectedExit, Failure
@@ -829,65 +828,23 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                            user_prefix=self.params.get("user_prefix"),
                                            params=self.params,
                                            gce_datacenter=gce_datacenter)
-
         self.k8s_cluster.wait_for_init()
+        self.k8s_cluster.deploy_cert_manager()
+        self.k8s_cluster.deploy_scylla_operator()
 
         # This should remove some of the unpredictability of pods startup time.
-        scylla_docker_image = f'scylladb/scylla:{self.params.get("scylla_version")}'
-        self.log.info("Pull `%s' to Minikube' Docker environment", scylla_docker_image)
-        self.k8s_cluster.run(f"docker pull -q {scylla_docker_image}")
+        self.k8s_cluster.docker_pull(f'scylladb/scylla:{self.params.get("scylla_version")}')
 
-        helm = partial(KubernetesOps.helm, self.k8s_cluster, remoter=self.k8s_cluster.nodes[0].remoter)
-        kubectl = partial(KubernetesOps.kubectl, self.k8s_cluster)
-        apply_file = partial(KubernetesOps.apply_file, self.k8s_cluster)
+        self.db_cluster = \
+            cluster_k8s.MinikubeScyllaPodCluster(k8s_cluster=self.k8s_cluster,
+                                                 scylla_cluster_config=cluster_k8s.SCYLLA_CLUSTER_CONFIG,
+                                                 scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
+                                                 user_prefix=self.params.get("user_prefix"),
+                                                 n_nodes=self.params.get("n_db_nodes"),
+                                                 params=self.params)
 
-        self.log.info("Deploy cert-manager")
-        kubectl("create namespace cert-manager")
-        helm("repo add jetstack https://charts.jetstack.io")
-        helm("install cert-manager jetstack/cert-manager --version v0.15.2 --set installCRDs=true",
-             namespace="cert-manager")
-        time.sleep(10)
-        kubectl("wait --timeout=1m --all --for=condition=Ready pod", namespace="cert-manager")
-
-        self.log.info("Deploy Scylla Operator")
-        apply_file(cluster_k8s.SCYLLA_OPERATOR_CONFIG)
-        time.sleep(10)
-        kubectl("wait --timeout=1m --all --for=condition=Ready pod", namespace="scylla-operator-system")
-
-        self.log.info("Create and initialize a Scylla cluster")
-        apply_file(cluster_k8s.SCYLLA_CLUSTER_CONFIG)
-
-        for _ in range(self.params.get("n_db_nodes")):
-            time.sleep(30)
-            kubectl("wait --timeout=3m --all --for=condition=Ready pod", namespace="scylla")
-
-        self.log.debug("Check Scylla cluster")
-        kubectl("get clusters.scylla.scylladb.com", namespace="scylla")
-        kubectl("get pods", namespace="scylla")
-
-        self.db_cluster = cluster_k8s.ScyllaPodCluster(k8s_cluster=self.k8s_cluster,
-                                                       user_prefix=self.params.get("user_prefix"),
-                                                       n_nodes=self.params.get("n_db_nodes"),
-                                                       params=self.params)
-
-        hydra_dest_ip = self.k8s_cluster.nodes[0].external_address
-        nodes_dest_ip = self.k8s_cluster.nodes[0].ip_address
-
-        hydra_iptables_rules = []
-        nodes_iptables_rules = []
-
-        for node in self.db_cluster.nodes:
-            KubernetesOps.expose_pod_ports(self.k8s_cluster, node.name, ports=[3000, 9042, 9180, ],
-                                           namespace=self.db_cluster.namespace)
-            hydra_iptables_rules.append(node.iptables_node_redirect_rules(hydra_dest_ip))
-            nodes_iptables_rules.append(node.iptables_node_redirect_rules(nodes_dest_ip))
-        hydra_iptables_rules = "\n".join(hydra_iptables_rules).replace("iptables", "iptables-legacy")
-        nodes_iptables_rules = "\n".join(nodes_iptables_rules)
-
-        LOCALRUNNER.run(f'bash -cxe "{hydra_iptables_rules}"')
-        atexit.register(LOCALRUNNER.run, f'''bash -cxe "{hydra_iptables_rules.replace(' -A ', ' -D ')}"''')
-
-        startup_script = "\n".join((Setup.get_startup_script(), nodes_iptables_rules, ))
+        self.log.debug("Update startup script with iptables rules")
+        startup_script = "\n".join((Setup.get_startup_script(), *self.db_cluster.nodes_iptables_redirect_rules(), ))
         Setup.get_startup_script = lambda: startup_script
 
         self.loaders = LoaderSetGCE(gce_image=self.params.get("gce_image"),

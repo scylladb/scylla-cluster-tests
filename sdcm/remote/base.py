@@ -18,6 +18,7 @@ import logging
 import re
 import os
 import subprocess
+from textwrap import dedent
 
 from invoke.watchers import StreamWatcher, Responder
 from invoke.runners import Result
@@ -132,8 +133,9 @@ class CommandRunner(metaclass=ABCMeta):
                          watchers: Optional[List[StreamWatcher]] = None,
                          sudo: bool = False,
                          shell_cmd: str = "bash -cxe",
-                         quote: str = '"') -> Result:
-        return (self.sudo if sudo else self.run)(cmd=f"{shell_cmd} {quote}{cmd}{quote}",
+                         quote: str = '"',
+                         preprocessor=dedent) -> Result:
+        return (self.sudo if sudo else self.run)(cmd=f"{shell_cmd} {quote}{preprocessor(cmd)}{quote}",
                                                  timeout=timeout,
                                                  ignore_status=ignore_status,
                                                  verbose=verbose,

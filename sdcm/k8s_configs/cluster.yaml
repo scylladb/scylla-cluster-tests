@@ -78,7 +78,7 @@ kind: Cluster
 metadata:
   labels:
     controller-tools.k8s.io: "1.0"
-  name: "${SCT_K8S_SCYLLA_CLUSTER_NAME}"
+  name: ${SCT_K8S_SCYLLA_CLUSTER_NAME}
   namespace: scylla
 spec:
   version: ${SCT_SCYLLA_VERSION}
@@ -90,7 +90,7 @@ spec:
       - name: ${SCT_K8S_SCYLLA_RACK}
         scyllaConfig: "scylla-config"
         scyllaAgentConfig: "scylla-agent-config"
-        members: ${SCT_N_DB_NODES}
+        members: 0
         storage:
           capacity: ${SCT_K8S_SCYLLA_DISK_GI}Gi
         resources:
