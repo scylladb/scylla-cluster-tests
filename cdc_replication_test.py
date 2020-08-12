@@ -69,7 +69,7 @@ class CDCReplicationTest(ClusterTester):
                                                consistency_level=ConsistencyLevel.QUORUM, fetch_size=1000))
             write_cql_result(res, os.path.join(self.logdir, 'master-table'))
 
-        with self.db_cluster.cql_connection_patient(node=replica_node) as sess:
+        with self.cs_db_cluster.cql_connection_patient(node=replica_node) as sess:
             self.log.info('Fetching replica table...')
             res = sess.execute(SimpleStatement(f'select * from {self.KS_NAME}.{self.TABLE_NAME}',
                                                consistency_level=ConsistencyLevel.QUORUM, fetch_size=1000))
@@ -131,7 +131,7 @@ class CDCReplicationTest(ClusterTester):
 
         self.log.info('Creating schema on replica cluster.')
         replica_node = self.cs_db_cluster.nodes[0]
-        with self.db_cluster.cql_connection_patient(node=replica_node) as sess:
+        with self.cs_db_cluster.cql_connection_patient(node=replica_node) as sess:
             sess.execute(f"create keyspace if not exists {self.KS_NAME}"
                          " with replication = {'class': 'SimpleStrategy', 'replication_factor': 1}")
             for stmt in ut_ddls + table_ddls:
