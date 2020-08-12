@@ -3104,7 +3104,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         return self.cql_connection_exclusive(**kwargs)
 
     def get_non_system_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments
-                                  filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True):
+                                  filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True) -> List[str]:
         regular_column_names = ["keyspace_name", "table_name"]
         materialized_view_column_names = ["keyspace_name", "view_name"]
         regular_table_names, materialized_view_table_names = set(), set()
@@ -3143,7 +3143,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         if not regular_table_names:
             return []
 
-        return regular_table_names - materialized_view_table_names
+        return list(regular_table_names - materialized_view_table_names)
 
 
 class NodeSetupFailed(Exception):
