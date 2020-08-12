@@ -9,7 +9,7 @@ artifactsPipeline(
     test_config: 'test-cases/artifacts/amazon2.yaml',
     backend: 'aws',
     region_name: 'eu-west-1',
-    instance_provision: 'spot_low_price',
+    provision_type: 'spot_low_price',
     scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo',
 
     timeout: [time: 60, unit: 'MINUTES'],
