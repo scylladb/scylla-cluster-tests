@@ -45,9 +45,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('ip_ssh_connections', 'private')}",
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
-            string(defaultValue: "${pipelineParams.get('instance_provision', 'spot_low_price')}",
+            string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
                    description: 'on_demand|spot_low_price|spot',
-                   name: 'instance_provision')
+                   name: 'provision_type')
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
@@ -118,7 +118,7 @@ def call(Map pipelineParams) {
 
                                                 export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                                 export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
-                                                export SCT_INSTANCE_PROVISION="${params.instance_provision}"
+                                                export SCT_INSTANCE_PROVISION="${params.provision_type}"
 
                                                 echo "start test ......."
                                                 ./docker/env/hydra.sh run-test artifacts_test --backend ${params.backend} --logdir "`pwd`"
