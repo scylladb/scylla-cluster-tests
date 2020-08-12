@@ -226,7 +226,6 @@ class UpgradeTest(FillDatabaseData):
         node.run_nodetool("snapshot")
         node.stop_scylla_server(verify_down=False)
 
-        node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
         if node.is_rhel_like():
             node.remoter.run('sudo cp ~/scylla.repo-backup /etc/yum.repos.d/scylla.repo')
             node.remoter.run('sudo chown root.root /etc/yum.repos.d/scylla.repo')
@@ -272,6 +271,7 @@ class UpgradeTest(FillDatabaseData):
 
             node.remoter.run('sudo systemctl daemon-reload')
 
+        node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
         result = node.remoter.run('sudo find /var/lib/scylla/data/system')
         snapshot_name = re.findall(r"system/peers-[a-z0-9]+/snapshots/(\d+)\n", result.stdout)
         # cmd = r"DIR='/var/lib/scylla/data/system'; for i in `sudo ls $DIR`;do sudo test -e $DIR/$i/snapshots/%s && sudo find $DIR/$i/snapshots/%s -type f -exec sudo /bin/cp {} $DIR/$i/ \;; done" % (snapshot_name[0], snapshot_name[0])
