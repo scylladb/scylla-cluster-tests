@@ -44,7 +44,7 @@ from sdcm.log import SDCMAdapter
 from sdcm.keystore import KeyStore
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm import wait
-from sdcm.sct_events import DisruptionEvent, DbEventsFilter, Severity, InfoEvent
+from sdcm.sct_events import DisruptionEvent, DbEventsFilter, Severity, InfoEvent, raise_event_on_failure
 from sdcm.db_stats import PrometheusDBStats
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
@@ -185,6 +185,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
 
+    @raise_event_on_failure
     def run(self, interval=None):
         if interval:
             self.interval = interval * 60
