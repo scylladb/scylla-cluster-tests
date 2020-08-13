@@ -31,6 +31,8 @@ instance_type_loader: 'c5.4xlarge'
 
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 30
+nemesis_filter_seeds: false
+seeds_num: 2
 
 user_prefix: 'longevity-tls-1tb-7d'
 space_node_threshold: 644245094
