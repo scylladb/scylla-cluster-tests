@@ -17,10 +17,11 @@ from os.path import normpath, expanduser, exists
 from sys import float_info
 from io import StringIO
 from warnings import warn
-from socket import socket, AF_INET, SOCK_STREAM, gaierror, error as sock_error
+from socket import socket, AF_INET, AF_INET6, SOCK_STREAM, gaierror, gethostbyname, error as sock_error
 from threading import Thread, Lock, Event, BoundedSemaphore
 from abc import abstractmethod, ABC
 from queue import SimpleQueue as Queue
+import ipaddress
 
 from ssh2.channel import Channel  # pylint: disable=no-name-in-module
 from ssh2.exceptions import AuthenticationError  # pylint: disable=no-name-in-module
@@ -386,13 +387,28 @@ class Client:  # pylint: disable=too-many-instance-attributes
         except:  # pylint: disable=bare-except
             raise AuthenticationException("Password authentication failed")
 
+    @staticmethod
+    def _get_socket_family(host):
+        try:
+            tmp = ipaddress.ip_address(host)
+            if isinstance(tmp, ipaddress.IPv4Address):
+                return AF_INET
+            return AF_INET6
+        except ValueError:
+            return None
+
     def _init_socket(self, host: str, port: int):
         if self.sock:
             try:
                 self.sock.close()
             except:  # pylint: disable=bare-except
                 pass
-        self.sock = socket(AF_INET, SOCK_STREAM)
+        family = self._get_socket_family(host)
+        if family is None:
+            family = self._get_socket_family(gethostbyname(host))
+            if family is None:
+                raise ValueError(f"Can't resolve '{host}' to and ip")
+        self.sock = socket(family, SOCK_STREAM)
         if self.timings.socket_timeout:
             self.sock.settimeout(self.timings.socket_timeout)
         try:
