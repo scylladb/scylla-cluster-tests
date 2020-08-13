@@ -9,19 +9,22 @@ from sdcm.remote import RemoteLibSSH2CmdRunner, RemoteCmdRunner, LocalCmdRunner,
 
 
 ALL_COMMANDS_WITH_ALL_OPTIONS = []
-for cmd in [
-    'echo 0',
-    'echo 0; false',
-    'adasdasdasd',
-    "/bin/bash -c \"printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\n%.0s' {1..100};\""]:
-    for verbose_value in [False, True]:
-        for ignore_status_value in [False, True]:
-            for new_session_value in [False, True]:
-                for retry_value in [1, 2]:
-                    for timeout_value in [None, 5]:
-                        ALL_COMMANDS_WITH_ALL_OPTIONS.append(
-                            (cmd, verbose_value, ignore_status_value, new_session_value, retry_value, timeout_value))
+
+
+for ip in ['::1', '127.0.0.1']:
+    for cmd in [
+        'echo 0',
+        'echo 0; false',
+        'adasdasdasd',
+        "/bin/bash -c \"printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\n%.0s' {1..100};\""]:
+        for verbose_value in [False, True]:
+            for ignore_status_value in [False, True]:
+                for new_session_value in [False, True]:
+                    for retry_value in [1, 2]:
+                        for timeout_value in [None, 5]:
+                            ALL_COMMANDS_WITH_ALL_OPTIONS.append(
+                                (ip, cmd, verbose_value, ignore_status_value, new_session_value, retry_value, timeout_value))
 
 
 class TestRemoteCmdRunners(unittest.TestCase):
@@ -51,8 +54,8 @@ class TestRemoteCmdRunners(unittest.TestCase):
         remoter.stop()
 
     @staticmethod
-    def _create_and_run_in_same_thread(remoter_type, key_file, stmt, kwargs, paramiko_thread_results):
-        remoter = remoter_type(hostname='127.0.0.1', user=getpass.getuser(), key_file=key_file)
+    def _create_and_run_in_same_thread(remoter_type, host, key_file, stmt, kwargs, paramiko_thread_results):
+        remoter = remoter_type(hostname=host, user=getpass.getuser(), key_file=key_file)
         try:
             result = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
@@ -131,10 +134,10 @@ class TestRemoteCmdRunners(unittest.TestCase):
         for future in threads:
             future.join()
 
-    @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
+    # @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
     @unittest.skip('To be ran manually')
     def test_run_in_mainthread(  # pylint: disable=too-many-arguments
-            self, stmt: str, verbose: bool, ignore_status: bool, new_session: bool, retry: int,
+            self, host: str, stmt: str, verbose: bool, ignore_status: bool, new_session: bool, retry: int,
             timeout: Union[float, None]):
         kwargs = {
             'verbose': verbose,
@@ -148,7 +151,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
             expected = exc
 
         remoter = RemoteCmdRunner(
-            hostname='127.0.0.1', user=getpass.getuser(), key_file=self.key_file)
+            hostname=host, user=getpass.getuser(), key_file=self.key_file)
         try:
             paramiko_result = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
@@ -177,10 +180,10 @@ class TestRemoteCmdRunners(unittest.TestCase):
         self._compare_results(expected, lib2ssh_result, stmt=stmt, kwargs=kwargs)
         self._compare_results(expected, lib2ssh_result2, stmt=stmt, kwargs=kwargs)
 
-    @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
+    # @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
     @unittest.skip('To be ran manually')
     def test_create_and_run_in_same_thread(  # pylint: disable=too-many-arguments,too-many-locals
-            self, stmt: str, verbose: bool, ignore_status: bool, new_session: bool,
+            self, host: str, stmt: str, verbose: bool, ignore_status: bool, new_session: bool,
             retry: int, timeout: Union[float, None]):
         kwargs = {
             'verbose': verbose,
@@ -198,14 +201,14 @@ class TestRemoteCmdRunners(unittest.TestCase):
         self._run_parallel(
             3,
             thread_body=self._create_and_run_in_same_thread,
-            args=(RemoteCmdRunner, self.key_file, stmt, kwargs, paramiko_thread_results),
+            args=(RemoteCmdRunner, host, self.key_file, stmt, kwargs, paramiko_thread_results),
             kwargs={})
 
         libssh2_thread_results = []
         self._run_parallel(
             3,
             thread_body=self._create_and_run_in_same_thread,
-            args=(RemoteLibSSH2CmdRunner, self.key_file, stmt, kwargs, libssh2_thread_results),
+            args=(RemoteLibSSH2CmdRunner, host, self.key_file, stmt, kwargs, libssh2_thread_results),
             kwargs={})
 
         for paramiko_result in paramiko_thread_results:
@@ -214,10 +217,10 @@ class TestRemoteCmdRunners(unittest.TestCase):
         for libssh2_result in libssh2_thread_results:
             self._compare_results(expected, libssh2_result, stmt=stmt, kwargs=kwargs)
 
-    @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
+    # @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
     @unittest.skip('To be ran manually')
     def test_create_and_run_in_separate_thread(  # pylint: disable=too-many-arguments
-            self, stmt: str, verbose: bool, ignore_status: bool,
+            self, host: str, stmt: str, verbose: bool, ignore_status: bool,
             new_session: bool, retry: int, timeout: Union[float, None]):
         kwargs = {
             'verbose': verbose,
@@ -233,7 +236,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
 
         # Paramiko fails too often when it is invoked like that, that is why it is not in the test
 
-        remoter = RemoteLibSSH2CmdRunner(hostname='127.0.0.1', user=getpass.getuser(), key_file=self.key_file)
+        remoter = RemoteLibSSH2CmdRunner(hostname=host, user=getpass.getuser(), key_file=self.key_file)
         libssh2_thread_results = []
 
         self._run_parallel(
@@ -246,20 +249,20 @@ class TestRemoteCmdRunners(unittest.TestCase):
             self.log.error(str(libssh2_result))
             self._compare_results(expected, libssh2_result, stmt=stmt, kwargs=kwargs)
 
-    @parameterized.expand([
-        (
-            RemoteLibSSH2CmdRunner,
-            "/bin/bash -c \"printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            "AAA\\n%.0s' {1..100};\""
-        ),
-        (
-            RemoteCmdRunner,
-            "/bin/bash -c \"printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            "AA\\n%.0s' {1..100};\""
-        )
-    ])
+    # @parameterized.expand([
+    #     (
+    #         RemoteLibSSH2CmdRunner,
+    #         "/bin/bash -c \"printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    #         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    #         "AAA\\n%.0s' {1..100};\""
+    #     ),
+    #     (
+    #         RemoteCmdRunner,
+    #         "/bin/bash -c \"printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    #         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    #         "AA\\n%.0s' {1..100};\""
+    #     )
+    # ])
     @unittest.skip('To be ran manually')
     def test_load_1000_threads(self, remoter_type, stmt: str):
         kwargs = {
