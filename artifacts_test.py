@@ -53,12 +53,7 @@ class ArtifactsTest(ClusterTester):
 
     def get_email_data(self):
         self.log.info("Prepare data for email")
-
         email_data = self._get_common_email_data()
-
-        # Normalize backend name, e.g., `aws' -> `AWS', `gce' -> `GCE', `docker' -> `Docker'.
-        backend = self.params.get("cluster_backend")
-        backend = {"aws": "AWS", "gce": "GCE", "docker": "Docker"}.get(backend, backend)
         try:
             node = self.node
         except:  # pylint: disable=bare-except
@@ -69,9 +64,7 @@ class ArtifactsTest(ClusterTester):
             scylla_packages = None
         if not scylla_packages:
             scylla_packages = ['No scylla packages are installed. Please check log files.']
-        email_data.update({"backend": backend,
-                           "region_name": self.params.get("region_name"),
-                           "scylla_instance_type": self.params.get('instance_type_db',
+        email_data.update({"scylla_instance_type": self.params.get('instance_type_db',
                                                                    self.params.get('gce_instance_type_db')),
                            "scylla_node_image": node.image if node else 'Node has not been initialized',
                            "scylla_packages_installed": scylla_packages,

@@ -109,17 +109,21 @@ class Email():
 
 
 class BaseEmailReporter:
-    COMMON_EMAIL_FIELDS = ("build_url",
-                           "end_time",
-                           "events_summary",
-                           "last_events",
-                           "nodes",
-                           "start_time",
-                           "subject",
-                           "test_id",
-                           "test_name",
-                           "test_status",
-                           "username",)
+    COMMON_EMAIL_FIELDS = (
+        "backend",
+        "build_url",
+        "end_time",
+        "events_summary",
+        "last_events",
+        "nodes",
+        "region_name",
+        "start_time",
+        "subject",
+        "test_id",
+        "test_name",
+        "test_status",
+        "username",
+    )
     _fields = ()
     email_template_file = 'results_base.html'
     last_events_body_limit_per_severity = 35000
@@ -295,36 +299,40 @@ class BaseEmailReporter:
 
 
 class ManagerUpgradeEmailReporter(BaseEmailReporter):
-    _fields = ("manager_server_repo",
-               "manager_agent_repo",
-               "scylla_version",
-               "scylla_instance_type",
-               "number_of_db_nodes",
-               "node_regions",
-               "target_manager_server_repo",
-               "target_manager_agent_repo")
+    _fields = (
+        "manager_server_repo",
+        "manager_agent_repo",
+        "scylla_version",
+        "scylla_instance_type",
+        "number_of_db_nodes",
+        "target_manager_server_repo",
+        "target_manager_agent_repo",
+    )
     email_template_file = "results_manager_upgrade.html"
 
 
 class MgmtEmailReporter(BaseEmailReporter):
-    _fields = ("manager_server_repo",
-               "manager_agent_repo",
-               "scylla_version",
-               "scylla_instance_type",
-               "number_of_db_nodes",
-               "node_regions")
+    _fields = (
+        "manager_server_repo",
+        "manager_agent_repo",
+        "scylla_version",
+        "scylla_instance_type",
+        "number_of_db_nodes",
+    )
     email_template_file = "results_manager.html"
 
 
 class LongevityEmailReporter(BaseEmailReporter):
-    _fields = ("grafana_screenshots",
-               "grafana_snapshots",
-               "nemesis_details",
-               "nemesis_name",
-               "number_of_db_nodes",
-               "scylla_ami_id",
-               "scylla_instance_type",
-               "scylla_version",)
+    _fields = (
+        "grafana_screenshots",
+        "grafana_snapshots",
+        "nemesis_details",
+        "nemesis_name",
+        "number_of_db_nodes",
+        "scylla_ami_id",
+        "scylla_instance_type",
+        "scylla_version",
+    )
     email_template_file = "results_longevity.html"
     last_events_body_limit_per_severity_in_attachment = 3000000
     last_events_body_limit_total_in_attachment = 10000000
@@ -378,41 +386,45 @@ class LongevityEmailReporter(BaseEmailReporter):
 
 
 class GeminiEmailReporter(LongevityEmailReporter):
-    _fields = ("gemini_cmd",
-               "gemini_version",
-               "nemesis_details",
-               "nemesis_name",
-               "number_of_db_nodes",
-               "number_of_oracle_nodes",
-               "oracle_ami_id",
-               "oracle_db_version",
-               "oracle_instance_type",
-               "results",
-               "scylla_ami_id",
-               "scylla_instance_type",
-               "scylla_version",
-               "status",
-               "grafana_screenshots",
-               "grafana_snapshots",)
+    _fields = (
+        "gemini_cmd",
+        "gemini_version",
+        "nemesis_details",
+        "nemesis_name",
+        "number_of_db_nodes",
+        "number_of_oracle_nodes",
+        "oracle_ami_id",
+        "oracle_db_version",
+        "oracle_instance_type",
+        "results",
+        "scylla_ami_id",
+        "scylla_instance_type",
+        "scylla_version",
+        "status",
+        "grafana_screenshots",
+        "grafana_snapshots",
+    )
     email_template_file = "results_gemini.html"
 
 
 class UpgradeEmailReporter(BaseEmailReporter):
-    _fields = ("number_of_db_nodes",
-               "scylla_ami_id",
-               "scylla_instance_type",
-               "scylla_version",)
+    _fields = (
+        "number_of_db_nodes",
+        "scylla_ami_id",
+        "scylla_instance_type",
+        "scylla_version",
+    )
     email_template_file = "results_upgrade.html"
 
 
 class ArtifactsEmailReporter(BaseEmailReporter):
-    _fields = ("backend",
-               "region_name",
-               "scylla_instance_type",
-               "scylla_node_image",
-               "scylla_packages_installed",
-               "scylla_repo",
-               "scylla_version",)
+    _fields = (
+        "scylla_instance_type",
+        "scylla_node_image",
+        "scylla_packages_installed",
+        "scylla_repo",
+        "scylla_version",
+    )
     email_template_file = "results_artifacts.html"
 
 
@@ -428,20 +440,21 @@ class TestAbortedEmailReporter(LongevityEmailReporter):
 
 
 class CDCReplicationReporter(LongevityEmailReporter):
-    _fields = ("grafana_screenshots",
-               "grafana_snapshots",
-               "nemesis_details",
-               "nemesis_name",
-               "number_of_db_nodes",
-               "scylla_ami_id",
-               "scylla_instance_type",
-               "scylla_version",
-               "oracle_ami_id",
-               "oracle_db_version",
-               "oracle_instance_type",
-               "number_of_oracle_nodes",
-               "consistency_status",
-               )
+    _fields = (
+        "grafana_screenshots",
+        "grafana_snapshots",
+        "nemesis_details",
+        "nemesis_name",
+        "number_of_db_nodes",
+        "scylla_ami_id",
+        "scylla_instance_type",
+        "scylla_version",
+        "oracle_ami_id",
+        "oracle_db_version",
+        "oracle_instance_type",
+        "number_of_oracle_nodes",
+        "consistency_status",
+    )
     email_template_file = "results_cdcreplication.html"
 
 

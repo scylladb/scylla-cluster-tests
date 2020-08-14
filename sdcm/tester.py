@@ -2287,11 +2287,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         start_time = format_timestamp(self.start_time)
         config_file_name = ";".join(os.path.splitext(os.path.basename(cfg))[0] for cfg in self.params["config_files"])
         test_status = self.get_test_status()
-        return {"build_url": os.environ.get("BUILD_URL"),
+        backend = self.params.get("cluster_backend")
+        region_name = self.params.get('region_name') or self.params.get('gce_datacenter')
+        return {"backend": backend,
+                "build_url": os.environ.get("BUILD_URL"),
                 "end_time": format_timestamp(time.time()),
                 "events_summary": self.get_event_summary(),
                 "last_events": self.get_events_grouped_by_category(100),
                 "nodes": [],
+                "region_name": region_name,
                 "start_time": start_time,
                 "subject": f"{test_status}: {os.environ.get('JOB_NAME') or config_file_name}: {start_time}",
                 "test_id": self.test_id,
