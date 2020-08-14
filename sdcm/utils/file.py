@@ -11,8 +11,16 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Optional, TextIO, List, Union, AnyStr
+from typing import Optional, TextIO, List, Union, AnyStr, Iterable
 from re import Pattern
+
+
+class ReiterableGenerator:
+    def __init__(self, generator):
+        self._generator = generator
+
+    def __iter__(self):
+        return self._generator()
 
 
 class File:
@@ -38,6 +46,10 @@ class File:
 
     def get_file_length(self) -> int:
         return self._open().seek(0, 2)
+
+    def flush(self):
+        self._io.flush()
+        return self
 
     def __enter__(self):
         return self
@@ -91,18 +103,20 @@ class File:
     def readlines(self, hint: int = -1) -> List[AnyStr]:
         return self._io.readlines(hint)
 
-    def read_lines_filtered(self, *patterns: Union[Pattern]) -> List[str]:
+    def read_lines_filtered(self, *patterns: Union[Pattern]) -> Iterable[str]:
         """
         Read lines from the file, filter them and yield
         :param patterns: List of patterns
         :param return_pattern: If True, it will return tuple of string and pattern
         :return:
         """
-        for line in self._io:
-            for pattern in patterns:
-                if pattern.search(line):
-                    yield line
-                    break
+        def generator():
+            for line in self._io:
+                for pattern in patterns:
+                    if pattern.search(line):
+                        yield line
+                        break
+        return ReiterableGenerator(generator=generator)
 
     def __getattr__(self, item):
         return getattr(self._io, item)
