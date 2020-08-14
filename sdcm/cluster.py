@@ -2812,20 +2812,22 @@ class FlakyRetryPolicy(RetryPolicy):
     A retry policy that retries 5 times
     """
 
-    def _retry_message(self, msg, *args, **kwargs):  # pylint: disable=unused-argument,arguments-differ
-        if kwargs['retry_num'] < 5:
-            LOGGER.debug("%s. Attempt #%s", msg, str(kwargs['retry_num']))
+    def _retry_message(self, msg, retry_num):
+        if retry_num < 5:
+            LOGGER.debug("%s. Attempt #%d", msg, retry_num)
             return self.RETRY, None
         return self.RETHROW, None
 
-    def on_read_timeout(self, *args, **kwargs):
-        return self._retry_message(msg="Retrying read after timeout", *args, **kwargs)
+    def on_read_timeout(self, query, consistency, required_responses,
+                        received_responses, data_retrieved, retry_num):
+        return self._retry_message(msg="Retrying read after timeout", retry_num=retry_num)
 
-    def on_write_timeout(self, *args, **kwargs):
-        return self._retry_message(msg="Retrying write after timeout", *args, **kwargs)
+    def on_write_timeout(self, query, consistency, write_type,
+                         required_responses, received_responses, retry_num):
+        return self._retry_message(msg="Retrying write after timeout", retry_num=retry_num)
 
-    def on_unavailable(self, *args, **kwargs):
-        return self._retry_message(msg="Retrying request after UE", *args, **kwargs)
+    def on_unavailable(self, query, consistency, required_replicas, alive_replicas, retry_num):
+        return self._retry_message(msg="Retrying request after UE", retry_num=retry_num)
 
 
 class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
