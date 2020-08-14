@@ -148,7 +148,6 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
                            "manager_agent_repo": self.params.get("scylla_mgmt_agent_repo",
                                                                  self.params.get("scylla_mgmt_repo")),
                            "number_of_db_nodes": self.params.get('n_db_nodes'),
-                           "node_regions": self.params.get("region_name"),
                            "scylla_version": self.db_cluster.nodes[0].scylla_version if self.db_cluster else "N/A",
                            "scylla_instance_type": self.params.get('instance_type_db',
                                                                    self.params.get('gce_instance_type_db')),
