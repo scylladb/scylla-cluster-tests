@@ -122,7 +122,7 @@
 | **<a name="backup_bucket_location">backup_bucket_location</a>**  | This is the bucket name to be used for backup with its region<br>(e.g. backup_bucket_location: 'manager-backup-tests') | N/A | SCT_BACKUP_BUCKET_LOCATION
 | **<a name="tag_ami_with_result">tag_ami_with_result</a>**  | If True, would tag the ami with the test final result | N/A | SCT_TAG_AMI_WITH_RESULT
 | **<a name="gce_datacenter">gce_datacenter</a>**  | Supported: us-east1 - means that the zone will be selected automatically or you can mention the zone explicitly, for example: us-east1-b | N/A | SCT_GCE_DATACENTER
-| **<a name="gce_network">gce_network</a>**  |  | N/A | SCT_GCE_DATACENTER
+| **<a name="gce_network">gce_network</a>**  |  | N/A | SCT_GCE_NETWORK
 | **<a name="gce_image">gce_image</a>**  |  | N/A | SCT_GCE_IMAGE
 | **<a name="gce_image_db">gce_image_db</a>**  |  | N/A | SCT_GCE_IMAGE_DB
 | **<a name="gce_image_monitor">gce_image_monitor</a>**  |  | N/A | SCT_GCE_IMAGE_MONITOR

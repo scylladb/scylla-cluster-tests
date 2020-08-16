@@ -538,7 +538,7 @@ class SCTConfiguration(dict):
              help="Supported: us-east1 - means that the zone will be selected automatically or "
                   "you can mention the zone explicitly, for example: us-east1-b"),
 
-        dict(name="gce_network", env="SCT_GCE_DATACENTER", type=str,
+        dict(name="gce_network", env="SCT_GCE_NETWORK", type=str,
              help=""),
 
         dict(name="gce_image", env="SCT_GCE_IMAGE", type=str,
