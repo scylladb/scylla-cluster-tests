@@ -936,7 +936,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     del added_columns_info['column_names'][column_name]
         if add:
             cmd = f"ALTER TABLE {self._add_drop_column_target_table[1]} " \
-                  f"ADD ( {', '.join(['%s %s' % (col[0], col[1]) for col in add])} );"
+                f"ADD ( {', '.join(['%s %s' % (col[0], col[1]) for col in add])} );"
             if self._add_drop_column_run_cql_query(cmd, self._add_drop_column_target_table[0]):
                 for column_name, column_type in add:
                     added_columns_info['column_names'][column_name] = column_type
@@ -957,7 +957,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         max_partitions_in_test_table = self.cluster.params.get('max_partitions_in_test_table')
 
         if not max_partitions_in_test_table:
-            raise NoMandatoryParameter('This nemesis expects "max_partitions_in_test_table" to be set')
+            raise UnsupportedNemesis(
+                'This nemesis expects mandatory "max_partitions_in_test_table" parameter to be set')
 
     def choose_partitions_for_delete(self, partitions_amount, ks_cf, with_clustering_key_data=False,
                                      exclude_partitions=None):
