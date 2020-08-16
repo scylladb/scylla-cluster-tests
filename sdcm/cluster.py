@@ -207,11 +207,11 @@ class Setup:
             return True
         if node_type is None:
             return False
-        if "db_nodes" in node_type:
+        if "db" in node_type:
             return cls.KEEP_ALIVE_DB_NODES
-        if "loader_nodes" in node_type:
+        if "loader" in node_type:
             return cls.KEEP_ALIVE_LOADER_NODES
-        if "monitor_nodes" in node_type:
+        if "monitor" in node_type:
             return cls.KEEP_ALIVE_MONITOR_NODES
         return False
 
