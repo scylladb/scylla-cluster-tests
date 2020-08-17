@@ -458,7 +458,7 @@ class ParallelObjectException(Exception):
         return ex_str
 
 
-def clean_cloud_resources(tags_dict):
+def clean_cloud_resources(tags_dict, dry_run=False):
     """
     Remove all instances with specific tags from both AWS/GCE
 
@@ -468,10 +468,10 @@ def clean_cloud_resources(tags_dict):
     if "TestId" not in tags_dict and "RunByUser" not in tags_dict:
         LOGGER.error("Can't clean cloud resources, TestId or RunByUser is missing")
         return False
-    clean_instances_aws(tags_dict)
-    clean_elastic_ips_aws(tags_dict)
-    clean_instances_gce(tags_dict)
-    clean_resources_docker(tags_dict)
+    clean_instances_aws(tags_dict, dry_run=dry_run)
+    clean_elastic_ips_aws(tags_dict, dry_run=dry_run)
+    clean_instances_gce(tags_dict, dry_run=dry_run)
+    clean_resources_docker(tags_dict, dry_run=dry_run)
     return True
 
 
@@ -569,21 +569,29 @@ def list_resources_docker(tags_dict: Optional[dict] = None,
     return dict(containers=containers, images=images)
 
 
-def clean_resources_docker(tags_dict: dict, builder_name: Optional[str] = None) -> None:
+def clean_resources_docker(tags_dict: dict, builder_name: Optional[str] = None, dry_run: bool = False) -> None:
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
 
     def delete_container(container):
         container.reload()
-        container.remove(v=True, force=True)
-        LOGGER.info("Docker container `%s' on host `%s' deleted", container.name, container.client.info()["Name"])
+        LOGGER.info("Going to delete Docker container `%s' on `%s'", container.name, container.client.info()["Name"])
+        if not dry_run:
+            container.remove(v=True, force=True)
+            LOGGER.debug("Done.")
 
     def delete_image(image):
-        image.client.images.remove(image=image.id, force=True)
-        LOGGER.info("Docker image tag(s) %s on host `%s' deleted", image.tags, image.client.info()["Name"])
+        LOGGER.info("Going to delete Docker image tag(s) %s on `%s'", image.tags, image.client.info()["Name"])
+        if not dry_run:
+            image.client.images.remove(image=image.id, force=True)
+            LOGGER.debug("Done.")
 
     resources_to_clean = list_resources_docker(tags_dict, builder_name=builder_name, group_as_builder=False)
     containers = resources_to_clean.get("containers", [])
     images = resources_to_clean.get("images", [])
+
+    if not containers and not images:
+        LOGGER.info("There are no resources to clean in Docker")
+        return
 
     for container in containers:
         try:
@@ -657,17 +665,16 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
     return instances
 
 
-def clean_instances_aws(tags_dict):
-    """
-    Remove all instances with specific tags AWS
+def clean_instances_aws(tags_dict, dry_run=False):
+    """Remove all instances with specific tags in AWS."""
 
-    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
-    :return: None
-    """
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
     aws_instances = list_instances_aws(tags_dict=tags_dict, group_as_region=True)
 
     for region, instance_list in aws_instances.items():
+        if not instance_list:
+            LOGGER.info("There are no instances to remove in AWS region %s", region)
+            continue
         client: EC2Client = boto3.client('ec2', region_name=region)
         for instance in instance_list:
             tags = aws_tags_to_dict(instance.get('Tags'))
@@ -678,8 +685,9 @@ def clean_instances_aws(tags_dict):
                 LOGGER.info(f"Skipping Sct Runner instance '{instance_id}'")
                 continue
             LOGGER.info("Going to delete '{instance_id}' [name={name}] ".format(instance_id=instance_id, name=name))
-            response = client.terminate_instances(InstanceIds=[instance_id])
-            LOGGER.debug("Done. Result: %s\n", response['TerminatingInstances'])
+            if not dry_run:
+                response = client.terminate_instances(InstanceIds=[instance_id])
+                LOGGER.debug("Done. Result: %s\n", response['TerminatingInstances'])
 
 
 def clean_sct_runners():
@@ -776,7 +784,7 @@ def list_elastic_ips_aws(tags_dict=None, region_name=None, group_as_region=False
     return elastic_ips
 
 
-def clean_elastic_ips_aws(tags_dict):
+def clean_elastic_ips_aws(tags_dict, dry_run=False):
     """
     Remove all elastic ips with specific tags AWS
 
@@ -787,18 +795,20 @@ def clean_elastic_ips_aws(tags_dict):
     aws_instances = list_elastic_ips_aws(tags_dict=tags_dict, group_as_region=True)
 
     for region, eip_list in aws_instances.items():
+        if not eip_list:
+            LOGGER.info("There are no EIPs to remove in AWS region %s", region)
+            continue
         client: EC2Client = boto3.client('ec2', region_name=region)
         for eip in eip_list:
-            association_id = eip.get('AssociationId', None)
-            if association_id:
+            association_id = eip.get('AssociationId')
+            if association_id and not dry_run:
                 response = client.disassociate_address(AssociationId=association_id)
                 LOGGER.debug("disassociate_address. Result: %s\n", response)
-
             allocation_id = eip['AllocationId']
-            LOGGER.info("Going to release '{allocation_id}' [public_ip={public_ip}] ".format(
-                allocation_id=allocation_id, public_ip=eip['PublicIp']))
-            response = client.release_address(AllocationId=allocation_id)
-            LOGGER.debug("Done. Result: %s\n", response)
+            LOGGER.info("Going to release '%s' [public_ip={%s}]", allocation_id, eip['PublicIp'])
+            if not dry_run:
+                response = client.release_address(AllocationId=allocation_id)
+                LOGGER.debug("Done. Result: %s\n", response)
 
 
 def get_gce_driver():
@@ -886,7 +896,7 @@ def list_static_ips_gce(region_name="all", group_by_region=False, verbose=False)
     return all_static_ips
 
 
-def clean_instances_gce(tags_dict):
+def clean_instances_gce(tags_dict, dry_run=False):
     """
     Remove all instances with specific tags GCE
 
@@ -896,11 +906,16 @@ def clean_instances_gce(tags_dict):
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
     gce_instances_to_clean = list_instances_gce(tags_dict=tags_dict)
 
+    if not gce_instances_to_clean:
+        LOGGER.info("There are no instances to remove in GCE")
+        return
+
     def delete_instance(instance):
-        LOGGER.info("Going to delete: {}".format(instance.name))
-        # https://libcloud.readthedocs.io/en/latest/compute/api.html#libcloud.compute.base.Node.destroy
-        res = instance.destroy()
-        LOGGER.info("{} deleted={}".format(instance.name, res))
+        LOGGER.info("Going to delete: %s", instance.name)
+        if not dry_run:
+            # https://libcloud.readthedocs.io/en/latest/compute/api.html#libcloud.compute.base.Node.destroy
+            res = instance.destroy()
+            LOGGER.info("%s deleted=%s", instance.name, res)
     ParallelObject(gce_instances_to_clean, timeout=60).run(delete_instance, ignore_exceptions=True)
 
 
@@ -1551,7 +1566,7 @@ def get_post_behavior_actions(config):
     return action_per_type
 
 
-def clean_resources_according_post_behavior(params, config, logdir):
+def clean_resources_according_post_behavior(params, config, logdir, dry_run=False):
     success = get_testrun_status(params.get('TestId'), logdir, only_critical=True)
     actions_per_type = get_post_behavior_actions(config)
     LOGGER.debug(actions_per_type)
@@ -1559,15 +1574,13 @@ def clean_resources_according_post_behavior(params, config, logdir):
         if action_type["action"] == "keep":
             LOGGER.info("Post behavior %s for %s. Keep resources running", action_type["action"], cluster_nodes_type)
         elif action_type["action"] == "destroy":
-            params["NodeType"] = action_type["NodeType"]
             LOGGER.info("Post behavior %s for %s. Clean resources", action_type["action"], cluster_nodes_type)
-            clean_cloud_resources(params)
+            clean_cloud_resources({**params, "NodeType": action_type["NodeType"]}, dry_run=dry_run)
             continue
         elif action_type["action"] == "keep-on-failure" and not success:
-            params["NodeType"] = action_type["NodeType"]
             LOGGER.info("Post behavior %s for %s. Test run Successful. Clean resources",
                         action_type["action"], cluster_nodes_type)
-            clean_cloud_resources(params)
+            clean_cloud_resources({**params, "NodeType": action_type["NodeType"]}, dry_run=dry_run)
             continue
         else:
             LOGGER.info("Post behavior %s for %s. Test run Failed. Keep resources running",

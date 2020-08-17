@@ -8,6 +8,7 @@ import time
 import subprocess
 import traceback
 from pathlib import Path
+from functools import partial
 
 import pytest
 import click
@@ -98,56 +99,74 @@ def cli():
 
 
 @cli.command('clean-resources', help='clean tagged instances in both clouds (AWS/GCE)')
+@click.option('--post-behavior', is_flag=True, default=False, help="clean all resources according to post behavior")
 @click.option('--user', type=str, help='user name to filter instances by')
 @sct_option('--test-id', 'test_id', help='test id to filter by. Could be used multiple times', multiple=True)
 @click.option('--logdir', type=str, help='directory with test run')
-@click.option('--config-file', multiple=True, type=click.Path(exists=True), help="Test config .yaml to use, can have multiple of those")
+@click.option('--dry-run', is_flag=True, default=False, help='dry run')
 @click.pass_context
-def clean_resources(ctx, user, test_id, logdir, config_file):  # pylint: disable=too-many-arguments,too-many-branches
+def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run):
+    """Clean cloud resources.
+
+    There are different options how to run clean up:
+      - To clean resources for the latest run according to post behavior
+        $ hydra clean-resources --post-behavior
+      - The same as above but with altered logdir
+        $ hydra clean-resources --post-behavior --logdir /path/to/logdir
+      - To clean resources for some Test ID according to post behavior (test run status extracted from logdir)
+        $ hydra clean-resources --post-behavior --test-id TESTID
+      - The same as above but with altered logdir
+        $ hydra clean-resources --post-behavior --test-id TESTID --logdir /path/to/logdir
+      - To clean resources for the latest run ignoring post behavior
+        $ hydra clean-resources
+      - The same as above but with altered logdir
+        $ hydra clean-resources --logdir /path/to/logdir
+      - To clean all resources belong to some Test ID:
+        $ hydra clean-resources --test-id TESTID
+      - To clean all resources belong to some user:
+        $ hydra clean-resources --user vasya.pupkin
+
+    Also you can add --dry-run option to see what should be cleaned.
+    """
     add_file_logger()
 
-    params = dict()
+    user_param = {"RunByUser": user} if user else {}
 
-    if config_file or logdir:
-        if not logdir:
+    if not post_behavior and user and not test_id and not logdir:
+        click.echo(f"Clean all resources belong to user `{user}'")
+        params = (user_param, )
+    else:
+        if not logdir and (post_behavior or not test_id):
             logdir = Setup.base_logdir()
 
-        if logdir and not test_id:
-            test_id = (search_test_id_in_latest(logdir), )
+        if not test_id and (latest_test_id := search_test_id_in_latest(logdir)):
+            click.echo(f"Latest TestId in {logdir} is {latest_test_id}")
+            test_id = (latest_test_id, )
 
-        if not logdir or not all(test_id):
+        if not test_id:
             click.echo(clean_resources.get_help(ctx))
             return
 
-        # need to pass SCTConfigration verification,
-        # but not affect on result
-        os.environ['SCT_CLUSTER_BACKEND'] = "aws"
-
-        if config_file:
-            os.environ['SCT_CONFIG_FILES'] = str(list(config_file))
-
-        config = SCTConfiguration()
-
-        for _test_id in test_id:
-            params['TestId'] = _test_id
-
-            clean_resources_according_post_behavior(params, config, logdir)
-    else:
-        if not (user or test_id):
-            click.echo(clean_resources.get_help(ctx))
-            return
-
-        if user:
-            params['RunByUser'] = user
-
-        if test_id:
-            for _test_id in test_id:
-                params['TestId'] = _test_id
-                clean_cloud_resources(params)
-                click.echo('cleaned instances for {}'.format(params))
+        if post_behavior:
+            click.echo(f"Clean resources according to post behavior for following Test IDs: {test_id}")
         else:
-            clean_cloud_resources(params)
-            click.echo('cleaned instances for {}'.format(params))
+            click.echo(f"Clean all resources for following Test IDs: {test_id}")
+
+        params = ({"TestId": tid, **user_param} for tid in test_id)
+
+    if post_behavior:
+        click.echo(f"Use {logdir} as a logdir")
+        os.environ["SCT_CLUSTER_BACKEND"] = "aws"  # just to pass SCTConfiguration() verification.
+        clean_func = partial(clean_resources_according_post_behavior, config=SCTConfiguration(), logdir=logdir)
+    else:
+        clean_func = clean_cloud_resources
+
+    if dry_run:
+        click.echo("Make a dry-run")
+
+    for param in params:
+        clean_func(param, dry_run=dry_run)
+        click.echo(f"Resources for {param} have cleaned")
 
 
 @cli.command('list-resources', help='list tagged instances in both clouds (AWS/GCE)')

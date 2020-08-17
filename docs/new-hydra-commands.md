@@ -14,8 +14,11 @@ hydra list-resources --test-id n3vik6-ssu84ld --user bentsi
 
 
 # cleanup resources
-hydra clean-resources --test-id n3vik6-ssu84ld --backend aws
-hydra clean-resources --backend gce --user bentsi
+hydra clean-resources --post-behavior
+hydra clean-resources --post-behavior --logdir /path/to/logdir
+hydra clean-resources --test-id n3vik6-ssu84ld
+hydra clean-resources --user bentsi
+hydra clean-resources --dry-run
 
 # WIP: provision a cluster without running any test scenario i.e. stress/nemesis
 hydra provision --backend aws --scylla-version 3.0
