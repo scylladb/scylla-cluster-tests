@@ -1687,7 +1687,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # nodetool removenode 'host_id'
             rnd_node = random.choice([n for n in self.cluster.nodes if n is not self.target_node])
             self.log.info("Running removenode command on {}, Removing node with the following host_id: {}"
-                          .format(rnd_node.ip_address,host_id))
+                          .format(rnd_node.ip_address, host_id))
             res = rnd_node.run_nodetool("removenode {}".format(host_id), ignore_status=True, verbose=True)
             return res.exit_status
 
@@ -2906,6 +2906,7 @@ class TerminateAndRemoveNodeMonkey(Nemesis):
 #     @log_time_elapsed_and_status
 #     def disrupt(self):
 #         self.disrupt_repair_streaming_err()
+
 
 RELATIVE_NEMESIS_SUBCLASS_LIST = [NotSpotNemesis]
 
