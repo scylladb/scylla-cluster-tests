@@ -1005,7 +1005,7 @@ class SCTConfiguration(dict):
         'baremetal': ['db_nodes_private_ip', 'db_nodes_public_ip', 'user_credentials_path'],
 
         'aws-siren': ["user_prefix", "instance_type_loader", "region_name", "cloud_credentials_path",
-                      "authenticator_user", "authenticator_password", "cloud_cluster_id", "nemesis_filter_seeds"],
+                      "cloud_cluster_id", "nemesis_filter_seeds"],
 
         'k8s-gce-minikube': ['gce_image_minikube', 'gce_instance_type_minikube', 'gce_root_disk_type_minikube',
                              'gce_root_disk_size_minikube', 'user_credentials_path', 'scylla_version',
