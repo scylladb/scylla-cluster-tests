@@ -80,7 +80,7 @@ def runCleanupResource(String backend){
     export SCT_REGION_NAME="eu-west-1"
 
     echo "start clean resources ..."
-    ./docker/env/hydra.sh clean-resources --logdir "`pwd`"
+    ./docker/env/hydra.sh clean-resources --post-behavior --logdir "`pwd`"
     echo "end clean resources"
     """
 }
