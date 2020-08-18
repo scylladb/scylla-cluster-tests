@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import os
 import getpass
 import unittest
 import threading
@@ -21,7 +22,8 @@ from parameterized import parameterized
 
 from sdcm.remote import RemoteLibSSH2CmdRunner, RemoteCmdRunner, LocalCmdRunner, RetryableNetworkException, \
     SSHConnectTimeoutError
-from sdcm.remote.base import CommandRunner
+from sdcm.remote.base import CommandRunner, Result
+from sdcm.remote.remote_file import remote_file
 
 
 ALL_COMMANDS_WITH_ALL_OPTIONS = []
@@ -365,3 +367,44 @@ class TestSudoAndRunShellScript(unittest.TestCase):
         remoter = self.remoter_cls("localhost", user="joe")
         remoter.run_shell_script("true", sudo=True)
         self.assertEqual(remoter.command_to_run, 'sudo bash -cxe "true"')
+
+
+class TestRemoteFile(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        class _Runner:
+            sf_src = sf_dst = rf_src = rf_dst = None
+            hostname = "localhost"
+
+            def run(self, cmd, *args, **kwargs):
+                if cmd == "mktemp":
+                    return Result(stdout="temporary\n")
+                self.command_to_run = cmd
+
+            def send_files(self, src: str, dst: str, *args, **kwargs) -> bool:
+                self.sf_src = src
+                self.sf_dst = dst
+                return True
+
+            def receive_files(self, src: str, dst: str, *args, **kwargs) -> bool:
+                with open(dst, "w"):
+                    pass
+                self.rf_src = src
+                self.rf_dst = dst
+                return True
+
+        cls.remoter_cls = _Runner
+
+    def test_remote_file(self):
+        remoter = self.remoter_cls()
+        some_file = "/some/path/some.file"
+        with remote_file(remoter=remoter, remote_path=some_file) as fobj:
+            fobj.write("test data")
+        self.assertEqual(remoter.rf_src, some_file)
+        self.assertEqual(remoter.sf_dst, "temporary")
+        self.assertTrue(remoter.rf_dst.startswith("/tmp/sct"))
+        self.assertTrue(remoter.rf_dst.endswith(os.path.basename(some_file)))
+        self.assertEqual(remoter.rf_dst, remoter.sf_src)
+        with open(remoter.sf_src) as fobj:
+            self.assertEqual(fobj.read(), "test data")
+        self.assertEqual(remoter.command_to_run, f"mv 'temporary' '{some_file}'")

@@ -506,26 +506,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return new_node
 
     def disrupt_nodetool_seed_decommission(self, add_node=True):
-        def update_seed_provider(_seed_address):
-            seed_provider = [dict(class_name='org.apache.cassandra.locator.SimpleSeedProvider',
-                                  parameters=[dict(seeds=seed_address)])]
-            for node in self.cluster.nodes:
-                node.patch_scylla_yaml(seed_provider=seed_provider)
-
         if len(self.cluster.seed_nodes) < 2:
             raise UnsupportedNemesis("To running seed decommission the cluster must contains at least 2 seed nodes")
+
         if not self.target_node.is_seed:
             self.target_node = random.choice(self.cluster.seed_nodes)
         self.target_node.is_seed = False
-
-        seed_address = ",".join([node.ip_address for node in self.cluster.seed_nodes])
-        update_seed_provider(_seed_address=seed_address)
+        self.cluster.update_seed_provider()
 
         new_seed_node = self.disrupt_nodetool_decommission(add_node=add_node, disruption_name="SeedDecommission")
         if new_seed_node and not new_seed_node.is_seed:
             new_seed_node.is_seed = True
-            seed_address = ",".join([node.ip_address for node in self.cluster.seed_nodes])
-            update_seed_provider(_seed_address=seed_address)
+            self.cluster.update_seed_provider()
 
     def disrupt_terminate_and_replace_node(self):  # pylint: disable=invalid-name
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/

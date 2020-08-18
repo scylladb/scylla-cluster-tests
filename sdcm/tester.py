@@ -340,9 +340,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         db_cluster.set_seeds(first_only=True)
         db_cluster.wait_for_init(node_list=db_cluster.nodes)
         db_cluster.set_seeds()
-
-        for node in db_cluster.nodes:
-            node.patch_scylla_yaml_with_seeds(",".join(db_cluster.seed_nodes_ips))
+        db_cluster.update_seed_provider()
 
     @staticmethod
     def update_certificates():
