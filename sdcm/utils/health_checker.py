@@ -172,7 +172,7 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
     if len(set(schema_version_on_all_nodes)) > 1:
         LOGGER.debug(debug_message)
         peers_info_str = '\n'.join(
-            f"{ip}: {schema_version['schema_version']}" for ip, schema_version in gossip_info.items())
+            f"{ip}: {schema_version['schema_version']}" for ip, schema_version in peers_details.items())
         ClusterHealthValidatorEvent(type='warning', name='NodeSchemaVersion', status=Severity.WARNING,
                                     node=current_node.name,
                                     message=f'Current node {current_node.ip_address}. Schema version is not same on all '
