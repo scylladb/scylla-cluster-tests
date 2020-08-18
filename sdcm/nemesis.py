@@ -503,6 +503,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_nodetool_decommission(self, add_node=True, disruption_name=None):
         self._set_current_disruption(f"{disruption_name or 'Decommission'} {self.target_node}")
         self.cluster.decommission(self.target_node)
+        new_node = None
         if add_node:
             # When adding node after decommission the node is declared as up only after it completed bootstrapping,
             # increasing the timeout for now
@@ -516,8 +517,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     for keyspace in test_keyspaces:
                         node.run_nodetool(sub_cmd='cleanup', args=keyspace)
             finally:
-                if new_node:
-                    new_node.running_nemesis = None
+                new_node.running_nemesis = None
         return new_node
 
     def disrupt_nodetool_seed_decommission(self, add_node=True):
@@ -537,7 +537,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         update_seed_provider(_seed_address=seed_address)
 
         new_seed_node = self.disrupt_nodetool_decommission(add_node=add_node, disruption_name="SeedDecommission")
-        if not new_seed_node.is_seed:
+        if new_seed_node and not new_seed_node.is_seed:
             new_seed_node.is_seed = True
             seed_address = ",".join([node.ip_address for node in self.cluster.seed_nodes])
             update_seed_provider(_seed_address=seed_address)
@@ -567,8 +567,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             wait_for_old_node_to_removed()
 
         finally:
-            if new_node:
-                new_node.running_nemesis = None
+            new_node.running_nemesis = None
 
     def disrupt_kill_scylla(self):
         self._set_current_disruption('ScyllaKillMonkey %s' % self.target_node)
@@ -1721,8 +1720,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 for keyspace in test_keyspaces:
                     node.run_nodetool(sub_cmd='cleanup', args=keyspace)
         finally:
-            if new_node:
-                new_node.running_nemesis = None
+            new_node.running_nemesis = None
 
     # Temporary disable due to  https://github.com/scylladb/scylla/issues/6522
     def _disrupt_network_reject_inter_node_communication(self):
