@@ -15,10 +15,7 @@ ENV USER scylla-test
 RUN yum -y install \
         sudo \
         collectd \
-        net-tools \
-        rsync \
-        openssl \
-        file && \
+        rsync && \
     yum clean all && \
     echo $'[program:collectd]\n\
 command=/usr/sbin/collectd\n\

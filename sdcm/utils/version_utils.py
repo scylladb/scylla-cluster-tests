@@ -24,6 +24,8 @@ PRIMARY_XML_GZ_REGEX = re.compile(r'="(.*?primary.xml.gz)"')
 REPOMD_XML_PATH = "repodata/repomd.xml"
 SCYLLA_URL_REGEX = re.compile(".*(?P<url>http.*scylladb.com.*).*")
 
+BUILD_ID_RE = re.compile(r"Build ID: (?P<build_id>\w+)")
+
 SCYLLA_URL_RESPONSE_TIMEOUT = 30
 SUPPORTED_XML_EXTENSIONS = ("xml", "xml.gz")
 SUPPORTED_FILE_EXTENSIONS = ("list", "repo", "Packages", "gz") + SUPPORTED_XML_EXTENSIONS

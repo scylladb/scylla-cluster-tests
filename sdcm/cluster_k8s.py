@@ -216,9 +216,7 @@ class BasePodContainer(cluster.BaseNode):
                                            k8s_server_url=self.parent_cluster.k8s_cluster.k8s_server_url)
 
         # TODO: refactor our commands to use sudo in more organized way and remove `sudo' dependency
-        # TODO: remove `net-tools' dependency by using `ss' instead of `netstat'
-        # TODO: remove `file' dependency by using `readelf' instead of `file'
-        self.remoter.run("yum install -y sudo net-tools file && yum clean all")
+        self.remoter.run("yum install -y sudo && yum clean all")
 
     def _init_port_mapping(self):
         pass

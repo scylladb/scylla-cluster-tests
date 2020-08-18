@@ -62,7 +62,7 @@ from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_g
 from sdcm.utils.decorators import retrying, log_run_info
 from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
-from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version
+from sdcm.utils.version_utils import SCYLLA_VERSION_RE, BUILD_ID_RE, get_gemini_version
 from sdcm.sct_events import Severity, CoreDumpEvent, DatabaseLogEvent, \
     ClusterHealthValidatorEvent, set_grafana_url, ScyllaBenchEvent, raise_event_on_failure, TestFrameworkEvent
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
@@ -1227,13 +1227,23 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             text = '%s: Waiting for SSH to be up' % self
         wait.wait_for(func=self.remoter.is_up, step=10, text=text, timeout=timeout, throw_exc=True)
 
-    def is_port_used(self, port, service_name):
+    def is_port_used(self, port: int, service_name: str) -> bool:
         try:
-            # check that port is taken
-            result_netstat = self.remoter.run('netstat -ln | grep :%s' % port,
-                                              # -n don't translate port numbers to names
-                                              verbose=False, ignore_status=True)
-            return result_netstat.exit_status == 0
+            # Path to `ss' is /usr/sbin/ss for RHEL-like distros and /bin/ss for Debian-based.  Unfortunately,
+            # /usr/sbin is not always in $PATH, so need to set it explicitly.
+            #
+            # Output of `ss -ln' command in case of used port:
+            #   $ ss -ln '( sport = :8000 )'
+            #   Netid State      Recv-Q Send-Q     Local Address:Port                    Peer Address:Port
+            #   tcp   LISTEN     0      5                      *:8000                               *:*
+            #
+            # And if there are no processes listening on the port:
+            #   $ ss -ln '( sport = :8001 )'
+            #   Netid State      Recv-Q Send-Q     Local Address:Port                    Peer Address:Port
+            #
+            # Can't avoid the header by using `-H' option because of ss' core on Ubuntu 18.04.
+            cmd = f"PATH=/bin:/usr/sbin ss -ln '( sport = :{port} )'"
+            return len(self.remoter.run(cmd, verbose=False).stdout.splitlines()) > 1
         except Exception as details:  # pylint: disable=broad-except
             self.log.error("Error checking for '%s' on port %s: %s", service_name, port, details)
             return False
@@ -1664,12 +1674,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         # then look it up base on the build id
         for scylla_executable in ['/usr/bin/scylla', '/opt/scylladb/libexec/scylla']:
-            try:
-                results = self.remoter.run(f'file {scylla_executable}')
-                build_id_regex = re.compile(r'BuildID\[.*\]=(.*),')
-                build_id = build_id_regex.search(results.stdout).group(1)
-            except Exception:  # pylint: disable=broad-except
-                LOGGER.warning(f'{scylla_executable} did had BuildID in it')
+            output = self.remoter.run(f"readelf -n {scylla_executable}", ignore_status=True).stdout
+            if match := BUILD_ID_RE.search(output):
+                build_id = match.group("build_id")
+                break
 
         if build_id:
             scylla_debug_info = "/usr/lib/debug/.build-id/{0}/{1}.debug".format(build_id[:2], build_id[2:])
@@ -2025,7 +2033,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             # `screen' package is missed in CentOS/RHEL 8. Should be installed from EPEL repository.
             if self.distro.is_centos8 or self.distro.is_rhel8:
                 self.install_epel()
-            self.remoter.run('sudo yum install -y rsync tcpdump screen wget net-tools')
+            self.remoter.run('sudo yum install -y rsync tcpdump screen')
             self.download_scylla_repo(scylla_repo)
             # hack cause of broken caused by EPEL
             self.remoter.run('sudo yum install -y python36-PyYAML', ignore_status=True)
@@ -2098,7 +2106,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
             self.remoter.run(
                 'sudo DEBIAN_FRONTEND=noninteractive apt-get {}-o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" upgrade -y'.format(force))
-            self.remoter.run('sudo apt-get install -y rsync tcpdump screen wget net-tools')
+            self.remoter.run('sudo apt-get install -y rsync tcpdump screen')
             self.download_scylla_repo(scylla_repo)
             self.remoter.run('sudo apt-get update')
             self.remoter.run(
