@@ -486,8 +486,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
         if disable_autocompaction:
             self.log.info(f'Bootstrap is finished and will enable autocompaction for keyspaces {keyspaces}')
-            for keyspace in keyspaces:
-                new_node.run_nodetool(sub_cmd='enableautocompaction', args=keyspace)
+            try:
+                for keyspace in keyspaces:
+                    new_node.run_nodetool(sub_cmd='enableautocompaction', args=keyspace)
+            except Exception as details:  # pylint: disable=broad-except
+                self.log.error("enableautocompaction failed with error %s", details)
+                new_node.running_nemesis = None
+                raise
         InfoEvent(message='FinishEvent - New Node is up and normal')
         return new_node
 
@@ -562,7 +567,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             wait_for_old_node_to_removed()
 
         finally:
-            new_node.running_nemesis = None
+            if new_node:
+                new_node.running_nemesis = None
 
     def disrupt_kill_scylla(self):
         self._set_current_disruption('ScyllaKillMonkey %s' % self.target_node)
