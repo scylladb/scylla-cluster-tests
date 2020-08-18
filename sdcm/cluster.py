@@ -4364,7 +4364,7 @@ class BaseLoaderSet():
                                             args=(loader, loader_idx, stress_cmd, node_list))
             setup_thread.daemon = True
             setup_thread.start()
-            time.sleep(30)
+            time.sleep(60)
 
         return _queue
 
