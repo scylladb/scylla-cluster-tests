@@ -31,7 +31,7 @@ class Alternator:
         if endpoint_url not in self.alternator_apis:
             aws_params = dict(endpoint_url=endpoint_url, aws_access_key_id=self.params.get("alternator_access_key_id"),
                               aws_secret_access_key=self.params.get("alternator_secret_access_key"),
-                              region_name=self.params.get("region_name").split()[0])
+                              region_name=self.params.get("region_name") and self.params.get("region_name").split()[0])
             resource: DynamoDBServiceResource = boto3.resource('dynamodb', **aws_params)
             client: DynamoDBClient = boto3.client('dynamodb', **aws_params)
             self.alternator_apis[endpoint_url] = AlternatorApi(resource=resource, client=client)
