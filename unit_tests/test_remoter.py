@@ -1,11 +1,27 @@
-from typing import Union
-from logging import getLogger
-import unittest
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 import getpass
+import unittest
 import threading
+from typing import Union, Optional
+from logging import getLogger
+
 from parameterized import parameterized
+
 from sdcm.remote import RemoteLibSSH2CmdRunner, RemoteCmdRunner, LocalCmdRunner, RetryableNetworkException, \
     SSHConnectTimeoutError
+from sdcm.remote.base import CommandRunner
 
 
 ALL_COMMANDS_WITH_ALL_OPTIONS = []
@@ -313,3 +329,39 @@ class TestRemoteCmdRunners(unittest.TestCase):
             self.assertNotEqual(paramiko_thread_results[0].stdout, paramiko_thread_results[1].stdout)
         else:
             self.assertEqual(paramiko_thread_results[0].stdout, paramiko_thread_results[1].stdout)
+
+
+class TestSudoAndRunShellScript(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        class _Runner(CommandRunner):
+            def run(self, cmd, *args, **kwargs):
+                self.command_to_run = cmd
+
+            def _create_connection(self):
+                pass
+
+            def is_up(self, timeout: Optional[float] = None) -> bool:
+                return True
+
+        cls.remoter_cls = _Runner
+
+    def test_sudo_root(self):
+        remoter = self.remoter_cls("localhost", user="root")
+        remoter.run("true")
+        self.assertEqual(remoter.command_to_run, "true")
+
+    def test_sudo_non_root(self):
+        remoter = self.remoter_cls("localhost", user="joe")
+        remoter.sudo("true")
+        self.assertEqual(remoter.command_to_run, "sudo true")
+
+    def test_run_shell_script(self):
+        remoter = self.remoter_cls("localhost")
+        remoter.run_shell_script("true")
+        self.assertEqual(remoter.command_to_run, 'bash -cxe "true"')
+
+    def test_run_shell_script_sudo(self):
+        remoter = self.remoter_cls("localhost", user="joe")
+        remoter.run_shell_script("true", sudo=True)
+        self.assertEqual(remoter.command_to_run, 'sudo bash -cxe "true"')
