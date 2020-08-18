@@ -13,7 +13,7 @@
 
 from typing import Optional, List
 from abc import abstractmethod, ABCMeta
-from shlex import quote
+import shlex
 import logging
 import re
 import os
@@ -88,11 +88,59 @@ class CommandRunner(metaclass=ABCMeta):
             watchers.append(LogWriteWatcher(log_file))
         return watchers
 
+    # pylint: disable=too-many-arguments
     @abstractmethod
-    def run(self, cmd: str, timeout: Optional[float] = None, ignore_status: bool = False,  # pylint: disable=too-many-arguments
-            verbose: bool = True, new_session: bool = False, log_file: Optional[str] = None, retry: int = 1,
-            watchers: Optional[List[StreamWatcher]] = None):
+    def run(self,
+            cmd: str,
+            timeout: Optional[float] = None,
+            ignore_status: bool = False,
+            verbose: bool = True,
+            new_session: bool = False,
+            log_file: Optional[str] = None,
+            retry: int = 1,
+            watchers: Optional[List[StreamWatcher]] = None) -> Result:
         pass
+
+    # pylint: disable=too-many-arguments
+    def sudo(self,
+             cmd: str,
+             timeout: Optional[float] = None,
+             ignore_status: bool = False,
+             verbose: bool = True,
+             new_session: bool = False,
+             log_file: Optional[str] = None,
+             retry: int = 1,
+             watchers: Optional[List[StreamWatcher]] = None) -> Result:
+        return self.run(cmd=cmd if self.user == "root" else f"sudo {cmd}",
+                        timeout=timeout,
+                        ignore_status=ignore_status,
+                        verbose=verbose,
+                        new_session=new_session,
+                        log_file=log_file,
+                        retry=retry,
+                        watchers=watchers)
+
+    # pylint: disable=too-many-arguments
+    def run_shell_script(self,
+                         cmd: str,
+                         timeout: Optional[float] = None,
+                         ignore_status: bool = False,
+                         verbose: bool = True,
+                         new_session: bool = False,
+                         log_file: Optional[str] = None,
+                         retry: int = 1,
+                         watchers: Optional[List[StreamWatcher]] = None,
+                         sudo: bool = False,
+                         shell_cmd: str = "bash -cxe",
+                         quote: str = '"') -> Result:
+        return (self.sudo if sudo else self.run)(cmd=f"{shell_cmd} {quote}{cmd}{quote}",
+                                                 timeout=timeout,
+                                                 ignore_status=ignore_status,
+                                                 verbose=verbose,
+                                                 new_session=new_session,
+                                                 log_file=log_file,
+                                                 retry=retry,
+                                                 watchers=watchers)
 
     @abstractmethod
     def _create_connection(self):
@@ -151,7 +199,7 @@ class CommandRunner(metaclass=ABCMeta):
             else:
                 new_name.append(char)
 
-        return quote("".join(new_name))
+        return shlex.quote("".join(new_name))
 
     @staticmethod
     def _make_ssh_command(user: str = "root",  # pylint: disable=too-many-arguments
