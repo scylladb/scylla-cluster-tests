@@ -1868,23 +1868,15 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             scylla_help = self.remoter.run("scylla --help", ignore_status=True).stdout
             scylla_arg_parser = ScyllaArgParser.from_scylla_help(scylla_help)
             append_scylla_args = scylla_arg_parser.filter_args(append_scylla_args)
+
+        if append_scylla_args:
             self.log.debug("Append following args to scylla: `%s'", append_scylla_args)
+            scylla_server_config = f"/etc/{'sysconfig' if self.distro.is_rhel_like else 'default'}/scylla-server"
+            self.remoter.sudo(
+                f"sed -i '/{append_scylla_args}/! s/SCYLLA_ARGS=\"/&{append_scylla_args} /' {scylla_server_config}")
 
-            if self.is_rhel_like():
-                result = self.remoter.run("sudo grep '\\%s' /etc/sysconfig/scylla-server" %
-                                          append_scylla_args, ignore_status=True)
-                if result.exit_status == 1:
-                    self.remoter.run(
-                        "sudo sed -i -e 's/SCYLLA_ARGS=\"/SCYLLA_ARGS=\"%s /' /etc/sysconfig/scylla-server" % append_scylla_args)
-            elif self.is_debian() or self.is_ubuntu():
-                result = self.remoter.run("sudo grep '\\%s' /etc/default/scylla-server" %
-                                          append_scylla_args, ignore_status=True)
-                if result.exit_status == 1:
-                    self.remoter.run(
-                        "sudo sed -i -e 's/SCYLLA_ARGS=\"/SCYLLA_ARGS=\"%s /'  /etc/default/scylla-server" % append_scylla_args)
-
-        if debug_install and self.is_rhel_like():
-            self.remoter.run('sudo yum install -y scylla-gdb', verbose=True, ignore_status=True)
+        if debug_install and self.distro.is_rhel_like:
+            self.remoter.sudo("yum install -y scylla-gdb", verbose=True, ignore_status=True)
 
     def config_client_encrypt(self):
         self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')  # pylint: disable=not-callable
