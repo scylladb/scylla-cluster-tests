@@ -13,9 +13,10 @@ from sdcm.utils.pricing import AWSPricing
 LOGGER = logging.getLogger(__name__)
 
 STATUS_FULFILLED = 'fulfilled'
-STATUS_PRICE_TOO_LOW = 'price-too-low'
-STATUS_ERROR = 'error'
+SPOT_STATUS_UNEXPECTED_ERROR = 'error'
+SPOT_PRICE_TOO_LOW = 'price-too-low'
 FLEET_LIMIT_EXCEEDED_ERROR = 'spotInstanceCountLimitExceeded'
+SPOT_CAPACITY_NOT_AVAILABLE_ERROR = 'capacity-not-available'
 MAX_SPOT_EXCEEDED_ERROR = 'MaxSpotInstanceCountExceeded'
 REQUEST_TIMEOUT = 300
 
@@ -153,7 +154,7 @@ class EC2ClientWarpper():
         resp = self._client.describe_spot_instance_requests(SpotInstanceRequestIds=request_ids)
         for req in resp['SpotInstanceRequests']:
             if req['Status']['Code'] != STATUS_FULFILLED or req['State'] != 'active':
-                if req['Status']['Code'] == STATUS_PRICE_TOO_LOW:
+                if req['Status']['Code'] in [SPOT_PRICE_TOO_LOW, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
                     return False, req['Status']['Code']
                 return False, resp
         return True, resp
@@ -171,7 +172,7 @@ class EC2ClientWarpper():
             time.sleep(self._wait_interval)
             status, resp = self._is_request_fulfilled(request_ids)
             LOGGER.debug(f"{request_ids}: [{status}] - {resp}")
-            if not status and resp == STATUS_PRICE_TOO_LOW:
+            if not status and resp in [SPOT_PRICE_TOO_LOW, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
                 break
             timeout += self._wait_interval
         if not status:
@@ -187,7 +188,7 @@ class EC2ClientWarpper():
         for req in resp['SpotFleetRequestConfigs']:
             if req['SpotFleetRequestState'] != 'active' or 'ActivityStatus' not in req or\
                     req['ActivityStatus'] != STATUS_FULFILLED:
-                if 'ActivityStatus' in req and req['ActivityStatus'] == STATUS_ERROR:
+                if 'ActivityStatus' in req and req['ActivityStatus'] == SPOT_STATUS_UNEXPECTED_ERROR:
                     current_time = datetime.datetime.now().timetuple()
                     search_start_time = datetime.datetime(
                         current_time.tm_year, current_time.tm_mon, current_time.tm_mday)
@@ -196,8 +197,9 @@ class EC2ClientWarpper():
                                                                             MaxResults=10)
                     LOGGER.debug('Fleet request error history: %s', resp)
                     errors = [i['EventInformation']['EventSubType'] for i in resp['HistoryRecords']]
-                    if FLEET_LIMIT_EXCEEDED_ERROR in errors:
-                        return False, FLEET_LIMIT_EXCEEDED_ERROR
+                    for error in [FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
+                        if error in errors:
+                            return False, error
                 return False, resp
         return True, resp
 
@@ -213,7 +215,7 @@ class EC2ClientWarpper():
         while not status and timeout < self._timeout:
             time.sleep(self._wait_interval)
             status, resp = self._is_fleet_request_fulfilled(request_id)
-            if not status and resp == FLEET_LIMIT_EXCEEDED_ERROR:
+            if not status and resp in [FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
                 break
             timeout += self._wait_interval
         if not status:
@@ -308,7 +310,8 @@ class EC2ClientWarpper():
                                               aws_instance_profile=aws_instance_profile)
         instance_ids, resp = self._wait_for_fleet_request_done(request_id)
         if not instance_ids:
-            err_code = MAX_SPOT_EXCEEDED_ERROR if resp == FLEET_LIMIT_EXCEEDED_ERROR else STATUS_ERROR
+            err_code = resp if resp in [FLEET_LIMIT_EXCEEDED_ERROR,
+                                        SPOT_CAPACITY_NOT_AVAILABLE_ERROR] else SPOT_STATUS_UNEXPECTED_ERROR
             raise CreateSpotFleetError(error_response={'Error': {'Code': err_code, 'Message': resp}},
                                        operation_name='create_spot_fleet')
 

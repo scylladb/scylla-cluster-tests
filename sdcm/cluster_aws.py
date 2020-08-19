@@ -14,15 +14,17 @@ from datetime import datetime
 from distutils.version import LooseVersion  # pylint: disable=no-name-in-module,import-error
 from functools import cached_property
 
+from math import floor
 import yaml
-from botocore.exceptions import WaiterError, ClientError
+from botocore.exceptions import WaiterError
 import boto3
 from mypy_boto3_ec2 import EC2Client
 
 from sdcm import cluster
 from sdcm import ec2_client
 from sdcm.cluster import INSTANCE_PROVISION_ON_DEMAND
-from sdcm.utils.common import list_instances_aws, get_ami_tags, ec2_instance_wait_public_ip
+from sdcm.ec2_client import CreateSpotInstancesError
+from sdcm.utils.common import list_instances_aws, get_ami_tags, ec2_instance_wait_public_ip, MAX_SPOT_DURATION_TIME
 from sdcm.utils.decorators import retrying
 from sdcm.sct_events import SpotTerminationEvent, DbEventsFilter
 from sdcm import wait
@@ -95,6 +97,10 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                                   self._ec2_ami_id,
                                                   self._ec2_instance_type)
 
+    @staticmethod
+    def calculate_spot_duration_for_test():
+        return floor(cluster.TEST_DURATION / 60) * 60 + 60
+
     def _create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0):  # pylint: disable=too-many-arguments
         ami_id = self._ec2_ami_id[dc_idx]
         self.log.debug(f"Creating {count} on-demand instances using AMI id '{ami_id}'... ")
@@ -129,7 +135,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                            aws_instance_profile=self.params.get('aws_instance_profile_name'))
         if self.instance_provision == INSTANCE_PROVISION_SPOT_DURATION:
             # duration value must be a multiple of 60
-            spot_params.update({'duration': round(cluster.TEST_DURATION / 60) * 60 + 60})
+            spot_params.update({'duration': self.calculate_spot_duration_for_test()})
 
         limit = SPOT_FLEET_LIMIT if self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET else SPOT_CNT_LIMIT
         request_cnt = 1
@@ -144,20 +150,12 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         for i in range(request_cnt):
             if tail_cnt and i == request_cnt - 1:
                 spot_params['count'] = tail_cnt
-            try:
-                if self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count > 1:
-                    instances_i = ec2.create_spot_fleet(**spot_params)
-                else:
-                    instances_i = ec2.create_spot_instances(**spot_params)
-                instances.extend(instances_i)
-            except ClientError as cl_ex:
-                if ec2_client.MAX_SPOT_EXCEEDED_ERROR in str(cl_ex):
-                    self.log.debug('Cannot create spot instance(-s): %s.'
-                                   'Creating on demand instance(-s) instead.', cl_ex)
-                    instances_i = self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx)
-                    instances.extend(instances_i)
-                else:
-                    raise
+
+            if self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count > 1:
+                instances_i = ec2.create_spot_fleet(**spot_params)
+            else:
+                instances_i = ec2.create_spot_instances(**spot_params)
+            instances.extend(instances_i)
 
         return instances
 
@@ -180,14 +178,75 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                            'SubnetId': self._ec2_subnet_id[dc_idx],
                            'Groups': self._ec2_security_group_ids[dc_idx]}]
 
+        self.log.info(f"Create {self.instance_provision} instance(s)")
         if self.instance_provision == 'mixed':
             instances = self._create_mixed_instances(count, interfaces, ec2_user_data, dc_idx)
         elif self.instance_provision == INSTANCE_PROVISION_ON_DEMAND:
             instances = self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx)
-        else:
+        elif self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count > 1:
             instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx)
+        else:
+            instances = self.fallback_provision_type(count, interfaces, ec2_user_data, dc_idx)
 
         return instances
+
+    def fallback_provision_type(self, count, interfaces, ec2_user_data, dc_idx):
+        # If user requested to use spot instances, first try to get spot_duration instances (according to test_duration)
+        # - if test_duration > 360 or spot_duration failed, try to get spot_low_price
+        # - if instance_provision_fallback_on_demand==true and previous attempts failed then create on_demand instance
+        # else fail the test
+        instances = None
+
+        if self.instance_provision.lower() == 'spot' or self.instance_provision == INSTANCE_PROVISION_SPOT_DURATION \
+                or (self.instance_provision == INSTANCE_PROVISION_SPOT_FLEET and count == 1):
+            instances_provision_fallbacks = [INSTANCE_PROVISION_SPOT_DURATION, INSTANCE_PROVISION_SPOT_LOW_PRICE]
+        else:
+            # If self.instance_provision == "spot_low_price"
+            instances_provision_fallbacks = [self.instance_provision]
+
+        if 'instance_provision_fallback_on_demand' in self.params \
+                and self.params['instance_provision_fallback_on_demand']:
+            instances_provision_fallbacks.append(INSTANCE_PROVISION_ON_DEMAND)
+
+        self.log.debug(f"Instances provision fallbacks : {instances_provision_fallbacks}")
+
+        for instances_provision_type in instances_provision_fallbacks:
+            # If original instance provision type was not spot_duration, we need to check that test duration
+            # not exceeds maximum allowed spot duration (360 min right for now). If it exceeds - it's impossible to
+            # request for spot duration provision type.
+            if instances_provision_type == INSTANCE_PROVISION_SPOT_DURATION and \
+                    self.calculate_spot_duration_for_test() > MAX_SPOT_DURATION_TIME:
+                self.log.info(f"Create {instances_provision_type} instance(s) is not alowed: "
+                              f"Test duration too long for spot_duration instance type. "
+                              f"Max possible test duration time for this instance type is {MAX_SPOT_DURATION_TIME} "
+                              f"minutes"
+                              )
+                continue
+
+            try:
+                self.log.info(f"Create {instances_provision_type} instance(s)")
+                if instances_provision_type == INSTANCE_PROVISION_ON_DEMAND:
+                    instances = self._create_on_demand_instances(count, interfaces, ec2_user_data, dc_idx)
+                else:
+                    instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx)
+                break
+            except CreateSpotInstancesError as cl_ex:
+                if instances_provision_type == instances_provision_fallbacks[-1]:
+                    raise
+                elif not self.check_spot_error(str(cl_ex), instances_provision_type):
+                    raise
+
+        return instances
+
+    def check_spot_error(self, cl_ex, instance_provision):
+        if ec2_client.MAX_SPOT_EXCEEDED_ERROR in cl_ex or \
+                ec2_client.FLEET_LIMIT_EXCEEDED_ERROR in cl_ex or \
+                ec2_client.SPOT_CAPACITY_NOT_AVAILABLE_ERROR in cl_ex or \
+                ec2_client.SPOT_PRICE_TOO_LOW in cl_ex or \
+                ec2_client.SPOT_STATUS_UNEXPECTED_ERROR in cl_ex:
+            self.log.error(f"Cannot create {instance_provision} instance(s): {cl_ex}")
+            return True
+        return False
 
     def _create_mixed_instances(self, count, interfaces, ec2_user_data, dc_idx):  # pylint: disable=too-many-arguments
         instances = []

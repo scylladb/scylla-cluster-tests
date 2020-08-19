@@ -1,4 +1,5 @@
-instance_provision: 'spot_low_price'
+instance_provision: 'spot'
+instance_provision_fallback_on_demand: false
 region_name:
   - eu-west-1
 user_credentials_path: '~/.ssh/scylla-qa-ec2'

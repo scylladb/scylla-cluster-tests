@@ -16,7 +16,7 @@ from distutils.util import strtobool  # pylint: disable=import-error,no-name-in-
 import anyconfig
 
 from sdcm.utils.common import find_scylla_repo, get_scylla_ami_versions, get_branched_ami, get_ami_tags, \
-    ami_built_by_scylla
+    ami_built_by_scylla, MAX_SPOT_DURATION_TIME
 from sdcm.utils.version_utils import get_branch_version, get_branch_version_for_multiple_repositories
 
 
@@ -87,7 +87,6 @@ class SCTConfiguration(dict):
     """
     Class the hold the SCT configuration
     """
-
     available_backends = ['aws', 'gce', 'docker', 'baremetal', 'aws-siren', 'k8s-gce-minikube', ]
 
     config_options = [
@@ -294,7 +293,12 @@ class SCTConfiguration(dict):
              help="""If True, all backtraces found in db nodes would be decoded automatically"""),
 
         dict(name="instance_provision", env="SCT_INSTANCE_PROVISION", type=str,
-             help="instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration"),
+             help="instance_provision: spot|on_demand|spot_fleet"),
+
+        dict(name="instance_provision_fallback_on_demand", env="SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND", type=boolean,
+             help="instance_provision_fallback_on_demand: create instance on_demand provision type if instance with selected "
+                  "'instance_provision' type creation failed. "
+                  "Expected values: true|false (default - false"),
 
         dict(name="reuse_cluster", env="SCT_REUSE_CLUSTER", type=str,
              help="""
@@ -1167,9 +1171,17 @@ class SCTConfiguration(dict):
         if new_scylla_repo and 'target_upgrade_version' not in self:
             self['target_upgrade_version'] = get_branch_version(new_scylla_repo)
 
-        # 9) instance_provision MIXED is not supported
-        if self.get('instance_provision') == 'mixed':
-            self.log.warning('Selected instance_provision type "MIXED" is not supported!')
+        # 9) validate that supported instance_provision selected
+        if self.get('instance_provision') not in ['spot', 'on_demand', 'spot_fleet', 'spot_low_price', 'spot_duration']:
+            raise ValueError(f"Selected instance_provision type '{self.get('instance_provision')}' is not supported!")
+
+        # 10) spot_duration instance can be created for test duration
+        if self.get('instance_provision').lower() == "spot_duration":
+            test_duration = self.get('test_duration')
+            if test_duration:
+                assert test_duration <= MAX_SPOT_DURATION_TIME, \
+                    f'Test duration too long for spot_duration instance type. ' \
+                    f'Max possible test duration time for this instance type is {MAX_SPOT_DURATION_TIME} minutes'
 
         self._update_environment_variables()
 
