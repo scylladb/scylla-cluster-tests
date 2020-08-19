@@ -2289,7 +2289,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         test_status = self.get_test_status()
         backend = self.params.get("cluster_backend")
         region_name = self.params.get('region_name') or self.params.get('gce_datacenter')
+        build_id = f'#{os.environ.get("BUILD_NUMBER")}' if os.environ.get('BUILD_NUMBER', '') else ''
         return {"backend": backend,
+                "build_id": os.environ.get('BUILD_NUMBER', ''),
                 "build_url": os.environ.get("BUILD_URL"),
                 "end_time": format_timestamp(time.time()),
                 "events_summary": self.get_event_summary(),
@@ -2297,7 +2299,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 "nodes": [],
                 "region_name": region_name,
                 "start_time": start_time,
-                "subject": f"{test_status}: {os.environ.get('JOB_NAME') or config_file_name}: {start_time}",
+                "subject": f"{test_status}: {os.environ.get('JOB_NAME') or config_file_name}{build_id}: {start_time}",
                 "test_id": self.test_id,
                 "test_name": self.id(),
                 "test_status": test_status,

@@ -87,6 +87,7 @@ function run_in_docker () {
         -w "${SCT_DIR}" \
         -e JOB_NAME="${JOB_NAME}" \
         -e BUILD_URL="${BUILD_URL}" \
+        -e BUILD_NUMBER="${BUILD_NUMBER}" \
         -e _SCT_BASE_DIR="${SCT_DIR}" \
         -e GIT_USER_EMAIL \
         -u ${USER_ID} \
