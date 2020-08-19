@@ -33,9 +33,12 @@ def call(Map pipelineParams) {
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'scylla_version')
             string(defaultValue: '', description: '', name: 'scylla_repo')
-            string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
-                   description: 'spot_low_price|on_demand|spot_fleet|spot_duration',
+            string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
+                   description: 'spot|on_demand|spot_fleet',
                    name: 'provision_type')
+            string(defaultValue: "${pipelineParams.get('instance_provision_fallback_on_demand', 'false')}",
+                   description: 'true|false',
+                   name: 'instance_provision_fallback_on_demand')
 
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'keep-on-failure')}",
                    description: 'keep|keep-on-failure|destroy',

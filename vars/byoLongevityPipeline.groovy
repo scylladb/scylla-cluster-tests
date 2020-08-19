@@ -54,9 +54,12 @@ def call() {
                    description: 'If empty - the default manager version will be taken',
                    name: 'scylla_mgmt_repo')
 
-            string(defaultValue: "spot_low_price",
-                   description: 'spot_low_price|on_demand|spot_fleet|spot_low_price|spot_duration',
+            string(defaultValue: "spot",
+                   description: 'spot|on_demand|spot_fleet',
                    name: 'provision_type')
+            string(defaultValue: "${pipelineParams.get('instance_provision_fallback_on_demand', 'false')}",
+                   description: 'true|false',
+                   name: 'instance_provision_fallback_on_demand')
 
             string(defaultValue: "private",
                    description: 'private|public|ipv6',
