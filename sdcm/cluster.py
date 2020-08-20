@@ -1985,6 +1985,37 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" {}'
                 '--allow-unauthenticated {}'.format(force, self.scylla_pkg()))
 
+    def offline_install_scylla(self, unified_package, nonroot):
+        """
+        Offline install scylla by unified package.
+        """
+        # Download unified package
+        self.remoter.run(f'curl {unified_package} -o ./unified_package.tar.gz')
+
+        # Offline install does't provide openjdk-8, it has to be installed in advance
+        # https://github.com/scylladb/scylla-jmx/issues/127
+        if self.is_rhel_like():
+            self.remoter.run('sudo yum install -y java-1.8.0-openjdk')
+        else:
+            self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless')
+            self.remoter.run('sudo update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64')
+
+        if nonroot:
+            install_cmds = dedent("""
+                tar xvfz ./unified_package.tar.gz
+                ./install.sh --nonroot
+                sudo rm -f /tmp/scylla.yaml
+            """)
+            # Known issue: https://github.com/scylladb/scylla/issues/7071
+            self.remoter.run('bash -cxe "%s"' % install_cmds)
+        else:
+            install_cmds = dedent("""
+                tar xvfz ./unified_package.tar.gz
+                ./install.sh --housekeeping
+                rm -f /tmp/scylla.yaml
+            """)
+            self.remoter.run('sudo bash -cxe "%s"' % install_cmds)
+
     def install_scylla_debuginfo(self):
         self.log.info("Installing Scylla debug info...")
         if not self.scylla_version:
@@ -2076,6 +2107,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if '--swap-directory' in result.stdout:
             # swap setup is supported
             extra_setup_args += ' --swap-directory / '
+        if self.parent_cluster.params.get('unified_package'):
+            extra_setup_args += ' --no-verify-package '
 
         if self.parent_cluster.params.get('workaround_kernel_bug_for_iotune'):
             self.log.warning(dedent("""
@@ -3729,7 +3762,11 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.remoter.sudo('systemctl stop apt-daily.timer', ignore_status=True)
             node.remoter.sudo('systemctl stop apt-daily-upgrade.timer', ignore_status=True)
         node.clean_scylla()
-        node.install_scylla(scylla_repo=self.params.get('scylla_repo'))
+        if self.params.get('unified_package'):
+            node.offline_install_scylla(unified_package=self.params.get('unified_package'),
+                                        nonroot=self.params.get('nonroot_offline_install'))
+        else:
+            node.install_scylla(scylla_repo=self.params.get('scylla_repo'))
 
     @staticmethod
     def _wait_for_preinstalled_scylla(node):
