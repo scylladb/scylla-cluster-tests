@@ -41,7 +41,6 @@
 | **<a name="use_cloud_manager">use_cloud_manager</a>**  | When define true, will install scylla cloud manager | N/A | SCT_USE_CLOUD_MANAGER
 | **<a name="use_mgmt">use_mgmt</a>**  | When define true, will install scylla management | N/A | SCT_USE_MGMT
 | **<a name="mgmt_port">mgmt_port</a>**  | The port of scylla management | 10090 | SCT_MGMT_PORT
-| **<a name="mgmt_segments_per_repair">mgmt_segments_per_repair</a>**  | the number of segments per repair used for the manager's repair | 10 | MGMT_SEGMENTS_PER_REPAIR
 | **<a name="manager_prometheus_port">manager_prometheus_port</a>**  | Port to be used by the manager to contact Prometheus | N/A | SCT_MANAGER_PROMETHEUS_PORT
 | **<a name="target_scylla_mgmt_repo">target_scylla_mgmt_repo</a>**  | Url to the repo of scylla manager version used to upgrade the manager and agents | N/A | SCT_TARGET_SCYLLA_MGMT_REPO
 | **<a name="update_db_packages">update_db_packages</a>**  | A local directory of rpms to install a custom version on top of<br>the scylla installed (or from repo or from ami) | N/A | SCT_UPDATE_DB_PACKAGES
