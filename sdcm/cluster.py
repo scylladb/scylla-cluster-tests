@@ -3057,9 +3057,10 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                        password=None, compression=True, protocol_version=None,
                        port=None, ssl_opts=None, connect_timeout=100, verbose=True):
         node_ips = self.get_node_external_ips()
+        wlrr = WhiteListRoundRobinPolicy(node_ips)
         return self._create_session(node=node, keyspace=keyspace, user=user, password=password,
                                     compression=compression, protocol_version=protocol_version,
-                                    port=port, ssl_opts=ssl_opts, node_ips=self.get_node_external_ips(),
+                                    load_balancing_policy=wlrr, port=port, ssl_opts=ssl_opts, node_ips=node_ips,
                                     connect_timeout=connect_timeout, verbose=verbose)
 
     def cql_connection_exclusive(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
@@ -3083,7 +3084,6 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
         If the timeout is exceeded, the exception is raised.
         """
-        # pylint: disable=unused-argument
         kwargs = locals()
         del kwargs["self"]
         return self.cql_connection(**kwargs)
