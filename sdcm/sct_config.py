@@ -160,6 +160,12 @@ class SCTConfiguration(dict):
         dict(name="scylla_repo", env="SCT_SCYLLA_REPO", type=str,
              help="Url to the repo of scylla version to install scylla"),
 
+        dict(name="unified_package", env="SCT_UNIFIED_PACKAGE", type=str,
+             help="Url to the unified package of scylla version to install scylla"),
+
+        dict(name="nonroot_offline_install", env="SCT_NONROOT_OFFLINE_INSTALL", type=boolean,
+             help="Install Scylla without required root priviledge"),
+
         dict(name="scylla_version", env="SCT_SCYLLA_VERSION",
              type=str,
              help="""Version of scylla to install, ex. '2.3.1'
