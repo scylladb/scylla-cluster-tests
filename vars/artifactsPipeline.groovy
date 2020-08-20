@@ -20,6 +20,12 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'a Scylla repo to run against (for .rpm/.deb tests, should be blank otherwise)',
                    name: 'scylla_repo')
+            string(defaultValue: "${pipelineParams.get('unified_package', '')}",
+                   description: 'Url to the unified package of scylla version to install scylla',
+                   name: 'unified_package')
+            booleanParam(defaultValue: "${pipelineParams.get('nonroot_offline_install', false)}",
+                   description: 'Install Scylla without required root priviledge',
+                   name: 'nonroot_offline_install')
             string(defaultValue: "${pipelineParams.get('scylla_mgmt_repo', '')}",
                    description: 'a Scylla Manager repo to run against (for .rpm/.deb tests, should be blank otherwise)',
                    name: 'scylla_mgmt_repo')
@@ -99,8 +105,11 @@ def call(Map pipelineParams) {
                                                         export SCT_SCYLLA_REPO_M="${params.scylla_repo}"
                                                         export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
                                                     fi
+                                                elif [[ ! -z "${params.unified_package}" ]]; then
+                                                    export SCT_UNIFIED_PACKAGE="${params.unified_package}"
+                                                    export SCT_NONROOT_OFFLINE_INSTALL=${params.nonroot_offline_install}
                                                 else
-                                                    echo "need to choose one of SCT_GCE_IMAGE_DB | SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO"
+                                                    echo "need to choose one of SCT_GCE_IMAGE_DB | SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO | SCT_UNIFIED_PACKAGE"
                                                     exit 1
                                                 fi
 
