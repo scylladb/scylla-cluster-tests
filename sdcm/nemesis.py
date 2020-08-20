@@ -464,18 +464,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.monitoring_set.reconfigure_scylla_monitoring()
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
         new_node.replacement_node_ip = old_node_ip
-        result = new_node.run_nodetool(sub_cmd='help', args='enableautocompaction')
-        if 'Unknown command enableautocompaction' in result.stdout:
-            disable_autocompaction = False
-        else:
-            disable_autocompaction = random.choice([True, False])
-        keyspaces = self.cluster.get_test_keyspaces()
         try:
             self.cluster.wait_for_init(node_list=[new_node], timeout=timeout, wait_db_up=False, check_node_health=False)
-            if disable_autocompaction:
-                self.log.info(f'During bootstrap, autocompaction will be disabled for keyspaces {keyspaces}')
-                for keyspace in keyspaces:
-                    new_node.run_nodetool(sub_cmd='disableautocompaction', args=keyspace, ignore_status=True)
             new_node.wait_db_up(timeout=timeout)
             self.cluster.clean_replacement_node_ip(new_node)
         except (NodeSetupFailed, NodeSetupTimeout):
@@ -484,15 +474,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.warning("Node will not be terminated. Please terminate manually!!!")
             raise
         self.cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
-        if disable_autocompaction:
-            self.log.info(f'Bootstrap is finished and will enable autocompaction for keyspaces {keyspaces}')
-            try:
-                for keyspace in keyspaces:
-                    new_node.run_nodetool(sub_cmd='enableautocompaction', args=keyspace)
-            except Exception as details:  # pylint: disable=broad-except
-                self.log.error("enableautocompaction failed with error %s", details)
-                new_node.running_nemesis = None
-                raise
         InfoEvent(message='FinishEvent - New Node is up and normal')
         return new_node
 
