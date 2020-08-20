@@ -3116,7 +3116,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             is_column_type = entity_type == "column"
             column_names = regular_column_names
             if is_column_type:
-                cmd = f"SELECT {column_names[0]}, {column_names[1]} FROM system_schema.columns"
+                cmd = f"SELECT {column_names[0]}, {column_names[1]}, type FROM system_schema.columns"
             elif entity_type == "view":
                 column_names = materialized_view_column_names
                 cmd = f"SELECT {column_names[0]}, {column_names[1]} FROM system_schema.views"
