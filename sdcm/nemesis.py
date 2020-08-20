@@ -25,6 +25,7 @@ import threading
 import os
 import re
 import traceback
+import json
 
 from typing import List, Optional
 from collections import OrderedDict, defaultdict
@@ -2065,8 +2066,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 raise LogContentNotFound('Reload SSL message not found in node log')
             return msg.stdout
 
-        ssl_files_location = '/etc/scylla/ssl_conf'
-        in_place_crt = self.target_node.remoter.run(f"cat {os.path.join(ssl_files_location, 'db.crt')}",
+        ssl_files_location = json.loads(
+            self.target_node.get_scylla_config_param("server_encryption_options"))["certificate"]
+        in_place_crt = self.target_node.remoter.run(f"cat {ssl_files_location}",
                                                     ignore_status=True).stdout
         update_certificates()
         time_now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -2075,12 +2077,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for node in self.cluster.nodes:
             node.remoter.run(f"sudo cp -f /tmp/db.crt {ssl_files_location}")
         for node in self.cluster.nodes:
-            new_crt = node.remoter.run(f"cat {os.path.join(ssl_files_location, 'db.crt')}").stdout
+            new_crt = node.remoter.run(f"cat {ssl_files_location}").stdout
             if in_place_crt == new_crt:
                 raise Exception('The CRT file was not replaced with the new one')
-            reload = check_ssl_reload_log(target_node=node, file_path=os.path.join(ssl_files_location, 'db.crt'),
+            reload = check_ssl_reload_log(target_node=node, file_path=ssl_files_location,
                                           since_time=time_now)
-
             if not reload:
                 raise Exception('SSL auto Reload did not happen')
 
