@@ -309,14 +309,50 @@ class AwsRegion:
                         "ToPort": 56090,
                         "IpProtocol": "tcp",
                         "IpRanges": [{'CidrIp': '0.0.0.0/0',
-                                      'Description': 'Allow Scylla Manager Agent Prometheus API for ALL'}],
+                                      'Description': 'Allow Scylla Manager Agent version 2.1 Prometheus API for ALL'}],
                         "Ipv6Ranges": [{'CidrIpv6': '::/0',
-                                        'Description': 'Allow Scylla Manager Agent Prometheus API for ALL'}]
+                                        'Description': 'Allow Scylla Manager Agent version 2.1 Prometheus API for ALL'}]
                     },
                     {
                         "IpProtocol": "-1",
                         "IpRanges": [{'CidrIp': '172.0.0.0/11',
                                       'Description': 'Allow traffic from Scylla Cloud lab while VPC peering for ALL'}],
+                    },
+                    {
+                        "FromPort": 5080,
+                        "ToPort": 5080,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
+                                      'Description': 'Allow Scylla Manager HTTP API for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
+                                        'Description': 'Allow Scylla Manager HTTP API for ALL'}]
+                    },
+                    {
+                        "FromPort": 5443,
+                        "ToPort": 5443,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
+                                      'Description': 'Allow Scylla Manager HTTPS API for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
+                                        'Description': 'Allow Scylla Manager HTTPS API for ALL'}]
+                    },
+                    {
+                        "FromPort": 5090,
+                        "ToPort": 5090,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
+                                      'Description': 'Allow Scylla Manager Agent Prometheus API for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
+                                        'Description': 'Allow Scylla Manager Agent Prometheus API for ALL'}]
+                    },
+                    {
+                        "FromPort": 5112,
+                        "ToPort": 5112,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
+                                      'Description': 'Allow Scylla Manager pprof Debug For ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
+                                        'Description': 'Allow Scylla Manager pprof Debug For ALL'}]
                     }
                 ]
             )

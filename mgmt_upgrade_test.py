@@ -102,8 +102,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
             self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
 
         with self.subTest("Continuing a 2.0 stopped backup task with 2.1 manager"):
-            pausable_backup_task.start(cmd=f"task -c {pausable_backup_task.cluster_id} start {pausable_backup_task.id} "
-                                           f"--continue=true")
+            pausable_backup_task.start()
             pausable_backup_task.wait_and_get_final_status(timeout=1200, step=20)
             assert pausable_backup_task.status == TaskStatus.DONE, \
                 f"task {pausable_backup_task.id} failed to continue after manager upgrade"
@@ -122,8 +121,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
 
             for i in range(2, 4):
                 LOGGER.debug(f"rerunning the backup task for the {i} time")
-                rerunning_backup_task.start(cmd=f"task -c {rerunning_backup_task.cluster_id} "
-                                                f"start {rerunning_backup_task.id} --continue=false")
+                rerunning_backup_task.start(continue_task=False)
             per_node_backup_file_paths = mgr_cluster.get_backup_files_dict(
                 snapshot_tag=rerunning_backup_task.get_snapshot_tag())
             for node in self.db_cluster.nodes:

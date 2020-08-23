@@ -349,7 +349,7 @@ class UserRemoteCredentials():
 class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     CQL_PORT = 9042
     MANAGER_AGENT_PORT = 10001
-    MANAGER_SERVER_PORT = 56080
+    MANAGER_SERVER_PORT = 5080
 
     log = LOGGER
 
@@ -1387,7 +1387,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         port = port if port else self.MANAGER_SERVER_PORT
         if self.is_port_used(port=port, service_name="scylla-manager"):
             # When the manager has started,
-            # it should answer an http request of https://127.0.0.1:56080/ping with status code 204
+            # it should answer an http request of https://127.0.0.1:5080/ping with status code 204
             curl_output = self.remoter.run(
                 f'''curl --write-out "%{{http_code}}\n" --silent --output /dev/null "http://127.0.0.1:{port}/ping"''',
                 ignore_status=True)
