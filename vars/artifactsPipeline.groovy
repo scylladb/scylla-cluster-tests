@@ -27,7 +27,7 @@ def call(Map pipelineParams) {
                    description: 'a Scylla AMI to run against (for AMI test, should be blank otherwise)',
                    name: 'scylla_ami_id')
             string(defaultValue: '',
-                   description: 'a GCE Image to run against (for GCE Image test, should be blank)',
+                   description: 'a GCE Image to run against',
                    name: 'gce_image_db')
             string(defaultValue: "${pipelineParams.get('region_name', '')}",
                    description: 'AWS region with Scylla AMI (for AMI test, ignored otherwise)',
