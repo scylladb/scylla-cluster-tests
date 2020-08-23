@@ -11,6 +11,9 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import datetime
+import re
+
 from sdcm.tester import ClusterTester
 
 
@@ -34,10 +37,40 @@ class ArtifactsTest(ClusterTester):
         self.run_cassandra_stress("write n=10000 -mode cql3 native -pop seq=1..10000")
         self.run_cassandra_stress("mixed duration=1m -mode cql3 native -rate threads=10 -pop seq=1..10000")
 
+    def verify_users(self):
+        # We can't ship the image with Scylla internal users inside. So we
+        # need to verify that mistakenly we didn't create all the users that we have project wide in the image
+        self.log.info("Checking that all existent users except centos were created after boot")
+        uptime = self.node.remoter.run(cmd="uptime -s").stdout.strip()
+        datetime_format = "%Y-%m-%d %H:%M:%S"
+        instance_start_time = datetime.datetime.strptime(uptime, datetime_format)
+        self.log.info("Instance started at: %s", instance_start_time)
+        out = self.node.remoter.run(cmd="ls -ltr --full-time /home", verbose=True).stdout.strip()
+        for line in out.splitlines():
+            splitted_line = line.split()
+            if len(splitted_line) <= 2:
+                continue
+            user = splitted_line[-1]
+            if user == "centos":
+                self.log.info("Skipping user %s since it is a default image user.", user)
+                continue
+            self.log.info("Checking user: '%s'", user)
+            if datetime_str := re.search(r"(\d+-\d+-\d+ \d+:\d+:\d+).", line):
+                datetime_user_created = datetime.datetime.strptime(datetime_str.group(1), datetime_format)
+                self.log.info("User '%s' created at '%s'", user, datetime_user_created)
+                if datetime_user_created < instance_start_time and not user == "centos":
+                    AssertionError("User %s was created in the image. Only user centos should exist in the image")
+            else:
+                raise AssertionError(f"Unable to parse/find timestamp of the user {user} creation in {line}")
+        self.log.info("All users except image user 'centos' were created after the boot.")
+
     def test_scylla_service(self):
         if self.params["cluster_backend"] == "aws":
             with self.subTest("check ENA support"):
                 assert self.node.ena_support, "ENA support is not enabled"
+
+        if self.params["cluster_backend"] == "gce":
+            self.verify_users()
 
         with self.subTest("check Scylla server after installation"):
             self.check_scylla()
