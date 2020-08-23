@@ -138,8 +138,10 @@ class ManagerTask(ScyllaManagerBase):
         self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
         return self.wait_and_get_final_status(timeout=30, step=3)
 
-    def start(self, cmd=None):
-        cmd = cmd or "task start {} -c {}".format(self.id, self.cluster_id)
+    def start(self, continue_task=True):
+        cmd = "task start {} -c {}".format(self.id, self.cluster_id)
+        if not continue_task:
+            cmd += " --no-continue"
         self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
         list_all_task_status = [s for s in TaskStatus.__dict__ if not s.startswith("__")]
         list_expected_task_status = [status for status in list_all_task_status if status != TaskStatus.STOPPED]
@@ -326,14 +328,6 @@ class ManagerTask(ScyllaManagerBase):
 class RepairTask(ManagerTask):
     def __init__(self, task_id, cluster_id, manager_node):
         ManagerTask.__init__(self, task_id=task_id, cluster_id=cluster_id, manager_node=manager_node)
-
-    def start(self, use_continue=False, **kwargs):  # pylint: disable=arguments-differ,unused-argument
-        str_continue = '--continue=true' if use_continue else '--continue=false'
-        cmd = "task start {} -c {} {}".format(self.id, self.cluster_id, str_continue)
-        ManagerTask.start(self, cmd=cmd)
-
-    def continue_repair(self):
-        self.start(use_continue=True)
 
 
 class HealthcheckTask(ManagerTask):
@@ -835,7 +829,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
               --ssl-user-key-file path    path to key associated with ssl-user-cert-file
 
         Global Flags:
-              --api-url URL    URL of Scylla Manager server (default "https://127.0.0.1:56443/api/v1")
+              --api-url URL    URL of Scylla Manager server (default "https://127.0.0.1:5443/api/v1")
           -c, --cluster name   target cluster name or ID
 
         Scylla Docs:

@@ -358,7 +358,7 @@ class UserRemoteCredentials():
 class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     CQL_PORT = 9042
     MANAGER_AGENT_PORT = 10001
-    MANAGER_SERVER_PORT = 56080
+    MANAGER_SERVER_PORT = 5080
 
     max_coredump_thread_exceptions: int = 10
 
@@ -1422,14 +1422,15 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def is_manager_server_up(self, port=None):
         port = port if port else self.MANAGER_SERVER_PORT
-        # When the manager has started,
-        # it should answer an http request of https://127.0.0.1:5080/ping with status code 204
-        # The port is only open locally, hence using curl instead
-        curl_output = self.remoter.run(
-            f'''curl --write-out "%{{http_code}}\n" --silent --output /dev/null "http://127.0.0.1:{port}/ping"''',
-            verbose=True, ignore_status=True)
-        http_status_code = int(curl_output.stdout.strip())
-        return http_status_code == 204
+        if self.is_port_used(port=port, service_name="scylla-manager"):
+            # When the manager has started,
+            # it should answer an http request of https://127.0.0.1:5080/ping with status code 204
+            curl_output = self.remoter.run(
+                f'''curl --write-out "%{{http_code}}\n" --silent --output /dev/null "http://127.0.0.1:{port}/ping"''',
+                ignore_status=True)
+            http_status_code = int(curl_output.stdout.strip())
+            return http_status_code == 204
+        return False
 
     def wait_manager_server_up(self, verbose=True, timeout=300):
         text = None

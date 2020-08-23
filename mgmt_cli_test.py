@@ -320,7 +320,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                 DbEventsFilter(type='RUNTIME_ERROR', line='get_repair_meta: repair_meta_id'):
             self.db_cluster.enable_client_encrypt()
         mgr_cluster.update(client_encrypt=True)
-        repair_task.start(use_continue=True)
+        repair_task.start()
         sleep = 40
         self.log.debug('Sleep {} seconds, waiting for health-check task to run by schedule on first time'.format(sleep))
         time.sleep(sleep)
@@ -506,7 +506,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                 reach_enospc_on_node(target_node=target_node)
                 has_enospc_been_reached = True
 
-                backup_task.start(cmd=f"task -c {backup_task.cluster_id} start {backup_task.id} --continue=true")
+                backup_task.start()
 
                 backup_task.wait_and_get_final_status()
                 assert backup_task.status == TaskStatus.DONE, "The backup failed to run on a node with no free space," \
