@@ -2298,10 +2298,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def _resharding_status(self, status):
         """
-        Check is there's Reshard listed in the log
+        Check is there's Reshard listed in the "nodetool compactionstats" output
         status : expected values: "start" or "finish"
         """
-        patt = re.compile('RESHARD')
+        patt = re.compile('RESHARD|RESHAP')
         result = self.run_nodetool("compactionstats")
         found = patt.search(result.stdout)
         # wait_for_status=='finish': If 'RESHARD' is not found in the compactionstats output, return True -
@@ -2317,26 +2317,35 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # Change murmur3_partitioner_ignore_msb_bits parameter to cause resharding.
         with self.remote_scylla_yaml() as scylla_yml:
             scylla_yml["murmur3_partitioner_ignore_msb_bits"] = murmur3_partitioner_ignore_msb_bits
-        self.start_scylla()
+        search_reshard = self.follow_system_log(patterns=['Reshard', 'Reshap'])
+        self.start_scylla(timeout=7200)
 
-        resharding_started = wait.wait_for(func=self._resharding_status, step=5, timeout=3600,
+        resharding_started = wait.wait_for(func=self._resharding_status, step=5, timeout=180,
                                            text="Wait for re-sharding to be started", status='start')
         if not resharding_started:
-            self.log.error('Resharding has not been started (murmur3_partitioner_ignore_msb_bits={}) '
-                           'Check the log for the details'.format(murmur3_partitioner_ignore_msb_bits))
-
+            resharding_started = list(search_reshard)
+            if resharding_started:
+                # If re-sharding was found running in the log but didn't reported by "nodetool compactionstats",
+                # it means that re-sharding was started and finished already
+                self.log.debug(f'Resharding has been finished successfully '
+                               f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits})')
+            else:
+                self.log.error(f'Resharding has not been started '
+                               f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits}) '
+                               'Check the log for the details')
             return
-
-        # Decrease nodetool compactionstats calls from 5sec to 1min to avoid the noise
-        resharding_finished = wait.wait_for(func=self._resharding_status, step=60,
-                                            text="Wait for re-sharding to be finished", status='finish')
-
-        if not resharding_finished:
-            self.log.error('Resharding was not finished! (murmur3_partitioner_ignore_msb_bits={}) '
-                           'Check the log for the details'.format(murmur3_partitioner_ignore_msb_bits))
         else:
-            self.log.debug('Resharding has been finished successfully (murmur3_partitioner_ignore_msb_bits={})'.
-                           format(murmur3_partitioner_ignore_msb_bits))
+            # Decrease nodetool compactionstats calls from 5sec to 1min to avoid the noise
+            resharding_finished = wait.wait_for(func=self._resharding_status, step=60,
+                                                text="Wait for re-sharding to be finished", status='finish')
+
+            if not resharding_finished:
+                self.log.error('Resharding was not finished! '
+                               f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits}) '
+                               'Check the log for the details')
+            else:
+                self.log.debug('Resharding has been finished successfully '
+                               f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits})')
 
     def _gen_nodetool_cmd(self, sub_cmd, args, options):
         credentials = self.parent_cluster.get_db_auth()
