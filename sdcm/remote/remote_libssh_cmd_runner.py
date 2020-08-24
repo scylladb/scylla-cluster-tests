@@ -52,7 +52,7 @@ class RemoteLibSSH2CmdRunner(RemoteCmdRunnerBase, ssh_transport='libssh2'):  # p
             user=self.user,
             port=self.port,
             pkey=os.path.expanduser(self.key_file),
-            timings=Timings(keepalive_timeout=300, connect_timeout=self.connect_timeout)
+            timings=Timings(keepalive_timeout=0, connect_timeout=self.connect_timeout)
         )
 
     def is_up(self, timeout: float = 30) -> bool:
