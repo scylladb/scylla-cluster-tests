@@ -164,9 +164,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             dcs_names.add(data_center)
         return dcs_names
 
-    def _create_keyspace_and_basic_table(self, keyspace_name, strategy, table_name="example_table"):
+    def _create_keyspace_and_basic_table(self, keyspace_name, strategy, table_name="example_table", rf=1):
         self.log.info("creating keyspace {}".format(keyspace_name))
-        keyspace_existence = self.create_keyspace(keyspace_name, 1, strategy)
+        keyspace_existence = self.create_keyspace(keyspace_name, rf, strategy)
         assert keyspace_existence, "keyspace creation failed"
         # Keyspaces without tables won't appear in the repair, so the must have one
         self.log.info("creating the table {} in the keyspace {}".format(table_name, keyspace_name))
@@ -450,7 +450,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, host=selected_host,
                                         auth_token=self.monitors.mgmt_auth_token)
-        self._create_keyspace_and_basic_table(self.SIMPLESTRATEGY_KEYSPACE_NAME, "SimpleStrategy")
+        self._create_keyspace_and_basic_table(self.SIMPLESTRATEGY_KEYSPACE_NAME, "SimpleStrategy", rf=2)
         self._create_keyspace_and_basic_table(self.LOCALSTRATEGY_KEYSPACE_NAME, "LocalStrategy")
         repair_task = mgr_cluster.create_repair_task()
         task_final_status = repair_task.wait_and_get_final_status(timeout=7200)
@@ -461,19 +461,17 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
         expected_keyspaces_to_be_repaired = ["system_auth", "system_distributed", "system_traces",  # pylint: disable=invalid-name
                                              self.SIMPLESTRATEGY_KEYSPACE_NAME]
-        repair_progress_table = repair_task.detailed_progress
+        per_keyspace_progress = repair_task.per_keyspace_progress
         self.log.info("Looking in the repair output for all of the required keyspaces")
         for keyspace_name in expected_keyspaces_to_be_repaired:
-            keyspace_repair_percentage = self._keyspace_value_in_progress_table(
-                repair_task, repair_progress_table, keyspace_name)
+            keyspace_repair_percentage = per_keyspace_progress.get(keyspace_name, None)
             assert keyspace_repair_percentage is not None, \
                 "The keyspace {} was not included in the repair!".format(keyspace_name)
             assert keyspace_repair_percentage == 100, \
                 "The repair of the keyspace {} stopped at {}%".format(
                     keyspace_name, keyspace_repair_percentage)
 
-        localstrategy_keyspace_percentage = self._keyspace_value_in_progress_table(   # pylint: disable=invalid-name
-            repair_task, repair_progress_table, self.LOCALSTRATEGY_KEYSPACE_NAME)
+        localstrategy_keyspace_percentage = per_keyspace_progress.get(self.LOCALSTRATEGY_KEYSPACE_NAME, None)
         assert localstrategy_keyspace_percentage is None, \
             "The keyspace with the replication strategy of localstrategy was included in repair, when it shouldn't"
         self.log.info("the sctool repair command was completed successfully")
@@ -514,13 +512,3 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             finally:
                 if has_enospc_been_reached:
                     clean_enospc_on_node(target_node=target_node, sleep_time=30)
-
-    @staticmethod
-    def _keyspace_value_in_progress_table(repair_task, repair_progress_table, keyspace_name):
-        try:
-            table_repair_progress = repair_task.sctool.get_table_value(repair_progress_table, keyspace_name)
-            table_repair_percentage = float(table_repair_progress.replace('%', ''))
-            return table_repair_percentage
-        except ScyllaManagerError as err:
-            assert "not found in" in str(err), "Unexpected error: {}".format(str(err))
-            return None
