@@ -1112,7 +1112,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.hard_reboot()
         else:
             self.log.debug('Softly rebooting node')
-            self.remoter.run('sudo reboot', ignore_status=True)
+            if not self.remoter.is_up(60):
+                raise RuntimeError('Target host is down')
+            try:
+                self.remoter.run('sudo reboot', ignore_status=True, retry=0)
+            except Exception:  # pylint: disable=broad-except
+                pass
 
         # wait until the reboot is executed
         wait.wait_for(func=uptime_changed, step=10, timeout=500, throw_exc=True)

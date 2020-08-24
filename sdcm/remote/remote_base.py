@@ -552,7 +552,6 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             self._print_command_results(exc.result, verbose, ignore_status)  # pylint: disable=no-member
         return True
 
-    @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException,))
     def run(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
             ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
             log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None,
@@ -575,7 +574,19 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
 
         watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
 
-        @retrying(n=retry)
+        if retry == 0:
+            # Won't retry on any case
+            allowed_exception = tuple()
+            retry = 1
+        elif retry == 1:
+            # Only retry 3 times on network exception
+            allowed_exception = (RetryableNetworkException,)
+            retry = 3
+        else:
+            # Retry times that user wants on any exception
+            allowed_exception = (Exception, )
+
+        @retrying(n=retry, sleep_time=5, allowed_exceptions=allowed_exception)
         def _run():
             self._run_pre_run(cmd, timeout, ignore_status, verbose, new_session, log_file, retry, watchers)
             try:
