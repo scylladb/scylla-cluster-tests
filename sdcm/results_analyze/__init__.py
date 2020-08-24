@@ -364,7 +364,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                     param, src[param], dst[param], version_dst))
         return cmp_res
 
-    def check_regression(self, test_id, is_gce=False):
+    def check_regression(self, test_id, is_gce=False, email_subject_postfix=None):
         """
         Get test results by id, filter similar results and calculate max values for each version,
         then compare with max in the test version and all the found versions.
@@ -511,6 +511,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         subject = f'Performance Regression Compare Results - {test_name} - {test_version} - {str(test_start_time)}'
         if ycsb:
             subject = f'(Alternator) Performance Regression - {test_name} - {test_version} - {str(test_start_time)}'
+        if email_subject_postfix:
+            subject = f'{subject} {email_subject_postfix}'
         html = self.render_to_html(results)
         self.send_email(subject, html)
 
