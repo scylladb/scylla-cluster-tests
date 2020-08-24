@@ -31,6 +31,7 @@ from typing import List, Optional, Dict, Union
 from textwrap import dedent
 from datetime import datetime
 from functools import cached_property, wraps
+from tenacity import RetryError
 
 import yaml
 import requests
@@ -351,6 +352,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     CQL_PORT = 9042
     MANAGER_AGENT_PORT = 10001
     MANAGER_SERVER_PORT = 5080
+    OLD_MANAGER_PORT = 56080
 
     log = LOGGER
 
@@ -1236,7 +1238,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         text = None
         if verbose:
             text = '%s: Waiting for manager server to be up' % self
-        wait.wait_for(func=self.is_manager_server_up, step=10, text=text, timeout=timeout, throw_exc=True)
+        try:
+            wait.wait_for(func=self.is_manager_server_up, step=10, text=text, timeout=timeout, throw_exc=True)
+        except RetryError:
+            wait.wait_for(func=self.is_manager_server_up, port=self.OLD_MANAGER_PORT,
+                          step=10, text=text, timeout=timeout, throw_exc=True)
 
     # Configuration node-exporter.service when use IPv6
 
@@ -3358,7 +3364,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             :return: dict
         """
         res = node.run_nodetool('info')
-        info_res = yaml.load(res.stdout)
+        # Removing unnecessary lines from the output
+        proper_yaml_output = "\n".join([line for line in res.stdout.splitlines() if ":" in line])
+        info_res = yaml.load(proper_yaml_output)
         return info_res
 
     def check_cluster_health(self):

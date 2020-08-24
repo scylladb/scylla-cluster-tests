@@ -9,6 +9,7 @@ import datetime
 from enum import Enum
 from textwrap import dedent
 from re import findall
+from statistics import mean
 import yaml
 
 from invoke.exceptions import UnexpectedExit, Failure
@@ -268,11 +269,24 @@ class ManagerTask(ScyllaManagerBase):
         parsed_progress_table = self.sctool.run(cmd=cmd, parse_table_res=True, is_multiple_tables=True)
         # expecting output of:
         # ...
-        #  ╭────────────────────┬───────╮
-        #  │ system_auth        │ 0.47% │
-        #  │ system_distributed │ 0.00% │
-        #  │ system_traces      │ 0.00% │
-        #  ╰────────────────────┴───────╯
+        # ╭────────────────────┬────────────────────────┬──────────┬──────────╮
+        # │ Keyspace           │                  Table │ Progress │ Duration │
+        # ├────────────────────┼────────────────────────┼──────────┼──────────┤
+        # │ keyspace1          │              standard1 │ 0%       │ 0s       │
+        # ├────────────────────┼────────────────────────┼──────────┼──────────┤
+        # │ system_auth        │           role_members │ 100%     │ 21s      │
+        # │ system_auth        │                  roles │ 100%     │ 23s      │
+        # ├────────────────────┼────────────────────────┼──────────┼──────────┤
+        # │ system_distributed │        cdc_generations │ 0%       │ 1s       │
+        # │ system_distributed │            cdc_streams │ 0%       │ 0s       │
+        # │ system_distributed │      view_build_status │ 0%       │ 0s       │
+        # ├────────────────────┼────────────────────────┼──────────┼──────────┤
+        # │ system_traces      │                 events │ 0%       │ 0s       │
+        # │ system_traces      │          node_slow_log │ 100%     │ 7s       │
+        # │ system_traces      │ node_slow_log_time_idx │ 0%       │ 0s       │
+        # │ system_traces      │               sessions │ 100%     │ 7s       │
+        # │ system_traces      │      sessions_time_idx │ 100%     │ 7s       │
+        # ╰────────────────────┴────────────────────────┴──────────┴──────────╯
         relevant_key = [key for key in parsed_progress_table.keys() if parsed_progress_table[key]][0]
         return parsed_progress_table[relevant_key]
 
@@ -328,6 +342,26 @@ class ManagerTask(ScyllaManagerBase):
 class RepairTask(ManagerTask):
     def __init__(self, task_id, cluster_id, manager_node):
         ManagerTask.__init__(self, task_id=task_id, cluster_id=cluster_id, manager_node=manager_node)
+
+    @property
+    def per_keyspace_progress(self):
+        """
+        Since, as of now, the progress table of a repair task shows the progress of every table,
+        this function will create an average for each keyspace and return the progress of all of the keyspaces in a dict
+        :return: dict
+        """
+        progress_table_lines = self.detailed_progress[1:]  # Removing headers
+        inclusive_table_progress_dict = {}
+        for line in progress_table_lines:
+            keyspace_name, table_name, progress_percentage, _ = line
+            if keyspace_name not in inclusive_table_progress_dict:
+                inclusive_table_progress_dict[keyspace_name] = []
+            inclusive_table_progress_dict[keyspace_name].append(int(progress_percentage.strip()[:-1]))
+        per_keyspace_progress = {}
+        for keyspace_name in inclusive_table_progress_dict:
+            average_progress = mean(inclusive_table_progress_dict[keyspace_name])
+            per_keyspace_progress[keyspace_name] = average_progress
+        return per_keyspace_progress
 
 
 class HealthcheckTask(ManagerTask):
@@ -646,7 +680,7 @@ class ManagerCluster(ScyllaManagerBase):
                 LOGGER.debug("Cluster: {} - {} has no hosts health report".format(self.id, dc_name))
             else:
                 list_titles_row = hosts_table[0]
-                host_col_idx = list_titles_row.index("Host")
+                host_col_idx = list_titles_row.index("Address")
                 cql_status_col_idx = list_titles_row.index("CQL")
                 rest_col_idx = list_titles_row.index("REST")
 
