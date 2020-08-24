@@ -336,11 +336,13 @@ class Client:  # pylint: disable=too-many-instance-attributes
         self._auth()
 
     def _init_tune(self):
+        if self.keepalive_thread:
+            self.keepalive_thread.stop()
         if self.timings.keepalive_timeout:
+            # This part of logic is disabled
+            # TODO: Make sure it works with no keep-alive packets and remove it if it does
             with self.session.lock:
                 self.session.keepalive_config(False, self.timings.keepalive_timeout)
-            if self.keepalive_thread:
-                self.keepalive_thread.stop()
             self.keepalive_thread = KeepAliveThread(
                 self.session, keepalive_timeout=self.timings.keepalive_sending_timeout)
             self.keepalive_thread.start()
