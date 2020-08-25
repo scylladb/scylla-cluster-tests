@@ -2098,6 +2098,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         we don't monitor swap usage in /proc/$scylla_pid/status, just make sure
         no coredump, serious db error occur during the heavy load of memory.
         """
+        self._set_current_disruption(f'MemoryStress on {self.target_node}')
         self.target_node.install_epel()
         self.target_node.remoter.run('sudo yum install -y stress-ng')
 
