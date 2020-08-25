@@ -1,0 +1,22 @@
+test_duration: 50
+
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=45m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=10 -pop seq=1..10485760 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+             "cassandra-stress read  cl=QUORUM duration=45m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=10 -pop seq=1..10485760 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+             ]
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.large'
+
+nemesis_class_name: 'ScyllaCloudLimitedChaosMonkey'
+nemesis_interval: 5
+nemesis_filter_seeds: false
+
+user_prefix: 'longevity-small-set-1h'
+space_node_threshold: 64424
+
+use_mgmt: false
+pre_create_schema: True
+sstable_size: 100
