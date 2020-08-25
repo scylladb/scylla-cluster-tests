@@ -1656,6 +1656,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         3.Nodetool removenode
         4.Add new node
         """
+        if self.cluster.params.get("cluster_backend") == 'aws-siren':
+            raise UnsupportedNemesis("Skipping this nemesis due this job run from Siren cloud with 2019 version!")
 
         self._set_current_disruption('TerminateAndRemoveNodeMonkey')
         node_to_remove = self.target_node
