@@ -4174,7 +4174,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             ./start-all.sh \
             -s `realpath "{self.monitoring_conf_dir}/scylla_servers.yml"` \
             -n `realpath "{self.monitoring_conf_dir}/node_exporter_servers.yml"` \
-            -d `realpath "{self.monitoring_data_dir}"` -l -v master,{self.monitoring_version} -b "-web.enable-admin-api"
+            -d `realpath "{self.monitoring_data_dir}"` -l -v master,{self.monitoring_version} -b "-web.enable-admin-api" -b "-query.max-samples=150000000"
         """)
         node.remoter.run("bash -ce '%s'" % run_script, verbose=True)
         self.add_sct_dashboards_to_grafana(node)
