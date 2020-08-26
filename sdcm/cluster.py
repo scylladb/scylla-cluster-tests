@@ -55,7 +55,8 @@ from sdcm.remote.remote_file import remote_file
 from sdcm import wait, mgmt
 from sdcm.utils import alternator
 from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
-    get_latest_gemini_version, normalize_ipv6_url, download_dir_from_cloud, generate_random_string, ScyllaCQLSession
+    get_latest_gemini_version, normalize_ipv6_url, download_dir_from_cloud, generate_random_string, ScyllaCQLSession, \
+    SCYLLA_YAML_PATH
 from sdcm.utils.distro import Distro
 from sdcm.utils.docker_utils import ContainerManager, NotFound
 
@@ -86,9 +87,9 @@ IP_SSH_CONNECTIONS = 'private'
 TASK_QUEUE = 'task_queue'
 RES_QUEUE = 'res_queue'
 WORKSPACE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-SCYLLA_YAML_PATH = "/etc/scylla/scylla.yaml"
 SCYLLA_DIR = "/var/lib/scylla"
-INSTALL_DIR = "~/scylladb"
+TEST_USER = 'scylla-test'
+INSTALL_DIR = f"/home/{TEST_USER}/scylladb"
 
 INSTANCE_PROVISION_ON_DEMAND = 'on_demand'
 SPOT_TERMINATION_CHECK_DELAY = 5
@@ -585,7 +586,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     @property
     def is_client_encrypt(self):
         result = self.remoter.run(
-            "grep ^client_encryption_options: /etc/scylla/scylla.yaml -A 3 | grep enabled | awk '{print $2}'", ignore_status=True)
+            f"grep ^client_encryption_options: {self.add_install_prefix(SCYLLA_YAML_PATH)} -A 3 | grep enabled | awk '{{print $2}}'", ignore_status=True)
         return 'true' in result.stdout.lower()
 
     @property
@@ -597,13 +598,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @property
     def is_server_encrypt(self):
-        result = self.remoter.run("grep '^server_encryption_options:' /etc/scylla/scylla.yaml", ignore_status=True)
+        result = self.remoter.run(
+            f"grep '^server_encryption_options:' {self.add_install_prefix(SCYLLA_YAML_PATH)}", ignore_status=True)
         return 'server_encryption_options' in result.stdout.lower()
 
     def extract_seeds_from_scylla_yaml(self):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct'), 'scylla.yaml')
         wait.wait_for(func=self.remoter.receive_files, step=10, text='Waiting for copying scylla.yaml', timeout=300,
-                      throw_exc=True, src=SCYLLA_YAML_PATH, dst=yaml_dst_path)
+                      throw_exc=True, src=self.add_install_prefix(SCYLLA_YAML_PATH), dst=yaml_dst_path)
         with open(yaml_dst_path, 'r') as yaml_stream:
             try:
                 conf_dict = yaml.safe_load(yaml_stream)
@@ -2278,6 +2280,23 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def journalctl(self):
         return self.wrap_cmd_with_permission('journalctl')
 
+    def add_install_prefix(self, abs_path):
+        """
+        nonroot install included all files inside a install root directory,
+        it's different with root install.
+        """
+        assert os.path.isabs(abs_path), f"abs_path ({abs_path}) should be an absolute path"
+        if not self.is_nonroot_install:
+            return abs_path
+        checklist = {
+            SCYLLA_YAML_PATH: f'{INSTALL_DIR}{SCYLLA_YAML_PATH}',
+            '/etc/scylla.d/io.conf': f'{INSTALL_DIR}/etc/scylla.d/io.conf',
+            '/usr/bin/scylla': f'{INSTALL_DIR}/bin/scylla',
+            '/usr/bin/nodetool': f'{INSTALL_DIR}/share/cassandra/bin/nodetool',
+            '/usr/bin/cqlsh': f'{INSTALL_DIR}/share/cassandra/bin/cqlsh',
+        }
+        return checklist.get(abs_path, INSTALL_DIR + abs_path)
+
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=300):
         if verify_down:
             self.wait_db_down(timeout=timeout)
@@ -3832,7 +3851,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             # when scylla-server process will be restarted
             node.replacement_node_ip = None
             node.remoter.run(
-                'sudo sed -i -e "s/^replace_address_first_boot:/# replace_address_first_boot:/g" /etc/scylla/scylla.yaml')
+                f'sudo sed -i -e "s/^replace_address_first_boot:/# replace_address_first_boot:/g" {node.add_install_prefix(SCYLLA_YAML_PATH)}')
 
     @staticmethod
     def verify_logging_from_nodes(nodes_list):
