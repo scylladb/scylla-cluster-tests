@@ -38,6 +38,7 @@ class SSHLoggerBase(NodeLoggerBase):
     def __init__(self, node, target_log_file: str):
         super().__init__(node, target_log_file)
         self._termination_event = Event()
+        self.node = node
         self._remoter = None
         self._remoter_params = node.remoter.get_init_arguments()
         self._child_process = Process(target=self._journal_thread, daemon=True)
@@ -102,7 +103,8 @@ class SSHLoggerBase(NodeLoggerBase):
 class SSHScyllaSystemdLogger(SSHLoggerBase):
     @property
     def _logger_cmd(self) -> str:
-        return 'sudo journalctl -f --no-tail --no-pager --utc {since} ' \
+        return f'{self.node.journalctl} -f --no-tail --no-pager ' \
+               '--utc {since} ' \
                '-u scylla-ami-setup.service ' \
                '-u scylla-image-setup.service ' \
                '-u scylla-io-setup.service ' \
