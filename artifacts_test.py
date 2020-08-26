@@ -37,7 +37,8 @@ class ArtifactsTest(ClusterTester):
                         f"Cluster name: {self.db_cluster.name}")
 
     def run_cassandra_stress(self, args: str):
-        result = self.node.remoter.run(f"{STRESS_CMD} {args} -node {self.node.ip_address}")
+        result = self.node.remoter.run(
+            f"{self.node.add_install_prefix(STRESS_CMD)} {args} -node {self.node.ip_address}")
         assert "java.io.IOException" not in result.stdout
         assert "java.io.IOException" not in result.stderr
 

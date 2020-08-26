@@ -1594,6 +1594,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                            sudo=True)
 
     def remote_scylla_yaml(self, path=SCYLLA_YAML_PATH):
+        path = self.add_install_prefix(path)
         return self._remote_yaml(path=path)
 
     def remote_manager_yaml(self, path=SCYLLA_MANAGER_YAML_PATH):
@@ -1739,7 +1740,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.remoter.sudo("md5sum /etc/encrypt_conf/*.pem", ignore_status=True)
 
         if append_scylla_args:
-            scylla_help = self.remoter.run("scylla --help", ignore_status=True).stdout
+            scylla_help = self.remoter.run(
+                f"{self.add_install_prefix('/usr/bin/scylla')} --help", ignore_status=True).stdout
             scylla_arg_parser = ScyllaArgParser.from_scylla_help(scylla_help)
             append_scylla_args = scylla_arg_parser.filter_args(append_scylla_args)
 
@@ -2050,9 +2052,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def get_scylla_version(self) -> str:
         self.scylla_version = self.scylla_version_detailed = ""
-
-        cmd = "scylla --version"
-        result = self.remoter.run(cmd, ignore_status=True)
+        scylla_path = self.add_install_prefix("/usr/bin/scylla")
+        result = self.remoter.run(f"{scylla_path} --version", ignore_status=True)
         if result.ok:
             self.scylla_version_detailed = result.stdout.strip()
             if build_id := self.get_scylla_build_id():
@@ -2294,6 +2295,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             '/usr/bin/scylla': f'{INSTALL_DIR}/bin/scylla',
             '/usr/bin/nodetool': f'{INSTALL_DIR}/share/cassandra/bin/nodetool',
             '/usr/bin/cqlsh': f'{INSTALL_DIR}/share/cassandra/bin/cqlsh',
+            '/usr/bin/cassandra-stress': f'{INSTALL_DIR}/share/cassandra/bin/cassandra-stress',
         }
         return checklist.get(abs_path, INSTALL_DIR + abs_path)
 
@@ -2505,7 +2507,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         credentials = self.parent_cluster.get_db_auth()
         if credentials:
             options += '-u {} -pw {} '.format(*credentials)
-        return "nodetool {options} {sub_cmd} {args}".format(options=options, sub_cmd=sub_cmd, args=args)
+        return f"{self.add_install_prefix('/usr/bin/nodetool')} {options} {sub_cmd} {args}"
 
     def run_nodetool(self, sub_cmd, args="", options="", timeout=None,
                      ignore_status=False, verbose=True, coredump_on_timeout=False):
@@ -3763,6 +3765,17 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node.remoter.run(f'{INSTALL_DIR}/sbin/scylla_setup --no-raid-setup --no-io-setup', ignore_status=True)
                 node.remoter.send_files(src='./configurations/io.conf', dst=f'{INSTALL_DIR}/etc/scylla.d/')
                 node.remoter.send_files(src='./configurations/io_properties.yaml', dst=f'{INSTALL_DIR}/etc/scylla.d/')
+
+                # simple config
+                node.remoter.run(
+                    f"echo 'cluster_name: \"{self.name}\"' >> {INSTALL_DIR}/etc/scylla/scylla.yaml")  # pylint: disable=no-member
+                node.remoter.run(
+                    f"sed -ie 's/- seeds: .*/- seeds: {node.ip_address}/g' {INSTALL_DIR}/etc/scylla/scylla.yaml")
+                node.remoter.run(
+                    f"sed -ie 's/^listen_address: .*/listen_address: {node.ip_address}/g' {INSTALL_DIR}/etc/scylla/scylla.yaml")
+                node.remoter.run(
+                    f"sed -ie 's/^rpc_address: .*/rpc_address: {node.ip_address}/g' {INSTALL_DIR}/etc/scylla/scylla.yaml")
+
                 node.start_scylla_server(verify_up=False, verify_up_timeout=timeout)
                 node.wait_db_up(verbose=verbose, timeout=timeout)
                 return
