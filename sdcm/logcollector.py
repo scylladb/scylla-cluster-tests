@@ -32,7 +32,8 @@ from selenium.webdriver.common.by import By
 from sdcm.utils.common import (S3Storage, list_instances_aws, list_instances_gce,
                                ParallelObject, remove_files, get_builder_by_test_id,
                                get_testrun_dir, search_test_id_in_latest, filter_aws_instances_by_type,
-                               filter_gce_instances_by_type, get_sct_root_path, normalize_ipv6_url)
+                               filter_gce_instances_by_type, get_sct_root_path, normalize_ipv6_url,
+                               SCYLLA_YAML_PATH)
 from sdcm.utils.decorators import retrying
 from sdcm.utils.get_username import get_username
 from sdcm.db_stats import PrometheusDBStats
@@ -799,7 +800,8 @@ class ScyllaLogCollector(LogCollector):
                     CommandLog(name='vmstat',
                                command='cat /proc/vmstat'),
                     CommandLog(name='scylla.yaml',
-                               command='cat /etc/scylla/scylla.yaml'),
+                               # Fixme: command=f'cat {self.add_install_prefix(SCYLLA_YAML_PATH)}'),
+                               command=f'cat {SCYLLA_YAML_PATH}'),
                     CommandLog(name='coredumps.info',
                                command='sudo coredumpctl info')
                     ]
