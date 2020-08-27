@@ -266,7 +266,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.remoter.run(kill_cmd, ignore_status=True)
 
         # Wait for the process to be down before waiting for service to be restarted
-        self.target_node.wait_db_down()
+        self.target_node.wait_db_down(check_interval=2)
 
         # Let's wait for the target Node to have their services re-started
         self.log.info('Waiting scylla services to be restarted after we killed them...')
