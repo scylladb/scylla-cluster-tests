@@ -97,3 +97,23 @@ class RemoteBrowser:
                      load_page_screenshot_delay, url, screenshot_path)
         time.sleep(load_page_screenshot_delay)
         self.browser.get_screenshot_as_file(screenshot_path)
+
+    def quit(self):
+        self.browser.quit()
+
+    def destroy_containers(self):
+        names = ["web_driver"]
+        if self.use_tunnel:
+            names.append("auto_ssh:web_driver")
+
+        for container_name in names:
+            self.destroy_container(container_name)
+
+    def destroy_container(self, name):
+        try:
+            if ContainerManager.get_container(self.node, name, raise_not_found_exc=False) is not None:
+                LOGGER.debug(f"Destroy {name} ({self}) container")
+                ContainerManager.destroy_container(self.node, name, ignore_keepalive=True)
+                LOGGER.info(f"{name} ({self}) destroyed")
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.error(f"{self}: some exception raised during container `{name}' destroying", exc_info=exc)
