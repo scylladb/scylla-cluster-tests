@@ -394,7 +394,17 @@ class GrafanaEntity(BaseMonitoringEntity):  # pylint: disable=too-few-public-met
             test_start_time = time.time() - (6 * 3600)
         self.start_time = str(test_start_time).split('.')[0] + '000'
         self.grafana_entity_names = self.base_grafana_entity_names + kwargs.pop("extra_entities", [])
+        self.remote_browser = None
         super(GrafanaEntity, self).__init__(*args, **kwargs)
+
+    def close_browser(self):
+        if self.remote_browser:
+            LOGGER.info('Grafana - browser quit')
+            self.remote_browser.quit()
+
+    def destory_webdriver_container(self):
+        if self.remote_browser:
+            self.remote_browser.destroy_containers()
 
 
 class GrafanaScreenShot(GrafanaEntity):
@@ -420,7 +430,7 @@ class GrafanaScreenShot(GrafanaEntity):
 
         try:
             screenshots = []
-            remote_browser = RemoteBrowser(node)
+            self.remote_browser = RemoteBrowser(node)
 
             for screenshot in self.grafana_entity_names:
                 dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=node.grafana_address,
@@ -444,9 +454,9 @@ class GrafanaScreenShot(GrafanaEntity):
                                                                     datetime.datetime.now().strftime("%Y%m%d_%H%M%S"),
                                                                     node.name))
                 LOGGER.debug("Get screenshot for url %s, save to %s", grafana_url, screenshot_path)
-                remote_browser.get_screenshot(grafana_url, screenshot_path,
-                                              screenshot['resolution'],
-                                              load_page_screenshot_delay=self.collect_timeout)
+                self.remote_browser.get_screenshot(grafana_url, screenshot_path,
+                                                   screenshot['resolution'],
+                                                   load_page_screenshot_delay=self.collect_timeout)
                 screenshots.append(screenshot_path)
 
             return screenshots
@@ -454,6 +464,8 @@ class GrafanaScreenShot(GrafanaEntity):
         except Exception as details:  # pylint: disable=broad-except
             LOGGER.error(f'Error taking monitor screenshot: {str(details)}, traceback: {traceback.format_exc()}')
             return []
+        finally:
+            self.close_browser()
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         node.logdir = local_dst
@@ -531,7 +543,7 @@ class GrafanaSnapshot(GrafanaEntity):
             LOGGER.warning("Monitoring version was not found")
             return []
         try:
-            remote_browser = RemoteBrowser(node)
+            self.remote_browser = RemoteBrowser(node)
             snapshots = []
             for snapshot in self.grafana_entity_names:
                 version = monitoring_version.replace('.', '-')
@@ -551,13 +563,14 @@ class GrafanaSnapshot(GrafanaEntity):
                     path=path,
                     st=self.start_time)
                 LOGGER.info("Get snapshot link for url %s", grafana_url)
-                snapshots.append(self._get_shared_snapshot_link(remote_browser.browser, grafana_url))
-
+                snapshots.append(self._get_shared_snapshot_link(self.remote_browser.browser, grafana_url))
             return snapshots
 
         except Exception as details:  # pylint: disable=broad-except
             LOGGER.error(f'Error taking monitor snapshot: {str(details)}, traceback: {traceback.format_exc()}')
-        return []
+            return []
+        finally:
+            self.close_browser()
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         node.logdir = local_dst
@@ -569,6 +582,9 @@ class GrafanaSnapshot(GrafanaEntity):
                 f.write(snapshot + '\n')
 
         return {'links': snapshots, 'file': snapshots_file}
+
+    def __del__(self):
+        self.destory_webdriver_container()
 
 
 class LogCollector:
