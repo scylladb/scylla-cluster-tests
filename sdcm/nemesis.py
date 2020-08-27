@@ -273,6 +273,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.wait_db_up(timeout=14400)
         self.log.info('Waiting JMX services to be restarted after we killed them...')
         self.target_node.wait_jmx_up()
+        self.cluster.wait_for_schema_agreement()
 
     def disrupt_stop_wait_start_scylla_server(self, sleep_time=300):  # pylint: disable=invalid-name
         self._set_current_disruption('StopWaitStartService %s' % self.target_node)
