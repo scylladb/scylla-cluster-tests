@@ -1424,11 +1424,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         wait.wait_for(func=lambda: not self.apt_running(), step=60,
                       text=text)
 
-    def wait_db_down(self, verbose=True, timeout=3600):
+    def wait_db_down(self, verbose=True, timeout=3600, check_interval=60):
         text = None
         if verbose:
             text = '%s: Waiting for DB services to be down' % self
-        wait.wait_for(func=lambda: not self.db_up(), step=60, text=text, timeout=timeout, throw_exc=True)
+        wait.wait_for(func=lambda: not self.db_up(), step=check_interval, text=text, timeout=timeout, throw_exc=True)
 
     def wait_cs_installed(self, verbose=True):
         text = None
