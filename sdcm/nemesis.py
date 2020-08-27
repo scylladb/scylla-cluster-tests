@@ -80,6 +80,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     disruptive = False
     run_with_gemini = True
     networking = False
+    kubernetes = False
     MINUTE_IN_SEC = 60
     HOUR_IN_SEC = 60 * MINUTE_IN_SEC
 
@@ -220,15 +221,23 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for operation in self.operation_log:
             self.log.info(operation)
 
-    def get_list_of_disrupt_methods_for_nemesis_subclasses(self, disruptive=None, run_with_gemini=None,
-                                                           networking=None):  # pylint: disable=invalid-name
+    def get_list_of_disrupt_methods_for_nemesis_subclasses(
+            self, disruptive=None, run_with_gemini=None, networking=None, kubernetes=None):  # pylint: disable=invalid-name
+        filters = {}
         if disruptive is not None:
-            return self._get_subclasses_disrupt_methods(disruptive=disruptive)
+            filters['disruptive'] = disruptive
         if run_with_gemini is not None:
-            return self._get_subclasses_disrupt_methods(run_with_gemini=run_with_gemini)
+            filters['run_with_gemini'] = run_with_gemini
         if networking is not None:
-            return self._get_subclasses_disrupt_methods(networking=networking)
-        return None
+            filters['networking'] = networking
+        if kubernetes is not None:
+            filters['kubernetes'] = kubernetes
+        return self._get_subclasses_disrupt_methods(**filters)
+
+    def _is_it_on_kubernetes(self):
+        if hasattr(self.tester, 'db_cluster'):
+            return 'kube' in type(self.tester.db_cluster).__name__.lower()
+        return False
 
     def _get_subclasses_disrupt_methods(self, **kwargs):
         subclasses_list = self._get_subclasses(**kwargs)
@@ -241,17 +250,31 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.debug("Gathered subclass methods: {}".format(disrupt_methods_list))
         return disrupt_methods_list
 
-    @staticmethod
-    def _get_subclasses(**kwargs):
-        filter_by_attribute, value = list(kwargs.items())[0]
+    @classmethod
+    def _get_subclasses(cls, **kwargs):
+        return cls._get_subclasses_from_list(Nemesis.__subclasses__(), **kwargs) + \
+            cls._get_subclasses_from_list(RELATIVE_NEMESIS_SUBCLASS_LIST, **kwargs)
 
-        nemesis_subclasses = [nemesis for nemesis in Nemesis.__subclasses__()
-                              if getattr(nemesis, filter_by_attribute) == value and
-                              (nemesis not in COMPLEX_NEMESIS or nemesis not in DEPRECATED_LIST_OF_NEMESISES)]
-        for inherit_nemesis_class in RELATIVE_NEMESIS_SUBCLASS_LIST:
-            nemesis_subclasses.extend([nemesis for nemesis in inherit_nemesis_class.__subclasses__()
-                                       if getattr(nemesis, filter_by_attribute) == value and
-                                       (nemesis not in COMPLEX_NEMESIS or nemesis not in DEPRECATED_LIST_OF_NEMESISES)])
+    @staticmethod
+    def _get_subclasses_from_list(list_of_nemesis: list, **filters):
+        """
+        It apply 'and' logic to filter,
+            if any value in the filter does not match what nemeses have,
+            nemeses will be filtered out.
+        """
+        nemesis_subclasses = []
+        nemesis_to_exclude = COMPLEX_NEMESIS + DEPRECATED_LIST_OF_NEMESISES
+        for nemesis in list_of_nemesis:
+            if nemesis in nemesis_to_exclude:
+                continue
+            matches = True
+            for filter_name, filter_value in filters.items():
+                if getattr(nemesis, filter_name) != filter_value:
+                    matches = False
+                    break
+            if not matches:
+                continue
+            nemesis_subclasses.append(nemesis)
         return nemesis_subclasses
 
     def __str__(self):
@@ -676,7 +699,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def call_random_disrupt_method(self, disrupt_methods=None, predefined_sequence=False):
         # pylint: disable=too-many-branches
 
-        if not disrupt_methods:
+        if disrupt_methods is None:
             disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
                                attr[0].startswith('disrupt_') and
                                callable(attr[1])]
@@ -684,6 +707,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
                                attr[0] in disrupt_methods and
                                callable(attr[1])]
+        if not disrupt_methods:
+            self.log.warning("No monkey to run")
+            return
         if not predefined_sequence:
             disrupt_method = random.choice(disrupt_methods)
         else:
@@ -2814,7 +2840,9 @@ class DisruptiveMonkey(Nemesis):
 
     def __init__(self, *args, **kwargs):
         super(DisruptiveMonkey, self).__init__(*args, **kwargs)
-        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(disruptive=True)
+        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(
+            disruptive=True,
+            kubernetes=self._is_it_on_kubernetes())
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2832,7 +2860,10 @@ class NonDisruptiveMonkey(Nemesis):
 
     def __init__(self, *args, **kwargs):
         super(NonDisruptiveMonkey, self).__init__(*args, **kwargs)
-        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(disruptive=False)
+        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(
+            disruptive=False,
+            kubernetes=self._is_it_on_kubernetes()
+        )
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2846,7 +2877,10 @@ class NetworkMonkey(Nemesis):
     #  - BlockNetworkMonkey
     def __init__(self, *args, **kwargs):
         super(NetworkMonkey, self).__init__(*args, **kwargs)
-        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(networking=True)
+        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(
+            networking=True,
+            kubernetes=self._is_it_on_kubernetes()
+        )
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2859,7 +2893,10 @@ class GeminiChaosMonkey(Nemesis):
     # - RestartThenRepairNodeMonkey
     def __init__(self, *args, **kwargs):
         super(GeminiChaosMonkey, self).__init__(*args, **kwargs)
-        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(run_with_gemini=True)
+        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(
+            run_with_gemini=True,
+            kubernetes=self._is_it_on_kubernetes()
+        )
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2869,9 +2906,28 @@ class GeminiChaosMonkey(Nemesis):
 class GeminiNonDisruptiveChaosMonkey(Nemesis):
     def __init__(self, *args, **kwargs):
         super(GeminiNonDisruptiveChaosMonkey, self).__init__(*args, **kwargs)
-        run_with_gemini = set(self.get_list_of_disrupt_methods_for_nemesis_subclasses(run_with_gemini=True))
-        non_disruptive = set(self.get_list_of_disrupt_methods_for_nemesis_subclasses(disruptive=False))
+        run_with_gemini = set(self.get_list_of_disrupt_methods_for_nemesis_subclasses(
+            run_with_gemini=True,
+            kubernetes=self._is_it_on_kubernetes()
+        ))
+        non_disruptive = set(self.get_list_of_disrupt_methods_for_nemesis_subclasses(
+            disruptive=False,
+            kubernetes=self._is_it_on_kubernetes()
+        ))
         self.disrupt_methods_list = run_with_gemini.intersection(non_disruptive)
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
+
+
+class KubernetesScyllaOperatorMonkey(Nemesis):
+    # All Nemesis that could be run on kubernetes backend
+    disruptive = True
+
+    def __init__(self, *args, **kwargs):
+        super(KubernetesScyllaOperatorMonkey, self).__init__(*args, **kwargs)
+        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(kubernetes=True)
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2934,7 +2990,7 @@ COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,
                    ScyllaCloudLimitedChaosMonkey,
                    AllMonkey, MdcChaosMonkey,
                    DisruptiveMonkey, NonDisruptiveMonkey, GeminiNonDisruptiveChaosMonkey,
-                   GeminiChaosMonkey, NetworkMonkey]
+                   GeminiChaosMonkey, NetworkMonkey, KubernetesScyllaOperatorMonkey]
 
 
 # TODO: https://trello.com/c/vwedwZK2/1881-corrupt-the-scrub-fails
