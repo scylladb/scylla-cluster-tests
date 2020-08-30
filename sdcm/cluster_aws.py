@@ -53,7 +53,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
                  services, credentials, cluster_uuid=None,
-                 ec2_instance_type='c4.xlarge', ec2_ami_username='root',
+                 ec2_instance_type='c5.xlarge', ec2_ami_username='root',
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
                  node_prefix='node', n_nodes=10, params=None, node_type=None, extra_network_interface=False):
@@ -713,7 +713,7 @@ class AWSNode(cluster.BaseNode):
 class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
-                 services, credentials, ec2_instance_type='c4.xlarge',
+                 services, credentials, ec2_instance_type='c5.xlarge',
                  ec2_ami_username='centos',
                  ec2_block_device_mappings=None,
                  user_prefix=None,
@@ -864,7 +864,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 class CassandraAWSCluster(ScyllaAWSCluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
-                 services, credentials, ec2_instance_type='c4.xlarge',
+                 services, credentials, ec2_instance_type='c5.xlarge',
                  ec2_ami_username='ubuntu',
                  ec2_block_device_mappings=None,
                  user_prefix=None,
@@ -952,7 +952,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
 class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
-                 services, credentials, ec2_instance_type='c4.xlarge',
+                 services, credentials, ec2_instance_type='c5.xlarge',
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos',
                  user_prefix=None, n_nodes=10, params=None):
@@ -985,7 +985,7 @@ class LoaderSetAWS(cluster.BaseLoaderSet, AWSCluster):
 class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
 
     def __init__(self, ec2_ami_id, ec2_subnet_id, ec2_security_group_ids,  # pylint: disable=too-many-arguments
-                 services, credentials, ec2_instance_type='c4.xlarge',
+                 services, credentials, ec2_instance_type='c5.xlarge',
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos',
                  user_prefix=None, n_nodes=10, targets=None, params=None):
