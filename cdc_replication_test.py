@@ -28,10 +28,12 @@ from sdcm import cluster
 from sdcm.tester import ClusterTester
 from sdcm.gemini_thread import GeminiStressThread
 
+
 class Mode(Enum):
     DELTA = 1
     PREIMAGE = 2
     POSTIMAGE = 3
+
 
 def mode_str(mode: Mode) -> str:
     return {
@@ -39,6 +41,7 @@ def mode_str(mode: Mode) -> str:
         Mode.PREIMAGE: 'preimage',
         Mode.POSTIMAGE: 'postimage'
     }[mode]
+
 
 def print_file_to_stdout(path: str) -> None:
     with open(path, "r") as file:
@@ -58,6 +61,7 @@ def write_cql_result(res, path: str):
             file.write(str(row) + '\n')
         file.flush()
         os.fsync(file.fileno())
+
 
 SCYLLA_MIGRATE_URL = "https://kbr-scylla.s3-eu-west-1.amazonaws.com/scylla-migrate"
 REPLICATOR_URL = "https://kbr-scylla.s3-eu-west-1.amazonaws.com/scylla-cdc-replicator-0.0.1-SNAPSHOT-jar-with-dependencies.jar"
