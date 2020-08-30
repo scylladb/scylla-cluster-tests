@@ -13,7 +13,7 @@ ami_id_db_scylla_desc: VERSION
 use_mgmt: true
 mgmt_port: 10090
 
-instance_type_loader: 'c4.large'
+instance_type_loader: 'c5.large'
 instance_type_monitor: 't2.small'
 
 db_type: scylla
