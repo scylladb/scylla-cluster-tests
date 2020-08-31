@@ -366,14 +366,15 @@ def list_repos(dist_type, dist_version):
 
 
 @cli.command(help="Check test configuration file")
-@click.argument('config_file', type=click.Path(exists=True))
+@click.argument('config_file', type=str, default='')
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), default='aws')
 def conf(config_file, backend):
     add_file_logger()
 
     if backend:
         os.environ['SCT_CLUSTER_BACKEND'] = backend
-    os.environ['SCT_CONFIG_FILES'] = config_file
+    if config_file:
+        os.environ['SCT_CONFIG_FILES'] = config_file
     config = SCTConfiguration()
     try:
         config.verify_configuration()

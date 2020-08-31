@@ -1,4 +1,4 @@
-test_duration: 25
+test_duration: 50
 
 prepare_write_cmd: "cassandra-stress user profile=/tmp/cs_profile_background_reads_overload.yaml ops'(insert=10)' no-warmup cl=ONE -port jmx=6868 -mode cql3 native -rate threads=1000 -errors ignore"
 stress_cmd_r: "cassandra-stress user profile=/tmp/cs_profile_background_reads_overload.yaml ops'(simple1=100)' no-warmup cl=ONE duration=10m -port jmx=6868 -mode cql3 native -rate threads=1000 -errors ignore"
