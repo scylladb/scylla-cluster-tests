@@ -1,7 +1,7 @@
 #!groovy
 
 def completed_stages = [:]
-
+def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
 
@@ -74,7 +74,6 @@ def call(Map pipelineParams) {
         options {
             timestamps()
             disableConcurrentBuilds()
-            timeout(pipelineParams.timeout)
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
         stages {
@@ -84,12 +83,29 @@ def call(Map pipelineParams) {
                         completed_stages = [:]
                     }
                     dir('scylla-cluster-tests') {
-                        checkout scm
+                        timeout(time: 5, unit: 'MINUTES') {
+                            checkout scm
 
-                        dir("scylla-qa-internal") {
-                            git(url: 'git@github.com:scylladb/scylla-qa-internal.git',
-                                credentialsId:'b8a774da-0e46-4c91-9f74-09caebaea261',
-                                branch: 'master')
+                            dir("scylla-qa-internal") {
+                                git(url: 'git@github.com:scylladb/scylla-qa-internal.git',
+                                    credentialsId:'b8a774da-0e46-4c91-9f74-09caebaea261',
+                                    branch: 'master')
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Get test duration') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        timeout(time: 1, unit: 'MINUTES') {
+                            script {
+                                wrap([$class: 'BuildUser']) {
+                                    dir('scylla-cluster-tests') {
+                                        (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -100,7 +116,9 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    createSctRunner(params, pipelineParams.timeout.time , builder.region)
+                                    timeout(time: 5, unit: 'MINUTES') {
+                                        createSctRunner(params, runnerTimeout , builder.region)
+                                    }
                                 }
                             }
                         }
@@ -113,7 +131,9 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    runSctTest(params, builder.region)
+                                    timeout(time: testRunTimeout, unit: 'MINUTES') {
+                                        runSctTest(params, builder.region)
+                                    }
                                 }
                             }
                         }
@@ -126,7 +146,9 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    runCollectLogs(params, builder.region)
+                                    timeout(time: collectLogsTimeout, unit: 'MINUTES') {
+                                        runCollectLogs(params, builder.region)
+                                    }
                                 }
                             }
                         }
@@ -139,8 +161,10 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    runCleanupResource(params, builder.region)
-                                    completed_stages['clean_resources'] = true
+                                    timeout(time: resourceCleanupTimeout, unit: 'MINUTES') {
+                                        runCleanupResource(params, builder.region)
+                                        completed_stages['clean_resources'] = true
+                                    }
                                 }
                             }
                         }
@@ -153,8 +177,10 @@ def call(Map pipelineParams) {
                         script {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
-                                    runSendEmail(params, currentBuild)
-                                    completed_stages['send_email'] = true
+                                    timeout(time: 10, unit: 'MINUTES') {
+                                        runSendEmail(params, currentBuild)
+                                        completed_stages['send_email'] = true
+                                    }
                                 }
                             }
                         }
@@ -178,7 +204,9 @@ def call(Map pipelineParams) {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
-                                    runCleanupResource(params, builder.region)
+                                        timeout(time: resourceCleanupTimeout, unit: 'MINUTES') {
+                                            runCleanupResource(params, builder.region)
+                                        }
                                     }
                                 }
                             }
@@ -189,7 +217,9 @@ def call(Map pipelineParams) {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
-                                    runSendEmail(params, currentBuild)
+                                        timeout(time: 10, unit: 'MINUTES') {
+                                            runSendEmail(params, currentBuild)
+                                        }
                                     }
                                 }
                             }
