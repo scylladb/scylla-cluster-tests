@@ -25,6 +25,12 @@ def call(Map pipelineParams) {
             string(defaultValue: '2.0.2',
                    description: '',
                    name: 'scylla_mgmt_agent_version')
+            string(defaultValue: "${pipelineParams.get('test_name', 'longevity_test.LongevityTest.test_custom_time')}",
+                   description: '',
+                   name: 'test_name')
+            string(defaultValue: "${pipelineParams.get('test_config', 'test-cases/scylla-operator/longevity-scylla-operator-3h.yaml')}",
+                   description: '',
+                   name: 'test_config')
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'keep-on-failure')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_db_nodes')
@@ -60,7 +66,7 @@ def call(Map pipelineParams) {
                         sctScript """
                             rm -fv ./latest
 
-                            export SCT_CONFIG_FILES=${pipelineParams.test_config}
+                            export SCT_CONFIG_FILES=${test_config}
                             export SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE=${params.k8s_scylla_operator_docker_image}
                             export SCT_SCYLLA_VERSION=${params.scylla_version}
                             export SCT_SCYLLA_MGMT_AGENT_VERSION=${params.scylla_mgmt_agent_version}
@@ -70,7 +76,7 @@ def call(Map pipelineParams) {
                             export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
 
                             echo "start test ......."
-                            ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --logdir "`pwd`"
+                            ./docker/env/hydra.sh run-test ${params.test_name} --logdir "`pwd`"
                             echo "end test ....."
                         """
                     }
