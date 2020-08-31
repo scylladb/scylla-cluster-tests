@@ -1159,7 +1159,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         finally:
             if tcpdump:
                 self.remoter.run('sudo killall tcpdump', ignore_status=True)
-        self.log.info('END tcpdump thread uuid: %s', tcpdump_id)
+                self.log.info('END tcpdump thread uuid: %s', tcpdump_id)
         return self._parse_cfstats(result.stdout)
 
     def wait_jmx_up(self, verbose=True, timeout=None):
