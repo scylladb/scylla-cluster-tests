@@ -55,7 +55,7 @@ class BaseEventsTest(unittest.TestCase):
     def setUpClass(cls):
         cls.temp_dir = tempfile.mkdtemp()
         start_metrics_server()
-        start_events_device(cls.temp_dir, timeout=5)
+        start_events_device(cls.temp_dir)
         cls.killed = Event()
         time.sleep(5)
 
