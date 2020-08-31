@@ -37,6 +37,7 @@ class CoreDumpInfo:
     download_url: str = ''
     command_line: str = ''
     executable: str = ''
+    process_retry: int = 0
 
     def publish_event(self):
         CoreDumpEvent(
@@ -55,15 +56,18 @@ class CoreDumpInfo:
 
 class CoredumpExportThread(Thread):
     log = getLogger(__file__)
+    lookup_period = 30
+    upload_retry_limit = 3
 
-    def __init__(self, node: 'BaseNode', max_core_limit: int):
+    def __init__(self, node: 'BaseNode', max_core_upload_limit: int):
         self.node = node
         self.termination_event = Event()
-        self.max_core_limit = max_core_limit
-        self.core_dump_found: List[CoreDumpInfo] = []
-        self.core_dump_in_progress: List[CoreDumpInfo] = []
-        self.core_dump_completed: List[CoreDumpInfo] = []
-        super().__init__(daemon=False)
+        self.max_core_upload_limit = max_core_upload_limit
+        self.found: List[CoreDumpInfo] = []
+        self.in_progress: List[CoreDumpInfo] = []
+        self.completed: List[CoreDumpInfo] = []
+        self.uploaded: List[CoreDumpInfo] = []
+        super().__init__(daemon=True)
 
     def stop(self):
         self.termination_event.set()
@@ -79,37 +83,60 @@ class CoredumpExportThread(Thread):
         """
         Keep reporting new coredumps found, every 30 seconds.
         """
-        while not self.termination_event.wait(30) or self.core_dump_in_progress:
-            if not self.node.wait_ssh_up(verbose=False):
-                continue
-            self._process_coredumps(self.core_dump_in_progress, self.core_dump_completed)
-            new_cores = self.extract_info_from_core_pids(self.get_core_pids(), exclude_cores=self.core_dump_found)
-            self.push_new_cores_to_process(new_cores)
+        while not self.termination_event.wait(self.lookup_period) or self.in_progress:
+            try:
+                self.main_cycle_body()
+            except Exception as exc:
+                self.log.error(f"CoredumpExportThread: following error occurred: {str(exc)}")
+
+    def main_cycle_body(self):
+        if not self.node.wait_ssh_up(verbose=False):
+            return
+        self._process_coredumps(self.in_progress, self.completed, self.uploaded)
+        new_cores = self.extract_info_from_core_pids(self.get_core_pids(), exclude_cores=self.found)
+        self.push_new_cores_to_process(new_cores)
 
     def push_new_cores_to_process(self, new_cores: List[CoreDumpInfo]):
-        self.core_dump_found.extend(new_cores)
+        self.found.extend(new_cores)
         for core_dump in new_cores:
             if 'bash' in core_dump.executable:
                 continue
             self.log_coredump(core_dump)
-            if len(self.core_dump_completed) + len(self.core_dump_in_progress) < self.max_core_limit:
-                self.core_dump_in_progress.append(core_dump)
+            if not self.is_limit_reached():
+                self.in_progress.append(core_dump)
+
+    def is_limit_reached(self):
+        return len(self.uploaded) >= self.max_core_upload_limit
 
     def process_coredumps(self):
-        self._process_coredumps(self.core_dump_in_progress, self.core_dump_completed)
+        self._process_coredumps(self.in_progress, self.completed, self.uploaded)
 
-    def _process_coredumps(self, in_progress: List[CoreDumpInfo], completed: List[CoreDumpInfo]):
+    def _process_coredumps(
+            self,
+            in_progress: List[CoreDumpInfo],
+            completed: List[CoreDumpInfo],
+            uploaded: List[CoreDumpInfo]
+    ):
         """
         Get core files from node and report them
         """
         if not in_progress:
             return
         for core_info in in_progress.copy():
+            if self.is_limit_reached():
+                in_progress.remove(core_info)
+                continue
             try:
+                core_info.process_retry += 1
+                if self.upload_retry_limit < core_info.process_retry:
+                    self.log.error(f"Maximum retry uploading is reached for core {str(core_info)}")
+                    in_progress.remove(core_info)
+                    continue
                 result = self.upload_coredump(core_info)
                 completed.append(core_info)
                 in_progress.remove(core_info)
                 if result:
+                    uploaded.append(core_info)
                     self.publish_event(core_info)
             except:  # pylint: disable=bare-except
                 pass
@@ -215,19 +242,30 @@ class CoredumpExportThread(Thread):
             elif line.startswith('Command Line:'):
                 command_line = line[14:].strip()
             elif line.startswith('Coredump:') or line.startswith('Storage:'):
-                if "(inaccessible)" in line:
+                if "inaccessible" in line:
                     # Ignore inaccessible cores
                     #       Storage: /var/lib/systemd/coredump/core.vi.1000.6c4de4c206a0476e88444e5ebaaac482.18554.1578994298000000.lz4 (inaccessible)
                     continue
-                corefile = line[line.find(':') + 1:]
+                corefile = line[line.find(':') + 1:].strip()
             elif line.startswith('Timestamp:'):
                 try:
                     # Converting time string "Tue 2020-01-14 10:40:25 UTC (6min ago)" to timestamp
-                    tmp = re.search(r'Timestamp: ([^\(]+)(\([^\)]+\)|)', line).group(1)
-                    fmt = "%a %Y-%m-%d %H:%M:%S" if len(tmp.split()) == 3 else "%a %Y-%m-%d %H:%M:%S %Z"
-                    timestamp = mktime(datetime.strptime(tmp.strip(' '), fmt).timetuple())
+                    timestring = re.search(r'Timestamp: ([^\(]+)(\([^\)]+\)|)', line).group(1).strip()
+                    time_spat = timestring.split()
+                    if len(time_spat) == 3:
+                        fmt = "%a %Y-%m-%d %H:%M:%S"
+                    elif len(time_spat) == 4:
+                        timezone = time_spat[3].strip()
+                        if re.search(r'^[+-][0-9]{2}$', timezone):
+                            # On some systems two digit timezone is not recognized as correct timezone
+                            time_spat[3] = f'{timezone}00'
+                            timestring = ' '.join(time_spat)
+                        fmt = "%a %Y-%m-%d %H:%M:%S %z"
+                    else:
+                        raise ValueError(f'Date has unknown format: {timestring}')
+                    timestamp = datetime.strptime(timestring, fmt).timestamp()
                 except Exception as exc:  # pylint: disable=broad-except
-                    self.log.error(f"Failed to convert date '{line}', due to error: {str(exc)}")
+                    self.log.error(f"Failed to convert date '{line}' ({timestring}), due to error: {str(exc)}")
         return CoreDumpInfo(pid=pid, executable=executable, command_line=command_line, corefile=corefile,
                             timestamp=timestamp, coredump_info=coredump_info)
 
@@ -240,7 +278,7 @@ class CoredumpExportThread(Thread):
         try:
             self.log.debug(f'Start uploading file: {core_info.corefile}')
             core_info.download_instructions = 'Coredump upload in progress'
-            core_info.download_url, core_info.download_instructions = self._upload_coredump(core_info.corefile)
+            self._upload_coredump(core_info)
             return True
         except Exception as exc:  # pylint: disable=broad-except
             core_info.download_instructions = 'failed to upload core'
@@ -269,7 +307,8 @@ class CoredumpExportThread(Thread):
         return output.stdout + output.stderr
 
     @retrying(n=10, sleep_time=20, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying on uploading coredump")
-    def _upload_coredump(self, coredump):
+    def _upload_coredump(self, core_info: CoreDumpInfo):
+        coredump = core_info.corefile
         coredump = self._pack_coredump(coredump)
         base_upload_url = 'upload.scylladb.com/%s/%s'
         coredump_id = os.path.basename(coredump)[:-3]
@@ -280,7 +319,7 @@ class CoredumpExportThread(Thread):
         download_url = 'https://storage.cloud.google.com/%s' % upload_url
         self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
         download_instructions = 'gsutil cp gs://%s .\ngunzip %s' % (upload_url, coredump)
-        return download_url, download_instructions
+        core_info.download_url, core_info.download_instructions = download_url, download_instructions
 
     def _pack_coredump(self, coredump: str) -> str:
         extensions = ['.lz4', '.zip', '.gz', '.gzip']
@@ -302,4 +341,4 @@ class CoredumpExportThread(Thread):
 
     @property
     def n_coredumps(self) -> int:
-        return len(self.core_dump_found)
+        return len(self.found)
