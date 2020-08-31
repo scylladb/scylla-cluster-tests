@@ -65,7 +65,7 @@ class TestBaseNode(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.temp_dir = tempfile.mkdtemp()
-        start_events_device(cls.temp_dir, timeout=5)
+        start_events_device(cls.temp_dir)
 
         cls.node = DummyNode(name='test_node', parent_cluster=None,
                              base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))

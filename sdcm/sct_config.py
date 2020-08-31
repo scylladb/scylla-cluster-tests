@@ -99,8 +99,8 @@ class SCTConfiguration(dict):
 
         dict(name="test_duration", env="SCT_TEST_DURATION", type=int,
              help="""
-                  Test duration (min). Parameter used to keep instances produced by tests that are
-                  supposed to run longer than 24 hours from being killed
+                  Test duration (min). Parameter used to keep instances produced by tests
+                  and for jenkins pipeline timeout and TimoutThread.
              """),
 
         dict(name="n_db_nodes", env="SCT_N_DB_NODES", type=int_or_list,
@@ -1187,13 +1187,15 @@ class SCTConfiguration(dict):
         new_scylla_repo = self.get('new_scylla_repo', None)
         if new_scylla_repo and 'target_upgrade_version' not in self:
             self['target_upgrade_version'] = get_branch_version(new_scylla_repo)
-        self.log.info(self.dump_config())
 
         # 9) instance_provision MIXED is not supported
         if self.get('instance_provision') == 'mixed':
             self.log.warning('Selected instance_provision type "MIXED" is not supported!')
 
         self._update_environment_variables()
+
+    def log_config(self):
+        self.log.info(self.dump_config())
 
     @classmethod
     def get_config_option(cls, name):
