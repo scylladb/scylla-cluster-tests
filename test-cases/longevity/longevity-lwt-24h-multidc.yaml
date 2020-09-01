@@ -15,3 +15,6 @@ nemesis_during_prepare: false
 space_node_threshold: 64424
 
 user_prefix: 'lwt-longevity-multi-dc-24h'
+
+server_encrypt: true
+client_encrypt: true
