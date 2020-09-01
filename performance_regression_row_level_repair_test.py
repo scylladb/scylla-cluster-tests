@@ -159,7 +159,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         requires: export SCT_HINTED_HANDOFF_DISABLED=true
         :return:
         """
-        dict_specific_tested_stats = {}
+        stats = {}
 
         self._pre_create_schema_large_scale()
         node1 = self.db_cluster.nodes[-1]
@@ -189,7 +189,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         repair_time = self._run_repair(node=node1)[0]  # pylint: disable=unsubscriptable-object
         self.log.info('Repair (0% synced) time on node: {} is: {}'.format(node1.name, repair_time))
 
-        dict_specific_tested_stats['repair_runtime_all_diff'] = repair_time
+        stats['repair_runtime_all_diff'] = repair_time
 
         self.wait_no_compactions_running()
 
@@ -197,10 +197,10 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         repair_time = self._run_repair(node=node1)[0]  # pylint: disable=unsubscriptable-object
         self.log.info('Repair (100% synced) time on node: {} is: {}'.format(node1.name, repair_time))
 
-        dict_specific_tested_stats['repair_runtime_no_diff'] = repair_time
-        self.update_test_details(scylla_conf=True, dict_specific_tested_stats=dict_specific_tested_stats)
+        stats['repair_runtime_no_diff'] = repair_time
+        self.update_test_details(scylla_conf=True, extra_stats=stats)
 
-        self.check_specified_stats_regression(dict_specific_tested_stats=dict_specific_tested_stats)
+        self.check_specified_stats_regression(stats)
 
     def test_row_level_repair_3_nodes_small_diff(self):
         """
@@ -249,11 +249,11 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         self.log.info('Repair (99.8% synced) time on node: {} is: {}'.format(node3.name, repair_time))
 
-        dict_specific_tested_stats = {'repair_runtime_small_diff': repair_time}
+        stats = {'repair_runtime_small_diff': repair_time}
 
-        self.update_test_details(scylla_conf=True, dict_specific_tested_stats=dict_specific_tested_stats)
+        self.update_test_details(scylla_conf=True, extra_stats=stats)
 
-        self.check_specified_stats_regression(dict_specific_tested_stats=dict_specific_tested_stats)
+        self.check_specified_stats_regression(stats)
 
     def _populate_scylla_bench_data_in_parallel(self, base_cmd, partition_count, clustering_row_count,
                                                 consistency_level="all"):
@@ -328,11 +328,11 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         self.log.info('Repair (with large partitions) time on node: {} is: {}'.format(node3.name, repair_time))
 
-        dict_specific_tested_stats = {'repair_runtime_large_partitions': repair_time}
+        stats = {'repair_runtime_large_partitions': repair_time}
 
-        self.update_test_details(scylla_conf=True, dict_specific_tested_stats=dict_specific_tested_stats)
+        self.update_test_details(scylla_conf=True, extra_stats=stats)
 
-        self.check_specified_stats_regression(dict_specific_tested_stats=dict_specific_tested_stats)
+        self.check_specified_stats_regression(stats)
 
     def test_row_level_repair_during_load(self, preload_data=True):
         """
@@ -375,8 +375,8 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
 
         self.log.info('Repair (during r/w load) time on node: {} is: {}'.format(node1.name, repair_time))
 
-        dict_specific_tested_stats = {'repair_runtime_during_load': repair_time}
+        stats = {'repair_runtime_during_load': repair_time}
 
-        self.update_test_details(scylla_conf=True, dict_specific_tested_stats=dict_specific_tested_stats)
+        self.update_test_details(scylla_conf=True, extra_stats=stats)
 
-        self.check_specified_stats_regression(dict_specific_tested_stats=dict_specific_tested_stats)
+        self.check_specified_stats_regression(stats)

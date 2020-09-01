@@ -616,7 +616,7 @@ class TestStatsMixin(Stats):
                 total_stats[stat] = total
         self._stats['results']['stats_total'] = total_stats
 
-    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, dict_specific_tested_stats=None, alternator=False):  # pylint: disable=too-many-arguments
+    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, extra_stats=None, alternator=False):  # pylint: disable=too-many-arguments
         if not self.create_stats:
             return
 
@@ -662,12 +662,12 @@ class TestStatsMixin(Stats):
             update_data.update({'errors': errors})
         if coredumps:
             update_data.update({'coredumps': coredumps})
-        if dict_specific_tested_stats:
-            self.log.debug("Updating specific stats of: {}".format(dict_specific_tested_stats))
-            for key, value in dict_specific_tested_stats.items():
+        if extra_stats:
+            self.log.debug("Updating specific stats of: {}".format(extra_stats))
+            for key, value in extra_stats.items():
                 self.log.debug("k: {} v: {}".format(key, value))
-            self._stats['results'].update(dict_specific_tested_stats)
-            update_data.update(dict_specific_tested_stats)
+            self._stats['results'].update(extra_stats)
+            update_data.update(extra_stats)
         self.update(update_data)
 
     def get_doc_data(self, key):

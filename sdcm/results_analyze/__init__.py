@@ -123,7 +123,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
             return None
         return test_doc['_source']['results']
 
-    def check_regression(self, test_id, dict_specific_tested_stats):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+    def check_regression(self, test_id, stats):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         """
         Get test results by id, filter similar results and calculate DB values for each version,
         then compare with max-allowed in the tested version (and report all the found versions).
@@ -147,7 +147,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
                        '.'.join([es_source_path, 'results', 'throughput']),
                        '.'.join([es_source_path, 'versions'])]
 
-        for stat in dict_specific_tested_stats.keys():  # Add all requested specific-stats to be retrieved from ES DB.
+        for stat in stats.keys():  # Add all requested specific-stats to be retrieved from ES DB.
             stat_path = '.'.join([es_source_path, stat])
             filter_path.append(stat_path)
 
@@ -158,7 +158,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
             self.log.info('Cannot find tests with the same parameters as {}'.format(test_id))
             return False
         cur_test_version = None
-        tested_params = dict_specific_tested_stats.keys()
+        tested_params = stats.keys()
         group_by_version = dict()
         # repair_runtime result example:
         # { u'_id': u'20190303-105120-405065',
@@ -214,7 +214,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
             raise ValueError("Could not retrieve current test details from database")
         for param in tested_params:
             if param in group_by_version[cur_test_version]:
-                cur_test_param_result = dict_specific_tested_stats[param]
+                cur_test_param_result = stats[param]
                 list_param_stats = group_by_version[cur_test_version][param]
                 param_avg = sum(list_param_stats) / float(len(list_param_stats))
                 deviation_limit = param_avg * allowed_deviation
