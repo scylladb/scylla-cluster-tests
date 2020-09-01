@@ -2212,9 +2212,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if verify_up:
             self.wait_db_up(timeout=timeout)
         if not self.is_ubuntu14():
-            self.remoter.run('sudo systemctl stop scylla-server.service', timeout=timeout, ignore_status=ignore_status)
+            self.remoter.sudo('systemctl stop scylla-server.service', timeout=timeout, ignore_status=ignore_status)
         else:
-            self.remoter.run('sudo service scylla-server stop', timeout=timeout, ignore_status=ignore_status)
+            self.remoter.sudo('service scylla-server stop', timeout=timeout, ignore_status=ignore_status)
         if verify_down:
             self.wait_db_down(timeout=timeout)
 
