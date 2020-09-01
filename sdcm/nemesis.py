@@ -2333,6 +2333,7 @@ class HardRebootNodeMonkey(Nemesis):
 
 class SoftRebootNodeMonkey(Nemesis):
     disruptive = True
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):

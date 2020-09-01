@@ -922,7 +922,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if not self.remoter.is_up(60):
                 raise RuntimeError('Target host is down')
             try:
-                self.remoter.run('sudo reboot', ignore_status=True, retry=0)
+                self.remoter.sudo('reboot', ignore_status=True, retry=0)
             except Exception:  # pylint: disable=broad-except
                 pass
 
