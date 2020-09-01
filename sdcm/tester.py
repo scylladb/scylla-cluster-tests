@@ -1988,14 +1988,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception as ex:  # pylint: disable=broad-except
             self.log.exception('Failed to check regression: %s', ex)
 
-    def check_specified_stats_regression(self, dict_specific_tested_stats):
-
+    def check_specified_stats_regression(self, stats):
         perf_analyzer = SpecifiedStatsPerformanceAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
                                                           send_email=self.params.get('send_email', default=True),
                                                           email_recipients=self.params.get('email_recipients', default=None))
         try:
-            perf_analyzer.check_regression(
-                self._test_id, dict_specific_tested_stats=dict_specific_tested_stats)
+            perf_analyzer.check_regression(self._test_id, stats)
         except Exception as ex:  # pylint: disable=broad-except
             self.log.exception('Failed to check regression: %s', ex)
 
