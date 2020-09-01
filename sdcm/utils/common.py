@@ -155,17 +155,6 @@ def verify_scylla_repo_file(content, is_rhel_like=True):
         assert valid_prefix, 'Repository content has invalid line: {}'.format(line)
 
 
-def remove_comments(data):
-    """Remove comments line from data
-
-    Remove any string which is start from # in data
-
-    Arguments:
-        data {str} -- data expected the command output, file contents
-    """
-    return '\n'.join([i.strip() for i in data.split('\n') if not i.startswith('#')])
-
-
 class S3Storage():
 
     bucket_name = 'cloudius-jenkins-test'

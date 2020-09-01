@@ -996,23 +996,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if self._docker_log_process:
             self._docker_log_process.kill()
 
-    def get_cpumodel(self):
-        """Get cpu model from /proc/cpuinfo
-
-        Get cpu model from /proc/cpuinfo of node
-        """
-        cpuinfo_cmd = 'cat /proc/cpuinfo'
-
-        try:
-            result = self.remoter.run(cmd=cpuinfo_cmd, verbose=False)
-            model = re.findall(r'^model\sname\s:(.+)$', result.stdout.strip(), re.MULTILINE)
-            return model[0].strip()
-
-        except Exception as details:  # pylint: disable=broad-except
-            self.log.error('Error retrieving CPU model info : %s',
-                           details)
-            return None
-
     def get_installed_packages(self):
         """Get installed packages on node
 
@@ -1030,21 +1013,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         except Exception as details:  # pylint: disable=broad-except
             self.log.error('Error retrieving installed packages: %s',
                            details)
-            return None
-
-    def get_system_info(self):
-        """Get system info by uname -a
-
-        Get system info as a result of uname -a
-        """
-
-        cmd = 'uname -a'
-        try:
-            result = self.remoter.run(cmd, verbose=False)
-            return result.stdout.strip()
-        except Exception as details:  # pylint: disable=broad-except
-            self.log.error('Error retrieving command \'%s\' result : %s',
-                           (cmd, details))
             return None
 
     def destroy(self):
