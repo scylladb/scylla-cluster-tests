@@ -383,8 +383,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         ks_cf_for_destroy = random.choice(ks_cfs)  # expected value as: 'keyspace1.standard1'
 
         ks_cf_for_destroy = ks_cf_for_destroy.replace('.', '/')
-        files = self.target_node.remoter.run("sudo sh -c 'find /var/lib/scylla/data/%s-* -maxdepth 1 -type f'"
-                                             % ks_cf_for_destroy, verbose=False)
+        files = self.target_node.remoter.sudo("find /var/lib/scylla/data/%s-* -maxdepth 1 -type f"
+                                              % ks_cf_for_destroy, verbose=False)
         if files.stderr:
             raise NoFilesFoundToDestroy(
                 'Failed to get data files for destroy in {}. Error: {}'.format(ks_cf_for_destroy,
@@ -433,7 +433,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             for _ in range(5):
                 file_for_destroy = self._choose_file_for_destroy(ks_cfs)
 
-                result = self.target_node.remoter.run('sudo rm -f %s' % file_for_destroy)
+                result = self.target_node.remoter.sudo('rm -f %s' % file_for_destroy)
                 if result.stderr:
                     raise FilesNotCorrupted('Files were not corrupted. CorruptThenRepair nemesis can\'t be run. '
                                             'Error: {}'.format(result))
@@ -2352,6 +2352,7 @@ class DrainerMonkey(Nemesis):
 
 class CorruptThenRepairMonkey(Nemesis):
     disruptive = True
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
