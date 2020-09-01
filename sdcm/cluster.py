@@ -555,7 +555,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     @cached_property
     def distro(self):
         self.log.info("Trying to detect Linux distribution...")
-        return Distro.from_os_release(self.remoter.run("cat /etc/os-release", ignore_status=True).stdout)
+        return Distro.from_os_release(self.remoter.run("cat /etc/os-release", ignore_status=True, retry=5).stdout)
 
     @property
     def is_client_encrypt(self):
