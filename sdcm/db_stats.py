@@ -14,7 +14,7 @@ import yaml
 import requests
 
 from sdcm.es import ES
-from sdcm.utils.common import get_job_name, remove_comments, normalize_ipv6_url
+from sdcm.utils.common import get_job_name, normalize_ipv6_url
 from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)
@@ -477,11 +477,6 @@ class TestStatsMixin(Stats):
         test_details['log_files'] = {}
         return test_details
 
-    def get_db_cluster_node_details(self):
-
-        return {'cpu_model': self.db_cluster.nodes[0].get_cpumodel(),
-                'sys_info': self.db_cluster.nodes[0].get_system_info()}
-
     def create_test_stats(self, sub_type=None, specific_tested_stats=None,  # pylint: disable=too-many-arguments
                           doc_id_with_timestamp=False, append_sub_test_to_name=True, test_name=None):
 
@@ -616,7 +611,7 @@ class TestStatsMixin(Stats):
                 total_stats[stat] = total
         self._stats['results']['stats_total'] = total_stats
 
-    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, extra_stats=None, alternator=False):  # pylint: disable=too-many-arguments
+    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, extra_stats=None, alternator=False):
         if not self.create_stats:
             return
 
@@ -624,50 +619,55 @@ class TestStatsMixin(Stats):
             self.log.error("Stats was not initialized. Could be error during Setup")
             return
 
-        update_data = {}
-        if 'test_details' not in self._stats.keys():
-            self._stats['test_details'] = dict()
-            self._stats['setup_details'] = dict()
-        self._stats['test_details']['time_completed'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        if extra_stats is None:
+            extra_stats = {}
+
+        update_data = {**extra_stats}
+        update_data["test_details"] = test_details = self._stats.setdefault("test_details", {})
+        update_data["setup_details"] = setup_details = self._stats.setdefault("setup_details", {})
+        update_data["status"] = self._stats["status"] = self.status
+
+        if errors:
+            update_data["errors"] = errors
+
+        if coredumps:
+            update_data["coredumps"] = coredumps
+
+        for key, value in extra_stats.items():
+            self.log.debug("extra stats -- k: %s v: %s", key, value)
+        self._stats["results"].update(extra_stats)
+
+        test_details["time_completed"] = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M")
 
         if self.monitors and self.monitors.nodes:
-            test_start_time = self._stats['test_details']['start_time']
-            if self.params.get('store_perf_results'):
-                update_data['results'] = self.get_prometheus_stats(alternator=alternator)
-            grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(test_start_time)
-            self._stats['test_details']['grafana_screenshots'] = grafana_dataset.get('screenshots', [])
-            self._stats['test_details']['grafana_snapshots'] = grafana_dataset.get('snapshots', [])
-            self._stats['test_details']['grafana_annotations'] = self.monitors.upload_annotations_to_s3()
-            self._stats['test_details']['prometheus_data'] = self.monitors.download_monitor_data()
+            if self.params.get("store_perf_results"):
+                update_data["results"] = self.get_prometheus_stats(alternator=alternator)
+            grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(test_details["start_time"])
+            test_details.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
+                                 "grafana_snapshots": grafana_dataset.get("snapshots", []),
+                                 "grafana_annotations": self.monitors.upload_annotations_to_s3(),
+                                 "prometheus_data": self.monitors.download_monitor_data(), })
 
-        if self.db_cluster:
-            self._stats['setup_details']['db_cluster_node_details'] = self.get_db_cluster_node_details()
-
-        if self.db_cluster and scylla_conf and 'scylla_args' not in self._stats['setup_details'].keys():
+        if self.db_cluster and self.db_cluster.nodes:
             node = self.db_cluster.nodes[0]
-            res = node.remoter.run('sudo grep ^SCYLLA_ARGS /etc/sysconfig/scylla-server', verbose=True)
-            self._stats['setup_details']['scylla_args'] = res.stdout.strip()
-            res = node.remoter.run('sudo cat /etc/scylla.d/io.conf', verbose=True)
-            self._stats['setup_details']['io_conf'] = remove_comments(res.stdout.strip())
-            res = node.remoter.run('sudo cat /etc/scylla.d/cpuset.conf', verbose=True)
-            self._stats['setup_details']['cpuset_conf'] = remove_comments(res.stdout.strip())
 
-        self._stats['status'] = self.status
-        update_data.update(
-            {'status': self._stats['status'],
-             'setup_details': self._stats['setup_details'],
-             'test_details': self._stats['test_details']
-             })
-        if errors:
-            update_data.update({'errors': errors})
-        if coredumps:
-            update_data.update({'coredumps': coredumps})
-        if extra_stats:
-            self.log.debug("Updating specific stats of: {}".format(extra_stats))
-            for key, value in extra_stats.items():
-                self.log.debug("k: {} v: {}".format(key, value))
-            self._stats['results'].update(extra_stats)
-            update_data.update(extra_stats)
+            def output(cmd):
+                result = node.remoter.sudo(cmd, ignore_status=True, verbose=True)
+                if result.ok:
+                    return result.stdout.strip()
+                self.log.error("Failed to run `%s' on %s", cmd, node)
+                return "<< failed to get >>"
+
+            setup_details["db_cluster_node_details"] = {
+                "cpu_model": output("awk -F: '/^model name/{print $2; exit}' /proc/cpuinfo"),
+                "sys_info": output("uname -a"),
+            }
+            if scylla_conf and "scylla_args" not in setup_details:
+                scylla_server_conf = f"/etc/{'sysconfig' if node.distro.is_rhel_like else 'default'}/scylla-server"
+                setup_details.update({"scylla_args": output(f"grep ^SCYLLA_ARGS {scylla_server_conf}"),
+                                      "io_conf": output("grep -v ^# /etc/scylla.d/io.conf"),
+                                      "cpuset_conf": output("grep -v ^# /etc/scylla.d/cpuset.conf"), })
+
         self.update(update_data)
 
     def get_doc_data(self, key):
