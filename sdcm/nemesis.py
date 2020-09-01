@@ -3012,7 +3012,6 @@ class MemoryStressMonkey(Nemesis):
 
 
 class ScyllaOperatorGrowShrinkClusterNemesis(GrowShrinkClusterNemesis):
-    kubernetes = True
 
     def set_target_node(self):
         self.target_node = self.cluster.nodes[-1]  # can withdraw last node only
