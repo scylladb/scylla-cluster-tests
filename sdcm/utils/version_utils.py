@@ -22,7 +22,6 @@ SCYLLA_VERSION_RE = re.compile(r"\d+(\.\d+)?\.[\d\w]+([.~][\d\w]+)?")
 PRIMARY_XML_GZ_REGEX = re.compile(r'="(.*?primary.xml.gz)"')
 
 REPOMD_XML_PATH = "repodata/repomd.xml"
-SCYLLA_URL_REGEX = re.compile(".*(?P<url>http.*scylladb.com.*).*")
 
 BUILD_ID_RE = re.compile(r"Build ID: (?P<build_id>\w+)")
 
@@ -121,7 +120,7 @@ def get_branch_version_from_centos_repository(urls):
 
 
 def get_repository_details(url):
-    urls = list({line for line in get_url_content(url=url) if SCYLLA_URL_REGEX.match(line)})
+    urls = list({line for line in get_url_content(url=url)})
 
     for file_type, regex_list in FILE_REGEX_DICT.items():
         for _url in urls:
