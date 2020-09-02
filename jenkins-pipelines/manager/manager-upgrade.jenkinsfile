@@ -12,6 +12,8 @@ managerPipeline(
     target_scylla_mgmt_server_repo: '',
     target_scylla_mgmt_agent_repo: '',
     scylla_mgmt_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.1.repo',
+    scylla_mgmt_agent_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.1.repo',
+    scylla_version: 'master:latest',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
     test_config: 'test-cases/upgrades/manager-upgrade.yaml',
