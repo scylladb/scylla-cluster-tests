@@ -2462,6 +2462,7 @@ class TruncateLargeParititionMonkey(Nemesis):
 
 class DeleteByPartitionsMonkey(Nemesis):
     disruptive = False
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2470,6 +2471,7 @@ class DeleteByPartitionsMonkey(Nemesis):
 
 class DeleteByRowsRangeMonkey(Nemesis):
     disruptive = False
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
