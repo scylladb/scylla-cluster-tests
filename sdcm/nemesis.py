@@ -2677,6 +2677,7 @@ class AddDropColumnMonkey(Nemesis):
     disruptive = False
     run_with_gemini = False
     networking = False
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
