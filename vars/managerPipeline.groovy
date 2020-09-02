@@ -25,7 +25,7 @@ def call(Map pipelineParams) {
 
 
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
-            string(defaultValue: '', description: '', name: 'scylla_version')
+            string(defaultValue: "${pipelineParams.get('scylla_version', '')}", description: '', name: 'scylla_version')
             string(defaultValue: '', description: '', name: 'scylla_repo')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
                    description: 'spot_low_price|on_demand|spot_fleet|spot_duration',
@@ -49,7 +49,7 @@ def call(Map pipelineParams) {
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
 
-            string(defaultValue: '',
+            string(defaultValue: "${pipelineParams.get('scylla_mgmt_repo', '')}",
                    description: 'If empty - the default manager version will be taken',
                    name: 'scylla_mgmt_repo')
 
