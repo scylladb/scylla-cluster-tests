@@ -229,14 +229,17 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     def create_ks_and_tables(self, num_ks, num_table):
         # FIXME: beforehand we better change to have RF=1 to avoid restoring content while restoring replica of data
         table_name = []
-        for keyspace in range(num_ks):
-            self.create_keyspace(f'ks00{keyspace}', 1)
-            for table in range(num_table):
-                self.create_table(f'table00{table}', keyspace_name=f'ks00{keyspace}')
-                table_name.append(f'ks00{keyspace}.table00{table}')
-                # FIXME: improve the structure + data insertion
-                # can use this function to populate tables better?
-                # self.populate_data_parallel()
+        with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+            for keyspace in range(num_ks):
+                session.execute(f"CREATE KEYSPACE IF NOT EXISTS ks00{keyspace} "
+                                "WITH replication={'class':'SimpleStrategy', 'replication_factor':1}")
+                for table in range(num_table):
+                    session.execute(f'CREATE COLUMNFAMILY IF NOT EXISTS ks00{keyspace}.table00{table} '
+                                      '(key varchar, c varchar, v varchar, PRIMARY KEY(key, c))')
+                    table_name.append(f'ks00{keyspace}.table00{table}')
+                    # FIXME: improve the structure + data insertion
+                    # can use this function to populate tables better?
+                    # self.populate_data_parallel()
         return table_name
 
     def test_basic_backup(self):
