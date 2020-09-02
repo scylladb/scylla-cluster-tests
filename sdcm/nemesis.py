@@ -2277,6 +2277,7 @@ class SslHotReloadingNemesis(Nemesis):
 
 
 class NoOpMonkey(Nemesis):
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2739,6 +2740,7 @@ class ScyllaKillMonkey(Nemesis):
 
 class ValidateHintedHandoffShortDowntime(Nemesis):
     disruptive = True
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2747,6 +2749,7 @@ class ValidateHintedHandoffShortDowntime(Nemesis):
 
 class SnapshotOperations(Nemesis):
     disruptive = False
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2763,6 +2766,7 @@ class NodeRestartWithResharding(Nemesis):
 
 class TopPartitions(Nemesis):
     disruptive = False
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
