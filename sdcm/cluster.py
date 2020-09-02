@@ -4103,7 +4103,8 @@ class BaseLoaderSet():
 
         return ret
 
-    def run_stress_thread_bench(self, stress_cmd, timeout, node_list=None, round_robin=False, use_single_loader=False):  # pylint: disable=too-many-arguments
+    def run_stress_thread_bench(self, stress_cmd, timeout, node_list=None, round_robin=False, use_single_loader=False,
+                                stop_test_on_failure=False):  # pylint: disable=too-many-arguments
         _queue = {TASK_QUEUE: queue.Queue(), RES_QUEUE: queue.Queue()}
 
         def node_run_stress_bench(node, loader_idx, stress_cmd, node_list):
@@ -4135,7 +4136,8 @@ class BaseLoaderSet():
                 if "truncate: seastar::rpc::timeout_error" in errors_str:
                     event_type, event_severity = 'timeout', Severity.ERROR
                 else:
-                    event_type, event_severity = 'failure', Severity.CRITICAL
+                    event_type = 'failure'
+                    event_severity = Severity.CRITICAL if stop_test_on_failure else Severity.ERROR
 
                 ScyllaBenchEvent(type=event_type, node=str(node), stress_cmd=stress_cmd,
                                  log_file_name=log_file_name, severity=event_severity,
