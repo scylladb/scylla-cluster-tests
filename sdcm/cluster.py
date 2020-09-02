@@ -1198,7 +1198,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         port = port if port else self.MANAGER_AGENT_PORT
         if self.is_port_used(port=port, service_name="scylla-manager-agent"):
             # When the agent is IP, it should answer an https request of https://NODE_IP:10001/ping with status code 204
-            response = requests.get(f"https://{self.ip_address}:{port}/ping", verify=False)
+            response = requests.get(f"https://{normalize_ipv6_url(self.ip_address)}:{port}/ping", verify=False)
             return response.status_code == 204
         return False
 
