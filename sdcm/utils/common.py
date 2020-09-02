@@ -1184,6 +1184,64 @@ def can_connect_to(ip: str, port: int, timeout: int = 1) -> bool:
     return result == 0
 
 
+def find_scylla_repo(scylla_version, dist_type='centos', dist_version=None):
+    """
+    Get a repo/list of scylla, based on scylla version match
+
+    :param scylla_version: branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:l'
+    :param dist_type: one of ['centos', 'ubuntu', 'debian']
+    :param dist_version: family name of the distro version
+    :raises: ValueError if not found
+
+    :return: str url repo/list
+    """
+    if ':' in scylla_version:
+        branch_repo = get_branched_repo(scylla_version, dist_type)
+        if branch_repo:
+            return branch_repo
+
+    repo_map = get_s3_scylla_repos_mapping(dist_type, dist_version)
+
+    for key in repo_map:
+        if scylla_version.startswith(key):
+            return repo_map[key]
+    else:
+        raise ValueError(f"repo for scylla version {scylla_version} wasn't found")
+
+
+def get_branched_repo(scylla_version, dist_type='centos'):
+    """
+    Get a repo/list of scylla, based on scylla version match
+
+    :param scylla_version: branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:l'
+    :param dist_type: one of ['centos', 'ubuntu', 'debian']
+    :return: str url repo/list, or None if not found
+    """
+    branch, branch_version = scylla_version.split(':', maxsplit=1)
+    s3_client: S3Client = boto3.client('s3', region_name=DEFAULT_AWS_REGION)
+    bucket = 'downloads.scylladb.com'
+
+    if dist_type == 'centos':
+        response = s3_client.list_objects(
+            Bucket=bucket, Prefix=f'rpm/unstable/centos/{branch}/{branch_version}/', Delimiter='/')
+        if 'Contents' not in response:
+            return
+        for repo_file in response['Contents']:
+            filename = os.path.basename(repo_file['Key'])
+            if filename == 'scylla.repo':
+                return f"https://s3.amazonaws.com/{bucket}/{repo_file['Key']}"
+
+    elif dist_type in ('ubuntu', 'debian'):
+        response = s3_client.list_objects(
+            Bucket=bucket, Prefix=f'deb/unstable/unified/{branch}/{branch_version}/scylladb-master/', Delimiter='/')
+        if 'Contents' not in response:
+            return
+        for repo_file in response['Contents']:
+            filename = os.path.basename(repo_file['Key'])
+            if filename == 'scylla.list':
+                return f"https://s3.amazonaws.com/{bucket}/{repo_file['Key']}"
+
+
 def get_branched_ami(ami_version, region_name):
     """
     Get a list of AMIs, based on version match

@@ -28,6 +28,10 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
             if k.startswith('SCT_'):
                 del os.environ[k]
 
+        # some of the tests assume this basic case is define, to avoid putting this again and again in each test
+        # and so we can run those tests specificly
+        os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
+
     def tearDown(self):
         for k, _ in os.environ.items():
             if k.startswith('SCT_'):
@@ -321,6 +325,32 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf = SCTConfiguration()
         conf.verify_configuration()
         self.assertEqual(conf.get('target_upgrade_version'), '2019.1.1')
+
+    def test_15a_new_scylla_repo_by_scylla_version(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
+        os.environ['SCT_SCYLLA_VERSION'] = 'branch-4.2:latest'
+        os.environ['SCT_NEW_VERSION'] = 'master:latest'
+        os.environ['SCT_USER_PREFIX'] = 'testing'
+
+        conf = SCTConfiguration()
+        conf.verify_configuration()
+        self.assertEqual(conf.get('scylla_repo'),
+                         "https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/branch-4.2/latest/scylla.repo")
+        self.assertEqual(conf.get('target_upgrade_version'), '666.development')
+
+    def test_15b_new_scylla_repo_by_scylla_version_ubuntu(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
+        os.environ['SCT_SCYLLA_VERSION'] = 'master:latest'
+        os.environ['SCT_NEW_VERSION'] = 'master:latest'
+        os.environ['SCT_USER_PREFIX'] = 'testing'
+        os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
+        os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'ubuntu-xenial'
+
+        conf = SCTConfiguration()
+        conf.verify_configuration()
+        self.assertEqual(conf.get('scylla_repo'),
+                         "https://s3.amazonaws.com/downloads.scylladb.com/deb/unstable/unified/master/latest/scylladb-master/scylla.list")
+        self.assertEqual(conf.get('target_upgrade_version'), '666.development')
 
     def test_16_oracle_scylla_version_us_east_1(self):
         ami_3_0_11 = "ami-0a49c99b529429c18"
