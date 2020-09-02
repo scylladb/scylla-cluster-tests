@@ -3896,14 +3896,6 @@ class BaseLoaderSet():
         node.remoter.run("source $HOME/.bashrc")
         node.remoter.run("go get github.com/scylladb/scylla-bench")
 
-        # install ycsb
-        ycsb_install = dedent("""
-            cd ~/
-            curl -O --location https://github.com/brianfrankcooper/YCSB/releases/download/0.15.0/ycsb-0.15.0.tar.gz
-            tar xfvz ycsb-0.15.0.tar.gz
-        """)
-        node.remoter.run('bash -cxe "%s"' % ycsb_install)
-
         # install docker
         docker_install = dedent("""
             curl -fsSL get.docker.com -o get-docker.sh
