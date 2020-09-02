@@ -20,5 +20,5 @@ class AddRemoveDCMonkey(Nemesis):
 
 def test_list_nemesis_of_added_disrupt_methods():
     nemesis = ChaosMonkey(FakeTester(), None)
-    assert 'disrupt_add_remove_dc' in nemesis.get_list_of_disrupt_methods_for_nemesis_subclasses(disruptive=False)
+    assert 'disrupt_add_remove_dc' in nemesis.get_list_of_methods_by_flags(disruptive=False)
     assert nemesis.call_random_disrupt_method(disrupt_methods=['disrupt_add_remove_dc']) is None
