@@ -2684,6 +2684,7 @@ class AddDropColumnMonkey(Nemesis):
 
 
 class ToggleTableIcsMonkey(Nemesis):
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
