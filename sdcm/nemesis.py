@@ -285,8 +285,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _kill_scylla_daemon(self):
         self.log.info('Kill all scylla processes in %s', self.target_node)
-        kill_cmd = "sudo pkill -9 scylla"
-        self.target_node.remoter.run(kill_cmd, ignore_status=True)
+        self.target_node.remoter.sudo("pkill -9 scylla", ignore_status=True)
 
         # Wait for the process to be down before waiting for service to be restarted
         self.target_node.wait_db_down(check_interval=2)
@@ -2393,6 +2392,7 @@ class NoCorruptRepairMonkey(Nemesis):
 
 class MajorCompactionMonkey(Nemesis):
     disruptive = False
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2731,6 +2731,7 @@ class NodeTerminateAndReplace(Nemesis):
 
 class ScyllaKillMonkey(Nemesis):
     disruptive = True
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
