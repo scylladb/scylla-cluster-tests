@@ -1,0 +1,19 @@
+stress_cmd: "cassandra-stress write cl=QUORUM n=1200300 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=400200300..600200300"
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+post_behavior_db_nodes: "destroy"
+post_behavior_loader_nodes: "destroy"
+post_behavior_monitor_nodes: "destroy"
+
+user_prefix: manager-regression
+space_node_threshold: 6442
+# ip_ssh_connections: 'public'
+
+use_mgmt: true
+mgmt_port: 10090
+
+gce_datacenter: 'us-east1'
+backup_bucket_location: 'manager-backup-tests-us-east1'

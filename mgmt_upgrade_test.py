@@ -56,9 +56,9 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
             repair_task = mgr_cluster.create_repair_task(interval="1d")
             repair_task_current_details = wait_until_task_finishes_return_details(repair_task)
 
-            self.update_all_agent_config_files()
-            bucket_name = self.params.get('backup_bucket_location').split()[0]
-            location_list = [f's3:{bucket_name}']
+            if not self.is_cred_file_configured:
+                self.update_config_file()
+            location_list = [self.bucket_name, ]
             backup_task = mgr_cluster.create_backup_task(interval="1d", location_list=location_list,
                                                          keyspace_list=["keyspace1"])
             backup_task_current_details = wait_until_task_finishes_return_details(backup_task)
@@ -77,8 +77,9 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
             self.create_simple_table(table_name="cf2")
             self.write_multiple_rows(table_name="cf2", key_range=(1, 11))
 
-            bucket_name = self.params.get('backup_bucket_location').split()[0]
-            location_list = [f's3:{bucket_name}']
+            if not self.is_cred_file_configured:
+                self.update_config_file()
+            location_list = [self.bucket_name, ]
             rerunning_backup_task = mgr_cluster.create_backup_task(location_list=location_list, keyspace_list=["ks1"],
                                                                    retention=2)
             rerunning_backup_task.wait_and_get_final_status(timeout=300, step=20)
