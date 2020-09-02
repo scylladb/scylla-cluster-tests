@@ -15,7 +15,7 @@ from distutils.util import strtobool  # pylint: disable=import-error,no-name-in-
 
 import anyconfig
 
-from sdcm.utils.common import get_s3_scylla_repos_mapping, get_scylla_ami_versions, get_branched_ami, get_ami_tags, \
+from sdcm.utils.common import find_scylla_repo, get_scylla_ami_versions, get_branched_ami, get_ami_tags, \
     ami_built_by_scylla
 from sdcm.utils.version_utils import get_branch_version, get_branch_version_for_multiple_repositories
 
@@ -1111,14 +1111,7 @@ class SCTConfiguration(dict):
                         raise ValueError("AMI for scylla version {} wasn't found".format(scylla_version))
                 self['ami_id_db_scylla'] = " ".join(ami_list)
             elif 'scylla_repo' not in self:
-                repo_map = get_s3_scylla_repos_mapping(dist_type, dist_version)
-
-                for key in repo_map.keys():
-                    if scylla_version.startswith(key):
-                        self['scylla_repo'] = repo_map[key]
-                        break
-                else:
-                    raise ValueError("repo for scylla version {} wasn't found".format(scylla_version))
+                self['scylla_repo'] = find_scylla_repo(scylla_version, dist_type, dist_version)
             else:
                 raise ValueError("'scylla_version' can't used together with  'ami_id_db_scylla' or with 'scylla_repo'")
 
@@ -1127,14 +1120,7 @@ class SCTConfiguration(dict):
                 dist_type_loader = scylla_linux_distro_loader.split('-')[0]
                 dist_version_loader = scylla_linux_distro_loader.split('-')[-1]
 
-                repo_map = get_s3_scylla_repos_mapping(dist_type_loader, dist_version_loader)
-
-                for key in repo_map.keys():
-                    if scylla_version.startswith(key):
-                        self['scylla_repo_loader'] = repo_map[key]
-                        break
-                else:
-                    raise ValueError("repo for scylla version {} wasn't found in []".format(scylla_version))
+                self['scylla_repo_loader'] = find_scylla_repo(scylla_version, dist_type_loader, dist_version_loader)
 
         # 5.1) handle oracle scylla_version if exists
         oracle_scylla_version = self.get('oracle_scylla_version', None)
@@ -1165,14 +1151,7 @@ class SCTConfiguration(dict):
                 raise ValueError("'new_version' isn't supported for AWS AMIs")
 
             elif 'new_scylla_repo' not in self:
-                repo_map = get_s3_scylla_repos_mapping(dist_type, dist_version)
-
-                for key in repo_map.keys():
-                    if scylla_version.startswith(key):
-                        self['new_scylla_repo'] = repo_map[key]
-                        break
-                else:
-                    raise ValueError("repo for scylla version {} wasn't found".format(new_scylla_version))
+                self['new_scylla_repo'] = find_scylla_repo(new_scylla_version, dist_type, dist_version)
 
         # 7) append username or ami_id_db_scylla_desc to the user_prefix
         version_tag = self.get('ami_id_db_scylla_desc', default=None)
