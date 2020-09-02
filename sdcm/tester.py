@@ -69,6 +69,7 @@ from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.utils.gce_utils import get_gce_services
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.remote import LOCALRUNNER
+from sdcm.keystore import KeyStore
 
 try:
     import cluster_cloud
@@ -535,6 +536,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             gce_image_monitor = self.params.get('gce_image')
         cluster_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_db', default=0),
                                     'pd-standard': self.params.get('gce_pd_standard_disk_size_db', default=0)}
+
+        service_accounts = KeyStore().get_gcp_service_accounts()
         common_params = dict(gce_image_username=self.params.get('gce_image_username'),
                              gce_network=self.params.get('gce_network', default='default'),
                              credentials=self.credentials,
@@ -550,6 +553,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                            services=services,
                                            n_nodes=db_info['n_nodes'],
                                            add_disks=cluster_additional_disks,
+                                           service_accounts=service_accounts,
                                            **common_params)
 
         loader_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_loader', default=0)}

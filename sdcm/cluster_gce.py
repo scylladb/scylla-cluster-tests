@@ -205,7 +205,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,  # pylint: disable=too-many-arguments
                  cluster_uuid=None, gce_instance_type='n1-standard-1', gce_region_names=None,
                  gce_n_local_ssd=1, gce_image_username='root', cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=3, add_disks=None, params=None, node_type=None):
+                 node_prefix='node', n_nodes=3, add_disks=None, params=None, node_type=None, service_accounts=None):
 
         # pylint: disable=too-many-locals
         self._gce_image = gce_image
@@ -219,6 +219,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self._gce_region_names = gce_region_names
         self._gce_n_local_ssd = int(gce_n_local_ssd) if gce_n_local_ssd else 0
         self._add_disks = add_disks
+        self._service_accounts = service_accounts
         # the full node prefix will contain unique uuid, so use this for search of existing nodes
         self._node_prefix = node_prefix
         super(GCECluster, self).__init__(cluster_uuid=cluster_uuid,
@@ -326,6 +327,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                                "Name": name,
                                                "NodeIndex": node_index,
                                                "startup-script": startup_script},
+                                  ex_service_accounts=self._service_accounts,
                                   ex_preemptible=spot)
         try:
             instance = self._gce_services[dc_idx].create_node(**create_node_params)
@@ -421,7 +423,7 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,  # pylint: disable=too-many-arguments
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos',
-                 user_prefix=None, n_nodes=3, add_disks=None, params=None, gce_datacenter=None):
+                 user_prefix=None, n_nodes=3, add_disks=None, params=None, gce_datacenter=None, service_accounts=None):
         # pylint: disable=too-many-locals
         # We have to pass the cluster name in advance in user_data
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
@@ -441,7 +443,8 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
                                                add_disks=add_disks,
                                                params=params,
                                                gce_region_names=gce_datacenter,
-                                               node_type='scylla-db'
+                                               node_type='scylla-db',
+                                               service_accounts=service_accounts
                                                )
         self.version = '2.1'
 

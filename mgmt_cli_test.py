@@ -27,10 +27,22 @@ from sdcm.tester import ClusterTester
 
 
 class BackupFunctionsMixIn:
+    is_cred_file_configured = False
+    region = None
+    bucket_name = None
+    DESTINATION = '/tmp/backup'
+
     @staticmethod
     def download_files_from_s3(node, destination, file_list):
         download_cmd = 'aws s3 cp {} {}'
         for file_path in file_list:
+            node.remoter.run(download_cmd.format(file_path, destination))
+
+    @staticmethod
+    def download_files_from_gs(node, destination, file_list):
+        download_cmd = 'gsutil cp {} {}'
+        for file_path in file_list:
+            file_path = file_path.replace('gcs://', 'gs://')
             node.remoter.run(download_cmd.format(file_path, destination))
 
     def run_cmd_with_retry(self, cmd, node, retries=10):
@@ -51,11 +63,26 @@ class BackupFunctionsMixIn:
                   mkdir -p {destination}'''
         self.run_cmd_with_retry(cmd=cmd, node=node)
 
+    def install_gsutil_dependencies(self, node, destination):
+        cmd = f'''curl https://sdk.cloud.google.com > install.sh
+                  bash install.sh --disable-prompts
+                  mkdir -p {destination}'''
+        self.run_cmd_with_retry(cmd=cmd, node=node)
+
     def restore_backup(self, mgr_cluster, snapshot_tag, keyspace_and_table_list):
         # pylint: disable=too-many-locals
+        if self.params.get('cluster_backend') == 'aws':
+            install_dependencies = self.install_awscli_dependencies
+            download_files = self.download_files_from_s3
+        elif self.params.get('cluster_backend') == 'gce':
+            install_dependencies = self.install_gsutil_dependencies
+            download_files = self.download_files_from_gs
+        else:
+            raise ValueError(f'"{self.params.get("cluster_backend")}" not supported')
+
         per_node_backup_file_paths = mgr_cluster.get_backup_files_dict(snapshot_tag)
         for node in self.db_cluster.nodes:
-            self.install_awscli_dependencies(node=node, destination=self.DESTINATION)
+            install_dependencies(node=node, destination=self.DESTINATION)
             node_data_path = '/var/lib/scylla/data'
             nodetool_info = self.db_cluster.get_nodetool_info(node)
             node_id = nodetool_info['ID']
@@ -63,8 +90,8 @@ class BackupFunctionsMixIn:
                 keyspace_path = os.path.join(node_data_path, keyspace)
                 for table in tables:
                     node.remoter.run(f'mkdir -p {os.path.join(self.DESTINATION, table)}')
-                    self.download_files_from_s3(node=node, destination=os.path.join(self.DESTINATION, table, ''),
-                                                file_list=per_node_backup_file_paths[node_id][keyspace][table])
+                    download_files(node=node, destination=os.path.join(self.DESTINATION, table, ''),
+                                   file_list=per_node_backup_file_paths[node_id][keyspace][table])
                     file_details_lst = per_node_backup_file_paths[node_id][keyspace][table][0].split('/')
                     table_id = file_details_lst[file_details_lst.index(table) + 1]
                     table_upload_path = os.path.join(keyspace_path, table + '-' + table_id, 'upload')
@@ -103,6 +130,20 @@ class BackupFunctionsMixIn:
         load_results = load_thread.get_results()
         self.log.info(f'load={load_results}')
 
+    def update_config_file(self):
+        # FIXME: add to the nodes not in the same region as the bucket the bucket's region
+        # this is a temporary fix, after https://github.com/scylladb/mermaid/issues/1456 is fixed, this is not necessary
+        config_file = '/etc/scylla-manager-agent/scylla-manager-agent.yaml'
+        if self.params.get('cluster_backend') == 'aws':
+            self.region = self.params.get('region_name').split()
+            self.bucket_name = f"s3:{self.params.get('backup_bucket_location').split()[0]}"
+            for node in self.db_cluster.nodes:
+                mgmt.update_config_file(node=node, region=self.region[0], config_file=config_file)
+        elif self.params.get('cluster_backend') == 'gce':
+            self.region = self.params.get('gce_datacenter')
+            self.bucket_name = f"gcs:{self.params.get('backup_bucket_location')}"
+        self.is_cred_file_configured = True
+
 
 # pylint: disable=too-many-public-methods
 class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
@@ -113,10 +154,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     CLUSTER_NAME = "mgr_cluster1"
     LOCALSTRATEGY_KEYSPACE_NAME = "localstrategy_keyspace"
     SIMPLESTRATEGY_KEYSPACE_NAME = "simplestrategy_keyspace"
-    DESTINATION = '/tmp/backup'
-    is_cred_file_configured = False
-    region = None
-    bucket_name = None
 
     def test_mgmt_repair_nemesis(self):
         """
@@ -216,16 +253,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         with self.subTest('Test Backup end of space'):  # Preferably at the end
             self.test_enospc_during_backup()
 
-    def update_config_file(self):
-        # FIXME: add to the nodes not in the same region as the bucket the bucket's region
-        # this is a temporary fix, after https://github.com/scylladb/mermaid/issues/1456 is fixed, this is not necessary
-        config_file = '/etc/scylla-manager-agent/scylla-manager-agent.yaml'
-        self.region = self.params.get('region_name').split()
-        self.bucket_name = self.params.get('backup_bucket_location').split()[0]
-        for node in self.db_cluster.nodes:
-            mgmt.update_config_file(node=node, region=self.region[0], config_file=config_file)
-        self.is_cred_file_configured = True
-
     def create_ks_and_tables(self, num_ks, num_table):
         # FIXME: beforehand we better change to have RF=1 to avoid restoring content while restoring replica of data
         table_name = []
@@ -235,7 +262,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                                 "WITH replication={'class':'SimpleStrategy', 'replication_factor':1}")
                 for table in range(num_table):
                     session.execute(f'CREATE COLUMNFAMILY IF NOT EXISTS ks00{keyspace}.table00{table} '
-                                      '(key varchar, c varchar, v varchar, PRIMARY KEY(key, c))')
+                                    '(key varchar, c varchar, v varchar, PRIMARY KEY(key, c))')
                     table_name.append(f'ks00{keyspace}.table00{table}')
                     # FIXME: improve the structure + data insertion
                     # can use this function to populate tables better?
@@ -246,7 +273,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self.log.info('starting test_basic_backup')
         if not self.is_cred_file_configured:
             self.update_config_file()
-        location_list = [f's3:{self.bucket_name}']
+        location_list = [self.bucket_name, ]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_basic', db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
@@ -260,7 +287,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self.log.info('starting test_backup_multiple_ks_tables')
         if not self.is_cred_file_configured:
             self.update_config_file()
-        location_list = [f's3:{self.bucket_name}']
+        location_list = [self.bucket_name, ]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_multiple-ks', db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
@@ -277,7 +304,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self.log.info('starting test_backup_location_with_path')
         if not self.is_cred_file_configured:
             self.update_config_file()
-        location_list = [f's3:{self.bucket_name}/path_testing/']
+        location_list = [f'{self.bucket_name}/path_testing/']
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_bucket_with_path',
                                                db_cluster=self.db_cluster,
@@ -293,7 +320,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self.log.info('starting test_backup_rate_limit')
         if not self.is_cred_file_configured:
             self.update_config_file()
-        location_list = [f's3:{self.bucket_name}']
+        location_list = [self.bucket_name, ]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_rate_limit', db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
@@ -486,7 +513,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self.update_config_file()
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         hosts = self.get_cluster_hosts_ip()
-        location_list = [f's3:{self.bucket_name}']
+        location_list = [self.bucket_name, ]
         selected_host = hosts[0]
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, host=selected_host,
