@@ -2437,6 +2437,7 @@ class EnospcAllNodesMonkey(Nemesis):
 
 class NodeToolCleanupMonkey(Nemesis):
     disruptive = False
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
