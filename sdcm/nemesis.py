@@ -27,7 +27,7 @@ import re
 import traceback
 import json
 
-from typing import List, Optional
+from typing import List, Optional, TypedDict, Type
 from collections import OrderedDict, defaultdict
 from functools import wraps, partial
 
@@ -221,26 +221,33 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for operation in self.operation_log:
             self.log.info(operation)
 
-    def get_list_of_disrupt_methods_for_nemesis_subclasses(
-            self, disruptive=None, run_with_gemini=None, networking=None, kubernetes=None):  # pylint: disable=invalid-name
-        filters = {}
-        if disruptive is not None:
-            filters['disruptive'] = disruptive
-        if run_with_gemini is not None:
-            filters['run_with_gemini'] = run_with_gemini
-        if networking is not None:
-            filters['networking'] = networking
-        if kubernetes is not None:
-            filters['kubernetes'] = kubernetes
-        return self._get_subclasses_disrupt_methods(**filters)
+    def get_list_of_methods_compatible_with_backend(
+            self,
+            disruptive: Optional[bool] = None,
+            run_with_gemini: Optional[bool] = None,
+            networking: Optional[bool] = None) -> List[str]:
+        return self.get_list_of_methods_by_flags(
+            disruptive=disruptive,
+            run_with_gemini=run_with_gemini,
+            networking=networking,
+            kubernetes=True if self._is_it_on_kubernetes() else None
+        )
 
-    def _is_it_on_kubernetes(self):
+    def _is_it_on_kubernetes(self) -> bool:
         if hasattr(self.tester, 'db_cluster'):
             return 'kube' in type(self.tester.db_cluster).__name__.lower()
         return False
 
-    def _get_subclasses_disrupt_methods(self, **kwargs):
-        subclasses_list = self._get_subclasses(**kwargs)
+    def get_list_of_methods_by_flags(
+            self,
+            disruptive: Optional[bool] = None,
+            run_with_gemini: Optional[bool] = None,
+            networking: Optional[bool] = None,
+            kubernetes: Optional[bool] = None) -> List[str]:
+        attributes = locals()
+        flags = {flag_name: attributes[flag_name] for flag_name in
+                 ['disruptive', 'run_with_gemini', 'networking', 'kubernetes'] if attributes[flag_name] is not None}
+        subclasses_list = self._get_subclasses(**flags)
         disrupt_methods_list = []
         for subclass in subclasses_list:
             method_name = re.search(
@@ -251,12 +258,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return disrupt_methods_list
 
     @classmethod
-    def _get_subclasses(cls, **kwargs):
-        return cls._get_subclasses_from_list(Nemesis.__subclasses__(), **kwargs) + \
-            cls._get_subclasses_from_list(RELATIVE_NEMESIS_SUBCLASS_LIST, **kwargs)
+    def _get_subclasses(cls, **flags) -> List[Type['Nemesis']]:
+        return cls._get_subclasses_from_list(Nemesis.__subclasses__(), **flags) + \
+            cls._get_subclasses_from_list(RELATIVE_NEMESIS_SUBCLASS_LIST, **flags)
 
     @staticmethod
-    def _get_subclasses_from_list(list_of_nemesis: list, **filters):
+    def _get_subclasses_from_list(
+            list_of_nemesis: List[Type['Nemesis']],
+            **flags) -> List[Type['Nemesis']]:
         """
         It apply 'and' logic to filter,
             if any value in the filter does not match what nemeses have,
@@ -268,7 +277,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if nemesis in nemesis_to_exclude:
                 continue
             matches = True
-            for filter_name, filter_value in filters.items():
+            for filter_name, filter_value in flags.items():
+                if filter_value is None:
+                    continue
                 if getattr(nemesis, filter_name) != filter_value:
                     matches = False
                     break
@@ -2860,9 +2871,7 @@ class DisruptiveMonkey(Nemesis):
 
     def __init__(self, *args, **kwargs):
         super(DisruptiveMonkey, self).__init__(*args, **kwargs)
-        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(
-            disruptive=True,
-            kubernetes=self._is_it_on_kubernetes())
+        self.disrupt_methods_list = self.get_list_of_methods_compatible_with_backend(disruptive=True)
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2880,10 +2889,7 @@ class NonDisruptiveMonkey(Nemesis):
 
     def __init__(self, *args, **kwargs):
         super(NonDisruptiveMonkey, self).__init__(*args, **kwargs)
-        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(
-            disruptive=False,
-            kubernetes=self._is_it_on_kubernetes()
-        )
+        self.disrupt_methods_list = self.get_list_of_methods_compatible_with_backend(disruptive=False)
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2897,10 +2903,7 @@ class NetworkMonkey(Nemesis):
     #  - BlockNetworkMonkey
     def __init__(self, *args, **kwargs):
         super(NetworkMonkey, self).__init__(*args, **kwargs)
-        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(
-            networking=True,
-            kubernetes=self._is_it_on_kubernetes()
-        )
+        self.disrupt_methods_list = self.get_list_of_methods_compatible_with_backend(networking=True)
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2913,10 +2916,7 @@ class GeminiChaosMonkey(Nemesis):
     # - RestartThenRepairNodeMonkey
     def __init__(self, *args, **kwargs):
         super(GeminiChaosMonkey, self).__init__(*args, **kwargs)
-        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(
-            run_with_gemini=True,
-            kubernetes=self._is_it_on_kubernetes()
-        )
+        self.disrupt_methods_list = self.get_list_of_methods_compatible_with_backend(run_with_gemini=True)
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2926,14 +2926,8 @@ class GeminiChaosMonkey(Nemesis):
 class GeminiNonDisruptiveChaosMonkey(Nemesis):
     def __init__(self, *args, **kwargs):
         super(GeminiNonDisruptiveChaosMonkey, self).__init__(*args, **kwargs)
-        run_with_gemini = set(self.get_list_of_disrupt_methods_for_nemesis_subclasses(
-            run_with_gemini=True,
-            kubernetes=self._is_it_on_kubernetes()
-        ))
-        non_disruptive = set(self.get_list_of_disrupt_methods_for_nemesis_subclasses(
-            disruptive=False,
-            kubernetes=self._is_it_on_kubernetes()
-        ))
+        run_with_gemini = set(self.get_list_of_methods_compatible_with_backend(run_with_gemini=True))
+        non_disruptive = set(self.get_list_of_methods_compatible_with_backend(disruptive=False))
         self.disrupt_methods_list = run_with_gemini.intersection(non_disruptive)
 
     @log_time_elapsed_and_status
@@ -2947,7 +2941,7 @@ class KubernetesScyllaOperatorMonkey(Nemesis):
 
     def __init__(self, *args, **kwargs):
         super(KubernetesScyllaOperatorMonkey, self).__init__(*args, **kwargs)
-        self.disrupt_methods_list = self.get_list_of_disrupt_methods_for_nemesis_subclasses(kubernetes=True)
+        self.disrupt_methods_list = self.get_list_of_methods_compatible_with_backend()
 
     @log_time_elapsed_and_status
     def disrupt(self):
