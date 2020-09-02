@@ -1,3 +1,16 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 # pylint: disable=too-many-lines
 from __future__ import absolute_import
 from typing import Optional, Generic, TypeVar, Type, List, Union
@@ -716,7 +729,11 @@ class DatabaseLogEvent(SctEvent):  # pylint: disable=too-many-instance-attribute
         self.raw_backtrace = None
         self.severity = severity
 
-    def add_info(self, node, line, line_number):
+    def add_info(self, node, line: str, line_number: int) -> bool:
+        """Update the event info from the log line.
+
+        Return True if an event is ready to be published and False otherwise.
+        """
         try:
             log_time = dateutil.parser.parse(line.split()[0])
             self.timestamp = log_time.timestamp()
@@ -736,21 +753,23 @@ class DatabaseLogEvent(SctEvent):  # pylint: disable=too-many-instance-attribute
             except (ValueError, IndexError):
                 LOGGER.warning("failed to read REACTOR_STALLED line=[%s] ", line)
 
+        return True
+
     def add_backtrace_info(self, backtrace=None, raw_backtrace=None):
         if backtrace:
             self.backtrace = backtrace
         if raw_backtrace:
             self.raw_backtrace = raw_backtrace
 
-    def clone_with_info(self, node, line, line_number):
+    def clone_with_info(self, node, line: str, line_number: int) -> "DatabaseLogEvent":
         ret = DatabaseLogEvent(type='', regex='')
         ret.__dict__.update(self.__dict__)
         ret.add_info(node, line, line_number)
         return ret
 
-    def add_info_and_publish(self, node, line, line_number):
-        self.add_info(node, line, line_number)
-        self.publish()
+    def add_info_and_publish(self, node, line: str, line_number: int) -> None:
+        if self.add_info(node, line, line_number):
+            self.publish()
 
     def __str__(self):
         if self.backtrace:
@@ -770,7 +789,40 @@ class CassandraStressLogEvent(DatabaseLogEvent):
 
 
 class GeminiLogEvent(DatabaseLogEvent):
-    pass
+    SEVERITY_MAPPING = {
+        "INFO": "NORMAL",
+        "DEBUG": "NORMAL",
+        "WARN": "WARNING",
+        "ERROR": "ERROR",
+        "FATAL": "CRITICAL",
+    }
+
+    def __init__(self, verbose=False):
+        super().__init__(type="geminievent", regex="", severity=Severity.CRITICAL)
+        self.verbose = verbose
+
+    def add_info(self, node, line: str, line_number: int) -> bool:
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            if self.verbose:
+                LOGGER.debug("Failed to parse a line: %s", line.rstrip())
+            return False
+        try:
+            self.timestamp = dateutil.parser.parse(data.pop("T")).timestamp()
+        except ValueError:
+            self.timestamp = time.time()
+        self.severity = getattr(Severity, self.SEVERITY_MAPPING[data.pop("L")])
+        self.line = data.pop("M")
+        if data:
+            self.line += " (" + " ".join(f'{key}="{value}"' for key, value in data.items()) + ")"
+        self.line_number = line_number
+        self.node = str(node)
+        return True
+
+    def __str__(self):
+        return f"{SctEvent.__str__(self)}: type={self.type} line_number={self.line_number} node={self.node}\n" \
+               f"{self.line}"
 
 
 class SpotTerminationEvent(SctEvent):

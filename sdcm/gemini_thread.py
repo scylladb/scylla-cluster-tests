@@ -1,10 +1,22 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 import logging
 import concurrent.futures
 import os
 import uuid
 import random
 import json
-import re
 import time
 
 from sdcm.sct_events import GeminiEvent, GeminiLogEvent, Severity
@@ -21,41 +33,21 @@ class NotGeminiErrorResult():  # pylint: disable=too-few-public-methods
 
 
 class GeminiEventsPublisher(FileFollowerThread):
-    severity_mapping = {
-        "INFO": "NORMAL",
-        "DEBUG": "NORMAL",
-        "WARN": "WARNING",
-        "ERROR": "ERROR",
-        "FATAL": "CRITICAL"
-    }
-
-    def __init__(self, node, gemini_log_filename):
-        super(GeminiEventsPublisher, self).__init__()
+    def __init__(self, node, gemini_log_filename, verbose=False):
+        super().__init__()
         self.gemini_log_filename = gemini_log_filename
         self.node = str(node)
-        self.gemini_events = [GeminiLogEvent(
-            type='geminievent', regex=r'{"L":"(?P<type>[A-Z]+?)".+"M":"(?P<message>[\w\s.,]+?)"}', severity=Severity.CRITICAL)]
+        self.verbose = verbose
 
     def run(self):
-        patterns = [(event, re.compile(event.regex)) for event in self.gemini_events]
-
-        while True:
-            exists = os.path.isfile(self.gemini_log_filename)
-            if not exists:
+        while not self.stopped():
+            if not os.path.isfile(self.gemini_log_filename):
                 time.sleep(0.5)
                 continue
-
-            for line_number, line in enumerate(self.follow_file(self.gemini_log_filename)):
-                for event, pattern in patterns:
-                    match = pattern.search(line)
-                    if match:
-                        data = match.groupdict()
-                        event.severity = getattr(Severity, self.severity_mapping[data['type']])
-                        event.add_info_and_publish(node=self.node, line=data['message'], line_number=line_number)
+            for line_number, line in enumerate(self.follow_file(self.gemini_log_filename), start=1):
+                GeminiLogEvent(verbose=self.verbose).add_info_and_publish(self.node, line, line_number)
                 if self.stopped():
                     break
-            if self.stopped():
-                break
 
 
 class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
