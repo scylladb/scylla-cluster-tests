@@ -2184,9 +2184,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if verify_down:
             self.wait_db_down(timeout=timeout)
         if not self.is_ubuntu14():
-            self.remoter.run('sudo systemctl start scylla-server.service', timeout=timeout)
+            self.remoter.sudo('systemctl start scylla-server.service', timeout=timeout)
         else:
-            self.remoter.run('sudo service scylla-server start', timeout=timeout)
+            self.remoter.sudo('service scylla-server start', timeout=timeout)
         if verify_up:
             self.wait_db_up(timeout=verify_up_timeout)
 
@@ -2194,9 +2194,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if verify_down:
             self.wait_jmx_down(timeout=timeout)
         if not self.is_ubuntu14():
-            self.remoter.run('sudo systemctl start scylla-jmx.service', timeout=timeout)
+            self.remoter.sudo('systemctl start scylla-jmx.service', timeout=timeout)
         else:
-            self.remoter.run('sudo service scylla-jmx start', timeout=timeout)
+            self.remoter.sudo('service scylla-jmx start', timeout=timeout)
         if verify_up:
             self.wait_jmx_up(timeout=verify_up_timeout)
 
@@ -2222,9 +2222,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if verify_up:
             self.wait_jmx_up(timeout=timeout)
         if not self.is_ubuntu14():
-            self.remoter.run('sudo systemctl stop scylla-jmx.service', timeout=timeout)
+            self.remoter.sudo('systemctl stop scylla-jmx.service', timeout=timeout)
         else:
-            self.remoter.run('sudo service scylla-jmx stop', timeout=timeout)
+            self.remoter.sudo('service scylla-jmx stop', timeout=timeout)
         if verify_down:
             self.wait_jmx_down(timeout=timeout)
 
@@ -2238,11 +2238,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if verify_up_before:
             self.wait_db_up(timeout=timeout)
         if not self.distro.is_ubuntu14:
-            self.remoter.run("sudo systemctl restart scylla-server.service",
-                             timeout=timeout, ignore_status=ignore_status)
+            self.remoter.sudo("systemctl restart scylla-server.service",
+                              timeout=timeout, ignore_status=ignore_status)
         else:
-            self.remoter.run("sudo service scylla-server restart",
-                             timeout=timeout, ignore_status=ignore_status)
+            self.remoter.sudo("service scylla-server restart",
+                              timeout=timeout, ignore_status=ignore_status)
         if verify_up_after:
             self.wait_db_up(timeout=timeout)
 
@@ -2250,9 +2250,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if verify_up_before:
             self.wait_jmx_up(timeout=timeout)
         if not self.distro.is_ubuntu14:
-            self.remoter.run("sudo systemctl restart scylla-jmx.service", timeout=timeout)
+            self.remoter.sudo("systemctl restart scylla-jmx.service", timeout=timeout)
         else:
-            self.remoter.run("sudo service scylla-jmx restart", timeout=timeout)
+            self.remoter.sudo("service scylla-jmx restart", timeout=timeout)
         if verify_up_after:
             self.wait_jmx_up(timeout=timeout)
 
