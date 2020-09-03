@@ -1,6 +1,18 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 #  pylint: disable=too-many-lines
 import datetime
-import io
 import logging
 import os
 import shutil
@@ -9,6 +21,7 @@ import time
 import zipfile
 import fnmatch
 import traceback
+from typing import Optional
 from functools import cached_property
 
 import requests
@@ -134,19 +147,19 @@ class CommandLog(BaseLogEntity):  # pylint: disable=too-few-public-methods
         BaseLogEntity
     """
 
-    def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
+    def collect(self, node, local_dst, remote_dst=None, local_search_path=None) -> Optional[str]:
         if not node.remoter or remote_dst is None:
             return None
-
         remote_logfile = LogCollector.collect_log_remotely(node=node,
                                                            cmd=self.cmd,
                                                            log_filename=os.path.join(remote_dst, self.name))
-        archive_logfile = LogCollector.archive_log_remotely(node=node, log_filename=remote_logfile)
-        LogCollector.receive_log(node=node,
-                                 remote_log_path=archive_logfile,
-                                 local_dir=local_dst,
-                                 timeout=self.collect_timeout)
-        return os.path.join(local_dst, os.path.basename(archive_logfile))
+        if archive_logfile := LogCollector.archive_log_remotely(node=node, log_filename=remote_logfile):
+            LogCollector.receive_log(node=node,
+                                     remote_log_path=archive_logfile,
+                                     local_dir=local_dst,
+                                     timeout=self.collect_timeout)
+            return os.path.join(local_dst, os.path.basename(archive_logfile))
+        return None
 
 
 class FileLog(CommandLog):
@@ -203,13 +216,10 @@ class FileLog(CommandLog):
 
         return local_dst
 
-    def collect_from_builder(self, builder, local_dst, search_in_dir):
-        file_path = self.find_on_builder(builder, self.name, search_in_dir)
-        if not file_path:
-            return None
-        archive = LogCollector.archive_log_remotely(builder, file_path)
-        builder.remoter.receive_files(archive, local_dst, timeout=self.collect_timeout)
-        return os.path.join(local_dst, os.path.basename(file_path))
+    def collect_from_builder(self, builder, local_dst, search_in_dir) -> None:
+        if file_path := self.find_on_builder(builder, self.name, search_in_dir):
+            if archive_logfile := LogCollector.archive_log_remotely(builder, file_path):
+                builder.remoter.receive_files(archive_logfile, local_dst, timeout=self.collect_timeout)
 
 
 class PrometheusSnapshots(BaseMonitoringEntity):
@@ -243,21 +253,23 @@ class PrometheusSnapshots(BaseMonitoringEntity):
         else:
             raise PrometheusSnapshotErrorException(result)
 
-    def get_prometheus_snapshot_remote(self, node):
+    def get_prometheus_snapshot_remote(self, node) -> Optional[str]:
         try:
             snapshot_dir = self.create_prometheus_snapshot(node)
         except (PrometheusSnapshotErrorException, Exception) as details:  # pylint: disable=broad-except
-            LOGGER.warning(
-                'Create prometheus snapshot failed %s.\nUse prometheus data directory', details)
+            LOGGER.warning("Create prometheus snapshot failed %s.\nUse prometheus data directory", details)
             node.remoter.run('docker stop aprom', ignore_status=True)
             snapshot_dir = self.monitoring_data_dir
-        LOGGER.info(snapshot_dir)
 
-        archive_path = LogCollector.archive_log_remotely(
-            node, snapshot_dir, "{}_{}".format(self.name, self.current_datetime))
+        LOGGER.info(snapshot_dir)
+        archive_logfile = LogCollector.archive_log_remotely(node, snapshot_dir, f"{self.name}_{self.current_datetime}")
         node.remoter.run('docker start aprom', ignore_status=True)
-        LOGGER.info(archive_path)
-        return archive_path
+
+        if not archive_logfile:
+            return None
+
+        LOGGER.info(archive_logfile)
+        return archive_logfile
 
     def setup_monitor_data_dir(self, node):
         if self.monitoring_data_dir:
@@ -265,15 +277,15 @@ class PrometheusSnapshots(BaseMonitoringEntity):
         base_dir = self.get_monitoring_base_dir(node)
         self.monitoring_data_dir = os.path.join(base_dir, self.monitoring_data_dir_name)
 
-    def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
+    def collect(self, node, local_dst, remote_dst=None, local_search_path=None) -> Optional[str]:
         self.setup_monitor_data_dir(node)
-        remote_snapshot_archive = self.get_prometheus_snapshot_remote(node)
-        LogCollector.receive_log(
-            node,
-            remote_log_path=remote_snapshot_archive,
-            local_dir=local_dst,
-            timeout=self.collect_timeout)
-        return os.path.join(local_dst, os.path.basename(remote_snapshot_archive))
+        if remote_snapshot_archive := self.get_prometheus_snapshot_remote(node):
+            LogCollector.receive_log(node,
+                                     remote_log_path=remote_snapshot_archive,
+                                     local_dir=local_dst,
+                                     timeout=self.collect_timeout)
+            return os.path.join(local_dst, os.path.basename(remote_snapshot_archive))
+        return None
 
 
 class MonitoringStack(BaseMonitoringEntity):
@@ -290,40 +302,42 @@ class MonitoringStack(BaseMonitoringEntity):
     grafana_port = 3000
     collect_timeout = 1800
 
-    def get_monitoring_data_stack(self, node, local_dist):
+    def get_monitoring_data_stack(self, node, local_dist) -> str:
         monitor_base_dir = self.get_monitoring_base_dir(node)
         monitor_install_dir_name, monitor_branch, monitor_version = self.get_monitoring_version(node)
+
         LOGGER.info("%s, %s, %s", monitor_install_dir_name, monitor_branch, monitor_version)
+
         if not monitor_branch or not monitor_version:
             return ""
-        archive_name = "monitoring_data_stack_{monitor_branch}_{monitor_version}.tar.gz".format(**locals())
 
-        annotations_json = self.get_grafana_annotations(node.grafana_address)
-        tmp_dir = tempfile.mkdtemp()
-        with io.open(os.path.join(tmp_dir, 'annotations.json'), 'w', encoding='utf-8') as f:  # pylint: disable=invalid-name
-            f.write(annotations_json)
-        node.remoter.send_files(src=os.path.join(tmp_dir, 'annotations.json'),
-                                dst=os.path.join(monitor_base_dir, monitor_install_dir_name, "sct_monitoring_addons"))
+        with open(os.path.join(tempfile.mkdtemp(), "annotations.json"), "w", encoding="utf-8") as annotations_file:
+            annotations_file.write(self.get_grafana_annotations(node.grafana_address))
+        node.remoter.send_files(src=annotations_file.name,
+                                dst=os.path.join(monitor_base_dir,
+                                                 monitor_install_dir_name,
+                                                 "sct_monitoring_addons"))
 
-        node.remoter.run("cd {}; tar -czvf {} {}/".format(monitor_base_dir,
-                                                          archive_name,
-                                                          monitor_install_dir_name),
-                         ignore_status=True)
-        node.remoter.receive_files(src=os.path.join(monitor_base_dir, archive_name),
-                                   dst=local_dist, timeout=self.collect_timeout)
-        local_archive_path = os.path.join(local_dist, archive_name)
-        return local_archive_path
+        archive_name = os.path.join(monitor_base_dir,
+                                    f"monitoring_data_stack_{monitor_branch}_{monitor_version}.tar.gz")
+        if not node.remoter.run(f"tar czvf '{archive_name}' -C '{monitor_base_dir}' '{monitor_install_dir_name}'",
+                                ignore_status=True).ok:
+            return ""
+        if not check_archive(node.remoter, archive_name):
+            LOGGER.error("Archive with monitoring data stack (%s) is corrupted.", archive_name)
+            return ""
+        node.remoter.receive_files(src=archive_name, dst=local_dist, timeout=self.collect_timeout)
 
-    def get_grafana_annotations(self, grafana_ip):  # pylint: disable=inconsistent-return-statements
-        annotations_url = "http://{grafana_ip}:{grafana_port}/api/annotations"
+        return os.path.join(local_dist, os.path.basename(archive_name))
+
+    def get_grafana_annotations(self, grafana_ip: str) -> str:
         try:
-            res = requests.get(annotations_url.format(
-                grafana_ip=grafana_ip, grafana_port=self.grafana_port))
+            res = requests.get(f"http://{grafana_ip}:{self.grafana_port}/api/annotations")
             if res.ok:
                 return res.text
-        except Exception as ex:  # pylint: disable=broad-except
-            LOGGER.warning("unable to get grafana annotations [%s]", str(ex))
-            return ""
+        except Exception as details:
+            LOGGER.warning("Unable to get Grafana annotations [%s]", details)
+        return ""
 
     @staticmethod
     def dashboard_exists(grafana_ip, uid):
@@ -649,28 +663,26 @@ class LogCollector:
         return remote_dir
 
     @staticmethod
-    def collect_log_remotely(node, cmd, log_filename):  # pylint: disable=unused-argument
+    def collect_log_remotely(node, cmd: str, log_filename: str) -> Optional[str]:
         if not node.remoter:
-            return False
-        collect_log_command = "{cmd} >& {log_filename}".format(**locals())
-        result = node.remoter.run(
-            collect_log_command, ignore_status=True, verbose=True)
-        result = node.remoter.run(
-            'test -f {}'.format(log_filename), ignore_status=True)
-        return log_filename if result.exited == 0 else False
+            return None
+        collect_log_command = f"{cmd} >& '{log_filename}'"
+        node.remoter.run(collect_log_command, ignore_status=True, verbose=True)
+        result = node.remoter.run(f"test -f '{log_filename}'", ignore_status=True)
+        return log_filename if result.ok else None
 
     @staticmethod
-    def archive_log_remotely(node, log_filename, archive_name=None):
-        archive_dir = os.path.dirname(log_filename)
-        if archive_name:
-            archive_name = os.path.join(archive_dir, archive_name)
-        else:
-            archive_name = os.path.join(archive_dir, os.path.basename(log_filename))
-        log_filename = os.path.basename(log_filename)
-        if node.remoter:
-            node.remoter.run(
-                "cd {archive_dir}; tar -czf {archive_name}.tar.gz {log_filename}".format(**locals()), ignore_status=True)
-        return "{}.tar.gz".format(archive_name)
+    def archive_log_remotely(node, log_filename: str, archive_name: Optional[str] = None) -> Optional[str]:
+        if not node.remoter:
+            return None
+        archive_dir, log_filename = os.path.split(log_filename)
+        archive_name = os.path.join(archive_dir, archive_name or log_filename) + ".tar.gz"
+        if not node.remoter.run(f"tar czf '{archive_name}' -C '{archive_dir}' '{log_filename}'", ignore_status=True).ok:
+            LOGGER.error("Unable to archive log `%s' to `%s'", log_filename, archive_name)
+            return None
+        if not check_archive(node.remoter, archive_name):
+            return None
+        return archive_name
 
     @staticmethod
     def receive_log(node, remote_log_path, local_dir, timeout=300):
@@ -681,12 +693,7 @@ class LogCollector:
                                        timeout=timeout)
         return local_dir
 
-    @staticmethod
-    def upload_logs(archive_path, storing_path):
-        s3_link = S3Storage().upload_file(file_path=archive_path, dest_dir=storing_path)
-        return s3_link
-
-    def collect_logs(self, local_search_path=None):
+    def collect_logs(self, local_search_path: Optional[str] = None) -> Optional[str]:
         def collect_logs_per_node(node):
             LOGGER.info('Collecting logs on host: %s', node.name)
             remote_node_dir = self.create_remote_storage_dir(node)
@@ -717,7 +724,7 @@ class LogCollector:
         final_archive = self.archive_dir_with_zip64(self.local_dir)
         if not final_archive:
             return None
-        s3_link = self.upload_logs(final_archive, "{0.test_id}/{0.current_run}".format(self))
+        s3_link = upload_archive_to_s3(final_archive, f"{self.test_id}/{self.current_run}")
         remove_files(self.local_dir)
         remove_files(final_archive)
         return s3_link
@@ -740,10 +747,6 @@ class LogCollector:
 
     def update_db_info(self):
         pass
-
-    @staticmethod
-    def archive_dir_with_zip(logdir):
-        return shutil.make_archive("{}".format(logdir), "zip", root_dir=logdir)
 
     @staticmethod
     def archive_dir_with_zip64(logdir):
@@ -883,7 +886,7 @@ class SCTLogCollector(LogCollector):
     ]
     cluster_log_type = 'sct-runner'
 
-    def collect_logs(self, local_search_path=None):
+    def collect_logs(self, local_search_path: Optional[str] = None) -> Optional[str]:
         for ent in self.log_entities:
             ent.collect(None, self.local_dir, None, local_search_path=local_search_path)
         if not os.listdir(self.local_dir):
@@ -908,7 +911,7 @@ class SCTLogCollector(LogCollector):
 
         final_archive = self.archive_dir_with_zip64(self.local_dir)
 
-        s3_link = self.upload_logs(final_archive, "{0.test_id}/{0.current_run}".format(self))
+        s3_link = upload_archive_to_s3(final_archive, f"{self.test_id}/{self.current_run}")
         remove_files(self.local_dir)
         remove_files(final_archive)
         return s3_link
@@ -1095,9 +1098,11 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                   storage_dir=self.storage_dir,
                                                   params=self.params)
             LOGGER.info("Start collect logs for cluster %s", log_collector.cluster_log_type)
-            result = log_collector.collect_logs(local_search_path=local_dir_with_logs)
-            results[log_collector.cluster_log_type] = result
-            LOGGER.info("collected data for %s\n%s\n", log_collector.cluster_log_type, result)
+            if result := log_collector.collect_logs(local_search_path=local_dir_with_logs):
+                results[log_collector.cluster_log_type] = result
+                LOGGER.info("collected data for %s\n%s\n", log_collector.cluster_log_type, result)
+            else:
+                LOGGER.warning("There are no logs collected for %s", log_collector.cluster_log_type)
         return results
 
     def create_base_storage_dir(self, test_dir=None):
@@ -1108,3 +1113,27 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
         if not os.path.exists(os.path.join(os.path.dirname(self.storage_dir), "test_id")):
             with open(os.path.join(os.path.dirname(self.storage_dir), "test_id"), "w") as f:  # pylint: disable=invalid-name
                 f.write(self.test_id)
+
+
+def check_archive(remoter, path: str) -> bool:
+    """Ensure that given path is a good and not empty archive."""
+
+    if path.endswith(".tar.gz"):
+        cmd = f"tar tzf '{path}'"
+    elif path.endswith(".zip"):
+        cmd = f"unzip -qql '{path}'"
+    else:
+        raise ValueError(f"Unsupported archive type: {path}")
+    result = remoter.run(cmd, ignore_status=True)
+    archive_is_ok = result.ok and not result.stdout.strip()
+    if not archive_is_ok:
+        LOGGER.error("Archive `%s' is corrupted", path)
+
+    return archive_is_ok
+
+
+def upload_archive_to_s3(archive_path: str, storing_path: str) -> Optional[str]:
+    if not check_archive(LocalCmdRunner(), archive_path):
+        LOGGER.error("File `%s' will not be uploaded", archive_path)
+        return None
+    return S3Storage().upload_file(file_path=archive_path, dest_dir=storing_path)

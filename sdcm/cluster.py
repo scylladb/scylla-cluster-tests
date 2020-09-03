@@ -47,10 +47,10 @@ from paramiko import SSHException
 from paramiko.ssh_exception import NoValidConnectionsError
 
 from sdcm.collectd import ScyllaCollectdSetup
-from sdcm.mgmt import ScyllaManagerError, get_scylla_manager_tool, update_config_file
+from sdcm.mgmt import ScyllaManagerError, update_config_file
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
-from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS
+from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER
 from sdcm.remote.remote_file import remote_file
 from sdcm import wait, mgmt
 from sdcm.utils import alternator
@@ -65,11 +65,12 @@ from sdcm.utils.decorators import retrying, log_run_info
 from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, BUILD_ID_RE, get_gemini_version
-from sdcm.sct_events import Severity, CoreDumpEvent, DatabaseLogEvent, \
-    ClusterHealthValidatorEvent, set_grafana_url, ScyllaBenchEvent, raise_event_on_failure, TestFrameworkEvent
+from sdcm.sct_events import Severity, DatabaseLogEvent, ClusterHealthValidatorEvent, set_grafana_url, \
+    ScyllaBenchEvent, raise_event_on_failure, TestFrameworkEvent
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
-from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack
+from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack, \
+    upload_archive_to_s3
 from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
@@ -4684,32 +4685,16 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         return annotations_url
 
     @log_run_info
-    def download_monitor_data(self):
-        for node in self.nodes:
-            try:
-                collector = PrometheusSnapshots(name='prometheus_snapshot')
-
-                snapshot_archive = collector.collect(node, self.logdir)
-                self.log.debug('Snapshot local path: {}'.format(snapshot_archive))
-
-                return S3Storage().upload_file(snapshot_archive, dest_dir=Setup.test_id())
-            except Exception as details:  # pylint: disable=broad-except
-                self.log.error('Error downloading prometheus data dir: %s', str(details))
-                return ""
-
-    def get_prometheus_snapshot(self, node):
-        collector = PrometheusSnapshots(name="prometheus_data")
-
-        return collector.collect(node, self.logdir)
-
-    def download_monitoring_data_stack(self):
-
-        for node in self.nodes:
-            collector = MonitoringStack(name="monitoring-stack")
-            local_path_to_monitor_stack = collector.collect(node, self.logdir)
-            self.log.info('Path to monitoring stack {}'.format(local_path_to_monitor_stack))
-
-            return S3Storage().upload_file(local_path_to_monitor_stack, dest_dir=Setup.test_id())
+    def download_monitor_data(self) -> str:
+        if not self.nodes:
+            return ""
+        try:
+            if snapshot_archive := PrometheusSnapshots(name='prometheus_snapshot').collect(self.nodes[0], self.logdir):
+                self.log.debug("Snapshot local path: %s", snapshot_archive)
+                return upload_archive_to_s3(snapshot_archive, Setup.test_id())
+        except Exception as details:
+            self.log.error("Error downloading prometheus data dir: %s", details)
+        return ""
 
 
 class NoMonitorSet():
