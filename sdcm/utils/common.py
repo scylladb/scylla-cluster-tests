@@ -1880,41 +1880,29 @@ def get_docker_stress_image_name(tool_name=None):
     return result.strip()
 
 
-def search_database_enospc(node):
-    """
-    Search system log by executing cmd inside node, use shell tool to
-    avoid return and process huge data.
-    """
-    cmd = "sudo journalctl --no-tail --no-pager -u scylla-server.service|grep 'No space left on device'|wc -l"
-    result = node.remoter.run(cmd, verbose=True)
-    return int(result.stdout)
-
-
-def approach_enospc(node, orig_errors):
-    # get the size of free space (default unit: KB)
-    result = node.remoter.run("df -l|grep '/var/lib/scylla'")
-    free_space_size = result.stdout.split()[3]
-
-    occupy_space_size = int(int(free_space_size) * 90 / 100)
-    occupy_space_cmd = 'sudo fallocate -l {}K /var/lib/scylla/occupy_90percent.{}'.format(
-        occupy_space_size, datetime.datetime.now().strftime('%s'))
-    LOGGER.debug('Cost 90% free space on /var/lib/scylla/ by {}'.format(occupy_space_cmd))
-    try:
-        node.remoter.run(occupy_space_cmd, verbose=True)
-    except Exception as details:  # pylint: disable=broad-except
-        LOGGER.error(str(details))
-    return search_database_enospc(node) > orig_errors
-
-
 def reach_enospc_on_node(target_node):
-    # check original ENOSPC error
-    orig_errors = search_database_enospc(target_node)
+    no_space_log_reader = target_node.follow_system_log(patterns=['No space left on device'])
+
+    def approach_enospc():
+        if bool(list(no_space_log_reader)):
+            return True
+        result = target_node.remoter.run("df -al | grep '/var/lib/scylla'")
+        free_space_size = int(result.stdout.split()[3])
+        total_space = int(result.stdout.split()[1])
+        occupy_space_size = int(free_space_size * 90 / 100)
+        occupy_space_cmd = f'fallocate -l {occupy_space_size}K /var/lib/scylla/occupy_90percent.{time.time()}'
+        LOGGER.debug(f'Cost 90% free space on /var/lib/scylla/ by {occupy_space_cmd}')
+        try:
+            target_node.remoter.sudo(occupy_space_cmd, verbose=True)
+        except Exception as details:  # pylint: disable=broad-except
+            LOGGER.warning(str(details))
+        return bool(list(no_space_log_reader))
+
     wait.wait_for(func=approach_enospc,
                   timeout=300,
                   step=5,
                   text='Wait for new ENOSPC error occurs in database',
-                  node=target_node,
-                  orig_errors=orig_errors)
+                  )
 
 
 def clean_enospc_on_node(target_node, sleep_time):
@@ -1922,11 +1910,11 @@ def clean_enospc_on_node(target_node, sleep_time):
     time.sleep(sleep_time)
 
     LOGGER.debug('Delete occupy_90percent file to release space to scylla-server')
-    target_node.remoter.run('sudo rm -rf /var/lib/scylla/occupy_90percent.*')
+    target_node.remoter.sudo('rm -rf /var/lib/scylla/occupy_90percent.*')
 
     LOGGER.debug('Sleep a while before restart scylla-server')
     time.sleep(sleep_time / 2)
-    target_node.remoter.run('sudo systemctl restart scylla-server.service')
+    target_node.restart_scylla_server()
     target_node.wait_db_up()
 
 
