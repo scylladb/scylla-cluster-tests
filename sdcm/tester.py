@@ -2123,13 +2123,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             node.remoter.run('sudo fstrim -v /var/lib/scylla')
 
     @silence()
-    def collect_logs(self):
-        do_collect = self.params.get('collect_logs', False)
-        if not do_collect:
+    def collect_logs(self) -> None:
+        if not self.params.get("collect_logs"):
             self.log.warning("Collect logs is disabled")
             return
 
-        self.log.info('Start collect logs...')
+        self.log.info("Start collect logs...")
         logs_dict = {"db_cluster_log": "",
                      "loader_log": "",
                      "monitoring_log": "",
@@ -2137,46 +2136,41 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                      "monitoring_stack": ""}
         storage_dir = os.path.join(self.logdir, "collected_logs")
         os.makedirs(storage_dir, exist_ok=True)
+        self.log.info("Storage dir is %s", storage_dir)
 
-        if not os.path.exists(storage_dir):
-            os.makedirs(storage_dir)
+        clusters = ({"name": "db_cluster",
+                     "nodes": self.db_cluster and self.db_cluster.nodes,
+                     "collector": ScyllaLogCollector,
+                     "logname": "db_cluster_log", },
+                    {"name": "loaders",
+                     "nodes": self.loaders and self.loaders.nodes,
+                     "collector": LoaderLogCollector,
+                     "logname": "loader_log", },
+                    {"name": "monitors",
+                     "nodes": self.monitors and self.monitors.nodes,
+                     "collector": MonitorLogCollector,
+                     "logname": "monitoring_log", },
+                    {"name": "k8s_cluster",
+                     "nodes": getattr(self, "k8s_cluster", None) and self.k8s_cluster.nodes,
+                     "collector": MinikubeLogCollector,
+                     "logname": "k8s_minikube_log", }, )
 
-        self.log.info("Storage dir is {}".format(storage_dir))
-        if self.db_cluster:
-            if hasattr(self.db_cluster, 'k8s_cluster'):
-                with silence(parent=self, name="Collect and publish minikube cluster logs"):
-                    minikube_log_collector = MinikubeLogCollector(
-                        self.db_cluster.k8s_cluster.nodes, Setup.test_id(), storage_dir, params=self.params)
-                    s3_link = minikube_log_collector.collect_logs(self.logdir)
+        for cluster in clusters:
+            if not cluster["nodes"]:
+                continue
+            with silence(parent=self, name=f"Collect and publish {cluster['name']} logs"):
+                collector = cluster["collector"](cluster["nodes"], Setup.test_id(), storage_dir, self.params)
+                if s3_link := collector.collect_logs(self.logdir):
                     self.log.info(s3_link)
-                    logs_dict["k8s_minikube_log"] = s3_link
-            with silence(parent=self, name="Collect and publish db cluster logs"):
-                db_log_collector = ScyllaLogCollector(
-                    self.db_cluster.nodes, Setup.test_id(), storage_dir, params=self.params)
-                s3_link = db_log_collector.collect_logs(self.logdir)
-                self.log.info(s3_link)
-                logs_dict["db_cluster_log"] = s3_link
-        if self.loaders:
-            with silence(parent=self, name="Collect and publish loaders cluster logs"):
-                loader_log_collector = LoaderLogCollector(
-                    self.loaders.nodes, Setup.test_id(), storage_dir, params=self.params)
-                s3_link = loader_log_collector.collect_logs(self.logdir)
-                self.log.info(s3_link)
-                logs_dict["loader_log"] = s3_link
-        if self.monitors.nodes:
-            with silence(parent=self, name="Collect and publish monitor cluster logs"):
-                monitor_log_collector = MonitorLogCollector(
-                    self.monitors.nodes, Setup.test_id(), storage_dir, params=self.params)
-                s3_link = monitor_log_collector.collect_logs(self.logdir)
-                self.log.info(s3_link)
-                logs_dict["monitoring_log"] = s3_link
+                    logs_dict[cluster["logname"]] = s3_link
+                else:
+                    self.log.warning("There are no logs for %s uploaded", cluster["name"])
 
         if self.create_stats:
             with silence(parent=self, name="Publish log links"):
-                self.update({'test_details': {'log_files': logs_dict}})
+                self.update({"test_details": {"log_files": logs_dict, }, })
 
-        self.log.info("Logs collected. Run command 'hydra investigate show-logs {}' to get links".
-                      format(Setup.test_id()))
+        self.log.info("Logs collected. Run command `hydra investigate show-logs %s' to get links", Setup.test_id())
 
     @silence()
     def get_test_failures(self):
