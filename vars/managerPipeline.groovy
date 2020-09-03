@@ -57,11 +57,11 @@ def call(Map pipelineParams) {
                    description: 'manager agent repo',
                    name: 'scylla_mgmt_agent_repo')
 
-            string(defaultValue: '',
+            string(defaultValue: "${pipelineParams.get('target_scylla_mgmt_server_repo', '')}",
                    description: 'Link to the repository of the manager that will be used as a target of the manager server in the manager upgrade test',
                    name: 'target_scylla_mgmt_server_repo')
 
-            string(defaultValue: '',
+            string(defaultValue: "${pipelineParams.get('target_scylla_mgmt_agent_repo', '')}",
                    description: 'Link to the repository of the manager that will be used as a target of the manager agents in the manager upgrade test',
                    name: 'target_scylla_mgmt_agent_repo')
 
