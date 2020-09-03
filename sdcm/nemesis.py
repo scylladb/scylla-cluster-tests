@@ -2751,6 +2751,7 @@ class SnapshotOperations(Nemesis):
 
 class NodeRestartWithResharding(Nemesis):
     disruptive = True
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
