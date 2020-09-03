@@ -1770,12 +1770,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.target_node,
                 name=name,
                 start_commands=[
-                    f'sudo iptables -t filter -A INPUT -p tcp --dport 7000 {matching_rule} -j {pkt_action}',
-                    f'sudo iptables -t filter -A INPUT -p tcp --dport 7001 {matching_rule} -j {pkt_action}'
+                    f'iptables -t filter -A INPUT -p tcp --dport 7000 {matching_rule} -j {pkt_action}',
+                    f'iptables -t filter -A INPUT -p tcp --dport 7001 {matching_rule} -j {pkt_action}'
                 ],
                 cleanup_commands=[
-                    f'sudo iptables -t filter -D INPUT -p tcp --dport 7000 {matching_rule} -j {pkt_action}',
-                    f'sudo iptables -t filter -D INPUT -p tcp --dport 7001 {matching_rule} -j {pkt_action}'
+                    f'iptables -t filter -D INPUT -p tcp --dport 7000 {matching_rule} -j {pkt_action}',
+                    f'iptables -t filter -D INPUT -p tcp --dport 7001 {matching_rule} -j {pkt_action}'
                 ],
                 wait_time=wait_time
             )
@@ -1793,8 +1793,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return self._run_commands_wait_and_cleanup(
             self.target_node,
             name=name,
-            start_commands=[f'sudo iptables -t filter -A INPUT -p tcp --dport 9100 {matching_rule} -j {pkt_action}'],
-            cleanup_commands=[f'sudo iptables -t filter -D INPUT -p tcp --dport 9100 {matching_rule} -j {pkt_action}'],
+            start_commands=[f'iptables -t filter -A INPUT -p tcp --dport 9100 {matching_rule} -j {pkt_action}'],
+            cleanup_commands=[f'iptables -t filter -D INPUT -p tcp --dport 9100 {matching_rule} -j {pkt_action}'],
             wait_time=wait_time
         )
 
@@ -1811,8 +1811,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return self._run_commands_wait_and_cleanup(
             self.target_node,
             name=name,
-            start_commands=[f'sudo iptables -t filter -A INPUT -p tcp --dport 9160 {matching_rule} -j {pkt_action}'],
-            cleanup_commands=[f'sudo iptables -t filter -D INPUT -p tcp --dport 9160 {matching_rule} -j {pkt_action}'],
+            start_commands=[f'iptables -t filter -A INPUT -p tcp --dport 9160 {matching_rule} -j {pkt_action}'],
+            cleanup_commands=[f'iptables -t filter -D INPUT -p tcp --dport 9160 {matching_rule} -j {pkt_action}'],
             wait_time=wait_time
         )
 
@@ -1887,7 +1887,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             cleanup_commands = []
         for cmd_num, cmd in enumerate(start_commands):
             try:
-                node.remoter.run(cmd)
+                node.remoter.sudo(cmd)
                 self.log.debug(f"{name}: executed: {cmd}")
                 cmd_executed[cmd_num] = True
                 if wait_time:
@@ -1901,7 +1901,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             return
         for cmd_num, cmd in enumerate(cleanup_commands):
             try:
-                node.remoter.run(cmd)
+                node.remoter.sudo(cmd)
             except Exception as exc:  # pylint: disable=broad-except
                 self.log.debug(f"{name}: failed to execute cleanup command "
                                f"{cmd} on node {node} due to the following error: {str(exc)}")
@@ -2789,6 +2789,7 @@ class BlockNetworkMonkey(Nemesis):
 #     disruptive = True
 #     networking = True
 #     run_with_gemini = False
+#     kubernetes = True
 #
 #     @log_time_elapsed_and_status
 #     def disrupt(self):
@@ -2799,6 +2800,7 @@ class RejectNodeExporterNetworkMonkey(Nemesis):
     disruptive = True
     networking = True
     run_with_gemini = False
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2809,6 +2811,7 @@ class RejectThriftNetworkMonkey(Nemesis):
     disruptive = True
     networking = True
     run_with_gemini = False
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
