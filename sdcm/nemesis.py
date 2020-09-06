@@ -27,8 +27,9 @@ import re
 import traceback
 import json
 
+
 from typing import List, Optional, TypedDict, Type
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict, defaultdict, Counter
 from functools import wraps, partial
 
 from invoke import UnexpectedExit
@@ -1474,8 +1475,79 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.tester.verify_no_drops_and_errors(starting_from=start_time)
 
     def disrupt_snapshot_operations(self):
+        """
+        Extend this nemesis to run 'nodetool snapshot' more options including multiple tables.
+        Random choose between:
+        - create snapshot of all keyspaces
+        - create snapshot of one keyspace
+        - create snapshot of few keyspaces
+        - create snapshot of few tables, including MVs
+        """
+        def _full_snapshot():
+            self.log.info("Take all keyspaces snapshot")
+            return 'snapshot'
+
+        def _ks_snapshot(one_ks):
+            self.log.info(f"Take {'one keyspace' if one_ks else 'few keyspaces'} snapshot")
+            # Prefer to take snapshot of test keyspace. Try to find it
+            ks_cf = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
+            if not ks_cf:
+                # If test table wasn't found - take system keyspace snapshot
+                ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node)
+
+            if one_ks:
+                keyspace_table = random.choice(ks_cf)
+                keyspace, _ = keyspace_table.split('.')
+            else:
+                keyspaces = list(set([ks.split('.')[0] for ks in ks_cf]))
+                if len(keyspaces) == 1:
+                    ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node)
+                    keyspaces = list(set([ks.split('.')[0] for ks in ks_cf]))
+                keyspace = ','.join(keyspaces)
+
+            return f'snapshot -kc {keyspace}'
+
+        def _few_tables():
+            def get_ks_with_few_tables(keyspace_table):
+                ks_occurrences = Counter([ks.split('.')[0] for ks in keyspace_table])
+                repeated_ks = [ks for ks, count in ks_occurrences.items() if count > 1]
+                return repeated_ks
+
+            self.log.info("Take few tables snapshot")
+            # Prefer to take snapshot of test table. Try to find it
+            ks_cf = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
+
+            if not ks_cf or len(ks_cf) == 1:
+                # If test table wasn't found - take system table snapshot
+                ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node)
+
+            ks_with_few_tables = get_ks_with_few_tables(ks_cf)
+            if not ks_with_few_tables:
+                any_ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node)
+                ks_with_few_tables = get_ks_with_few_tables(any_ks_cf)
+
+            if not ks_with_few_tables:
+                self.log.warning('Keyspace with few tables has not been found')
+                return _full_snapshot()
+
+            selected_keyspace = random.choice(ks_with_few_tables)
+            tables = ','.join([k_c.split('.')[1] for k_c in ks_cf if k_c.startswith(f"{selected_keyspace}.")])
+
+            return f'snapshot {selected_keyspace} -cf {tables}'
+
         self._set_current_disruption('SnapshotOperations')
-        result = self.target_node.run_nodetool('snapshot')
+        functions_map = [(_few_tables,), (_full_snapshot,), (_ks_snapshot, True),  (_ks_snapshot, False)]
+        snapshot_option = random.choice(functions_map)
+
+        try:
+            nodetool_cmd = snapshot_option[0]() if len(snapshot_option) == 1 else snapshot_option[0](snapshot_option[1])
+            if not nodetool_cmd:
+                raise ValueError(f"Failed to get nodetool command.")
+        except Exception as exc:  # pylint: disable=broad-except
+            raise ValueError(f"Failed to get nodetool command. Error: {exc}")
+
+        self.log.debug(f'Take snapshot with command: {nodetool_cmd}')
+        result = self.target_node.run_nodetool(nodetool_cmd)
         self.log.debug(result)
         snapshot_name = re.findall(r'(\d+)', result.stdout, re.MULTILINE)[0]
         result = self.target_node.run_nodetool('listsnapshots')

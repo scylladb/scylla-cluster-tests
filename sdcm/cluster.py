@@ -2886,6 +2886,13 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
     def get_non_system_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments
                                   filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True) -> List[str]:
+        return self.get_any_ks_cf_list(db_node, filter_out_table_with_counter=filter_out_table_with_counter,
+                                       filter_out_mv=filter_out_mv, filter_empty_tables=filter_empty_tables,
+                                       filter_out_system=True)
+
+    def get_any_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments
+                           filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
+                           filter_out_system=False) -> List[str]:
         regular_column_names = ["keyspace_name", "table_name"]
         materialized_view_column_names = ["keyspace_name", "view_name"]
         regular_table_names, materialized_view_table_names = set(), set()
@@ -2906,13 +2913,27 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                 is_valid_table = True
                 table_name = f"{getattr(row, column_names[0])}.{getattr(row, column_names[1])}"
 
-                if getattr(row, column_names[0]).startswith(("system", "alternator_usertable")):
+                if filter_out_system and getattr(row, column_names[0]).startswith(("system", "alternator_usertable")):
                     is_valid_table = False
                 elif is_column_type and (filter_out_table_with_counter and "counter" in row.type):
                     is_valid_table = False
-                elif is_column_type and (filter_empty_tables and not cql_session.execute(
-                        f"SELECT * FROM {table_name} LIMIT 1").current_rows):
-                    is_valid_table = False
+                elif is_column_type and filter_empty_tables:
+                    current_rows = 0
+                    # Scylls issue https://github.com/scylladb/scylla/issues/7186
+                    # Problem to read from system_schema.dropped_columns, column "dropped_time":
+                    # cassandra.DriverException: Failed decoding result column "dropped_time" of type timestamp:
+                    # date value out of range
+                    if table_name == 'system_schema.dropped_columns':
+                        continue
+
+                    try:
+                        current_rows = cql_session.execute(f"SELECT * FROM {table_name} LIMIT 1").current_rows
+                    except Exception as exc:  # pylint: disable=broad-except
+                        self.log.warning(f'Failed to get rows from {table_name} table. Error: {exc}')
+
+                    if not current_rows:
+                        is_valid_table = False
+
                 if is_valid_table:
                     result.add(table_name)
             return result
