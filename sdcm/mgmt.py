@@ -465,8 +465,9 @@ class ManagerCluster(ScyllaManagerBase):
         LOGGER.debug("Created task id is: {}".format(task_id))
         return BackupTask(task_id=task_id, cluster_id=self.id, scylla_manager=self.manager_node)
 
-    def create_repair_task(self, node=None, dc_list=None, token_ranges=None,  # pylint: disable=too-many-arguments
-                           keyspace=None, with_hosts=None, interval=None, num_retries=None, fail_fast=None):
+    def create_repair_task(self, dc_list=None,  # pylint: disable=too-many-arguments
+                           keyspace=None, interval=None, num_retries=None, fail_fast=None,
+                           intensity=None):
         # the interval string:
         # Amount of time after which a successfully completed task would be run again. Supported time units include:
         #
@@ -475,24 +476,20 @@ class ManagerCluster(ScyllaManagerBase):
         # m - minutes,
         # s - seconds.
         cmd = "repair -c {}".format(self.id)
-        if node is not None:
-            cmd += " --host {} ".format(node.address())
         if dc_list is not None:
             dc_names = ','.join(dc_list)
             cmd += " --dc {} ".format(dc_names)
-        if token_ranges is not None:
-            cmd += " --token-ranges {} ".format(token_ranges)
         if keyspace is not None:
             cmd += " --keyspace {} ".format(keyspace)
-        if with_hosts is not None:
-            host_addresses = ','.join([host.address() for host in with_hosts])
-            cmd += " --with-hosts {} ".format(host_addresses)
         if interval is not None:
             cmd += " --interval {}".format(interval)
         if num_retries is not None:
             cmd += " --num-retries {}".format(num_retries)
         if fail_fast is not None:
             cmd += " --fail-fast"
+        if intensity is not None:
+            cmd += f" --intensity {intensity}"
+
         res = self.sctool.run(cmd=cmd, parse_table_res=False)
         if not res:
             raise ScyllaManagerError("Unknown failure for sctool {} command".format(cmd))
