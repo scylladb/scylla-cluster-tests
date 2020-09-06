@@ -259,8 +259,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @classmethod
     def _get_subclasses(cls, **flags) -> List[Type['Nemesis']]:
-        return cls._get_subclasses_from_list(Nemesis.__subclasses__(), **flags) + \
-            cls._get_subclasses_from_list(RELATIVE_NEMESIS_SUBCLASS_LIST, **flags)
+        tmp = Nemesis.__subclasses__()
+        subclasses = []
+        while tmp:
+            for nemesis in tmp.copy():
+                subclasses.append(nemesis)
+                tmp.remove(nemesis)
+                tmp.extend(nemesis.__subclasses__())
+        return cls._get_subclasses_from_list(subclasses, **flags)
 
     @staticmethod
     def _get_subclasses_from_list(
@@ -2950,6 +2956,20 @@ class TerminateAndRemoveNodeMonkey(Nemesis):
     def disrupt(self):
         self.disrupt_remove_node_then_add_node()
 
+
+class ScyllaOperatorGrowShrinkClusterNemesis(GrowShrinkClusterNemesis):
+    kubernetes = True
+
+    def set_target_node(self):
+        self.target_node = self.cluster.nodes[-1]  # can withdraw last node only
+        self.set_current_running_nemesis(node=self.target_node)
+        self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_grow_shrink_cluster()
+
+
 # Disable unstable streaming err nemesises
 #
 # class DecommissionStreamingErrMonkey(Nemesis):
@@ -2978,9 +2998,6 @@ class TerminateAndRemoveNodeMonkey(Nemesis):
 #     def disrupt(self):
 #         self.disrupt_repair_streaming_err()
 
-
-RELATIVE_NEMESIS_SUBCLASS_LIST = [NotSpotNemesis]
-
 DEPRECATED_LIST_OF_NEMESISES = [UpgradeNemesis, UpgradeNemesisOneNode, RollbackNemesis]
 
 COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,
@@ -3007,12 +3024,3 @@ class MemoryStressMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_memory_stress()
-
-
-class ScyllaOperatorGrowShrinkClusterNemesis(GrowShrinkClusterNemesis):
-    kubernetes = True
-
-    def set_target_node(self):
-        self.target_node = self.cluster.nodes[-1]  # can withdraw last node only
-        self.set_current_running_nemesis(node=self.target_node)
-        self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
