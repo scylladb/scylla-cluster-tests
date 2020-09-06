@@ -202,7 +202,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.result = None
         self._results = []
         self.status = "RUNNING"
-        self.start_time = time.time()
         self._init_params()
         reuse_cluster_id = self.params.get('reuse_cluster', default=False)
         if reuse_cluster_id:
@@ -258,10 +257,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.scylla_dir = SCYLLA_DIR
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
         self._logs = {}
-        self.timeout_thread = self._init_test_timeout_thread()
         self.email_reporter = build_reporter(self.__class__.__name__,
                                              self.params.get('email_recipients', default=()),
                                              self.logdir)
+        self.start_time = time.time()
 
         self.localhost = self._init_localhost()
         if self.params.get("logs_transport") == 'rsyslog':
@@ -272,26 +271,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         time.sleep(0.5)
         InfoEvent('TEST_START test_id=%s' % Setup.test_id())
 
-    def _init_test_timeout_thread(self) -> threading.Timer:
-        start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
-
-        def kill_the_test():
-            try:
-                raise RuntimeError(
-                    f"Test started at {start_time} has reached timeout ({self.test_duration} minutes)"
-                )
-            except:  # pylint: disable=bare-except
-                self.kill_test(sys.exc_info())
-        th = threading.Timer(60 * int(self.test_duration), kill_the_test)
-        th.start()
-        return th
-
     def _init_localhost(self):
         return LocalHost(user_prefix=self.params.get("user_prefix", None), test_id=Setup.test_id())
 
     def _init_params(self):
         self.params = SCTConfiguration()
-        self.params.log_config()
         self.params.verify_configuration()
         self.params.check_required_files()
 
@@ -324,7 +308,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def test_duration(self):
         return self._duration
 
-    def get_duration(self, duration: int):
+    def get_duration(self, duration):
         """Calculate duration based on test_duration
 
         Calculate duration for stress threads
@@ -374,11 +358,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if summary.get('ERROR', 0) or summary.get('CRITICAL', 0):
             return 'FAILED'
         return 'SUCCESS'
-
-    def kill_test(self, backtrace_with_reason):
-        test_pid = os.getpid()
-        self.result.addFailure(Setup.tester_obj(), backtrace_with_reason)
-        os.kill(test_pid, signal.SIGUSR2)
 
     @teardown_on_exception
     @log_run_info
@@ -1764,7 +1743,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         with silence(parent=self, name='Sending test end event'):
             InfoEvent('TEST_END')
         self.log.info('TearDown is starting...')
-        self.stop_timeout_thread()
         self.stop_event_analyzer()
         self.stop_resources()
         self.get_test_failures()
@@ -1814,10 +1792,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     @silence()
     def stop_event_analyzer(self):  # pylint: disable=no-self-use
         stop_events_analyzer()
-
-    @silence()
-    def stop_timeout_thread(self):
-        self.timeout_thread.cancel()
 
     @silence()
     def collect_sct_logs(self):

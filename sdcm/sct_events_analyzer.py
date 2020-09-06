@@ -1,5 +1,7 @@
+import os
 import sys
 import threading
+import signal
 import logging
 
 from sdcm.sct_events import EVENTS_PROCESSES, Severity, raise_event_on_failure
@@ -47,8 +49,10 @@ class EventsAnalyzer(threading.Thread):
         self.join(timeout)
 
     def kill_test(self, backtrace_with_reason):
-        self.terminate()
         if not Setup.tester_obj():
             LOGGER.error("no test was register using 'Setup.set_tester_obj()', not killing")
             return
-        Setup.tester_obj().kill_test(backtrace_with_reason)
+        test_pid = os.getpid()
+        Setup.tester_obj().result.addFailure(Setup.tester_obj(), backtrace_with_reason)
+        os.kill(test_pid, signal.SIGUSR2)
+        self.terminate()

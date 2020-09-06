@@ -1011,7 +1011,7 @@ class EventsFileLogger(multiprocessing.Process):  # pylint: disable=too-many-ins
 EVENTS_PROCESSES = dict()
 
 
-def start_events_device(log_dir):
+def start_events_device(log_dir, timeout=5):  # pylint: disable=redefined-outer-name
     from sdcm.utils.grafana import GrafanaEventAggragator, GrafanaAnnotator
     from sdcm.sct_events_analyzer import EventsAnalyzer
 
