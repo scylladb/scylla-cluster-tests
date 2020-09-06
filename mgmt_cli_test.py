@@ -15,6 +15,8 @@
 
 import os
 import time
+import random
+import re
 from random import randint
 from invoke import exceptions
 
@@ -23,6 +25,7 @@ from sdcm.group_common_events import ignore_no_space_errors
 from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus, TaskStatus, ScyllaManagerError, ScyllaManagerTool
 from sdcm.nemesis import MgmtRepair, DbEventsFilter
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
+from sdcm.utils.decorators import retrying
 from sdcm.tester import ClusterTester
 
 
@@ -119,8 +122,8 @@ class BackupFunctionsMixIn:
 
     def _generate_load(self):
         self.log.info('Starting c-s write workload for 1m')
-        stress_cmd = self.params.get('stress_cmd')
-        stress_thread = self.run_stress_thread(stress_cmd=stress_cmd, duration=5)
+        stress_cmd = self.params.get('prepare_write_cmd')
+        stress_thread = self.run_stress_thread(stress_cmd=stress_cmd)
         self.log.info('Sleeping for 15s to let cassandra-stress run...')
         time.sleep(15)
         return stress_thread
@@ -143,6 +146,26 @@ class BackupFunctionsMixIn:
             self.region = self.params.get('gce_datacenter')
             self.bucket_name = f"gcs:{self.params.get('backup_bucket_location')}"
         self.is_cred_file_configured = True
+
+    def generate_background_read_load(self):
+        self.log.info('Starting c-s read')
+        stress_cmd = self.params.get('stress_read_cmd')
+        stress_thread = self.run_stress_thread(stress_cmd=stress_cmd)
+        self.log.info('Sleeping for 15s to let cassandra-stress run...')
+        time.sleep(15)
+        return stress_thread
+
+
+class NoFilesFoundToDestroy(Exception):
+    pass
+
+
+class NoKeyspaceFound(Exception):
+    pass
+
+
+class FilesNotCorrupted(Exception):
+    pass
 
 
 # pylint: disable=too-many-public-methods
@@ -218,16 +241,16 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         4) test_client_encryption
         :return:
         """
-        with self.subTest('STEP 1: Basic Backup Test'):
-            self.test_basic_backup()
-        with self.subTest('STEP 2: Repair Multiple Keyspace Types'):
-            self.test_repair_multiple_keyspace_types()
-        with self.subTest('STEP 3: Mgmt Cluster CRUD'):
-            self.test_mgmt_cluster_crud()
-        with self.subTest('STEP 4: Mgmt cluster Health Check'):
-            self.test_mgmt_cluster_healthcheck()
-        with self.subTest('STEP 5: Client Encryption'):
-            self.test_client_encryption()
+        self.generate_load_and_wait_for_results()
+        stress_read_thread = self.generate_background_read_load()
+        time.sleep(300)  # waiting for the compactions to end
+        # TODO: use a wait function instead of sleep
+        for node in self.db_cluster.nodes:
+            node.run_nodetool("flush")
+        with self.subTest('STEP 1: test_multiple_intensity'):
+            self.test_multiple_intensity()
+        load_results = stress_read_thread.get_results()
+        self.log.info(f'load={load_results}')
 
     def get_email_data(self):
         self.log.info("Prepare data for email")
@@ -538,3 +561,49 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             finally:
                 if has_enospc_been_reached:
                     clean_enospc_on_node(target_node=target_node, sleep_time=30)
+
+    def _delete_keyspace_directory(self, db_node, keyspace_name):
+        # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
+        db_node.stop_scylla_server(verify_up=False, verify_down=True)
+
+        try:
+            directoy_path = f"/var/lib/scylla/data/{keyspace_name}"
+            directory_size_result = db_node.remoter.sudo(f"du -h --max-depth=0 {directoy_path}")
+            result = db_node.remoter.sudo(f'rm -rf {directoy_path}')
+            if result.stderr:
+                raise FilesNotCorrupted('Files were not corrupted. CorruptThenRepair nemesis can\'t be run. '
+                                        'Error: {}'.format(result))
+            if directory_size_result.stdout:
+                directory_size = directory_size_result.stdout[:directory_size_result.stdout.find("\t")]
+                self.log.debug(f"Removed the directory of keyspace {keyspace_name} from node "
+                               f"{db_node}\nThe size of the directory is {directory_size}")
+
+        finally:
+            db_node.start_scylla_server(verify_up=True, verify_down=False)
+
+    def test_multiple_intensity(self):
+        self.log.info('starting test_multiple_intensity')
+        if not self.is_cred_file_configured:
+            self.update_config_file()
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_intensity', db_cluster=self.db_cluster,
+                                               auth_token=self.monitors.mgmt_auth_token)
+        intensity_list = [1/3, 3]
+        target_node = self.db_cluster.nodes[2]
+
+        self._delete_keyspace_directory(db_node=target_node, keyspace_name="keyspace1")
+
+        self.log.debug(f"Starting a repair with no intensity")
+        base_repair_task = mgr_cluster.create_repair_task()
+        base_repair_task.wait_and_get_final_status(step=30)
+        assert base_repair_task.status == TaskStatus.DONE, "The base repair task did not end in the expected time"
+        self.log.debug(f"The base repair, with no intensity argument, took {str(base_repair_task.duration)}")
+
+        for intensity_level in intensity_list:
+            self._delete_keyspace_directory(db_node=target_node, keyspace_name="keyspace1")
+
+            self.log.debug(f"Starting a repair with {intensity_level} intensity")
+            repair_task = mgr_cluster.create_repair_task(intensity=intensity_level)
+            repair_task.wait_and_get_final_status(step=30)
+            self.log.debug(f"repair with {intensity_level} intensity took {str(repair_task.duration)}")
+        self.log.info('finishing test_multiple_intensity')

@@ -17,7 +17,7 @@ managerPipeline(
     scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo',
     scylla_version: 'master:latest',
 
-    timeout: [time: 120, unit: 'MINUTES'],
+    timeout: [time: 480, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
     post_behavior_monitor_nodes: 'keep-on-failure'

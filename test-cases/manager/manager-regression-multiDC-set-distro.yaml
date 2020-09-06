@@ -1,12 +1,13 @@
-test_duration: 120
+test_duration: 480
 
-stress_cmd: "cassandra-stress write cl=QUORUM n=1200300 -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=2,us-west-2scylla_node_west=1)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=400200300..600200300"
+prepare_write_cmd: "cassandra-stress write cl=QUORUM n=103200300 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=400200300..600200300 -log interval=5"
+stress_read_cmd: "cassandra-stress read cl=QUORUM duration=240m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=400200300..600200300 -log interval=5 -errors ignore"
 
 instance_type_db: 'i3.large'
 instance_type_loader: 'c5.large'
 
-region_name: 'us-east-1 us-west-2'
-n_db_nodes: '2 1'
+region_name: 'us-east-1'
+n_db_nodes: 3
 n_loaders: 1
 n_monitor_nodes: 1
 

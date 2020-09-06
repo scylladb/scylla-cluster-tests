@@ -302,6 +302,20 @@ class ManagerTask(ScyllaManagerBase):
         relevant_key = [key for key in parsed_progress_table.keys() if parsed_progress_table[key]][0]
         return parsed_progress_table[relevant_key]
 
+    @property
+    def duration(self):
+        if self.status in [TaskStatus.NEW, TaskStatus.STARTING]:
+            return duration_to_timedelta(duration_string="0")
+        cmd = "task progress {} -c {}".format(self.id, self.cluster_id)
+        res = self.sctool.run(cmd=cmd)
+        duration_string = "0"
+        for task_property in res:
+            if task_property[0].startswith("Duration"):
+                duration_string = task_property[0].split(':')[1]
+                break
+        duration_timedelta = duration_to_timedelta(duration_string=duration_string)
+        return duration_timedelta
+
     def wait_for_task_done_status(self, timeout=10800):
         start_time = time.time()
         while start_time + timeout > time.time():
@@ -349,6 +363,22 @@ class ManagerTask(ScyllaManagerBase):
         if not res:
             raise ScyllaManagerError("Unexpected result on waiting for task {} status".format(self.id))
         return self.status
+
+
+def duration_to_timedelta(duration_string):
+    total_seconds = 0
+    if "d" in duration_string:
+        total_seconds += int(duration_string[:duration_string.find('d')]) * 86400
+        duration_string = duration_string[duration_string.find('d') + 1:]
+    if "h" in duration_string:
+        total_seconds += int(duration_string[:duration_string.find('h')]) * 3600
+        duration_string = duration_string[duration_string.find('h') + 1:]
+    if "m" in duration_string:
+        total_seconds += int(duration_string[:duration_string.find('m')]) * 60
+        duration_string = duration_string[duration_string.find('m') + 1:]
+    if "s" in duration_string:
+        total_seconds += int(duration_string[:duration_string.find('s')])
+    return datetime.timedelta(seconds=total_seconds)
 
 
 class RepairTask(ManagerTask):
