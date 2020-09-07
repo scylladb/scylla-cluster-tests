@@ -134,12 +134,16 @@ class KubernetesCmdRunner(CommandRunner):
         watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
 
         # TODO: This should be removed than sudo calls will be done in more organized way.
-        if cmd.startswith("sudo "):
+        tmp = cmd.split(maxsplit=3)
+        if tmp[0] == 'sudo':
             deprecation("Using `sudo' in cmd string is deprecated.  Use `remoter.sudo()' instead.")
             frame = inspect.stack()[1]
             self.log.error("Cut off `sudo' from the cmd string: %s (%s:%s: %s)",
                            cmd, frame.filename, frame.lineno, frame.code_context[0].rstrip())
-            cmd = cmd[5:]
+            if tmp[1] == '-u':
+                cmd = tmp[3]
+            else:
+                cmd = cmd[cmd.find('sudo') + 5:]
 
         @retrying(n=retry or 1)
         def _run():
