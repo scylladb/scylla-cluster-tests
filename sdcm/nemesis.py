@@ -654,15 +654,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             remote_get_file(node.remoter, sstable_url, sstable_file,
                             hash_expected=sstable_md5, retries=2,
                             user_agent=creds['user_agent'])
-            result = node.remoter.run("sudo ls -t /var/lib/scylla/data/keyspace1/")
+            result = node.remoter.sudo("ls -t /var/lib/scylla/data/keyspace1/")
             upload_dir = result.stdout.split()[0]
-            node.remoter.run('sudo -u scylla tar xvfz {} -C /var/lib/scylla/data/keyspace1/{}/upload/'.format(
-                sstable_file, upload_dir))
+            if node.is_docker():
+                node.remoter.run(f'tar xvfz {sstable_file} -C /var/lib/scylla/data/keyspace1/{upload_dir}/upload/')
+            else:
+                node.remoter.sudo(
+                    f'tar xvfz {sstable_file} -C /var/lib/scylla/data/keyspace1/{upload_dir}/upload/', user='scylla')
+
             # Scylla Enterprise 2019.1 doesn't support to load schema.cql and manifest.json, let's remove them
-            node.remoter.run(
-                'sudo rm -f /var/lib/scylla/data/keyspace1/{}/upload/schema.cql'.format(upload_dir))
-            node.remoter.run(
-                'sudo rm -f /var/lib/scylla/data/keyspace1/{}/upload/manifest.json'.format(upload_dir))
+            node.remoter.sudo(f'rm -f /var/lib/scylla/data/keyspace1/{upload_dir}/upload/schema.cql')
+            node.remoter.sudo(f'rm -f /var/lib/scylla/data/keyspace1/{upload_dir}/upload/manifest.json')
             self.log.debug(f'Loading {keys_num} keys to {node.name} by refresh')
             node.run_nodetool(sub_cmd="refresh", args="-- keyspace1 standard1")
 
@@ -2421,6 +2423,7 @@ class MajorCompactionMonkey(Nemesis):
 class RefreshMonkey(Nemesis):
     disruptive = False
     run_with_gemini = False
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2430,6 +2433,7 @@ class RefreshMonkey(Nemesis):
 class RefreshBigMonkey(Nemesis):
     disruptive = False
     run_with_gemini = False
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
