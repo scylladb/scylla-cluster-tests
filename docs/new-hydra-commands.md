@@ -3,8 +3,11 @@
 # run a test will all the regular avocado params
 hydra run longevity_test.py:LongevityTest.test_custom_time --multiplex tests/sample.yaml --filter-only /run/backends/aws/us_east_1 --filter-out /run/backends/gce
 
+# show test configuration in yaml format:
+hydra output-conf internal_test_data/minimal_test_case.yaml -b gce
 
 # check if test config is o.k.
+
 hydra conf internal_test_data/minimal_test_case.yaml
 # check test config for specific backend
 hydra conf internal_test_data/minimal_test_case.yaml --backend gce
