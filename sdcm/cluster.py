@@ -1147,10 +1147,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if uuid_exists and not mark_exists:
             result = self.remoter.run('cat %s' % uuid_path, verbose=verbose)
             self.remoter.run(cmd % result.stdout.strip(), ignore_status=True)
-            if self.is_docker():  # in docker we don't have scylla user and run as root
-                self.remoter.sudo('touch %s' % mark_path, verbose=verbose)
+            if self.is_docker():
+                self.remoter.run('touch %s' % mark_path, verbose=verbose)
             else:
-                self.remoter.run('sudo -u scylla touch %s' % mark_path, verbose=verbose)
+                self.remoter.sudo('touch %s' % mark_path, verbose=verbose, user='scylla')
 
     def wait_db_up(self, verbose=True, timeout=3600):
         text = None
