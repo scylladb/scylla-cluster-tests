@@ -141,7 +141,7 @@ class CDCReplicationTest(ClusterTester):
 
         self.consistency_ok = True
 
-        no_rounds = 12 # 12 rounds, ~30 minutes each -> ~6 hours
+        no_rounds = 12  # 12 rounds, ~30 minutes each -> ~6 hours
         for rnd in range(no_rounds):
             self.log.info('Starting round {}'.format(rnd))
 
@@ -191,8 +191,8 @@ class CDCReplicationTest(ClusterTester):
                 fetch_tables=False)
             self.fail('Consistency check failed.')
 
-
     # pylint: disable=too-many-statements,too-many-branches,too-many-locals
+
     def test_replication(self, is_gemini_test: bool, mode: Mode) -> None:
         assert is_gemini_test or (mode == Mode.DELTA), "cassandra-stress doesn't work with preimage/postimage modes"
 
