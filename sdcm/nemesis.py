@@ -598,7 +598,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('MajorCompaction %s' % self.target_node)
         self.target_node.run_nodetool("compact")
 
-    def disrupt_nodetool_refresh(self, big_sstable=True, skip_download=False):
+    def disrupt_nodetool_refresh(self, big_sstable: bool):
         self._set_current_disruption('Refresh keyspace1.standard1 on {}'.format(self.target_node.name))
 
         # Checking the columns number of keyspace1.standard1
@@ -648,13 +648,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         result = self.target_node.run_nodetool(sub_cmd="cfstats", args="keyspace1.standard1")
 
         def do_refresh(node):
-            if not skip_download:
-                key_store = KeyStore()
-                creds = key_store.get_scylladb_upload_credentials()
-                # Download the sstable files from S3
-                remote_get_file(node.remoter, sstable_url, sstable_file,
-                                hash_expected=sstable_md5, retries=2,
-                                user_agent=creds['user_agent'])
+            key_store = KeyStore()
+            creds = key_store.get_scylladb_upload_credentials()
+            # Download the sstable files from S3
+            remote_get_file(node.remoter, sstable_url, sstable_file,
+                            hash_expected=sstable_md5, retries=2,
+                            user_agent=creds['user_agent'])
             result = node.remoter.run("sudo ls -t /var/lib/scylla/data/keyspace1/")
             upload_dir = result.stdout.split()[0]
             node.remoter.run('sudo -u scylla tar xvfz {} -C /var/lib/scylla/data/keyspace1/{}/upload/'.format(
@@ -2425,7 +2424,7 @@ class RefreshMonkey(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self.disrupt_nodetool_refresh()
+        self.disrupt_nodetool_refresh(big_sstable=False)
 
 
 class RefreshBigMonkey(Nemesis):
@@ -2434,7 +2433,7 @@ class RefreshBigMonkey(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self.disrupt_nodetool_refresh(big_sstable=True, skip_download=False)
+        self.disrupt_nodetool_refresh(big_sstable=True)
 
 
 class EnospcMonkey(Nemesis):
