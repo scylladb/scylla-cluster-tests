@@ -435,6 +435,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.enable_auto_bootstrap = True
 
         self.scylla_version = ''
+        self.scylla_version_detailed = ''
 
         # If node is a replacement for a dead node, store dead node private ip here
         self.replacement_node_ip = None
@@ -1450,6 +1451,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         """
         return self.remoter.run('addr2line -Cpife {0} {1}'.format(scylla_debug_file, raw_backtrace), verbose=True)
 
+    def get_scylla_build_id(self) -> Optional[str]:
+        for scylla_executable in ("/usr/bin/scylla", "/opt/scylladb/libexec/scylla", ):
+            output = self.remoter.run(f"readelf -n {scylla_executable}", ignore_status=True).stdout
+            if match := BUILD_ID_RE.search(output):
+                return match.group("build_id")
+        return None
+
     def get_scylla_debuginfo_file(self):
         """
         Lookup the scylla debug information, in various places it can be.
@@ -1457,8 +1465,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         :return the path to the scylla debug information
         :rtype str
         """
-        build_id = None
-
         # first try default location
         scylla_debug_info = '/usr/lib/debug/bin/scylla.debug'
         results = self.remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
@@ -1471,13 +1477,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return results.stdout.strip()
 
         # then look it up base on the build id
-        for scylla_executable in ['/usr/bin/scylla', '/opt/scylladb/libexec/scylla']:
-            output = self.remoter.run(f"readelf -n {scylla_executable}", ignore_status=True).stdout
-            if match := BUILD_ID_RE.search(output):
-                build_id = match.group("build_id")
-                break
-
-        if build_id:
+        if build_id := self.get_scylla_build_id():
             scylla_debug_info = "/usr/lib/debug/.build-id/{0}/{1}.debug".format(build_id[:2], build_id[2:])
             results = self.remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
             if results.exit_status == 0:
@@ -1904,26 +1904,35 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             raise ValueError(f"Unsupported Linux distribution: {self.distro}")
         return result.exit_status == 0
 
-    def get_scylla_version(self) -> Optional[str]:
-        commands = ["scylla --version", ]
+    def get_scylla_version(self) -> str:
+        self.scylla_version = self.scylla_version_detailed = ""
 
-        if self.distro.is_rhel_like:
-            commands.append(f"rpm --query --queryformat '%{{VERSION}}' {self.scylla_pkg()}")
+        cmd = "scylla --version"
+        result = self.remoter.run(cmd, ignore_status=True)
+        if result.ok:
+            self.scylla_version_detailed = result.stdout.strip()
+            if build_id := self.get_scylla_build_id():
+                self.scylla_version_detailed += f" with build-id {build_id}"
         else:
-            commands.append(f"dpkg-query --show --showformat '${{Version}}' {self.scylla_pkg()}")
-
-        for cmd in commands:
+            if self.distro.is_rhel_like:
+                cmd = f"rpm --query --queryformat '%{{VERSION}}' {self.scylla_pkg()}"
+            else:
+                cmd = f"dpkg-query --show --showformat '${{Version}}' {self.scylla_pkg()}"
             result = self.remoter.run(cmd, ignore_status=True)
-            match = result.ok and SCYLLA_VERSION_RE.match(result.stdout)
-            if match:
-                self.scylla_version = match.group().replace("~", ".")
-                self.log.info("Found ScyllaDB version: %s", self.scylla_version)
-                break
+
+        if match := result.ok and SCYLLA_VERSION_RE.match(result.stdout):
+            self.scylla_version = match.group().replace("~", ".")
+            self.log.info("Found ScyllaDB version: %s", self.scylla_version)
+        else:
             self.log.debug("Unable to get or parse ScyllaDB version using `%s':\n%s\n%s",
                            cmd, result.stdout, result.stderr)
-        else:
-            self.log.warning("All attempts to get ScyllaDB version failed. Looks like there is no ScyllaDB installed.")
-            self.scylla_version = None
+
+        if not self.scylla_version:
+            self.log.warning(
+                "All attempts to get ScyllaDB version failed. Looks like there is no ScyllaDB installed.")
+
+        if not self.scylla_version_detailed:
+            self.scylla_version_detailed = self.scylla_version
 
         return self.scylla_version
 

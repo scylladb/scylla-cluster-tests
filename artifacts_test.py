@@ -64,11 +64,8 @@ class ArtifactsTest(ClusterTester):
             scylla_packages = None
         if not scylla_packages:
             scylla_packages = ['No scylla packages are installed. Please check log files.']
-        email_data.update({"scylla_instance_type": self.params.get('instance_type_db',
-                                                                   self.params.get('gce_instance_type_db')),
-                           "scylla_node_image": node.image if node else 'Node has not been initialized',
+        email_data.update({"scylla_node_image": node.image if node else 'Node has not been initialized',
                            "scylla_packages_installed": scylla_packages,
-                           "scylla_repo": self.params.get("scylla_repo"),
-                           "scylla_version": node.scylla_version if node else 'Node has not been initialized', })
+                           "scylla_repo": self.params.get("scylla_repo"), })
 
         return email_data

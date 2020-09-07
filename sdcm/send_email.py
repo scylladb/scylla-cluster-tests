@@ -117,7 +117,10 @@ class BaseEmailReporter:
         "events_summary",
         "last_events",
         "nodes",
+        "number_of_db_nodes",
         "region_name",
+        "scylla_instance_type",
+        "scylla_version",
         "start_time",
         "subject",
         "test_id",
@@ -303,9 +306,6 @@ class ManagerUpgradeEmailReporter(BaseEmailReporter):
     _fields = (
         "manager_server_repo",
         "manager_agent_repo",
-        "scylla_version",
-        "scylla_instance_type",
-        "number_of_db_nodes",
         "target_manager_server_repo",
         "target_manager_agent_repo",
     )
@@ -316,9 +316,6 @@ class MgmtEmailReporter(BaseEmailReporter):
     _fields = (
         "manager_server_repo",
         "manager_agent_repo",
-        "scylla_version",
-        "scylla_instance_type",
-        "number_of_db_nodes",
     )
     email_template_file = "results_manager.html"
 
@@ -329,10 +326,7 @@ class LongevityEmailReporter(BaseEmailReporter):
         "grafana_snapshots",
         "nemesis_details",
         "nemesis_name",
-        "number_of_db_nodes",
         "scylla_ami_id",
-        "scylla_instance_type",
-        "scylla_version",
     )
     email_template_file = "results_longevity.html"
     last_events_body_limit_per_severity_in_attachment = 3000000
@@ -392,15 +386,12 @@ class GeminiEmailReporter(LongevityEmailReporter):
         "gemini_version",
         "nemesis_details",
         "nemesis_name",
-        "number_of_db_nodes",
         "number_of_oracle_nodes",
         "oracle_ami_id",
         "oracle_db_version",
         "oracle_instance_type",
         "results",
         "scylla_ami_id",
-        "scylla_instance_type",
-        "scylla_version",
         "status",
         "grafana_screenshots",
         "grafana_snapshots",
@@ -410,21 +401,16 @@ class GeminiEmailReporter(LongevityEmailReporter):
 
 class UpgradeEmailReporter(BaseEmailReporter):
     _fields = (
-        "number_of_db_nodes",
         "scylla_ami_id",
-        "scylla_instance_type",
-        "scylla_version",
     )
     email_template_file = "results_upgrade.html"
 
 
 class ArtifactsEmailReporter(BaseEmailReporter):
     _fields = (
-        "scylla_instance_type",
         "scylla_node_image",
         "scylla_packages_installed",
         "scylla_repo",
-        "scylla_version",
     )
     email_template_file = "results_artifacts.html"
 
@@ -446,10 +432,7 @@ class CDCReplicationReporter(LongevityEmailReporter):
         "grafana_snapshots",
         "nemesis_details",
         "nemesis_name",
-        "number_of_db_nodes",
         "scylla_ami_id",
-        "scylla_instance_type",
-        "scylla_version",
         "oracle_ami_id",
         "oracle_db_version",
         "oracle_instance_type",
