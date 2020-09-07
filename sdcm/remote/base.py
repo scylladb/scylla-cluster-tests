@@ -111,8 +111,14 @@ class CommandRunner(metaclass=ABCMeta):
              new_session: bool = False,
              log_file: Optional[str] = None,
              retry: int = 1,
-             watchers: Optional[List[StreamWatcher]] = None) -> Result:
-        return self.run(cmd=cmd if self.user == "root" else f"sudo {cmd}",
+             watchers: Optional[List[StreamWatcher]] = None,
+             user: Optional[str] = 'root') -> Result:
+        if user != self.user:
+            if user == 'root':
+                cmd = f"sudo {cmd}"
+            else:
+                cmd = f"sudo -u {user} {cmd}"
+        return self.run(cmd=cmd,
                         timeout=timeout,
                         ignore_status=ignore_status,
                         verbose=verbose,
