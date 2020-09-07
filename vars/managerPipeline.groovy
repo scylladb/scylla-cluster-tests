@@ -186,7 +186,7 @@ def call(Map pipelineParams) {
                                     export SCT_CONFIG_FILES=${test_config}
 
                                     echo "start collect logs ..."
-                                    ./docker/env/hydra.sh collect-logs --logdir "`pwd`"
+                                    ./docker/env/hydra.sh collect-logs --backend "${params.backend}" --logdir "`pwd`"
                                     echo "end collect logs"
                                     """
                                 }
