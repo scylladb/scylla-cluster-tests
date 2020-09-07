@@ -365,6 +365,21 @@ def list_repos(dist_type, dist_version):
     click.echo(tbl.get_string(title="Scylla Repos"))
 
 
+@cli.command('output-conf', help="Output test configuration readed from the file")
+@click.argument('config_files', type=str, default='')
+@click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends))
+def output_conf(config_files, backend):
+    add_file_logger()
+
+    if backend:
+        os.environ['SCT_CLUSTER_BACKEND'] = backend
+    if config_files:
+        os.environ['SCT_CONFIG_FILES'] = config_files
+    config = SCTConfiguration()
+    click.secho(config.dump_config(), fg='green')
+    sys.exit(0)
+
+
 @cli.command(help="Check test configuration file")
 @click.argument('config_file', type=str, default='')
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), default='aws')
