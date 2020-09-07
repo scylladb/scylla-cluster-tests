@@ -146,10 +146,6 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
         email_data.update({"manager_server_repo": self.params.get("scylla_mgmt_repo"),
                            "manager_agent_repo": self.params.get("scylla_mgmt_agent_repo",
                                                                  self.params.get("scylla_mgmt_repo")),
-                           "number_of_db_nodes": self.params.get('n_db_nodes'),
-                           "scylla_version": self.db_cluster.nodes[0].scylla_version if self.db_cluster else "N/A",
-                           "scylla_instance_type": self.params.get('instance_type_db',
-                                                                   self.params.get('gce_instance_type_db')),
                            "target_manager_server_repo": self.params.get('target_scylla_mgmt_server_repo'),
                            "target_manager_agent_repo": self.params.get('target_scylla_mgmt_agent_repo')})
 
