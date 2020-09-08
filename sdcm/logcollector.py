@@ -19,7 +19,7 @@ from selenium.webdriver.common.by import By
 from sdcm.utils.common import (S3Storage, list_instances_aws, list_instances_gce,
                                ParallelObject, remove_files, get_builder_by_test_id,
                                get_testrun_dir, search_test_id_in_latest, filter_aws_instances_by_type,
-                               filter_gce_instances_by_type, get_sct_root_path)
+                               filter_gce_instances_by_type, get_sct_root_path, normalize_ipv6_url)
 from sdcm.utils.decorators import retrying
 from sdcm.utils.get_username import get_username
 from sdcm.db_stats import PrometheusDBStats
@@ -298,7 +298,7 @@ class MonitoringStack(BaseMonitoringEntity):
             return ""
         archive_name = "monitoring_data_stack_{monitor_branch}_{monitor_version}.tar.gz".format(**locals())
 
-        annotations_json = self.get_grafana_annotations(node.grafana_address)
+        annotations_json = self.get_grafana_annotations(normalize_ipv6_url(node.grafana_address))
         tmp_dir = tempfile.mkdtemp()
         with io.open(os.path.join(tmp_dir, 'annotations.json'), 'w', encoding='utf-8') as f:  # pylint: disable=invalid-name
             f.write(annotations_json)
@@ -423,7 +423,7 @@ class GrafanaScreenShot(GrafanaEntity):
             remote_browser = RemoteBrowser(node)
 
             for screenshot in self.grafana_entity_names:
-                dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=node.grafana_address,
+                dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=normalize_ipv6_url(node.grafana_address),
                                                                     uid="-".join([screenshot['name'],
                                                                                   version])
                                                                     )
@@ -434,7 +434,7 @@ class GrafanaScreenShot(GrafanaEntity):
                     version=version,
                     dashboard_name=screenshot['name'])
                 grafana_url = self.grafana_entity_url_tmpl.format(
-                    node_ip=node.grafana_address,
+                    node_ip=normalize_ipv6_url(node.grafana_address),
                     grafana_port=self.grafana_port,
                     path=path,
                     st=self.start_time)
@@ -535,7 +535,7 @@ class GrafanaSnapshot(GrafanaEntity):
             snapshots = []
             for snapshot in self.grafana_entity_names:
                 version = monitoring_version.replace('.', '-')
-                dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=node.grafana_address,
+                dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=normalize_ipv6_url(node.grafana_address),
                                                                     uid="-".join([snapshot['name'],
                                                                                   version])
                                                                     )
@@ -546,7 +546,7 @@ class GrafanaSnapshot(GrafanaEntity):
                     version=version,
                     dashboard_name=snapshot['name'])
                 grafana_url = self.grafana_entity_url_tmpl.format(
-                    node_ip=node.grafana_address,
+                    node_ip=normalize_ipv6_url(node.grafana_address),
                     grafana_port=self.grafana_port,
                     path=path,
                     st=self.start_time)
