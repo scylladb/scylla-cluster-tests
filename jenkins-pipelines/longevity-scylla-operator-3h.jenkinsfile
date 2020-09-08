@@ -7,5 +7,5 @@ operatorPipeline(
     params: params,
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: 'test-cases/scylla-operator/longevity-scylla-operator-3h.yaml',
-    timeout: [time: 220, unit: 'MINUTES']
+    timeout: [time: 250, unit: 'MINUTES']
 )
