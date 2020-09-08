@@ -18,6 +18,7 @@ import time
 import atexit
 import logging
 import contextlib
+from datetime import datetime
 from copy import deepcopy
 from typing import Optional, Union, List, Dict, Any, Literal, ContextManager
 from difflib import unified_diff
@@ -248,12 +249,16 @@ class MinikubeCluster(KubernetesCluster):
     def nodes_dest_ip(self) -> Optional[str]:
         return self.nodes[-1].ip_address
 
+    @cached_property
+    def remoter(self) -> KubernetesCmdRunner:
+        return self.nodes[-1].remoter
+
     def helm(self, *args, **kwargs):
         return KubernetesOps.helm(self, *args, **kwargs, remoter=self.nodes[-1].remoter)
 
     def docker_pull(self, image):
         LOGGER.info("Pull `%s' to Minikube' Docker environment", image)
-        self.nodes[-1].remoter.run(f"docker pull -q {image}")
+        self.remoter.run(f"docker pull -q {image}")
 
 
 class GceMinikubeCluster(MinikubeCluster, cluster_gce.GCECluster):
@@ -296,6 +301,8 @@ class GceMinikubeCluster(MinikubeCluster, cluster_gce.GCECluster):
 
 
 class BasePodContainer(cluster.BaseNode):
+    parent_cluster: 'PodCluster'
+
     def __init__(self, name: str, parent_cluster: "PodCluster", node_prefix: str = "node", node_index: int = 1,
                  base_logdir: Optional[str] = None, dc_idx: int = 0):
         self.node_index = node_index
@@ -437,6 +444,21 @@ class BasePodContainer(cluster.BaseNode):
     def restart(self):
         raise NotImplementedError("Not implemented yet")  # TODO: implement this method.
 
+    def hard_reboot(self):
+        self.parent_cluster.k8s_cluster.kubectl(f'delete pod {self.name} --now', namespace='scylla')
+
+    def soft_reboot(self):
+        # Kubernetes brings pods back to live right after it is deleted
+        self.parent_cluster.k8s_cluster.kubectl(f'delete pod {self.name} --grace-period=300', namespace='scylla')
+
+    # On kubernetes there is no stop/start, closest analog of node restart would be soft_restart
+    restart = soft_reboot
+
+    @property
+    def uptime(self):
+        # update -s from inside of docker containers shows docker host uptime
+        return datetime.fromtimestamp(int(self.remoter.run('stat -c %Y /proc/1', ignore_status=True).stdout.strip()))
+
     @contextlib.contextmanager
     def remote_scylla_yaml(self, path: str = cluster.SCYLLA_YAML_PATH) -> ContextManager:
         """Update scylla.yaml, k8s way
@@ -459,6 +481,23 @@ class BasePodContainer(cluster.BaseNode):
             diff = "".join(unified_diff(original, changed))
             LOGGER.debug("%s: scylla.yaml requires to be updated with:\n%s", self, diff)
             self.parent_cluster.scylla_yaml_update_required = True
+
+
+class MinicubePodContainer(BasePodContainer):
+    parent_cluster: 'MinikubeScyllaPodCluster'
+
+    @cached_property
+    def host_remoter(self):
+        return self.parent_cluster.k8s_cluster.remoter
+
+    @property
+    def docker_id(self):
+        return self.host_remoter.run(
+            f'docker ps --filter "label=io.kubernetes.pod.name={self.name}" '
+            '--filter "label=io.kubernetes.container.name=scylla" -q').stdout.strip()
+
+    def restart(self):
+        self.host_remoter.run(f'docker restart {self.docker_id}')
 
 
 class PodCluster(cluster.BaseCluster):
@@ -680,6 +719,17 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
 
 class MinikubeScyllaPodCluster(ScyllaPodCluster):
     k8s_cluster: MinikubeCluster
+    nodes: List[MinicubePodContainer]
+
+    def _create_node(self, node_index: int, pod_name: str) -> MinicubePodContainer:
+        node = MinicubePodContainer(
+            parent_cluster=self,
+            name=pod_name,
+            base_logdir=self.logdir,
+            node_prefix=self.node_prefix,
+            node_index=node_index)
+        node.init()
+        return node
 
     def _iptables_redirect_rules(self,
                                  dest_ip: str,
@@ -725,7 +775,7 @@ class MinikubeScyllaPodCluster(ScyllaPodCluster):
                   count: int,
                   ec2_user_data: str = "",
                   dc_idx: int = 0,
-                  enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
+                  enable_auto_bootstrap: bool = False) -> List[MinicubePodContainer]:
         new_nodes = super().add_nodes(count=count,
                                       ec2_user_data=ec2_user_data,
                                       dc_idx=dc_idx,

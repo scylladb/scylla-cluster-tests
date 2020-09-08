@@ -885,14 +885,22 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # Need to re-implement this method if the backend supports hard reboot.
         raise Exception("The backend doesn't support hard_reboot")
 
+    def soft_reboot(self):  # pylint: disable=no-self-use
+        try:
+            self.remoter.run('sudo reboot', ignore_status=True, retry=0)
+        except Exception:  # pylint: disable=broad-except
+            pass
+
+    @property
+    def uptime(self):
+        return datetime.strptime(self.remoter.run('uptime -s', ignore_status=True).stdout.strip(), '%Y-%m-%d %H:%M:%S')
+
     def reboot(self, hard=True, verify_ssh=True):
-        result = self.remoter.run('uptime -s')
-        pre_uptime = datetime.strptime(result.stdout.strip(), '%Y-%m-%d %H:%M:%S')
+        pre_uptime = self.uptime
 
         def uptime_changed():
             try:
-                result = self.remoter.run('uptime -s', ignore_status=True)
-                post_uptime = datetime.strptime(result.stdout.strip(), '%Y-%m-%d %H:%M:%S')
+                post_uptime = self.uptime
                 # In one job, I found the `uptime -s` result increased 1 second without real
                 # reboot, it might be caused by normal timedrift. So we should not treat it as
                 # reboot finish if the uptime change is very short.
@@ -922,10 +930,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.log.debug('Softly rebooting node')
             if not self.remoter.is_up(60):
                 raise RuntimeError('Target host is down')
-            try:
-                self.remoter.run('sudo reboot', ignore_status=True, retry=0)
-            except Exception:  # pylint: disable=broad-except
-                pass
+            self.soft_reboot()
 
         # wait until the reboot is executed
         wait.wait_for(func=uptime_changed, step=10, timeout=500, throw_exc=True)
