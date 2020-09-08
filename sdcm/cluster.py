@@ -38,7 +38,7 @@ from paramiko.ssh_exception import NoValidConnectionsError
 
 from sdcm.collectd import ScyllaCollectdSetup
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener
-from sdcm.mgmt import ScyllaManagerError, get_scylla_manager_tool, update_config_file
+from sdcm.mgmt import ScyllaManagerError, update_config_file
 from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunner, LOCALRUNNER, NETWORK_EXCEPTIONS
 from sdcm import wait
@@ -1326,11 +1326,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def is_manager_agent_up(self, port=None):
         port = port if port else self.MANAGER_AGENT_PORT
-        if self.is_port_used(port=port, service_name="scylla-manager-agent"):
-            # When the agent is IP, it should answer an https request of https://NODE_IP:10001/ping with status code 204
-            response = requests.get(f"https://{self.ip_address}:{port}/ping", verify=False)
-            return response.status_code == 204
-        return False
+        # When the agent is IP, it should answer an https request of https://NODE_IP:10001/ping with status code 204
+        response = requests.get(f"https://{normalize_ipv6_url(self.ip_address)}:{port}/ping", verify=False)
+        return response.status_code == 204
 
     def wait_manager_agent_up(self, verbose=True, timeout=180):
         text = None
@@ -1340,15 +1338,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def is_manager_server_up(self, port=None):
         port = port if port else self.MANAGER_SERVER_PORT
-        if self.is_port_used(port=port, service_name="scylla-manager"):
-            # When the manager has started,
-            # it should answer an http request of https://127.0.0.1:56080/ping with status code 204
-            curl_output = self.remoter.run(
-                f'''curl --write-out "%{{http_code}}\n" --silent --output /dev/null "http://127.0.0.1:{port}/ping"''',
-                ignore_status=True)
-            http_status_code = int(curl_output.stdout.strip())
-            return http_status_code == 204
-        return False
+        # When the manager has started,
+        # it should answer an http request of https://127.0.0.1:5080/ping with status code 204
+        # The port is only open locally, hence using curl instead
+        curl_output = self.remoter.run(
+            f'''curl --write-out "%{{http_code}}\n" --silent --output /dev/null "http://127.0.0.1:{port}/ping"''',
+            verbose=True, ignore_status=True)
+        http_status_code = int(curl_output.stdout.strip())
+        return http_status_code == 204
 
     def wait_manager_server_up(self, verbose=True, timeout=300):
         text = None
