@@ -11,6 +11,6 @@ cdcReplicationPipeline(
     test_name: 'cdc_replication_test.CDCReplicationTest.test_replication_gemini_postimage',
     test_config: 'test-cases/cdc/cdc-15m-replication-postimage.yaml',
 
-    timeout: [time: 100, unit: 'MINUTES'],
+    timeout: [time: 140, unit: 'MINUTES'],
     email_recipients: 'kbraun@scylladb.com,piotr@scylladb.com,alex.bykov@scylladb.com'
 )
