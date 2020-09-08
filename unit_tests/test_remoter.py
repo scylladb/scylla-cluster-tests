@@ -368,11 +368,17 @@ class TestRemoteFile(unittest.TestCase):
         class _Runner:
             sf_src = sf_dst = rf_src = rf_dst = None
             hostname = "localhost"
+            command_to_run = ""
 
             def run(self, cmd, *args, **kwargs):
+                self.command_to_run = cmd
                 if cmd == "mktemp":
                     return Result(stdout="temporary\n")
-                self.command_to_run = cmd
+                elif 'stat -c "%U:%G"' in cmd:
+                    return Result(stdout="bentsi:bentsi")
+                elif 'stat -c "%a"' in cmd:
+                    return Result(stdout="644")
+                return Result(stdout="", stderr="")
 
             def send_files(self, src: str, dst: str, *args, **kwargs) -> bool:
                 self.sf_src = src
@@ -386,12 +392,16 @@ class TestRemoteFile(unittest.TestCase):
                 self.rf_dst = dst
                 return True
 
+            def sudo(self, cmd, *_, **__):
+                return self.run(cmd)
+
         cls.remoter_cls = _Runner
 
     def test_remote_file(self):
         remoter = self.remoter_cls()
         some_file = "/some/path/some.file"
-        with remote_file(remoter=remoter, remote_path=some_file) as fobj:
+        with remote_file(remoter=remoter, remote_path=some_file,
+                         preserve_ownership=False, preserve_permissions=False) as fobj:
             fobj.write("test data")
         self.assertEqual(remoter.rf_src, some_file)
         self.assertEqual(remoter.sf_dst, "temporary")
@@ -401,3 +411,21 @@ class TestRemoteFile(unittest.TestCase):
         with open(remoter.sf_src) as fobj:
             self.assertEqual(fobj.read(), "test data")
         self.assertEqual(remoter.command_to_run, f"mv 'temporary' '{some_file}'")
+
+    def test_remote_file_preserve_ownership(self):
+        remoter = self.remoter_cls()
+        some_file = "/some/path/some.file"
+        with remote_file(remoter=remoter, remote_path=some_file,
+                         preserve_ownership=True, preserve_permissions=False) as fobj:
+            fobj.write("test data")
+            assert remoter.command_to_run == f'stat -c "%U:%G" {some_file}'
+        assert f"chown bentsi:bentsi {some_file}" == remoter.command_to_run
+
+    def test_remote_file_preserve_permissions(self):
+        remoter = self.remoter_cls()
+        some_file = "/some/path/some.file"
+        with remote_file(remoter=remoter, remote_path=some_file,
+                         preserve_ownership=False, preserve_permissions=True) as fobj:
+            fobj.write("test data")
+            assert remoter.command_to_run == f'stat -c "%a" {some_file}'
+        assert f"chmod 644 {some_file}" == remoter.command_to_run

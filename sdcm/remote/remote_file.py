@@ -28,9 +28,15 @@ def read_to_stringio(fobj):
 
 
 @contextlib.contextmanager
-def remote_file(remoter, remote_path, serializer=StringIO.getvalue, deserializer=read_to_stringio, sudo=False):
+def remote_file(remoter, remote_path, serializer=StringIO.getvalue, deserializer=read_to_stringio, sudo=False,
+                preserve_ownership=True, preserve_permissions=True):
     filename = os.path.basename(remote_path)
     local_tempfile = os.path.join(tempfile.mkdtemp(prefix='sct'), filename)
+    if preserve_ownership:
+        ownership = remoter.sudo(cmd='stat -c "%U:%G" ' + remote_path).stdout.strip()
+    if preserve_permissions:
+        permissions = remoter.sudo(cmd='stat -c "%a" ' + remote_path).stdout.strip()
+
     wait.wait_for(remoter.receive_files,
                   step=10,
                   text=f"Waiting for copying `{remote_path}' from {remoter.hostname}",
@@ -62,3 +68,8 @@ def remote_file(remoter, remote_path, serializer=StringIO.getvalue, deserializer
         remoter.sudo(remote_tempfile_move_cmd)
     else:
         remoter.run(remote_tempfile_move_cmd)
+
+    if preserve_ownership:
+        remoter.sudo(f"chown {ownership} {remote_path}")
+    if preserve_permissions:
+        remoter.sudo(f"chmod {permissions} {remote_path}")
