@@ -1,7 +1,10 @@
 import logging
 import subprocess
+from functools import cached_property
 from abc import abstractmethod, ABCMeta
 from multiprocessing import Process, Event
+from threading import Thread, Event as ThreadEvent
+
 from datetime import datetime
 from sdcm import wait
 from sdcm.sct_events import raise_event_on_failure
@@ -35,7 +38,7 @@ class SSHLoggerBase(LoggerBase):
 
     @property
     @abstractmethod
-    def _logger_cmd(self):
+    def _logger_cmd(self) -> str:
         pass
 
     def _file_exists(self, file_path):
@@ -92,7 +95,7 @@ class SSHLoggerBase(LoggerBase):
 
 class SSHScyllaSystemdLogger(SSHLoggerBase):
     @property
-    def _logger_cmd(self):
+    def _logger_cmd(self) -> str:
         return 'sudo journalctl -f --no-tail --no-pager --utc {since} ' \
                '-u scylla-ami-setup.service ' \
                '-u scylla-image-setup.service ' \
@@ -103,13 +106,13 @@ class SSHScyllaSystemdLogger(SSHLoggerBase):
 
 class SSHGeneralSystemdLogger(SSHLoggerBase):
     @property
-    def _logger_cmd(self):
+    def _logger_cmd(self) -> str:
         return 'sudo journalctl -f --no-tail --no-pager --utc {since} '
 
 
 class SSHScyllaFileLogger(SSHLoggerBase):
     @property
-    def _logger_cmd(self):
+    def _logger_cmd(self) -> str:
         return 'sudo tail -f /var/log/syslog | grep scylla'
 
     def _retrieve(self, since):
@@ -120,7 +123,7 @@ class SSHScyllaFileLogger(SSHLoggerBase):
 
 class SSHGeneralFileLogger(SSHLoggerBase):
     @property
-    def _logger_cmd(self):
+    def _logger_cmd(self) -> str:
         return 'sudo tail -f /var/log/syslog'
 
     def _retrieve(self, since):
@@ -134,61 +137,81 @@ class CommandLoggerBase(LoggerBase):
     _child_process = None
 
     def __init__(self, node, target_log_file: str):
-        self._build_logger_cmd(node, target_log_file)
         super().__init__(node, target_log_file)
-
-    @abstractmethod
-    def _build_logger_cmd(self, node, target_log_file):
-        pass
+        self._thread = Thread(target=self._thread_body, daemon=False)
+        self._termination_even = ThreadEvent()
 
     @property
-    def _logger_cmd(self):
-        return self._cached_logger_cmd
+    @abstractmethod
+    def _logger_cmd(self) -> str:
+        pass
+
+    def _thread_body(self):
+        while not self._termination_even.wait(0.1):
+            try:
+                self._child_process = subprocess.Popen(self._logger_cmd, shell=True)
+                self._child_process.wait()
+            except:  # pylint: disable=bare-except
+                pass
 
     def start(self):
-        self._child_process = subprocess.Popen(self._logger_cmd, shell=True)
+        self._termination_even.clear()
+        self._thread.start()
 
     def stop(self, timeout=None):
+        self._termination_even.set()
         if self._child_process:
             self._child_process.kill()
+        self._thread.join(timeout)
 
 
 class DockerScyllaLogger(CommandLoggerBase):
-    def _build_logger_cmd(self, node, target_log_file):
-        self._cached_logger_cmd = f'docker logs -f {node.name} 2>&1 | grep scylla >{target_log_file}'
+
+    @cached_property
+    def _logger_cmd(self) -> str:
+        return f'docker logs -f {self._node.name} 2>&1 | grep scylla >>{self._target_log_file}'
 
 
 class DockerGeneralLogger(CommandLoggerBase):
-    def _build_logger_cmd(self, node, target_log_file):
-        self._cached_logger_cmd = f'docker logs -f {node.name} >{target_log_file} 2>&1'
+
+    @cached_property
+    def _logger_cmd(self) -> str:
+        return f'docker logs -f {self._node.name} >>{self._target_log_file} 2>&1'
 
 
 class KubectlScyllaLogger(CommandLoggerBase):
-    def _build_logger_cmd(self, node, target_log_file):
-        self._cached_logger_cmd = \
-            f"kubectl -s {node.parent_cluster.k8s_cluster.k8s_server_url} -n {node.parent_cluster.namespace} " \
-            f"logs -f {node.name} -c {node.parent_cluster.container} 2>&1 | grep scylla >{target_log_file}"
+    
+    @property
+    def _logger_cmd(self) -> str:
+        pc = self._node.parent_cluster
+        return f"kubectl -s {pc.k8s_cluster.k8s_server_url} -n {pc.namespace} " \
+               f"logs -f {self._node.name} -c {pc.container} 2>&1 | grep scylla >>{self._target_log_file}"
 
 
 class KubectlGeneralLogger(CommandLoggerBase):
-    def _build_logger_cmd(self, node, target_log_file):
-        self._cached_logger_cmd = \
-            f"kubectl -s {node.parent_cluster.k8s_cluster.k8s_server_url} -n {node.parent_cluster.namespace} " \
-            f"logs -f {node.name} -c {node.parent_cluster.container} > {target_log_file} 2>&1"
+
+    @property
+    def _logger_cmd(self) -> str:
+        pc = self._node.parent_cluster
+        return f"kubectl -s {pc.k8s_cluster.k8s_server_url} -n {pc.namespace} " \
+               f"logs -f {self._node.name} -c {pc.container} >> {self._target_log_file} 2>&1"
 
 
 class CertManagerLogger(CommandLoggerBase):
-    def _build_logger_cmd(self, node, target_log_file):
-        self._cached_logger_cmd = \
-            f"kubectl -s {node.k8s_server_url} -n cert-manager " \
-            f"logs -l app.kubernetes.io/instance=cert-manager --all-containers=true -f > {target_log_file} 2>&1"
+
+    @property
+    def _logger_cmd(self) -> str:
+        return f"kubectl -s {self._node.k8s_server_url} -n cert-manager " \
+               "logs -l app.kubernetes.io/instance=cert-manager" \
+               f" --all-containers=true -f >> {self._target_log_file} 2>&1"
 
 
 class ScyllaOperatorLogger(CommandLoggerBase):
-    def _build_logger_cmd(self, node, target_log_file):
-        self._cached_logger_cmd = \
-            f"kubectl -s {node.k8s_server_url} -n scylla-operator-system  " \
-            f"logs scylla-operator-controller-manager-0 --all-containers=true -f > {target_log_file} 2>&1"
+
+    @property
+    def _logger_cmd(self) -> str:
+        return f"kubectl -s {self._node.k8s_server_url} -n scylla-operator-system  " \
+               f"logs scylla-operator-controller-manager-0 --all-containers=true -f >> {self._target_log_file} 2>&1"
 
 
 def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint: disable=too-many-return-statements
