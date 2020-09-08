@@ -14,8 +14,7 @@ instance_type_db_oracle: 'i3.large'
 n_loaders: 1
 instance_type_loader: 'c4.large'
 
-n_monitor_nodes: 0
-# instance_type_monitor: 't3.small'
+n_monitor_nodes: 1
 
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 5
