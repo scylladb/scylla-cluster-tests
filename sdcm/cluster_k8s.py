@@ -38,7 +38,7 @@ from sdcm.sct_config import sct_abs_path
 from sdcm.sct_events import TestFrameworkEvent
 from sdcm.utils.k8s import KubernetesOps, JSON_PATCH_TYPE
 from sdcm.utils.common import get_free_port, wait_for_port
-from sdcm.utils.decorators import log_run_info
+from sdcm.utils.decorators import log_run_info, timeout
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger
 
@@ -684,10 +684,10 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         if monitors := cluster.Setup.tester_obj().monitors:
             monitors.reconfigure_scylla_monitoring()
 
+    @timeout(message="Wait for pod(s) to be ready...", timeout=600)
     def wait_for_pods_readiness(self, count: Optional[int] = None):
         if count is None:
             count = len(self.nodes)
-        LOGGER.debug("Wait for %d pod(s) to be ready...", count)
         for _ in range(count):
             time.sleep(SCYLLA_POD_READINESS_DELAY)
             self.k8s_cluster.kubectl(f"wait --timeout={SCYLLA_POD_READINESS_TIMEOUT}m --all --for=condition=Ready pod",

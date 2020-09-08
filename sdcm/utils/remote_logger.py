@@ -139,7 +139,7 @@ class CommandLoggerBase(LoggerBase):
     def __init__(self, node, target_log_file: str):
         super().__init__(node, target_log_file)
         self._thread = Thread(target=self._thread_body, daemon=False)
-        self._termination_even = ThreadEvent()
+        self._termination_event = ThreadEvent()
 
     @property
     @abstractmethod
@@ -147,7 +147,7 @@ class CommandLoggerBase(LoggerBase):
         pass
 
     def _thread_body(self):
-        while not self._termination_even.wait(0.1):
+        while not self._termination_event.wait(0.1):
             try:
                 self._child_process = subprocess.Popen(self._logger_cmd, shell=True)
                 self._child_process.wait()
@@ -155,11 +155,11 @@ class CommandLoggerBase(LoggerBase):
                 pass
 
     def start(self):
-        self._termination_even.clear()
+        self._termination_event.clear()
         self._thread.start()
 
     def stop(self, timeout=None):
-        self._termination_even.set()
+        self._termination_event.set()
         if self._child_process:
             self._child_process.kill()
         self._thread.join(timeout)
@@ -180,7 +180,7 @@ class DockerGeneralLogger(CommandLoggerBase):
 
 
 class KubectlScyllaLogger(CommandLoggerBase):
-    
+
     @property
     def _logger_cmd(self) -> str:
         pc = self._node.parent_cluster
