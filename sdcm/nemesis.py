@@ -2329,6 +2329,7 @@ class StopStartMonkey(Nemesis):
 
 class RestartThenRepairNodeMonkey(NotSpotNemesis):
     disruptive = True
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2337,6 +2338,7 @@ class RestartThenRepairNodeMonkey(NotSpotNemesis):
 
 class MultipleHardRebootNodeMonkey(Nemesis):
     disruptive = True
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2345,6 +2347,7 @@ class MultipleHardRebootNodeMonkey(Nemesis):
 
 class HardRebootNodeMonkey(Nemesis):
     disruptive = True
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2353,6 +2356,7 @@ class HardRebootNodeMonkey(Nemesis):
 
 class SoftRebootNodeMonkey(Nemesis):
     disruptive = True
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
