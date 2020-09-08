@@ -598,7 +598,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('MajorCompaction %s' % self.target_node)
         self.target_node.run_nodetool("compact")
 
-    def disrupt_nodetool_refresh(self, big_sstable: bool):
+    def disrupt_nodetool_refresh(self, big_sstable: bool = False):
         self._set_current_disruption('Refresh keyspace1.standard1 on {}'.format(self.target_node.name))
 
         # Checking the columns number of keyspace1.standard1
