@@ -55,8 +55,6 @@ def call(Map pipelineParams) {
             stage('Run SCT Test') {
                 steps {
                     script {
-                        def test_config = groovy.json.JsonOutput.toJson(params.test_config)
-
                         sctScript """
                             rm -fv ./latest
 
@@ -79,10 +77,8 @@ def call(Map pipelineParams) {
             stage('Collect log data') {
                 steps {
                     script {
-                        def test_config = groovy.json.JsonOutput.toJson(params.test_config)
-
                         sctScript """
-                            export SCT_CONFIG_FILES=${test_config}
+                            export SCT_CONFIG_FILES=${pipelineParams.test_config}
 
                             echo "start collect logs ..."
                             ./docker/env/hydra.sh collect-logs --logdir "`pwd`"
@@ -94,8 +90,6 @@ def call(Map pipelineParams) {
             stage('Clean resources') {
                 steps {
                     script {
-                        def test_config = groovy.json.JsonOutput.toJson(params.test_config)
-
                         sctScript """
                             export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                             export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
