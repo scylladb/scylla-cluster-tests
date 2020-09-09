@@ -30,15 +30,17 @@ from threading import RLock
 
 import yaml
 from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance
+from invoke.exceptions import UnexpectedExit
 
 from sdcm import cluster, cluster_gce, cluster_docker
+from sdcm.cluster import ClusterNodesNotReady
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.sct_config import sct_abs_path
 from sdcm.sct_events import TestFrameworkEvent
 from sdcm.utils.k8s import KubernetesOps, JSON_PATCH_TYPE
 from sdcm.utils.common import get_free_port, wait_for_port
-from sdcm.utils.decorators import log_run_info, timeout
+from sdcm.utils.decorators import log_run_info, timeout, retrying
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger
 
@@ -804,6 +806,11 @@ class MinikubeScyllaPodCluster(ScyllaPodCluster):
     def upgrade_scylla_cluster(self, new_version: str) -> None:
         self.k8s_cluster.docker_pull(f"scylladb/scylla:{new_version}")
         return super().upgrade_scylla_cluster(new_version)
+
+    @retrying(n=20, sleep_time=60, allowed_exceptions=(ClusterNodesNotReady, UnexpectedExit),
+              message="Waiting for nodes to join the cluster")
+    def wait_for_nodes_up_and_normal(self, nodes, verification_node=None):
+        super().wait_for_nodes_up_and_normal(nodes, verification_node)
 
 
 def iptables_port_redirect_rule(iptables_bin: str,
