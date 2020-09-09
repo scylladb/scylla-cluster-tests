@@ -12,5 +12,5 @@ cdcReplicationPipeline(
     test_config: 'test-cases/cdc/cdc-replication-longevity.yaml',
 
     timeout: [time: 650, unit: 'MINUTES'],
-    email_recipients: 'kbraun@scylladb.com,piotr@scylladb.com,alex.bykov@scylladb.com'
+    email_recipients: 'qa@scylladb.com,kbraun@scylladb.com,piotr@scylladb.com,alex.bykov@scylladb.com'
 )

@@ -12,5 +12,5 @@ cdcReplicationPipeline(
     test_config: 'test-cases/cdc/cdc-15m-replication-preimage.yaml',
 
     timeout: [time: 140, unit: 'MINUTES'],
-    email_recipients: 'kbraun@scylladb.com,piotr@scylladb.com,alex.bykov@scylladb.com'
+    email_recipients: 'qa@scylladb.com,kbraun@scylladb.com,piotr@scylladb.com,alex.bykov@scylladb.com'
 )
