@@ -1779,7 +1779,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         node_to_remove = self.target_node
         up_normal_nodes = self.cluster.get_nodes_up_and_normal(verification_node=node_to_remove)
         # node_to_remove must be different than node
-        node = random.choice([n for n in self.cluster.nodes if n is not node_to_remove])
+        verification_node = random.choice([n for n in self.cluster.nodes if n is not node_to_remove])
 
         # node_to_remove must not be the only seed in cluster
         num_of_seed_nodes = len(self.cluster.seed_nodes)
@@ -1788,7 +1788,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         # get node's host_id
         removed_node_status = self.cluster.get_node_status_dictionary(
-            ip_address=node_to_remove.ip_address, verification_node=node)
+            ip_address=node_to_remove.ip_address, verification_node=verification_node)
         assert removed_node_status is not None, "failed to get host_id using nodetool status"
         host_id = removed_node_status["host_id"]
 
@@ -1820,7 +1820,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         # verify node is removed by nodetool status
         removed_node_status = self.cluster.get_node_status_dictionary(
-            ip_address=node_to_remove.ip_address, verification_node=node)
+            ip_address=node_to_remove.ip_address, verification_node=verification_node)
         assert removed_node_status is None, "Node was not removed properly (Node status:{})".format(removed_node_status)
 
         # add new node
