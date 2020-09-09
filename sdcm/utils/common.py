@@ -495,7 +495,8 @@ def list_clients_docker(builder_name: Optional[str] = None, verbose: bool = Fals
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                client = docker.DockerClient(base_url=f"ssh://{builder['user']}@{builder['public_ip']}")
+                client = docker.DockerClient(
+                    base_url=f"ssh://{builder['user']}@{normalize_ipv6_url(builder['public_ip'])}")
             client.ping()
             log.info("%(name)s: connected via SSH (%(user)s@%(public_ip)s)", builder)
         except:
