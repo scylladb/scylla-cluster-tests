@@ -46,6 +46,7 @@ from sdcm.prometheus import nemesis_metrics_obj
 from sdcm import wait
 from sdcm.sct_events import DisruptionEvent, DbEventsFilter, Severity, raise_event_on_failure
 from sdcm.db_stats import PrometheusDBStats
+from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
 
@@ -1167,7 +1168,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.debug("Toggle table ICS query to execute: {}".format(cmd))
         try:
             self.target_node.run_cqlsh(cmd)
-        except UnexpectedExit as unexpected_exit:
+        except (UnexpectedExit, Libssh2UnexpectedExit) as unexpected_exit:
             if "Unable to find compaction strategy" in str(unexpected_exit):
                 raise UnsupportedNemesis("for this nemesis to work, you need ICS supported scylla version.")
             raise unexpected_exit
