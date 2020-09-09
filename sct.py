@@ -607,7 +607,7 @@ def cloud_usage_report(emails):
 @cli.command('collect-logs', help='Collect logs from cluster by test-id')
 @click.option('--test-id', help='Find cluster by test-id')
 @click.option('--logdir', help='Path to directory with sct results')
-@click.option('--backend', help='Cloud where search nodes', default='aws')
+@click.option('--backend', help='Cloud where search nodes', default=None)
 @click.option('--config-file', type=str, help='config test file path')
 def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
     add_file_logger()
