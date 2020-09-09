@@ -1,4 +1,4 @@
-test_duration: 60
+test_duration: 120
 
 user_prefix: 'cdc-replication-cs'
 db_type: mixed_scylla
