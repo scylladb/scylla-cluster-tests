@@ -37,7 +37,7 @@ from urllib.parse import urlparse
 from unittest.mock import Mock
 
 from functools import wraps
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from concurrent.futures.thread import _python_exit
@@ -1953,3 +1953,25 @@ def ec2_ami_get_root_device_name(image_id, region):
             return image.root_device_name
     except (TypeError, ClientError):
         raise AssertionError(f"Image '{image_id}' details not found in '{region}'")
+
+
+def parse_nodetool_listsnapshots(listsnapshots_output: str) -> defaultdict:
+    """
+    listsnapshots output:
+
+        Snapshot Details:
+        Snapshot name Keyspace name Column family name True size Size on disk
+        1599414845162 system_schema keyspaces          0 bytes   71.71 KB
+        1599414845162 system_schema scylla_tables      0 bytes   73.21 KB
+        1599414845162 system_schema tables             0 bytes   81.48 KB
+        1599414845162 system_schema columns            0 bytes   80.12 KB
+
+        Total TrueDiskSpaceUsed: 0 bytes
+    """
+    snapshots_content = defaultdict(list)
+    SnapshotDetails = namedtuple("SnapshotDetails", ["keyspace_name", "table_name"])
+    for line in listsnapshots_output.splitlines():
+        if line and not line.startswith('Snapshot') and not line.startswith('Total'):
+            line_splitted = line.split()
+            snapshots_content[line_splitted[0]].append(SnapshotDetails(line_splitted[1], line_splitted[2]))
+    return snapshots_content
