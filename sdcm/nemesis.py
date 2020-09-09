@@ -29,7 +29,7 @@ import json
 
 
 from typing import List, Optional, TypedDict, Type
-from collections import OrderedDict, defaultdict, Counter
+from collections import OrderedDict, defaultdict, Counter, namedtuple
 from functools import wraps, partial
 
 from invoke import UnexpectedExit
@@ -40,7 +40,7 @@ from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed
 from sdcm.group_common_events import ignore_alternator_client_errors, ignore_no_space_errors
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_string, \
-    update_certificates, reach_enospc_on_node, clean_enospc_on_node
+    update_certificates, reach_enospc_on_node, clean_enospc_on_node, parse_nodetool_listsnapshots
 from sdcm.utils.decorators import retrying
 from sdcm.log import SDCMAdapter
 from sdcm.keystore import KeyStore
@@ -1485,6 +1485,36 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         assert self.tester.hints_sending_in_progress() is False, "Hints are sent too slow"
         self.tester.verify_no_drops_and_errors(starting_from=start_time)
 
+    def _validate_snapshot(self, nodetool_cmd: str, snapshot_content: namedtuple):
+        """
+        The snapshot may be taken for a few options:
+        - for all keyspaces (with all their tables) - nodetool snapshot cmd without parameters: nodetool snapshot
+        - for one kespace (with all its tables) - nodetool snapshot cmd with "-ks" parameter: nodetool snapshot -ks system
+        - for a few keyspaces (with all their tables) - nodetool snapshot cmd with "-ks" parameter: nodetool snapshot -ks system, system_schema
+        - for one kespace and few tables - nodetool snapshot cmd with "-cf" parameter like: nodetool snapshot test -cf cf1,cf2
+
+        By parsing of nodetool_cmd is recognized with type of snapshot was created.
+        This function check if all expected keyspace/tables are in the snapshot
+        """
+        snapshot_params = nodetool_cmd.split()
+        ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node, filter_empty_tables=False)
+        keyspace_table = []
+        if len(snapshot_params) > 1:
+            if snapshot_params[1] == "-kc":
+                for ks in snapshot_params[2].split(','):
+                    keyspace_table.extend([k_c.split('.') for k_c in ks_cf if k_c.startswith(f"{ks}.")])
+            else:
+                keyspace = snapshot_params[1]
+                keyspace_table.extend([[keyspace, cf] for cf in snapshot_params[3].split(',')])
+        else:
+            keyspace_table.extend([k_c.split('.') for k_c in ks_cf])
+
+        snapshot_content_list = [[elem.keyspace_name, elem.table_name] for elem in snapshot_content]
+        if sorted(keyspace_table) != sorted(snapshot_content_list):
+            raise AssertionError(f"Snapshot content not as expected. \n"
+                                 f"Expected content: {sorted(keyspace_table)} \n "
+                                 f"Actual snapshot content: {sorted(snapshot_content_list)}")
+
     def disrupt_snapshot_operations(self):
         """
         Extend this nemesis to run 'nodetool snapshot' more options including multiple tables.
@@ -1560,11 +1590,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.debug(f'Take snapshot with command: {nodetool_cmd}')
         result = self.target_node.run_nodetool(nodetool_cmd)
         self.log.debug(result)
-        snapshot_name = re.findall(r'(\d+)', result.stdout, re.MULTILINE)[0]
+        if "snapshot name" not in result.stdout:
+            raise Exception(f"Snapshot name wasn't found in {nodetool_cmd} output:\n{result.stdout}")
+
+        snapshot_name = re.findall(r'(\d+)', result.stdout.split("snapshot name")[1])[0]
         result = self.target_node.run_nodetool('listsnapshots')
         self.log.debug(result)
         if snapshot_name in result.stdout:
             self.log.info('Snapshot %s created' % snapshot_name)
+            snapshots_content = parse_nodetool_listsnapshots(listsnapshots_output=result.stdout)
+            snapshot_content = snapshots_content.get(snapshot_name)
+            self._validate_snapshot(nodetool_cmd=nodetool_cmd, snapshot_content=snapshot_content)
+            self.log.info('Snapshot %s validated successfully' % snapshot_name)
         else:
             raise Exception(f"Snapshot {snapshot_name} wasn't found in: \n{result.stdout}")
 
