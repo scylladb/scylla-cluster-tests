@@ -1370,7 +1370,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_mgmt_backup(self):
         self._set_current_disruption('ManagementBackup')
-        # TODO: When cloud backup is supported - add this to the belowq 'if' statement:
+        # TODO: When cloud backup is supported - add this to the below 'if' statement:
         #  and not self.cluster.params.get('use_cloud_manager', default=None)
         if not self.cluster.params.get('use_mgmt', default=None):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
@@ -1378,8 +1378,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise UnsupportedNemesis('backup bucket location configuration is not defined!')
 
         mgr_cluster = self.cluster.get_cluster_manager()
-        bucket_location_name = self.cluster.params.get('backup_bucket_location').split()
-        mgr_task = mgr_cluster.create_backup_task(location_list=['s3:{}'.format(bucket_location_name[0])])
+        cluster_backend = self.cluster.params.get('cluster_backend')
+        backup_bucket_location = self.cluster.params.get('backup_bucket_location')
+        if cluster_backend == 'aws':
+            bucket_name = f"s3:{backup_bucket_location.split()[0]}"
+        elif cluster_backend == 'gce':
+            bucket_name = f"gcs:{backup_bucket_location}"
+        else:
+            raise ValueError(f"cluster_backend={cluster_backend} not supported in ManagementBackup")
+        mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ])
 
         succeeded, status = mgr_task.wait_for_task_done_status(timeout=54000)
         if succeeded and status == TaskStatus.DONE:
