@@ -20,7 +20,7 @@ from docker import DockerClient  # pylint: disable=wrong-import-order
 from selenium.webdriver import Remote, ChromeOptions
 
 from sdcm.utils.docker_utils import ContainerManager, DOCKER_API_CALL_TIMEOUT
-from sdcm.utils.common import get_free_port, wait_for_port
+from sdcm.utils.common import get_free_port, wait_for_port, normalize_ipv6_url
 from sdcm.utils.ssh_agent import SSHAgent
 
 
@@ -44,7 +44,7 @@ class WebDriverContainerMixin:
         if not self.ssh_login_info:
             return None
         SSHAgent.add_keys((self.ssh_login_info["key_file"], ))
-        return DockerClient(base_url=f"ssh://{self.ssh_login_info['user']}@{self.ssh_login_info['hostname']}",
+        return DockerClient(base_url=f"ssh://{self.ssh_login_info['user']}@{normalize_ipv6_url(self.ssh_login_info['hostname'])}",
                             timeout=DOCKER_API_CALL_TIMEOUT)
 
 
