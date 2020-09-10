@@ -1465,7 +1465,8 @@ def filter_aws_instances_by_type(instances):
     filtered_instances = {
         "db_nodes": [],
         "loader_nodes": [],
-        "monitor_nodes": []
+        "monitor_nodes": [],
+        "minikube_nodes": [],
     }
 
     for instance in instances:
@@ -1477,6 +1478,9 @@ def filter_aws_instances_by_type(instances):
             filtered_instances["monitor_nodes"].append(instance)
         if 'loader-node' in name[0]:
             filtered_instances["loader_nodes"].append(instance)
+        elif 'k8s-minikube' in name[0]:
+            filtered_instances["minikube_nodes"].append(instance)
+
     return filtered_instances
 
 
@@ -1484,16 +1488,20 @@ def filter_gce_instances_by_type(instances):
     filtered_instances = {
         "db_nodes": [],
         "loader_nodes": [],
-        "monitor_nodes": []
+        "monitor_nodes": [],
+        "minikube_nodes": [],
     }
 
     for instance in instances:
         if 'db-node' in instance.name:
             filtered_instances["db_nodes"].append(instance)
-        if 'monitor-node' in instance.name:
+        elif 'monitor-node' in instance.name:
             filtered_instances["monitor_nodes"].append(instance)
-        if 'loader-node' in instance.name:
+        elif 'loader-node' in instance.name:
             filtered_instances["loader_nodes"].append(instance)
+        elif 'k8s-minikube' in instance.name:
+            filtered_instances["minikube_nodes"].append(instance)
+
     return filtered_instances
 
 
@@ -1501,16 +1509,19 @@ def filter_docker_containers_by_type(containers):
     filtered_containers = {
         "db_nodes": [],
         "loader_nodes": [],
-        "monitor_nodes": []
+        "monitor_nodes": [],
+        "minikube_nodes": [],
     }
 
     for container in containers:
         if "db-node" in container.name:
             filtered_containers["db_nodes"].append(container)
-        if "monitor-node" in container.name:
+        elif "monitor-node" in container.name:
             filtered_containers["monitor_nodes"].append(container)
-        if "loader-node" in container.name:
+        elif "loader-node" in container.name:
             filtered_containers["loader_nodes"].append(container)
+        elif 'k8s-minikube' in container.name:
+            filtered_containers["minikube_nodes"].append(container)
     return filtered_containers
 
 

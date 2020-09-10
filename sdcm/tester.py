@@ -60,7 +60,8 @@ from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.ndbench_thread import NdBenchStressThread
 from sdcm.localhost import LocalHost
 from sdcm.cdclog_reader_thread import CDCLogReaderThread
-from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCollector, LoaderLogCollector
+from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCollector, LoaderLogCollector, \
+    MinikubeLogCollector
 from sdcm.send_email import build_reporter, read_email_data_from_file, get_running_instances_for_email_report, \
     save_email_data_to_file
 from sdcm.utils import alternator
@@ -2071,6 +2072,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.log.info("Storage dir is {}".format(storage_dir))
         if self.db_cluster:
+            if hasattr(self.db_cluster, 'k8s_cluster'):
+                with silence(parent=self, name="Collect and publish minikube cluster logs"):
+                    minikube_log_collector = MinikubeLogCollector(
+                        self.db_cluster.k8s_cluster.nodes, Setup.test_id(), storage_dir, params=self.params)
+                    s3_link = minikube_log_collector.collect_logs(self.logdir)
+                    self.log.info(s3_link)
+                    logs_dict["k8s_minikube_log"] = s3_link
             with silence(parent=self, name="Collect and publish db cluster logs"):
                 db_log_collector = ScyllaLogCollector(
                     self.db_cluster.nodes, Setup.test_id(), storage_dir, params=self.params)
