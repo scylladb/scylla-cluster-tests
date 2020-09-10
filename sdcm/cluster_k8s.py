@@ -268,8 +268,8 @@ class GceMinikubeCluster(MinikubeCluster, cluster_gce.GCECluster):
         # pylint: disable=too-many-locals
         self.minikube_version = minikube_version
 
-        cluster_prefix = cluster.prepend_user_prefix(user_prefix, "k8s")
-        node_prefix = cluster.prepend_user_prefix(user_prefix, "k8s-minikube")
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, "k8s-minikube")
+        node_prefix = cluster.prepend_user_prefix(user_prefix, "node")
         super().__init__(gce_image=gce_image,
                          gce_image_type=gce_image_type,
                          gce_image_size=gce_image_size,

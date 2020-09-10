@@ -699,16 +699,17 @@ class LogCollector:
 
         LOGGER.debug("Nodes list %s", [node.name for node in self.nodes])
 
-        if not self.nodes:
+        if not self.nodes and not os.listdir(self.local_dir):
             LOGGER.warning(f'No nodes found for {self.cluster_log_type} cluster. Logs will not be collected')
             return None
-        try:
-            workers_number = int(len(self.nodes) / 2)
-            workers_number = len(self.nodes) if workers_number < 2 else workers_number
-            ParallelObject(self.nodes, num_workers=workers_number, timeout=self.collect_timeout).run(
-                collect_logs_per_node, ignore_exceptions=True)
-        except Exception as details:  # pylint: disable=broad-except
-            LOGGER.error('Error occured during collecting logs %s', details)
+        if self.nodes:
+            try:
+                workers_number = int(len(self.nodes) / 2)
+                workers_number = len(self.nodes) if workers_number < 2 else workers_number
+                ParallelObject(self.nodes, num_workers=workers_number, timeout=self.collect_timeout).run(
+                    collect_logs_per_node, ignore_exceptions=True)
+            except Exception as details:  # pylint: disable=broad-except
+                LOGGER.error('Error occured during collecting logs %s', details)
 
         if not os.listdir(self.local_dir):
             LOGGER.warning('Directory %s is empty', self.local_dir)
@@ -799,6 +800,40 @@ class ScyllaLogCollector(LogCollector):
     def collect_logs(self, local_search_path=None):
         self.collect_logs_for_inactive_nodes(local_search_path)
         return super(ScyllaLogCollector, self).collect_logs(local_search_path)
+
+
+class MinikubeLogCollector(LogCollector):
+    """Minikube cluster log collecting
+
+    Collect on each node the logs for Scylla DB cluster
+
+    Extends:
+        LogCollector
+
+    Variables:
+        log_entities {list} -- LogEntities to collect
+        cluster_log_type {str} -- cluster type name
+    """
+    log_entities = [FileLog(name='system.log',
+                            command="sudo journalctl --no-tail --no-pager",
+                            search_locally=True),
+                    CommandLog(name='cpu_info',
+                               command='cat /proc/cpuinfo'),
+                    CommandLog(name='mem_info',
+                               command='cat /proc/meminfo'),
+                    CommandLog(name='interrupts',
+                               command='cat /proc/interrupts'),
+                    CommandLog(name='vmstat',
+                               command='cat /proc/vmstat'),
+                    CommandLog(name='coredumps.info',
+                               command='sudo coredumpctl info')
+                    ]
+    cluster_log_type = "k8s-minikube"
+    collect_timeout = 600
+
+    def collect_logs(self, local_search_path=None):
+        self.collect_logs_for_inactive_nodes(local_search_path)
+        return super().collect_logs(local_search_path)
 
 
 class LoaderLogCollector(LogCollector):
@@ -943,11 +978,13 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
         self.db_cluster = []
         self.monitor_set = []
         self.loader_set = []
+        self.minikube_set = []
         self.sct_set = []
         self.cluster_log_collectors = {
             ScyllaLogCollector: self.db_cluster,
             MonitorLogCollector: self.monitor_set,
             LoaderLogCollector: self.loader_set,
+            MinikubeLogCollector: self.minikube_set,
             SCTLogCollector: self.sct_set
         }
 
@@ -1005,6 +1042,17 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                   instance=instance,
                                                   global_ip=instance['PublicIpAddress'],
                                                   tags={**self.tags, "NodeType": "loader", }))
+        for instance in filtered_instances['minikube_nodes']:
+            name = [tag['Value']
+                    for tag in instance['Tags'] if tag['Key'] == 'Name']
+            self.minikube_set.append(CollectingNode(name=name[0],
+                                                    ssh_login_info={
+                "hostname": instance['PublicIpAddress'],
+                "user": self.params['ami_loader_user'],
+                "key_file": self.params['user_credentials_path']},
+                instance=instance,
+                global_ip=instance['PublicIpAddress'],
+                tags={**self.tags, "NodeType": "loader", }))
 
     def get_gce_instances_by_testid(self):
         instances = list_instances_gce({"TestId": self.test_id}, running=True)
@@ -1028,6 +1076,15 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                    global_ip=instance.public_ips[0],
                                                    tags={**self.tags, "NodeType": "monitor", }))
         for instance in filtered_instances['loader_nodes']:
+            self.loader_set.append(CollectingNode(name=instance.name,
+                                                  ssh_login_info={
+                                                      "hostname": instance.public_ips[0],
+                                                      "user": self.params['gce_image_username'],
+                                                      "key_file": self.params['user_credentials_path']},
+                                                  instance=instance,
+                                                  global_ip=instance.public_ips[0],
+                                                  tags={**self.tags, "NodeType": "loader", }))
+        for instance in filtered_instances['minikube_nodes']:
             self.loader_set.append(CollectingNode(name=instance.name,
                                                   ssh_login_info={
                                                       "hostname": instance.public_ips[0],
@@ -1063,13 +1120,16 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                   global_ip=instance.public_ips[0],
                                                   tags={**self.tags, "NodeType": "loader", }))
 
-    def get_running_cluster_sets(self):
-        if self.backend == 'aws':
+    def get_running_cluster_sets(self, backend):
+        if backend == 'aws':
             self.get_aws_instances_by_testid()
-        elif self.backend == 'gce':
+        elif backend == 'gce':
             self.get_gce_instances_by_testid()
-        elif self.backend == 'docker':
+        elif backend == 'docker':
             self.get_docker_instances_by_testid()
+        elif backend == 'k8s-gce-minikube':
+            self.get_gce_instances_by_testid()
+            # TBD: Extract db-nodes
 
     def run(self):
         """Run collect logs process as standalone operation
@@ -1082,7 +1142,7 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
         if not self.test_id:
             LOGGER.warning("No test_id provided or found")
             return results
-        self.get_running_cluster_sets()
+        self.get_running_cluster_sets(self.backend)
 
         local_dir_with_logs = get_testrun_dir(self.sct_result_dir, self.test_id)
         LOGGER.info("Found sct result directory with logs: %s", local_dir_with_logs)
