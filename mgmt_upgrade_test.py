@@ -2,7 +2,7 @@ import logging
 from time import sleep
 
 from sdcm.tester import ClusterTester
-from sdcm.mgmt import get_scylla_manager_tool, TaskStatus, update_config_file
+from sdcm.mgmt import get_scylla_manager_tool, TaskStatus, update_config_file, RepairTask
 from mgmt_cli_test import BackupFunctionsMixIn
 
 
@@ -87,6 +87,17 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
             assert rerunning_backup_task.status == TaskStatus.DONE, \
                 f"Unknown failure in task {rerunning_backup_task.id}"
 
+        with self.subTest("Creating repairs using legacy flags"):
+            legacy_args = [
+                f" --host {self.db_cluster.nodes[0].ip_address}",
+                f" --with-hosts {self.db_cluster.nodes[0].ip_address}",
+                f" --token-ranges all --host {self.db_cluster.nodes[0].ip_address}"
+            ]
+            legacy_args_tasks = {}
+            for arg in legacy_args:
+                legacy_args_tasks[arg] = _create_stopped_repair_task_with_manual_argument(
+                    mgr_cluster=mgr_cluster, arg_string=arg)
+
         upgrade_scylla_manager(pre_upgrade_manager_version=current_manager_version,
                                target_upgrade_server_version=target_upgrade_server_version,
                                target_upgrade_agent_version=target_upgrade_agent_version,
@@ -132,6 +143,21 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
                 # making sure that the files of the missing table isn't in s3
                 assert "cf1" not in per_node_backup_file_paths[node_id]["ks1"], \
                     "The missing table is still in s3, even though it should have been purged"
+
+        with self.subTest("Rerunning legacy repairs, expecting success"):
+            for original_arg_string, task in legacy_args_tasks.items():
+                task.start()
+                task.wait_and_get_final_status(timeout=5000, step=10)
+
+                current_arg_string = task.arguments
+                assert task.status == TaskStatus.DONE, f"Task {task.id} with legacy arg '{original_arg_string}' did " \
+                                                       f"not end successfully in the expected time after the upgrade." \
+                                                       f"\nThe arguments string of the task after the upgrade is " \
+                                                       f"'{current_arg_string}'"
+                assert not current_arg_string, f"Task {task.id}, which was created before the upgrade with the legacy" \
+                                               f" arg '{original_arg_string}' Was expected to contain an empty arg " \
+                                               f"string after the upgrade, but instead the current arg string" \
+                                               f" is '{current_arg_string}'"
 
     def update_all_agent_config_files(self):
         config_file = '/etc/scylla-manager-agent/scylla-manager-agent.yaml'
@@ -216,3 +242,15 @@ def upgrade_scylla_manager(pre_upgrade_manager_version, target_upgrade_server_ve
     new_manager_version = manager_tool.version
     assert new_manager_version != pre_upgrade_manager_version, "Manager failed to upgrade - " \
                                                                "previous and new versions are the same. Test failed!"
+
+
+def _create_stopped_repair_task_with_manual_argument(mgr_cluster, arg_string):
+    res = mgr_cluster.sctool.run(cmd=f"repair -c {mgr_cluster.id} {arg_string}",
+                                     parse_table_res=False)
+    assert not res.stderr, f"Task creation failed: {res.stderr}"
+    task_id = res.stdout.split('\n')[0]
+    repair_task = RepairTask(task_id=task_id, cluster_id=mgr_cluster.id,
+                             manager_node=mgr_cluster.manager_node)
+    repair_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=500, step=10)
+    repair_task.stop()
+    return repair_task
