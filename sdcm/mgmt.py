@@ -232,6 +232,18 @@ class ManagerTask(ScyllaManagerBase):
         # ╰─────────────────────────────────────────────┴───────────────────────────────┴──────┴────────────┴────────╯
 
     @property
+    def arguments(self):
+        """
+        Gets the task's arguments
+        """
+        cmd = "task list -c {}".format(self.cluster_id)
+        res = self.sctool.run(cmd=cmd)
+        arguments_string = self.get_property(parsed_table=res, column_name='arguments')
+        # The manager will sometimes retry a task a few times if it's defined this way, and so in the case of
+        # a failure in the task the manager can present the task's status as 'ERROR (#/4)'
+        return arguments_string.strip()
+
+    @property
     def progress(self):
         """
         Gets the repair task's progress
