@@ -22,8 +22,11 @@ import warnings
 from uuid import uuid4
 from functools import wraps
 import threading
+import multiprocessing
+import inspect
 import signal
 import sys
+import traceback
 
 import boto3.session
 from invoke.exceptions import UnexpectedExit, Failure
@@ -68,8 +71,6 @@ from sdcm.utils import alternator
 from sdcm.utils.profiler import ProfilerFactory
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.utils.gce_utils import get_gce_services
-from sdcm.utils.k8s import KubernetesOps
-from sdcm.remote import LOCALRUNNER
 from sdcm.keystore import KeyStore
 
 try:
@@ -1718,6 +1719,60 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.credentials = []
 
     @silence()
+    def show_alive_threads(self):
+        if not threading.active_count():
+            return
+        self.log.error("There are some threads left alive:")
+        for th_num, th in enumerate(threading.enumerate()):
+            if th is threading.current_thread():
+                continue
+            source = '<no code available>'
+            module = 'Unknown'
+            if th.__class__ is threading.Thread:
+                if th.run.__func__ is not threading.Thread.run:
+                    module = th.run.__module__
+                    source = inspect.getsource(th.run)
+                elif getattr(th, '_target', None):
+                    module = th._target.__module__
+                    source = inspect.getsource(th._target)
+            else:
+                module = th.__module__
+                source = inspect.getsource(th.__class__)
+            self.log.error(f"========= Thread {th.name} from {module} =========")
+            self.log.error(f"========= SOURCE =========\n{source}")
+            self.log.error(f"========= STACK TRACE =========\n{self._get_stacktrace(th)}")
+            self.log.error(f"========= END OF Thread {th.name} from {module} =========")
+
+    def _get_stacktrace(self, thread):
+        frame = sys._current_frames().get(thread.ident, None)
+        output = []
+        for filename, lineno, name, line in traceback.extract_stack(frame):
+            output.append('File: "%s", line %d, in %s' % (filename,
+                                                          lineno, name))
+            if line:
+                output.append("  %s" % (line.strip()))
+        return '\n'.join(output)
+
+    @silence()
+    def show_alive_processes(self):
+        if not multiprocessing.active_children():
+            return
+        self.log.error("There are some processes left alive:")
+        for proc_num, proc in enumerate(multiprocessing.active_children()):
+            source = '<no code available>'
+            module = 'Unknown'
+            if proc.__class__ is multiprocessing.Process:
+                if proc.run.__func__ != multiprocessing.Process.run:
+                    module = proc.run.__module__
+                    source = inspect.getsource(proc.run)
+            else:
+                module = proc.__module__
+                source = inspect.getsource(proc.__class__)
+            self.log.error(f"========= Process {proc.name} from {module} =========")
+            self.log.error(f"========= SOURCE =========\n{source}")
+            self.log.error(f"========= END OF Process {proc.name} from {module}  =========")
+
+    @silence()
     def clean_resources(self):
         # pylint: disable=too-many-branches
         if not self.params.get('execute_post_behavior', False):
@@ -1788,6 +1843,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.collect_sct_logs()
         self.finalize_teardown()
         self.log.info('Test ID: {}'.format(Setup.test_id()))
+        self.show_alive_threads()
+        self.show_alive_processes()
 
     def _get_test_result_event(self) -> TestResultEvent:
         return TestResultEvent(
