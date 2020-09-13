@@ -13,7 +13,7 @@ managerPipeline(
     target_scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo',
 
     scylla_mgmt_repo: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.1-bionic.list',
-    scylla_mgmt_agent_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.1.repo,
+    scylla_mgmt_agent_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.1.repo',
     scylla_version: 'master:latest',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
