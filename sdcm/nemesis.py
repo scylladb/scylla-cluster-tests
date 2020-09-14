@@ -349,6 +349,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.wait_db_up()
         self.log.info('Waiting JMX services to start after node reboot')
         self.target_node.wait_jmx_up()
+        self.cluster.wait_for_nodes_up_and_normal(nodes=[self.target_node])
 
     def disrupt_multiple_hard_reboot_node(self):  # pylint: disable=invalid-name
         num_of_reboots = random.randint(2, 10)
@@ -362,6 +363,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             else:
                 self.log.info('Waiting JMX services to start after node reboot')
                 self.target_node.wait_jmx_up()
+            self.cluster.wait_for_nodes_up_and_normal(nodes=[self.target_node])
             sleep_time = random.randint(0, 100)
             self.log.info(
                 'Sleep {} seconds after hard reboot and service-up for node {}'.format(sleep_time, self.target_node))
@@ -374,6 +376,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.wait_db_up()
         self.log.info('Waiting JMX services to start after node reboot')
         self.target_node.wait_jmx_up()
+        self.cluster.wait_for_nodes_up_and_normal(nodes=[self.target_node])
 
     def disrupt_restart_with_resharding(self):
         self._set_current_disruption('RestartNodeWithResharding %s' % self.target_node)
