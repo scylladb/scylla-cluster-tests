@@ -12,5 +12,5 @@ perfRegressionParallelPipeline(
     sub_tests: ["test_write", "test_read", "test_mixed"],
 
     timeout: [time: 240, unit: "MINUTES"],
-    email_recipients: '["qa@scylladb.com","alternator@scylladb.com"]'
+    email_recipients: 'qa@scylladb.com'
 )
