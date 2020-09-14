@@ -37,6 +37,53 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
                                                auth_token=self.monitors.mgmt_auth_token)
         return mgr_cluster, current_manager_version
 
+    def test_backup_force_param_on_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
+        target_upgrade_server_version = self.params.get('target_scylla_mgmt_server_repo')
+        target_upgrade_agent_version = self.params.get('target_scylla_mgmt_agent_repo')
+        manager_node = self.monitors.nodes[0]
+        manager_tool = get_scylla_manager_tool(manager_node=manager_node)
+        manager_tool.add_cluster(name="cluster_under_test", db_cluster=self.db_cluster,
+                                 auth_token=self.monitors.mgmt_auth_token)
+        current_manager_version = manager_tool.version
+
+        LOGGER.debug("Generating load")
+        self.generate_load_and_wait_for_results()
+
+        mgr_cluster = manager_tool.get_cluster(cluster_name="cluster_under_test")
+        if not self.is_cred_file_configured:
+            self.update_config_file()
+        location_list = [self.bucket_name, ]
+        backup_task = mgr_cluster.create_backup_task(interval="1d", location_list=location_list,
+                                                     keyspace_list=["keyspace1"], force=True)
+        backup_task.wait_for_uploading_stage()
+        backup_task.stop()
+        # backup_task_current_details = wait_until_task_finishes_return_details(backup_task)
+
+        upgrade_scylla_manager(pre_upgrade_manager_version=current_manager_version,
+                               target_upgrade_server_version=target_upgrade_server_version,
+                               target_upgrade_agent_version=target_upgrade_agent_version,
+                               manager_node=manager_node,
+                               db_cluster=self.db_cluster)
+
+        LOGGER.debug("Checking that the previously created tasks' details have not changed")
+        manager_tool = get_scylla_manager_tool(manager_node=manager_node)
+        # make sure that the cluster is still added to the manager
+        manager_tool.get_cluster(cluster_name="cluster_under_test")
+        # validate_previous_task_details(task=backup_task, previous_task_details=backup_task_current_details)
+        try:
+            LOGGER.debug(f"Starting backup task with previous 'force' flag.")
+            backup_task.start()
+            self.fail(msg="'force' flag should not be allowed in manager 2.2")
+        except Exception as error:
+            LOGGER.debug(f"Starting backup task with force flag failed with: {error}")
+        # backup_task.start()
+        # backup_task_current_details = wait_until_task_finishes_return_details(backup_task)
+        # backup_task_snapshot = backup_task.get_snapshot_tag()
+        # pre_upgrade_backup_task_files = mgr_cluster.get_backup_files_dict(backup_task_snapshot)
+
+        with self.subTest("Restoring a 2.1 backup task with 2.2 manager"):
+            self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
+
     def test_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
         target_upgrade_server_version = self.params.get('target_scylla_mgmt_server_repo')
         target_upgrade_agent_version = self.params.get('target_scylla_mgmt_agent_repo')
