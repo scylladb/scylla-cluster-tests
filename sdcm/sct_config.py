@@ -1145,7 +1145,7 @@ class SCTConfiguration(dict):
             else:
                 raise ValueError("'scylla_version' can't used together with  'ami_id_db_scylla' or with 'scylla_repo'")
 
-            if self.get("n_loaders") and "scylla_repo_loader" not in self and ":" not in scylla_version:
+            if self.get("n_loaders") and "scylla_repo_loader" not in self:
                 scylla_linux_distro_loader = self.get('scylla_linux_distro_loader', '')
                 dist_type_loader = scylla_linux_distro_loader.split('-')[0]
                 dist_version_loader = scylla_linux_distro_loader.split('-')[-1]
