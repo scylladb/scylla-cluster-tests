@@ -12,5 +12,5 @@ longevityPipeline(
     test_config: 'test-cases/longevity/longevity-alternator-200GB-48h.yaml',
 
     timeout: [time: 3200, unit: 'MINUTES'],
-    email_recipients: 'qa@scylladb.com,alternator@scylladb.com'
+    email_recipients: 'qa@scylladb.com'
 )
