@@ -44,7 +44,9 @@ class WebDriverContainerMixin:
         if not self.ssh_login_info:
             return None
         SSHAgent.add_keys((self.ssh_login_info["key_file"], ))
-        return DockerClient(base_url=f"ssh://{self.ssh_login_info['user']}@{normalize_ipv6_url(self.ssh_login_info['hostname'])}",
+        # since a bug in docker package https://github.com/docker-library/python/issues/517 that need to explicitly
+        # pass down the port for supporting ipv6
+        return DockerClient(base_url=f"ssh://{self.ssh_login_info['user']}@{normalize_ipv6_url(self.ssh_login_info['hostname'])}:22",
                             timeout=DOCKER_API_CALL_TIMEOUT)
 
 

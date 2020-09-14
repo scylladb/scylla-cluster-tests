@@ -495,8 +495,10 @@ def list_clients_docker(builder_name: Optional[str] = None, verbose: bool = Fals
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
+                # since a bug in docker package https://github.com/docker-library/python/issues/517 that need
+                # to explicitly pass down the port for supporting ipv6
                 client = docker.DockerClient(
-                    base_url=f"ssh://{builder['user']}@{normalize_ipv6_url(builder['public_ip'])}")
+                    base_url=f"ssh://{builder['user']}@{normalize_ipv6_url(builder['public_ip'])}:22")
             client.ping()
             log.info("%(name)s: connected via SSH (%(user)s@%(public_ip)s)", builder)
         except:
