@@ -73,7 +73,7 @@ from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnap
 from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
-from sdcm.coredump import CoredumpExportThread
+from sdcm.coredump import CoredumpExportSystemdThread
 
 CREDENTIALS = []
 DEFAULT_USER_PREFIX = getpass.getuser()
@@ -383,7 +383,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         self.last_line_no = 1
         self.last_log_position = 0
-        self._coredump_thread: Optional[CoredumpExportThread] = None
+        self._coredump_thread: Optional[CoredumpExportSystemdThread] = None
         self._db_log_reader_thread = None
         self._scylla_manager_journal_thread = None
         self._decoding_backtraces_thread = None
@@ -455,9 +455,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if not Setup.REUSE_CLUSTER:
             self.set_hostname()
 
-        self.start_task_threads()
         self._init_port_mapping()
-
+        self.start_task_threads()
         self.set_keep_alive()
 
     def _init_remoter(self, ssh_login_info):
@@ -855,8 +854,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             except (SystemExit, KeyboardInterrupt) as ex:
                 self.log.debug("db_log_reader_thread() stopped by %s", ex.__class__.__name__)
 
-    def start_backtrace_thread(self):
-        self._coredump_thread = CoredumpExportThread(self, self._maximum_number_of_cores_to_publish)
+    def start_coredump_thread(self):
+        self._coredump_thread = CoredumpExportSystemdThread(self, self._maximum_number_of_cores_to_publish)
         self._coredump_thread.start()
 
     def start_db_log_reader_thread(self):
@@ -938,17 +937,27 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if verify_ssh:
             self.wait_ssh_up()
 
+    @cached_property
+    def node_type(self) -> 'str':
+        if 'db-node' in self.name:
+            return 'db'
+        if 'monitor' in self.name:
+            return 'monitor'
+        if 'loader' in self.name:
+            return 'loader'
+        return 'unknown'
+
     @log_run_info
     def start_task_threads(self):
         self.start_journal_thread()
         if self.is_spot:
             self.start_spot_monitoring_thread()
-        if 'db-node' in self.name:  # this should be replaced when DbNode class will be created
-            self.start_backtrace_thread()
+        if self.node_type == 'db':
+            self.start_coredump_thread()
             self.start_db_log_reader_thread()
-        elif 'loader' in self.name:
-            self.start_backtrace_thread()
-        elif 'monitor' in self.name:
+        elif self.node_type == 'loader':
+            self.start_coredump_thread()
+        elif self.node_type == 'monitor':
             # TODO: start alert manager thread here when start_task_threads will be run after node setup
             # self.start_alert_manager_thread()
             if Setup.BACKTRACE_DECODING:

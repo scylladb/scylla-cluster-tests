@@ -504,7 +504,7 @@ class BasePodContainer(cluster.BaseNode):
             self.parent_cluster.scylla_yaml_update_required = True
 
 
-class MinicubePodContainer(BasePodContainer):
+class MinicubeScyllaPodContainer(BasePodContainer):
     parent_cluster: 'MinikubeScyllaPodCluster'
 
     @cached_property
@@ -519,6 +519,10 @@ class MinicubePodContainer(BasePodContainer):
 
     def restart(self):
         self.host_remoter.run(f'docker restart {self.docker_id}')
+
+    @cached_property
+    def node_type(self) -> 'str':
+        return 'db'
 
 
 class PodCluster(cluster.BaseCluster):
@@ -740,10 +744,10 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
 
 class MinikubeScyllaPodCluster(ScyllaPodCluster):
     k8s_cluster: MinikubeCluster
-    nodes: List[MinicubePodContainer]
+    nodes: List[MinicubeScyllaPodContainer]
 
-    def _create_node(self, node_index: int, pod_name: str) -> MinicubePodContainer:
-        node = MinicubePodContainer(
+    def _create_node(self, node_index: int, pod_name: str) -> MinicubeScyllaPodContainer:
+        node = MinicubeScyllaPodContainer(
             parent_cluster=self,
             name=pod_name,
             base_logdir=self.logdir,
@@ -796,7 +800,7 @@ class MinikubeScyllaPodCluster(ScyllaPodCluster):
                   count: int,
                   ec2_user_data: str = "",
                   dc_idx: int = 0,
-                  enable_auto_bootstrap: bool = False) -> List[MinicubePodContainer]:
+                  enable_auto_bootstrap: bool = False) -> List[MinicubeScyllaPodContainer]:
         new_nodes = super().add_nodes(count=count,
                                       ec2_user_data=ec2_user_data,
                                       dc_idx=dc_idx,

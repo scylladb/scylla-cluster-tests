@@ -1,0 +1,23 @@
+{
+  "cat /etc/os-release": [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "NAME=\"Ubuntu\"\nVERSION=\"20.04.1 LTS (Focal Fossa)\"\nID=ubuntu\nID_LIKE=debian\nPRETTY_NAME=\"Ubuntu 20.04.1 LTS\"\nVERSION_ID=\"20.04\"\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nVERSION_CODENAME=focal\nUBUNTU_CODENAME=focal\n",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "sudo ls /var/lib/scylla/coredumps/*.core": [
+    {
+      "__instance__": "invoke.exceptions.UnexpectedExit",
+      "result": {
+        "__instance__": "fabric.runners.Result",
+        "stdout": "",
+        "stderr": "Fake error, just to check what will coredump exporter thread can handle it properly",
+        "exited": 1
+      },
+      "reason": null
+    }
+  ]
+}

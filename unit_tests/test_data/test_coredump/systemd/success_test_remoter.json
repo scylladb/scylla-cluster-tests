@@ -1,4 +1,13 @@
 {
+  "cat /etc/os-release": [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "NAME=\"CentOS Linux\"\nVERSION=\"7 (Core)\"\nID=\"centos\"\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"7\"\nPRETTY_NAME=\"CentOS Linux 7 (Core)\"\nANSI_COLOR=\"0;31\"\nCPE_NAME=\"cpe:/o:centos:centos:7\"\nHOME_URL=\"https://www.centos.org/\"\nBUG_REPORT_URL=\"https://bugs.centos.org/\"\n\nCENTOS_MANTISBT_PROJECT=\"CentOS-7\"\nCENTOS_MANTISBT_PROJECT_VERSION=\"7\"\nREDHAT_SUPPORT_PRODUCT=\"centos\"\nREDHAT_SUPPORT_PRODUCT_VERSION=\"7\"\n",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
   "sudo coredumpctl --no-pager --no-legend 2>&1": [
     {
       "__instance__": "invoke.exceptions.UnexpectedExit",
