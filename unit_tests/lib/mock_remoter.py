@@ -28,9 +28,10 @@ class MockRemoter:
     >>> mock_remoter_result = mock_remoter.run('echo "Do something with remoter"')
     >>> assert mock_remoter_result == remoter_result
     """
-    command_counter = {}
+    user = 'scylla-test'
 
     def __init__(self, responses: Union[dict, str] = None):
+        self.command_counter = {}
         if isinstance(responses, str):
             self.responses = Pickler.load_from_file(responses)
         elif isinstance(responses, dict):
@@ -66,3 +67,28 @@ class MockRemoter:
             return self._process_response(output)
         else:
             raise RuntimeError('Wrong response value, could be Result or Exception')
+
+    # pylint: disable=too-many-arguments
+    def sudo(self,
+             cmd: str,
+             timeout: Optional[float] = None,
+             ignore_status: bool = False,
+             verbose: bool = True,
+             new_session: bool = False,
+             log_file: Optional[str] = None,
+             retry: int = 1,
+             watchers: Optional[List[StreamWatcher]] = None,
+             user: Optional[str] = 'root') -> Result:
+        if user != self.user:
+            if user == 'root':
+                cmd = f"sudo {cmd}"
+            else:
+                cmd = f"sudo -u {user} {cmd}"
+        return self.run(cmd=cmd,
+                        timeout=timeout,
+                        ignore_status=ignore_status,
+                        verbose=verbose,
+                        new_session=new_session,
+                        log_file=log_file,
+                        retry=retry,
+                        watchers=watchers)

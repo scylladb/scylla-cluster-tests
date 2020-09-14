@@ -1115,12 +1115,18 @@ spec:
         - mountPath: /tmp/k8s-webhook-server/serving-certs
           name: cert
           readOnly: true
+        - mountPath: /var/lib/scylla/coredumps
+          name: coredumpfs
       terminationGracePeriodSeconds: 10
       volumes:
       - name: cert
         secret:
           defaultMode: 420
           secretName: webhook-server-cert
+      - name: coredumpfs
+        hostPath:
+          path: /var/lib/scylla/coredumps
+
 ---
 apiVersion: cert-manager.io/v1alpha2
 kind: Certificate

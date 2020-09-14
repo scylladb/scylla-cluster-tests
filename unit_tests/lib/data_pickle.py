@@ -55,6 +55,7 @@ class Pickler:
         'sdcm.coredump.CoreDumpInfo': {
             'init_args': {
                 'process_retry': 0,
+                'node': None,
                 '*': PicklerAction.passthrough,
             },
         },
@@ -181,8 +182,6 @@ class Pickler:
         instance = instance_class(**init_args)
         for attr_name, attr_value in cls._from_data_iterate_attrs(instance_type, obj, 'init_args', PicklerAction.passthrough):
             setattr(instance, attr_name, attr_value)
-        if instance_type == 'sdcm.coredump.CoreDumpInfo':
-            l = 1
         return instance
 
     @classmethod

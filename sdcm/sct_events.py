@@ -240,6 +240,16 @@ class SctEvent(Generic[EventType]):
             return EVENTS_PROCESSES['MainDevice'].publish_event_guaranteed(self)
         return EVENTS_PROCESSES['MainDevice'].publish_event(self)
 
+    def publish_or_dump(self, default_logger=None):
+        if 'MainDevice' in EVENTS_PROCESSES:
+            if EVENTS_PROCESSES['MainDevice'].is_alive():
+                super().publish()
+            else:
+                EVENTS_PROCESSES['EVENTS_FILE_LOGGER'].dump_event_into_files(self)
+            return
+        if default_logger:
+            default_logger.error(str(self))
+
     def __str__(self):
         return "({} {})".format(self.__class__.__name__, self.severity)
 
@@ -289,16 +299,6 @@ class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attribu
         source_method = f'.{self.source_method}({params})' if self.source_method else ''
         message += f'\nTraceback (most recent call last):\n{self.trace}' if self.trace else ''
         return f"{super().__str__()}, source={self.source}{source_method} {message}"
-
-    def publish_or_dump(self, default_logger=None):
-        if 'MainDevice' in EVENTS_PROCESSES:
-            if EVENTS_PROCESSES['MainDevice'].is_alive():
-                super().publish()
-            else:
-                EVENTS_PROCESSES['EVENTS_FILE_LOGGER'].dump_event_into_files(self)
-            return
-        if default_logger:
-            default_logger.error(str(self))
 
 
 class TestResultEvent(SctEvent, Exception):
@@ -505,7 +505,7 @@ class ThreadFailedEvent(SctEvent):
         self.message = message
         self.severity = Severity.ERROR
         self.traceback = str(traceback)
-        self.publish()
+        self.publish_or_dump()
 
     def __str__(self):
         return f"{super().__str__()}: message={self.message}\n{self.traceback}"
