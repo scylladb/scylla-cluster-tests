@@ -2185,7 +2185,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if verify_up:
             self.wait_jmx_up(timeout=timeout)
 
-    @retrying(n=3, sleep_time=5, allowed_exceptions=(CommandTimedOut, NoValidConnectionsError,),
+    @retrying(n=3, sleep_time=5, allowed_exceptions=NETWORK_EXCEPTIONS,
               message="Failed to stop scylla.server, retrying...")
     def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
         if verify_up:
@@ -3449,7 +3449,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 break
         return node_status
 
-    @retrying(n=60, sleep_time=3, allowed_exceptions=(ClusterNodesNotReady, UnexpectedExit),
+    @retrying(n=60, sleep_time=3, allowed_exceptions=NETWORK_EXCEPTIONS + (ClusterNodesNotReady,),
               message="Waiting for nodes to join the cluster")
     def wait_for_nodes_up_and_normal(self, nodes, verification_node=None):
         self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
