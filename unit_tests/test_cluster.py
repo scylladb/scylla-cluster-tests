@@ -92,22 +92,19 @@ class TestBaseNode(unittest.TestCase):
     def test_search_system_interlace_reactor_stall(self):  # pylint: disable=invalid-name
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_interlace_stall.log')
 
-        self.node._read_system_log_and_publish_events()
+        self.node._read_system_log_and_publish_events(start_from_beginning=True)
 
-        events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
-        events = []
-        for line in events_file.readlines():
+        with open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r') as events_file:
+            events = [json.loads(line) for line in events_file]
 
-            events.append(json.loads(line))
+            event_a, event_b = events[-2], events[-1]
+            print(event_a)
+            print(event_b)
 
-        event_a, event_b = events[-2], events[-1]
-        print(event_a)
-        print(event_b)
-
-        assert event_a["type"] == "REACTOR_STALLED"
-        assert event_a["line_number"] == 1
-        assert event_b["type"] == "REACTOR_STALLED"
-        assert event_b["line_number"] == 4
+            assert event_a["type"] == "REACTOR_STALLED"
+            assert event_a["line_number"] == 0
+            assert event_b["type"] == "REACTOR_STALLED"
+            assert event_b["line_number"] == 3
 
     def test_search_system_suppressed_messages(self):  # pylint: disable=invalid-name
         self.node.system_log = os.path.join(os.path.dirname(
@@ -115,15 +112,31 @@ class TestBaseNode(unittest.TestCase):
 
         self.node._read_system_log_and_publish_events(start_from_beginning=True)
 
-        events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
+        with open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r') as events_file:
+            events = [json.loads(line) for line in events_file]
 
-        events = [json.loads(line) for line in events_file.readlines()]
+            event_a = events[-1]
+            print(event_a)
 
-        event_a = events[-1]
-        print(event_a)
+            assert event_a["type"] == "SUPPRESSED_MESSAGES", 'Not expected event type {}'.format(event_a["type"])
+            assert event_a["line_number"] == 6, 'Not expected event line number {}'.format(event_a["line_number"])
 
-        assert event_a["type"] == "SUPPRESSED_MESSAGES", 'Not expected event type {}'.format(event_a["type"])
-        assert event_a["line_number"] == 6, 'Not expected event line number {}'.format(event_a["line_number"])
+    def test_search_one_line_backtraces(self):  # pylint: disable=invalid-name
+        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_one_line_backtrace.log')
+
+        self.node._read_system_log_and_publish_events(start_from_beginning=True)
+
+        with open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r') as events_file:
+            events = [json.loads(line) for line in events_file]
+
+            event_backtrace1, event_backtrace2 = events[22], events[23]
+            print(event_backtrace1)
+            print(event_backtrace2)
+
+            assert event_backtrace1["type"] == "DATABASE_ERROR"
+            assert event_backtrace1["raw_backtrace"]
+            assert event_backtrace2["type"] == "DATABASE_ERROR"
+            assert event_backtrace2["raw_backtrace"]
 
 
 class VersionDummyRemote:

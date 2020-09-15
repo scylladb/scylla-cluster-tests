@@ -1320,12 +1320,24 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                         if not exclude:
                             LOGGER.debug(line)
                 match = backtrace_regex.search(line)
+                one_line_backtrace = []
                 if match and backtraces:
                     data = match.groupdict()
                     if data['other_bt']:
                         backtraces[-1]['backtrace'] += [data['other_bt'].strip()]
                     if data['scylla_bt']:
                         backtraces[-1]['backtrace'] += [data['scylla_bt'].strip()]
+                elif "backtrace:" in line.lower() and "0x" in line:
+                    # This part handles the backtrases are printed in one line.
+                    # Example:
+                    # [shard 2] seastar - Exceptional future ignored: exceptions::mutation_write_timeout_exception
+                    # (Operation timed out for system.paxos - received only 0 responses from 1 CL=ONE.),
+                    # backtrace:   0x3316f4d#012  0x2e2d177#012  0x189d397#012  0x2e76ea0#012  0x2e770af#012
+                    # 0x2eaf065#012  0x2ebd68c#012  0x2e48d5d#012  /opt/scylladb/libreloc/libpthread.so.0+0x94e1#012
+                    splitted_line = re.split("backtrace:", line, flags=re.IGNORECASE)
+                    for trace_line in splitted_line[1].split():
+                        if trace_line.startswith('0x') or 'scylladb/lib' in trace_line:
+                            one_line_backtrace.append(trace_line)
 
                 if index not in self._system_log_errors_index or start_from_beginning:
                     # for each line use all regexes to match, and if found send an event
@@ -1336,6 +1348,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                             cloned_event = event.clone_with_info(node=self, line_number=index, line=line)
                             backtraces.append(dict(event=cloned_event, backtrace=[]))
                             break  # Stop iterating patterns to avoid creating two events for one line of the log
+
+                if one_line_backtrace and backtraces:
+                    backtraces[-1]['backtrace'] = one_line_backtrace
 
             if not start_from_beginning:
                 self.last_line_no = index if index else last_line_no
