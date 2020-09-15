@@ -35,7 +35,7 @@ def call(Map params, String region){
     export SCT_INSTANCE_PROVISION="${params.get('provision_type', '')}"
     export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
     export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
-    if [[ ${params.update_db_packages} != null ]]; then
+    if [[ ! -z "${params.update_db_packages}" ]]; then
         export SCT_UPDATE_DB_PACKAGES="${params.update_db_packages}"
     fi
 
