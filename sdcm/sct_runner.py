@@ -6,6 +6,7 @@ from enum import Enum
 from functools import lru_cache
 from math import ceil
 from textwrap import dedent
+from typing import Optional
 
 import boto3
 
@@ -56,11 +57,11 @@ class SctRunner:
         ks = KeyStore()
         return ks.get_ec2_ssh_key_pair()
 
-    def get_remoter(self, host):
+    def get_remoter(self, host, connect_timeout: Optional[float] = None):
         self._ssh_pkey_file = tempfile.NamedTemporaryFile(mode="w", delete=False)
         self._ssh_pkey_file.write(self.key_pair().private_key.decode())
         self._ssh_pkey_file.flush()
-        return RemoteCmdRunnerBase.create_remoter(hostname=host, user=self.LOGIN_USER, key_file=self._ssh_pkey_file.name)
+        return RemoteCmdRunnerBase.create_remoter(hostname=host, user=self.LOGIN_USER, key_file=self._ssh_pkey_file.name, connect_timeout=connect_timeout)
 
     def install_prereqs(self, public_ip):
         LOGGER.info("Installing required packages...")
