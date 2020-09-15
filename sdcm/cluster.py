@@ -1914,6 +1914,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.scylla_version_detailed = result.stdout.strip()
             if build_id := self.get_scylla_build_id():
                 self.scylla_version_detailed += f" with build-id {build_id}"
+                self.log.info(f"Found ScyllaDB version with details: {self.scylla_version_detailed}")
         else:
             if self.distro.is_rhel_like:
                 cmd = f"rpm --query --queryformat '%{{VERSION}}' {self.scylla_pkg()}"
