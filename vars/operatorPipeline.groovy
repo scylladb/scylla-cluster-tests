@@ -19,7 +19,7 @@ def call(Map pipelineParams) {
             string(defaultValue: 'scylladb/scylla-operator:v0.2.3',
                    description: '',
                    name: 'k8s_scylla_operator_docker_image')
-            string(defaultValue: '4.0.0',
+            string(defaultValue: 'latest',
                    description: '',
                    name: 'scylla_version')
             string(defaultValue: '2.0.2',
