@@ -902,7 +902,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
             # make sure scylla-ami-setup finishes, flag file is deleted, and first start fails as expected.
             result = node.remoter.run('systemctl status scylla-server', ignore_status=True)
-            return 'Failed to start Scylla Server.' in result.stdout
+            return 'Failed to start Scylla Server.' in result.stdout or 'Active: failed' in result.stdout
 
         wait.wait_for(scylla_ami_setup_done, step=10, timeout=300)
 
