@@ -66,8 +66,9 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
             pre_upgrade_backup_task_files = mgr_cluster.get_backup_files_dict(backup_task_snapshot)
 
         with self.subTest("Creating a backup task and stopping it"):
+            legacy_args = "--force" if manager_tool.client_version.startswith("2.1") else None
             pausable_backup_task = mgr_cluster.create_backup_task(interval="1d", location_list=location_list,
-                                                                  keyspace_list=["system_*"])
+                                                                  keyspace_list=["system_*"], legacy_args=legacy_args)
             pausable_backup_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=180, step=2)
             pausable_backup_task.stop()
 

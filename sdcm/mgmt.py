@@ -420,9 +420,9 @@ class ManagerCluster(ScyllaManagerBase):
         self.ssh_identity_file = ssh_identity_file
 
     def create_backup_task(self, dc_list=None,  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
-                           dry_run=None, force=None, interval=None, keyspace_list=None,
+                           dry_run=None, interval=None, keyspace_list=None,
                            location_list=None, num_retries=None, rate_limit_list=None, retention=None, show_tables=None,
-                           snapshot_parallel_list=None, start_date=None, upload_parallel_list=None):
+                           snapshot_parallel_list=None, start_date=None, upload_parallel_list=None, legacy_args=None):
         cmd = "backup -c {}".format(self.id)
 
         if dc_list is not None:
@@ -430,8 +430,6 @@ class ManagerCluster(ScyllaManagerBase):
             cmd += " --dc {} ".format(dc_names)
         if dry_run is not None:
             cmd += " --dry-run"
-        if force is not None:
-            cmd += " --force"
         if interval is not None:
             cmd += " --interval {}".format(interval)
         if keyspace_list is not None:
@@ -457,7 +455,8 @@ class ManagerCluster(ScyllaManagerBase):
         if upload_parallel_list is not None:
             upload_parallel_string = ','.join(upload_parallel_list)
             cmd += " --upload-parallel {} ".format(upload_parallel_string)
-
+        if legacy_args:
+            cmd += f" {legacy_args}"
         res = self.sctool.run(cmd=cmd, parse_table_res=False)
         if not res.stdout:
             raise ScyllaManagerError("Unknown failure for sctool '{}' command".format(cmd))
@@ -770,6 +769,10 @@ class ScyllaManagerTool(ScyllaManagerBase):
     def version(self):
         cmd = "version"
         return self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
+
+    @property
+    def client_version(self):
+        return self.version[0][0].strip("Client version: ")
 
     @property
     def cluster_list(self):
