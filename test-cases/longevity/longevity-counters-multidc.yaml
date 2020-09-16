@@ -20,4 +20,3 @@ nemesis_interval: 15
 use_mgmt: true
 
 server_encrypt: true
-client_encrypt: true
