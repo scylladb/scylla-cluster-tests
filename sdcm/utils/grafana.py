@@ -12,7 +12,7 @@ LOGGER = logging.getLogger(__name__)
 class GrafanaAnnotator(threading.Thread):
     def __init__(self):
         self.stop_event = threading.Event()
-        super(GrafanaAnnotator, self).__init__()
+        super().__init__(daemon=True)
 
     def run(self):
         for event_class, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events(stop_event=self.stop_event):
@@ -48,7 +48,7 @@ class GrafanaEventAggragator(threading.Thread):
         self.max_duplicates = max_duplicates
         self.annotations = list()
         self.auth = ('admin', 'admin')
-        super(GrafanaEventAggragator, self).__init__()
+        super().__init__(daemon=True)
 
     def set_grafana_url(self, grafana_base_url):
         self.grafana_base_url = grafana_base_url

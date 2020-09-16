@@ -29,8 +29,7 @@ def start_http_server(port, addr='', registry=prometheus_client.REGISTRY):
     """Starts an HTTP server for prometheus metrics as a daemon thread"""
     custom_metrics_handler = prometheus_client.MetricsHandler.factory(registry)
     httpd = _ThreadingSimpleServer((addr, port), custom_metrics_handler)
-    http_thread = threading.Thread(target=httpd.serve_forever, name='HttpServerThread')
-    http_thread.daemon = True
+    http_thread = threading.Thread(target=httpd.serve_forever, name='HttpServerThread', daemon=True)
     http_thread.start()
     return httpd
 
@@ -270,7 +269,7 @@ class AlertSilencer:
 class PrometheusDumper(threading.Thread):
     def __init__(self):
         self.stop_event = threading.Event()
-        super(PrometheusDumper, self).__init__()
+        super().__init__(daemon=True)
 
     def run(self):
         events_gauge = nemesis_metrics_obj().create_gauge('sct_events_gauge',

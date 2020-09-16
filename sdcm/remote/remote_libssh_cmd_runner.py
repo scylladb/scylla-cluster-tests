@@ -11,21 +11,14 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Optional, List
 import os
 import time
-import threading
 import socket
-
-from invoke.watchers import StreamWatcher
-
-from sdcm.utils.decorators import retrying
 
 from .libssh2_client import Client as LibSSH2Client, Timings
 from .libssh2_client.exceptions import AuthenticationException, UnknownHostException, ConnectError, \
     FailedToReadCommandOutput, CommandTimedOut, FailedToRunCommand, OpenChannelTimeout, SocketRecvError, \
     UnexpectedExit, Failure
-from .libssh2_client.result import Result
 from .base import RetryableNetworkException
 from .remote_base import RemoteCmdRunnerBase
 
