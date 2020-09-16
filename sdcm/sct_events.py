@@ -243,7 +243,7 @@ class SctEvent(Generic[EventType]):
     def publish_or_dump(self, default_logger=None):
         if 'MainDevice' in EVENTS_PROCESSES:
             if EVENTS_PROCESSES['MainDevice'].is_alive():
-                super().publish()
+                self.publish()
             else:
                 EVENTS_PROCESSES['EVENTS_FILE_LOGGER'].dump_event_into_files(self)
             return
@@ -525,8 +525,12 @@ class CoreDumpEvent(SctEvent):
         self.publish()
 
     def __str__(self):
-        return "{0}: node={1.node}\ncorefile_url=\n{1.corefile_url}\nbacktrace={1.backtrace}\ndownload_instructions=\n{1.download_instructions}".format(
-            super(CoreDumpEvent, self).__str__(), self)
+        output = super(CoreDumpEvent, self).__str__()
+        for attr_name in ['node', 'corefile_url', 'backtrace', 'download_instructions']:
+            attr_value = getattr(self, attr_name, None)
+            if attr_value:
+                output += f"{attr_name}={attr_value}\n"
+        return output
 
 
 class DisruptionEvent(SctEvent):  # pylint: disable=too-many-instance-attributes

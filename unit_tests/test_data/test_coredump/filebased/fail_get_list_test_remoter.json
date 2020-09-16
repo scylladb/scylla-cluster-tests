@@ -8,7 +8,7 @@
       "exit_status": 0
     }
   ],
-  "sudo ls /var/lib/scylla/coredumps/*.core": [
+  "sudo ls /var/lib/scylla/coredumps": [
     {
       "__instance__": "invoke.exceptions.UnexpectedExit",
       "result": {

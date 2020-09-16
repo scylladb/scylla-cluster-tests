@@ -13,18 +13,18 @@
 
 from threading import Thread, Event
 from typing import List, Optional, Dict
-from logging import getLogger
+import time
 from dataclasses import dataclass
 from functools import cached_property
 import re
 import os
 
-from time import mktime
 from datetime import datetime
 from abc import abstractmethod
 
 from sdcm.sct_events import raise_event_on_failure, CoreDumpEvent
-from sdcm.utils.decorators import retrying
+from sdcm.log import SDCMAdapter
+from sdcm.utils.decorators import retrying, timeout
 from sdcm.remote import NETWORK_EXCEPTIONS
 
 
@@ -81,12 +81,12 @@ class CoreDumpInfo:
 
 
 class CoredumpThreadBase(Thread):
-    log = getLogger(__file__)
     lookup_period = 30
     upload_retry_limit = 3
 
     def __init__(self, node: 'BaseNode', max_core_upload_limit: int):
         self.node = node
+        self.log = SDCMAdapter(node.log, extra={"prefix": self.__class__.__name__})
         self.max_core_upload_limit = max_core_upload_limit
         self.found: List[CoreDumpInfo] = []
         self.in_progress: List[CoreDumpInfo] = []
@@ -98,12 +98,6 @@ class CoredumpThreadBase(Thread):
     def stop(self):
         self.termination_event.set()
 
-    def start(self):
-        if self.node.is_ubuntu14():
-            # fixme: ubuntu14 doesn't has coredumpctl, skip it.
-            return
-        super().start()
-
     @raise_event_on_failure
     def run(self):
         """
@@ -113,10 +107,10 @@ class CoredumpThreadBase(Thread):
             try:
                 self.main_cycle_body()
             except Exception as exc:
-                self.log.error(f"CoredumpExportThread: following error occurred: {str(exc)}")
+                self.log.error(f"Following error occurred: {str(exc)}")
 
     def main_cycle_body(self):
-        if not self.node.wait_ssh_up(verbose=False):
+        if not self.node.remoter.is_up(timeout=60):
             return
         self._process_coredumps(self.in_progress, self.completed, self.uploaded)
         new_cores = self.extract_info_from_core_pids(self.get_list_of_cores(), exclude_cores=self.found)
@@ -159,6 +153,7 @@ class CoredumpThreadBase(Thread):
                     in_progress.remove(core_info)
                     completed.append(core_info)
                     continue
+                self.update_coredump_info_with_more_information(core_info)
                 result = self.upload_coredump(core_info)
                 completed.append(core_info)
                 in_progress.remove(core_info)
@@ -188,11 +183,6 @@ class CoredumpThreadBase(Thread):
                     found = True
                     break
             if found:
-                continue
-            try:
-                self.update_coredump_info_with_more_information(new_core_info)
-            except Exception as exc:  # pylint: disable=bare-except
-                self.log.error(f"Failed to extract coredump information for {new_core_info.pid} due to the: {str(exc)}")
                 continue
             self.publish_event(new_core_info)
             output.append(new_core_info)
@@ -239,9 +229,11 @@ class CoredumpThreadBase(Thread):
 
     def _install_pigz(self):
         if self.node.is_rhel_like():
-            self.node.remoter.sudo('yum install pigz')
+            self.node.remoter.sudo('yum install -y pigz')
+            self.__dict__['is_pigz_installed'] = True
         elif self.node.is_ubuntu() or self.node.is_debian():
-            self.node.remoter.sudo('apt install pigz')
+            self.node.remoter.sudo('apt install -y pigz')
+            self.__dict__['is_pigz_installed'] = True
         else:
             raise RuntimeError("Distro is not supported")
 
@@ -253,7 +245,7 @@ class CoredumpThreadBase(Thread):
         if not self._is_pigz_installed:
             self._install_pigz()
         try:  # pylint: disable=unreachable
-            if not self.node.remoter.run(f'sudo ls {coredump}.gz', ignore_status=True).ok:
+            if not self.node.remoter.run(f'sudo ls {coredump}.gz', verbose=False, ignore_status=True).ok:
                 self.node.remoter.run(f'sudo pigz --fast --keep {coredump}')
             coredump += '.gz'
         except NETWORK_EXCEPTIONS:  # pylint: disable=try-except-raise
@@ -294,7 +286,6 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         result = self.node.remoter.run(
             'sudo coredumpctl --no-pager --no-legend 2>&1', verbose=False, ignore_status=True)
         if "No coredumps found" in result.stdout or not result.ok:
-            # exit_status 127: coredumpctl command not found
             return []
         pids_list = []
         result = result.stdout + result.stderr
@@ -413,15 +404,23 @@ class CoredumpExportFileThread(CoredumpThreadBase):
     feed them to coredumpctl to extract core information, packs them and upload
 
     """
-    '/lib/systemd/systemd-coredump %P %u %g %s %t 9223372036854775808 %h'
-    '%h-%P-%u-%g-%s-%t.core'
-    lookup_period = 0.1
-    coredumps_directories = []
+    checkup_time_core_to_complete = 1
 
-    def __init__(self, node: 'BaseNode', max_core_upload_limit: int, coredump_directories=None):
-        if coredump_directories:
-            self.coredumps_directories = coredump_directories
+    def __init__(self, node: 'BaseNode', max_core_upload_limit: int, coredump_directories: List[str]):
+        self.coredumps_directories = coredump_directories
         super().__init__(node=node, max_core_upload_limit=max_core_upload_limit)
+
+    @property
+    def _is_file_installed(self):
+        return self.node.remoter.run('file', ignore_status=True).exited in [0, 1]
+
+    def _install_file(self):
+        if self.node.is_rhel_like():
+            self.node.remoter.sudo('yum install -y file')
+        elif self.node.is_ubuntu() or self.node.is_debian():
+            self.node.remoter.sudo('apt install -y file')
+        else:
+            raise RuntimeError("Distro is not supported")
 
     def _extract_core_info_from_file_name(self, corefile: str) -> Dict[str, str]:
         data = os.path.splitext(corefile)[0].split('-')
@@ -437,25 +436,40 @@ class CoredumpExportFileThread(CoredumpThreadBase):
     def _get_list_of_cores(self) -> Optional[List[CoreDumpInfo]]:
         output = []
         for directory in self.coredumps_directories:
-            for corefile in self.node.remoter.sudo(f'ls {directory}/*.core').stdout.split():
+            for corefile in self.node.remoter.sudo(f'ls {directory}', verbose=False, ignore_status=True).stdout.split():
                 self.log.debug(f'Found core file at {corefile}')
                 core_data = self._extract_core_info_from_file_name(os.path.basename(corefile))
                 output.append(
                     CoreDumpInfo(
                         pid=core_data['pid'],
                         timestamp=float(core_data['timestamp']),
-                        corefile=corefile
+                        corefile=os.path.join(directory, os.path.basename(corefile)),
+                        node=self.node
                     )
                 )
-                self.node.remoter.sudo(f'rm -f {corefile} ', ignore_status=True)
+        if output:
+            if not self._is_file_installed:
+                self._install_file()
         return output
 
+    @timeout(timeout=600, message='Wait till core is fully dumped')
+    def wait_till_core_is_completed(self, core_info: CoreDumpInfo):
+        initial_size = self.node.remoter.run(f'stat -c %s {core_info.corefile}', verbose=False).stdout
+        if not initial_size:
+            raise RuntimeError(f"Can't get size of the file {core_info.corefile}")
+        time.sleep(self.checkup_time_core_to_complete)
+        final_size = self.node.remoter.run(f'stat -c %s {core_info.corefile}', verbose=False).stdout
+        if not final_size:
+            raise RuntimeError(f"Can't get size of the file {core_info.corefile}")
+        if initial_size != final_size:
+            raise RuntimeError(f"Core is still in the process of dumping {core_info.corefile}")
+
     def update_coredump_info_with_more_information(self, core_info: CoreDumpInfo):
+        self.wait_till_core_is_completed(core_info)
         # /var/lib/scylla/coredumps/45d8a24d50d3-5711-0-0-6-1600105104.core: ELF 64-bit LSB core file, x86-64,
         # version 1 (SYSV), SVR4-style, from '/usr/bin/scylla --log-to-syslog 0 --log-to-stdout 1
         # --default-log-level info --', real uid: 0, effective uid: 0, real gid: 0, effective gid: 0,
         # execfn: '/opt/scylladb/libexec/scylla', platform: 'x86_64'
         for chunk in self.node.remoter.sudo(f'file {core_info.corefile}', retry=3).stdout.split(', '):
             if chunk.startswith("from '"):
-                core_info.command_line = chunk[6:-1]
-
+                core_info.update(command_line=chunk[6:-1])

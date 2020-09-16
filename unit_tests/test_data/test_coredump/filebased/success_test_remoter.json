@@ -1,4 +1,93 @@
 {
+  "stat -c %s /var/lib/scylla/coredumps/45d8a24d50d3-5711-0-0-6-1600105104.core": [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "1000",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    },
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "5000",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    },
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "9000",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    },
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "100000",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    },
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "1000000",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+    "stat -c %s /var/lib/scylla/coredumps/ac7d8023a369-41537-0-0-11-1600150672.core": [
+    {
+      "__instance__": "invoke.exceptions.UnexpectedExit",
+      "result": {
+        "__instance__": "fabric.runners.Result",
+        "stdout": "",
+        "stderr": "Fake error, just to check what will coredump exporter thread can handle it properly",
+        "exited": 1
+      },
+      "reason": null
+    },
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "5000",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    },
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "9000",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    },
+    {
+      "__instance__": "invoke.exceptions.UnexpectedExit",
+      "result": {
+        "__instance__": "fabric.runners.Result",
+        "stdout": "",
+        "stderr": "Fake error, just to check what will coredump exporter thread can handle it properly",
+        "exited": 1
+      },
+      "reason": null
+    },
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "1000000",
+      "stderr": "",
+      "exited": 0,
+      "exit_status": 0
+    }
+  ],
+  "file": [
+    {
+      "__instance__": "fabric.runners.Result",
+      "stdout": "sage: file [-bcCdEhikLlNnprsSvzZ0] [--apple] [--extension] [--mime-encoding]\n            [--mime-type] [-e <testname>] [-F <separator>]  [-f <namefile>]\n            [-m <magicfiles>] [-P <parameter=value>] <file> ...\n       file -C [-m <magicfiles>]\n       file [--help]",
+      "stderr": "",
+      "exited": 1,
+      "exit_status": 1
+    }
+  ],
   "cat /etc/os-release": [
     {
       "__instance__": "fabric.runners.Result",
@@ -8,7 +97,7 @@
       "exit_status": 0
     }
   ],
-  "sudo ls /var/lib/scylla/coredumps/*.core": [
+  "sudo ls /var/lib/scylla/coredumps": [
     {
       "__instance__": "invoke.exceptions.UnexpectedExit",
       "result": {

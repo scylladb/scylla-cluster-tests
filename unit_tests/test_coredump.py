@@ -2,10 +2,10 @@ import unittest
 import os
 import time
 import tempfile
+from abc import abstractmethod
 from sdcm.coredump import CoredumpExportSystemdThread, CoreDumpInfo, CoredumpExportFileThread, CoredumpThreadBase
 from unit_tests.lib.data_pickle import Pickler
 from unit_tests.lib.mock_remoter import MockRemoter
-from unit_tests.lib.remoter_recorder import RemoterRecorder
 from sdcm.cluster import BaseNode
 
 
@@ -54,6 +54,7 @@ class CoredumpExportSystemdTestThread(CoredumpExportSystemdThread):
 
 class CoredumpExportFileTestThread(CoredumpExportFileThread):
     lookup_period = 0
+    checkup_time_core_to_complete = 0
 
     def __init__(self, node: 'BaseNode', max_core_upload_limit: int, coredump_directories=None):
         self.got_cores = []
@@ -88,21 +89,10 @@ class CoredumpExportFileTestThread(CoredumpExportFileThread):
 class CoredumpExportTestBase(unittest.TestCase):
     maxDiff = None
     test_data_folder: str = None
-    target_coredump_class = None
 
+    @abstractmethod
     def _init_target_coredump_cass(self, test_name: str) -> CoredumpThreadBase:
-        return self.target_coredump_class(
-            FakeNode(
-                MockRemoter(
-                    responses=os.path.join(
-                        os.path.dirname(__file__), 'test_data', 'test_coredump', self.test_data_folder,
-                        test_name + '_remoter.json'
-                    )
-                ),
-                tempfile.mkdtemp()
-            ),
-            5
-        )
+        pass
 
     def _run_coredump_with_fake_remoter(self, test_name: str):
         th = self._init_target_coredump_cass(test_name)
@@ -112,10 +102,6 @@ class CoredumpExportTestBase(unittest.TestCase):
         th.join(20)
         self.assertFalse(th.is_alive(), 'CoredumpExportThread thread did not stop in 20 seconds')
         results = th.get_results()
-        # th.save_results(
-        #     os.path.join(os.path.dirname(__file__), 'test_data', 'test_coredump', self.test_data_folder,
-        #                  test_name + '_results.json')
-        # )
         expected_results = th.load_expected_results(
             os.path.join(os.path.dirname(__file__), 'test_data', 'test_coredump', self.test_data_folder,
                          test_name + '_results.json')
@@ -132,7 +118,20 @@ class CoredumpExportTestBase(unittest.TestCase):
 class CoredumpExportSystemdTest(CoredumpExportTestBase):
     maxDiff = None
     test_data_folder = 'systemd'
-    target_coredump_class = CoredumpExportSystemdTestThread
+
+    def _init_target_coredump_cass(self, test_name: str) -> CoredumpExportSystemdTestThread:
+        return CoredumpExportSystemdTestThread(
+            FakeNode(
+                MockRemoter(
+                    responses=os.path.join(
+                        os.path.dirname(__file__), 'test_data', 'test_coredump', self.test_data_folder,
+                        test_name + '_remoter.json'
+                    )
+                ),
+                tempfile.mkdtemp()
+            ),
+            5
+        )
 
     def test_success_test(self):
         self._run_coredump_with_fake_remoter('success_test')
@@ -147,10 +146,9 @@ class CoredumpExportSystemdTest(CoredumpExportTestBase):
 class CoredumpExportFileTest(CoredumpExportTestBase):
     maxDiff = None
     test_data_folder = 'filebased'
-    target_coredump_class = CoredumpExportFileTestThread
 
-    def _init_target_coredump_cass(self, test_name: str) -> CoredumpThreadBase:
-        return self.target_coredump_class(
+    def _init_target_coredump_cass(self, test_name: str) -> CoredumpExportFileTestThread:
+        return CoredumpExportFileTestThread(
             FakeNode(
                 MockRemoter(
                     responses=os.path.join(
