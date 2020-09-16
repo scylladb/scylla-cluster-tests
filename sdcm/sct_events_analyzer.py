@@ -16,7 +16,7 @@ class EventsAnalyzer(threading.Thread):
 
     def __init__(self):
         self.stop_event = threading.Event()
-        super().__init__()
+        super().__init__(daemon=True)
 
     @raise_event_on_failure
     def run(self):

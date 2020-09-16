@@ -138,7 +138,7 @@ class CommandLoggerBase(LoggerBase):
 
     def __init__(self, node, target_log_file: str):
         super().__init__(node, target_log_file)
-        self._thread = Thread(target=self._thread_body, daemon=False)
+        self._thread = Thread(target=self._thread_body, daemon=True)
         self._termination_event = ThreadEvent()
 
     @property

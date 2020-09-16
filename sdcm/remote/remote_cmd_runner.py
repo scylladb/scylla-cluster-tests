@@ -13,17 +13,13 @@
 
 from typing import Optional, List
 import os
-import time
 import threading
 
 from fabric import Connection, Config
 from paramiko import SSHException, RSAKey
 from paramiko.ssh_exception import NoValidConnectionsError, AuthenticationException
-from invoke.runners import Result
 from invoke.watchers import StreamWatcher
 from invoke.exceptions import UnexpectedExit, Failure
-
-from sdcm.utils.decorators import retrying
 
 from .base import RetryableNetworkException, SSHConnectTimeoutError
 from .remote_base import RemoteCmdRunnerBase
@@ -80,8 +76,7 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
             self.ssh_up_thread_termination.wait(5)
 
     def start_ssh_up_thread(self):
-        self.ssh_up_thread = threading.Thread(target=self.ssh_ping_thread, name='SSHPingThread')
-        self.ssh_up_thread.daemon = True
+        self.ssh_up_thread = threading.Thread(target=self.ssh_ping_thread, name='SSHPingThread', daemon=True)
         self.ssh_up_thread.start()
 
     def stop_ssh_up_thread(self):

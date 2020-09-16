@@ -285,6 +285,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             except:  # pylint: disable=bare-except
                 self.kill_test(sys.exc_info())
         th = threading.Timer(60 * int(self.test_duration), kill_the_test)
+        th.daemon = True
         th.start()
         return th
 
@@ -1228,8 +1229,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 time.sleep(interval)
                 current = time.time()
 
-        thread = threading.Thread(target=run_in_thread, name='FullScanThread')
-        thread.daemon = True
+        thread = threading.Thread(target=run_in_thread, name='FullScanThread', daemon=True)
         thread.start()
 
     @staticmethod

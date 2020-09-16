@@ -1420,7 +1420,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         self._set_current_disruption('AbortRepairMonkey')
         self.log.debug("Start repair target_node in background")
-        thread1 = threading.Thread(target=self.repair_nodetool_repair, name='NodeToolRepairThread')
+        thread1 = threading.Thread(target=self.repair_nodetool_repair, name='NodeToolRepairThread', daemon=True)
         thread1.start()
 
         def repair_streaming_exists():
@@ -2068,7 +2068,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         streaming_error_logs_stream = self.target_node.follow_system_log(patterns=['streaming.*err'])
 
         streaming_thread = threading.Thread(target=streaming_task_thread, kwargs={'nodetool_task': task},
-                                            name='StreamingThread')
+                                            name='StreamingThread', daemon=True)
         streaming_thread.start()
 
         def is_streaming_started():
