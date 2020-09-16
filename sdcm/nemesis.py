@@ -637,7 +637,41 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             node.remoter.run(
                 'sudo rm -f /var/lib/scylla/data/keyspace1/{}/upload/manifest.json'.format(upload_dir))
             self.log.debug(f'Loading {keys_num} keys to {node.name} by refresh')
+
+            # Resharding of the loaded sstable files is performed before they are moved from upload to the main folder.
+            # So we need to validate that resharded files are placed in the "upload" folder before moving.
+            # Find the compaction output that reported about the resharding
+
+            search_reshard = node.follow_system_log(patterns=['Resharded.*\[/'])
             node.run_nodetool(sub_cmd="refresh", args="-- keyspace1 standard1")
+            resharding_done = list(search_reshard)
+            return resharding_done
+
+        def validate_resharding_after_refresh(resharding_done):
+            """
+            # Validate that files after resharding were saved in the "upload" folder.
+            # Example of compaction output:
+
+            #   scylla[6653]:  [shard 0] compaction - [Reshard keyspace1.standard1 3cad4140-f8c3-11ea-acb1-000000000002]
+            #   Resharded 1 sstables to [
+            #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-9-big-Data.db:level=0,
+            #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-10-big-Data.db:level=0,
+            #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-11-big-Data.db:level=0,
+            #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-12-big-Data.db:level=0,
+            #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-13-big-Data.db:level=0,
+            #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-22-big-Data.db:level=0,
+            #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-15-big-Data.db:level=0,
+            #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-16-big-Data.db:level=0,
+            #   ]. 91MB to 92MB (~100% of original) in 5009ms = 18MB/s. ~370176 total partitions merged to 370150
+            """
+            assert resharding_done, "Resharding wasn't run"
+            self.log.debug(f"Found resharding: {resharding_done}")
+
+            for line in resharding_done:
+                # Find all files that were created after resharding
+                for one_file in re.findall(r"(/var/.*?),", line, re.IGNORECASE):
+                    # The file path have to include "upload" folder
+                    assert '/upload/' in one_file, "Loaded file was resharded not in 'upload' folder"
 
         if result is not None and result.exit_status == 0:
             # Check one special key before refresh, we will verify refresh by query in the end
@@ -652,7 +686,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
             # Executing rolling refresh one by one
             for node in self.cluster.nodes:
-                do_refresh(node)
+                resharding_done = do_refresh(node)
+                validate_resharding_after_refresh(resharding_done)
 
             # Verify that the special key is loaded by SELECT query
             result = self.target_node.run_cqlsh(query_verify)
