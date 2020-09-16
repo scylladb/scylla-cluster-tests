@@ -47,7 +47,7 @@ LOGGER = logging.getLogger(__name__)
 class EventsDevice(multiprocessing.Process):
 
     def __init__(self, log_dir):
-        super(EventsDevice, self).__init__()
+        super().__init__(daemon=True)
 
         self._ready = multiprocessing.Event()
         self._pub_port = multiprocessing.Value('d', 0)
@@ -924,7 +924,7 @@ class PrometheusAlertManagerEvent(SctEvent):  # pylint: disable=too-many-instanc
 
 class EventsFileLogger(multiprocessing.Process):  # pylint: disable=too-many-instance-attributes
     def __init__(self, log_dir):
-        super(EventsFileLogger, self).__init__()
+        super().__init__(daemon=True)
         self._test_pid = os.getpid()
         self._stop_event = multiprocessing.Event()
         self.event_log_base_dir = Path(log_dir, 'events_log')
