@@ -44,6 +44,7 @@ from sdcm.utils.decorators import log_run_info, timeout, retrying
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger
 from .operator_monitoring import ScyllaOperatorLogMonitoring, ScyllaOperatorStatusMonitoring
+from sdcm.coredump import CoredumpExportFileThread
 
 
 KUBECTL_PROXY_PORT = 8001
@@ -95,6 +96,10 @@ class MinikubeOps:
             echo fs.aio-max-nr=1048576 >> /etc/sysctl.d/99-sct-minikube.conf
             echo net.ipv4.ip_forward=1 >> /etc/sysctl.d/99-sct-minikube.conf
             echo net.ipv4.conf.all.forwarding=1 >> /etc/sysctl.d/99-sct-minikube.conf
+            # kernel.core_pattern is global variable, it has same value inside of docker container and on the host
+            # we patch it on the host
+            mkdir -p /var/lib/scylla/coredumps
+            echo kernel.core_pattern=/var/lib/scylla/coredumps/%h-%P-%u-%g-%s-%t.core >> /etc/sysctl.d/99-sct-minikube.conf
             sysctl --system
 
             # Download kubectl binary.
@@ -333,6 +338,10 @@ class BasePodContainer(cluster.BaseNode):
                          node_prefix=node_prefix,
                          dc_idx=dc_idx)
 
+    def init(self) -> None:
+        super().init()
+        self.remoter.run('mkdir -p /var/lib/scylla/coredumps', ignore_status=True)
+
     @staticmethod
     def is_docker() -> bool:
         return True
@@ -502,6 +511,11 @@ class BasePodContainer(cluster.BaseNode):
             diff = "".join(unified_diff(original, changed))
             LOGGER.debug("%s: scylla.yaml requires to be updated with:\n%s", self, diff)
             self.parent_cluster.scylla_yaml_update_required = True
+
+    def start_coredump_thread(self):
+        self._coredump_thread = CoredumpExportFileThread(
+            self, self._maximum_number_of_cores_to_publish, ['/var/lib/scylla/coredumps'])
+        self._coredump_thread.start()
 
 
 class MinicubeScyllaPodContainer(BasePodContainer):

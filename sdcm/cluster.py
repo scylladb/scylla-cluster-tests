@@ -455,8 +455,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if not Setup.REUSE_CLUSTER:
             self.set_hostname()
 
-        self._init_port_mapping()
         self.start_task_threads()
+        self._init_port_mapping()
+
         self.set_keep_alive()
 
     def _init_remoter(self, ssh_login_info):
@@ -940,10 +941,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     @cached_property
     def node_type(self) -> 'str':
         if 'db-node' in self.name:
+            self.log.info('node_type = db')
             return 'db'
         if 'monitor' in self.name:
+            self.log.info('node_type = monitor')
             return 'monitor'
         if 'loader' in self.name:
+            self.log.info('node_type = loader')
             return 'loader'
         return 'unknown'
 
