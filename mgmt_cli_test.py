@@ -123,7 +123,7 @@ class BackupFunctionsMixIn:
     def _generate_load(self):
         self.log.info('Starting c-s write workload for 1m')
         stress_cmd = self.params.get('prepare_write_cmd')
-        stress_thread = self.run_stress_thread(stress_cmd=stress_cmd)
+        stress_thread = self.run_stress_thread(stress_cmd=stress_cmd, round_robin=self.params.get('round_robin'))
         self.log.info('Sleeping for 15s to let cassandra-stress run...')
         time.sleep(15)
         return stress_thread
@@ -132,6 +132,71 @@ class BackupFunctionsMixIn:
         load_thread = self._generate_load()
         load_results = load_thread.get_results()
         self.log.info(f'load={load_results}')
+
+    def _parse_stress_cmd(self, stress_cmd, params):
+        # Due to an issue with scylla & cassandra-stress - we need to create the counter table manually
+        if 'counter_' in stress_cmd:
+            self._create_counter_table()
+
+        if 'compression' in stress_cmd:
+            if 'keyspace_name' not in params:
+                compression_prefix = re.search('compression=(.*)Compressor', stress_cmd).group(1)
+                keyspace_name = "keyspace_{}".format(compression_prefix.lower())
+                params.update({'keyspace_name': keyspace_name})
+
+        return params
+
+    @staticmethod
+    def _get_keyspace_name(ks_number, keyspace_pref='keyspace'):
+        return '{}{}'.format(keyspace_pref, ks_number)
+
+    def _run_all_stress_cmds(self, stress_queue, params):
+        stress_cmds = params['stress_cmd']
+        if not isinstance(stress_cmds, list):
+            stress_cmds = [stress_cmds]
+        # In some cases we want the same stress_cmd to run several times (can be used with round_robin or not).
+        stress_multiplier = self.params.get('stress_multiplier', default=1)
+        if stress_multiplier > 1:
+            stress_cmds *= stress_multiplier
+
+        for stress_cmd in stress_cmds:
+            params.update({'stress_cmd': stress_cmd})
+            self._parse_stress_cmd(stress_cmd, params)
+
+            # Run all stress commands
+            self.log.debug('stress cmd: {}'.format(stress_cmd))
+            if stress_cmd.startswith('scylla-bench'):
+                stress_queue.append(self.run_stress_thread_bench(stress_cmd=stress_cmd,
+                                                                 stats_aggregate_cmds=False,
+                                                                 round_robin=self.params.get('round_robin')))
+            else:
+                stress_queue.append(self.run_stress_thread(**params))
+
+    def run_prepare_write_cmd(self):
+        # In some cases (like many keyspaces), we want to create the schema (all keyspaces & tables) before the load
+        # starts - due to the heavy load, the schema propogation can take long time and c-s fails.
+        prepare_write_cmd = self.params.get('prepare_write_cmd', default=None)
+        pre_create_schema = self.params.get('pre_create_schema', default=False)
+        keyspace_num = self.params.get('keyspace_num', default=1)
+        write_queue = list()
+
+        # When the load is too heavy for one loader when using MULTI-KEYSPACES, the load is spreaded evenly across
+        # the loaders (round_robin).
+        if keyspace_num > 1 and self.params.get('round_robin'):
+            self.log.debug("Using round_robin for multiple Keyspaces...")
+            for i in range(1, keyspace_num + 1):
+                keyspace_name = self._get_keyspace_name(i)
+                self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
+                                                               'keyspace_name': keyspace_name,
+                                                               'round_robin': True})
+        # Not using round_robin and all keyspaces will run on all loaders
+        else:
+            self._run_all_stress_cmds(write_queue, params={'stress_cmd': prepare_write_cmd,
+                                                           'keyspace_num': keyspace_num,
+                                                           'round_robin': self.params.get('round_robin')})
+
+        for stress in write_queue:
+            self.verify_stress_thread(cs_thread_pool=stress)
 
     def update_config_file(self):
         # FIXME: add to the nodes not in the same region as the bucket the bucket's region
@@ -241,9 +306,21 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         4) test_client_encryption
         :return:
         """
-        self.generate_load_and_wait_for_results()
+        with self.subTest('STEP 1: Basic Backup Test'):
+            self.test_basic_backup()
+        with self.subTest('STEP 2: Repair Multiple Keyspace Types'):
+            self.test_repair_multiple_keyspace_types()
+        with self.subTest('STEP 3: Mgmt Cluster CRUD'):
+            self.test_mgmt_cluster_crud()
+        with self.subTest('STEP 4: Mgmt cluster Health Check'):
+            self.test_mgmt_cluster_healthcheck()
+        with self.subTest('STEP 5: Client Encryption'):
+            self.test_client_encryption()
+
+    def test_repair_intensity_feature(self):
+        self.run_prepare_write_cmd()
         stress_read_thread = self.generate_background_read_load()
-        time.sleep(300)  # waiting for the compactions to end
+        time.sleep(600)  # waiting for the compactions to end
         # TODO: use a wait function instead of sleep
         for node in self.db_cluster.nodes:
             node.run_nodetool("flush")
