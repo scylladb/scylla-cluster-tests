@@ -946,6 +946,8 @@ class SCTConfiguration(dict):
                   "only effect GCE backend"),
         dict(name="internode_compression", env="SCT_INTERNODE_COMPRESSION", type=str,
              help="scylla option: internode_compression"),
+        dict(name="internode_encryption", env="SCT_INTERNODE_ENCRYPTION", type=str,
+             help="scylla sub option of server_encryption_options: internode_encryption"),
 
         dict(name="loader_swap_size", env="SCT_LOADER_SWAP_SIZE", type=int,
              help="The size of the swap file for the loaders. Its size in bytes calculated by x * 1MB"),
