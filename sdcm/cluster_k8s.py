@@ -91,7 +91,10 @@ class MinikubeOps:
             add-apt-repository \\"deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\\"
             apt-get -qq install --no-install-recommends docker-ce docker-ce-cli containerd.io
             usermod -a -G docker {node.ssh_login_info["user"]}
-            echo 1048576 > /proc/sys/fs/aio-max-nr
+            echo fs.aio-max-nr=1048576 >> /etc/sysctl.d/99-sct-minikube.conf
+            echo net.ipv4.ip_forward=1 >> /etc/sysctl.d/99-sct-minikube.conf
+            echo net.ipv4.conf.all.forwarding=1 >> /etc/sysctl.d/99-sct-minikube.conf
+            sysctl --system
 
             # Download kubectl binary.
             curl -fsSLo /usr/local/bin/kubectl \
