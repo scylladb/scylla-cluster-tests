@@ -849,7 +849,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
     def get_cluster_hosts_with_ips(db_cluster):
         return [[n, n.ip_address] for n in db_cluster.nodes]
 
-    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, disable_automatic_repair=False,  # pylint: disable=too-many-arguments
+    def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, disable_automatic_repair=True,  # pylint: disable=too-many-arguments
                     auth_token=None):
         """
         :param name: cluster name
