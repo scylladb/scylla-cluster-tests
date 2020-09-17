@@ -20,3 +20,4 @@ nemesis_interval: 15
 use_mgmt: true
 
 server_encrypt: true
+internode_encryption: 'dc'

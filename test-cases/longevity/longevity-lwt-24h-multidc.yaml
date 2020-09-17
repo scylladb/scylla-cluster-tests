@@ -17,4 +17,5 @@ space_node_threshold: 64424
 user_prefix: 'lwt-longevity-multi-dc-24h'
 
 server_encrypt: true
+internode_encryption: 'dc'
 client_encrypt: true
