@@ -259,6 +259,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         # for saving test details in DB
         self.create_stats = self.params.get(key='store_results_in_elasticsearch', default=True)
         self.scylla_dir = SCYLLA_DIR
+        self.left_processes_log = os.path.join(self.logdir, 'left_processes.log')
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
         self._logs = {}
         self.timeout_thread = self._init_test_timeout_thread()
@@ -1721,27 +1722,32 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     @silence()
     def show_alive_threads(self):
         if not threading.active_count():
-            return
-        self.log.error("There are some threads left alive:")
-        for th_num, th in enumerate(threading.enumerate()):
-            if th is threading.current_thread():
-                continue
-            source = '<no code available>'
-            module = 'Unknown'
-            if th.__class__ is threading.Thread:
-                if th.run.__func__ is not threading.Thread.run:
-                    module = th.run.__module__
-                    source = inspect.getsource(th.run)
-                elif getattr(th, '_target', None):
-                    module = th._target.__module__
-                    source = inspect.getsource(th._target)
-            else:
-                module = th.__module__
-                source = inspect.getsource(th.__class__)
-            self.log.error(f"========= Thread {th.name} from {module} =========")
-            self.log.error(f"========= SOURCE =========\n{source}")
-            self.log.error(f"========= STACK TRACE =========\n{self._get_stacktrace(th)}")
-            self.log.error(f"========= END OF Thread {th.name} from {module} =========")
+            return False
+        source_modules = []
+        with open(self.left_processes_log, 'a') as log_file:
+            for th_num, th in enumerate(threading.enumerate()):
+                if th is threading.current_thread():
+                    continue
+                source = '<no code available>'
+                module = 'Unknown'
+                if th.__class__ is threading.Thread:
+                    if th.run.__func__ is not threading.Thread.run:
+                        module = th.run.__module__
+                        source = inspect.getsource(th.run)
+                    elif getattr(th, '_target', None):
+                        module = th._target.__module__
+                        source = inspect.getsource(th._target)
+                else:
+                    module = th.__module__
+                    source = inspect.getsource(th.__class__)
+                if module not in source_modules:
+                    source_modules.append(module)
+                log_file.write(f"========= Thread {th.name} from {module} =========\n")
+                log_file.write(f"========= SOURCE =========\n{source}\n")
+                log_file.write(f"========= STACK TRACE =========\n{self._get_stacktrace(th)}\n")
+                log_file.write(f"========= END OF Thread {th.name} from {module} =========\n")
+        self.log.error(f"There are some threads left alive from following modules: {','.join(source_modules)}")
+        return True
 
     def _get_stacktrace(self, thread):
         frame = sys._current_frames().get(thread.ident, None)
@@ -1756,21 +1762,26 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     @silence()
     def show_alive_processes(self):
         if not multiprocessing.active_children():
-            return
-        self.log.error("There are some processes left alive:")
-        for proc_num, proc in enumerate(multiprocessing.active_children()):
-            source = '<no code available>'
-            module = 'Unknown'
-            if proc.__class__ is multiprocessing.Process:
-                if proc.run.__func__ != multiprocessing.Process.run:
-                    module = proc.run.__module__
-                    source = inspect.getsource(proc.run)
-            else:
-                module = proc.__module__
-                source = inspect.getsource(proc.__class__)
-            self.log.error(f"========= Process {proc.name} from {module} =========")
-            self.log.error(f"========= SOURCE =========\n{source}")
-            self.log.error(f"========= END OF Process {proc.name} from {module}  =========")
+            return False
+        source_modules = []
+        with open(self.left_processes_log, 'a') as log_file:
+            for proc_num, proc in enumerate(multiprocessing.active_children()):
+                source = '<no code available>'
+                module = 'Unknown'
+                if proc.__class__ is multiprocessing.Process:
+                    if proc.run.__func__ != multiprocessing.Process.run:
+                        module = proc.run.__module__
+                        source = inspect.getsource(proc.run)
+                else:
+                    module = proc.__module__
+                    source = inspect.getsource(proc.__class__)
+                if module not in source_modules:
+                    source_modules.append(module)
+                log_file.write(f"========= Process {proc.name} from {module} =========\n")
+                log_file.write(f"========= SOURCE =========\n{source}\n")
+                log_file.write(f"========= END OF Process {proc.name} from {module}  =========\n")
+        self.log.error(f"There are some processes left alive from the following modules {','.join(source_modules)}")
+        return True
 
     @silence()
     def clean_resources(self):
@@ -1843,8 +1854,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.collect_sct_logs()
         self.finalize_teardown()
         self.log.info('Test ID: {}'.format(Setup.test_id()))
-        self.show_alive_threads()
-        self.show_alive_processes()
+        self._check_alive_routines_and_report_them()
+
+    def _check_alive_routines_and_report_them(self):
+        if self.show_alive_threads() or self.show_alive_processes():
+            self.log.error(f'Please check {self.left_processes_log} log to see them')
 
     def _get_test_result_event(self) -> TestResultEvent:
         return TestResultEvent(
