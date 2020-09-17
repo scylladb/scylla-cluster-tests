@@ -38,7 +38,7 @@ class ScyllaArgError(Exception):
 
 class ScyllaArgParser(argparse.ArgumentParser):
     def __init__(self, prog: str) -> None:
-        super().__init__(prog=prog, argument_default=argparse.SUPPRESS, add_help=False)
+        super().__init__(prog=prog, argument_default=argparse.SUPPRESS, add_help=False, conflict_handler="resolve")
 
     def error(self, message: Text) -> NoReturn:
         LOGGER.error(message)
