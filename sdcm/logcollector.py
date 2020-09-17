@@ -899,6 +899,8 @@ class SCTLogCollector(LogCollector):
                 search_locally=True),
         FileLog(name='sct.log',
                 search_locally=True),
+        FileLog(name='left_processes.log',
+                search_locally=True),
         FileLog(name='raw_events.log',
                 search_locally=True),
         FileLog(name='events.log',
