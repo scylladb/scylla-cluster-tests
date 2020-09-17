@@ -3794,7 +3794,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if not mgr_cluster:
             self.log.debug("Could not find cluster : {} on Manager. Adding it to Manager".format(cluster_name))
             target = self.nodes[0].ip_address
-            mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=target, disable_automatic_repair=True,
+            mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=target,
                                                    auth_token=Setup.tester_obj().monitors.mgmt_auth_token)
         return mgr_cluster
 
