@@ -108,7 +108,7 @@ class MinikubeOps:
             chmod +x /usr/local/bin/minikube
 
             # Install Helm 3.
-            snap install helm --classic
+            snap install helm --channel=3.2/stable --classic
             ln -s /snap/bin/helm /usr/local/bin/helm
         """)
         node.remoter.run(f'sudo bash -cxe "{minikube_setup_script}"', change_context=True)
