@@ -2191,10 +2191,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self.log.debug("Rebuild sstable file by scrub, corrupted data file will be skipped.")
         for ks_cf in self.cluster.get_non_system_ks_cf_list(self.target_node):
-            scrub_cmd = 'curl -s -X GET --header "Content-Type: application/json" --header ' \
-                        '"Accept: application/json" "http://127.0.0.1:10000/storage_service/keyspace_scrub/{}?skip_corrupted=true"'.format(
-                            ks_cf.split('.')[0])
-            self.target_node.remoter.run(scrub_cmd)
+            self.target_node.run_nodetool("scrub", args=f"{ks_cf.split('.')[0]}")
 
         self.log.debug('Refreshing the cache by restart the node, and verify the rebuild sstable can be loaded successfully.')
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
