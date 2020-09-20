@@ -686,7 +686,6 @@ def clean_instances_aws(tags_dict, dry_run=False):
 def clean_sct_runners():
     LOGGER.info("Looking for SCT runner instances...")
     all_instances = list_instances_aws(verbose=True)
-    sorted_by_test_id = {}
     sct_runners = []
 
     for instance in all_instances:
@@ -694,10 +693,6 @@ def clean_sct_runners():
         node_type = tags.get("NodeType", "")
         if node_type == "sct-runner":
             sct_runners.append(instance)
-        else:
-            test_id = tags.get("TestId")
-            if test_id:
-                sorted_by_test_id[test_id] = instance
     if sct_runners:
         runners_info = []
         for i in sct_runners:
@@ -713,18 +708,22 @@ def clean_sct_runners():
     runners_cleaned = []
     for sct_runner in sct_runners:
         tags = aws_tags_to_dict(sct_runner.get('Tags'))
-        test_id = tags.get("TestId")
         keep = tags.get("keep", "")
         region = sct_runner['Placement']['AvailabilityZone'][:-1]
         instance_id = sct_runner['InstanceId']
+        keep_hours = 0
         if "alive" in keep:
             LOGGER.warning(f"Skipping {instance_id} in {region}: keep={keep}")
             continue
+        else:
+            try:
+                keep_hours = int(keep)
+            except ValueError:
+                LOGGER.warning(f"keep value <{keep}> is invalid: should be a number or 'alive'!")
+
         launch_time = sct_runner['LaunchTime']
         seconds_running = (utc_now - launch_time).total_seconds()
-        #  running less than an hour and more than 20 minutes but no test instances created
-        #  means that something bad happened with a test
-        if not keep or seconds_running > (int(keep) * 3600 if sorted_by_test_id.get(test_id) else 1200):
+        if not keep or seconds_running > keep_hours * 3600:
             LOGGER.info(f"[{region}] Runner instance '{instance_id}'<keep={keep}> that launched at '{launch_time}' UTC "
                         f"is unused/expired, cleaning ...")
             client = boto3.client('ec2', region_name=region)
