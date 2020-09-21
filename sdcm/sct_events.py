@@ -557,7 +557,7 @@ class DisruptionEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
 
 
 class ClusterHealthValidatorEvent(SctEvent):
-    def __init__(self, type, name, status=Severity.ERROR, node=None, message=None, error=None, **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
+    def __init__(self, type, name, status=Severity.ERROR, node=None, message=None, error=None, publish=True, **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
         super(ClusterHealthValidatorEvent, self).__init__()
         self.name = name
         self.type = type
@@ -567,7 +567,9 @@ class ClusterHealthValidatorEvent(SctEvent):
         self.message = message if message else ''
 
         self.__dict__.update(kwargs)
-        self.publish()
+
+        if publish:
+            self.publish()
 
     def __str__(self):
         if self.severity in (Severity.NORMAL, Severity.WARNING):

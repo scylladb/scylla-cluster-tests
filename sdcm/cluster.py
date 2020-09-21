@@ -59,7 +59,8 @@ from sdcm.utils.distro import Distro
 from sdcm.utils.docker_utils import ContainerManager, NotFound
 
 from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_gossip_and_nodetool_status, \
-    check_schema_version, check_nulls_in_peers, check_schema_agreement_in_gossip_and_peers
+    check_schema_version, check_nulls_in_peers, check_schema_agreement_in_gossip_and_peers, \
+    CHECK_NODE_HEALTH_RETRIES, CHECK_NODE_HEALTH_RETRY_DELAY
 from sdcm.utils.decorators import retrying, log_run_info
 from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
@@ -2393,21 +2394,52 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.generate_coredump_file()
             raise
 
-    def check_node_health(self):
+    def check_node_health(self, retries: int = CHECK_NODE_HEALTH_RETRIES) -> None:
         # Task 1443: ClusterHealthCheck is bottle neck in scale test and create a lot of noise in 5000 tables test.
         # Disable it
         if not self.parent_cluster.params.get('cluster_health_check'):
             return
 
-        nodes_status = self.get_nodes_status()
-        peers_details = self.get_peers_info() or {}
-        gossip_info = self.get_gossip_info() or {}
+        for retry_n in range(1, retries+1):
+            LOGGER.debug("Check the health of the node `%s' [attempt #%d]", self.name, retry_n)
 
-        check_nodes_status(nodes_status, current_node=self,
-                           removed_nodes_list=self.parent_cluster.dead_nodes_ip_address_list)
-        check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, current_node=self)
-        check_schema_version(gossip_info, peers_details, nodes_status, current_node=self)
-        check_nulls_in_peers(gossip_info, peers_details, current_node=self)
+            nodes_status = self.get_nodes_status()
+            peers_details = self.get_peers_info() or {}
+            gossip_info = self.get_gossip_info() or {}
+
+            events = itertools.chain(
+                check_nodes_status(
+                    nodes_status=nodes_status,
+                    current_node=self,
+                    removed_nodes_list=self.parent_cluster.dead_nodes_ip_address_list),
+                check_node_status_in_gossip_and_nodetool_status(
+                    gossip_info=gossip_info,
+                    nodes_status=nodes_status,
+                    current_node=self),
+                check_schema_version(
+                    gossip_info=gossip_info,
+                    peers_details=peers_details,
+                    nodes_status=nodes_status,
+                    current_node=self),
+                check_nulls_in_peers(
+                    gossip_info=gossip_info,
+                    peers_details=peers_details,
+                    current_node=self), )
+
+            event = next(events, None)
+            if event is None:
+                LOGGER.debug("Node `%s' is healthy", self.name)
+                break
+            if retry_n == retries:  # publish health validation events on the last retry.
+                LOGGER.debug("One or more node `%s' health validation has failed", self.name)
+                event.publish()
+                for event in events:
+                    event.publish()
+                break
+
+            LOGGER.debug("Wait for %d secs before next try to validate the health of the node `%s'",
+                         CHECK_NODE_HEALTH_RETRY_DELAY, self.name)
+            time.sleep(CHECK_NODE_HEALTH_RETRY_DELAY)
 
     def get_nodes_status(self):
         nodes_status = {}
