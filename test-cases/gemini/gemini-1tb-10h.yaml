@@ -1,4 +1,4 @@
-test_duration: 6500
+test_duration: 780
 n_db_nodes: 3
 n_test_oracle_db_nodes: 1
 n_loaders: 1
