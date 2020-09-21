@@ -2328,8 +2328,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.create_stats:
             nemesis_stats = self.get_doc_data(key='nemesis')
         else:
-            for nem in self.db_cluster.nemesis:
-                nemesis_stats.update(nem.stats)
+            if self.db_cluster:
+                for nem in self.db_cluster.nemesis:
+                    nemesis_stats.update(nem.stats)
+            else:
+                self.log.warning("No nemesises as cluster was not created")
+
         if nemesis_stats:
             for detail in nemesis_stats.values():
                 for run in detail.get('runs', []):
