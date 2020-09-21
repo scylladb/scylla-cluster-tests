@@ -43,6 +43,7 @@ from sdcm.utils.common import get_free_port, wait_for_port
 from sdcm.utils.decorators import log_run_info, timeout, retrying
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger
+from .operator_monitoring import ScyllaOperatorLogMonitoring, ScyllaOperatorStatusMonitoring
 
 
 KUBECTL_PROXY_PORT = 8001
@@ -148,8 +149,10 @@ class MinikubeOps:
 
 class KubernetesCluster:  # pylint: disable=too-few-public-methods
     datacenter = ()
-    _cert_manager_journal_thread = None
-    _scylla_operator_journal_thread = None
+    _cert_manager_journal_thread: Optional[CertManagerLogger] = None
+    _scylla_operator_journal_thread: Optional[ScyllaOperatorLogger] = None
+    _scylla_operator_log_monitor_thread: Optional[ScyllaOperatorLogMonitoring] = None
+    _scylla_operator_status_monitor_thread: Optional[ScyllaOperatorStatusMonitoring] = None
 
     @property
     def k8s_server_url(self) -> Optional[str]:
@@ -186,6 +189,10 @@ class KubernetesCluster:  # pylint: disable=too-few-public-methods
     def start_scylla_operator_journal_thread(self) -> None:
         self._scylla_operator_journal_thread = ScyllaOperatorLogger(self, self.scylla_operator_log)
         self._scylla_operator_journal_thread.start()
+        self._scylla_operator_log_monitor_thread = ScyllaOperatorLogMonitoring(self)
+        self._scylla_operator_log_monitor_thread.start()
+        self._scylla_operator_status_monitor_thread = ScyllaOperatorStatusMonitoring(self)
+        self._scylla_operator_status_monitor_thread.start()
 
     @log_run_info
     def deploy_scylla_operator(self) -> None:
@@ -209,8 +216,17 @@ class KubernetesCluster:  # pylint: disable=too-few-public-methods
         LOGGER.info("Stop k8s task threads")
         if self._cert_manager_journal_thread:
             self._cert_manager_journal_thread.stop(timeout)
+        if self._scylla_operator_log_monitor_thread:
+            self._scylla_operator_log_monitor_thread.stop()
+        if self._scylla_operator_status_monitor_thread:
+            self._scylla_operator_status_monitor_thread.stop()
         if self._scylla_operator_journal_thread:
             self._scylla_operator_journal_thread.stop(timeout)
+
+    @property
+    def operator_pod_status(self):
+        pods = KubernetesOps.list_pods(self, namespace='scylla-operator-system')
+        return pods[0].status if pods else None
 
 
 class MinikubeCluster(KubernetesCluster):
