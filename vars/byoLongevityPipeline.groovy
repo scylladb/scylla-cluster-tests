@@ -57,7 +57,7 @@ def call() {
             string(defaultValue: "spot",
                    description: 'spot|on_demand|spot_fleet',
                    name: 'provision_type')
-            string(defaultValue: "${pipelineParams.get('instance_provision_fallback_on_demand', 'false')}",
+            string(defaultValue: "false",
                    description: 'true|false',
                    name: 'instance_provision_fallback_on_demand')
 
