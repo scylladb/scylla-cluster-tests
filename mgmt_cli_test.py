@@ -58,8 +58,7 @@ class BackupFunctionsMixIn:
         cmd = f'''sudo yum install -y epel-release
                   sudo yum install -y python-pip
                   sudo yum remove -y epel-release
-                  sudo pip install awscli
-                  sudo pip install boto3
+                  sudo pip install awscli==1.18.140
                   mkdir -p {destination}'''
         self.run_cmd_with_retry(cmd=cmd, node=node)
 
