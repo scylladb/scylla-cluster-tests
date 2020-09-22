@@ -1096,7 +1096,7 @@ class SCTConfiguration(dict):
         dist_version = scylla_linux_distro.split('-')[-1]
 
         if scylla_version:
-            if self.get("cluster_backend") == "docker":
+            if self.get("cluster_backend") in ["docker", "k8s-gce-minikube"]:
                 self.log.info("Assume that Scylla Docker image has repo file pre-installed.")
             elif 'ami_id_db_scylla' not in self and self.get('cluster_backend') == 'aws':
                 ami_list = []
