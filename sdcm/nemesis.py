@@ -189,6 +189,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
 
+    def set_last_node_as_target(self):
+        self.target_node = self.cluster.nodes[-1]  # can withdraw last node only
+        self.set_current_running_nemesis(node=self.target_node)
+        self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
+
     @raise_event_on_failure
     def run(self, interval=None):
         if interval:
@@ -2216,10 +2221,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         time.sleep(self.interval)
 
-        self._set_current_disruption("ShrinkCLuster")
+        self._set_current_disruption("ShrinkCluster")
         self.log.info("Start shrink cluster on %s nodes", add_nodes_number)
         for _ in range(add_nodes_number):
-            self.set_target_node()
+            if self._is_it_on_kubernetes():
+                self.set_last_node_as_target()
+            else:
+                self.set_target_node()
             self.log.info("Next node will be removed %s", self.target_node)
             try:
                 InfoEvent(message='StartEvent - ShrinkCluster started decommissioning a node')
@@ -2423,6 +2431,7 @@ class NoOpMonkey(Nemesis):
 
 class GrowShrinkClusterNemesis(Nemesis):
     disruptive = True
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3099,19 +3108,6 @@ class TerminateAndRemoveNodeMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_remove_node_then_add_node()
-
-
-class ScyllaOperatorGrowShrinkClusterNemesis(GrowShrinkClusterNemesis):
-    kubernetes = True
-
-    def set_target_node(self):
-        self.target_node = self.cluster.nodes[-1]  # can withdraw last node only
-        self.set_current_running_nemesis(node=self.target_node)
-        self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
-
-    @log_time_elapsed_and_status
-    def disrupt(self):
-        self.disrupt_grow_shrink_cluster()
 
 
 # Disable unstable streaming err nemesises
