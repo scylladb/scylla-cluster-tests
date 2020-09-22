@@ -1724,10 +1724,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if not threading.active_count():
             return False
         source_modules = []
+        result = False
         with open(self.left_processes_log, 'a') as log_file:
             for th_num, th in enumerate(threading.enumerate()):
                 if th is threading.current_thread():
                     continue
+                result = True
                 source = '<no code available>'
                 module = 'Unknown'
                 if th.__class__ is threading.Thread:
@@ -1746,8 +1748,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 log_file.write(f"========= SOURCE =========\n{source}\n")
                 log_file.write(f"========= STACK TRACE =========\n{self._get_stacktrace(th)}\n")
                 log_file.write(f"========= END OF Thread {th.name} from {module} =========\n")
-        self.log.error(f"There are some threads left alive from following modules: {','.join(source_modules)}")
-        return True
+        if result:
+            self.log.error(f"There are some threads left alive from following modules: {','.join(source_modules)}")
+        return result
 
     def _get_stacktrace(self, thread):
         frame = sys._current_frames().get(thread.ident, None)
@@ -1857,7 +1860,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self._check_alive_routines_and_report_them()
 
     def _check_alive_routines_and_report_them(self):
-        if self.show_alive_threads() or self.show_alive_processes():
+        result = self.show_alive_threads()
+        result = self.show_alive_processes() or result
+        if result:
             self.log.error(f'Please check {self.left_processes_log} log to see them')
 
     def _get_test_result_event(self) -> TestResultEvent:
