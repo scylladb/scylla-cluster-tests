@@ -97,8 +97,15 @@ class GeminiTest(ClusterTester):
         self.log.info('Prepare data for email')
 
         email_data = self._get_common_email_data()
+
+        if self.loaders:
+            gemini_version = self.loaders.gemini_version
+        else:
+            self.log.warning("Failed to get gemini version as loader instance is not created")
+            gemini_version = ""
+
         email_data.update({"gemini_cmd": self.gemini_results["cmd"],
-                           "gemini_version": self.loaders.gemini_version,
+                           "gemini_version": gemini_version,
                            "nemesis_details": self.get_nemesises_stats(),
                            "nemesis_name": self.params.get("nemesis_class_name"),
                            "number_of_oracle_nodes": self.params.get("n_test_oracle_db_nodes", 1),
