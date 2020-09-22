@@ -172,6 +172,14 @@ class CDCReplicationTest(ClusterTester):
                 break
 
             if rnd != no_rounds - 1:
+                self.log.info('Truncating master cluster base table.')
+                with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0]) as sess:
+                    sess.execute(f"truncate table {self.KS_NAME}.{self.TABLE_NAME}")
+
+                self.log.info('Truncating replica cluster base table.')
+                with self.cs_db_cluster.cql_connection_patient(node=self.cs_db_cluster.nodes[0]) as sess:
+                    sess.execute(f"truncate table {self.KS_NAME}.{self.TABLE_NAME}")
+
                 self.log.info('Starting gemini.')
                 stress_thread = self.start_gemini(gemini_seed)
 
