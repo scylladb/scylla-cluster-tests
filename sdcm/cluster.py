@@ -3013,7 +3013,6 @@ def wait_for_init_wrap(method):
                 start_time = time.perf_counter()
                 node_setup(node)
                 verify_node_setup(start_time)
-                cl_inst.wait_for_nodes_up_and_normal(nodes=init_nodes, verification_node=node)
             else:
                 setup_thread = threading.Thread(target=node_setup, name='NodeSetupThread',
                                                 args=(node,))
@@ -3023,6 +3022,9 @@ def wait_for_init_wrap(method):
 
         while len(results) != len(node_list):
             verify_node_setup(start_time)
+
+        if isinstance(cl_inst, BaseScyllaCluster):
+            cl_inst.wait_for_nodes_up_and_normal(nodes=node_list)
 
         time_elapsed = time.perf_counter() - start_time
         cl_inst.log.debug('Setup duration -> %s s', int(time_elapsed))
@@ -3556,9 +3558,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         if wait_db_up:
             node.wait_db_up(verbose=verbose, timeout=timeout)
-            nodes_status = node.get_nodes_status()
-            check_nodes_status(nodes_status=nodes_status, current_node=node,
-                               removed_nodes_list=self.dead_nodes_ip_address_list)  # pylint: disable=no-member
+            # Wait the node is UN and then run "nodetool status"
+            self.wait_for_nodes_up_and_normal(nodes=[node], verification_node=node)
             self.clean_replacement_node_ip(node)
 
     def _scylla_install(self, node):
