@@ -3604,6 +3604,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         if wait_db_up:
             node.wait_db_up(verbose=verbose, timeout=timeout)
+            # Wait the node is UN and then run "nodetool status" to prevent test failure
+            self.wait_for_nodes_up_and_normal(nodes=[node])
             nodes_status = node.get_nodes_status()
             check_nodes_status(nodes_status=nodes_status, current_node=node,
                                removed_nodes_list=self.dead_nodes_ip_address_list)  # pylint: disable=no-member
