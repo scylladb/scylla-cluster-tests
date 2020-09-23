@@ -401,7 +401,7 @@ class BackupTask(ManagerTask):
         full_progress_string = self.sctool.run("task progress {} -c {}".format(self.id, self.cluster_id),
                                                parse_table_res=False,
                                                is_verify_errorless_result=True).stdout.lower()
-        return "upload" in full_progress_string
+        return "uploading data" in full_progress_string.lower()
 
     def wait_for_uploading_stage(self, timeout=1440, step=10):
         text = "Waiting until backup task: {} starts to upload snapshots".format(self.id)
