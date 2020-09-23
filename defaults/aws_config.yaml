@@ -7,24 +7,24 @@ instance_type_loader: 'c5.xlarge'
 instance_type_monitor: 't3.large'
 regions_data:
   us-east-1:
-    ami_id_loader: 'ami-03c856a491257cb7f' # Loader dedicated AMI v11
+    ami_id_loader: 'ami-0e62d20953fe1e43b' # Loader dedicated AMI v12
     ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
     backup_bucket_location: 'manager-backup-tests-us-east-1'
   eu-west-1:
-    ami_id_loader: 'ami-0ac1d5f2066dfc9b4' # Loader dedicated AMI v11
+    ami_id_loader: 'ami-0420555cd3f09793d' # Loader dedicated AMI v12
     ami_id_monitor: 'ami-0ff760d16d9497662' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
     backup_bucket_location: 'manager-backup-tests-eu-west-1'
   eu-west-2:
-    ami_id_loader: 'ami-05f5e60a958ed70d6' # Loader dedicated AMI v11
+    ami_id_loader: 'ami-058b6ffa92d4ac518' # Loader dedicated AMI v12
     ami_id_monitor: 'ami-0eab3a90fc693af19' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
   eu-north-1:
-    ami_id_loader: 'ami-03389f1ec374f22d3' # Loader dedicated AMI v11
+    ami_id_loader: 'ami-065c19c182c39bd1c' # Loader dedicated AMI v12
     ami_id_monitor: 'ami-5ee66f20' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
   eu-central-1:
-    ami_id_loader: 'ami-05ffe040de90c0a53' # Loader dedicated AMI v11
+    ami_id_loader: 'ami-0cd5d469903967f32' # Loader dedicated AMI v12
     ami_id_monitor: 'ami-04cf43aca3e6f3de3' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
   us-west-2:
-    ami_id_loader: 'ami-0de1ee51de25ac133' # Loader dedicated AMI v11
+    ami_id_loader: 'ami-05b71faa3c20f3757' # Loader dedicated AMI v12
     ami_id_monitor: 'ami-01ed306a12b7d1c96' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
     backup_bucket_location: 'manager-backup-tests-eu-west-2'
 
