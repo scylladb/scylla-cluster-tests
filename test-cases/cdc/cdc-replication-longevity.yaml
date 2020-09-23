@@ -1,4 +1,4 @@
-test_duration: 600
+test_duration: 900
 
 user_prefix: 'cdc-replication-longevity'
 db_type: mixed_scylla

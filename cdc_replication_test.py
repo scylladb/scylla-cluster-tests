@@ -131,12 +131,14 @@ class CDCReplicationTest(ClusterTester):
 
         self.consistency_ok = True
 
-        no_rounds = 12  # 12 rounds, ~30 minutes each -> ~6 hours
+        # 9 rounds, ~1h30 minutes each -> ~11h30m total
+        # The number of rounds is tuned according to the available disk space in an i3.large AWS instance.
+        # One more round would cause the nodes to run out of disk space.
+        no_rounds = 9
         for rnd in range(no_rounds):
             self.log.info('Starting round {}'.format(rnd))
 
             self.log.info('Starting nemesis')
-            self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
             self.db_cluster.start_nemesis()
 
             self.log.info('Waiting for workload generation to finish (~30 minutes)...')
