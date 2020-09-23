@@ -441,15 +441,22 @@ def investigate():
 
 @investigate.command('show-logs', help="Show logs collected for testrun filtered by test-id")
 @click.argument('test_id')
-def show_log(test_id):
+@click.option('-o', '--output-format', type=click.Choice(["table", "markdown"]), default="table", help="type of the output")
+def show_log(test_id, output_format):
     add_file_logger()
 
-    table = PrettyTable(["Date", "Log type", "Link"])
-    table.align = "l"
     files = list_logs_by_test_id(test_id)
-    for log in files:
-        table.add_row([log["date"].strftime("%Y%m%d_%H%M%S"), log["type"], log["link"]])
-    click.echo(table.get_string(title="Log links for testrun with test id {}".format(test_id)))
+
+    if output_format == 'table':
+        table = PrettyTable(["Date", "Log type", "Link"])
+        table.align = "l"
+        for log in files:
+            table.add_row([log["date"].strftime("%Y%m%d_%H%M%S"), log["type"], log["link"]])
+        click.echo(table.get_string(title="Log links for testrun with test id {}".format(test_id)))
+    elif output_format == 'markdown':
+        click.echo("\n## Logs\n")
+        for log in files:
+            click.echo(f'* **{log["type"]}** - {log["link"]}')
 
 
 @investigate.command('show-monitor', help="Run monitoring stack with saved data locally")
