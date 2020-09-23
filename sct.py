@@ -703,6 +703,7 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
                 "test_id": test_id,
                 "nodes": get_running_instances_for_email_report(test_id)
             })
+    test_results['logs_links'] = list_logs_by_test_id(test_results.get('test_id', test_id))
     email_recipients = email_recipients.split(',')
     reporter = build_reporter(reporter, email_recipients, testrun_dir)
     if not reporter:

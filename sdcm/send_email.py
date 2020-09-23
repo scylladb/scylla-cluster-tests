@@ -127,6 +127,7 @@ class BaseEmailReporter:
         "test_name",
         "test_status",
         "username",
+        "logs_links",
     )
     _fields = ()
     email_template_file = 'results_base.html'
