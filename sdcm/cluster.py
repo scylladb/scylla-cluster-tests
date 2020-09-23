@@ -946,6 +946,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if 'db-node' in self.name:  # this should be replaced when DbNode class will be created
             self.start_backtrace_thread()
             self.start_db_log_reader_thread()
+        elif 'loader' in self.name:
+            self.start_backtrace_thread()
         elif 'monitor' in self.name:
             # TODO: start alert manager thread here when start_task_threads will be run after node setup
             # self.start_alert_manager_thread()
@@ -3907,6 +3909,8 @@ class BaseLoaderSet():
             node.config_client_encrypt()
 
         result = node.remoter.run('test -e ~/PREPARED-LOADER', ignore_status=True)
+        node.remoter.sudo("bash -cxe \"echo '*\t\thard\tcore\t\tunlimited\n*\t\tsoft\tcore\t\tunlimited' "
+                          ">> /etc/security/limits.d/20-coredump.conf\"")
         if result.exit_status == 0:
             self.log.debug('Skip loader setup for using a prepared AMI')
             return
