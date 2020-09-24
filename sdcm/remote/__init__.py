@@ -24,5 +24,7 @@ __all__ = (
 )
 
 
-NETWORK_EXCEPTIONS = RemoteLibSSH2CmdRunner.get_retryable_exceptions() + RemoteCmdRunner.get_retryable_exceptions()
+NETWORK_EXCEPTIONS = (SSHConnectTimeoutError, RetryableNetworkException) + \
+    RemoteLibSSH2CmdRunner.get_retryable_exceptions() + \
+    RemoteCmdRunner.get_retryable_exceptions()
 LOCALRUNNER = LocalCmdRunner()
