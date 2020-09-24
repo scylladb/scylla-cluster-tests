@@ -1365,7 +1365,7 @@ class SCTConfiguration(dict):
 
             partition_range_splitted = partition_range_with_data_validation.split('-')
 
-            if not (partition_range_splitted[0].isdigit() and partition_range_splitted[0].isdigit()):
+            if not (partition_range_splitted[0].isdigit() and partition_range_splitted[1].isdigit()):
                 raise ValueError(error_message_template.format('PK values should be integer. '))
 
             if int(partition_range_splitted[1]) < int(partition_range_splitted[0]):
