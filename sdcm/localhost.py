@@ -17,12 +17,13 @@ from typing import Optional
 
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.rsyslog import RSYSLOG_PORT, RSyslogContainerMixin, generate_rsyslog_conf_file
+from sdcm.utils.gce_utils import GcloudContainerMixin
 
 
 LOGGER = logging.getLogger(__name__)
 
 
-class LocalHost(RSyslogContainerMixin):
+class LocalHost(RSyslogContainerMixin, GcloudContainerMixin):
     def __init__(self, user_prefix: Optional[str] = None, test_id: Optional[str] = None) -> None:
         self._containers = {}
         self.tags = {}
