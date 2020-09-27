@@ -45,6 +45,7 @@ from sdcm.cluster_aws import CassandraAWSCluster
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
+from sdcm.cluster_k8s import minikube
 from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, update_certificates, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, PageFetcher, \
     rows_to_list, ec2_ami_get_root_device_name
@@ -851,18 +852,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         services, gce_datacenter = list(services.values()), list(services.keys())
 
         self.k8s_cluster = \
-            cluster_k8s.GceMinikubeCluster(minikube_version=self.params.get("minikube_version"),
-                                           gce_image=self.params.get("gce_image_minikube"),
-                                           gce_image_type=self.params.get("gce_root_disk_type_minikube"),
-                                           gce_image_size=self.params.get("gce_root_disk_size_minikube"),
-                                           gce_network=self.params.get("gce_network"),
-                                           services=services,
-                                           credentials=self.credentials,
-                                           gce_instance_type=self.params.get("gce_instance_type_minikube"),
-                                           gce_image_username=self.params.get("gce_image_username"),
-                                           user_prefix=self.params.get("user_prefix"),
-                                           params=self.params,
-                                           gce_datacenter=gce_datacenter)
+            minikube.GceMinikubeCluster(minikube_version=self.params.get("minikube_version"),
+                                        gce_image=self.params.get("gce_image_minikube"),
+                                        gce_image_type=self.params.get("gce_root_disk_type_minikube"),
+                                        gce_image_size=self.params.get("gce_root_disk_size_minikube"),
+                                        gce_network=self.params.get("gce_network"),
+                                        services=services,
+                                        credentials=self.credentials,
+                                        gce_instance_type=self.params.get("gce_instance_type_minikube"),
+                                        gce_image_username=self.params.get("gce_image_username"),
+                                        user_prefix=self.params.get("user_prefix"),
+                                        params=self.params,
+                                        gce_datacenter=gce_datacenter)
         self.k8s_cluster.wait_for_init()
         self.k8s_cluster.deploy_cert_manager()
         self.k8s_cluster.deploy_scylla_operator()
@@ -871,12 +872,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_cluster.docker_pull(f'scylladb/scylla:{self.params.get("scylla_version")}')
 
         self.db_cluster = \
-            cluster_k8s.MinikubeScyllaPodCluster(k8s_cluster=self.k8s_cluster,
-                                                 scylla_cluster_config=cluster_k8s.SCYLLA_CLUSTER_CONFIG,
-                                                 scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
-                                                 user_prefix=self.params.get("user_prefix"),
-                                                 n_nodes=self.params.get("n_db_nodes"),
-                                                 params=self.params)
+            minikube.MinikubeScyllaPodCluster(k8s_cluster=self.k8s_cluster,
+                                              scylla_cluster_config=cluster_k8s.SCYLLA_CLUSTER_CONFIG,
+                                              scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
+                                              user_prefix=self.params.get("user_prefix"),
+                                              n_nodes=self.params.get("n_db_nodes"),
+                                              params=self.params)
 
         self.log.debug("Update startup script with iptables rules")
         startup_script = "\n".join((Setup.get_startup_script(), *self.db_cluster.nodes_iptables_redirect_rules(), ))
