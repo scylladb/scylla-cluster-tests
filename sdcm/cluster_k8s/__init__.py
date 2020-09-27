@@ -111,10 +111,6 @@ class MinikubeOps:
             curl -fsSLo /usr/local/bin/minikube \
                 https://storage.googleapis.com/minikube/releases/v{minikube_version}/minikube-linux-amd64
             chmod +x /usr/local/bin/minikube
-
-            # Install Helm 3.
-            snap install helm --channel=3.2/stable --classic
-            ln -s /snap/bin/helm /usr/local/bin/helm
         """)
         node.remoter.run(f'sudo bash -cxe "{minikube_setup_script}"', change_context=True)
 
@@ -166,7 +162,10 @@ class KubernetesCluster:  # pylint: disable=too-few-public-methods
 
     kubectl = partialmethod(KubernetesOps.kubectl)
     apply_file = partialmethod(KubernetesOps.apply_file)
-    helm = partialmethod(KubernetesOps.helm)
+
+    @cached_property
+    def helm(self):
+        return cluster.Setup.tester_obj().localhost.helm
 
     @property
     def cert_manager_log(self) -> str:
@@ -180,10 +179,10 @@ class KubernetesCluster:  # pylint: disable=too-few-public-methods
     def deploy_cert_manager(self) -> None:
         LOGGER.info("Deploy cert-manager")
         self.kubectl("create namespace cert-manager")
-        self.helm("repo add jetstack https://charts.jetstack.io")
-        self.helm(f"install cert-manager jetstack/cert-manager "
-                  f"--version v{self.params.get('k8s_cert_manager_version')} --set installCRDs=true",
-                  namespace="cert-manager")
+        LOGGER.debug(self.helm("repo add jetstack https://charts.jetstack.io"))
+        LOGGER.debug(self.helm(f"install cert-manager jetstack/cert-manager "
+                               f"--version v{self.params.get('k8s_cert_manager_version')} --set installCRDs=true",
+                               namespace="cert-manager", k8s_server_url=self.k8s_server_url))
         time.sleep(10)
         self.kubectl("wait --timeout=1m --all --for=condition=Ready pod", namespace="cert-manager")
         self.start_cert_manager_journal_thread()
@@ -279,9 +278,6 @@ class MinikubeCluster(KubernetesCluster):
     @cached_property
     def remoter(self) -> KubernetesCmdRunner:
         return self.nodes[-1].remoter
-
-    def helm(self, *args, **kwargs):
-        return KubernetesOps.helm(self, *args, **kwargs, remoter=self.nodes[-1].remoter)
 
     def docker_pull(self, image):
         LOGGER.info("Pull `%s' to Minikube' Docker environment", image)

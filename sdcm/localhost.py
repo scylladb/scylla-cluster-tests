@@ -16,6 +16,7 @@ import logging
 from typing import Optional
 
 from sdcm.utils.docker_utils import ContainerManager
+from sdcm.utils.k8s import HelmContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_PORT, RSyslogContainerMixin, generate_rsyslog_conf_file
 from sdcm.utils.gce_utils import GcloudContainerMixin
 
@@ -23,7 +24,7 @@ from sdcm.utils.gce_utils import GcloudContainerMixin
 LOGGER = logging.getLogger(__name__)
 
 
-class LocalHost(RSyslogContainerMixin, GcloudContainerMixin):
+class LocalHost(RSyslogContainerMixin, GcloudContainerMixin, HelmContainerMixin):
     def __init__(self, user_prefix: Optional[str] = None, test_id: Optional[str] = None) -> None:
         self._containers = {}
         self.tags = {}
