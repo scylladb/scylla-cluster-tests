@@ -13,18 +13,21 @@
 
 # pylint: disable=too-many-arguments
 
+import os
 import logging
+from typing import Optional
+from functools import cached_property
 
 import kubernetes as k8s
 
 from sdcm.remote import LOCALRUNNER
+from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
 
 
 KUBECTL_BIN = "kubectl"
-HELM_BIN = "helm"
+HELM_IMAGE = "alpine/helm:3.3.4"
 
 KUBECTL_TIMEOUT = 300  # seconds
-HELM_TIMEOUT = 300  # seconds
 
 JSON_PATCH_TYPE = "application/json-patch+json"
 
@@ -83,18 +86,6 @@ class KubernetesOps:
         cmd.extend(command)
         return remoter.run(" ".join(cmd), timeout=timeout)
 
-    @staticmethod
-    def helm(kluster, *command, namespace=None, timeout=HELM_TIMEOUT, remoter=None):
-        cmd = [HELM_BIN, ]
-        if remoter is None:
-            if kluster.k8s_server_url is not None:
-                cmd.append(f"--kube-apiserver {kluster.k8s_server_url}")
-            remoter = LOCALRUNNER
-        if namespace:
-            cmd.append(f"--namespace {namespace}")
-        cmd.extend(command)
-        return remoter.run(" ".join(cmd), timeout=timeout)
-
     @classmethod
     def apply_file(cls, kluster, config_path, namespace=None, timeout=KUBECTL_TIMEOUT):
         cls.kubectl(kluster, "apply", "-f", f"<(envsubst<{config_path})", namespace=namespace, timeout=timeout)
@@ -120,3 +111,32 @@ class KubernetesOps:
     @classmethod
     def unexpose_pod_ports(cls, kluster, pod_name, namespace=None, timeout=KUBECTL_TIMEOUT):
         cls.kubectl(kluster, f"delete service {pod_name}-loadbalancer", namespace=namespace, timeout=timeout)
+
+
+class HelmContainerMixin:
+    def helm_container_run_args(self) -> dict:
+        volumes = {os.path.expanduser("~/.kube"): {"bind": "/root/.kube", "mode": "rw"},
+                   os.path.expanduser("~/.helm"): {"bind": "/root/.helm", "mode": "rw"},
+                   os.path.abspath(os.curdir): {"bind": "/apps", "mode": "rw"}, }
+        return dict(image=HELM_IMAGE,
+                    entrypoint="/bin/cat",
+                    tty=True,
+                    name=f"{self.name}-helm",
+                    network_mode="host",
+                    volumes=volumes)
+
+    @cached_property
+    def _helm_container(self) -> Container:
+        return ContainerManager.run_container(self, "helm")
+
+    def helm(self, *command: str, namespace: Optional[str] = None, k8s_server_url: Optional[str] = None) -> str:
+        cmd = ["helm", ]
+        if k8s_server_url:
+            cmd.extend(("--kube-apiserver", k8s_server_url, ))
+        if namespace:
+            cmd.extend(("--namespace", namespace, ))
+        cmd.extend(command)
+        res = self._helm_container.exec_run(["sh", "-c", " ".join(cmd)])
+        if res.exit_code:
+            raise DockerException(f"{self._helm_container}: {res.output.decode('utf-8')}")
+        return res.output.decode("utf-8")
