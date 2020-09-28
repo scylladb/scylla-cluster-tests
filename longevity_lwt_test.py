@@ -49,7 +49,6 @@ class LWTLongevityTest(LongevityTest):
             self.start_nemesis()
 
     def start_nemesis(self):
-        self.db_cluster.termination_event.clear()
         self.db_cluster.start_nemesis()
 
     def test_lwt_longevity(self):

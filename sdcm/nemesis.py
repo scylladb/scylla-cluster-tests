@@ -199,7 +199,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if interval:
             self.interval = interval * 60
         self.log.info('Interval: %s s', self.interval)
-        while not self.termination_event.isSet():
+        while not self.termination_event.is_set():
             cur_interval = self.interval
             self.set_target_node()
             self._set_current_disruption(report=False)

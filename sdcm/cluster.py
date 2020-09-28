@@ -3098,7 +3098,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
     node_setup_requires_scylla_restart = True
 
     def __init__(self, *args, **kwargs):
-        self.termination_event = threading.Event()
+        self.nemesis_termination_event = threading.Event()
         self.nemesis = []
         self.nemesis_threads = []
         self.nemesis_count = 0
@@ -3559,7 +3559,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         for nem in nemesis:
             for _ in range(nem['num_threads']):
                 self.nemesis.append(nem['nemesis'](tester_obj=tester_obj,
-                                                   termination_event=self.termination_event))
+                                                   termination_event=self.nemesis_termination_event))
         self.nemesis_count = sum(nem['num_threads'] for nem in nemesis)
 
     def clean_nemesis(self):
@@ -3567,6 +3567,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     @log_run_info("Start nemesis threads on cluster")
     def start_nemesis(self, interval=None):
+        self.log.info('Clear _nemesis_termination_event')
+        self.nemesis_termination_event.clear()
         for nemesis in self.nemesis:
             nemesis_thread = threading.Thread(target=nemesis.run, name='NemesisThread', args=(interval,), daemon=True)
             nemesis_thread.start()
@@ -3574,10 +3576,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     @log_run_info("Stop nemesis threads on cluster")
     def stop_nemesis(self, timeout=10):
-        if self.termination_event.isSet():
+        if self.nemesis_termination_event.is_set():
             return
-        self.log.info('Set _termination_event')
-        self.termination_event.set()
+        self.log.info('Set _nemesis_termination_event')
+        self.nemesis_termination_event.set()
         for nemesis_thread in self.nemesis_threads:
             nemesis_thread.join(timeout)
         self.nemesis_threads = []

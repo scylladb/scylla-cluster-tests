@@ -162,7 +162,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         """
         self.generate_load_and_wait_for_results()
         self.log.debug("test_mgmt_cli: initialize MgmtRepair nemesis")
-        mgmt_nemesis = MgmtRepair(tester_obj=self, termination_event=self.db_cluster.termination_event)
+        mgmt_nemesis = MgmtRepair(tester_obj=self, termination_event=self.db_cluster.nemesis_termination_event)
         mgmt_nemesis.disrupt()
 
     def test_mgmt_cluster_crud(self):
