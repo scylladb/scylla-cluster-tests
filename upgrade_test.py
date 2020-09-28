@@ -16,7 +16,6 @@
 import random
 import time
 import re
-import os
 from functools import wraps
 
 from pkg_resources import parse_version
@@ -26,6 +25,7 @@ from sdcm import wait
 from sdcm.group_common_events import ignore_upgrade_schema_errors
 from sdcm.utils.version_utils import is_enterprise
 from sdcm.sct_events import IndexSpecialColumnErrorEvent
+from sdcm.utils.version_utils import get_node_supported_sstable_versions
 
 
 def truncate_entries(func):
@@ -315,18 +315,10 @@ class UpgradeTest(FillDatabaseData):
 
         :return:
         """
-        sstable_format_regex = re.compile(r'Feature (.*)_SSTABLE_FORMAT is enabled')
-
-        versions_set = set()
-
+        output = []
         for node in self.db_cluster.nodes:
-            if os.path.exists(node.system_log):
-                for line in open(node.system_log).readlines():
-                    match = sstable_format_regex.search(line)
-                    if match:
-                        versions_set.add(match.group(1).lower())
-
-        return max(versions_set)
+            output.extend(get_node_supported_sstable_versions(node.system_log))
+        return max(set(output))
 
     def wait_for_sstable_upgrade(self, node, queue=None):
         all_tables_upgraded = True

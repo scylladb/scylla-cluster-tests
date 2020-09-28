@@ -2,6 +2,7 @@ import re
 from collections import namedtuple
 from enum import Enum, auto
 from string import Template
+from typing import List
 
 import requests
 from pkg_resources import parse_version
@@ -19,6 +20,7 @@ GEMINI_VERSION_RE = re.compile(r'\s(?P<gemini_version>([\d]+\.[\d]+\.[\d]+)?),')
 REPO_VERSIONS_REGEX = re.compile(r'Version: (.*?)\n', re.DOTALL)
 
 SCYLLA_VERSION_RE = re.compile(r"\d+(\.\d+)?\.[\d\w]+([.~][\d\w]+)?")
+SCYLLA_SSTABLE_SUPPORTED_RE = re.compile(r'Feature (.*)_SSTABLE_FORMAT is enabled')
 PRIMARY_XML_GZ_REGEX = re.compile(r'="(.*?primary.xml.gz)"')
 
 REPOMD_XML_PATH = "repodata/repomd.xml"
@@ -163,3 +165,12 @@ def get_gemini_version(output: str):
     if result:
         return result.groupdict().get("gemini_version", None)
     return None
+
+
+def get_node_supported_sstable_versions(node_system_log) -> List[str]:
+    output = []
+    with open(node_system_log) as file:
+        for line in file.readlines():
+            if match := SCYLLA_SSTABLE_SUPPORTED_RE.search(line):
+                output.append(match.group(1).lower())
+    return output
