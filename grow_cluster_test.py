@@ -163,7 +163,7 @@ class GrowClusterTest(ClusterTester):
                 self.log.info('Remove %s nodes from cluster', rm_cnt)
                 for _ in range(rm_cnt):
                     decommision_nemesis = nemesis.DecommissionMonkey(
-                        tester_obj=self, termination_event=self.db_cluster.termination_event)
+                        tester_obj=self, termination_event=self.db_cluster.nemesis_termination_event)
                     decommision_nemesis.disrupt_nodetool_decommission(add_node=False)
             duration = (datetime.datetime.now() - start).seconds / 60  # current duration in minutes
             self.log.info('Count of nodes in cluster: %s', len(self.db_cluster.nodes))

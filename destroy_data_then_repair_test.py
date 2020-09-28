@@ -27,7 +27,7 @@ class CorruptThenRepair(ClusterTester):
 
         # run rebuild
         current_nemesis = nemesis.CorruptThenRepairMonkey(
-            tester_obj=self, termination_event=self.db_cluster.termination_event)
+            tester_obj=self, termination_event=self.db_cluster.nemesis_termination_event)
         current_nemesis.disrupt()
 
         for stress in write_queue:
