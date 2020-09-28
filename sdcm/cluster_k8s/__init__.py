@@ -124,6 +124,7 @@ class MinikubeOps:
         minikube_start_script = dedent(f"""
             sysctl fs.protected_regular=0
             minikube start --driver=none --extra-config=apiserver.service-node-port-range=1-65535
+            ip link set docker0 promisc on
             chown -R $USER $HOME/.kube $HOME/.minikube
         """)
         node.remoter.run(f'sudo -E bash -cxe "{minikube_start_script}"')
