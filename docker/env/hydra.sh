@@ -118,6 +118,7 @@ if [[ "$1" == "--execute-on-runner" ]]; then
         echo "Going to run a Hydra commands on SCT runner '$SCT_RUNNER_IP'..."
         HOME_DIR="/home/ubuntu"
         echo "Syncing ${SCT_DIR} to the SCT runner instance..."
+        ssh-keygen -R "$SCT_RUNNER_IP" || true
         rsync -ar -e "ssh -o StrictHostKeyChecking=no" --delete ${SCT_DIR} ubuntu@${SCT_RUNNER_IP}:/home/ubuntu/
         if [[ -z "$AWS_OPTIONS" ]]; then
           echo "AWS credentials were not passed using AWS_* environment variables!"
