@@ -252,7 +252,7 @@ def check_schema_agreement_in_gossip_and_peers(node, retries: int = CHECK_NODE_H
         LOGGER.debug("%s Gossip info: %s", message_pref, gossip_info)
         LOGGER.debug("%s Peers info: %s", message_pref, peers_info)
 
-        if gossip_info is None or peers_info is not None:
+        if gossip_info is None or peers_info is None:
             LOGGER.warning("%s Unable to get gossip or peers information", message_pref)
             continue
 
