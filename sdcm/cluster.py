@@ -46,7 +46,7 @@ from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
 from paramiko import SSHException
 
 from sdcm.collectd import ScyllaCollectdSetup
-from sdcm.mgmt import ScyllaManagerError, update_config_file
+from sdcm.mgmt import ScyllaManagerError, update_config_file, SCYLLA_MANAGER_YAML_PATH, SCYLLA_MANAGER_AGENT_YAML_PATH
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS
@@ -1526,13 +1526,20 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         cmd = cmd.format(datacenters[self.dc_idx], dc_suffix)
         self.remoter.run(cmd)
 
-    def remote_scylla_yaml(self, path=SCYLLA_YAML_PATH):
-        self.log.debug("Update Scylla YAML configuration file (%s)", path)
+    def _remote_yaml(self, path):
+        file_name = os.path.split(path)[1].split(".", maxsplit=1)[0].title()
+        self.log.debug("Update {} YAML configuration file ({})".format(file_name, path))
         return remote_file(remoter=self.remoter,
                            remote_path=path,
                            serializer=yaml.safe_dump,
                            deserializer=yaml.safe_load,
                            sudo=True)
+
+    def remote_scylla_yaml(self, path=SCYLLA_YAML_PATH):
+        return self._remote_yaml(path=path)
+
+    def remote_manager_yaml(self, path=SCYLLA_MANAGER_YAML_PATH):
+        return self._remote_yaml(path=path)
 
     # pylint: disable=invalid-name,too-many-arguments,too-many-locals,too-many-branches,too-many-statements
     def config_setup(self,
