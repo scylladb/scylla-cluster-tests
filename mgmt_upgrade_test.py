@@ -42,6 +42,12 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
         target_upgrade_server_version = self.params.get('target_scylla_mgmt_server_repo')
         target_upgrade_agent_version = self.params.get('target_scylla_mgmt_agent_repo')
         manager_node = self.monitors.nodes[0]
+
+        with manager_node.remote_manager_yaml() as scylla_manager_ymal:
+            node_ip = scylla_manager_ymal["http"].split(":", maxsplit=1)[0]
+            scylla_manager_ymal["http"] = f"{node_ip}:{self.params['mgmt_port']}"
+            scylla_manager_ymal["prometheus"] = f"{node_ip}:{self.params['manager_prometheus_port']}"
+            LOGGER.info("The new Scylla Manager is:\n{}".format(scylla_manager_ymal))
         manager_tool = get_scylla_manager_tool(manager_node=manager_node)
         manager_tool.add_cluster(name="cluster_under_test", db_cluster=self.db_cluster,
                                  auth_token=self.monitors.mgmt_auth_token)

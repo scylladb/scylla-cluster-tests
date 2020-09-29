@@ -17,6 +17,7 @@ import requests
 
 
 from sdcm import wait
+from sdcm.remote.remote_file import remote_file
 from sdcm.utils.distro import Distro
 
 LOGGER = logging.getLogger(__name__)
