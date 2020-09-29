@@ -2569,9 +2569,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.log.debug(f'Resharding has been finished successfully '
                                f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits})')
             else:
-                self.log.error(f'Resharding has not been started '
-                               f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits}) '
-                               'Check the log for the details')
+                raise Exception(f'Resharding has not been started '
+                                f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits}) '
+                                'Check the log for the details')
             return
         else:
             # Decrease nodetool compactionstats calls from 5sec to 1min to avoid the noise
@@ -2579,9 +2579,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                                                 text="Wait for re-sharding to be finished", status='finish')
 
             if not resharding_finished:
-                self.log.error('Resharding was not finished! '
-                               f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits}) '
-                               'Check the log for the details')
+                raise Exception('Resharding was not finished! '
+                                f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits}) '
+                                'Check the log for the details')
             else:
                 self.log.debug('Resharding has been finished successfully '
                                f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits})')
