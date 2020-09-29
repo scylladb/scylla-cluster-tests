@@ -2,7 +2,8 @@ import logging
 from time import sleep
 
 from sdcm.tester import ClusterTester
-from sdcm.mgmt import get_scylla_manager_tool, TaskStatus, update_config_file, RepairTask
+from sdcm.mgmt import get_scylla_manager_tool, TaskStatus, update_config_file, RepairTask, \
+    SCYLLA_MANAGER_AGENT_YAML_PATH
 from mgmt_cli_test import BackupFunctionsMixIn
 
 
@@ -160,10 +161,9 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
                                                f" is '{current_arg_string}'"
 
     def update_all_agent_config_files(self):
-        config_file = '/etc/scylla-manager-agent/scylla-manager-agent.yaml'
         region_name = self.params.get('region_name').split()[0]
         for node in self.db_cluster.nodes:
-            update_config_file(node=node, region=region_name, config_file=config_file)
+            update_config_file(node=node, region=region_name, config_file=SCYLLA_MANAGER_AGENT_YAML_PATH)
         sleep(60)
 
     def get_email_data(self):

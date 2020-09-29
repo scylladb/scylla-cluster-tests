@@ -20,7 +20,8 @@ from invoke import exceptions
 
 from sdcm import mgmt
 from sdcm.group_common_events import ignore_no_space_errors
-from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus, TaskStatus, ScyllaManagerError, ScyllaManagerTool
+from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus, TaskStatus, ScyllaManagerError, ScyllaManagerTool, \
+    SCYLLA_MANAGER_AGENT_YAML_PATH
 from sdcm.nemesis import MgmtRepair, DbEventsFilter
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
 from sdcm.tester import ClusterTester
@@ -133,12 +134,11 @@ class BackupFunctionsMixIn:
     def update_config_file(self):
         # FIXME: add to the nodes not in the same region as the bucket the bucket's region
         # this is a temporary fix, after https://github.com/scylladb/mermaid/issues/1456 is fixed, this is not necessary
-        config_file = '/etc/scylla-manager-agent/scylla-manager-agent.yaml'
         if self.params.get('cluster_backend') == 'aws':
             self.region = self.params.get('region_name').split()
             self.bucket_name = f"s3:{self.params.get('backup_bucket_location').split()[0]}"
             for node in self.db_cluster.nodes:
-                mgmt.update_config_file(node=node, region=self.region[0], config_file=config_file)
+                mgmt.update_config_file(node=node, region=self.region[0], config_file=SCYLLA_MANAGER_AGENT_YAML_PATH)
         elif self.params.get('cluster_backend') == 'gce':
             self.region = self.params.get('gce_datacenter')
             self.bucket_name = f"gcs:{self.params.get('backup_bucket_location')}"
