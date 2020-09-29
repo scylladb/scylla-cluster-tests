@@ -26,6 +26,8 @@ STATUS_ERROR = 'error'
 MANAGER_IDENTITY_FILE_DIR = '/root/.ssh'
 MANAGER_IDENTITY_FILE_NAME = 'scylla-manager.pem'
 MANAGER_IDENTITY_FILE = os.path.join(MANAGER_IDENTITY_FILE_DIR, MANAGER_IDENTITY_FILE_NAME)
+SCYLLA_MANAGER_YAML_PATH = "/etc/scylla-manager/scylla-manager.yaml"
+SCYLLA_MANAGER_AGENT_YAML_PATH = "/etc/scylla-manager-agent/scylla-manager-agent.yaml"
 SSL_CONF_DIR = '/tmp/ssl_conf'
 SSL_USER_CERT_FILE = SSL_CONF_DIR + '/db.crt'
 SSL_USER_KEY_FILE = SSL_CONF_DIR + '/db.key'
@@ -101,7 +103,7 @@ class TaskStatus(Enum):
             raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
 
 
-def update_config_file(node, region, config_file='/etc/scylla-manager-agent/scylla-manager-agent.yaml'):
+def update_config_file(node, region, config_file=SCYLLA_MANAGER_AGENT_YAML_PATH):
     # FIXME: if the bucket and the node are in the same region, no need to update config file
     # the problem is that with multi DC is that i get 2 regions and 2 buckets:
     # 'us-east-1 us-west-2' and 'manager-backup-tests-us-east-1 manager-backup-tests-eu-west-2'
