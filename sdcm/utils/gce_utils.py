@@ -14,6 +14,7 @@
 import os
 import json
 import random
+import logging
 from functools import cached_property
 
 from libcloud.compute.providers import Provider, get_driver
@@ -23,6 +24,8 @@ from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
 
 
 GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:311.0.0-alpine"
+
+LOGGER = logging.getLogger(__name__)
 
 GceDriver = get_driver(Provider.GCE)  # pylint: disable=invalid-name
 
@@ -87,7 +90,12 @@ class GcloudContainerMixin:
         return container
 
     def gcloud(self, command: str) -> str:
+        LOGGER.debug("Execute `gcloud %s'", command)
         res = self._gcloud_container.exec_run(["sh", "-c", f"gcloud {command}"])
         if res.exit_code:
             raise DockerException(f"{self._gcloud_container}: {res.output.decode('utf-8')}")
         return res.output.decode("utf-8")
+
+    @cached_property
+    def gcloud_container_id(self):
+        return self._gcloud_container.id

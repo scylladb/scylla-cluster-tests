@@ -32,11 +32,13 @@ import copy
 import string
 import warnings
 import getpass
+import json
+import uuid
 from typing import Iterable, List, Callable, Optional, Dict, Union
 from urllib.parse import urlparse
 from unittest.mock import Mock
 
-from functools import wraps
+from functools import wraps, cached_property
 from collections import defaultdict, namedtuple
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
@@ -460,6 +462,7 @@ def clean_cloud_resources(tags_dict, dry_run=False):
         return False
     clean_instances_aws(tags_dict, dry_run=dry_run)
     clean_elastic_ips_aws(tags_dict, dry_run=dry_run)
+    clean_clusters_gke(tags_dict, dry_run=dry_run)
     clean_instances_gce(tags_dict, dry_run=dry_run)
     clean_resources_docker(tags_dict, dry_run=dry_run)
     return True
@@ -888,6 +891,62 @@ def list_static_ips_gce(region_name="all", group_by_region=False, verbose=False)
     return all_static_ips
 
 
+def list_clusters_gke(tags_dict: Optional[dict] = None, verbose: bool = False) -> list:
+    from sdcm.utils.docker_utils import ContainerManager
+    from sdcm.utils.gce_utils import GcloudContainerMixin
+
+    class GkeCluster:
+        def __init__(self, cluster_info: dict, cleaner: "GkeCleaner"):
+            self.cluster_info = cluster_info
+            self.cleaner = cleaner
+
+        @cached_property
+        def extra(self) -> dict:
+            metadata = self.cluster_info["nodeConfig"]["metadata"].items()
+            return {"metadata": {"items": [{"key": key, "value": value} for key, value in metadata], }, }
+
+        @cached_property
+        def name(self) -> str:
+            return self.cluster_info["name"]
+
+        @cached_property
+        def zone(self) -> str:
+            return self.cluster_info["zone"]
+
+        def destroy(self):
+            return self.cleaner.gcloud(f"container clusters delete {self.name} --zone {self.zone} --quiet")
+
+    class GkeCleaner(GcloudContainerMixin):
+        name = f"gke-cleaner-{uuid.uuid4()!s:.8}"
+        _containers = {}
+        tags = {}
+
+        def list_gke_clusters(self) -> list:
+            try:
+                output = self.gcloud("container clusters list --format json")
+            except Exception as exc:
+                LOGGER.error("`gcloud container clusters list --format json' failed to run: %s", exc)
+            else:
+                try:
+                    return [GkeCluster(info, self) for info in json.loads(output)]
+                except json.JSONDecodeError as exc:
+                    LOGGER.error("Unable to parse output of `gcloud container clusters list --format json': %s", exc)
+            return []
+
+        def __del__(self):
+            ContainerManager.destroy_all_containers(self)
+
+    clusters = GkeCleaner().list_gke_clusters()
+
+    if tags_dict:
+        clusters = filter_gce_by_tags(tags_dict=tags_dict, instances=clusters)
+
+    if verbose:
+        LOGGER.info("Done. Found total of %s GKE clusters.", len(clusters))
+
+    return clusters
+
+
 def clean_instances_gce(tags_dict, dry_run=False):
     """
     Remove all instances with specific tags GCE
@@ -909,6 +968,25 @@ def clean_instances_gce(tags_dict, dry_run=False):
             res = instance.destroy()
             LOGGER.info("%s deleted=%s", instance.name, res)
     ParallelObject(gce_instances_to_clean, timeout=60).run(delete_instance, ignore_exceptions=True)
+
+
+def clean_clusters_gke(tags_dict: dict, dry_run: bool = False) -> None:
+    assert tags_dict, "tags_dict not provided (can't clean all clusters)"
+    gke_clusters_to_clean = list_clusters_gke(tags_dict=tags_dict)
+
+    if not gke_clusters_to_clean:
+        LOGGER.info("There are no clusters to remove in GKE")
+        return
+
+    def delete_cluster(cluster):
+        LOGGER.info("Going to delete: %s", cluster.name)
+        if not dry_run:
+            try:
+                res = cluster.destroy()
+            except Exception as exc:
+                LOGGER.error(exc)
+            LOGGER.info("%s deleted=%s", cluster.name, res)
+    ParallelObject(gke_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
 
 
 _SCYLLA_AMI_CACHE = defaultdict(dict)

@@ -13,9 +13,12 @@ def call(Map pipelineParams) {
         environment {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
-            SCT_CLUSTER_BACKEND   = 'k8s-gce-minikube'
+            SCT_CLUSTER_BACKEND   = "${pipelineParams.get('backend', params.backend)}"
 		}
         parameters {
+            choice(choices: ['k8s-gce-minikube', 'k8s-gke'],
+                   description: '',
+                   name: 'backend')
             string(defaultValue: '',
                    description: '',
                    name: 'k8s_scylla_operator_docker_image')

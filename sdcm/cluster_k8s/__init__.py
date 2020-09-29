@@ -19,7 +19,7 @@ import logging
 import contextlib
 from datetime import datetime
 from copy import deepcopy
-from typing import Optional, Union, List, Dict, Any, Literal, ContextManager
+from typing import Optional, Union, List, Dict, Any, ContextManager, Type
 from difflib import unified_diff
 from tempfile import NamedTemporaryFile
 from functools import cached_property, partialmethod
@@ -30,30 +30,23 @@ from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstanc
 
 from sdcm import cluster, cluster_docker
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
+from sdcm.coredump import CoredumpExportFileThread
 from sdcm.sct_config import sct_abs_path
 from sdcm.sct_events import TestFrameworkEvent
 from sdcm.utils.k8s import KubernetesOps, JSON_PATCH_TYPE
 from sdcm.utils.decorators import log_run_info, timeout
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger
-from .operator_monitoring import ScyllaOperatorLogMonitoring, ScyllaOperatorStatusMonitoring
-from sdcm.coredump import CoredumpExportFileThread
+from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring, ScyllaOperatorStatusMonitoring
 
 
 SCYLLA_OPERATOR_CONFIG = sct_abs_path("sdcm/k8s_configs/operator.yaml")
-SCYLLA_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/cluster.yaml")
 SCYLLA_API_VERSION = "scylla.scylladb.com/v1alpha1"
 SCYLLA_CLUSTER_RESOURCE_KIND = "Cluster"
 SCYLLA_POD_READINESS_DELAY = 30  # seconds
 SCYLLA_POD_READINESS_TIMEOUT = 5  # minutes
 SCYLLA_POD_TERMINATE_TIMEOUT = 30  # minutes
-SCYLLA_POD_EXPOSED_PORTS = [3000, 9042, 9180, ]
-IPTABLES_BIN = "iptables"
-IPTABLES_LEGACY_BIN = "iptables-legacy"
 
 LOGGER = logging.getLogger(__name__)
-
-
-IptablesChainCommand = Literal["A", "C", "D"]
 
 
 class KubernetesCluster:  # pylint: disable=too-few-public-methods
@@ -67,6 +60,7 @@ class KubernetesCluster:  # pylint: disable=too-few-public-methods
     def k8s_server_url(self) -> Optional[str]:
         return None
 
+    kubectl_cmd = partialmethod(KubernetesOps.kubectl_cmd)
     kubectl = partialmethod(KubernetesOps.kubectl)
     apply_file = partialmethod(KubernetesOps.apply_file)
 
@@ -203,10 +197,16 @@ class BasePodContainer(cluster.BaseNode):
         return pod_status and pod_status.pod_ip
 
     @property
-    def _pod_status(self):
+    def _pod(self):
         pods = KubernetesOps.list_pods(self.parent_cluster, namespace=self.parent_cluster.namespace,
                                        field_selector=f"metadata.name={self.name}")
-        return pods[0].status if pods else None
+        return pods[0] if pods else None
+
+    @property
+    def _pod_status(self):
+        if pod := self._pod:
+            return pod.status
+        return None
 
     @property
     def _cluster_ip_service(self):
@@ -270,18 +270,6 @@ class BasePodContainer(cluster.BaseNode):
     def image(self) -> str:
         return self._container_status.image
 
-    def iptables_node_redirect_rules(self,
-                                     dest_ip: str,
-                                     iptables_bin: str = IPTABLES_BIN,
-                                     command: IptablesChainCommand = "A") -> List[str]:
-        to_ip = self._cluster_ip_service.spec.cluster_ip
-        return [iptables_port_redirect_rule(iptables_bin=iptables_bin,
-                                            command=command,
-                                            to_ip=to_ip,
-                                            to_port=p.target_port,
-                                            dest_ip=dest_ip,
-                                            dest_port=p.node_port) for p in self._loadbalancer_service.spec.ports]
-
     @property
     def ipv6_ip_address(self):
         raise NotImplementedError()
@@ -334,6 +322,8 @@ class BasePodContainer(cluster.BaseNode):
 
 
 class PodCluster(cluster.BaseCluster):
+    PodContainerClass: Type[BasePodContainer] = BasePodContainer
+
     def __init__(self,
                  k8s_cluster: KubernetesCluster,
                  namespace: str = "default",
@@ -361,14 +351,12 @@ class PodCluster(cluster.BaseCluster):
         return KubernetesOps.core_v1_api(self.k8s_cluster)
 
     def _create_node(self, node_index: int, pod_name: str) -> BasePodContainer:
-        node = BasePodContainer(parent_cluster=self,
-                                name=pod_name,
-                                base_logdir=self.logdir,
-                                node_prefix=self.node_prefix,
-                                node_index=node_index)
-
+        node = self.PodContainerClass(parent_cluster=self,
+                                      name=pod_name,
+                                      base_logdir=self.logdir,
+                                      node_prefix=self.node_prefix,
+                                      node_index=node_index)
         node.init()
-
         return node
 
     def add_nodes(self,
@@ -556,13 +544,3 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
     def rollout_restart(self):
         self.k8s_cluster.kubectl("rollout restart statefulset", namespace=self.namespace)
         self.wait_for_pods_readiness()
-
-
-def iptables_port_redirect_rule(iptables_bin: str,
-                                command: IptablesChainCommand,
-                                to_ip: str,
-                                to_port: int,
-                                dest_ip: str,
-                                dest_port: int) -> str:
-    return f"{iptables_bin} -t nat -{command} OUTPUT -d {to_ip} -p tcp --dport {to_port} " \
-           f"-j DNAT --to-destination {dest_ip}:{dest_port}"

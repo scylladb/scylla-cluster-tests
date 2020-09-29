@@ -6,7 +6,8 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 operatorPipeline(
     params: params,
 
-    test_config: 'test-cases/k8s/gce-minikube-longevity-10gb-1h.yaml',
+    test_name: 'longevity_test.LongevityTest.test_custom_time',
+    test_config: 'internal_test_data/simple_test_case.yaml',
 
     timeout: [time: 180, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy',

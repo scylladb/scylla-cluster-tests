@@ -1,0 +1,45 @@
+instance_provision: 'on_demand'
+gce_datacenter: 'us-east1-c'
+gce_network: 'qa-vpc'
+gce_image_username: 'scylla-test'
+
+gke_cluster_version: '1.15.12-gke.20'
+gke_cluster_n_nodes: 3
+
+gce_instance_type_db: 'n1-standard-8'
+gce_root_disk_type_db: 'pd-ssd'
+gce_root_disk_size_db: 50
+gce_n_local_ssd_disk_db: 3
+
+n_db_nodes: 3
+
+k8s_scylla_operator_docker_image: 'scylladb/scylla-operator:v0.2.4'
+k8s_cert_manager_version: '0.15.2'
+scylla_version: '4.0.0'
+scylla_mgmt_agent_version: '2.0.2'
+k8s_scylla_datacenter: 'us-east1-c'
+k8s_scylla_rack: 'us-east1'
+k8s_scylla_cluster_name: 'sct-cluster'
+k8s_scylla_cpu_n: 6
+k8s_scylla_mem_gi: 16
+k8s_scylla_disk_gi: 500
+
+gce_image: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
+gce_instance_type_loader: 'e2-standard-2'
+gce_root_disk_type_loader: 'pd-standard'
+gce_n_local_ssd_disk_loader: 0
+
+n_loaders: 1
+
+gce_instance_type_monitor: 'e2-medium'
+gce_root_disk_type_monitor: 'pd-standard'
+gce_root_disk_size_monitor: 50
+gce_n_local_ssd_disk_monitor: 0
+
+n_monitor_nodes: 1
+
+user_credentials_path: '~/.ssh/scylla-test'
+use_preinstalled_scylla: true
+backtrace_decoding: false
+
+append_scylla_args: ''
