@@ -85,7 +85,6 @@ TASK_QUEUE = 'task_queue'
 RES_QUEUE = 'res_queue'
 WORKSPACE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 SCYLLA_YAML_PATH = "/etc/scylla/scylla.yaml"
-SCYLLA_MANAGER_YAML_PATH = "/etc/scylla-manager/scylla-manager.yaml"
 SCYLLA_DIR = "/var/lib/scylla"
 
 INSTANCE_PROVISION_ON_DEMAND = 'on_demand'
@@ -2147,47 +2146,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.remoter.run(cmd, ignore_status=True, verbose=True)
         self._scylla_manager_journal_thread.join(timeout)
         self._scylla_manager_journal_thread = None
-
-    def config_scylla_manager(self, mgmt_port, db_hosts):
-        """
-        this code was took out from  install_mgmt() method.
-        it may be usefull for manager testing future enhancements.
-
-        Usage may be:
-            if self.params.get('mgmt_db_local', default=True):
-                mgmt_db_hosts = ['127.0.0.1']
-            else:
-                mgmt_db_hosts = [str(trg) for trg in self.targets['db_nodes']]
-            node.config_scylla_manager(mgmt_port=self.params.get('mgmt_port', default=10090),
-                              db_hosts=mgmt_db_hosts)
-
-        :param mgmt_port:
-        :param db_hosts:
-        :return:
-        """
-        # only support for centos
-        self.log.debug('Install scylla-manager')
-        rsa_id_dst = '/tmp/scylla-test'
-        mgmt_conf_tmp = '/tmp/scylla-manager.yaml'
-        mgmt_conf_dst = '/etc/scylla-manager/scylla-manager.yaml'
-
-        mgmt_conf = {'http': '0.0.0.0:{}'.format(mgmt_port),
-                     'database':
-                         {'hosts': db_hosts,
-                          'timeout': '5s'},
-                     'ssh':
-                         {'user': self.ssh_login_info['user'],
-                          'identity_file': rsa_id_dst}
-                     }
-        (_, conf_file) = tempfile.mkstemp(dir='/tmp')
-        with open(conf_file, 'w') as fd:
-            yaml.dump(mgmt_conf, fd, default_flow_style=False)
-        self.remoter.send_files(src=conf_file, dst=mgmt_conf_tmp)  # pylint: disable=not-callable
-        self.remoter.run('sudo cp {} {}'.format(mgmt_conf_tmp, mgmt_conf_dst))
-        if self.is_docker():
-            self.remoter.run('sudo supervisorctl start scylla-manager')
-        else:
-            self.remoter.run('sudo systemctl restart scylla-manager.service')
 
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=300):
         if verify_down:
