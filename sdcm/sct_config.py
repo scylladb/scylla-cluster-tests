@@ -87,7 +87,7 @@ class SCTConfiguration(dict):
     """
     Class the hold the SCT configuration
     """
-    available_backends = ['aws', 'gce', 'docker', 'baremetal', 'aws-siren', 'k8s-gce-minikube', ]
+    available_backends = ['aws', 'gce', 'docker', 'baremetal', 'aws-siren', 'k8s-gce-minikube', 'k8s-gke']
 
     config_options = [
         dict(name="config_files", env="SCT_CONFIG_FILES", type=str_or_list,
@@ -600,6 +600,13 @@ class SCTConfiguration(dict):
         dict(name="gce_root_disk_size_minikube", env="SCT_GCE_ROOT_DISK_SIZE_MINIKUBE", type=int,
              help=""),
 
+        # k8s-gke options
+        dict(name="gke_cluster_version", env="SCT_GKE_CLUSTER_VERSION", type=str,
+             help=""),
+
+        dict(name="gke_cluster_n_nodes", env="SCT_GKE_CLUSTER_N_NODES", type=int,
+             help=""),
+
         # k8s options
         dict(name="k8s_scylla_operator_docker_image", env="SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE", type=str,
              help=""),
@@ -1020,6 +1027,14 @@ class SCTConfiguration(dict):
                              'k8s_scylla_disk_gi', 'gce_image', 'gce_instance_type_loader', 'gce_root_disk_type_loader',
                              'gce_n_local_ssd_disk_loader', 'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
                              'gce_root_disk_size_monitor', 'gce_n_local_ssd_disk_monitor', 'minikube_version'],
+
+        'k8s-gke': ['gke_cluster_version', 'gke_cluster_n_nodes', 'gce_instance_type_db', 'gce_root_disk_type_db',
+                    'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db', 'user_credentials_path', 'scylla_version',
+                    'scylla_mgmt_agent_version', 'k8s_scylla_operator_docker_image', 'k8s_scylla_datacenter',
+                    'k8s_scylla_rack', 'k8s_scylla_cluster_name', 'k8s_scylla_cpu_n', 'k8s_scylla_mem_gi', 'gce_image',
+                    'gce_instance_type_loader', 'gce_root_disk_type_loader', 'gce_n_local_ssd_disk_loader',
+                    'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'gce_root_disk_size_monitor',
+                    'gce_n_local_ssd_disk_monitor'],
     }
 
     defaults_config_files = {
@@ -1029,6 +1044,7 @@ class SCTConfiguration(dict):
         "baremetal": [sct_abs_path('defaults/baremetal_config.yaml')],
         "aws-siren": [sct_abs_path('defaults/aws_config.yaml')],
         "k8s-gce-minikube": [sct_abs_path('defaults/k8s_gce_minikube_config.yaml')],
+        "k8s-gke": [sct_abs_path('defaults/k8s_gke_config.yaml')],
     }
 
     multi_region_params = [
@@ -1098,7 +1114,7 @@ class SCTConfiguration(dict):
         dist_version = scylla_linux_distro.split('-')[-1]
 
         if scylla_version:
-            if self.get("cluster_backend") in ["docker", "k8s-gce-minikube"]:
+            if self.get("cluster_backend") in ["docker", "k8s-gce-minikube", "k8s-gke"]:
                 self.log.info("Assume that Scylla Docker image has repo file pre-installed.")
             elif 'ami_id_db_scylla' not in self and self.get('cluster_backend') == 'aws':
                 ami_list = []

@@ -45,7 +45,7 @@ from sdcm.cluster_aws import CassandraAWSCluster
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
-from sdcm.cluster_k8s import minikube
+from sdcm.cluster_k8s import minikube, gke
 from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, update_certificates, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, PageFetcher, \
     rows_to_list, ec2_ami_get_root_device_name
@@ -873,11 +873,76 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.db_cluster = \
             minikube.MinikubeScyllaPodCluster(k8s_cluster=self.k8s_cluster,
-                                              scylla_cluster_config=cluster_k8s.SCYLLA_CLUSTER_CONFIG,
+                                              scylla_cluster_config=minikube.SCYLLA_CLUSTER_CONFIG,
                                               scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
                                               user_prefix=self.params.get("user_prefix"),
                                               n_nodes=self.params.get("n_db_nodes"),
                                               params=self.params)
+
+        self.log.debug("Update startup script with iptables rules")
+        startup_script = "\n".join((Setup.get_startup_script(), *self.db_cluster.nodes_iptables_redirect_rules(), ))
+        Setup.get_startup_script = lambda: startup_script
+
+        self.loaders = LoaderSetGCE(gce_image=self.params.get("gce_image"),
+                                    gce_image_type=self.params.get("gce_root_disk_type_loader"),
+                                    gce_image_size=None,
+                                    gce_network=self.params.get("gce_network"),
+                                    service=services[:1],
+                                    credentials=self.credentials,
+                                    gce_instance_type=self.params.get("gce_instance_type_loader"),
+                                    gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_loader"),
+                                    gce_image_username=self.params.get("gce_image_username"),
+                                    user_prefix=self.params.get("user_prefix"),
+                                    n_nodes=self.params.get('n_loaders'),
+                                    params=self.params,
+                                    gce_datacenter=gce_datacenter)
+        if self.params.get("n_monitor_nodes") > 0:
+            self.monitors = MonitorSetGCE(gce_image=self.params.get("gce_image"),
+                                          gce_image_type=self.params.get("gce_root_disk_type_monitor"),
+                                          gce_image_size=self.params.get('gce_root_disk_size_monitor'),
+                                          gce_network=self.params.get("gce_network"),
+                                          service=services[:1],
+                                          credentials=self.credentials,
+                                          gce_instance_type=self.params.get("gce_instance_type_monitor"),
+                                          gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_monitor"),
+                                          gce_image_username=self.params.get("gce_image_username"),
+                                          user_prefix=self.params.get("user_prefix"),
+                                          n_nodes=self.params.get('n_monitor_nodes'),
+                                          targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
+                                          params=self.params,
+                                          gce_datacenter=gce_datacenter)
+        else:
+            self.monitors = NoMonitorSet()
+
+    def get_cluster_k8s_gke(self):
+        self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
+
+        services = get_gce_services(self.params.get('gce_datacenter').split())
+        assert len(services) == 1, "Doesn't support multi DC setup for `k8s-gke' backend"
+
+        services, gce_datacenter = list(services.values()), list(services.keys())
+        self.k8s_cluster = gke.GkeCluster(gke_cluster_version=self.params.get("gke_cluster_version"),
+                                          gce_image_type=self.params.get("gce_root_disk_type_db"),
+                                          gce_image_size=self.params.get("gce_root_disk_size_db"),
+                                          gce_network=self.params.get("gce_network"),
+                                          services=services,
+                                          credentials=self.credentials,
+                                          gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_db"),
+                                          gce_instance_type=self.params.get("gce_instance_type_db"),
+                                          user_prefix=self.params.get("user_prefix"),
+                                          n_nodes=self.params.get("gke_cluster_n_nodes"),
+                                          params=self.params,
+                                          gce_datacenter=gce_datacenter)
+        self.k8s_cluster.wait_for_init()
+        self.k8s_cluster.deploy_cert_manager()
+        self.k8s_cluster.deploy_scylla_operator()
+
+        self.db_cluster = gke.GkeScyllaPodCluster(k8s_cluster=self.k8s_cluster,
+                                                  scylla_cluster_config=gke.SCYLLA_CLUSTER_CONFIG,
+                                                  scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
+                                                  user_prefix=self.params.get("user_prefix"),
+                                                  n_nodes=self.params.get("n_db_nodes"),
+                                                  params=self.params)
 
         self.log.debug("Update startup script with iptables rules")
         startup_script = "\n".join((Setup.get_startup_script(), *self.db_cluster.nodes_iptables_redirect_rules(), ))
@@ -944,6 +1009,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.get_cluster_baremetal()
         elif cluster_backend == 'k8s-gce-minikube':
             self.get_cluster_k8s_gce_minikube()
+        elif cluster_backend == 'k8s-gke':
+            self.get_cluster_k8s_gke()
 
     def _cs_add_node_flag(self, stress_cmd):
         if '-node' not in stress_cmd:

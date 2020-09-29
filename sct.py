@@ -24,7 +24,7 @@ from sdcm.utils.common import (list_instances_aws, list_instances_gce, list_reso
                                list_logs_by_test_id, get_branched_ami, gce_meta_to_dict,
                                aws_tags_to_dict, list_elastic_ips_aws, get_builder_by_test_id,
                                clean_resources_according_post_behavior, clean_sct_runners,
-                               search_test_id_in_latest, get_testrun_dir, format_timestamp)
+                               search_test_id_in_latest, get_testrun_dir, format_timestamp, list_clusters_gke)
 from sdcm.utils.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
                                      kill_running_monitoring_stack_services)
 from sdcm.cluster import Setup
@@ -239,6 +239,22 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
         click.secho("No elastic ips found for selected filters in AWS!", fg="yellow")
 
     click.secho("Checking GCE...", fg='green')
+    gke_clusters = list_clusters_gke(tags_dict=params, verbose=verbose)
+    if gke_clusters:
+        gke_table = PrettyTable(["Name", "Region-AZ", "TestId", "RunByUser", "CreateTime"])
+        gke_table.align = "l"
+        gke_table.sortby = 'CreateTime'
+        for cluster in gke_clusters:
+            tags = gce_meta_to_dict(cluster.extra['metadata'])
+            gke_table.add_row([cluster.name,
+                               cluster.zone,
+                               tags.get('TestId', 'N/A') if tags else "N/A",
+                               tags.get('RunByUser', 'N/A') if tags else "N/A",
+                               cluster.cluster_info['createTime'],
+                               ])
+        click.echo(gke_table.get_string(title="GKE clusters"))
+    else:
+        click.secho("Nothing found for selected filters in GKE!", fg="yellow")
     gce_instances = list_instances_gce(tags_dict=params, running=get_all_running, verbose=verbose)
     if gce_instances:
         gce_table = PrettyTable(table_header)

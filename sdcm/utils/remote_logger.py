@@ -184,8 +184,8 @@ class KubectlScyllaLogger(CommandLoggerBase):
     @property
     def _logger_cmd(self) -> str:
         pc = self._node.parent_cluster
-        return f"kubectl -s {pc.k8s_cluster.k8s_server_url} -n {pc.namespace} " \
-               f"logs -f {self._node.name} -c {pc.container} 2>&1 | grep scylla >>{self._target_log_file}"
+        cmd = pc.k8s_cluster.kubectl_cmd("logs -f", self._node.name, "-c", pc.container, namespace=pc.namespace)
+        return f"{cmd} 2>&1 | grep scylla >> {self._target_log_file}"
 
 
 class KubectlGeneralLogger(CommandLoggerBase):
@@ -193,25 +193,26 @@ class KubectlGeneralLogger(CommandLoggerBase):
     @property
     def _logger_cmd(self) -> str:
         pc = self._node.parent_cluster
-        return f"kubectl -s {pc.k8s_cluster.k8s_server_url} -n {pc.namespace} " \
-               f"logs -f {self._node.name} -c {pc.container} >> {self._target_log_file} 2>&1"
+        cmd = pc.k8s_cluster.kubectl_cmd("logs -f", self._node.name, "-c", pc.container, namespace=pc.namespace)
+        return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
 class CertManagerLogger(CommandLoggerBase):
 
     @property
     def _logger_cmd(self) -> str:
-        return f"kubectl -s {self._node.k8s_server_url} -n cert-manager " \
-               "logs -l app.kubernetes.io/instance=cert-manager" \
-               f" --all-containers=true -f >> {self._target_log_file} 2>&1"
+        cmd = self._node.kubectl_cmd("logs -f -l app.kubernetes.io/instance=cert-manager --all-containers=true",
+                                     namespace="cert-manager")
+        return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
 class ScyllaOperatorLogger(CommandLoggerBase):
 
     @property
     def _logger_cmd(self) -> str:
-        return f"kubectl -s {self._node.k8s_server_url} -n scylla-operator-system  " \
-               f"logs scylla-operator-controller-manager-0 --all-containers=true -f >> {self._target_log_file} 2>&1"
+        cmd = self._node.kubectl_cmd("logs -f scylla-operator-controller-manager-0 --all-containers=true",
+                                     namespace="scylla-operator-system")
+        return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
 def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint: disable=too-many-return-statements

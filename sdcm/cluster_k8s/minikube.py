@@ -11,28 +11,29 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import atexit
 import logging
 from typing import Optional, List
 from textwrap import dedent
 from functools import cached_property
-from itertools import chain
 
 from invoke.exceptions import UnexpectedExit
 
 from sdcm import cluster, cluster_gce
-from sdcm.remote import LOCALRUNNER, shell_script_cmd
+from sdcm.remote import LOCALRUNNER
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
-from sdcm.cluster_k8s import KubernetesCluster, BasePodContainer, ScyllaPodCluster, IptablesChainCommand, \
-    IPTABLES_BIN, IPTABLES_LEGACY_BIN, SCYLLA_POD_EXPOSED_PORTS
+from sdcm.sct_config import sct_abs_path
+from sdcm.cluster_k8s import KubernetesCluster, BasePodContainer, ScyllaPodCluster
+from sdcm.cluster_k8s.iptables import IptablesPodPortsRedirectMixin, IptablesClusterOpsMixin
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.common import get_free_port, wait_for_port
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import ContainerManager
 
 
+SCYLLA_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/cluster-minikube.yaml")
 KUBECTL_PROXY_PORT = 8001
 KUBECTL_PROXY_CONTAINER = "auto_ssh:kubectl_proxy"
+SCYLLA_POD_EXPOSED_PORTS = [3000, 9042, 9180, ]
 
 LOGGER = logging.getLogger(__name__)
 
@@ -93,6 +94,7 @@ class MinikubeOps:
         minikube_start_script = dedent(f"""
             sysctl fs.protected_regular=0
             minikube start --driver=none --extra-config=apiserver.service-node-port-range=1-65535
+            ip link set docker0 promisc on
             chown -R $USER $HOME/.kube $HOME/.minikube
         """)
         node.remoter.run(f'sudo -E bash -cxe "{minikube_start_script}"')
@@ -210,9 +212,7 @@ class GceMinikubeCluster(MinikubeCluster, cluster_gce.GCECluster):
         self.stop_k8s_task_threads()
 
 
-class MinikubeScyllaPodContainer(BasePodContainer):
-    parent_cluster: "MinikubeScyllaPodCluster"
-
+class MinikubeScyllaPodContainer(BasePodContainer, IptablesPodPortsRedirectMixin):
     @cached_property
     def host_remoter(self):
         return self.parent_cluster.k8s_cluster.remoter
@@ -230,60 +230,17 @@ class MinikubeScyllaPodContainer(BasePodContainer):
     def node_type(self) -> 'str':
         return 'db'
 
+    @cached_property
+    def hydra_dest_ip(self):
+        return self.parent_cluster.k8s_cluster.hydra_dest_ip
 
-class MinikubeScyllaPodCluster(ScyllaPodCluster):
-    k8s_cluster: MinikubeCluster
-    nodes: List[MinikubeScyllaPodContainer]
+    @cached_property
+    def nodes_dest_ip(self):
+        return self.parent_cluster.k8s_cluster.nodes_dest_ip
 
-    def _create_node(self, node_index: int, pod_name: str) -> MinikubeScyllaPodContainer:
-        node = MinikubeScyllaPodContainer(
-            parent_cluster=self,
-            name=pod_name,
-            base_logdir=self.logdir,
-            node_prefix=self.node_prefix,
-            node_index=node_index)
-        node.init()
-        return node
 
-    def _iptables_redirect_rules(self,
-                                 dest_ip: str,
-                                 iptables_bin: str = IPTABLES_BIN,
-                                 command: IptablesChainCommand = "A",
-                                 nodes: Optional[List[BasePodContainer]] = None) -> List[str]:
-        if nodes is None:
-            nodes = self.nodes
-        return list(chain.from_iterable(node.iptables_node_redirect_rules(dest_ip=dest_ip,
-                                                                          iptables_bin=iptables_bin,
-                                                                          command=command) for node in nodes))
-
-    def hydra_iptables_redirect_rules(self,
-                                      command: IptablesChainCommand = "A",
-                                      nodes: Optional[list] = None) -> List[str]:
-        return self._iptables_redirect_rules(dest_ip=self.k8s_cluster.hydra_dest_ip,
-                                             iptables_bin=IPTABLES_LEGACY_BIN,
-                                             command=command,
-                                             nodes=nodes)
-
-    def nodes_iptables_redirect_rules(self,
-                                      command: IptablesChainCommand = "A",
-                                      nodes: Optional[list] = None) -> List[str]:
-        return self._iptables_redirect_rules(dest_ip=self.k8s_cluster.nodes_dest_ip, command=command, nodes=nodes)
-
-    def update_nodes_iptables_redirect_rules(self,
-                                             command: IptablesChainCommand = "A",
-                                             nodes: Optional[list] = None) -> None:
-        nodes_to_update = []
-        if tester := cluster.Setup.tester_obj():
-            if tester.loaders:
-                nodes_to_update.extend(tester.loaders.nodes)
-            if tester.monitors:
-                nodes_to_update.extend(tester.monitors.nodes)
-
-        if nodes_to_update:
-            LOGGER.debug("Found following nodes to apply new iptables rules: %s", nodes_to_update)
-            iptables_rules = "\n".join(self.nodes_iptables_redirect_rules(command=command, nodes=nodes))
-            for node in nodes_to_update:
-                node.remoter.sudo(shell_script_cmd(iptables_rules))
+class MinikubeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
+    PodContainerClass = MinikubeScyllaPodContainer
 
     def add_nodes(self,
                   count: int,
@@ -301,12 +258,7 @@ class MinikubeScyllaPodCluster(ScyllaPodCluster):
                                            selector=f"statefulset.kubernetes.io/pod-name={node.name}",
                                            namespace=self.namespace)
 
-        add_rules_commands = self.hydra_iptables_redirect_rules(nodes=new_nodes)
-        del_rules_commands = self.hydra_iptables_redirect_rules(command="D", nodes=new_nodes)
-
-        LOCALRUNNER.sudo(shell_script_cmd("\n".join(add_rules_commands)))
-        atexit.register(LOCALRUNNER.sudo, shell_script_cmd("\n".join(del_rules_commands)))
-
+        self.add_hydra_iptables_rules(nodes=new_nodes)
         self.update_nodes_iptables_redirect_rules(nodes=new_nodes)
 
         return new_nodes

@@ -1134,7 +1134,8 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
             self.get_docker_instances_by_testid()
         elif backend == 'k8s-gce-minikube':
             self.get_gce_instances_by_testid()
-            # TBD: Extract db-nodes
+        elif backend == 'k8s-gke':
+            self.get_gce_instances_by_testid()
 
     def run(self):
         """Run collect logs process as standalone operation

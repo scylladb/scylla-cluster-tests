@@ -21,6 +21,7 @@ from functools import cached_property
 import kubernetes as k8s
 
 from sdcm.remote import LOCALRUNNER
+from sdcm.sct_config import sct_abs_path
 from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
 
 
@@ -29,8 +30,11 @@ HELM_IMAGE = "alpine/helm:3.3.4"
 
 KUBECTL_TIMEOUT = 300  # seconds
 
+K8S_CONFIGS = sct_abs_path("sdcm/k8s_configs")
+
 JSON_PATCH_TYPE = "application/json-patch+json"
 
+LOGGER = logging.getLogger(__name__)
 
 logging.getLogger("kubernetes.client.rest").setLevel(logging.INFO)
 
@@ -75,20 +79,27 @@ class KubernetesOps:
         return cls.core_v1_api(kluster).list_namespaced_service(namespace=namespace, watch=False, **kwargs).items
 
     @staticmethod
-    def kubectl(kluster, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None):
+    def kubectl_cmd(kluster, *command, namespace=None, ignore_k8s_server_url=False):
         cmd = [KUBECTL_BIN, ]
-        if remoter is None:
-            if kluster.k8s_server_url is not None:
-                cmd.append(f"--server={kluster.k8s_server_url}")
-            remoter = LOCALRUNNER
+        if not ignore_k8s_server_url and kluster.k8s_server_url is not None:
+            cmd.append(f"--server={kluster.k8s_server_url}")
         if namespace:
             cmd.append(f"--namespace={namespace}")
         cmd.extend(command)
-        return remoter.run(" ".join(cmd), timeout=timeout)
+        return " ".join(cmd)
 
     @classmethod
-    def apply_file(cls, kluster, config_path, namespace=None, timeout=KUBECTL_TIMEOUT):
-        cls.kubectl(kluster, "apply", "-f", f"<(envsubst<{config_path})", namespace=namespace, timeout=timeout)
+    def kubectl(cls, kluster, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None):
+        cmd = cls.kubectl_cmd(kluster, *command, namespace=namespace, ignore_k8s_server_url=bool(remoter))
+        if remoter is None:
+            remoter = LOCALRUNNER
+        return remoter.run(cmd, timeout=timeout)
+
+    @classmethod
+    def apply_file(cls, kluster, config_path, namespace=None, timeout=KUBECTL_TIMEOUT, envsubst=True):
+        if envsubst:
+            config_path = f"<(envsubst<{config_path})"
+        cls.kubectl(kluster, "apply", "-f",  config_path, namespace=namespace, timeout=timeout)
 
     @classmethod
     def copy_file(cls, kluster, src, dst, container=None, timeout=KUBECTL_TIMEOUT):
@@ -117,7 +128,7 @@ class HelmContainerMixin:
     def helm_container_run_args(self) -> dict:
         volumes = {os.path.expanduser("~/.kube"): {"bind": "/root/.kube", "mode": "rw"},
                    os.path.expanduser("~/.helm"): {"bind": "/root/.helm", "mode": "rw"},
-                   os.path.abspath(os.curdir): {"bind": "/apps", "mode": "rw"}, }
+                   K8S_CONFIGS: {"bind": "/apps", "mode": "rw"}, }
         return dict(image=HELM_IMAGE,
                     entrypoint="/bin/cat",
                     tty=True,
@@ -136,7 +147,10 @@ class HelmContainerMixin:
         if namespace:
             cmd.extend(("--namespace", namespace, ))
         cmd.extend(command)
-        res = self._helm_container.exec_run(["sh", "-c", " ".join(cmd)])
+        cmd = " ".join(cmd)
+
+        LOGGER.debug("Execute `%s'", cmd)
+        res = self._helm_container.exec_run(["sh", "-c", cmd])
         if res.exit_code:
             raise DockerException(f"{self._helm_container}: {res.output.decode('utf-8')}")
         return res.output.decode("utf-8")

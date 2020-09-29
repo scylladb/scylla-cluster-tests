@@ -12,11 +12,13 @@
 # Copyright (c) 2020 ScyllaDB
 
 import unittest
+from unittest.mock import patch
+
 from sdcm.utils.common import clean_cloud_resources
 
 
+@patch("sdcm.utils.common.clean_clusters_gke", lambda *_, **__: None)  # TODO: fix our builders and remove this patch
 class CleanCloudResourcesTest(unittest.TestCase):
-
     def test_no_tag_testid_and_runbyuser(self):
         params = {}
         res = clean_cloud_resources(params)
