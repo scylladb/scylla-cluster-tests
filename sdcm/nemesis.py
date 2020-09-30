@@ -28,7 +28,7 @@ import traceback
 import json
 
 
-from typing import List, Optional, TypedDict, Type
+from typing import List, Optional, TypedDict, Type, Callable, Tuple, Dict, Set
 from collections import OrderedDict, defaultdict, Counter, namedtuple
 from functools import wraps, partial
 
@@ -2764,6 +2764,89 @@ class ChaosMonkey(Nemesis):
         self.call_random_disrupt_method()
 
 
+class CategoricalMonkey(Nemesis):
+    """Randomly picks disruptions to execute using the given categorical distribution.
+
+    Each disruption is assigned a weight. The probability that a disruption D with weight W
+    will be executed is W / T, where T is the sum of weights of all disruptions.
+
+    The distribution is passed into the monkey's constructor as a dictionary.
+    Keys in the dictionary are names of the disruption methods (from the `Nemesis` class)
+    e.g. `disrupt_hard_reboot_node`. The value for each key is the weight of this disruption.
+    You can omit the ``disrupt_'' prefix from the key, e.g. `hard_reboot_node`.
+
+    A default weight can be passed; it will be assigned to each disruption that is not listed.
+    In particular if the default weight is 0 then the unlisted disruptions won't be executed.
+    """
+
+    @staticmethod
+    def get_disruption_distribution(dist: dict, default_weight: float) -> Tuple[List[Callable], List[float]]:
+        def is_nonnegative_number(val):
+            try:
+                val = float(val)
+            except ValueError:
+                return False
+            else:
+                return val >= 0
+
+        def prefixed(pref: str, val: str) -> str:
+            if val.startswith(pref):
+                return val
+            return pref + val
+
+        all_methods = CategoricalMonkey.get_disrupt_methods()
+
+        population: List[Callable] = []
+        weights: List[float] = []
+        listed_methods: Set[str] = set()
+
+        for name, weight in dist.items():
+            name = str(name)
+            prefixed_name = prefixed('disrupt_', name)
+            if prefixed_name not in all_methods:
+                raise ValueError(f"'{name}' is not a valid disruption")
+
+            if not is_nonnegative_number(weight):
+                raise ValueError("Each disruption weight must be a non-negative number."
+                                 " '{weight}' is not a valid weight.")
+
+            weight = float(weight)
+            if weight > 0:
+                population.append(all_methods[prefixed_name])
+                weights.append(weight)
+            listed_methods.add(prefixed_name)
+
+        if default_weight > 0:
+            for method_name, method in all_methods.items():
+                if method_name not in listed_methods:
+                    population.append(method)
+                    weights.append(default_weight)
+
+        if not population:
+            raise ValueError("There must be at least one disruption with a positive weight.")
+
+        return population, weights
+
+    @staticmethod
+    def get_disrupt_methods() -> Dict[str, Callable]:
+        return {attr[0]: attr[1] for attr in inspect.getmembers(CategoricalMonkey) if
+                attr[0].startswith('disrupt_') and
+                callable(attr[1])}
+
+    def __init__(self, tester_obj, termination_event, dist: dict, default_weight: float = 1):
+        super(CategoricalMonkey, self).__init__(tester_obj, termination_event)
+        self.disruption_distribution = CategoricalMonkey.get_disruption_distribution(dist, default_weight)
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        population, weights = self.disruption_distribution
+        assert len(population) == len(weights) and population
+
+        method = random.choices(population, weights=weights)[0]
+        bound_method = method.__get__(self, CategoricalMonkey)
+        self.execute_disrupt_method(bound_method)
+
+
 class LimitedChaosMonkey(Nemesis):
 
     @log_time_elapsed_and_status
@@ -3293,7 +3376,8 @@ COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,
                    ScyllaCloudLimitedChaosMonkey,
                    AllMonkey, MdcChaosMonkey,
                    DisruptiveMonkey, NonDisruptiveMonkey, GeminiNonDisruptiveChaosMonkey,
-                   GeminiChaosMonkey, NetworkMonkey, KubernetesScyllaOperatorMonkey, SisyphusMonkey]
+                   GeminiChaosMonkey, NetworkMonkey, KubernetesScyllaOperatorMonkey, SisyphusMonkey,
+                   CategoricalMonkey]
 
 
 # TODO: https://trello.com/c/vwedwZK2/1881-corrupt-the-scrub-fails
