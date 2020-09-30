@@ -2839,6 +2839,9 @@ class CategoricalMonkey(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
+        self._random_disrupt()
+
+    def _random_disrupt(self):
         population, weights = self.disruption_distribution
         assert len(population) == len(weights) and population
 
