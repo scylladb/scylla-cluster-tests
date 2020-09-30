@@ -2293,14 +2293,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # TODO add to each type of node
         # comment raising exception. replace with log warning
         # raise NotImplementedError('Derived classes must implement get_console_output')
-        self.log.warning('Method is not implemented for %s' % self.__class__.__name__)
+        self.log.warning('Method get_console_output is not implemented for %s' % self.__class__.__name__)
         return ''
 
     def get_console_screenshot(self):
         # TODO add to each type of node
         # comment raising exception. replace with log warning
         # raise NotImplementedError('Derived classes must implement get_console_output')
-        self.log.warning('Method is not implemented for %s' % self.__class__.__name__)
+        self.log.warning('Method get_console_screenshot is not implemented for %s' % self.__class__.__name__)
         return b''
 
     def _resharding_status(self, status):
@@ -2565,7 +2565,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.log.warning("Swap file is not used on loader node %s.\nError details: %s", self, result.stderr)
 
     def set_hostname(self):
-        self.log.warning('Method is not implemented for %s' % self.__class__.__name__)
+        self.log.warning('Method set_hostname is not implemented for %s' % self.__class__.__name__)
 
     @property
     def scylla_packages_installed(self) -> List[str]:

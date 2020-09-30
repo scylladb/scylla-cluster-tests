@@ -736,7 +736,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
 
     def upgrade_scylla_cluster(self, new_version: str) -> None:
         self.replace_scylla_cluster_value("/spec/version", new_version)
-        self.wait_for_pods_readiness()
+        self.rollout_restart()
 
     def update_scylla_config(self) -> bool:
         with self.scylla_yaml_lock:

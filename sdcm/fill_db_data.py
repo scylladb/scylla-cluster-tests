@@ -3065,9 +3065,9 @@ class FillDatabaseData(ClusterTester):
             # pylint: disable=no-member
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
-            session.set_keyspace("keyspace_fill_db_data")
             # clean original test data by truncate
             try:
+                session.set_keyspace("keyspace_fill_db_data")
                 self.truncate_tables(session)
             except Exception as ex:  # pylint: disable=broad-except
                 LOGGER.debug("Found error in truncate tables: '%s'", ex)
