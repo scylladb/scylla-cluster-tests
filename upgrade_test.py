@@ -657,6 +657,100 @@ class UpgradeTest(FillDatabaseData):
 
         self.log.info('all nodes were upgraded, and last workaround is verified.')
 
+    def test_kubernetes_scylla_upgrade(self):
+        """
+        Run a set of different cql queries against various types/tables before
+        and after upgrade of every node to check the consistency of data
+        """
+        self.truncate_entries_flag = False  # not perform truncate entries test
+        self.log.info('Step1 - Populate DB with many types of tables and data')
+        target_upgrade_version = self.params.get('new_version', default='')
+        if target_upgrade_version and parse_version(target_upgrade_version) >= parse_version('3.1') and \
+                not is_enterprise(target_upgrade_version):
+            self.truncate_entries_flag = True
+        self.prepare_keyspaces_and_tables()
+        self.log.info('Step2 - Populate some data before upgrading cluster')
+        self.fill_and_verify_db_data('', pre_fill=True)
+        self.log.info('Step3 - Starting c-s write workload')
+        self.verify_stress_thread(
+            self.run_stress_thread(
+                stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_w'))
+            )
+        )
+        self.log.info('Step4 - Starting c-s read workload')
+        self.verify_stress_thread(
+            self.run_stress_thread(
+                stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))
+            )
+        )
+        self.log.info(f'Step5 - Upgrade cluster to {target_upgrade_version}')
+        self.db_cluster.upgrade_scylla_cluster(target_upgrade_version)
+        self.log.info('Step6 - Wait till cluster got upgraded')
+        self.wait_till_scylla_is_upgraded_on_all_nodes(target_upgrade_version)
+        self.log.info('Step7 - Upgrade sstables')
+        upgradesstables = self.db_cluster.run_func_parallel(func=self.upgradesstables_if_command_available)
+        # only check sstable format version if all nodes had 'nodetool upgradesstables' available
+        if all(upgradesstables):
+            self.log.info('Upgrading sstables if new version is available')
+            tables_upgraded = self.db_cluster.run_func_parallel(func=self.wait_for_sstable_upgrade)
+            assert all(tables_upgraded), f"Failed to upgrade the sstable format {tables_upgraded}"
+        self.log.info('Step8 - Verify data after upgrade')
+        self.fill_and_verify_db_data(note='after all nodes upgraded')
+        self.log.info('Step9 - Starting c-s read workload')
+        self.verify_stress_thread(
+            self.run_stress_thread(
+                stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))
+            )
+        )
+        self.log.info('Step10 - Starting c-s write workload')
+        self.verify_stress_thread(
+            self.run_stress_thread(
+                stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_w'))
+            )
+        )
+        self.log.info('Step11 - Starting c-s read workload')
+        self.verify_stress_thread(
+            self.run_stress_thread(
+                stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))
+            )
+        )
+        self.log.info('Step12 - Search for errors in scylla log')
+        for node in self.db_cluster.nodes:
+            self.search_for_idx_token_error_after_upgrade(node=node, step=f'{str(node)} after upgrade')
+        self.log.info('Step13 - Checking how many failed_to_load_scheme errors happened during the test')
+        error_factor = 3
+        schema_load_error_num = self.count_log_errors(search_pattern='Failed to load schema version',
+                                                      step='AFTER UPGRADE')
+        # Warning example:
+        # workload prioritization - update_service_levels_from_distributed_data: an error occurred while retrieving
+        # configuration (exceptions::read_failure_exception (Operation failed for system_distributed.service_levels
+        # - received 0 responses and 1 failures from 1 CL=ONE.))
+        workload_prioritization_error_num = self.count_log_errors(
+            search_pattern='workload prioritization.*read_failure_exception',
+            step='AFTER UPGRADE',
+            search_for_idx_token_error=False
+        )
+        self.log.info(f'schema_load_error_num: {schema_load_error_num}; '
+                      f'workload_prioritization_error_num: {workload_prioritization_error_num}')
+
+        # Issue #https://github.com/scylladb/scylla-enterprise/issues/1391
+        # By Eliran's comment: For 'Failed to load schema version' error which is expected and non offensive is
+        # to count the 'workload prioritization' warning and subtract that amount from the amount of overall errors.
+        load_error_num = schema_load_error_num-workload_prioritization_error_num
+        assert load_error_num <= error_factor * 8 * \
+            len(self.db_cluster.nodes), 'Only allowing shards_num * %d schema load errors per host during the ' \
+                                        'entire test, actual: %d' % (
+                error_factor, schema_load_error_num)
+
+    def wait_till_scylla_is_upgraded_on_all_nodes(self, target_version):
+        def _is_cluster_upgraded():
+            for node in self.db_cluster.nodes:
+                if target_version != node.get_scylla_version() or not node.db_up:
+                    return False
+            return True
+        wait.wait_for(func=_is_cluster_upgraded, step=30, timeout=900, throw_exc=True,
+                      text="Waiting until all nodes in the cluster are upgraded")
+
     def count_log_errors(self, search_pattern, step, search_for_idx_token_error=True):
         schema_load_error_num = 0
         for node in self.db_cluster.nodes:

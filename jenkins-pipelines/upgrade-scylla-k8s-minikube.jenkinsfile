@@ -1,0 +1,11 @@
+#!groovy
+
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+operatorPipeline(
+    backend: 'k8s-gce-minikube',
+    params: params,
+    test_name: 'upgrade_test.UpgradeTest.test_kubernetes_scylla_upgrade',
+    test_config: 'test-cases/scylla-operator/kubernetes-scylla-upgrade.yaml',
+    timeout: [time: 300, unit: 'MINUTES']
+)
