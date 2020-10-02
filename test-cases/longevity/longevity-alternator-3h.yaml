@@ -26,9 +26,9 @@ stress_cmd: [
   "cassandra-stress write cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..6990500 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
   "cassandra-stress read  cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..6990500 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
   # with lwt table
-  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=6990500 -p fieldcount=10 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true",
+  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=6990500 -p fieldcount=10 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true -p maxexecutiontime=10800",
   # no lwt table
-  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=6990500 -p fieldcount=10 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true -p table=usertable_no_lwt",
+  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=6990500 -p fieldcount=10 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true -p table=usertable_no_lwt -p maxexecutiontime=10800",
 ]
 
 round_robin: true
