@@ -64,7 +64,7 @@ from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_g
 from sdcm.utils.decorators import retrying, log_run_info
 from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
-from sdcm.utils.version_utils import SCYLLA_VERSION_RE, BUILD_ID_RE, get_gemini_version
+from sdcm.utils.version_utils import SCYLLA_VERSION_RE, BUILD_ID_RE, get_gemini_version, get_systemd_version
 from sdcm.sct_events import Severity, DatabaseLogEvent, ClusterHealthValidatorEvent, set_grafana_url, \
     ScyllaBenchEvent, raise_event_on_failure, TestFrameworkEvent
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
@@ -1693,6 +1693,19 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         if debug_install and self.distro.is_rhel_like:
             self.remoter.sudo("yum install -y scylla-gdb", verbose=True, ignore_status=True)
+
+        if self.init_system == "systemd":
+            systemd_version = get_systemd_version(self.remoter.run("systemctl --version", ignore_status=True).stdout)
+            if systemd_version >= 240:
+                self.log.debug("systemd version %d >= 240: we can change FinalKillSignal", systemd_version)
+                self.remoter.sudo(shell_script_cmd("""\
+                    mkdir -p /etc/systemd/system/scylla-server.service.d
+                    cat <<EOF > /etc/systemd/system/scylla-server.service.d/override.conf
+                    [Service]
+                    FinalKillSignal=SIGABRT
+                    EOF
+                    systemctl daemon-reload
+                """))
 
     def config_client_encrypt(self):
         self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')  # pylint: disable=not-callable
