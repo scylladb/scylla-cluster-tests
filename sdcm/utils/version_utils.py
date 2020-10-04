@@ -23,6 +23,12 @@ SCYLLA_VERSION_RE = re.compile(r"\d+(\.\d+)?\.[\d\w]+([.~][\d\w]+)?")
 SSTABLE_FORMAT_VERSION_REGEX = re.compile(r'Feature (.*)_SSTABLE_FORMAT is enabled')
 PRIMARY_XML_GZ_REGEX = re.compile(r'="(.*?primary.xml.gz)"')
 
+# Example of output for `systemctl --version' command:
+#   $ systemctl --version
+#   systemd 237
+#   +PAM ... default-hierarchy=hybrid
+SYSTEMD_VERSION_RE = re.compile(r"^systemd (?P<version>\d+)")
+
 REPOMD_XML_PATH = "repodata/repomd.xml"
 
 BUILD_ID_RE = re.compile(r"Build ID: (?P<build_id>\w+)")
@@ -174,3 +180,12 @@ def get_node_supported_sstable_versions(node_system_log) -> List[str]:
             if match := SSTABLE_FORMAT_VERSION_REGEX.search(line):
                 output.append(match.group(1).lower())
     return output
+
+
+def get_systemd_version(output: str) -> int:
+    if match := SYSTEMD_VERSION_RE.match(output):
+        try:
+            return int(match.group("version"))
+        except ValueError:
+            pass
+    return 0
