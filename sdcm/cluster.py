@@ -4706,6 +4706,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             ]
 
         screenshot_links = []
+        snapshots = []
         for node in self.nodes:
             screenshot_collector = GrafanaScreenShot(name="grafana-screenshot",
                                                      test_start_time=test_start_time,
@@ -4718,8 +4719,9 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             snapshots_collector = GrafanaSnapshot(name="grafana-snapshot",
                                                   test_start_time=test_start_time,
                                                   extra_entities=grafana_extra_entities)
-            snapshots = snapshots_collector.collect(node, self.logdir)
-        return {'screenshots': screenshot_links, 'snapshots': snapshots['links']}
+            snapshots_data = snapshots_collector.collect(node, self.logdir)
+            snapshots.extend(snapshots_data.get('links', []))
+        return {'screenshots': screenshot_links, 'snapshots': snapshots}
 
     def upload_annotations_to_s3(self):
         annotations_url = ''
