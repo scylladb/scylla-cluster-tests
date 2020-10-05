@@ -3748,7 +3748,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                           alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'),
                           internode_compression=self.params.get('internode_compression'))
 
-    def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600, wait_db_up: bool = True):  # pylint: disable=too-many-branches
+    def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # pylint: disable=too-many-branches
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
 
         install_scylla = True
@@ -3798,11 +3798,11 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         else:
             self._reuse_cluster_setup(node)
 
-        if wait_db_up:
-            node.wait_db_up(verbose=verbose, timeout=timeout)
-            # Wait the node is UN and then run "nodetool status"
-            self.wait_for_nodes_up_and_normal(nodes=[node], verification_node=node)
-            self.clean_replacement_node_ip(node)
+        node.wait_db_up(verbose=verbose, timeout=timeout)
+        nodes_status = node.get_nodes_status()
+        check_nodes_status(nodes_status=nodes_status, current_node=node)
+
+        self.clean_replacement_node_ip(node)
 
     def _scylla_install(self, node):
         node.update_repo_cache()
@@ -3855,13 +3855,12 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         return True
 
     @wait_for_init_wrap
-    def wait_for_init(self, node_list=None, verbose=False, timeout=None, wait_db_up=True, check_node_health=True):  # pylint: disable=unused-argument, too-many-arguments
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):  # pylint: disable=unused-argument, too-many-arguments
         """
         Scylla cluster setup.
         :param node_list: List of nodes to watch for init.
         :param verbose: Whether to print extra info while watching for init.
         :param timeout: timeout in minutes to wait for init to be finished
-        :param wait_db_up: select if wait for db to start up or not
         :param check_node_health: select if run node health check or not
         :return:
         """
