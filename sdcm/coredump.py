@@ -83,6 +83,7 @@ class CoreDumpInfo:
 class CoredumpThreadBase(Thread):
     lookup_period = 30
     upload_retry_limit = 3
+    max_coredump_thread_exceptions = 10
 
     def __init__(self, node: 'BaseNode', max_core_upload_limit: int):
         self.node = node
@@ -93,6 +94,7 @@ class CoredumpThreadBase(Thread):
         self.completed: List[CoreDumpInfo] = []
         self.uploaded: List[CoreDumpInfo] = []
         self.termination_event = Event()
+        self.exception = None
         super().__init__(daemon=True)
 
     def stop(self):
@@ -103,11 +105,17 @@ class CoredumpThreadBase(Thread):
         """
         Keep reporting new coredumps found, every 30 seconds.
         """
+        exceptions_count = 0
         while not self.termination_event.wait(self.lookup_period) or self.in_progress:
             try:
                 self.main_cycle_body()
+                exceptions_count = 0
             except Exception as exc:
-                self.log.error(f"Following error occurred: {str(exc)}")
+                self.log.error("Following error occurred: %s", exc)
+                exceptions_count += 1
+                if exceptions_count == self.max_coredump_thread_exceptions:
+                    self.exception = exc
+                    raise
 
     def main_cycle_body(self):
         if not self.node.remoter.is_up(timeout=60):
@@ -163,9 +171,9 @@ class CoredumpThreadBase(Thread):
             except:  # pylint: disable=bare-except
                 pass
 
-    @retrying(n=10, sleep_time=20, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying on getting pid of cores")
+    @abstractmethod
     def get_list_of_cores(self) -> Optional[List[CoreDumpInfo]]:
-        return self._get_list_of_cores()
+        ...
 
     def publish_event(self, core_info: CoreDumpInfo):
         try:
@@ -268,10 +276,6 @@ class CoredumpThreadBase(Thread):
         return len(self.found)
 
     @abstractmethod
-    def _get_list_of_cores(self) -> Optional[List[CoreDumpInfo]]:
-        pass
-
-    @abstractmethod
     def update_coredump_info_with_more_information(self, core_info: CoreDumpInfo):
         pass
 
@@ -282,7 +286,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
     Relay on coredumpctl on the host-side to do all things
     """
 
-    def _get_list_of_cores(self) -> Optional[List[CoreDumpInfo]]:
+    def get_list_of_cores(self) -> Optional[List[CoreDumpInfo]]:
         result = self.node.remoter.run(
             'sudo coredumpctl --no-pager --no-legend 2>&1', verbose=False, ignore_status=True)
         if "No coredumps found" in result.stdout or not result.ok:
@@ -433,7 +437,7 @@ class CoredumpExportFileThread(CoredumpThreadBase):
             'timestamp': data[5],
         }
 
-    def _get_list_of_cores(self) -> Optional[List[CoreDumpInfo]]:
+    def get_list_of_cores(self) -> Optional[List[CoreDumpInfo]]:
         output = []
         for directory in self.coredumps_directories:
             for corefile in self.node.remoter.sudo(f'ls {directory}', verbose=False, ignore_status=True).stdout.split():

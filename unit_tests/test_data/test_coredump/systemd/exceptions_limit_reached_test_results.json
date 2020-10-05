@@ -5,12 +5,12 @@
   "uploaded": [],
   "exception": {
     "__instance__": "invoke.exceptions.UnexpectedExit",
-    "reason": null,
     "result": {
       "__instance__": "fabric.runners.Result",
-      "exited": 1,
-      "stderr": "Fake error, just to check what will coredump exporter thread can handle it properly",
-      "stdout": ""
-    }
+      "stdout": "",
+      "stderr": "",
+      "exited": 1
+    },
+    "reason": null
   }
 }

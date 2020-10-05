@@ -30,7 +30,7 @@ class CoredumpExportSystemdTestThread(CoredumpExportSystemdThread):
         pass
 
     def _localize_results(self):
-        output = {}
+        output = {'exception': self.exception}
         for group_name in ['found', 'in_progress', 'completed', 'uploaded']:
             group = getattr(self, group_name)
             group_data = []
@@ -47,9 +47,6 @@ class CoredumpExportSystemdTestThread(CoredumpExportSystemdThread):
 
     def save_results(self, filepath):
         return Pickler.save_to_file(filepath, self._localize_results())
-
-    def get_list_of_cores(self):
-        return self._get_list_of_cores()
 
 
 class CoredumpExportFileTestThread(CoredumpExportFileThread):
@@ -82,20 +79,17 @@ class CoredumpExportFileTestThread(CoredumpExportFileThread):
     def save_results(self, filepath):
         return Pickler.save_to_file(filepath, self._localize_results())
 
-    def get_list_of_cores(self):
-        return self._get_list_of_cores()
-
 
 class CoredumpExportTestBase(unittest.TestCase):
     maxDiff = None
     test_data_folder: str = None
 
     @abstractmethod
-    def _init_target_coredump_cass(self, test_name: str) -> CoredumpThreadBase:
+    def _init_target_coredump_class(self, test_name: str) -> CoredumpThreadBase:
         pass
 
     def _run_coredump_with_fake_remoter(self, test_name: str):
-        th = self._init_target_coredump_cass(test_name)
+        th = self._init_target_coredump_class(test_name)
         th.start()
         time.sleep(1)
         th.stop()
@@ -115,11 +109,38 @@ class CoredumpExportTestBase(unittest.TestCase):
                     f'Got unexpected results for {coredump_status}: {str(result_coredump_list)}\n{str(exc)}')
 
 
+class CoredumpExportExceptionTest(CoredumpExportTestBase):
+    maxDiff = None
+    test_data_folder = 'systemd'
+
+    def _init_target_coredump_class(self, test_name: str) -> CoredumpExportSystemdTestThread:
+        th = CoredumpExportSystemdTestThread(
+            FakeNode(
+                MockRemoter(
+                    responses=os.path.join(
+                        os.path.dirname(__file__), 'test_data', 'test_coredump', self.test_data_folder,
+                        test_name + '_remoter.json'
+                    )
+                ),
+                tempfile.mkdtemp()
+            ),
+            5
+        )
+        th.max_coredump_thread_exceptions = 2
+        return th
+
+    def test_with_exceptions_limit_reached(self):
+        self._run_coredump_with_fake_remoter('exceptions_limit_reached_test')
+
+    def test_with_exceptions_limit_not_reached(self):
+        self._run_coredump_with_fake_remoter('exceptions_limit_not_reached_test')
+
+
 class CoredumpExportSystemdTest(CoredumpExportTestBase):
     maxDiff = None
     test_data_folder = 'systemd'
 
-    def _init_target_coredump_cass(self, test_name: str) -> CoredumpExportSystemdTestThread:
+    def _init_target_coredump_class(self, test_name: str) -> CoredumpExportSystemdTestThread:
         return CoredumpExportSystemdTestThread(
             FakeNode(
                 MockRemoter(
@@ -147,7 +168,7 @@ class CoredumpExportFileTest(CoredumpExportTestBase):
     maxDiff = None
     test_data_folder = 'filebased'
 
-    def _init_target_coredump_cass(self, test_name: str) -> CoredumpExportFileTestThread:
+    def _init_target_coredump_class(self, test_name: str) -> CoredumpExportFileTestThread:
         return CoredumpExportFileTestThread(
             FakeNode(
                 MockRemoter(
