@@ -222,7 +222,7 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
                          n_nodes=n_nodes,
                          params=params)
 
-    def node_setup(self, node, verbose=False, timeout=3600, wait_db_up=True):
+    def node_setup(self, node, verbose=False, timeout=3600):
         endpoint_snitch = self.params.get('endpoint_snitch')
         seed_address = ','.join(self.seed_nodes_ips)
 
