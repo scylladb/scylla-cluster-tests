@@ -21,7 +21,7 @@ from logging import getLogger
 from parameterized import parameterized
 
 from sdcm.remote import RemoteLibSSH2CmdRunner, RemoteCmdRunner, LocalCmdRunner, RetryableNetworkException, \
-    SSHConnectTimeoutError
+    SSHConnectTimeoutError, shell_script_cmd
 from sdcm.remote.base import CommandRunner, Result
 from sdcm.remote.remote_file import remote_file
 
@@ -358,15 +358,8 @@ class TestSudoAndRunShellScript(unittest.TestCase):
         remoter.sudo("true")
         self.assertEqual(remoter.command_to_run, "sudo true")
 
-    def test_run_shell_script(self):
-        remoter = self.remoter_cls("localhost")
-        remoter.run_shell_script("true")
-        self.assertEqual(remoter.command_to_run, 'bash -cxe "true"')
-
-    def test_run_shell_script_sudo(self):
-        remoter = self.remoter_cls("localhost", user="joe")
-        remoter.run_shell_script("true", sudo=True)
-        self.assertEqual(remoter.command_to_run, 'sudo bash -cxe "true"')
+    def test_shell_script_cmd(self):
+        self.assertEqual(shell_script_cmd("true"), 'bash -cxe "true"')
 
 
 class TestRemoteFile(unittest.TestCase):

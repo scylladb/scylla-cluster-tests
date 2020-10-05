@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Optional, List
+from typing import Optional, List, Callable
 from abc import abstractmethod, ABCMeta
 import shlex
 import logging
@@ -126,29 +126,6 @@ class CommandRunner(metaclass=ABCMeta):
                         log_file=log_file,
                         retry=retry,
                         watchers=watchers)
-
-    # pylint: disable=too-many-arguments
-    def run_shell_script(self,
-                         cmd: str,
-                         timeout: Optional[float] = None,
-                         ignore_status: bool = False,
-                         verbose: bool = True,
-                         new_session: bool = False,
-                         log_file: Optional[str] = None,
-                         retry: int = 1,
-                         watchers: Optional[List[StreamWatcher]] = None,
-                         sudo: bool = False,
-                         shell_cmd: str = "bash -cxe",
-                         quote: str = '"',
-                         preprocessor=dedent) -> Result:
-        return (self.sudo if sudo else self.run)(cmd=f"{shell_cmd} {quote}{preprocessor(cmd)}{quote}",
-                                                 timeout=timeout,
-                                                 ignore_status=ignore_status,
-                                                 verbose=verbose,
-                                                 new_session=new_session,
-                                                 log_file=log_file,
-                                                 retry=retry,
-                                                 watchers=watchers)
 
     @abstractmethod
     def _create_connection(self):
@@ -303,3 +280,10 @@ class FailuresWatcher(Responder):
             self.callback(self.sentinel, line)
         if self.raise_exception:
             raise OutputCheckError(err)
+
+
+def shell_script_cmd(cmd: str,
+                     shell_cmd: str = "bash -cxe",
+                     quote: str = '"',
+                     preprocessor: Callable[[str], str] = dedent) -> str:
+    return f"{shell_cmd} {quote}{preprocessor(cmd)}{quote}"

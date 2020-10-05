@@ -49,7 +49,7 @@ from sdcm.collectd import ScyllaCollectdSetup
 from sdcm.mgmt import ScyllaManagerError, update_config_file, SCYLLA_MANAGER_YAML_PATH, SCYLLA_MANAGER_AGENT_YAML_PATH
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
-from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS
+from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd
 from sdcm.remote.remote_file import remote_file
 from sdcm import wait, mgmt
 from sdcm.utils import alternator
@@ -1672,12 +1672,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                                                                "system_info_encryption",
                                                                "kmip_hosts:", )):
                 self.remoter.send_files(src="./data_dir/encrypt_conf", dst="/tmp/")
-                self.remoter.run_shell_script("""\
+                self.remoter.sudo(shell_script_cmd("""\
                     rm -rf /etc/encrypt_conf
                     mv -f /tmp/encrypt_conf /etc
                     mkdir -p /etc/scylla/encrypt_conf /etc/encrypt_conf/system_key_dir
                     chown -R scylla:scylla /etc/scylla /etc/encrypt_conf
-                """, sudo=True)
+                """))
                 self.remoter.sudo("md5sum /etc/encrypt_conf/*.pem", ignore_status=True)
 
         if append_scylla_args:
@@ -3183,12 +3183,12 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             else:
                 binary_path = '/usr/bin/scylla'
             # replace the binary
-            node.remoter.run_shell_script(f"""\
+            node.remoter.sudo(shell_script_cmd(f"""\
                 cp -f {binary_path} {binary_path}.origin
                 cp -f /tmp/scylla {binary_path}
                 chown root:root {binary_path}
                 chmod +x {binary_path}
-            """, sudo=True)
+            """))
             _queue.put(node)
             _queue.task_done()
 
@@ -3766,10 +3766,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.stop_scylla_server()
 
         for node in self.nodes:
-            node.remoter.run_shell_script(f"""\
+            node.remoter.sudo(shell_script_cmd(f"""\
                 rm -rf '/var/lib/scylla/data/{ks}'
                 cp -r '/var/lib/scylla/data/{backup_name}' '/var/lib/scylla/data/{ks}'
-            """, sudo=True)
+            """))
 
         for node in self.nodes:
             node.start_scylla_server()

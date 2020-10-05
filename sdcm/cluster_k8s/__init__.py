@@ -34,7 +34,7 @@ from invoke.exceptions import UnexpectedExit
 
 from sdcm import cluster, cluster_gce, cluster_docker
 from sdcm.cluster import ClusterNodesNotReady
-from sdcm.remote import LOCALRUNNER
+from sdcm.remote import LOCALRUNNER, shell_script_cmd
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.sct_config import sct_abs_path
 from sdcm.sct_events import TestFrameworkEvent
@@ -817,7 +817,7 @@ class MinikubeScyllaPodCluster(ScyllaPodCluster):
             LOGGER.debug("Found following nodes to apply new iptables rules: %s", nodes_to_update)
             iptables_rules = "\n".join(self.nodes_iptables_redirect_rules(command=command, nodes=nodes))
             for node in nodes_to_update:
-                node.remoter.run_shell_script(cmd=iptables_rules, sudo=True)
+                node.remoter.sudo(shell_script_cmd(iptables_rules))
 
     def add_nodes(self,
                   count: int,
@@ -835,10 +835,12 @@ class MinikubeScyllaPodCluster(ScyllaPodCluster):
                                            selector=f"statefulset.kubernetes.io/pod-name={node.name}",
                                            namespace=self.namespace)
 
-        LOCALRUNNER.run_shell_script(cmd="\n".join(self.hydra_iptables_redirect_rules(nodes=new_nodes)), sudo=True)
-        atexit.register(LOCALRUNNER.run_shell_script,
-                        cmd="\n".join(self.hydra_iptables_redirect_rules(command="D", nodes=new_nodes)),
-                        sudo=True)
+        add_rules_commands = self.hydra_iptables_redirect_rules(nodes=new_nodes)
+        del_rules_commands = self.hydra_iptables_redirect_rules(command="D", nodes=new_nodes)
+
+        LOCALRUNNER.sudo(shell_script_cmd("\n".join(add_rules_commands)))
+        atexit.register(LOCALRUNNER.sudo, shell_script_cmd("\n".join(del_rules_commands)))
+
         self.update_nodes_iptables_redirect_rules(nodes=new_nodes)
 
         return new_nodes

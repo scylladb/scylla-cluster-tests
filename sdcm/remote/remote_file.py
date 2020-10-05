@@ -50,6 +50,7 @@ def remote_file(remoter, remote_path, serializer=StringIO.getvalue, deserializer
     LOGGER.debug("New content of `%s':\n%s", remote_path, content)
 
     remote_tempfile = remoter.run("mktemp").stdout.strip()
+    remote_tempfile_move_cmd = f"mv '{remote_tempfile}' '{remote_path}'"
     wait.wait_for(remoter.send_files,
                   step=10,
                   text=f"Waiting for updating of `{remote_path}' on {remoter.hostname}",
@@ -57,4 +58,7 @@ def remote_file(remoter, remote_path, serializer=StringIO.getvalue, deserializer
                   throw_exc=True,
                   src=local_tempfile,
                   dst=remote_tempfile)
-    (remoter.sudo if sudo else remoter.run)(f"mv '{remote_tempfile}' '{remote_path}'")
+    if sudo:
+        remoter.sudo(remote_tempfile_move_cmd)
+    else:
+        remoter.run(remote_tempfile_move_cmd)
