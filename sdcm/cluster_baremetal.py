@@ -111,7 +111,7 @@ class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
         ))
         super(ScyllaPhysicalCluster, self).__init__(**kwargs)
 
-    def node_setup(self, node, verbose=False, timeout=3600, wait_db_up=True):
+    def node_setup(self, node, verbose=False, timeout=3600):
         """
         Configure scylla.yaml on cluster nodes.
         We have to modify scylla.yaml on our own because we are not on AWS,
