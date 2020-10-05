@@ -15,12 +15,13 @@ from .local_cmd_runner import LocalCmdRunner
 from .remote_cmd_runner import RemoteCmdRunner
 from .remote_libssh_cmd_runner import RemoteLibSSH2CmdRunner
 from .remote_base import RemoteCmdRunnerBase
-from .base import FailuresWatcher, RetryableNetworkException, SSHConnectTimeoutError
+from .base import FailuresWatcher, RetryableNetworkException, SSHConnectTimeoutError, shell_script_cmd
 
 
 __all__ = (
     'LocalCmdRunner', 'RemoteLibSSH2CmdRunner', 'RemoteCmdRunner', 'NETWORK_EXCEPTIONS', 'LOCALRUNNER',
-    'RemoteCmdRunnerBase', 'FailuresWatcher', 'RetryableNetworkException', 'SSHConnectTimeoutError'
+    'RemoteCmdRunnerBase', 'FailuresWatcher', 'RetryableNetworkException', 'SSHConnectTimeoutError',
+    'shell_script_cmd',
 )
 
 
