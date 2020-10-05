@@ -674,14 +674,22 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         if self.get_scylla_args():
             raise NotImplementedError("custom SCYLLA_ARGS is not supported by k8s-* backends yet")
 
-        for param in ("server_encrypt", "append_scylla_yaml", ):
-            if self.params.get(param):
-                raise NotImplementedError(f"{param} is not supported by k8s-* backends yet")
+        if self.params.get("server_encrypt"):
+            raise NotImplementedError("server_encrypt is not supported by k8s-* backends yet")
+
+        append_scylla_yaml = self.params.get("append_scylla_yaml")
+
+        if append_scylla_yaml:
+            unsupported_options = ("system_key_directory", "system_info_encryption", "kmip_hosts:", )
+            if any(substr in append_scylla_yaml for substr in unsupported_options):
+                raise NotImplementedError(
+                    f"{unsupported_options} are not supported in append_scylla_yaml by k8s-* backends yet")
 
         node.config_setup(enable_exp=self.params.get("experimental"),
                           endpoint_snitch=endpoint_snitch,
                           authenticator=self.params.get("authenticator"),
                           server_encrypt=self.params.get("server_encrypt"),
+                          append_scylla_yaml=append_scylla_yaml,
                           hinted_handoff=self.params.get("hinted_handoff"),
                           authorizer=self.params.get("authorizer"),
                           alternator_port=self.params.get("alternator_port"),
