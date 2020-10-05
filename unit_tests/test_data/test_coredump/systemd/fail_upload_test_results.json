@@ -126,5 +126,6 @@
       "command_line": "/usr/src/scylladb/scylla-cluster-tests/venv/bin/python /snap/pycharm-professional/211/plugins/python/helpers/pycharm/_jb_unittest_runner.py --path /usr/src/scylladb/scylla-cluster-tests/dkropachev/unit_tests/test_remoter.py",
       "executable": "/usr/bin/python3.8"
     }
-  ]
+  ],
+  "exception": null
 }

@@ -21,6 +21,8 @@ class DefaultValue:
 
 
 __builtin__ = [].__class__.__module__
+
+
 def is_builtin(o): return o.__module__ == __builtin__
 
 
@@ -154,6 +156,9 @@ class Pickler:
     @classmethod
     def _from_data_iterate_attrs(cls, instance_type, obj: dict, args_bucket_name: str, default_action=None):
         action_map = cls._get_attrs_by_class(instance_type, args_bucket_name)
+        if not action_map:
+            raise RuntimeError("Unknown class, please, add this class to 'class_info'")
+
         default_action = action_map.get('*', default_action)
         if not isinstance(obj, dict):
             obj = obj.__dict__
