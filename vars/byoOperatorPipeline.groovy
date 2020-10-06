@@ -16,7 +16,7 @@ def call(Map pipelineParams) {
             SCT_CLUSTER_BACKEND   = 'k8s-gce-minikube'
 		}
         parameters {
-            string(defaultValue: 'scylladb/scylla-operator:v0.2.3',
+            string(defaultValue: '',
                    description: '',
                    name: 'k8s_scylla_operator_docker_image')
             string(defaultValue: '4.0.0',
@@ -67,7 +67,9 @@ def call(Map pipelineParams) {
                             rm -fv ./latest
 
                             export SCT_CONFIG_FILES=${test_config}
-                            export SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE=${params.k8s_scylla_operator_docker_image}
+                            if [[ -n "${params.k8s_scylla_operator_docker_image}" ]]; then
+                                export SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE=${params.k8s_scylla_operator_docker_image}
+                            fi
                             export SCT_SCYLLA_VERSION=${params.scylla_version}
                             export SCT_SCYLLA_MGMT_AGENT_VERSION=${params.scylla_mgmt_agent_version}
 
