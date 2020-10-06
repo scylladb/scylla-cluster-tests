@@ -460,7 +460,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.run_nodetool("status", ignore_status=True, verbose=True)
 
         if result is not None:
-            self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
+            # workaround for issue #7332: don't interrupt test and don't raise exception
+            # for UnexpectedExit, Failure and CommandTimedOut if "scylla-server stop" failed
+            # or scylla-server was stopped gracefully.
+            self.target_node.stop_scylla_server(verify_up=False, verify_down=True, ignore_status=True)
             self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     @retrying(n=3, sleep_time=60, allowed_exceptions=(NodeSetupFailed, NodeSetupTimeout))

@@ -2412,7 +2412,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if verify_up:
             self.wait_jmx_up(timeout=timeout)
 
-    @retrying(n=3, sleep_time=5, allowed_exceptions=NETWORK_EXCEPTIONS,
+    @retrying(n=3, sleep_time=5, allowed_exceptions=NETWORK_EXCEPTIONS + (CommandTimedOut, ),
               message="Failed to stop scylla.server, retrying...")
     def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
         if verify_up:
