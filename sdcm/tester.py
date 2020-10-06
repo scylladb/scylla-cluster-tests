@@ -53,6 +53,7 @@ from sdcm.utils.common import ScyllaCQLSession, get_non_system_ks_cf_list, forma
     get_testrun_status, download_encrypt_keys, PageFetcher, rows_to_list, normalize_ipv6_url
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
+from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT
 from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
@@ -303,6 +304,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.alternator = alternator.api.Alternator(
             aws_access_key_id=self.params.get("alternator_access_key_id"),
             aws_secret_access_key=self.params.get("alternator_secret_access_key"))
+        if self.params.get("use_ldap_authorization"):
+            Setup.configure_ldap(self.localhost, use_ssl=False)
+            ldap_role = LDAP_ROLE
+            ldap_users = LDAP_USERS.copy()
+            ldap_address = list(Setup.LDAP_ADDRESS).copy()
+            unique_members_list = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}' for user in ldap_users]
+            ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
+            user_password = LDAP_PASSWORD  # not in use not for authorization, but must be in the config
+            ldap_entry = [f'cn={ldap_role},{LDAP_BASE_OBJECT}',
+                          ['groupOfUniqueNames', 'simpleSecurityObject', 'top'],
+                          {'uniqueMember': unique_members_list, 'userPassword': user_password}]
+            self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
+                                          user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
         start_events_device(self.logdir)
         time.sleep(0.5)
         InfoEvent('TEST_START test_id=%s' % Setup.test_id())
@@ -413,7 +427,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 self.legacy_init_nodes(db_cluster=self.db_cluster)
             else:
                 self.init_nodes(db_cluster=self.db_cluster)
-
+            if self.params.get('use_ldap_authorization'):
+                self.db_cluster.nodes[0].create_ldap_users_on_scylla()
             self.set_system_auth_rf()
 
             db_node_address = self.db_cluster.nodes[0].ip_address

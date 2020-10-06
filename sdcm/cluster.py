@@ -62,6 +62,7 @@ from sdcm.sct_events import Severity, CoreDumpEvent, DatabaseLogEvent, \
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack
+from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LDAP_BASE_OBJECT, LDAP_PASSWORD, LDAP_USERS, LDAP_ROLE
 from sdcm.utils.remote_logger import get_system_logging_thread
 
 CREDENTIALS = []
@@ -111,6 +112,7 @@ class Setup:
     BACKTRACE_DECODING = False
     INTRA_NODE_COMM_PUBLIC = False
     RSYSLOG_ADDRESS = None
+    LDAP_ADDRESS = None
     DECODING_QUEUE = None
     USE_LEGACY_CLUSTER_INIT = False
     AUTO_BOOTSTRAP = True
@@ -232,6 +234,16 @@ class Setup:
             tags["JenkinsJobTag"] = build_tag
 
         return tags
+
+    @classmethod
+    def configure_ldap(cls, node, use_ssl=False):
+        ContainerManager.run_container(node, "ldap")
+        if use_ssl:
+            port = node.ldap_ports['ldap_ssl_port']
+        else:
+            port = node.ldap_ports['ldap_port']
+        address = get_my_ip()
+        cls.LDAP_ADDRESS = (address, port)
 
     @classmethod
     def configure_rsyslog(cls, node, enable_ngrok=False):
@@ -463,14 +475,23 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.log.debug(self.remoter.ssh_debug_cmd())
 
     def _init_port_mapping(self):
-        if (IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION) and Setup.RSYSLOG_ADDRESS:
-            try:
-                ContainerManager.destroy_container(self, "auto_ssh:rsyslog", ignore_keepalive=True)
-            except NotFound:
-                pass
-            ContainerManager.run_container(self, "auto_ssh:rsyslog",
-                                           local_port=Setup.RSYSLOG_ADDRESS[1],
-                                           remote_port=RSYSLOG_SSH_TUNNEL_LOCAL_PORT)
+        if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION:
+            if Setup.RSYSLOG_ADDRESS:
+                try:
+                    ContainerManager.destroy_container(self, "auto_ssh:rsyslog", ignore_keepalive=True)
+                except NotFound:
+                    pass
+                ContainerManager.run_container(self, "auto_ssh:rsyslog",
+                                               local_port=Setup.RSYSLOG_ADDRESS[1],
+                                               remote_port=RSYSLOG_SSH_TUNNEL_LOCAL_PORT)
+            if Setup.LDAP_ADDRESS and self.parent_cluster.node_type == "scylla-db":
+                try:
+                    ContainerManager.destroy_container(self, "auto_ssh:ldap", ignore_keepalive=True)
+                except NotFound:
+                    pass
+                ContainerManager.run_container(self, "auto_ssh:ldap",
+                                               local_port=Setup.LDAP_ADDRESS[1],
+                                               remote_port=LDAP_SSH_TUNNEL_LOCAL_PORT)
 
     @property
     def region(self):
@@ -1721,20 +1742,26 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if value is None:
                 self.log.debug(f"The variable '{key}'is successfully removed")
                 scylla_yml.pop(key, None)
-            else:
-                if scylla_yml.get(key, None) is None:
-                    self.log.debug(f"Create new variable '{key}' with value '{value}'")
-                else:
-                    self.log.debug(f"Change variable '{key}' from '{scylla_yml.get(key)}' to '{value}'")
-                scylla_yml[key] = value
 
-        scylla_yaml_contents = yaml.safe_dump(scylla_yml)
-        with open(yaml_dst_path, 'w') as scylla_yaml_file:
-            scylla_yaml_file.write(scylla_yaml_contents)
-        self.log.debug("Scylla YAML configuration:\n%s", scylla_yaml_contents)
-        wait.wait_for(self.remoter.send_files, step=10, text='Waiting for copying scylla.yaml to node',
-                      timeout=300, throw_exc=True, src=yaml_dst_path, dst='/tmp/scylla.yaml')
-        self.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
+    @staticmethod
+    def get_ldap_config():
+        ldap_server_ip = '127.0.0.1' if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION else Setup.LDAP_ADDRESS[0]
+        ldap_port = LDAP_SSH_TUNNEL_LOCAL_PORT if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION else \
+            Setup.LDAP_ADDRESS[1]
+        return {'role_manager': 'com.scylladb.auth.LDAPRoleManager',
+                'ldap_url_template': f'ldap://{ldap_server_ip}:{ldap_port}/'
+                                     f'{LDAP_BASE_OBJECT}?cn?sub?(uniqueMember='
+                                     f'uid={{USER}},ou=Person,{LDAP_BASE_OBJECT})',
+                'ldap_attr_role': 'cn',
+                'ldap_bind_dn': f'cn=admin,{LDAP_BASE_OBJECT}',
+                'ldap_bind_passwd': LDAP_PASSWORD}
+
+    def create_ldap_users_on_scylla(self):
+        if not self.parent_cluster.ldap_configured:
+            self.run_cqlsh(f'CREATE ROLE \'{LDAP_ROLE}\' WITH SUPERUSER=true')
+            for user in LDAP_USERS:
+                self.run_cqlsh(f'CREATE ROLE \'{user}\' WITH login=true AND password=\'{LDAP_PASSWORD}\'')
+            self.parent_cluster.ldap_configured = True
 
     # pylint: disable=invalid-name,too-many-arguments,too-many-locals,too-many-branches,too-many-statements
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
@@ -1742,7 +1769,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                      client_encrypt=None, append_scylla_yaml=None, append_scylla_args=None, debug_install=False,
                      hinted_handoff='enabled', murmur3_partitioner_ignore_msb_bits=None, authorizer=None,
                      alternator_port=None, listen_on_all_interfaces=False, ip_ssh_connections=None,
-                     alternator_enforce_authorization=False):
+                     alternator_enforce_authorization=False, ldap=False):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         wait.wait_for(self.remoter.receive_files, step=10, text='Waiting for copying scylla.yaml',
                       timeout=300, throw_exc=True, src=yaml_file, dst=yaml_dst_path)
@@ -1845,6 +1872,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             scylla_yml['alternator_enforce_authorization'] = True
         else:
             scylla_yml['alternator_enforce_authorization'] = False
+
+        if ldap:
+            scylla_yml.update(self.get_ldap_config())
+
+        if append_scylla_yaml:
+            scylla_yml.update(yaml.safe_load(append_scylla_yaml))
 
         scylla_yaml_contents = yaml.safe_dump(scylla_yml)
 
@@ -2831,6 +2864,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         else:
             raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
         self.coredumps = dict()
+        self.ldap_configured = False
         super(BaseCluster, self).__init__()
 
     @cached_property
@@ -2935,8 +2969,12 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         node.destroy()
 
     def get_db_auth(self):
-        user = self.params.get('authenticator_user', default=None)
-        password = self.params.get('authenticator_password', default=None)
+        if self.params.get('use_ldap_authorization') and self.ldap_configured:
+            user = LDAP_USERS[0]
+            password = LDAP_PASSWORD
+        else:
+            user = self.params.get('authenticator_user', default=None)
+            password = self.params.get('authenticator_password', default=None)
         return (user, password) if user and password else None
 
     def write_node_public_ip_file(self):
@@ -3529,7 +3567,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                           authorizer=self.params.get('authorizer'),
                           alternator_port=self.params.get('alternator_port'),
                           murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
-                          alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'))
+                          alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'),
+                          ldap=self.params.get('use_ldap_authorization'))
 
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600, wait_db_up: bool = True):  # pylint: disable=too-many-branches
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
