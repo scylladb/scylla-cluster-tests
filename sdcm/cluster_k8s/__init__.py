@@ -626,7 +626,8 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                           alternator_port=self.params.get("alternator_port"),
                           murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
                           alternator_enforce_authorization=self.params.get("alternator_enforce_authorization"),
-                          internode_compression=self.params.get("internode_compression"))
+                          internode_compression=self.params.get("internode_compression"),
+                          ldap=self.params.get('use_ldap_authorization'))
 
     def validate_seeds_on_all_nodes(self):
         pass

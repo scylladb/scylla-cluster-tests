@@ -19,12 +19,13 @@ from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.k8s import HelmContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_PORT, RSyslogContainerMixin, generate_rsyslog_conf_file
 from sdcm.utils.gce_utils import GcloudContainerMixin
+from sdcm.utils.ldap import LDAP_PORT, LDAP_SSL_PORT, LdapContainerMixin
 
 
 LOGGER = logging.getLogger(__name__)
 
 
-class LocalHost(RSyslogContainerMixin, GcloudContainerMixin, HelmContainerMixin):
+class LocalHost(RSyslogContainerMixin, GcloudContainerMixin, HelmContainerMixin, LdapContainerMixin):
     def __init__(self, user_prefix: Optional[str] = None, test_id: Optional[str] = None) -> None:
         self._containers = {}
         self.tags = {}
@@ -34,6 +35,11 @@ class LocalHost(RSyslogContainerMixin, GcloudContainerMixin, HelmContainerMixin)
     @property
     def rsyslog_port(self) -> Optional[int]:
         return ContainerManager.get_container_port(self, "rsyslog", RSYSLOG_PORT)
+
+    @property
+    def ldap_ports(self) -> Optional[dict]:
+        return {'ldap_port': ContainerManager.get_container_port(self, "ldap", LDAP_PORT),
+                'ldap_ssl_port': ContainerManager.get_container_port(self, "ldap", LDAP_SSL_PORT)}
 
     def destroy(self) -> None:
         ContainerManager.destroy_all_containers(self)
