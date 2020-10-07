@@ -85,8 +85,7 @@ class BackupFunctionsMixIn:
         for node in self.db_cluster.nodes:
             install_dependencies(node=node, destination=self.DESTINATION)
             node_data_path = '/var/lib/scylla/data'
-            nodetool_info = self.db_cluster.get_nodetool_info(node)
-            node_id = nodetool_info['ID']
+            node_id = node.host_id
             for keyspace, tables in keyspace_and_table_list.items():
                 keyspace_path = os.path.join(node_data_path, keyspace)
                 for table in tables:
