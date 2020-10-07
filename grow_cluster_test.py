@@ -20,7 +20,7 @@ import random
 from sdcm.tester import ClusterTester
 from sdcm.utils.common import get_data_dir_path
 from sdcm import nemesis
-from sdcm import prometheus
+from sdcm.services import prometheus
 
 
 class GrowClusterTest(ClusterTester):

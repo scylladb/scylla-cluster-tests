@@ -1,7 +1,7 @@
 {
   "found": [
     {
-      "__instance__": "sdcm.coredump.CoreDumpInfo",
+      "__instance__": "sdcm.services.coredump.CoreDumpInfo",
       "pid": "24393",
       "corefile": "",
       "timestamp": 1597301474.0,
@@ -12,7 +12,7 @@
       "executable": "/usr/bin/python3.8"
     },
     {
-      "__instance__": "sdcm.coredump.CoreDumpInfo",
+      "__instance__": "sdcm.services.coredump.CoreDumpInfo",
       "pid": "160718",
       "corefile": "",
       "timestamp": 1597319939.0,
@@ -23,7 +23,7 @@
       "executable": "/usr/bin/python3.8"
     },
     {
-      "__instance__": "sdcm.coredump.CoreDumpInfo",
+      "__instance__": "sdcm.services.coredump.CoreDumpInfo",
       "pid": "307283",
       "corefile": "/var/lib/systemd/coredump/core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4",
       "timestamp": 1598239861.0,
@@ -34,7 +34,7 @@
       "executable": "/usr/sbin/sshd"
     },
     {
-      "__instance__": "sdcm.coredump.CoreDumpInfo",
+      "__instance__": "sdcm.services.coredump.CoreDumpInfo",
       "pid": "1245911",
       "corefile": "/var/lib/systemd/coredump/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1245911.1598259111000000000000.lz4",
       "timestamp": 1598259111.0,
@@ -45,7 +45,7 @@
       "executable": "/usr/bin/python3.8"
     },
     {
-      "__instance__": "sdcm.coredump.CoreDumpInfo",
+      "__instance__": "sdcm.services.coredump.CoreDumpInfo",
       "pid": "1404017",
       "corefile": "/var/lib/systemd/coredump/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1404017.1598260030000000000000.lz4",
       "timestamp": 1598260030.0,
@@ -59,7 +59,7 @@
   "in_progress": [],
   "completed": [
     {
-      "__instance__": "sdcm.coredump.CoreDumpInfo",
+      "__instance__": "sdcm.services.coredump.CoreDumpInfo",
       "pid": "24393",
       "corefile": "",
       "timestamp": 1597301474.0,
@@ -70,7 +70,7 @@
       "executable": "/usr/bin/python3.8"
     },
     {
-      "__instance__": "sdcm.coredump.CoreDumpInfo",
+      "__instance__": "sdcm.services.coredump.CoreDumpInfo",
       "pid": "160718",
       "corefile": "",
       "timestamp": 1597319939.0,
@@ -81,7 +81,7 @@
       "executable": "/usr/bin/python3.8"
     },
     {
-      "__instance__": "sdcm.coredump.CoreDumpInfo",
+      "__instance__": "sdcm.services.coredump.CoreDumpInfo",
       "pid": "1245911",
       "corefile": "/var/lib/systemd/coredump/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1245911.1598259111000000000000.lz4",
       "timestamp": 1598259111.0,
@@ -92,7 +92,7 @@
       "executable": "/usr/bin/python3.8"
     },
     {
-      "__instance__": "sdcm.coredump.CoreDumpInfo",
+      "__instance__": "sdcm.services.coredump.CoreDumpInfo",
       "pid": "307283",
       "corefile": "/var/lib/systemd/coredump/core.sshd.1000.3ee441d8238246e79d2c30f6619ceeac.307283.1598239861000000000000.lz4",
       "timestamp": 1598239861.0,
@@ -103,7 +103,7 @@
       "executable": "/usr/sbin/sshd"
     },
     {
-      "__instance__": "sdcm.coredump.CoreDumpInfo",
+      "__instance__": "sdcm.services.coredump.CoreDumpInfo",
       "pid": "1404017",
       "corefile": "/var/lib/systemd/coredump/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1404017.1598260030000000000000.lz4",
       "timestamp": 1598260030.0,
@@ -116,7 +116,7 @@
   ],
   "uploaded": [
     {
-      "__instance__": "sdcm.coredump.CoreDumpInfo",
+      "__instance__": "sdcm.services.coredump.CoreDumpInfo",
       "pid": "1245911",
       "corefile": "/var/lib/systemd/coredump/core.python.1000.3ee441d8238246e79d2c30f6619ceeac.1245911.1598259111000000000000.lz4",
       "timestamp": 1598259111.0,

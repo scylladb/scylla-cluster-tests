@@ -12,6 +12,7 @@ nemesis_interval: 1
 nemesis_filter_seeds: false
 
 user_prefix: 'PR-provision-docker'
+backtrace_decoding: false
 
 scylla_version: 4.0.0
 system_auth_rf: 0

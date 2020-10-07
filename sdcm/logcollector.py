@@ -561,10 +561,9 @@ class GrafanaSnapshot(GrafanaEntity):
             snapshots = []
             for snapshot in self.grafana_entity_names:
                 version = monitoring_version.replace('.', '-')
-                dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=normalize_ipv6_url(node.grafana_address),
-                                                                    uid="-".join([snapshot['name'],
-                                                                                  version])
-                                                                    )
+                dashboard_exists = MonitoringStack.dashboard_exists(
+                    grafana_ip=normalize_ipv6_url(node.grafana_address),
+                    uid="-".join([snapshot['name'], version]))
                 if not dashboard_exists:
                     version = "master"
 

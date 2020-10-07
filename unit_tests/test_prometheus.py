@@ -4,16 +4,26 @@ import unittest
 import shutil
 import json
 import requests
+import logging
 
-from sdcm.sct_events import stop_events_device, start_events_device
-from sdcm.prometheus import PrometheusAlertManagerListener, PrometheusAlertManagerEvent
+from sdcm.event_device import start_events_device, stop_and_cleanup_all_services
+from sdcm.services.prometheus import PrometheusAlertManagerListener, PrometheusAlertManagerEvent
+
+
+class FakeNode:
+    def __init__(self, external_address):
+        self.external_address = external_address
+        self.log = logging.getLogger('FakeNode')
+
+    def wait_ssh_up(self, verbose=False):
+        return True
 
 
 class PrometheusAlertManagerListenerArtificialTest(PrometheusAlertManagerListener):
-    interval = 0
+    _interval = 0
 
     def __init__(self, artificial_alerts: list):
-        super().__init__('', interval=0)
+        super().__init__(FakeNode(''))
         self._artificial_alerts = artificial_alerts
         self._iter = -1
         self._results = {'_publish_end_of_alerts': [], '_publish_new_alerts': []}
@@ -23,7 +33,7 @@ class PrometheusAlertManagerListenerArtificialTest(PrometheusAlertManagerListene
         if self._iter < len(self._artificial_alerts):
             return self._artificial_alerts[0:self._iter]
         if self._iter > len(self._artificial_alerts) * 2:
-            self._stop_flag.set()
+            self._termination_event.set()
             return []
         return self._artificial_alerts[self._iter - len(self._artificial_alerts):len(self._artificial_alerts)]
 
@@ -36,7 +46,7 @@ class PrometheusAlertManagerListenerArtificialTest(PrometheusAlertManagerListene
     def get_result(self):
         return self._results
 
-    def wait_till_alert_manager_up(self):
+    def _service_on_before_start(self):
         pass
 
 
@@ -46,6 +56,7 @@ class PrometheusAlertManagerListenerRealTest(PrometheusAlertManagerListener):
     TBD: Alert manager accept alerts only for known instances
     """
     # pylint: disable=too-many-instance-attributes
+    _interval = 0
 
     def __init__(self,  # pylint: disable=too-many-arguments
                  ip, port=9093, artificial_alerts: list = None, events_wait_timeout=60, tmp_dir='/tmp/logdir'):
@@ -57,11 +68,11 @@ class PrometheusAlertManagerListenerRealTest(PrometheusAlertManagerListener):
         self._current_alert_to_post: int = -1
         self._event_log_file = None
         self._result_data = None
-        super().__init__(ip, port, interval=0)
+        super().__init__(ip, port)
 
     def start(self):
         shutil.rmtree(self._tmp_dir)
-        start_events_device('/tmp/logdir')
+        start_events_device('/tmp/logdir', test_mode=True)
         self._event_log_file = None
         while self._event_log_file is None:
             try:
@@ -86,9 +97,9 @@ class PrometheusAlertManagerListenerRealTest(PrometheusAlertManagerListener):
         if self._current_alert_to_post < len(self._artificial_alerts):
             return self._post_alert(self._artificial_alerts[self._current_alert_to_post])
         if self._current_alert_to_post > len(self._artificial_alerts) * 2:
-            self._stop_flag.set()
+            self._termination_event.set()
             return False
-        self._stop_flag.set()
+        self._termination_event.set()
         return False
 
     def wait_alert_event(self, event_type: str, timeout=None):
@@ -121,7 +132,7 @@ class PrometheusAlertManagerListenerRealTest(PrometheusAlertManagerListener):
 
     def stop(self):
         super().stop()
-        stop_events_device()
+        stop_and_cleanup_all_services()
 
 
 class PrometheusAlertManagerTest(unittest.TestCase):
@@ -132,6 +143,7 @@ class PrometheusAlertManagerTest(unittest.TestCase):
             test_data = json.load(file)
         listener = PrometheusAlertManagerListenerArtificialTest(artificial_alerts=test_data['post'])
         listener.start()
+        listener.join(5)
         result = listener.get_result()
         self.assertEqual(result, test_data['expected'])
 

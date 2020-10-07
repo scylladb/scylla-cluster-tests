@@ -6,18 +6,21 @@ import unittest
 import tempfile
 import logging
 import datetime
+import json
 from pathlib import Path
 from multiprocessing import Event
 
 from sdcm.utils.decorators import timeout
-from sdcm.prometheus import start_metrics_server
-from sdcm.sct_events import (start_events_device, stop_events_device, InfoEvent, CassandraStressEvent,
+from sdcm.services.prometheus import start_metrics_server
+from sdcm.sct_events import (InfoEvent, CassandraStressEvent,
                              CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
-                             Severity, ThreadFailedEvent, TestFrameworkEvent, get_logger_event_summary,
+                             Severity, ThreadFailedEvent, TestFrameworkEvent,
                              ScyllaBenchEvent, PrometheusAlertManagerEvent, EventsFilter, YcsbStressEvent,
                              EventsSeverityChangerFilter)
+from sdcm.event_device import start_events_device, stop_and_cleanup_all_services, EventsProcessor
 
 from sdcm.cluster import Setup
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -25,6 +28,8 @@ logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(messa
 
 
 class BaseEventsTest(unittest.TestCase):
+    events_processor: EventsProcessor
+
     @classmethod
     def get_event_log_file(cls, name):
         log_file = Path(cls.temp_dir, 'events_log', name)
@@ -49,19 +54,21 @@ class BaseEventsTest(unittest.TestCase):
     @classmethod
     @timeout(timeout=10, sleep_time=0.05)
     def wait_for_event_summary(cls):
-        return get_logger_event_summary()
+        with open(cls.events_processor.event_file_logger.events_summary_filename) as summary_file:
+            output = json.load(summary_file)
+        return output
 
     @classmethod
     def setUpClass(cls):
         cls.temp_dir = tempfile.mkdtemp()
         start_metrics_server()
-        start_events_device(cls.temp_dir)
+        cls.events_processor = start_events_device(cls.temp_dir, test_mode=True)
         cls.killed = Event()
         time.sleep(5)
 
     @classmethod
     def tearDownClass(cls):
-        stop_events_device()
+        stop_and_cleanup_all_services()
 
 
 class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
@@ -181,6 +188,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
 
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
                                                                                     line=enospc_line)
+
             DatabaseLogEvent(type="NO_SPACE_ERROR", regex="B").add_info_and_publish(node="A", line_number=22,
                                                                                     line=enospc_line)
 
@@ -217,7 +225,6 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                           timestamp=time.mktime(datetime.datetime.strptime(
                               "Tue 2020-01-14 10:40:25 UTC", "%a %Y-%m-%d %H:%M:%S UTC").timetuple())
                           )
-
             TestFrameworkEvent(source='', source_method='').publish()
 
         log_content_after = self.wait_for_event_log_change('events.log', log_content_before)
@@ -230,7 +237,6 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         with EventsSeverityChangerFilter(event_class=TestFrameworkEvent, severity=Severity.WARNING, extra_time_to_expiration=10):
             TestFrameworkEvent(source='critical that should be lowered',
                                source_method='', severity=Severity.CRITICAL).publish()
-
         TestFrameworkEvent(source='critical that should be lowered #2',
                            source_method='', severity=Severity.CRITICAL).publish()
 

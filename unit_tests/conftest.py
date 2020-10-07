@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from sdcm.prometheus import start_metrics_server
+from sdcm.services.prometheus import start_metrics_server
 from sdcm.utils.docker_utils import RemoteDocker
 from sdcm import wait
 from sdcm.utils.decorators import timeout
-from sdcm.sct_events import (start_events_device, stop_events_device)
+from sdcm.event_device import start_events_device, stop_and_cleanup_all_services
 
 from unit_tests.dummy_remote import LocalNode
 
@@ -48,7 +48,7 @@ def events():
     start_events_device(temp_dir)
     yield EventsLogUtils(temp_dir=temp_dir)
 
-    stop_events_device()
+    stop_and_cleanup_all_services()
 
 
 @pytest.fixture(scope='session')

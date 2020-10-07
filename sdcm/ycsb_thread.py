@@ -7,7 +7,7 @@ import uuid
 import tempfile
 from textwrap import dedent
 
-from sdcm.prometheus import nemesis_metrics_obj
+from sdcm.services.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import YcsbStressEvent, Severity
 from sdcm.remote import FailuresWatcher
 from sdcm.utils import alternator

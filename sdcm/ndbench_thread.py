@@ -5,7 +5,7 @@ import time
 import uuid
 from distutils.util import strtobool  # pylint: disable=import-error,no-name-in-module
 
-from sdcm.prometheus import nemesis_metrics_obj
+from sdcm.services.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import NdbenchStressEvent, Severity
 from sdcm.utils.common import FileFollowerThread
 from sdcm.remote import FailuresWatcher

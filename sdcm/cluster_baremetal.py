@@ -64,11 +64,6 @@ class PhysicalMachineNode(cluster.BaseNode):
     def restart(self):
         self.remoter.run('sudo reboot -h now', ignore_status=True)
 
-    def destroy(self):
-        self.stop_task_threads()  # For future implementation of destroy
-        self.wait_till_tasks_threads_are_stopped()
-        super().destroy()
-
 
 class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
     def __init__(self, **kwargs):

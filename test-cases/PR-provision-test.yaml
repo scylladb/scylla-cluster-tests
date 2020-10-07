@@ -16,6 +16,7 @@ system_auth_rf: 0
 
 nemesis_class_name: NonDisruptiveMonkey
 nemesis_interval: 1
+backtrace_decoding: false
 
 user_prefix: 'PR-provision-test'
 instance_provision: 'spot'

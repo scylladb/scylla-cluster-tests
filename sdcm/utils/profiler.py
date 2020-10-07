@@ -139,13 +139,14 @@ class ProfileableThread(threading.Thread):
     def init_run(obj):
         original_run_method = obj.run
 
-        def modified_run():
+        def modified_run(*args):
             profile = getattr(obj, '_profile', None)
             if profile:
                 profile.enable()  # pylint: disable=protected-access
-            original_run_method()
+            original_run_method(*args)
             if profile:
                 profile.create_stats()  # pylint: disable=protected-access
+
         setattr(obj, 'run', modified_run)
 
     def _bootstrap_inner(self):

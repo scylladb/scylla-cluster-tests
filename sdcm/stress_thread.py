@@ -21,7 +21,7 @@ import logging
 import concurrent.futures
 
 from sdcm.loader import CassandraStressExporter
-from sdcm.prometheus import nemesis_metrics_obj
+from sdcm.services.prometheus import nemesis_metrics_obj
 from sdcm.cluster import BaseLoaderSet
 from sdcm.sct_events import CassandraStressEvent
 from sdcm.utils.common import FileFollowerThread, generate_random_string, get_profile_content

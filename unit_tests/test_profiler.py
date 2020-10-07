@@ -20,8 +20,9 @@ from multiprocessing import Process
 import unittest
 import os.path
 import shutil
+import logging
 from sdcm.utils.common import generate_random_string
-from sdcm.prometheus import PrometheusAlertManagerListener
+from sdcm.services.prometheus import PrometheusAlertManagerListener
 from unit_tests.lib.test_profiler.lib import LibMultiprocessingProcessCustomClass, LibProcessCustomClass, \
     LibMultiprocessingProcessCustomClassWithRun, LibProcessCustomClassWithRun, LibThreadCustomClass, \
     LibThreadCustomClassWithRun, LibThreadingThreadCustomClass, LibThreadingThreadCustomClassWithRun, LibThread, LibProcess
@@ -107,6 +108,15 @@ class ProfileableProcessCustomClassWithRun(pp):
         process_body()
 
 
+class FakeNode:
+    def __init__(self, external_address):
+        self.external_address = external_address
+        self.log = logging.getLogger('FakeNode')
+
+    def wait_ssh_up(self, verbose):
+        return True
+
+
 class TestProfileFactory(unittest.TestCase):
     """ Test to illustrate profile factory usage """
     tmpdir = os.path.join('/tmp', generate_random_string(10))
@@ -152,7 +162,8 @@ class TestProfileFactory(unittest.TestCase):
         self._add_tests()
         for sub in self._subroutines:
             sub.start()
-        tmp = PrometheusAlertManagerListener('127.0.0.1')
+        tmp = PrometheusAlertManagerListener(FakeNode('127.0.0.1'))
+        tmp._interval = 0
         tmp.start()
         function_sleep()
         function_while()
@@ -164,12 +175,14 @@ class TestProfileFactory(unittest.TestCase):
                     done = False
                     break
         tmp.stop()
+        tmp.join(1)
 
     def test_profile_disabled(self):
         self._add_tests()
         for sub in self._subroutines:
             sub.start()
-        tmp = PrometheusAlertManagerListener('127.0.0.1')
+        tmp = PrometheusAlertManagerListener(FakeNode('127.0.0.1'))
+        tmp._interval = 0
         tmp.start()
         function_sleep()
         function_while()
@@ -181,6 +194,7 @@ class TestProfileFactory(unittest.TestCase):
                     done = False
                     break
         tmp.stop()
+        tmp.join(1)
 
     def _add_tests(self):  # pylint: disable=too-many-statements
         self._subroutines.append(Thread(target=thread_body, name="Thread.daemon", daemon=True))

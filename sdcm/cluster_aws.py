@@ -10,7 +10,6 @@ import json
 import base64
 from typing import List, Dict
 from textwrap import dedent
-from datetime import datetime
 from distutils.version import LooseVersion  # pylint: disable=no-name-in-module,import-error
 from functools import cached_property
 
@@ -26,9 +25,10 @@ from sdcm.cluster import INSTANCE_PROVISION_ON_DEMAND
 from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.utils.common import list_instances_aws, get_ami_tags, ec2_instance_wait_public_ip, MAX_SPOT_DURATION_TIME
 from sdcm.utils.decorators import retrying
-from sdcm.sct_events import SpotTerminationEvent, DbEventsFilter
+from sdcm.sct_events import DbEventsFilter
 from sdcm import wait
 from sdcm.remote import LocalCmdRunner, NETWORK_EXCEPTIONS
+from sdcm.services.spot_monitoring import AWSSpotMonitoringThread
 
 LOGGER = logging.getLogger(__name__)
 
@@ -511,26 +511,9 @@ class AWSNode(cluster.BaseNode):
     def is_spot(self):
         return bool(self._instance.instance_lifecycle and 'spot' in self._instance.instance_lifecycle.lower())
 
-    def check_spot_termination(self):
-        try:
-            result = self.remoter.run(
-                'curl http://169.254.169.254/latest/meta-data/spot/instance-action', verbose=False)
-            status = result.stdout.strip()
-        except Exception as details:  # pylint: disable=broad-except
-            self.log.warning('Error during getting spot termination notification %s', details)
-            return 0
-
-        if '404 - Not Found' in status:
-            return 0
-
-        self.log.warning('Got spot termination notification from AWS %s', status)
-        terminate_action = json.loads(status)
-        terminate_action_timestamp = time.mktime(datetime.strptime(
-            terminate_action['time'], "%Y-%m-%dT%H:%M:%SZ").timetuple())
-        next_check_delay = terminate_action['time-left'] = terminate_action_timestamp - time.time()
-        SpotTerminationEvent(node=self, message=terminate_action)
-
-        return max(next_check_delay - SPOT_TERMINATION_CHECK_OVERHEAD, 0)
+    def start_spot_monitoring_thread(self):
+        self._spot_monitoring_thread = AWSSpotMonitoringThread(node=self)
+        self._spot_monitoring_thread.start()
 
     @property
     def external_address(self):
@@ -705,8 +688,7 @@ class AWSNode(cluster.BaseNode):
         client.release_address(AllocationId=self.eip_allocation_id)
 
     def destroy(self):
-        self.stop_task_threads()
-        self.wait_till_tasks_threads_are_stopped()
+        self.stop_services()
         self._instance.terminate()
         if self.eip_allocation_id:
             self.release_address()

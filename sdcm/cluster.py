@@ -46,8 +46,7 @@ from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
 from paramiko import SSHException
 
 from sdcm.collectd import ScyllaCollectdSetup
-from sdcm.mgmt import ScyllaManagerError, update_config_file, SCYLLA_MANAGER_YAML_PATH, SCYLLA_MANAGER_AGENT_YAML_PATH
-from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
+from sdcm.mgmt import ScyllaManagerError, update_config_file, SCYLLA_MANAGER_YAML_PATH
 from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd
 from sdcm.remote.remote_file import remote_file
@@ -65,15 +64,22 @@ from sdcm.utils.decorators import retrying, log_run_info
 from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, BUILD_ID_RE, get_gemini_version
-from sdcm.sct_events import Severity, DatabaseLogEvent, ClusterHealthValidatorEvent, set_grafana_url, \
-    ScyllaBenchEvent, raise_event_on_failure, TestFrameworkEvent
+from sdcm.sct_events import Severity, DatabaseLogEvent, ClusterHealthValidatorEvent, \
+    ScyllaBenchEvent, raise_event_on_failure, TestFrameworkEvent, LOGGER
+from sdcm.event_device import set_grafana_url
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3
-from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
-from sdcm.coredump import CoredumpExportSystemdThread
+from sdcm.services.coredump import CoredumpExportSystemdThread
+from sdcm.services.db_log_reader import DBLogReaderThread
+from sdcm.services.remote_logger import get_system_logging_thread, ScyllaManagerSystemdLogger
+from sdcm.services.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
+from sdcm.services.tcpdump_logger import TcpdumpLogger
+from sdcm.services.decode_backtrace import DecodeBacktraceThread
+from sdcm.services.base import ListOfServices, get_by_instance
+
 
 CREDENTIALS = []
 DEFAULT_USER_PREFIX = getpass.getuser()
@@ -88,7 +94,6 @@ SCYLLA_YAML_PATH = "/etc/scylla/scylla.yaml"
 SCYLLA_DIR = "/var/lib/scylla"
 
 INSTANCE_PROVISION_ON_DEMAND = 'on_demand'
-SPOT_TERMINATION_CHECK_DELAY = 5
 
 LOGGER = logging.getLogger(__name__)
 
@@ -383,7 +388,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.last_line_no = 1
         self.last_log_position = 0
         self._coredump_thread: Optional[CoredumpExportSystemdThread] = None
-        self._db_log_reader_thread = None
+        self._db_log_reader_thread: Optional[DBLogReaderThread] = None
         self._scylla_manager_journal_thread = None
         self._decoding_backtraces_thread = None
         self._init_system = None
@@ -413,14 +418,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             DatabaseLogEvent(type='BOOT', regex='Starting Scylla Server', severity=Severity.NORMAL),
             DatabaseLogEvent(type='SUPPRESSED_MESSAGES', regex='journal: Suppressed', severity=Severity.WARNING),
             DatabaseLogEvent(type='stream_exception', regex='stream_exception'),
-        ]
-        self._exclude_system_log_from_being_logged = [
-            ' !INFO    | sshd[',
-            ' !INFO    | systemd:',
-            ' !INFO    | systemd-logind:',
-            ' !INFO    | sudo:',
-            ' !INFO    | sshd[',
-            ' !INFO    | dhclient['
         ]
         self.termination_event = threading.Event()
         self.lock = threading.Lock()
@@ -782,30 +779,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def is_spot(self):
         return False
 
-    def check_spot_termination(self):
-        """Check if a spot instance termination was initiated by the cloud.
-
-        :return: a delay to a next check if the instance termination was started, otherwise 0
-        """
-        raise NotImplementedError('Derived classes must implement check_spot_termination')
-
-    def spot_monitoring_thread(self):
-        while True:
-            if self.termination_event.isSet():
-                break
-            try:
-                self.wait_ssh_up(verbose=False)
-            except Exception as ex:  # pylint: disable=broad-except
-                self.log.warning("Unable to connect to '%s'. Probably the node was terminated or is still booting. "
-                                 "Error details: '%s'", self.name, ex)
-                continue
-            next_check_delay = self.check_spot_termination() or SPOT_TERMINATION_CHECK_DELAY
-            time.sleep(next_check_delay)
-
     def start_spot_monitoring_thread(self):
-        self._spot_monitoring_thread = threading.Thread(
-            target=self.spot_monitoring_thread, name='SpotMonitoringThread', daemon=True)
-        self._spot_monitoring_thread.start()
+        pass
 
     @property
     def init_system(self):
@@ -827,7 +802,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             target_log_file=self.system_log,
         )
         if self._journal_thread:
-            self.log.info("Use %s as logging daemon", type(self._journal_thread).__name__)
+            self.log.info(f"Use {self._journal_thread.name} as logging daemon")
             self._journal_thread.start()
         else:
             if log_transport == 'rsyslog':
@@ -839,32 +814,27 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     message="Got no logging daemon by unknown reason"
                 ).publish_or_dump()
 
-    @raise_event_on_failure
-    def db_log_reader_thread(self):
-        """
-        Keep reporting new events from db log, every 30 seconds.
-        """
-        while not self.termination_event.isSet():
-            self.termination_event.wait(15)
-            try:
-                self._read_system_log_and_publish_events(start_from_beginning=False,
-                                                         exclude_from_logging=self._exclude_system_log_from_being_logged)
-            except Exception:  # pylint: disable=broad-except
-                self.log.exception("failed to read db log")
-            except (SystemExit, KeyboardInterrupt) as ex:
-                self.log.debug("db_log_reader_thread() stopped by %s", ex.__class__.__name__)
-
     def start_coredump_thread(self):
         self._coredump_thread = CoredumpExportSystemdThread(self, self._maximum_number_of_cores_to_publish)
         self._coredump_thread.start()
 
-    def start_db_log_reader_thread(self):
-        self._db_log_reader_thread = threading.Thread(
-            target=self.db_log_reader_thread, name='LogReaderThread', daemon=True)
+    def start_system_log_reader_thread(self):
+        self._db_log_reader_thread = DBLogReaderThread(
+            node=self,
+            # Don't log records if journal thread does that
+            log_file_records=not (self._journal_thread and self._journal_thread.log_records),
+            backtrace_decoding_queue=Setup.DECODING_QUEUE if Setup.BACKTRACE_DECODING else None,
+            event_rules=[(re.compile(expression.regex, re.IGNORECASE), expression) for expression in
+                         self._system_error_events]
+        )
         self._db_log_reader_thread.start()
 
+    def stop_system_log_reader_thread(self):
+        if self._db_log_reader_thread:
+            self._db_log_reader_thread.stop()
+
     def start_alert_manager_thread(self):
-        self._alert_manager = PrometheusAlertManagerListener(self.external_address, stop_flag=self.termination_event)
+        self._alert_manager = PrometheusAlertManagerListener(node=self)
         self._alert_manager.start()
 
     def silence_alert(self, alert_name, duration=None, start=None, end=None):
@@ -957,7 +927,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.start_spot_monitoring_thread()
         if self.node_type == 'db':
             self.start_coredump_thread()
-            self.start_db_log_reader_thread()
+            self.start_system_log_reader_thread()
         elif self.node_type == 'loader':
             self.start_coredump_thread()
         elif self.node_type == 'monitor':
@@ -977,44 +947,24 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return 0
         return self._coredump_thread.n_coredumps
 
-    @log_run_info
-    def stop_task_threads(self):
-        if self.termination_event.isSet():
-            return
-        self.log.info('Set termination_event')
-        self.termination_event.set()
-        if self._coredump_thread:
-            self._coredump_thread.stop()
-        if self._alert_manager:
-            self._alert_manager.stop()
+    @cached_property
+    def services(self) -> ListOfServices:
+        return get_by_instance(self)
 
     @log_run_info
-    def wait_till_tasks_threads_are_stopped(self, timeout: float = 120):
-        await_bucket = []
-        if self._spot_monitoring_thread:
-            await_bucket.append(self._spot_monitoring_thread)
-        if self._db_log_reader_thread:
-            await_bucket.append(self._db_log_reader_thread)
-        if self._alert_manager:
-            await_bucket.append(self._alert_manager)
-        if self._decoding_backtraces_thread:
-            await_bucket.append(self._decoding_backtraces_thread)
-        end_time = time.perf_counter() + timeout
-        while await_bucket and end_time > time.perf_counter():
-            for thread in await_bucket.copy():
-                if not thread.is_alive():
-                    await_bucket.remove(thread)
-            time.sleep(1)
+    def stop_services(self, timeout=10):
+        if alive_services := self.services.gradually_stop_and_cleanup(timeout).alive():
+            alive_services.kill()
+        self.services.cleanup()
 
-        if self._coredump_thread:
-            self._coredump_thread.join(20*60)
-        if self._journal_thread:
-            self._journal_thread.stop(timeout // 10)
-        if self._scylla_manager_journal_thread:
-            self.stop_scylla_manager_log_capture(timeout // 10)
-        self._decoding_backtraces_thread = None
-        if self._docker_log_process:
-            self._docker_log_process.kill()
+    @log_run_info
+    def wait_till_services_are_stopped(self, timeout: float = 120):
+        if self.services.wait_till_stopped(timeout).is_any_alive():
+            return True
+        if service_names := self.services.alive().names():
+            self.log.error(f"Services are still alive after ({timeout} seconds): " +
+                           ','.join(service_names))
+        return False
 
     def get_installed_packages(self):
         """Get installed packages on node
@@ -1036,6 +986,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return None
 
     def destroy(self):
+        self.stop_services()
         ContainerManager.destroy_all_containers(self)
         LOGGER.info("%s destroyed", self)
 
@@ -1104,28 +1055,16 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     stat_dict[stat_line[0]] = stat_line[1].split()[0]
         return stat_dict
 
-    def _get_tcpdump_logs(self, tcpdump_id):
-        try:
-            pcap_name = 'tcpdump-%s.pcap' % tcpdump_id
-            pcap_tmp_file = os.path.join('/tmp', pcap_name)
-            pcap_file = os.path.join(self.logdir, pcap_name)
-            self.remoter.run('sudo tcpdump -vv -i lo port 10000 -w %s > /dev/null 2>&1' %
-                             pcap_tmp_file, ignore_status=True)
-            self.remoter.receive_files(src=pcap_tmp_file, dst=pcap_file)  # pylint: disable=not-callable
-        except Exception as details:  # pylint: disable=broad-except
-            self.log.error('Error running tcpdump on lo, tcp port 10000: %s',
-                           str(details))
-
     def get_cfstats(self, keyspace, tcpdump=False):
         def keyspace_available():
             self.run_nodetool("flush", ignore_status=True)
             res = self.run_nodetool(sub_cmd='cfstats', args=keyspace, ignore_status=True)
             return res.exit_status == 0
         tcpdump_id = uuid.uuid4()
+        tcpdump_thread = None
         if tcpdump:
             self.log.info('START tcpdump thread uuid: %s', tcpdump_id)
-            tcpdump_thread = threading.Thread(target=self._get_tcpdump_logs, name='TcpDumpUploadingThread',
-                                              kwargs={'tcpdump_id': tcpdump_id}, daemon=True)
+            tcpdump_thread = TcpdumpLogger(node=self, tcpdump_id=str(tcpdump_id))
             tcpdump_thread.start()
         wait.wait_for(keyspace_available, step=60, text='Waiting until keyspace {} is available'.format(keyspace))
         try:
@@ -1135,8 +1074,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                            'debugging info', tcpdump_id)
             raise
         finally:
-            if tcpdump:
-                self.remoter.run('sudo killall tcpdump', ignore_status=True)
+            if tcpdump and tcpdump_thread:
+                tcpdump_thread.stop()
                 self.log.info('END tcpdump thread uuid: %s', tcpdump_id)
         return self._parse_cfstats(result.stdout)
 
@@ -1287,198 +1226,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 regexps.append(re.compile(pattern.regex, flags=re.IGNORECASE))
         return stream.read_lines_filtered(*regexps)
 
-    def _read_system_log_and_publish_events(
-            self, start_from_beginning: bool = False, exclude_from_logging: List[str] = None):
-        """
-        Search for all known patterns listed in  `_system_error_events`
-
-        :param start_from_beginning: if True will search log from first line
-        :param publish_events: if True will publish events
-        :param exclude_from_logging: lis of patterns to exclude from being logged
-        :return: None
-        """
-        # pylint: disable=too-many-branches,too-many-locals,too-many-statements
-
-        patterns = []
-        backtraces = []
-        index = 0
-        # prepare/compile all regexes
-        for expression in self._system_error_events:
-            patterns += [(re.compile(expression.regex, re.IGNORECASE), expression)]
-
-        backtrace_regex = re.compile(r'(?P<other_bt>/lib.*?\+0x[0-f]*\n)|(?P<scylla_bt>0x[0-f]*\n)', re.IGNORECASE)
-
-        if not os.path.exists(self.system_log):
-            return
-
-        if start_from_beginning:
-            start_search_from_byte = 0
-            last_line_no = 0
-        else:
-            start_search_from_byte = self.last_log_position
-            last_line_no = self.last_line_no
-
-        with open(self.system_log, 'r') as db_file:
-            if start_search_from_byte:
-                db_file.seek(start_search_from_byte)
-            for index, line in enumerate(db_file, start=last_line_no):
-                if not start_from_beginning and Setup.RSYSLOG_ADDRESS:
-                    line = line.strip()
-                    if not exclude_from_logging:
-                        LOGGER.debug(line)
-                    else:
-                        exclude = False
-                        for pattern in exclude_from_logging:
-                            if pattern in line:
-                                exclude = True
-                                break
-                        if not exclude:
-                            LOGGER.debug(line)
-                match = backtrace_regex.search(line)
-                one_line_backtrace = []
-                if match and backtraces:
-                    data = match.groupdict()
-                    if data['other_bt']:
-                        backtraces[-1]['backtrace'] += [data['other_bt'].strip()]
-                    if data['scylla_bt']:
-                        backtraces[-1]['backtrace'] += [data['scylla_bt'].strip()]
-                elif "backtrace:" in line.lower() and "0x" in line:
-                    # This part handles the backtrases are printed in one line.
-                    # Example:
-                    # [shard 2] seastar - Exceptional future ignored: exceptions::mutation_write_timeout_exception
-                    # (Operation timed out for system.paxos - received only 0 responses from 1 CL=ONE.),
-                    # backtrace:   0x3316f4d#012  0x2e2d177#012  0x189d397#012  0x2e76ea0#012  0x2e770af#012
-                    # 0x2eaf065#012  0x2ebd68c#012  0x2e48d5d#012  /opt/scylladb/libreloc/libpthread.so.0+0x94e1#012
-                    splitted_line = re.split("backtrace:", line, flags=re.IGNORECASE)
-                    for trace_line in splitted_line[1].split():
-                        if trace_line.startswith('0x') or 'scylladb/lib' in trace_line:
-                            one_line_backtrace.append(trace_line)
-
-                if index not in self._system_log_errors_index or start_from_beginning:
-                    # for each line use all regexes to match, and if found send an event
-                    for pattern, event in patterns:
-                        match = pattern.search(line)
-                        if match:
-                            self._system_log_errors_index.append(index)
-                            cloned_event = event.clone_with_info(node=self, line_number=index, line=line)
-                            backtraces.append(dict(event=cloned_event, backtrace=[]))
-                            break  # Stop iterating patterns to avoid creating two events for one line of the log
-
-                if one_line_backtrace and backtraces:
-                    backtraces[-1]['backtrace'] = one_line_backtrace
-
-            if not start_from_beginning:
-                self.last_line_no = index if index else last_line_no
-                self.last_log_position = db_file.tell() + 1
-
-        traces_count = 0
-        for backtrace in backtraces:
-            backtrace['event'].add_backtrace_info(raw_backtrace="\n".join(backtrace['backtrace']))
-            if backtrace['event'].type == 'BACKTRACE':
-                traces_count += 1
-
-        # filter function to attach the backtrace to the correct error and not to the back traces
-        # if the error is within 10 lines and the last isn't backtrace type, the backtrace would be appended to the previous error
-        def filter_backtraces(backtrace):
-            last_error = filter_backtraces.last_error
-            try:
-                if (last_error and
-                        backtrace['event'].line_number <= filter_backtraces.last_error.line_number + 20
-                        and not filter_backtraces.last_error.type == 'BACKTRACE' and backtrace['event'].type == 'BACKTRACE'):
-                    last_error.add_backtrace_info(raw_backtrace="\n".join(backtrace['backtrace']))
-                    return False
-                return True
-            finally:
-                filter_backtraces.last_error = backtrace['event']
-
-        # support interlaced reactor stalled
-        for _ in range(traces_count):
-            filter_backtraces.last_error = None
-            backtraces = list(filter(filter_backtraces, backtraces))
-
-        for backtrace in backtraces:
-            if Setup.BACKTRACE_DECODING:
-                if backtrace['event'].raw_backtrace:
-                    scylla_debug_info = self.get_scylla_debuginfo_file()
-                    self.log.debug('Debug info file %s', scylla_debug_info)
-                    Setup.DECODING_QUEUE.put({"node": self, "debug_file": scylla_debug_info,
-                                              "event": backtrace['event']})
-            else:
-                backtrace['event'].publish()
-
     def start_decode_on_monitor_node_thread(self):
-        self._decoding_backtraces_thread = threading.Thread(
-            target=self.decode_backtrace, name='DecodeOnMonitorNodeThread', daemon=True)
-        self._decoding_backtraces_thread.daemon = True
+        self._decoding_backtraces_thread = DecodeBacktraceThread(node=self, decoding_queue=Setup.DECODING_QUEUE)
         self._decoding_backtraces_thread.start()
 
-    def decode_backtrace(self):
-        scylla_debug_file = None
-        while True:
-            event = None
-            obj = None
-            try:
-                obj = Setup.DECODING_QUEUE.get(timeout=5)
-                if obj is None:
-                    Setup.DECODING_QUEUE.task_done()
-                    break
-                event = obj["event"]
-                if not scylla_debug_file:
-                    scylla_debug_file = self.copy_scylla_debug_info(obj["node"], obj["debug_file"])
-                output = self.decode_raw_backtrace(scylla_debug_file, " ".join(event.raw_backtrace.split('\n')))
-                event.add_backtrace_info(backtrace=output.stdout)
-                Setup.DECODING_QUEUE.task_done()
-            except queue.Empty:
-                pass
-            except Exception as details:  # pylint: disable=broad-except
-                self.log.error("failed to decode backtrace %s", details)
-            finally:
-                if event:
-                    event.publish()
-
-            if self.termination_event.isSet() and Setup.DECODING_QUEUE.empty():
-                break
-
-    def copy_scylla_debug_info(self, node, debug_file):
-        """Copy scylla debug file from db-node to monitor-node
-
-        Copy via builder
-        :param node: db node
-        :type node: BaseNode
-        :param scylla_debug_file: path to scylla_debug_file on db-node
-        :type scylla_debug_file: str
-        :returns: path on monitor node
-        :rtype: {str}
-        """
-        base_scylla_debug_file = os.path.basename(debug_file)
-        transit_scylla_debug_file = os.path.join(node.parent_cluster.logdir,
-                                                 base_scylla_debug_file)
-        final_scylla_debug_file = os.path.join("/tmp", base_scylla_debug_file)
-
-        if not os.path.exists(transit_scylla_debug_file):
-            node.remoter.receive_files(debug_file, transit_scylla_debug_file)
-        res = self.remoter.run(
-            "test -f {}".format(final_scylla_debug_file), ignore_status=True, verbose=False)
-        if res.exited != 0:
-            self.remoter.send_files(transit_scylla_debug_file,  # pylint: disable=not-callable
-                                    final_scylla_debug_file)
-        self.log.info("File on monitor node %s: %s", self, final_scylla_debug_file)
-        self.log.info("Remove transit file: %s", transit_scylla_debug_file)
-        os.remove(transit_scylla_debug_file)
-        return final_scylla_debug_file
-
-    def decode_raw_backtrace(self, scylla_debug_file, raw_backtrace):
-        """run decode backtrace on monitor node
-
-        Decode backtrace on monitor node
-        :param scylla_debug_file: file path on db-node
-        :type scylla_debug_file: str
-        :param raw_backtrace: string with backtrace data
-        :type raw_backtrace: str
-        :returns: result of bactrace
-        :rtype: {str}
-        """
-        return self.remoter.run('addr2line -Cpife {0} {1}'.format(scylla_debug_file, raw_backtrace), verbose=True)
+    def stop_decode_on_monitor_node_thread(self):
+        if self._decoding_backtraces_thread:
+            self._decoding_backtraces_thread.stop()
 
     def get_scylla_build_id(self) -> Optional[str]:
         for scylla_executable in ("/usr/bin/scylla", "/opt/scylladb/libexec/scylla", ):
@@ -2135,25 +1889,52 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         self.start_scylla_manager_log_capture()
 
-    def retrieve_scylla_manager_log(self):
-        mgmt_log_name = os.path.join(self.logdir, 'scylla_manager.log')
-        cmd = "sudo journalctl -u scylla-manager -f"
-        self.remoter.run(cmd, ignore_status=True, verbose=True, log_file=mgmt_log_name)
-
-    def scylla_manager_log_thread(self):
-        while not self.termination_event.isSet():
-            self.retrieve_scylla_manager_log()
-
     def start_scylla_manager_log_capture(self):
-        self._scylla_manager_journal_thread = threading.Thread(
-            target=self.scylla_manager_log_thread, name='ScyllaManagerJournalThread', daemon=True)
+        self._scylla_manager_journal_thread = ScyllaManagerSystemdLogger(
+            node=self, target_log_file=os.path.join(self.logdir, 'scylla_manager.log')
+        )
         self._scylla_manager_journal_thread.start()
 
-    def stop_scylla_manager_log_capture(self, timeout=10):
-        cmd = "sudo pkill -f \"sudo journalctl -u scylla-manager -f\""
-        self.remoter.run(cmd, ignore_status=True, verbose=True)
-        self._scylla_manager_journal_thread.join(timeout)
-        self._scylla_manager_journal_thread = None
+    def config_scylla_manager(self, mgmt_port, db_hosts):
+        """
+        this code was took out from  install_mgmt() method.
+        it may be usefull for manager testing future enhancements.
+
+        Usage may be:
+            if self.params.get('mgmt_db_local', default=True):
+                mgmt_db_hosts = ['127.0.0.1']
+            else:
+                mgmt_db_hosts = [str(trg) for trg in self.targets['db_nodes']]
+            node.config_scylla_manager(mgmt_port=self.params.get('mgmt_port', default=10090),
+                              db_hosts=mgmt_db_hosts)
+
+        :param mgmt_port:
+        :param db_hosts:
+        :return:
+        """
+        # only support for centos
+        self.log.debug('Install scylla-manager')
+        rsa_id_dst = '/tmp/scylla-test'
+        mgmt_conf_tmp = '/tmp/scylla-manager.yaml'
+        mgmt_conf_dst = '/etc/scylla-manager/scylla-manager.yaml'
+
+        mgmt_conf = {'http': '0.0.0.0:{}'.format(mgmt_port),
+                     'database':
+                         {'hosts': db_hosts,
+                          'timeout': '5s'},
+                     'ssh':
+                         {'user': self.ssh_login_info['user'],
+                          'identity_file': rsa_id_dst}
+                     }
+        (_, conf_file) = tempfile.mkstemp(dir='/tmp')
+        with open(conf_file, 'w') as fd:
+            yaml.dump(mgmt_conf, fd, default_flow_style=False)
+        self.remoter.send_files(src=conf_file, dst=mgmt_conf_tmp)  # pylint: disable=not-callable
+        self.remoter.run('sudo cp {} {}'.format(mgmt_conf_tmp, mgmt_conf_dst))
+        if self.is_docker():
+            self.remoter.run('sudo supervisorctl start scylla-manager')
+        else:
+            self.remoter.run('sudo systemctl restart scylla-manager.service')
 
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=300):
         if verify_down:
@@ -3549,7 +3330,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
     @log_run_info("Start nemesis threads on cluster")
     def start_nemesis(self, interval=None):
         for nemesis in self.nemesis:
-            nemesis_thread = threading.Thread(target=nemesis.run, name='NemesisThread', args=(interval,), daemon=True)
+            nemesis_thread = nemesis
+            if interval:
+                nemesis.set_interval(interval)
             nemesis_thread.start()
             self.nemesis_threads.append(nemesis_thread)
 
@@ -3557,8 +3340,14 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
     def stop_nemesis(self, timeout=10):
         if self.termination_event.isSet():
             return
+        self.set_stop_nemesis_flag()
+        self.wait_nemesis_stopped(timeout)
+
+    def set_stop_nemesis_flag(self):
         self.log.info('Set _termination_event')
         self.termination_event.set()
+
+    def wait_nemesis_stopped(self, timeout=None):
         for nemesis_thread in self.nemesis_threads:
             nemesis_thread.join(timeout)
         self.nemesis_threads = []
@@ -4709,6 +4498,10 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         screenshot_links = []
         snapshots = []
         for node in self.nodes:
+            if not node.wait_ssh_up(verbose=False, timeout=10):
+                self.log.error(
+                    f"Can't get grafana screenshot and snapshot from mode {str(node)}, reason - node is down")
+                continue
             screenshot_collector = GrafanaScreenShot(name="grafana-screenshot",
                                                      test_start_time=test_start_time,
                                                      extra_entities=grafana_extra_entities)

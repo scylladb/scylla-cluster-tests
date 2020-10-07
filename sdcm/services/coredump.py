@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from threading import Thread, Event
 from typing import List, Optional, Dict
 import time
 from dataclasses import dataclass
@@ -22,10 +21,10 @@ import os
 from datetime import datetime
 from abc import abstractmethod
 
-from sdcm.sct_events import raise_event_on_failure, CoreDumpEvent
-from sdcm.log import SDCMAdapter
+from sdcm.sct_events import CoreDumpEvent
 from sdcm.utils.decorators import retrying, timeout
 from sdcm.remote import NETWORK_EXCEPTIONS
+from sdcm.services.base import NodeThreadService
 
 
 @dataclass
@@ -80,38 +79,27 @@ class CoreDumpInfo:
                 setattr(self, attr_name, attr_value)
 
 
-class CoredumpThreadBase(Thread):
-    lookup_period = 30
+class CoredumpThreadBase(NodeThreadService):
+    _interval = 30
     upload_retry_limit = 3
 
     def __init__(self, node: 'BaseNode', max_core_upload_limit: int):
-        self.node = node
-        self.log = SDCMAdapter(node.log, extra={"prefix": self.__class__.__name__})
         self.max_core_upload_limit = max_core_upload_limit
         self.found: List[CoreDumpInfo] = []
         self.in_progress: List[CoreDumpInfo] = []
         self.completed: List[CoreDumpInfo] = []
         self.uploaded: List[CoreDumpInfo] = []
-        self.termination_event = Event()
-        super().__init__(daemon=True)
+        super().__init__(node=node)
 
-    def stop(self):
-        self.termination_event.set()
+    def _service_can_iterate(self, delay):
+        if self.in_progress:
+            return True
+        return not self._termination_event.wait(delay)
 
-    @raise_event_on_failure
-    def run(self):
-        """
-        Keep reporting new coredumps found, every 30 seconds.
-        """
-        while not self.termination_event.wait(self.lookup_period) or self.in_progress:
-            try:
-                self.main_cycle_body()
-            except Exception as exc:
-                self.log.error(f"Following error occurred: {str(exc)}")
+    def _service_on_before_iterate(self):
+        return self._node.remoter.is_up(timeout=60)
 
-    def main_cycle_body(self):
-        if not self.node.remoter.is_up(timeout=60):
-            return
+    def _service_body(self):
         self._process_coredumps(self.in_progress, self.completed, self.uploaded)
         new_cores = self.extract_info_from_core_pids(self.get_list_of_cores(), exclude_cores=self.found)
         self.push_new_cores_to_process(new_cores)
@@ -149,7 +137,7 @@ class CoredumpThreadBase(Thread):
             try:
                 core_info.process_retry += 1
                 if self.upload_retry_limit < core_info.process_retry:
-                    self.log.error(f"Maximum retry uploading is reached for core {str(core_info)}")
+                    self._log.error(f"Maximum retry uploading is reached for core {str(core_info)}")
                     in_progress.remove(core_info)
                     completed.append(core_info)
                     continue
@@ -163,7 +151,6 @@ class CoredumpThreadBase(Thread):
             except:  # pylint: disable=bare-except
                 pass
 
-    @retrying(n=10, sleep_time=20, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying on getting pid of cores")
     def get_list_of_cores(self) -> Optional[List[CoreDumpInfo]]:
         return self._get_list_of_cores()
 
@@ -171,7 +158,7 @@ class CoredumpThreadBase(Thread):
         try:
             core_info.publish_event()
         except Exception as exc:  # pylint: disable=bare-except
-            self.log.error(f"Failed to publish coredump event due to the: {str(exc)}")
+            self._log.error(f"Failed to publish coredump event due to the: {str(exc)}")
 
     def extract_info_from_core_pids(
             self, new_cores: Optional[List[CoreDumpInfo]], exclude_cores: List[CoreDumpInfo]) -> List[CoreDumpInfo]:
@@ -195,11 +182,11 @@ class CoredumpThreadBase(Thread):
         base_upload_url = 'upload.scylladb.com/%s/%s'
         coredump_id = os.path.basename(coredump)[:-3]
         upload_url = base_upload_url % (coredump_id, os.path.basename(coredump))
-        self.log.info('Uploading coredump %s to %s' % (coredump, upload_url))
-        self.node.remoter.run("sudo curl --request PUT --upload-file "
-                              "'%s' '%s'" % (coredump, upload_url))
+        self._log.info('Uploading coredump %s to %s' % (coredump, upload_url))
+        self._node.remoter.run("sudo curl --request PUT --upload-file "
+                               "'%s' '%s'" % (coredump, upload_url))
         download_url = 'https://storage.cloud.google.com/%s' % upload_url
-        self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
+        self._log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
         download_instructions = 'gsutil cp gs://%s .\ngunzip %s' % (upload_url, coredump)
         core_info.download_url, core_info.download_instructions = download_url, download_instructions
 
@@ -207,32 +194,32 @@ class CoredumpThreadBase(Thread):
         if core_info.download_url:
             return False
         if not core_info.corefile:
-            self.log.error(f"{str(core_info)} has inaccessible corefile, can't upload it")
+            self._log.error(f"{str(core_info)} has inaccessible corefile, can't upload it")
             return False
         try:
-            self.log.debug(f'Start uploading file: {core_info.corefile}')
+            self._log.debug(f'Start uploading file: {core_info.corefile}')
             core_info.download_instructions = 'Coredump upload in progress'
             self._upload_coredump(core_info)
             return True
         except Exception as exc:  # pylint: disable=broad-except
             core_info.download_instructions = 'failed to upload core'
-            self.log.error(f"Following error occurred during uploading coredump {core_info.corefile}: {str(exc)}")
+            self._log.error(f"Following error occurred during uploading coredump {core_info.corefile}: {str(exc)}")
             raise
 
     @cached_property
     def _is_pigz_installed(self):
-        if self.node.is_rhel_like():
-            return self.node.remoter.run('yum list installed | grep pigz', ignore_status=True).ok
-        if self.node.is_ubuntu() or self.node.is_debian():
-            return self.node.remoter.run('apt list --installed | grep pigz', ignore_status=True).ok
+        if self._node.is_rhel_like():
+            return self._node.remoter.run('yum list installed | grep pigz', ignore_status=True).ok
+        if self._node.is_ubuntu() or self._node.is_debian():
+            return self._node.remoter.run('apt list --installed | grep pigz', ignore_status=True).ok
         raise RuntimeError("Distro is not supported")
 
     def _install_pigz(self):
-        if self.node.is_rhel_like():
-            self.node.remoter.sudo('yum install -y pigz')
+        if self._node.is_rhel_like():
+            self._node.remoter.sudo('yum install -y pigz')
             self.__dict__['is_pigz_installed'] = True
-        elif self.node.is_ubuntu() or self.node.is_debian():
-            self.node.remoter.sudo('apt install -y pigz')
+        elif self._node.is_ubuntu() or self._node.is_debian():
+            self._node.remoter.sudo('apt install -y pigz')
             self.__dict__['is_pigz_installed'] = True
         else:
             raise RuntimeError("Distro is not supported")
@@ -245,23 +232,23 @@ class CoredumpThreadBase(Thread):
         if not self._is_pigz_installed:
             self._install_pigz()
         try:  # pylint: disable=unreachable
-            if not self.node.remoter.run(f'sudo ls {coredump}.gz', verbose=False, ignore_status=True).ok:
-                self.node.remoter.run(f'sudo pigz --fast --keep {coredump}')
+            if not self._node.remoter.run(f'sudo ls {coredump}.gz', verbose=False, ignore_status=True).ok:
+                self._node.remoter.run(f'sudo pigz --fast --keep {coredump}')
             coredump += '.gz'
         except NETWORK_EXCEPTIONS:  # pylint: disable=try-except-raise
             raise
         except Exception as ex:  # pylint: disable=broad-except
-            self.log.warning("Failed to compress coredump '%s': %s", coredump, ex)
+            self._log.warning("Failed to compress coredump '%s': %s", coredump, ex)
         return coredump
 
     def log_coredump(self, core_info: CoreDumpInfo):
         if not core_info.coredump_info:
             return
-        log_file = os.path.join(self.node.logdir, 'coredump.log')
+        log_file = os.path.join(self._node.logdir, 'coredump.log')
         with open(log_file, 'a') as log_file_obj:
             log_file_obj.write(core_info.coredump_info)
         for line in core_info.coredump_info.splitlines():
-            self.log.error(line)
+            self._log.error(line)
 
     @property
     def n_coredumps(self) -> int:
@@ -283,7 +270,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
     """
 
     def _get_list_of_cores(self) -> Optional[List[CoreDumpInfo]]:
-        result = self.node.remoter.run(
+        result = self._node.remoter.run(
             'sudo coredumpctl --no-pager --no-legend 2>&1', verbose=False, ignore_status=True)
         if "No coredumps found" in result.stdout or not result.ok:
             return []
@@ -307,9 +294,9 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                 continue
             pid = columns[1]
             if re.findall(r'[^0-9]', pid):
-                self.log.error("PID pattern matched non-numerical value. Looks like coredumpctl changed it's output")
+                self._log.error("PID pattern matched non-numerical value. Looks like coredumpctl changed it's output")
                 continue
-            pids_list.append(CoreDumpInfo(pid=pid, node=self.node))
+            pids_list.append(CoreDumpInfo(pid=pid, node=self._node))
         return pids_list
 
     def update_coredump_info_with_more_information(self, core_info: CoreDumpInfo):
@@ -380,7 +367,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                         raise ValueError(f'Date has unknown format: {timestring}')
                     timestamp = datetime.strptime(timestring, fmt).timestamp()
                 except Exception as exc:  # pylint: disable=broad-except
-                    self.log.error(f"Failed to convert date '{line}' ({timestring}), due to error: {str(exc)}")
+                    self._log.error(f"Failed to convert date '{line}' ({timestring}), due to error: {str(exc)}")
         core_info.update(executable=executable, command_line=command_line, corefile=corefile, timestamp=timestamp,
                          coredump_info=coredump_info)
 
@@ -393,7 +380,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         :param pid: PID of the core.
         :return: fabric.Result output
         """
-        output = self.node.remoter.run(
+        output = self._node.remoter.run(
             f'sudo coredumpctl info --no-pager --no-legend {core_info.pid}', verbose=False, ignore_status=False)
         return output.stdout + output.stderr
 
@@ -412,13 +399,13 @@ class CoredumpExportFileThread(CoredumpThreadBase):
 
     @property
     def _is_file_installed(self):
-        return self.node.remoter.run('file', ignore_status=True).exited in [0, 1]
+        return self._node.remoter.run('file', ignore_status=True).exited in [0, 1]
 
     def _install_file(self):
-        if self.node.is_rhel_like():
-            self.node.remoter.sudo('yum install -y file')
-        elif self.node.is_ubuntu() or self.node.is_debian():
-            self.node.remoter.sudo('apt install -y file')
+        if self._node.is_rhel_like():
+            self._node.remoter.sudo('yum install -y file')
+        elif self._node.is_ubuntu() or self._node.is_debian():
+            self._node.remoter.sudo('apt install -y file')
         else:
             raise RuntimeError("Distro is not supported")
 
@@ -436,15 +423,15 @@ class CoredumpExportFileThread(CoredumpThreadBase):
     def _get_list_of_cores(self) -> Optional[List[CoreDumpInfo]]:
         output = []
         for directory in self.coredumps_directories:
-            for corefile in self.node.remoter.sudo(f'ls {directory}', verbose=False, ignore_status=True).stdout.split():
-                self.log.debug(f'Found core file at {corefile}')
+            for corefile in self._node.remoter.sudo(f'ls {directory}', verbose=False, ignore_status=True).stdout.split():
+                self._log.debug(f'Found core file at {corefile}')
                 core_data = self._extract_core_info_from_file_name(os.path.basename(corefile))
                 output.append(
                     CoreDumpInfo(
                         pid=core_data['pid'],
                         timestamp=float(core_data['timestamp']),
                         corefile=os.path.join(directory, os.path.basename(corefile)),
-                        node=self.node
+                        node=self._node
                     )
                 )
         if output:
@@ -454,11 +441,11 @@ class CoredumpExportFileThread(CoredumpThreadBase):
 
     @timeout(timeout=600, message='Wait till core is fully dumped')
     def wait_till_core_is_completed(self, core_info: CoreDumpInfo):
-        initial_size = self.node.remoter.run(f'stat -c %s {core_info.corefile}', verbose=False).stdout
+        initial_size = self._node.remoter.run(f'stat -c %s {core_info.corefile}', verbose=False).stdout
         if not initial_size:
             raise RuntimeError(f"Can't get size of the file {core_info.corefile}")
         time.sleep(self.checkup_time_core_to_complete)
-        final_size = self.node.remoter.run(f'stat -c %s {core_info.corefile}', verbose=False).stdout
+        final_size = self._node.remoter.run(f'stat -c %s {core_info.corefile}', verbose=False).stdout
         if not final_size:
             raise RuntimeError(f"Can't get size of the file {core_info.corefile}")
         if initial_size != final_size:
@@ -470,6 +457,6 @@ class CoredumpExportFileThread(CoredumpThreadBase):
         # version 1 (SYSV), SVR4-style, from '/usr/bin/scylla --log-to-syslog 0 --log-to-stdout 1
         # --default-log-level info --', real uid: 0, effective uid: 0, real gid: 0, effective gid: 0,
         # execfn: '/opt/scylladb/libexec/scylla', platform: 'x86_64'
-        for chunk in self.node.remoter.sudo(f'file {core_info.corefile}', retry=3).stdout.split(', '):
+        for chunk in self._node.remoter.sudo(f'file {core_info.corefile}', retry=3).stdout.split(', '):
             if chunk.startswith("from '"):
                 core_info.update(command_line=chunk[6:-1])

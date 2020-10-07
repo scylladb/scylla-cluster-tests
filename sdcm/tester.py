@@ -19,6 +19,7 @@ import time
 import random
 import unittest
 import warnings
+import json
 from uuid import uuid4
 from functools import wraps
 import threading
@@ -29,6 +30,8 @@ import sys
 import traceback
 
 import boto3.session
+
+from functools import cached_property
 from invoke.exceptions import UnexpectedExit, Failure
 
 from cassandra.concurrent import execute_concurrent_with_args  # pylint: disable=no-name-in-module
@@ -37,7 +40,7 @@ from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
 from sdcm import nemesis, cluster_docker, cluster_baremetal, cluster_k8s, db_stats, wait
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR, Setup, UserRemoteCredentials, set_duration as set_cluster_duration, \
-    set_ip_ssh_connections as set_cluster_ip_ssh_connections, BaseLoaderSet, BaseMonitorSet, BaseScyllaCluster
+    set_ip_ssh_connections as set_cluster_ip_ssh_connections, BaseLoaderSet, BaseMonitorSet
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_gce import LoaderSetGCE
 from sdcm.cluster_gce import MonitorSetGCE
@@ -54,8 +57,9 @@ from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, FullScanEvent, Severity, \
-    TestFrameworkEvent, TestResultEvent, get_logger_event_summary, EVENTS_PROCESSES, stop_events_analyzer
+from sdcm.sct_events import InfoEvent, FullScanEvent, Severity, \
+    TestFrameworkEvent, TestResultEvent
+from sdcm.event_device import start_events_device
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.prepare_region import AwsRegion
@@ -72,6 +76,8 @@ from sdcm.utils.profiler import ProfilerFactory
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.utils.gce_utils import get_gce_services
 from sdcm.keystore import KeyStore
+from sdcm.services.base import ListOfServices, get_from_all_sources
+from sdcm.services.event_file_logger import EventsFileLogger
 
 try:
     import cluster_cloud
@@ -198,7 +204,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     localhost = None
     monitors: BaseMonitorSet
     loaders: BaseLoaderSet
-    db_cluster: BaseScyllaCluster
 
     def __init__(self, *args):  # pylint: disable=too-many-statements
         super(ClusterTester, self).__init__(*args)
@@ -272,7 +277,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             Setup.configure_rsyslog(self.localhost, enable_ngrok=False)
 
         self.alternator = alternator.api.Alternator(sct_params=self.params)
-        start_events_device(self.logdir)
+        start_events_device(self.logdir, Setup)
         time.sleep(0.5)
         InfoEvent('TEST_START test_id=%s' % Setup.test_id())
 
@@ -366,13 +371,24 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def update_certificates():
         update_certificates()
 
-    @staticmethod
-    def get_events_grouped_by_category(limit=0) -> dict:
-        return EVENTS_PROCESSES['EVENTS_FILE_LOGGER'].get_events_by_category(limit)
+    @cached_property
+    def event_file_logger(self) -> EventsFileLogger:
+        return get_from_all_sources().get('EventsFileLogger')
 
-    @staticmethod
-    def get_event_summary() -> dict:
-        return get_logger_event_summary()
+    def get_events_grouped_by_category(self, limit=0) -> dict:
+        return self.event_file_logger.get_events_by_category(limit)
+
+    def get_event_summary(self) -> dict:
+        with open(self.event_file_logger.events_summary_filename) as summary_file:
+            try:
+                output = json.load(summary_file)
+            except Exception as exc:
+                raise RuntimeError(
+                    "Wrong json data in the file: \n" +
+                    '-----START -----\n' +
+                    '\n'.join(summary_file.readlines()) +
+                    '-----END   -----')
+        return output
 
     def get_test_status(self) -> str:
         summary = self.get_event_summary()
@@ -1661,48 +1677,29 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         truncated_time = self.rows_to_list(session.execute(query))
         return truncated_time[0]
 
-    def get_nemesis_report(self, cluster):
-        for current_nemesis in cluster.nemesis:
-            with silence(parent=self, name=f"get_nemesis_report(cluster={str(cluster)})"):
-                current_nemesis.report()
-
     @silence()
     def stop_nemesis(self, cluster):  # pylint: disable=no-self-use
         cluster.stop_nemesis(timeout=1800)
 
-    @silence()
-    def stop_resources_stop_tasks_threads(self, cluster):  # pylint: disable=no-self-use
-        # TODO: this should be run in parallel
-        for node in cluster.nodes:
-            node.stop_task_threads()
-        for node in cluster.nodes:
-            with silence(parent=self, name=f'stop_resources_stop_tasks_threads(cluster={str(cluster)})'):
-                node.wait_till_tasks_threads_are_stopped()
+    @property
+    def services(self) -> ListOfServices:
+        return get_from_all_sources()
 
     @silence()
-    def get_backtraces(self, cluster):  # pylint: disable=no-self-use
-        cluster.get_backtraces()
+    def get_nemesis_report(self):  # pylint: disable=no-self-use
+        if self.db_cluster:
+            for current_nemesis in self.db_cluster.nemesis:
+                with silence(parent=self, name=f"get_nemesis_report(cluster={str(self.db_cluster)})"):
+                    current_nemesis.report()
 
     @silence()
-    def stop_resources(self):  # pylint: disable=no-self-use
+    def stop_non_critical_services(self, timeout: int = 1200):  # pylint: disable=no-self-use
         self.log.debug('Stopping all resources')
         with silence(parent=self, name="Kill Stress Threads"):
             self.kill_stress_thread()
-
-        # Stopping nemesis, using timeout of 30 minutes, since replace/decommission node can take time
-        if self.db_cluster:
-            self.get_nemesis_report(self.db_cluster)
-            self.stop_nemesis(self.db_cluster)
-            self.stop_resources_stop_tasks_threads(self.db_cluster)
-            self.get_backtraces(self.db_cluster)
-
-        if self.loaders:
-            self.get_backtraces(self.loaders)
-            self.stop_resources_stop_tasks_threads(self.loaders)
-
-        if self.monitors:
-            self.get_backtraces(self.monitors)
-            self.stop_resources_stop_tasks_threads(self.monitors)
+        services = self.services.exclude_tags('core')
+        if service_names := services.gradually_stop(timeout).alive().names():
+            self.log.error(f"Services are still alive after ({timeout} seconds): " + ','.join(service_names))
 
     @silence()
     def destroy_cluster(self, cluster):  # pylint: disable=no-self-use
@@ -1838,9 +1835,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         with silence(parent=self, name='Sending test end event'):
             InfoEvent('TEST_END')
         self.log.info('TearDown is starting...')
-        self.stop_timeout_thread()
-        self.stop_event_analyzer()
-        self.stop_resources()
+        self.stop_non_critical_services()
+        self.get_nemesis_report()
         self.get_test_failures()
         if self.params.get('collect_logs'):
             self.collect_logs()
@@ -1852,12 +1848,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         time.sleep(1)  # Sleep is needed to let final event being saved into files
         self.save_email_data()
         self.send_email()
-        self.stop_event_device()
+        self.stop_all_services()
+        self.kill_rest_of_services()
         if self.params.get('collect_logs'):
             self.collect_sct_logs()
         self.finalize_teardown()
         self.log.info('Test ID: {}'.format(Setup.test_id()))
         self._check_alive_routines_and_report_them()
+        self.cleanup_all_services()
 
     def _check_alive_routines_and_report_them(self):
         result = self.show_alive_threads()
@@ -1894,7 +1892,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @silence()
     def stop_event_analyzer(self):  # pylint: disable=no-self-use
-        stop_events_analyzer()
+        svc = get_from_all_sources().get('EventsAnalyzer')
+        if not svc:
+            return
+        svc.stop()
+        svc.wait_till_stopped()
 
     @silence()
     def stop_timeout_thread(self):
@@ -1911,8 +1913,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 self.update({'test_details': {'log_files': {'job_log': s3_link}}})
 
     @silence()
-    def stop_event_device(self):  # pylint: disable=no-self-use
-        stop_events_device()
+    def stop_all_services(self):  # pylint: disable=no-self-use
+        self.services.gradually_stop(10)
+
+    @silence()
+    def kill_rest_of_services(self):  # pylint: disable=no-self-use
+        self.services.alive().kill()
+
+    @silence()
+    def cleanup_all_services(self):  # pylint: disable=no-self-use
+        self.services.cleanup()
 
     @silence()
     def update_test_with_errors(self):

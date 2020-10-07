@@ -9,8 +9,9 @@ from socketserver import ThreadingMixIn
 import requests
 import prometheus_client
 
-from sdcm.utils.decorators import retrying, log_run_info
-from sdcm.sct_events import PrometheusAlertManagerEvent, EVENTS_PROCESSES
+from sdcm.utils.decorators import retrying
+from sdcm.services.base import NodeThreadService, DetachThreadService
+from sdcm.sct_events import PrometheusAlertManagerEvent
 
 
 START = 'start'
@@ -107,14 +108,14 @@ class NemesisMetrics:
             LOGGER.exception('Cannot stop metrics event: %s', ex)
 
 
-class PrometheusAlertManagerListener(threading.Thread):
+class PrometheusAlertManagerListener(NodeThreadService):
+    _interval = 10
+    _wait_till_ready_timeout = 600
 
-    def __init__(self, ip, port=9093, interval=10, stop_flag: threading.Event = None):
-        super(PrometheusAlertManagerListener, self).__init__(name=self.__class__.__name__, daemon=True)
-        self._alert_manager_url = f"http://{ip}:{port}/api/v2"
-        self._stop_flag = stop_flag if stop_flag else threading.Event()
-        self._interval = interval
-        self._timeout = 600
+    def __init__(self, node, port=9093):
+        self._alert_manager_url = f"http://{node.external_address}:{port}/api/v2"
+        self._existed_alerts = {}
+        super().__init__(node)
 
     @property
     def is_alert_manager_up(self):
@@ -123,24 +124,19 @@ class PrometheusAlertManagerListener(threading.Thread):
         except Exception:  # pylint: disable=broad-except
             return False
 
-    @log_run_info
-    def wait_till_alert_manager_up(self):
-        end_time = time.time() + self._timeout
-        while time.time() < end_time and not self._stop_flag.is_set():
+    def _service_on_before_start(self):
+        end_time = time.time() + self._wait_till_ready_timeout
+        while time.time() < end_time and not self._termination_event.is_set():
             if self.is_alert_manager_up:
                 return
             time.sleep(30)
-        if self._stop_flag.is_set():
+        if self._termination_event.is_set():
             LOGGER.warning("Prometheus Alert Manager was asked to stop.")
         else:
-            raise TimeoutError(f"Prometheus Alert Manager({self._alert_manager_url}) "
-                               f"did not get up for {self._timeout}s")
+            raise TimeoutError(
+                f"Prometheus Alert Manager({self._alert_manager_url}) did not get up for {self._interval}s")
 
-    @log_run_info
-    def stop(self):
-        self._stop_flag.set()
-
-    @retrying(n=10)
+    @retrying(n=3)
     def _get_alerts(self, active=False):
         if active:
             response = requests.get(f"{self._alert_manager_url}/alerts?active={int(active)}", timeout=3)
@@ -169,36 +165,34 @@ class PrometheusAlertManagerListener(threading.Thread):
             alert = updated_dict.get(alert['fingerprint'], alert)
             PrometheusAlertManagerEvent(raw_alert=alert, event_type='end').publish()
 
-    def run(self):
-        self.wait_till_alert_manager_up()
-        existed = {}
-        while not self._stop_flag.is_set():
-            start_time = time.time()
-            just_left = existed.copy()
-            existing = {}
-            new_ones = {}
-            alerts = self._get_alerts(active=True)
-            if alerts is not None:
-                for alert in alerts:
-                    fingerprint = alert.get('fingerprint', None)
-                    if not fingerprint:
-                        continue
-                    state = alert.get('status', {}).get('state', '')
-                    if state == 'suppressed':
-                        continue
-                    existing[fingerprint] = alert
-                    if fingerprint in just_left:
-                        del just_left[fingerprint]
-                        continue
-                    new_ones[fingerprint] = alert
-                existed = existing
-            self._publish_new_alerts(new_ones)
-            self._publish_end_of_alerts(just_left)
-            delta = int((start_time + self._interval) - time.time())
-            if delta > 0:
-                time.sleep(int(delta))
+    def _service_body(self):
+        start_time = time.time()
+        just_left = self._existed_alerts.copy()
+        existing = {}
+        new_ones = {}
+        alerts = self._get_alerts(active=True)
+        if alerts is not None:
+            for alert in alerts:
+                fingerprint = alert.get('fingerprint', None)
+                if not fingerprint:
+                    continue
+                state = alert.get('status', {}).get('state', '')
+                if state == 'suppressed':
+                    continue
+                existing[fingerprint] = alert
+                if fingerprint in just_left:
+                    del just_left[fingerprint]
+                    continue
+                new_ones[fingerprint] = alert
+            self._existed_alerts = existing
+        self._publish_new_alerts(new_ones)
+        self._publish_end_of_alerts(just_left)
+        delta = int((start_time + self._interval) - time.time())
+        if delta > 0:
+            return int(delta)
 
-    def silence(self, alert_name: str, duration: int = None, start: datetime.datetime = None, end: datetime.datetime = None) -> str:
+    def silence(self, alert_name: str, duration: int = None, start: datetime.datetime = None,
+                end: datetime.datetime = None) -> str:
         """
         Silence an alert for a duration of time
 
@@ -246,7 +240,8 @@ class PrometheusAlertManagerListener(threading.Thread):
 
 
 class AlertSilencer:
-    def __init__(self, alert_manager: PrometheusAlertManagerListener, alert_name: str, duration: int = None,  # pylint: disable=too-many-arguments
+    def __init__(self,  # pylint: disable=too-many-arguments
+                 alert_manager: PrometheusAlertManagerListener, alert_name: str, duration: int = None,
                  start: datetime.datetime = None, end: datetime.datetime = None):
         self.alert_manager = alert_manager
         self.alert_name = alert_name
@@ -266,25 +261,21 @@ class AlertSilencer:
 # we are using the GrafanaAnnotator
 
 
-class PrometheusDumper(threading.Thread):
-    def __init__(self):
-        self.stop_event = threading.Event()
-        super().__init__(daemon=True)
+class PrometheusDumper(DetachThreadService):
+    _interval = 0
 
-    def run(self):
+    def __init__(self, main_device):
+        self._main_device = main_device
+        super().__init__()
+
+    def _service_body(self):
         events_gauge = nemesis_metrics_obj().create_gauge('sct_events_gauge',
                                                           'Gauge for sct events',
                                                           ['event_type', 'type', 'severity', 'node'])
 
-        for event_type, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events(stop_event=self.stop_event):
+        for event_type, message_data in self._main_device.subscribe_events(
+                stop_event=self._termination_event):
             events_gauge.labels(event_type,  # pylint: disable=no-member
                                 getattr(message_data, 'type', ''),
                                 message_data.severity,
                                 getattr(message_data, 'node', '')).set(message_data.timestamp)
-
-    def terminate(self):
-        self.stop_event.set()
-
-    def stop(self, timeout: float = None):
-        self.stop_event.set()
-        self.join(timeout)

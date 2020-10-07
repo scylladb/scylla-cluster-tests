@@ -15,14 +15,14 @@ import os
 import time
 import logging
 from textwrap import dedent
-from typing import Dict
+from typing import Dict, Optional
 from functools import cached_property
 
 from libcloud.common.google import GoogleBaseError, ResourceNotFoundError
 
 from sdcm import cluster
-from sdcm.sct_events import SpotTerminationEvent
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
+from sdcm.services.spot_monitoring import GCESpotMonitoringThread
 
 
 SPOT_TERMINATION_CHECK_DELAY = 1
@@ -36,6 +36,7 @@ class CreateGCENodeError(Exception):
 
 
 class GCENode(cluster.BaseNode):
+    _spot_monitoring_thread: Optional[GCESpotMonitoringThread]
 
     """
     Wraps GCE instances, so that we can also control the instance through SSH.
@@ -55,7 +56,6 @@ class GCENode(cluster.BaseNode):
                           'user': gce_image_username,
                           'key_file': credentials.key_file,
                           'extra_ssh_options': '-tt'}
-        self._preempted_last_state = False
         super(GCENode, self).__init__(name=name,
                                       parent_cluster=parent_cluster,
                                       ssh_login_info=ssh_login_info,
@@ -130,30 +130,9 @@ class GCENode(cluster.BaseNode):
     def is_spot(self):
         return self._instance.extra['scheduling']['preemptible']
 
-    def check_spot_termination(self):
-        """Check if a spot instance termination was initiated by the cloud.
-
-        There are few different methods how to detect this event in GCE:
-
-            https://cloud.google.com/compute/docs/instances/create-start-preemptible-instance#detecting_if_an_instance_was_preempted
-
-        but we use internal metadata because the getting of zone operations is not implemented in Apache Libcloud yet.
-        """
-        try:
-            result = self.remoter.run(
-                'curl "http://metadata.google.internal/computeMetadata/v1/instance/preempted'
-                '?wait_for_change=true&timeout_sec=%d" -H "Metadata-Flavor: Google"'
-                % SPOT_TERMINATION_METADATA_CHECK_TIMEOUT, verbose=False)
-            status = result.stdout.strip()
-        except Exception as details:  # pylint: disable=broad-except
-            self.log.warning('Error during getting spot termination notification %s', details)
-            return 0
-        preempted = status.lower() == 'true'
-        if preempted and not self._preempted_last_state:
-            self.log.warning('Got spot termination notification from GCE')
-            SpotTerminationEvent(node=self, message='Instance was preempted.')
-        self._preempted_last_state = preempted
-        return SPOT_TERMINATION_CHECK_DELAY
+    def start_spot_monitoring_thread(self):
+        self._spot_monitoring_thread = GCESpotMonitoringThread(node=self)
+        self._spot_monitoring_thread.start()
 
     def restart(self):
         # When using local_ssd disks in GCE, there is no option to Stop and Start an instance.
@@ -171,8 +150,7 @@ class GCENode(cluster.BaseNode):
             self.log.exception("Instance doesn't exist, skip destroy")
 
     def destroy(self):
-        self.stop_task_threads()
-        self.wait_till_tasks_threads_are_stopped()
+        self.stop_services()
         self._instance_wait_safe(self._safe_destroy)
         super().destroy()
 

@@ -1,40 +1,25 @@
-import logging
-import subprocess
 from functools import cached_property
-from abc import abstractmethod, ABCMeta
-from multiprocessing import Process, Event
-from threading import Thread, Event as ThreadEvent
-
+from abc import abstractmethod
 from datetime import datetime
+from typing import Union, Optional
+import subprocess
+
 from sdcm import wait
-from sdcm.sct_events import raise_event_on_failure
 from sdcm.remote import RemoteCmdRunnerBase
+from sdcm.services.base import NodeProcessService, NodeThreadService
 
 
-class LoggerBase(metaclass=ABCMeta):
-    def __init__(self, node, target_log_file: str):
-        self._node = node
-        self._target_log_file = target_log_file
-        self._log = logging.getLogger(self.__class__.__name__)
-
-    @abstractmethod
-    def start(self):
-        pass
-
-    @abstractmethod
-    def stop(self, timeout=None):
-        pass
-
-
-class SSHLoggerBase(LoggerBase):
+class SSHLoggerBase(NodeProcessService):
     _retrieve_message = "Reading Scylla logs from {since}"
+    _remoter = None
+    _interval = 0
 
-    def __init__(self, node, target_log_file: str):
-        super().__init__(node, target_log_file)
-        self._termination_event = Event()
-        self._remoter = None
+    def __init__(self, node, target_log_file: str, log_records: bool = True):
+        self._target_log_file = target_log_file
         self._remoter_params = node.remoter.get_init_arguments()
-        self._child_process = Process(target=self._journal_thread, daemon=True)
+        self._read_from_timestamp = None
+        self._log_records = log_records
+        super().__init__(node)
 
     @property
     @abstractmethod
@@ -43,8 +28,7 @@ class SSHLoggerBase(LoggerBase):
 
     def _file_exists(self, file_path):
         try:
-            result = self._remoter.run('sudo test -e %s' % file_path,
-                                       ignore_status=True)
+            result = self._remoter.run('sudo test -e %s' % file_path, ignore_status=True)
             return result.exit_status == 0
         except Exception as details:  # pylint: disable=broad-except
             self._log.error('Error checking if file %s exists: %s',
@@ -58,39 +42,24 @@ class SSHLoggerBase(LoggerBase):
     def _retrieve(self, since):
         since = '--since "{}" '.format(since) if since else ""
         self._remoter.run(self._logger_cmd.format(since=since),
-                          verbose=True, ignore_status=True,
+                          verbose=self._log_records, ignore_status=True,
                           log_file=self._target_log_file)
 
-    def _retrieve_journal(self, since):
-        try:
-            self._log_retrieve(since)
-            self._retrieve(since)
-        except Exception as details:  # pylint: disable=broad-except
-            self._log.error('Error retrieving remote node DB service log: %s', details)
+    def _service_body(self):
+        if self._remoter is None:
+            self._remoter = RemoteCmdRunnerBase.create_remoter(**self._remoter_params)
+        self._log_retrieve(self._read_from_timestamp)
+        self._retrieve(self._read_from_timestamp)
+        self._read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
-    @raise_event_on_failure
-    def _journal_thread(self):
-        self._remoter = RemoteCmdRunnerBase.create_remoter(**self._remoter_params)
-        read_from_timestamp = None
-        while not self._termination_event.is_set():
-            self._wait_ssh_up(verbose=False)
-            self._retrieve_journal(since=read_from_timestamp)
-            read_from_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-
-    def _wait_ssh_up(self, verbose=True, timeout=500):
-        text = None
-        if verbose:
-            text = '%s: Waiting for SSH to be up' % self
-        wait.wait_for(func=self._remoter.is_up, step=10, text=text, timeout=timeout, throw_exc=True)
-
-    def start(self):
-        self._child_process.start()
-
-    def stop(self, timeout=None):
-        self._child_process.terminate()
-        self._child_process.join(timeout)
-        if self._child_process.is_alive():
-            self._child_process.kill()  # pylint: disable=no-member
+    @property
+    def log_records(self) -> bool:
+        """
+        Return True if this thread log (LOGGER.debug(rec)) records gathered from remote endpoint
+        :return:
+        :rtype: bool
+        """
+        return self._log_records
 
 
 class SSHScyllaSystemdLogger(SSHLoggerBase):
@@ -132,37 +101,52 @@ class SSHGeneralFileLogger(SSHLoggerBase):
         super()._retrieve(since)
 
 
-class CommandLoggerBase(LoggerBase):
+class tmpclass():
+    def fileno(self):
+        return 0
+
+    def __getattribute__(self, item):
+        print(item)
+
+
+class CommandLoggerBase(NodeThreadService):
+    _interval = 0
     _cached_logger_cmd = None
     _child_process = None
 
     def __init__(self, node, target_log_file: str):
-        super().__init__(node, target_log_file)
-        self._thread = Thread(target=self._thread_body, daemon=True)
-        self._termination_event = ThreadEvent()
+        self._target_log_file = target_log_file
+        super().__init__(node)
 
     @property
     @abstractmethod
     def _logger_cmd(self) -> str:
         pass
 
-    def _thread_body(self):
-        while not self._termination_event.wait(0.1):
+    def _service_body(self):
+        self._child_process = subprocess.Popen(
+            self._logger_cmd,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+        self._child_process.wait()
+
+    def stop(self):
+        super().stop()
+        if self._child_process:
             try:
-                self._child_process = subprocess.Popen(self._logger_cmd, shell=True)
-                self._child_process.wait()
-            except:  # pylint: disable=bare-except
+                self._child_process.kill()
+            except:
                 pass
 
-    def start(self):
-        self._termination_event.clear()
-        self._thread.start()
-
-    def stop(self, timeout=None):
-        self._termination_event.set()
-        if self._child_process:
-            self._child_process.kill()
-        self._thread.join(timeout)
+    @property
+    def log_records(self) -> bool:
+        """
+        Return True if this thread log (LOGGER.debug(rec)) records gathered from remote endpoint
+        :return:
+        :rtype: bool
+        """
+        return False
 
 
 class DockerScyllaLogger(CommandLoggerBase):
@@ -214,7 +198,14 @@ class ScyllaOperatorLogger(CommandLoggerBase):
                f"logs scylla-operator-controller-manager-0 --all-containers=true -f >> {self._target_log_file} 2>&1"
 
 
-def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint: disable=too-many-return-statements
+class ScyllaManagerSystemdLogger(SSHLoggerBase):
+    @property
+    def _logger_cmd(self) -> str:
+        return 'sudo journalctl -f -u scylla-manager --no-tail --no-pager --utc {since} '
+
+
+def get_system_logging_thread(logs_transport, node, target_log_file) \
+        -> Optional[Union[SSHLoggerBase, CommandLoggerBase]]:  # pylint: disable=too-many-return-statements
     if logs_transport == 'docker':
         if 'db-node' in node.name:
             return DockerScyllaLogger(node, target_log_file)

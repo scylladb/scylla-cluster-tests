@@ -42,9 +42,9 @@ from sdcm.utils.k8s import KubernetesOps, JSON_PATCH_TYPE
 from sdcm.utils.common import get_free_port, wait_for_port
 from sdcm.utils.decorators import log_run_info, timeout, retrying
 from sdcm.utils.docker_utils import ContainerManager
-from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger
+from sdcm.services.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger
 from .operator_monitoring import ScyllaOperatorLogMonitoring, ScyllaOperatorStatusMonitoring
-from sdcm.coredump import CoredumpExportFileThread
+from sdcm.services.coredump import CoredumpExportFileThread
 
 
 KUBECTL_PROXY_PORT = 8001
@@ -379,9 +379,6 @@ class BasePodContainer(cluster.BaseNode):
             TestFrameworkEvent(source=self.__class__.__name__,
                                source_method="start_journal_thread",
                                message="Got no logging daemon by unknown reason").publish()
-
-    def check_spot_termination(self):
-        pass
 
     @property
     def scylla_listen_address(self):

@@ -52,7 +52,7 @@ class Pickler:
                 'exit_status': PicklerAction.passthrough
             }
         },
-        'sdcm.coredump.CoreDumpInfo': {
+        'sdcm.services.coredump.CoreDumpInfo': {
             'init_args': {
                 'process_retry': 0,
                 'node': None,

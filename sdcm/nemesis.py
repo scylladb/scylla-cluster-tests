@@ -28,7 +28,7 @@ import traceback
 import json
 
 
-from typing import List, Optional, TypedDict, Type
+from typing import List, Optional, Type
 from collections import OrderedDict, defaultdict, Counter, namedtuple
 from functools import wraps, partial
 
@@ -44,13 +44,14 @@ from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_st
 from sdcm.utils.decorators import retrying
 from sdcm.log import SDCMAdapter
 from sdcm.keystore import KeyStore
-from sdcm.prometheus import nemesis_metrics_obj
+from sdcm.services.prometheus import nemesis_metrics_obj
 from sdcm import wait
-from sdcm.sct_events import DisruptionEvent, DbEventsFilter, Severity, InfoEvent, raise_event_on_failure
+from sdcm.sct_events import DisruptionEvent, DbEventsFilter, InfoEvent, raise_event_on_failure
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
+from sdcm.services.base import DetachThreadService
 
 
 class NoFilesFoundToDestroy(Exception):
@@ -77,7 +78,7 @@ class NoMandatoryParameter(Exception):
     """ raised from within a nemesis execution to skip this nemesis"""
 
 
-class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
+class Nemesis(DetachThreadService):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
 
     disruptive = False
     run_with_gemini = True
@@ -99,7 +100,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.current_disruption = None
         self.duration_list = []
         self.error_list = []
-        self.interval = 60 * self.tester.params.get('nemesis_interval')  # convert from min to sec
+        self._interval = 60 * self.tester.params.get('nemesis_interval')  # convert from min to sec
         self.start_time = time.time()
         self.stats = {}
         self.metrics_srv = nemesis_metrics_obj()
@@ -120,6 +121,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # TODO: issue https://github.com/scylladb/scylla/issues/6074. Waiting for dev conclusions
             'cqlstress_lwt_example': '*'  # Ignore LWT user-profile tables
         }
+        super().__init__()
+
+    def set_interval(self, interval: int):
+        self._interval = interval
 
     @classmethod
     def add_disrupt_method(cls, func=None):
@@ -194,22 +199,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.set_current_running_nemesis(node=self.target_node)
         self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
 
-    @raise_event_on_failure
-    def run(self, interval=None):
-        if interval:
-            self.interval = interval * 60
-        self.log.info('Interval: %s s', self.interval)
-        while not self.termination_event.isSet():
-            cur_interval = self.interval
-            self.set_target_node()
-            self._set_current_disruption(report=False)
-            try:
-                self.disrupt()
-            except UnsupportedNemesis:
-                cur_interval = 0
-            finally:
-                self.target_node.running_nemesis = None
-                self.termination_event.wait(timeout=cur_interval)
+    def _service_on_before_start(self):
+        self.log.info('Interval: %s s', self._interval)
+
+    def _service_body(self) -> Optional[int]:
+        self.set_target_node()
+        self._set_current_disruption(report=False)
+        try:
+            self.disrupt()
+        except UnsupportedNemesis:
+            return 0
+        finally:
+            self.target_node.running_nemesis = None
+        return None
 
     def report(self):
         if self.duration_list:
@@ -219,7 +221,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self.log.info('Report')
         self.log.info('DB Version: %s', getattr(self.cluster.nodes[0], "scylla_version", "n/a"))
-        self.log.info('Interval: %s s', self.interval)
+        self.log.info('Interval: %s s', self._interval)
         self.log.info('Average duration: %s s', avg_duration)
         self.log.info('Total execution time: %s s', int(time.time() - self.start_time))
         self.log.info('Times executed: %s', len(self.duration_list))
@@ -2250,7 +2252,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.info("New node added %s", added_node.name)
         self.log.info("Finish cluster grow")
 
-        time.sleep(self.interval)
+        time.sleep(self._interval)
 
         self._set_current_disruption("ShrinkCluster")
         self.log.info("Start shrink cluster on %s nodes", add_nodes_number)

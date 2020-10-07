@@ -3,7 +3,7 @@ import os
 import time
 import tempfile
 from abc import abstractmethod
-from sdcm.coredump import CoredumpExportSystemdThread, CoreDumpInfo, CoredumpExportFileThread, CoredumpThreadBase
+from sdcm.services.coredump import CoredumpExportSystemdThread, CoreDumpInfo, CoredumpExportFileThread, CoredumpThreadBase
 from unit_tests.lib.data_pickle import Pickler
 from unit_tests.lib.mock_remoter import MockRemoter
 from sdcm.cluster import BaseNode
@@ -20,7 +20,7 @@ class FakeNode(BaseNode):
 
 
 class CoredumpExportSystemdTestThread(CoredumpExportSystemdThread):
-    lookup_period = 0
+    _interval = 0
 
     def __init__(self, node: 'BaseNode', max_core_upload_limit: int):
         self.got_cores = []
@@ -53,7 +53,7 @@ class CoredumpExportSystemdTestThread(CoredumpExportSystemdThread):
 
 
 class CoredumpExportFileTestThread(CoredumpExportFileThread):
-    lookup_period = 0
+    _interval = 0
     checkup_time_core_to_complete = 0
 
     def __init__(self, node: 'BaseNode', max_core_upload_limit: int, coredump_directories=None):
@@ -100,7 +100,7 @@ class CoredumpExportTestBase(unittest.TestCase):
         time.sleep(1)
         th.stop()
         th.join(20)
-        self.assertFalse(th.is_alive(), 'CoredumpExportThread thread did not stop in 20 seconds')
+        self.assertFalse(th.is_service_alive(), 'CoredumpExportThread thread did not stop in 20 seconds')
         results = th.get_results()
         expected_results = th.load_expected_results(
             os.path.join(os.path.dirname(__file__), 'test_data', 'test_coredump', self.test_data_folder,
