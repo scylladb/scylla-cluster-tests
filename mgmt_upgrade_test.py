@@ -142,6 +142,10 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
             for i in range(2, 4):
                 LOGGER.debug(f"rerunning the backup task for the {i} time")
                 rerunning_backup_task.start(continue_task=False)
+                rerunning_backup_task.wait_and_get_final_status(step=5)
+                assert rerunning_backup_task.status == TaskStatus.DONE, \
+                    f"backup {rerunning_backup_task.id} that was rerun again from the start has failed to reach " \
+                    f"status DONE within expected time limit"
             per_node_backup_file_paths = mgr_cluster.get_backup_files_dict(
                 snapshot_tag=rerunning_backup_task.get_snapshot_tag())
             for node in self.db_cluster.nodes:

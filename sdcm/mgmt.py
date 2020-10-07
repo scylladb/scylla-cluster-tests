@@ -86,7 +86,7 @@ class HostRestStatus(Enum):
             raise ScyllaManagerError("Could not recognize returned host rest status: {}".format(output_str))
 
 
-class TaskStatus(Enum):
+class TaskStatus:
     NEW = "NEW"
     RUNNING = "RUNNING"
     DONE = "DONE"
@@ -147,9 +147,6 @@ class ManagerTask(ScyllaManagerBase):
         if not continue_task:
             cmd += " --no-continue"
         self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
-        list_all_task_status = [s for s in TaskStatus.__dict__ if not s.startswith("__")]
-        list_expected_task_status = [status for status in list_all_task_status if status != TaskStatus.STOPPED]
-        return self.wait_for_status(list_status=list_expected_task_status, timeout=30, step=3)
 
     @staticmethod
     def _add_kwargs_to_cmd(cmd, **kwargs):
@@ -346,8 +343,7 @@ class ManagerTask(ScyllaManagerBase):
         :return:
         """
         list_final_status = [TaskStatus.ERROR, TaskStatus.STOPPED, TaskStatus.DONE]
-        LOGGER.debug("Waiting for task: {} getting to a final status ({})..".format(self.id, [str(s) for s in
-                                                                                              list_final_status]))
+        LOGGER.debug("Waiting for task: {} getting to a final status ({})..".format(self.id, str(list_final_status)))
         res = self.wait_for_status(list_status=list_final_status, timeout=timeout, step=step)
         if not res:
             raise ScyllaManagerError("Unexpected result on waiting for task {} status".format(self.id))
