@@ -149,8 +149,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
             per_node_backup_file_paths = mgr_cluster.get_backup_files_dict(
                 snapshot_tag=rerunning_backup_task.get_snapshot_tag())
             for node in self.db_cluster.nodes:
-                nodetool_info = self.db_cluster.get_nodetool_info(node)
-                node_id = nodetool_info['ID']
+                node_id = node.host_id
                 # making sure that the files of the missing table isn't in s3
                 assert "cf1" not in per_node_backup_file_paths[node_id]["ks1"], \
                     "The missing table is still in s3, even though it should have been purged"

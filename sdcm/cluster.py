@@ -477,6 +477,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def region(self):
         raise NotImplementedError()
 
+    @property
+    def host_id(self):
+        full_nodetool_status = self.parent_cluster.get_nodetool_status(verification_node=self)
+        for data_center in full_nodetool_status:
+            if self.ip_address in full_nodetool_status[data_center]:
+                return full_nodetool_status[data_center][self.ip_address]['host_id']
+        raise AssertionError(f"Could not find the requested node {self.ip_address} in nodetool status")
+
     def refresh_ip_address(self):
         self.ssh_login_info["hostname"] = self.external_address
         self.remoter.hostname = self.external_address
