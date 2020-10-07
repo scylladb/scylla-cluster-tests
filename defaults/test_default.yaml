@@ -18,7 +18,7 @@ scylla_linux_distro_loader: 'centos'
 
 system_auth_rf: 3
 
-monitor_branch: 'branch-3.1'
+monitor_branch: 'branch-3.5'
 store_results_in_elasticsearch: true
 
 space_node_threshold: 0
