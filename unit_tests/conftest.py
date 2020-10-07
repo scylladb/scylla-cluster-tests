@@ -9,8 +9,7 @@ from sdcm.prometheus import start_metrics_server
 from sdcm.utils.docker_utils import RemoteDocker
 from sdcm import wait
 from sdcm.utils.decorators import timeout
-from sdcm.sct_events import (start_events_device, stop_events_device)
-
+from sdcm.core_services import start_core_services, stop_and_cleanup_all_services
 from unit_tests.dummy_remote import LocalNode
 
 
@@ -45,10 +44,10 @@ class EventsLogUtils:
 @pytest.fixture(scope='session')
 def events():
     temp_dir = tempfile.mkdtemp()
-    start_events_device(temp_dir)
+    start_core_services(temp_dir, test_mode=True)
     yield EventsLogUtils(temp_dir=temp_dir)
 
-    stop_events_device()
+    stop_and_cleanup_all_services()
 
 
 @pytest.fixture(scope='session')

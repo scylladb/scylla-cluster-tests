@@ -11,8 +11,7 @@ import queue
 
 
 from sdcm.cluster import Setup
-from sdcm.sct_events import start_events_device, stop_events_device
-from sdcm.sct_events import EVENTS_PROCESSES
+from sdcm.core_services import CoreServices, start_core_services, stop_and_cleanup_all_services
 
 from unit_tests.dummy_remote import DummyRemote
 from unit_tests.test_cluster import DummyNode
@@ -31,11 +30,12 @@ logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(messa
 
 
 class TestDecodeBactraces(unittest.TestCase):
+    core_services: CoreServices
 
     @classmethod
     def setUpClass(cls):
         cls.temp_dir = tempfile.mkdtemp()
-        start_events_device(cls.temp_dir)
+        cls.core_services = start_core_services(cls.temp_dir, setup_info=Setup, test_mode=True)
 
         cls.node = DecodeDummyNode(name='test_node', parent_cluster=None,
                                    base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
@@ -47,7 +47,7 @@ class TestDecodeBactraces(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        stop_events_device()
+        stop_and_cleanup_all_services()
         shutil.rmtree(cls.temp_dir)
 
     def setUp(self):
@@ -63,7 +63,7 @@ class TestDecodeBactraces(unittest.TestCase):
         self.monitor_node.stop_task_threads()
         self.monitor_node.wait_till_tasks_threads_are_stopped()
 
-        events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
+        events_file = open(self.core_services.event_device.raw_events_filename, 'r')
 
         events = []
         for line in events_file.readlines():
@@ -85,7 +85,7 @@ class TestDecodeBactraces(unittest.TestCase):
         self.monitor_node.stop_task_threads()
         self.monitor_node.wait_till_tasks_threads_are_stopped()
 
-        events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
+        events_file = open(self.core_services.event_device.raw_events_filename, 'r')
 
         events = []
         for line in events_file.readlines():
@@ -110,7 +110,7 @@ class TestDecodeBactraces(unittest.TestCase):
         self.monitor_node.stop_task_threads()
         self.monitor_node.wait_till_tasks_threads_are_stopped()
 
-        events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
+        events_file = open(self.core_services.event_device.raw_events_filename, 'r')
         events = []
         for line in events_file.readlines():
             events.append(json.loads(line))
@@ -134,7 +134,7 @@ class TestDecodeBactraces(unittest.TestCase):
         self.monitor_node.stop_task_threads()
         self.monitor_node.wait_till_tasks_threads_are_stopped()
 
-        events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
+        events_file = open(self.core_services.event_device.raw_events_filename, 'r')
         events = []
         for line in events_file.readlines():
             events.append(json.loads(line))

@@ -5,7 +5,7 @@ import shutil
 import json
 import requests
 
-from sdcm.sct_events import stop_events_device, start_events_device
+from sdcm.core_services import start_core_services, stop_and_cleanup_all_services
 from sdcm.prometheus import PrometheusAlertManagerListener, PrometheusAlertManagerEvent
 
 
@@ -61,7 +61,7 @@ class PrometheusAlertManagerListenerRealTest(PrometheusAlertManagerListener):
 
     def start(self):
         shutil.rmtree(self._tmp_dir)
-        start_events_device('/tmp/logdir')
+        start_core_services('/tmp/logdir', test_mode=True)
         self._event_log_file = None
         while self._event_log_file is None:
             try:
@@ -121,7 +121,7 @@ class PrometheusAlertManagerListenerRealTest(PrometheusAlertManagerListener):
 
     def stop(self):
         super().stop()
-        stop_events_device()
+        stop_and_cleanup_all_services()
 
 
 class PrometheusAlertManagerTest(unittest.TestCase):

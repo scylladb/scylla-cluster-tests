@@ -6,16 +6,18 @@ import unittest
 import tempfile
 import logging
 import datetime
+import json
 from pathlib import Path
 from multiprocessing import Event
 
 from sdcm.utils.decorators import timeout
 from sdcm.prometheus import start_metrics_server
-from sdcm.sct_events import (start_events_device, stop_events_device, InfoEvent, CassandraStressEvent,
+from sdcm.sct_events import (InfoEvent, CassandraStressEvent,
                              CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
-                             Severity, ThreadFailedEvent, TestFrameworkEvent, get_logger_event_summary,
+                             Severity, ThreadFailedEvent, TestFrameworkEvent,
                              ScyllaBenchEvent, PrometheusAlertManagerEvent, EventsFilter, YcsbStressEvent,
                              EventsSeverityChangerFilter)
+from sdcm.core_services import CoreServices, start_core_services, stop_and_cleanup_all_services
 
 from sdcm.cluster import Setup
 
@@ -25,6 +27,8 @@ logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(messa
 
 
 class BaseEventsTest(unittest.TestCase):
+    core_services: CoreServices
+
     @classmethod
     def get_event_log_file(cls, name):
         log_file = Path(cls.temp_dir, 'events_log', name)
@@ -49,19 +53,21 @@ class BaseEventsTest(unittest.TestCase):
     @classmethod
     @timeout(timeout=10, sleep_time=0.05)
     def wait_for_event_summary(cls):
-        return get_logger_event_summary()
+        with open(cls.core_services.event_file_logger.events_summary_filename) as summary_file:
+            output = json.load(summary_file)
+        return output
 
     @classmethod
     def setUpClass(cls):
         cls.temp_dir = tempfile.mkdtemp()
         start_metrics_server()
-        start_events_device(cls.temp_dir)
+        cls.core_services = start_core_services(cls.temp_dir, test_mode=True)
         cls.killed = Event()
         time.sleep(5)
 
     @classmethod
     def tearDownClass(cls):
-        stop_events_device()
+        stop_and_cleanup_all_services()
 
 
 class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods

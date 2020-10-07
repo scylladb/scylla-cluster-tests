@@ -14,8 +14,7 @@ from weakref import proxy as weakproxy
 from invoke import Result
 
 from sdcm.cluster import BaseNode
-from sdcm.sct_events import start_events_device, stop_events_device
-from sdcm.sct_events import EVENTS_PROCESSES
+from sdcm.core_services import start_core_services, stop_and_cleanup_all_services, CoreServices
 from sdcm.utils.distro import Distro
 
 from unit_tests.dummy_remote import DummyRemote
@@ -61,11 +60,12 @@ logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(messa
 
 
 class TestBaseNode(unittest.TestCase):
+    core_services: CoreServices
 
     @classmethod
     def setUpClass(cls):
         cls.temp_dir = tempfile.mkdtemp()
-        start_events_device(cls.temp_dir)
+        cls.core_services = start_core_services(cls.temp_dir)
 
         cls.node = DummyNode(name='test_node', parent_cluster=None,
                              base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
@@ -74,7 +74,7 @@ class TestBaseNode(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        stop_events_device()
+        stop_and_cleanup_all_services()
         shutil.rmtree(cls.temp_dir)
 
     def setUp(self):
@@ -94,7 +94,7 @@ class TestBaseNode(unittest.TestCase):
 
         self.node._read_system_log_and_publish_events(start_from_beginning=True)
 
-        with open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r') as events_file:
+        with open(self.core_services.event_device.raw_events_filename, 'r') as events_file:
             events = [json.loads(line) for line in events_file]
 
             event_a, event_b = events[-2], events[-1]
@@ -112,7 +112,7 @@ class TestBaseNode(unittest.TestCase):
 
         self.node._read_system_log_and_publish_events(start_from_beginning=True)
 
-        with open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r') as events_file:
+        with open(self.core_services.event_device.raw_events_filename, 'r') as events_file:
             events = [json.loads(line) for line in events_file]
 
             event_a = events[-1]
@@ -126,7 +126,7 @@ class TestBaseNode(unittest.TestCase):
 
         self.node._read_system_log_and_publish_events(start_from_beginning=True)
 
-        with open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r') as events_file:
+        with open(self.core_services.event_device.raw_events_filename, 'r') as events_file:
             events = [json.loads(line) for line in events_file]
 
             event_backtrace1, event_backtrace2 = events[22], events[23]

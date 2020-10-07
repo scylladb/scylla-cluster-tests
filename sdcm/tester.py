@@ -27,6 +27,7 @@ import inspect
 import signal
 import sys
 import traceback
+import json
 
 import boto3.session
 from invoke.exceptions import UnexpectedExit, Failure
@@ -54,8 +55,8 @@ from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, FullScanEvent, Severity, \
-    TestFrameworkEvent, TestResultEvent, get_logger_event_summary, EVENTS_PROCESSES, stop_events_analyzer
+from sdcm.sct_events import InfoEvent, FullScanEvent, Severity, TestFrameworkEvent, TestResultEvent
+from sdcm.core_services import CoreServices, start_core_services, stop_and_cleanup_all_services
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.prepare_region import AwsRegion
@@ -199,6 +200,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     monitors: BaseMonitorSet
     loaders: BaseLoaderSet
     db_cluster: BaseScyllaCluster
+    core_services: CoreServices
 
     def __init__(self, *args):  # pylint: disable=too-many-statements
         super(ClusterTester, self).__init__(*args)
@@ -272,7 +274,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             Setup.configure_rsyslog(self.localhost, enable_ngrok=False)
 
         self.alternator = alternator.api.Alternator(sct_params=self.params)
-        start_events_device(self.logdir)
+        self.core_services = start_core_services(self.logdir, Setup)
         time.sleep(0.5)
         InfoEvent('TEST_START test_id=%s' % Setup.test_id())
 
@@ -366,13 +368,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def update_certificates():
         update_certificates()
 
-    @staticmethod
-    def get_events_grouped_by_category(limit=0) -> dict:
-        return EVENTS_PROCESSES['EVENTS_FILE_LOGGER'].get_events_by_category(limit)
+    def get_events_grouped_by_category(self, limit=0) -> dict:
+        return self.core_services.event_file_logger.get_events_by_category(limit)
 
-    @staticmethod
-    def get_event_summary() -> dict:
-        return get_logger_event_summary()
+    def get_event_summary(self) -> dict:
+        with open(self.core_services.event_file_logger.events_summary_filename) as summary_file:
+            output = json.load(summary_file)
+        return output
 
     def get_test_status(self) -> str:
         summary = self.get_event_summary()
@@ -1894,7 +1896,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @silence()
     def stop_event_analyzer(self):  # pylint: disable=no-self-use
-        stop_events_analyzer()
+        self.core_services.event_analyzer.stop()
 
     @silence()
     def stop_timeout_thread(self):
@@ -1912,7 +1914,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @silence()
     def stop_event_device(self):  # pylint: disable=no-self-use
-        stop_events_device()
+        stop_and_cleanup_all_services()
 
     @silence()
     def update_test_with_errors(self):

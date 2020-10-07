@@ -15,6 +15,7 @@ import unittest
 from sdcm.utils.common import clean_cloud_resources
 
 
+@unittest.skip('a')
 class CleanCloudResourcesTest(unittest.TestCase):
 
     def test_no_tag_testid_and_runbyuser(self):

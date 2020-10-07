@@ -65,8 +65,9 @@ from sdcm.utils.decorators import retrying, log_run_info
 from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, BUILD_ID_RE, get_gemini_version
-from sdcm.sct_events import Severity, DatabaseLogEvent, ClusterHealthValidatorEvent, set_grafana_url, \
+from sdcm.sct_events import Severity, DatabaseLogEvent, ClusterHealthValidatorEvent, \
     ScyllaBenchEvent, raise_event_on_failure, TestFrameworkEvent
+from sdcm.core_services import set_grafana_url
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3

@@ -336,6 +336,7 @@ class DetachThreadService(DetachService, ThreadServiceMixin, ABC):
     Detached service that is sipping as thread
     This is service that is not attached to anything
     """
+
     def __init__(self):
         DetachService.__init__(self)
         ThreadServiceMixin.__init__(self)
@@ -346,6 +347,7 @@ class DetachProcessService(DetachService, ProcessServiceMixin, ABC):
     Detached service that is sipping as process
     This is service that is not attached to anything
     """
+
     def __init__(self):
         DetachService.__init__(self)
         ProcessServiceMixin.__init__(self)
@@ -356,6 +358,7 @@ class NodeThreadService(NodeService, ThreadServiceMixin, ABC):
     Node service that is attached to node that is sipping as thread
     This is service that is attached to any type of node
     """
+
     def __init__(self, node):
         NodeService.__init__(self, node)
         ThreadServiceMixin.__init__(self)
@@ -366,6 +369,7 @@ class NodeProcessService(NodeService, ProcessServiceMixin, ABC):
     Node service that is attached to node that is sipping as process
     This is service that is attached to any type of node
     """
+
     def __init__(self, node):
         NodeService.__init__(self, node)
         ProcessServiceMixin.__init__(self)
@@ -376,6 +380,7 @@ class ClusterThreadService(ClusterService, ThreadServiceMixin, ABC):
     Cluster service that is attached to node that is sipping as thread
     This is service that is attached to any type of cluster
     """
+
     def __init__(self, cluster):
         ClusterService.__init__(self, cluster)
         ThreadServiceMixin.__init__(self)
@@ -386,6 +391,7 @@ class ClusterProcessService(ClusterService, ProcessServiceMixin, ABC):
     Cluster service that is attached to node that is sipping as process
     This is service that is attached to any type of cluster
     """
+
     def __init__(self, cluster):
         ClusterService.__init__(self, cluster)
         ProcessServiceMixin.__init__(self)

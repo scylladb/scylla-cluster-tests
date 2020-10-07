@@ -9,7 +9,7 @@ import requests
 
 from sdcm.prometheus import start_metrics_server, nemesis_metrics_obj
 from sdcm.remote import RemoteCmdRunnerBase
-from sdcm.sct_events import start_events_device, stop_events_device
+from sdcm.core_services import start_core_services, stop_and_cleanup_all_services
 
 from sdcm.ec2_client import EC2Client
 from sdcm.stress_thread import CassandraStressThread, CassandraStressEventsPublisher
@@ -114,12 +114,12 @@ class BaseSCTEventsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.temp_dir = tempfile.mkdtemp()
-        start_events_device(cls.temp_dir)
+        start_core_services(cls.temp_dir, test_mode=True)
         time.sleep(10)
 
     @classmethod
     def tearDownClass(cls):
-        stop_events_device()
+        stop_and_cleanup_all_services()
 
 
 @unittest.skip("manual tests")
