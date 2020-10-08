@@ -2161,7 +2161,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.debug(repair_logs)
             return len(streaming_logs) > 0 or len(repair_logs) > 0
 
-        wait.wait_for(func=is_streaming_started, timeout=200, step=1,
+        wait.wait_for(func=is_streaming_started, timeout=600, step=1,
                       text='Wait for streaming starts', throw_exc=False)
         self.log.debug('wait for random between 10s to 10m')
         time.sleep(random.randint(10, 600))
