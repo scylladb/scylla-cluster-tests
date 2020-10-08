@@ -31,7 +31,7 @@ regions_data:
 cluster_health_check: false
 
 nemesis_class_name: 'ChaosMonkey'
-nemesis_interval: 30
+nemesis_interval: 60
 
 store_results_in_elasticsearch: False
 
