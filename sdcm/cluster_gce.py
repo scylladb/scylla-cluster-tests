@@ -17,6 +17,7 @@ import logging
 from textwrap import dedent
 from typing import Dict
 from functools import cached_property
+import json
 
 from libcloud.common.google import GoogleBaseError, ResourceNotFoundError
 
@@ -326,7 +327,9 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                   ex_metadata={**self.tags,
                                                "Name": name,
                                                "NodeIndex": node_index,
-                                               "startup-script": startup_script},
+                                               "startup-script": startup_script,
+                                               "user-data": json.dumps(dict(scylla_yaml=dict(cluster_name=self.name),
+                                                                            start_scylla_on_first_boot=False))},
                                   ex_service_accounts=self._service_accounts,
                                   ex_preemptible=spot)
         try:
