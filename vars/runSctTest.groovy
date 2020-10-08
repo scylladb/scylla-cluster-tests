@@ -5,14 +5,6 @@ def call(Map params, String region){
     def aws_region = initAwsRegionParam(params.aws_region, region)
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = params.backend.trim().toLowerCase()
-    def update_db_packages = ""
-    if ( params.update_db_packages != null ) {
-        update_db_packages = params.update_db_packages
-    }
-    def instance_provision_fallback_on_demand = ""
-    if ( params.instance_provision_fallback_on_demand != null ) {
-        instance_provision_fallback_on_demand = params.instance_provision_fallback_on_demand
-    }
 
     sh """
     #!/bin/bash
@@ -41,11 +33,11 @@ def call(Map params, String region){
     export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
     export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
     export SCT_INSTANCE_PROVISION="${params.provision_type}"
-    export SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND="${instance_provision_fallback_on_demand}"
+    export SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND="${params.instance_provision_fallback_on_demand ? params.instance_provision_fallback_on_demand : ''}"
     export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
     export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
-    if [[ -n "${update_db_packages}" ]] ; then
-        export SCT_UPDATE_DB_PACKAGES="${update_db_packages}"
+    if [[ "${params.update_db_packages || false}" == "true" ]] ; then
+        export SCT_UPDATE_DB_PACKAGES="${params.update_db_packages}"
     fi
 
     export SCT_TAG_AMI_WITH_RESULT="${params.tag_ami_with_result}"
