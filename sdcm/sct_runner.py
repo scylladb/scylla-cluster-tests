@@ -27,7 +27,7 @@ class ImageType(Enum):
 
 class SctRunner:
     """Provisions and configures the SCT runner"""
-    VERSION = 1.1  # Version of the Image
+    VERSION = 1.2  # Version of the Image
     IMAGE_NAME = f"sct-runner-{VERSION}"
     NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
@@ -67,6 +67,9 @@ class SctRunner:
         LOGGER.info("Installing required packages...")
         prereqs_script = dedent(f"""
             echo "fs.aio-max-nr = 65536" >> /etc/sysctl.conf
+            echo "ubuntu soft nofile 4096" >> /etc/security/limits.conf
+            echo "jenkins soft nofile 4096" >> /etc/security/limits.conf
+            echo "root soft nofile 4096" >> /etc/security/limits.conf
             mkdir -p -m 777 /home/ubuntu/sct-results
             chown ubuntu:ubuntu /home/ubuntu/sct-results
             echo "cd ~/sct-results" >> /home/ubuntu/.bashrc
@@ -94,6 +97,7 @@ class SctRunner:
             # Jenkins pipelines run /bin/sh for some reason
             unlink /bin/sh
             ln -s /bin/bash /bin/sh
+
         """)
         remoter = self.get_remoter(host=public_ip)
         result = remoter.run(f"sudo bash -cxe '{prereqs_script}'", ignore_status=True)
