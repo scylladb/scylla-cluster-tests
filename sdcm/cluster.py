@@ -2028,7 +2028,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                                         dst='/tmp/')
                 self.remoter.run('sudo mv /tmp/{0} /etc/scylla.d/{0}'.format(conf))
         else:
-            self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} {}'
+            self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --setup-nic-and-disks {}'
                              .format(devname, ','.join(disks), extra_setup_args))
 
         result = self.remoter.run('cat /proc/mounts')
