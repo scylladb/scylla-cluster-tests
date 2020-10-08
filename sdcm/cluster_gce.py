@@ -316,8 +316,8 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         if self.params.get("scylla_linux_distro", "") in ("ubuntu-bionic", "ubuntu-xenial"):
             # we need to disable sshguard to prevent blocking connections from the builder
             startup_script += dedent("""
-                systemctl disable sshguard
-                systemctl stop sshguard
+                sudo systemctl disable sshguard
+                sudo systemctl stop sshguard
             """)
         create_node_params = dict(name=name,
                                   size=self._gce_instance_type,
