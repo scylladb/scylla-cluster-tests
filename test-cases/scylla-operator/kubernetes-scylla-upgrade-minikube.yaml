@@ -24,11 +24,11 @@ new_version: '4.1.7'
 # Following configurations does not currently work on kubernetes, due to thhe lack of ssl certificate support.
 # could be enabled after https://github.com/scylladb/scylla-cluster-tests/issues/2744
 #
-#server_encrypt: true
-#authenticator: 'PasswordAuthenticator'
-#authenticator_user: 'cassandra'
-#authenticator_password: 'cassandra'
-#authorization_in_upgrade: 'CassandraAuthorizer'
+server_encrypt: true
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+authorization_in_upgrade: 'CassandraAuthorizer'
 #remove_authorization_in_rollback: true
 #recover_system_tables: true
 

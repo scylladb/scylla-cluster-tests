@@ -1,0 +1,72 @@
+# Namespace where the Scylla Cluster will be created
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: scylla
+
+---
+
+# Role for scylla members.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ${SCT_K8S_SCYLLA_CLUSTER_NAME}-member
+  namespace: scylla
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resources:
+      - services
+    verbs:
+      - get
+      - list
+      - patch
+      - watch
+  - apiGroups:
+      - "apps"
+    resources:
+      - statefulsets
+    verbs:
+      - get
+      - list
+      - patch
+      - watch
+  - apiGroups:
+      - scylla.scylladb.com
+    resources:
+      - clusters
+    verbs:
+      - get
+
+---
+
+# ServiceAccount for scylla members.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ${SCT_K8S_SCYLLA_CLUSTER_NAME}-member
+  namespace: scylla
+
+---
+
+# RoleBinding for scylla members.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ${SCT_K8S_SCYLLA_CLUSTER_NAME}-member
+  namespace: scylla
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ${SCT_K8S_SCYLLA_CLUSTER_NAME}-member
+subjects:
+  - kind: ServiceAccount
+    name: ${SCT_K8S_SCYLLA_CLUSTER_NAME}-member
+    namespace: scylla
+

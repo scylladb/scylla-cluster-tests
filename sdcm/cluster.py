@@ -1636,8 +1636,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if endpoint_snitch:
                 scylla_yml['endpoint_snitch'] = endpoint_snitch
 
-            if not client_encrypt:
-                scylla_yml['client_encryption_options'] = dict(enabled=False)
 
             if self.enable_auto_bootstrap:
                 scylla_yml['auto_bootstrap'] = True
@@ -1651,19 +1649,21 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if authorizer in ['AllowAllAuthorizer', 'CassandraAuthorizer']:
                 scylla_yml['authorizer'] = authorizer
 
-            if server_encrypt or client_encrypt:
-                self.config_client_encrypt()
             if server_encrypt:
+                self.prepare_server_encryption()
                 scylla_yml['server_encryption_options'] = dict(internode_encryption=internode_encryption,
                                                                certificate='/etc/scylla/ssl_conf/db.crt',
                                                                keyfile='/etc/scylla/ssl_conf/db.key',
                                                                truststore='/etc/scylla/ssl_conf/cadb.pem')
 
             if client_encrypt:
+                self.prepare_client_encryption()
                 scylla_yml['client_encryption_options'] = dict(enabled=True,
                                                                certificate='/etc/scylla/ssl_conf/client/test.crt',
                                                                keyfile='/etc/scylla/ssl_conf/client/test.key',
                                                                truststore='/etc/scylla/ssl_conf/client/catest.pem')
+            else:
+                scylla_yml['client_encryption_options'] = dict(enabled=False)
 
             if self.replacement_node_ip:
                 scylla_yml['replace_address_first_boot'] = self.replacement_node_ip
@@ -1686,18 +1686,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if append_scylla_yaml:
                 scylla_yml.update(yaml.safe_load(append_scylla_yaml))
 
-        if append_scylla_yaml:
-            if any(substr in append_scylla_yaml for substr in ("system_key_directory",
-                                                               "system_info_encryption",
-                                                               "kmip_hosts:", )):
-                self.remoter.send_files(src="./data_dir/encrypt_conf", dst="/tmp/")
-                self.remoter.sudo(shell_script_cmd("""\
-                    rm -rf /etc/encrypt_conf
-                    mv -f /tmp/encrypt_conf /etc
-                    mkdir -p /etc/scylla/encrypt_conf /etc/encrypt_conf/system_key_dir
-                    chown -R scylla:scylla /etc/scylla /etc/encrypt_conf
-                """))
-                self.remoter.sudo("md5sum /etc/encrypt_conf/*.pem", ignore_status=True)
+        if self.parent_cluster.is_kmip_enabled(append_scylla_yaml=append_scylla_yaml):
+            self.prepare_for_kmip()
 
         if append_scylla_args:
             scylla_help = self.remoter.run("scylla --help", ignore_status=True).stdout
@@ -1714,28 +1704,49 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.sudo("yum install -y scylla-gdb", verbose=True, ignore_status=True)
 
         if self.init_system == "systemd":
-            systemd_version = get_systemd_version(self.remoter.run("systemctl --version", ignore_status=True).stdout)
-            if systemd_version >= 240:
-                self.log.debug("systemd version %d >= 240: we can change FinalKillSignal", systemd_version)
-                self.remoter.sudo(shell_script_cmd("""\
-                    mkdir -p /etc/systemd/system/scylla-server.service.d
-                    cat <<EOF > /etc/systemd/system/scylla-server.service.d/override.conf
-                    [Service]
-                    FinalKillSignal=SIGABRT
-                    EOF
-                    systemctl daemon-reload
-                """))
+            self.patch_systemd()
 
-    def config_client_encrypt(self):
-        self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')  # pylint: disable=not-callable
+    def patch_systemd(self):
+        systemd_version = get_systemd_version(self.remoter.run("systemctl --version", ignore_status=True).stdout)
+        if systemd_version >= 240:
+            self.log.debug("systemd version %d >= 240: we can change FinalKillSignal", systemd_version)
+            self.remoter.sudo(shell_script_cmd("""\
+                mkdir -p /etc/systemd/system/scylla-server.service.d
+                cat <<EOF > /etc/systemd/system/scylla-server.service.d/override.conf
+                [Service]
+                FinalKillSignal=SIGABRT
+                EOF
+                systemctl daemon-reload
+            """))
+
+    def prepare_for_kmip(self):
+        self.remoter.send_files(src="./data_dir/encrypt_conf", dst="/tmp/")
+        self.remoter.sudo(shell_script_cmd("""\
+            rm -rf /etc/encrypt_conf
+            mv -f /tmp/encrypt_conf /etc
+            mkdir -p /etc/scylla/encrypt_conf /etc/encrypt_conf/system_key_dir
+            chown -R scylla:scylla /etc/scylla /etc/encrypt_conf
+        """))
+        self.remoter.sudo("md5sum /etc/encrypt_conf/*.pem", ignore_status=True)
+
+    def prepare_client_encryption(self):
+        self.remoter.send_files(src='./data_dir/ssl_conf/client', dst='/tmp/')  # pylint: disable=not-callable
         setup_script = dedent("""
             mkdir -p ~/.cassandra/
-            cp /tmp/ssl_conf/client/cqlshrc ~/.cassandra/
-            sudo mkdir -p /etc/scylla/
-            sudo rm -rf /etc/scylla/ssl_conf/
-            sudo mv -f /tmp/ssl_conf/ /etc/scylla/
+            cp /tmp/client/cqlshrc ~/.cassandra/
+            sudo mkdir -p /etc/scylla/ssl_conf/client
+            sudo mv -f /tmp/client/* /etc/scylla/ssl_conf/client
         """)
         self.remoter.run('bash -cxe "%s"' % setup_script)
+
+    def prepare_server_encryption(self):
+        self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')  # pylint: disable=not-callable
+        setup_script = dedent("""
+            mkdir -p /etc/scylla/
+            rm -rf /etc/scylla/ssl_conf/
+            mv -f /tmp/ssl_conf/ /etc/scylla/
+        """)
+        self.remoter.sudo('bash -cxe "%s"' % setup_script)
 
     @retrying(n=3, sleep_time=10, allowed_exceptions=(AssertionError,), message="Retrying on getting scylla repo")
     def download_scylla_repo(self, scylla_repo):
@@ -2730,6 +2741,40 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.coredumps = dict()
         super(BaseCluster, self).__init__()
 
+    def is_scylla_encryption_options_enabled(self, params) -> bool:
+        if params is None:
+            params = self.params
+        return params.get('scylla_encryption_options', '')
+
+    def is_client_encryption_enabled(self, params=None) -> bool:
+        if params is None:
+            params = self.params
+        return params.get('client_encrypt', '')
+
+    def is_server_encryption_enabled(self, params=None) -> bool:
+        if params is None:
+            params = self.params
+        return params.get('server_encrypt', '')
+
+    def is_internode_encryption_enabled(self, params=None) -> bool:
+        if params is None:
+            params = self.params
+        return params.get('internode_encryption', '')
+
+    def is_system_encryption_enabled(self, params=None, append_scylla_yaml=None) -> bool:
+        if params is None:
+            params = self.params
+        if append_scylla_yaml is None:
+            append_scylla_yaml = params.get('append_scylla_yaml', '')
+        return 'system_info_encryption' in append_scylla_yaml
+
+    def is_kmip_enabled(self, params=None, append_scylla_yaml=None) -> bool:
+        if params is None:
+            params = self.params
+        if append_scylla_yaml is None:
+            append_scylla_yaml = params.get('append_scylla_yaml', '')
+        return 'kmip_hosts:' in append_scylla_yaml
+
     @cached_property
     def tags(self) -> Dict[str, str]:
         key = self.node_type if "db" not in self.node_type else "db"
@@ -3334,6 +3379,12 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node_list = self.nodes
             self._update_db_packages(new_scylla_bin, node_list)
 
+    def get_docker_repo_from_scylla_version(self, version: str) -> str:
+        first_chunk = version.split('.')[0]
+        if first_chunk.startswith('20') and len(first_chunk) == 4:
+            return 'scylladb/scylla-enterprise'
+        return 'scylladb/scylla'
+
     def get_node_info_list(self, verification_node):
         """
             !!! Deprecated !!!!
@@ -3661,19 +3712,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.remoter.sudo('cat /etc/scylla.d/io.conf')
 
             if self.params.get('use_mgmt', None):
-                pkgs_url = self.params.get('scylla_mgmt_pkg', None)
-                pkg_path = None
-                if pkgs_url:
-                    pkg_path = download_dir_from_cloud(pkgs_url)
-                    node.remoter.run('mkdir -p {}'.format(pkg_path))
-                    node.remoter.send_files(src='{}*.rpm'.format(pkg_path), dst=pkg_path)
-                node.install_manager_agent(package_path=pkg_path)
-                cluster_backend = self.params.get("cluster_backend")
-                if cluster_backend == "aws":
-                    region = self.params.get('region_name').split()
-                    update_config_file(node=node, region=region[0])
-                else:
-                    self.log.warning("Backend '%s' not support. Won't configure manager backups!", cluster_backend)
+                self.install_manager_agent(node, self.params.get('scylla_mgmt_pkg', None))
         else:
             self._reuse_cluster_setup(node)
 
@@ -3682,6 +3721,20 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         check_nodes_status(nodes_status=nodes_status, current_node=node)
 
         self.clean_replacement_node_ip(node)
+
+    def install_manager_agent(self, node, pkgs_url):
+        pkg_path = None
+        if pkgs_url:
+            pkg_path = download_dir_from_cloud(pkgs_url)
+            node.remoter.run('mkdir -p {}'.format(pkg_path))
+            node.remoter.send_files(src='{}*.rpm'.format(pkg_path), dst=pkg_path)
+        node.install_manager_agent(package_path=pkg_path)
+        cluster_backend = self.params.get("cluster_backend")
+        if cluster_backend == "aws":
+            region = self.params.get('region_name').split()
+            update_config_file(node=node, region=region[0])
+        else:
+            self.log.warning("Backend '%s' not support. Won't configure manager backups!", cluster_backend)
 
     def _scylla_install(self, node):
         node.update_repo_cache()
@@ -3944,7 +3997,7 @@ class BaseLoaderSet():
         collectd_setup.install(node)
         self.install_gemini(node=node)
         if self.params.get('client_encrypt'):
-            node.config_client_encrypt()
+            node.prepare_client_encryption()
 
         result = node.remoter.run('test -e ~/PREPARED-LOADER', ignore_status=True)
         node.remoter.sudo("bash -cxe \"echo '*\t\thard\tcore\t\tunlimited\n*\t\tsoft\tcore\t\tunlimited' "

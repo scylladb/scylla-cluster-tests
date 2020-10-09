@@ -211,8 +211,17 @@ class GceMinikubeCluster(MinikubeCluster, cluster_gce.GCECluster):
         super().destroy()
         self.stop_k8s_task_threads()
 
+    def docker_pull_scylla_image_for_version(self, version: str):
+        first_chunk = version.split('.')[0]
+        if first_chunk[0:2] == '20' and len(first_chunk) == 4:
+            self.docker_pull(f"scylladb/scylla-enterprise:{version}")
+        else:
+            self.docker_pull(f"scylladb/scylla:{version}")
+
 
 class MinikubeScyllaPodContainer(BasePodContainer, IptablesPodPortsRedirectMixin):
+    parent_cluster: 'MinikubeScyllaPodCluster'
+
     @cached_property
     def host_remoter(self):
         return self.parent_cluster.k8s_cluster.remoter
@@ -241,6 +250,7 @@ class MinikubeScyllaPodContainer(BasePodContainer, IptablesPodPortsRedirectMixin
 
 class MinikubeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
     PodContainerClass = MinikubeScyllaPodContainer
+    k8s_cluster: 'GceMinikubeCluster'
 
     def add_nodes(self,
                   count: int,
@@ -270,7 +280,7 @@ class MinikubeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
         super().terminate_node(node)
 
     def upgrade_scylla_cluster(self, new_version: str) -> None:
-        self.k8s_cluster.docker_pull(f"scylladb/scylla:{new_version}")
+        self.k8s_cluster.docker_pull_scylla_image_for_version(new_version)
         return super().upgrade_scylla_cluster(new_version)
 
     @retrying(n=20, sleep_time=60, allowed_exceptions=(cluster.ClusterNodesNotReady, UnexpectedExit),
