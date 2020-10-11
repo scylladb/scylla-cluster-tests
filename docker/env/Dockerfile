@@ -1,4 +1,4 @@
-ARG PYTHON_IMAGE_TAG=3.8.5-slim-buster
+ARG PYTHON_IMAGE_TAG=3.9.1-slim-buster
 
 FROM python:$PYTHON_IMAGE_TAG as apt_base
 ENV DEBIAN_FRONTEND=noninteractive
@@ -16,7 +16,7 @@ ENV PIP_NO_CACHE_DIR=1
 RUN apt-get install -y --no-install-recommends build-essential cmake libssl-dev zlib1g-dev
 ADD requirements-python.txt .
 RUN mkdir /build && \
-    pip3 install -r requirements-python.txt --root=/build --prefix=./ --ignore-installed --no-warn-script-location
+    pip3 install -r requirements-python.txt --root=/build --prefix=./ --ignore-installed --no-warn-script-location --use-feature=2020-resolver
 
 FROM python:$PYTHON_IMAGE_TAG
 ARG KUBECTL_VERSION=1.18.5
