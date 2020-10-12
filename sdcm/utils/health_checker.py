@@ -15,7 +15,8 @@ import time
 import logging
 from typing import Generator
 
-from sdcm.sct_events import ClusterHealthValidatorEvent, Severity
+from sdcm.sct_events.base import Severity
+from sdcm.sct_events.database import ClusterHealthValidatorEvent
 
 
 CHECK_NODE_HEALTH_RETRIES = 3

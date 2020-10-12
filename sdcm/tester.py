@@ -35,7 +35,7 @@ from cassandra.concurrent import execute_concurrent_with_args  # pylint: disable
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
-from sdcm import nemesis, cluster_docker, cluster_baremetal, cluster_k8s, db_stats, wait
+from sdcm import nemesis, cluster_docker, cluster_baremetal, db_stats, wait
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR, Setup, UserRemoteCredentials, set_duration as set_cluster_duration, \
     set_ip_ssh_connections as set_cluster_ip_ssh_connections, BaseLoaderSet, BaseMonitorSet, BaseScyllaCluster
 from sdcm.cluster_gce import ScyllaGCECluster
@@ -57,9 +57,12 @@ from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, FullScanEvent, Severity, \
-    TestFrameworkEvent, TestResultEvent, get_logger_event_summary, EVENTS_PROCESSES, stop_events_analyzer, \
-    ScyllaBenchEvent
+from sdcm.sct_events import get_events_grouped_by_category
+from sdcm.sct_events.base import Severity
+from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEvent
+from sdcm.sct_events.database import FullScanEvent
+from sdcm.sct_events.events_device import start_events_device, stop_events_device, get_logger_event_summary
+from sdcm.sct_events.events_analyzer import stop_events_analyzer
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.prepare_region import AwsRegion
@@ -405,10 +408,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     @staticmethod
     def update_certificates():
         update_certificates()
-
-    @staticmethod
-    def get_events_grouped_by_category(limit=0) -> dict:
-        return EVENTS_PROCESSES['EVENTS_FILE_LOGGER'].get_events_by_category(limit)
 
     @staticmethod
     def get_event_summary() -> dict:
@@ -2013,7 +2012,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def _get_test_result_event(self) -> TestResultEvent:
         return TestResultEvent(
             test_status=self.get_test_status(),
-            events=self.get_events_grouped_by_category(limit=1))
+            events=get_events_grouped_by_category(limit=1))
 
     @staticmethod
     def _remove_errors_from_unittest_results(result):
@@ -2064,7 +2063,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         coredumps = []
         if self.db_cluster:
             coredumps = self.db_cluster.coredumps
-        test_events = self.get_events_grouped_by_category()
+        test_events = get_events_grouped_by_category()
         self.update_test_details(
             errors=test_events['ERROR'] + test_events['CRITICAL'],
             coredumps=coredumps)
@@ -2519,7 +2518,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 "build_url": os.environ.get("BUILD_URL"),
                 "end_time": format_timestamp(time.time()),
                 "events_summary": self.get_event_summary(),
-                "last_events": self.get_events_grouped_by_category(100),
+                "last_events": get_events_grouped_by_category(100),
                 "nodes": [],
                 "number_of_db_nodes": self.params.get('n_db_nodes'),
                 "region_name": region_name,

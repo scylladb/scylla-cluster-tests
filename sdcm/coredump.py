@@ -11,21 +11,21 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from threading import Thread, Event
-from typing import List, Optional, Dict
-import time
-from dataclasses import dataclass
-from functools import cached_property
-import re
 import os
-
-from datetime import datetime
+import re
+import time
 from abc import abstractmethod
+from typing import List, Optional, Dict
+from datetime import datetime
+from functools import cached_property
+from threading import Thread, Event
+from dataclasses import dataclass
 
-from sdcm.sct_events import raise_event_on_failure, CoreDumpEvent
 from sdcm.log import SDCMAdapter
-from sdcm.utils.decorators import retrying, timeout
 from sdcm.remote import NETWORK_EXCEPTIONS
+from sdcm.utils.decorators import retrying, timeout
+from sdcm.sct_events.system import CoreDumpEvent
+from sdcm.sct_events.decorators import raise_event_on_failure
 
 
 @dataclass

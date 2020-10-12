@@ -10,7 +10,8 @@ import requests
 import prometheus_client
 
 from sdcm.utils.decorators import retrying, log_run_info
-from sdcm.sct_events import PrometheusAlertManagerEvent, EVENTS_PROCESSES
+from sdcm.sct_events import subscribe_events
+from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
 
 
 START = 'start'
@@ -276,7 +277,7 @@ class PrometheusDumper(threading.Thread):
                                                           'Gauge for sct events',
                                                           ['event_type', 'type', 'severity', 'node'])
 
-        for event_type, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events(stop_event=self.stop_event):
+        for event_type, message_data in subscribe_events(stop_event=self.stop_event):
             events_gauge.labels(event_type,  # pylint: disable=no-member
                                 getattr(message_data, 'type', ''),
                                 message_data.severity,

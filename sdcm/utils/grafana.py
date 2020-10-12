@@ -1,10 +1,25 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
+import logging
 import threading
 from collections import defaultdict
-import logging
 
 import requests
 
-from sdcm.sct_events import EVENTS_PROCESSES
+from sdcm.sct_events import subscribe_events
+from sdcm.sct_events.monitors import store_grafana_annotation
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -15,7 +30,7 @@ class GrafanaAnnotator(threading.Thread):
         super().__init__(daemon=True)
 
     def run(self):
-        for event_class, message_data in EVENTS_PROCESSES['MainDevice'].subscribe_events(stop_event=self.stop_event):
+        for event_class, message_data in subscribe_events(stop_event=self.stop_event):
 
             event_type = getattr(message_data, 'type', None)
             tags = [event_class, message_data.severity.name, 'events']
@@ -27,7 +42,7 @@ class GrafanaAnnotator(threading.Thread):
                 "isRegion": False,
                 "text": str(message_data)
             }
-            EVENTS_PROCESSES['EVENTS_GRAFANA_AGGRAGATOR'].store_annotation(annotate_data)
+            store_grafana_annotation(annotate_data)
 
     def terminate(self):
         self.stop_event.set()

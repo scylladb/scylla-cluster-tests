@@ -24,9 +24,9 @@ import random
 from sdcm.loader import CassandraStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.cluster import BaseLoaderSet
-from sdcm.sct_events import CassandraStressEvent
 from sdcm.utils.common import FileFollowerThread, generate_random_string, get_profile_content
-from sdcm.sct_events import CassandraStressLogEvent, Severity
+from sdcm.sct_events.base import Severity
+from sdcm.sct_events.loaders import CassandraStressEvent, CassandraStressLogEvent
 
 
 LOGGER = logging.getLogger(__name__)

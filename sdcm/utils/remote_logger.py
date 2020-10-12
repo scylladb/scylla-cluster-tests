@@ -1,15 +1,28 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
+import time
 import logging
 import subprocess
-import time
-from functools import cached_property
 from abc import abstractmethod, ABCMeta
-from multiprocessing import Process, Event
-from threading import Thread, Event as ThreadEvent
-
 from datetime import datetime
+from functools import cached_property
+from threading import Thread, Event as ThreadEvent
+from multiprocessing import Process, Event
+
 from sdcm import wait
-from sdcm.sct_events import raise_event_on_failure
 from sdcm.remote import RemoteCmdRunnerBase
+from sdcm.sct_events.decorators import raise_event_on_failure
 
 
 class LoggerBase(metaclass=ABCMeta):

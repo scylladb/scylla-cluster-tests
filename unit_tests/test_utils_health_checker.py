@@ -15,7 +15,7 @@
 import unittest
 from copy import deepcopy
 
-from sdcm.sct_events import Severity
+from sdcm.sct_events.base import Severity
 from sdcm.utils.health_checker import check_nodes_status, check_nulls_in_peers, \
     check_node_status_in_gossip_and_nodetool_status, check_schema_version
 

@@ -26,19 +26,15 @@ import os
 import re
 import traceback
 import json
-
-
-from typing import List, Optional, TypedDict, Type, Callable, Tuple, Dict, Set
-from collections import OrderedDict, defaultdict, Counter, namedtuple
+from typing import List, Optional, Type, Callable, Tuple, Dict, Set
 from functools import wraps, partial
-
+from collections import OrderedDict, defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
-from invoke import UnexpectedExit
-from cassandra import ConsistencyLevel  # pylint: disable=ungrouped-imports
 
-from sdcm.cluster_aws import ScyllaAWSCluster
+from invoke import UnexpectedExit
+from cassandra import ConsistencyLevel
+
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed
-from sdcm.group_common_events import ignore_alternator_client_errors, ignore_no_space_errors
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_string, \
     update_certificates, reach_enospc_on_node, clean_enospc_on_node, parse_nodetool_listsnapshots
@@ -48,8 +44,12 @@ from sdcm.log import SDCMAdapter
 from sdcm.keystore import KeyStore
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm import wait
-from sdcm.sct_events import DisruptionEvent, DbEventsFilter, Severity, InfoEvent, raise_event_on_failure, \
-    CassandraStressLogEvent, EventsSeverityChangerFilter
+from sdcm.sct_events.base import Severity
+from sdcm.sct_events.system import DisruptionEvent, InfoEvent
+from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter
+from sdcm.sct_events.loaders import CassandraStressLogEvent
+from sdcm.sct_events.decorators import raise_event_on_failure
+from sdcm.sct_events.group_common_events import ignore_alternator_client_errors, ignore_no_space_errors
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.cluster_k8s import PodCluster

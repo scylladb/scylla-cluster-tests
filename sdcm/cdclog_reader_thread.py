@@ -1,15 +1,29 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 import logging
 import uuid
 import pprint
-
 from pathlib import Path
 from typing import List, Dict
 
-from sdcm.sct_events import CDCReaderStressEvent, Severity
+from sdcm.sct_events.base import Severity
+from sdcm.sct_events.loaders import CDCReaderStressEvent
 from sdcm.utils.common import get_docker_stress_image_name
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
 from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
+
 
 LOGGER = logging.getLogger(__name__)
 

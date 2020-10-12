@@ -1,3 +1,16 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 import threading
 import logging
 import re
@@ -7,33 +20,7 @@ from datetime import datetime
 
 from sdcm.utils.file import File
 from sdcm.utils.decorators import timeout
-from sdcm.sct_events import SctEvent, Severity
-
-
-class ScyllaOperatorLogEvent(SctEvent):
-    def __init__(self, timestamp=None, namespace=None, cluster=None, message=None, error=None, trace_id=None):
-        super().__init__()
-        self.severity = Severity.ERROR
-        self.namespace = namespace
-        self.cluster = cluster
-        self.message = message
-        self.timestamp = timestamp
-        self.error = error
-        self.trace_id = trace_id
-
-    def __str__(self):
-        cluster = f'/{self.cluster}' if self.cluster else ''
-        return f"{super().__str__()} {self.trace_id} {self.namespace}{cluster}: {self.message}, {self.error}"
-
-
-class ScyllaOperatorRestartEvent(SctEvent):
-    def __init__(self, restart_count):
-        super().__init__()
-        self.severity = Severity.ERROR
-        self.restart_count = restart_count
-
-    def __str__(self):
-        return f"{super().__str__()}: Scylla operator has been restarted, restart_count={self.restart_count}"
+from sdcm.sct_events.operator import ScyllaOperatorLogEvent, ScyllaOperatorRestartEvent
 
 
 class ScyllaOperatorLogMonitoring(threading.Thread):
@@ -49,7 +36,7 @@ class ScyllaOperatorLogMonitoring(threading.Thread):
         '_trace_id': 'trace_id'
     }
 
-    def __init__(self, kluster: 'KubernetesCluster'):
+    def __init__(self, kluster):
         self.termination_event = threading.Event()
         self.current_position = 0
         self.kluster = kluster
@@ -95,7 +82,7 @@ class ScyllaOperatorStatusMonitoring(threading.Thread):
     status_check_period = 10
     log = logging.getLogger('ScyllaOperatorStatusMonitoring')
 
-    def __init__(self, kluster: 'KubernetesCluster'):
+    def __init__(self, kluster):
         self.termination_event = threading.Event()
         self.kluster = kluster
         self.last_restart_count = 0

@@ -5,7 +5,7 @@ import shutil
 import json
 import requests
 
-from sdcm.sct_events import stop_events_device, start_events_device
+from sdcm.sct_events.events_device import stop_events_device, start_events_device
 from sdcm.prometheus import PrometheusAlertManagerListener, PrometheusAlertManagerEvent
 
 

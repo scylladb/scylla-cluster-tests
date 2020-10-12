@@ -7,7 +7,8 @@ from sdcm.tester import ClusterTester, silence, TestResultEvent
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.log import MultilineMessagesFormatter, configure_logging
 from sdcm.utils.common import generate_random_string
-from sdcm.sct_events import TestFrameworkEvent
+from sdcm.sct_events import get_events_grouped_by_category
+from sdcm.sct_events.system import TestFrameworkEvent
 
 
 class FakeSCTConfiguration(SCTConfiguration):
@@ -137,7 +138,7 @@ class ClusterTesterForTests(ClusterTester):
     def events(self) -> dict:
         if self._events:
             return self._events
-        self._events = self.get_events_grouped_by_category()
+        self._events = get_events_grouped_by_category()
         return self._events
 
 

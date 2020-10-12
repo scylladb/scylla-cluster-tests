@@ -21,7 +21,7 @@ from invoke import exceptions
 from distutils.version import LooseVersion
 
 from sdcm import mgmt
-from sdcm.group_common_events import ignore_no_space_errors
+from sdcm.sct_events.group_common_events import ignore_no_space_errors
 from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus, TaskStatus, ScyllaManagerError, ScyllaManagerTool, \
     SCYLLA_MANAGER_AGENT_YAML_PATH
 from sdcm.nemesis import MgmtRepair, DbEventsFilter
