@@ -523,7 +523,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def cassandra_stress_version(self):
         if not self._cassandra_stress_version:
             result = self.remoter.run(cmd="cassandra-stress version", ignore_status=True, verbose=True)
-            match = re.match("Version: (.*)", result.stdout)
+            match = re.search("Version: (.*)", result.stdout)
             if match:
                 self._cassandra_stress_version = match.group(1)
             else:
