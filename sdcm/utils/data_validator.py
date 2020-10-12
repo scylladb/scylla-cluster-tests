@@ -1,3 +1,16 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 # Data validation module may be used with cassandra-stress user profile only
 #
 # **************** Caution **************************************************************
@@ -119,11 +132,13 @@
 #     running stress.
 #
 
-import logging
 import re
+import logging
 
-from sdcm.sct_events import DataValidatorEvent, Severity
 from sdcm.utils.common import get_profile_content
+from sdcm.sct_events.base import Severity
+from sdcm.sct_events.database import DataValidatorEvent
+
 
 LOGGER = logging.getLogger(__name__)
 

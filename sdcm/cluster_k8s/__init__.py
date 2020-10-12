@@ -38,7 +38,7 @@ from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring, Sc
 from sdcm.coredump import CoredumpExportFileThread
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.sct_config import sct_abs_path
-from sdcm.sct_events import TestFrameworkEvent
+from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.k8s import KubernetesOps, ApiCallRateLimiter, JSON_PATCH_TYPE, KUBECTL_TIMEOUT
 from sdcm.utils.decorators import log_run_info, timeout
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \

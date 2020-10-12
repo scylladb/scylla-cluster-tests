@@ -1,15 +1,28 @@
-from __future__ import absolute_import
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
 
 import logging
 import unittest
 
-
 from test_lib.utils import get_data_by_path, MagicList
+
 
 logging.basicConfig(level=logging.DEBUG)
 
 
 class TestClass:  # pylint: disable=too-few-public-methods
+    __test__ = False  # Mark this class to be not collected by pytest.
+
     def __init__(self, **kwargs):
         for arg_name, arg_value in kwargs.items():
             setattr(self, arg_name, arg_value)

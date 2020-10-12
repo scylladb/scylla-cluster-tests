@@ -20,12 +20,12 @@ from functools import wraps
 
 from pkg_resources import parse_version
 
-from sdcm.fill_db_data import FillDatabaseData
 from sdcm import wait
-from sdcm.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused
-from sdcm.utils.version_utils import is_enterprise
-from sdcm.sct_events import IndexSpecialColumnErrorEvent, InfoEvent
-from sdcm.utils.version_utils import get_node_supported_sstable_versions
+from sdcm.fill_db_data import FillDatabaseData
+from sdcm.utils.version_utils import is_enterprise, get_node_supported_sstable_versions
+from sdcm.sct_events.system import InfoEvent
+from sdcm.sct_events.database import IndexSpecialColumnErrorEvent
+from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused
 
 
 def truncate_entries(func):

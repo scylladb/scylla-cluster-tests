@@ -1,5 +1,16 @@
-from __future__ import absolute_import
-from __future__ import print_function
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 import time
 import traceback
 import unittest
@@ -9,15 +20,18 @@ import datetime
 from pathlib import Path
 from multiprocessing import Event
 
-from sdcm.utils.decorators import timeout
-from sdcm.prometheus import start_metrics_server
-from sdcm.sct_events import (start_events_device, stop_events_device, InfoEvent, CassandraStressEvent,
-                             CoreDumpEvent, DatabaseLogEvent, DisruptionEvent, DbEventsFilter, SpotTerminationEvent,
-                             Severity, ThreadFailedEvent, TestFrameworkEvent, get_logger_event_summary,
-                             ScyllaBenchEvent, PrometheusAlertManagerEvent, EventsFilter, YcsbStressEvent,
-                             EventsSeverityChangerFilter)
-
 from sdcm.cluster import Setup
+from sdcm.prometheus import start_metrics_server
+from sdcm.utils.decorators import timeout
+from sdcm.sct_events.base import Severity
+from sdcm.sct_events.system import InfoEvent, CoreDumpEvent, DisruptionEvent, SpotTerminationEvent, ThreadFailedEvent, \
+    TestFrameworkEvent
+from sdcm.sct_events.filters import DbEventsFilter, EventsFilter, EventsSeverityChangerFilter
+from sdcm.sct_events.loaders import CassandraStressEvent, ScyllaBenchEvent, YcsbStressEvent
+from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
+from sdcm.sct_events.events_device import start_events_device, stop_events_device, get_logger_event_summary
+
 
 LOGGER = logging.getLogger(__name__)
 

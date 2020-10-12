@@ -14,8 +14,8 @@ from weakref import proxy as weakproxy
 from invoke import Result
 
 from sdcm.cluster import BaseNode, BaseCluster, BaseMonitorSet
-from sdcm.sct_events import start_events_device, stop_events_device
-from sdcm.sct_events import EVENTS_PROCESSES
+from sdcm.sct_events.events_device import start_events_device, stop_events_device
+from sdcm.sct_events.events_processes import EVENTS_PROCESSES
 from sdcm.utils.distro import Distro
 
 from unit_tests.dummy_remote import DummyRemote

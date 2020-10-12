@@ -19,8 +19,9 @@ import random
 import json
 import time
 
-from sdcm.sct_events import GeminiEvent, GeminiLogEvent, Severity
+from sdcm.sct_events.loaders import GeminiEvent, GeminiLogEvent
 from sdcm.utils.common import FileFollowerThread
+
 
 LOGGER = logging.getLogger(__name__)
 

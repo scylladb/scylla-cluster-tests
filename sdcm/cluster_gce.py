@@ -23,7 +23,7 @@ from libcloud.common.google import GoogleBaseError, ResourceNotFoundError
 
 from sdcm import cluster
 from sdcm.keystore import pub_key_from_private_key_file
-from sdcm.sct_events import SpotTerminationEvent
+from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 
 
