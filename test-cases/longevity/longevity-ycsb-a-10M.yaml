@@ -1,0 +1,60 @@
+# [Ivan]: I am currently testing CRDB vs ScyllaDB with YCSB workloads.
+#         This scenario shows how to run YCSB workload A against Scylla.
+#         It can be run with Jenkins BYO as in https://jenkins.scylladb.com/view/staging/job/scylla-staging/job/ivan/job/ivan-byo-longevity/23/:
+#         test_name: longevity_test.LongevityTest.test_custom_time.
+#
+# avg load speed per 2*2*128 threads 44K ops/s each
+# 10M / 44K = ~3 minutes
+#
+# 240 = 4 hours * 60
+# 480 = 8 hours * 60
+# 10900 = 7 days * 24 hours a day * 60 minutes an hour
+test_duration: 480
+
+pre_create_keyspace: [
+  "CREATE KEYSPACE ycsb WITH REPLICATION = {'class' : 'SimpleStrategy', 'replication_factor': 3 };",
+  "CREATE TABLE ycsb.usertable (y_id varchar primary key, field0 varchar, field1 varchar, field2 varchar, field3 varchar, field4 varchar, field5 varchar, field6 varchar, field7 varchar, field8 varchar, field9 varchar);"
+]
+
+prepare_write_cmd:
+  - >-
+    bin/ycsb load cassandra-cql -P workloads/workloada -threads 128 -p recordcount=10000000
+    -p cassandra.readconsistencylevel=ONE -p cassandra.writeconsistencylevel=ONE
+    -p readproportion=0 -p updateproportion=1
+    -p fieldcount=10 -p fieldlength=128
+    -p insertstart=0 -p insertcount=5000000
+    -p cassandra.username=cassandra -p cassandra.password=cassandra
+
+  - >-
+    bin/ycsb load cassandra-cql -P workloads/workloada -threads 128 -p recordcount=10000000
+    -p cassandra.readconsistencylevel=ONE -p cassandra.writeconsistencylevel=ONE
+    -p readproportion=0 -p updateproportion=1
+    -p fieldcount=10 -p fieldlength=128
+    -p insertstart=5000000 -p insertcount=5000000
+    -p cassandra.username=cassandra -p cassandra.password=cassandra
+
+stress_cmd: [
+    "bin/ycsb run cassandra-cql -P workloads/workloada -threads 35 -p recordcount=10000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=10000000 -p cassandra.username=cassandra -p cassandra.password=cassandra",
+    "bin/ycsb run cassandra-cql -P workloads/workloada -threads 35 -p recordcount=10000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=10000000 -p cassandra.username=cassandra -p cassandra.password=cassandra",
+]
+
+round_robin: true
+
+n_db_nodes: 3
+n_loaders: 2
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.4xlarge'
+instance_type_loader: 'm5.2xlarge' # 8 vCPU (4 cores), 32 GB RAM
+
+nemesis_class_name: 'NoOpMonkey'
+nemesis_interval: 5
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'
+
+user_prefix: 'longevity-ycsb-a-10M-8h'
+space_node_threshold: 64424
+store_results_in_elasticsearch: false
