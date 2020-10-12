@@ -4,8 +4,6 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 managerPipeline(
-    params: params,
-
     backend: 'gce',
     test_name: 'mgmt_cli_test.MgmtCliTest.test_backup_feature',
     test_config: 'test-cases/manager/manager-regression-gce.yaml',

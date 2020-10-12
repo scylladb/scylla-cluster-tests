@@ -4,8 +4,6 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 perfRegressionParallelPipeline(
-    params: params,
-
     backend: "aws",
     aws_region: "us-east-1",
     test_name: "performance_regression_test.PerformanceRegressionTest",
