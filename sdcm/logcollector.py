@@ -847,6 +847,8 @@ class LoaderLogCollector(LogCollector):
                 search_locally=True),
         FileLog(name='*cassandra-stress*.log',
                 search_locally=True),
+        FileLog(name='*ycsb*.log',
+                search_locally=True),
         FileLog(name='*gemini-l*.log',
                 search_locally=True),
         FileLog(name='gemini_result*.log',
