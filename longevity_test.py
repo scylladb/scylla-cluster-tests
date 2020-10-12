@@ -312,6 +312,8 @@ class LongevityTest(ClusterTester):
                 self.monitors.reconfigure_scylla_monitoring()
                 self.db_cluster.wait_for_init(node_list=new_nodes)
 
+        self.db_cluster.start_nemesis()
+
         stress_params_list = list()
 
         customer_profiles = self.params.get('cs_user_profiles', default=[])
@@ -329,18 +331,11 @@ class LongevityTest(ClusterTester):
                 for _ in range(user_profile_table_count):
                     stress_params_list += self.create_templated_user_stress_params(next(templated_table_counter),
                                                                                    cs_profile)
-            stress_queue = list()
+
             self._run_user_stress_in_batches(batch_size=batch_size,
-                                             stress_params_list=stress_params_list,
-                                             stress_queue=stress_queue)
+                                             stress_params_list=stress_params_list)
 
-            # Start nemesis thread after stress
-            self.db_cluster.start_nemesis()
-
-            for stress in stress_queue:
-                self.verify_stress_thread(cs_thread_pool=stress)
-
-    def _run_user_stress_in_batches(self, batch_size, stress_params_list, stress_queue):
+    def _run_user_stress_in_batches(self, batch_size, stress_params_list):
         """
         run user profile in batches, while adding 4 stress-commands which are not with precreated tables
         and wait for them to finish
@@ -356,6 +351,7 @@ class LongevityTest(ClusterTester):
 
         for batch, _, _, extra_tables_idx in list(chunks(stress_params_list, batch_size)):
 
+            stress_queue = list()
             batch_params = dict(round_robin=True, stress_cmd=[])
 
             # add few stress threads with tables that weren't pre-created
@@ -372,6 +368,8 @@ class LongevityTest(ClusterTester):
                 batch_params['stress_cmd'] += [params['stress_cmd']]
 
             self._run_all_stress_cmds(stress_queue, params=batch_params)
+            for stress in stress_queue:
+                self.verify_stress_thread(cs_thread_pool=stress)
 
     def _run_stress_in_batches(self, total_stress, batch_size, stress_cmd):
         stress_queue = list()
