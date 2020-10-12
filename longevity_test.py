@@ -513,11 +513,18 @@ class LongevityTest(ClusterTester):
                             self.log.debug('extra definition for [{}] exists [{}]'.format(table_name, str(exc)))
 
     def _pre_create_keyspace(self):
-        query = self.params.get('pre_create_keyspace')
+        cmds = self.params.get('pre_create_keyspace')
         node = self.db_cluster.nodes[0]
-        # pylint: disable=no-member
-        with self.db_cluster.cql_connection_patient(node) as session:
-            session.execute(query)
+
+        if not isinstance(cmds, list):
+            cmds = [cmds]
+
+        for cmd in cmds:
+            # Run all stress commands
+            self.log.debug('pre_create_keyspace cmd: {}'.format(cmd))
+            # pylint: disable=no-member
+            with self.db_cluster.cql_connection_patient(node) as session:
+                session.execute(cmd)
 
     def _flush_all_nodes(self):
         """
