@@ -4,8 +4,6 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
-    params: params,
-
     backend: 'aws',
     aws_region: 'eu-west-1',
     test_name: 'performance_regression_row_level_repair_test.PerformanceRegressionRowLevelRepairTest.test_row_level_repair_large_partitions',

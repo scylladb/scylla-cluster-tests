@@ -77,7 +77,7 @@ def call(Map pipelineParams) {
 
                                                         export SCT_CONFIG_FILES=${pipelineParams.test_config}
                                                         export SCT_SCYLLA_VERSION=${base_version}
-                                                        export SCT_NEW_SCYLLA_REPO=${pipelineParams.params.new_scylla_repo}
+                                                        export SCT_NEW_SCYLLA_REPO=${params.new_scylla_repo}
 
                                                         export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                                         export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"

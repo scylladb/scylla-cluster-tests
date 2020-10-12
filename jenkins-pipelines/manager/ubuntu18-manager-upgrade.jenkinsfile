@@ -4,7 +4,6 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 managerPipeline(
-    params: params,
     manager: true,
     backend: 'aws',
     aws_region: 'us-east-1',
