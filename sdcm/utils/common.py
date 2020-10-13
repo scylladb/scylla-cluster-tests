@@ -2061,3 +2061,18 @@ def parse_nodetool_listsnapshots(listsnapshots_output: str) -> defaultdict:
             line_splitted = line.split()
             snapshots_content[line_splitted[0]].append(SnapshotDetails(line_splitted[1], line_splitted[2]))
     return snapshots_content
+
+
+def convert_metric_to_ms(metric: str) -> float:
+    # Convert metric value to ms and float
+    try:
+        if metric.endswith('µs'):
+            metric_converted = float(metric[:-2]) / 1000
+        elif metric.endswith('ms'):
+            metric_converted = float(metric[:-2])
+        else:
+            metric_converted = float(metric)
+    except ValueError as ve:
+        metric_converted = metric
+        LOGGER.error("Value %s can't be converted to float. Exception: %s", metric, ve)
+    return metric_converted

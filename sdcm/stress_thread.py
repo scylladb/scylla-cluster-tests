@@ -194,8 +194,8 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
 
         with CassandraStressExporter(instance_name=node.ip_address,
                                      metrics=nemesis_metrics_obj(),
-                                     cs_operation=stress_cmd_opt,
-                                     cs_log_filename=log_file_name,
+                                     stress_operation=stress_cmd_opt,
+                                     stress_log_filename=log_file_name,
                                      loader_idx=loader_idx, cpu_idx=cpu_idx), \
                 CassandraStressEventsPublisher(node=node, cs_log_filename=log_file_name):
             result = None

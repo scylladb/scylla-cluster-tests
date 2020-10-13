@@ -794,6 +794,10 @@ class CassandraStressLogEvent(DatabaseLogEvent):
     pass
 
 
+class ScyllaBenchLogEvent(DatabaseLogEvent):
+    pass
+
+
 class GeminiLogEvent(DatabaseLogEvent):
     SEVERITY_MAPPING = {
         "INFO": "NORMAL",

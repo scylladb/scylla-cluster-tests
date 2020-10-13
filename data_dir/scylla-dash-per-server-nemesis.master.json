@@ -802,6 +802,20 @@
                                 "intervalFactor": 1,
                                 "legendFormat": "YCSB INSERT [{{instance}}]",
                                 "refId": "I"
+                            },
+                            {
+                                "expr": "collectd_scylla_bench_stress_write_gauge{type=\"lat_perc_95\"}",
+                                "format": "time_series",
+                                "interval": "15s",
+                                "intervalFactor": 1,
+                                "refId": "J"
+                            },
+                            {
+                                "expr": "collectd_scylla_bench_stress_read_gauge{type=\"lat_perc_95\"}",
+                                "format": "time_series",
+                                "interval": "15s",
+                                "intervalFactor": 1,
+                                "refId": "K"
                             }
                         ],
                         "thresholds": [],
@@ -940,6 +954,20 @@
                                 "intervalFactor": 1,
                                 "legendFormat": "YCSB INSERT [{{instance}}]",
                                 "refId": "I"
+                            },
+                            {
+                                "expr": "collectd_scylla_bench_stress_write_gauge{type=\"lat_perc_99\"}",
+                                "format": "time_series",
+                                "interval": "15s",
+                                "intervalFactor": 1,
+                                "refId": "J"
+                            },
+                            {
+                                "expr": "collectd_scylla_bench_stress_read_gauge{type=\"lat_perc_99\"}",
+                                "format": "time_series",
+                                "interval": "15s",
+                                "intervalFactor": 1,
+                                "refId": "K"
                             }
                         ],
                         "thresholds": [],
