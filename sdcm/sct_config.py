@@ -688,6 +688,11 @@ class SCTConfiguration(dict):
         dict(name="post_prepare_cql_cmds", env="SCT_POST_PREPARE_CQL_CMDS", type=str_or_list,
              help="CQL Commands to run after prepare stage finished (relevant only to longevity_test.py)"),
 
+        dict(name="prepare_wait_no_compactions_timeout", env="SCT_PREPARE_WAIT_NO_COMPACTIONS_TIMEOUT", type=int,
+             help="At the end of prepare stage, run major compaction and wait for this time (in minutes) for compaction to finish. "
+                  "(relevant only to longevity_test.py)"
+                  ", Should be use only for when facing issue like compaction is affect the test or load"),
+
         dict(name="compaction_strategy", env="SCT_COMPACTION_STRATEGY", type=str,
              help="Choose a specific compaction strategy to pre-create schema with."),
 
