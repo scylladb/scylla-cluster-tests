@@ -157,6 +157,12 @@ class LongevityTest(ClusterTester):
         post_prepare_cql_cmds = self.params.get('post_prepare_cql_cmds')
         if post_prepare_cql_cmds:
             self._run_cql_commands(post_prepare_cql_cmds)
+
+        prepare_wait_no_compactions_timeout = self.params.get('prepare_wait_no_compactions_timeout')
+        if prepare_wait_no_compactions_timeout:
+            for node in self.db_cluster.nodes:
+                node.run_nodetool("compact")
+            self.wait_no_compactions_running(n=prepare_wait_no_compactions_timeout)
         self.log.info('Prepare finished')
 
     def test_custom_time(self):
