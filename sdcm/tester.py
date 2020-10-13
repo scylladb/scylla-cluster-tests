@@ -46,6 +46,7 @@ from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.cluster_k8s import minikube, gke
+from sdcm.scylla_bench_thread import ScyllaBenchThread
 from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, update_certificates, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, PageFetcher, \
     rows_to_list, ec2_ami_get_root_device_name
@@ -1082,19 +1083,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         timeout = self.get_duration(duration)
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
 
-        credentials = self.db_cluster.get_db_auth()
-        if credentials and 'username=' not in stress_cmd:
-            stress_cmd += " -username {} -password {}".format(*credentials)
-
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
-        bench_thread = self.loaders.run_stress_thread_bench(
-            stress_cmd, timeout,
+        bench_thread = ScyllaBenchThread(
+            stress_cmd, loader_set=self.loaders, timeout=timeout,
             node_list=self.db_cluster.nodes,
             round_robin=round_robin,
             use_single_loader=use_single_loader,
             stop_test_on_failure=stop_test_on_failure,
+            credentials=self.db_cluster.get_db_auth()
         )
+        bench_thread.run()
         scylla_encryption_options = self.params.get('scylla_encryption_options')
         if scylla_encryption_options and 'write' in stress_cmd:
             # Configure encryption at-rest for all test tables, sleep a while to wait the workload starts and test tables are created
@@ -1195,7 +1194,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return results
 
     def get_stress_results_bench(self, queue):
-        results = self.loaders.get_stress_results_bench(queue)
+        results = queue.get_stress_results_bench()
         if self.create_stats:
             self.update_stress_results(results)
         return results
