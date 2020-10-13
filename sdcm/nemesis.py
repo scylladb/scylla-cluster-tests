@@ -49,6 +49,7 @@ from sdcm import wait
 from sdcm.sct_events import DisruptionEvent, DbEventsFilter, Severity, InfoEvent, raise_event_on_failure
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
+from sdcm.cluster_k8s import KubernetesCluster
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
 
@@ -241,9 +242,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         )
 
     def _is_it_on_kubernetes(self) -> bool:
-        if hasattr(self.tester, 'db_cluster'):
-            return 'kube' in type(self.tester.db_cluster).__name__.lower()
-        return False
+        return isinstance(getattr(self.tester, "db_cluster", None), KubernetesCluster)
 
     def get_list_of_methods_by_flags(
             self,
