@@ -16,7 +16,7 @@ n_db_nodes: 3
 n_loaders: 1
 n_monitor_nodes: 1
 
-user_prefix: 'k8s-scylla-upgrade-minikube'
+user_prefix: 'k8s-scylla-upgrade'
 
 new_version: '4.1.7'
 
