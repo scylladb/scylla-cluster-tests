@@ -9,5 +9,7 @@ n_monitor_nodes: 1
 nemesis_class_name: 'KubernetesScyllaOperatorMonkey'
 nemesis_interval: 5
 
-user_prefix: 'k8s-longevity-10gb-3h-gke'
+# Need to keep rendered name less than 40 chars because of GKE restrictions. Note, that backend name included automatically.
+user_prefix: 'long-10gb-3h'
+
 space_node_threshold: 64424
