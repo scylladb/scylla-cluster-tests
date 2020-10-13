@@ -1,0 +1,22 @@
+#!groovy
+￼
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+managerPipeline(
+    params: params,
+
+    manager: true,
+    backend: 'aws',
+    test_name: 'mgmt_cli_test.MgmtCliTest.test_repair_intensity_feature_on_single_node',
+    test_config: 'test-cases/manager/manager-repair-intensity-single-repaired-nodes.yaml',
+
+    scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo',
+    scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo',
+    scylla_version: 'master:latest',
+
+    timeout: [time: 1620, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy',
+    post_behavior_loader_nodes: 'destroy',
+    post_behavior_monitor_nodes: 'keep-on-failure'
+)
