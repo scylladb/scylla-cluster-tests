@@ -85,7 +85,7 @@ class KubernetesCluster:  # pylint: disable=too-few-public-methods
                                f"--version v{self.params.get('k8s_cert_manager_version')} --set installCRDs=true",
                                namespace="cert-manager", k8s_server_url=self.k8s_server_url))
         time.sleep(10)
-        self.kubectl("wait --timeout=1m --all --for=condition=Ready pod", namespace="cert-manager")
+        self.kubectl("wait --timeout=5m --all --for=condition=Ready pod", namespace="cert-manager")
         self.start_cert_manager_journal_thread()
 
     @property
@@ -105,7 +105,7 @@ class KubernetesCluster:  # pylint: disable=too-few-public-methods
         LOGGER.info("Deploy Scylla Operator")
         self.apply_file(SCYLLA_OPERATOR_CONFIG)
         time.sleep(10)
-        self.kubectl("wait --timeout=1m --all --for=condition=Ready pod", namespace="scylla-operator-system")
+        self.kubectl("wait --timeout=5m --all --for=condition=Ready pod", namespace="scylla-operator-system")
         self.start_scylla_operator_journal_thread()
 
     @log_run_info
