@@ -2477,7 +2477,7 @@ spec:
         hostPath:
           path: /var/lib/scylla/coredumps
 ---
-apiVersion: cert-manager.io/v1alpha2
+apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: scylla-operator-serving-cert
@@ -2491,7 +2491,7 @@ spec:
     name: scylla-operator-selfsigned-issuer
   secretName: webhook-server-cert
 ---
-apiVersion: cert-manager.io/v1alpha2
+apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
   name: scylla-operator-selfsigned-issuer
