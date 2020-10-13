@@ -15,51 +15,55 @@ pre_create_keyspace: [
   "CREATE TABLE ycsb.usertable (y_id varchar primary key, field0 varchar, field1 varchar, field2 varchar, field3 varchar, field4 varchar, field5 varchar, field6 varchar, field7 varchar, field8 varchar, field9 varchar);"
 ]
 
+# number of core connections must match number of vCPU (16) on a db node - 2
 prepare_write_cmd:
   - >-
-    bin/ycsb load cassandra-cql -P workloads/workloada -threads 128 -p recordcount=1000000000
+    bin/ycsb load cassandra-cql -P workloads/workloada -threads 84 -p recordcount=1000000000
     -p cassandra.readconsistencylevel=ONE -p cassandra.writeconsistencylevel=ONE
     -p readproportion=0 -p updateproportion=1
     -p fieldcount=10 -p fieldlength=128
     -p insertstart=0 -p insertcount=250000000
+    -p cassandra.coreconnections=14 -p cassandra.maxconnections=14
     -p cassandra.username=cassandra -p cassandra.password=cassandra
 
   - >-
-    bin/ycsb load cassandra-cql -P workloads/workloada -threads 128 -p recordcount=1000000000
+    bin/ycsb load cassandra-cql -P workloads/workloada -threads 84 -p recordcount=1000000000
     -p cassandra.readconsistencylevel=ONE -p cassandra.writeconsistencylevel=ONE
     -p readproportion=0 -p updateproportion=1
     -p fieldcount=10 -p fieldlength=128
     -p insertstart=250000000 -p insertcount=250000000
+    -p cassandra.coreconnections=14 -p cassandra.maxconnections=14
     -p cassandra.username=cassandra -p cassandra.password=cassandra
 
   - >-
-    bin/ycsb load cassandra-cql -P workloads/workloada -threads 128 -p recordcount=1000000000
+    bin/ycsb load cassandra-cql -P workloads/workloada -threads 84 -p recordcount=1000000000
     -p cassandra.readconsistencylevel=ONE -p cassandra.writeconsistencylevel=ONE
     -p readproportion=0 -p updateproportion=1
     -p fieldcount=10 -p fieldlength=128
     -p insertstart=500000000 -p insertcount=250000000
+    -p cassandra.coreconnections=14 -p cassandra.maxconnections=14
     -p cassandra.username=cassandra -p cassandra.password=cassandra
 
   - >-
-    bin/ycsb load cassandra-cql -P workloads/workloada -threads 128 -p recordcount=1000000000
+    bin/ycsb load cassandra-cql -P workloads/workloada -threads 84 -p recordcount=1000000000
     -p cassandra.readconsistencylevel=ONE -p cassandra.writeconsistencylevel=ONE
     -p readproportion=0 -p updateproportion=1
     -p fieldcount=10 -p fieldlength=128
     -p insertstart=750000000 -p insertcount=250000000
+    -p cassandra.coreconnections=14 -p cassandra.maxconnections=14
     -p cassandra.username=cassandra -p cassandra.password=cassandra
 
 stress_cmd: [
-    "bin/ycsb run cassandra-cql -P workloads/workloada -threads 128 -p recordcount=1000000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=2140000000 -p cassandra.username=cassandra -p cassandra.password=cassandra",
-    "bin/ycsb run cassandra-cql -P workloads/workloada -threads 128 -p recordcount=1000000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=2140000000 -p cassandra.username=cassandra -p cassandra.password=cassandra",
-    "bin/ycsb run cassandra-cql -P workloads/workloada -threads 128 -p recordcount=1000000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=2140000000 -p cassandra.username=cassandra -p cassandra.password=cassandra",
-    "bin/ycsb run cassandra-cql -P workloads/workloada -threads 128 -p recordcount=1000000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=2140000000 -p cassandra.username=cassandra -p cassandra.password=cassandra",
-    "bin/ycsb run cassandra-cql -P workloads/workloada -threads 128 -p recordcount=1000000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=2140000000 -p cassandra.username=cassandra -p cassandra.password=cassandra"
+    "bin/ycsb run cassandra-cql -P workloads/workloada -threads 84 -p recordcount=1000000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=500000000 -p cassandra.coreconnections=14 -p cassandra.maxconnections=14 -p cassandra.username=cassandra -p cassandra.password=cassandra",
+    "bin/ycsb run cassandra-cql -P workloads/workloada -threads 84 -p recordcount=1000000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=500000000 -p cassandra.coreconnections=14 -p cassandra.maxconnections=14 -p cassandra.username=cassandra -p cassandra.password=cassandra",
+    "bin/ycsb run cassandra-cql -P workloads/workloada -threads 84 -p recordcount=1000000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=500000000 -p cassandra.coreconnections=14 -p cassandra.maxconnections=14 -p cassandra.username=cassandra -p cassandra.password=cassandra",
+    "bin/ycsb run cassandra-cql -P workloads/workloada -threads 84 -p recordcount=1000000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=500000000 -p cassandra.coreconnections=14 -p cassandra.maxconnections=14 -p cassandra.username=cassandra -p cassandra.password=cassandra",
 ]
 
 round_robin: true
 
 n_db_nodes: 3
-n_loaders: 5
+n_loaders: 4
 n_monitor_nodes: 1
 
 instance_type_db: 'i3.4xlarge'
