@@ -682,8 +682,11 @@ class SCTConfiguration(dict):
              help=""),
         dict(name="pre_create_schema", env="SCT_PRE_CREATE_SCHEMA", type=boolean,
              help=""),
-        dict(name="pre_create_keyspace", env="SCT_PRE_CREATE_KEYSPACE", type=str,
+        dict(name="pre_create_keyspace", env="SCT_PRE_CREATE_KEYSPACE", type=str_or_list,
              help="Command to create keysapce to be pre-create before running workload"),
+
+        dict(name="post_prepare_cql_cmds", env="SCT_POST_PREPARE_CQL_CMDS", type=str_or_list,
+             help="CQL Commands to run after prepare stage finished (relevant only to longevity_test.py)"),
 
         dict(name="compaction_strategy", env="SCT_COMPACTION_STRATEGY", type=str,
              help="Choose a specific compaction strategy to pre-create schema with."),
