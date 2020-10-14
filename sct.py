@@ -303,6 +303,9 @@ def list_ami_branch(region, version):
     def get_tags(ami):
         return {i['Key']: i['Value'] for i in ami.tags}
 
+    if ":" not in version:
+        version += ":all"
+
     amis = get_branched_ami(version, region_name=region)
     tbl = PrettyTable(["Name", "ImageId", "CreationDate", "BuildId", "Test Status"])
     tbl.align = "l"
