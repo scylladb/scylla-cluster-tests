@@ -325,8 +325,8 @@ class UpgradeTest(FillDatabaseData):
 
         def wait_for_node_to_finish():
             try:
-                result = node.remoter.run(
-                    "sudo find /var/lib/scylla/data/system -type f ! -path '*snapshots*' | xargs -I{} basename {}")
+                result = node.remoter.sudo(
+                    r"find /var/lib/scylla/data/system -type f ! -path '*snapshots*' -printf %f\\n")
                 all_sstable_files = result.stdout.splitlines()
 
                 sstable_version_regex = re.compile(r'(\w+)-\d+-(.+)\.(db|txt|sha1|crc32)')
