@@ -1191,7 +1191,7 @@ def get_branched_ami(ami_version, region_name):
     :param region_name: the region to look AMIs in
     :return: list of ec2.images
     """
-    branch, build_id = ami_version.split(':')
+    branch, build_id = ami_version.split(':', 1)
     ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
 
     LOGGER.info("Looking for AMI match [%s]", ami_version)
