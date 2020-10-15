@@ -264,6 +264,13 @@ class AwsRegion:
                         "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow  Prometheus for ALL'}]
                     },
                     {
+                        "FromPort": 9093,
+                        "ToPort": 9093,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow Prometheus Alert Manager For All'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow Prometheus Alert Manager For All'}]
+                    },
+                    {
                         "FromPort": 9180,
                         "ToPort": 9180,
                         "IpProtocol": "tcp",
