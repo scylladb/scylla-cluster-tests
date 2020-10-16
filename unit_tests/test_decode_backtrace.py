@@ -11,20 +11,16 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import unittest
-import tempfile
-import logging
-import shutil
 import os
 import json
 import queue
+import unittest
 
 from sdcm.cluster import Setup
-from sdcm.sct_events.events_device import start_events_device, stop_events_device
-from sdcm.sct_events.events_processes import EVENTS_PROCESSES
 
 from unit_tests.dummy_remote import DummyRemote
 from unit_tests.test_cluster import DummyNode
+from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
 class DecodeDummyNode(DummyNode):  # pylint: disable=abstract-method
@@ -36,16 +32,10 @@ class DecodeDummyNode(DummyNode):  # pylint: disable=abstract-method
         return "scylla_debug_info_file"
 
 
-logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
-
-
-class TestDecodeBactraces(unittest.TestCase):
-
+class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
     @classmethod
     def setUpClass(cls):
-        cls.temp_dir = tempfile.mkdtemp()
-        start_events_device(cls.temp_dir)
-
+        cls.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
         cls.node = DecodeDummyNode(name='test_node', parent_cluster=None,
                                    base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
         cls.node.remoter = DummyRemote()
@@ -56,8 +46,7 @@ class TestDecodeBactraces(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        stop_events_device()
-        shutil.rmtree(cls.temp_dir)
+        cls.teardown_events_processes()
 
     def setUp(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system.log')
@@ -72,11 +61,10 @@ class TestDecodeBactraces(unittest.TestCase):
         self.monitor_node.stop_task_threads()
         self.monitor_node.wait_till_tasks_threads_are_stopped()
 
-        events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
-
         events = []
-        for line in events_file.readlines():
-            events.append(json.loads(line))
+        with self.get_raw_events_log().open() as events_file:
+            for line in events_file.readlines():
+                events.append(json.loads(line))
 
         for event in events:
             if event.get('raw_backtrace'):
@@ -94,11 +82,10 @@ class TestDecodeBactraces(unittest.TestCase):
         self.monitor_node.stop_task_threads()
         self.monitor_node.wait_till_tasks_threads_are_stopped()
 
-        events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
-
         events = []
-        for line in events_file.readlines():
-            events.append(json.loads(line))
+        with self.get_raw_events_log().open() as events_file:
+            for line in events_file.readlines():
+                events.append(json.loads(line))
 
         for event in events:
             if event.get('backtrace') and event.get('raw_backtrace'):
@@ -119,10 +106,10 @@ class TestDecodeBactraces(unittest.TestCase):
         self.monitor_node.stop_task_threads()
         self.monitor_node.wait_till_tasks_threads_are_stopped()
 
-        events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
         events = []
-        for line in events_file.readlines():
-            events.append(json.loads(line))
+        with self.get_raw_events_log().open() as events_file:
+            for line in events_file.readlines():
+                events.append(json.loads(line))
 
         for event in events:
             if event.get('backtrace') and event.get('raw_backtrace'):
@@ -143,10 +130,10 @@ class TestDecodeBactraces(unittest.TestCase):
         self.monitor_node.stop_task_threads()
         self.monitor_node.wait_till_tasks_threads_are_stopped()
 
-        events_file = open(EVENTS_PROCESSES['MainDevice'].raw_events_filename, 'r')
         events = []
-        for line in events_file.readlines():
-            events.append(json.loads(line))
+        with self.get_raw_events_log().open() as events_file:
+            for line in events_file.readlines():
+                events.append(json.loads(line))
 
         for event in events:
             if event.get('backtrace') and event.get('raw_backtrace'):

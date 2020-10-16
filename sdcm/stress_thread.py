@@ -207,8 +207,12 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
             except Exception as exc:  # pylint: disable=broad-except
                 errors_str = format_stress_cmd_error(exc)
 
-                event_type = 'failure' if self.stop_test_on_failure else 'error'
-                event_severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR
+                if self.stop_test_on_failure:
+                    event_type = "failure"
+                    event_severity = Severity.CRITICAL
+                else:
+                    event_type = "error"
+                    event_severity = Severity.ERROR
 
                 CassandraStressEvent(type=event_type, node=str(node), stress_cmd=stress_cmd,
                                      log_file_name=log_file_name, severity=event_severity,

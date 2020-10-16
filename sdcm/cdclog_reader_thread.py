@@ -78,15 +78,15 @@ class CDCLogReaderThread(DockerBasedStressThread):
                                 log_file=log_file_name,
                                 verbose=True)
             if not result.ok:
-                CDCReaderStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
+                CDCReaderStressEvent(type="error", node=str(loader), stress_cmd=self.stress_cmd,
                                      severity=Severity.ERROR,
                                      errors=result.stderr.split("\n"))
 
             return result
         except Exception as exc:  # pylint: disable=broad-except
             errors_str = format_stress_cmd_error(exc)
-            CDCReaderStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
-                                 severity=Severity.ERROR,
+            CDCReaderStressEvent(type="failure", node=str(loader), stress_cmd=self.stress_cmd,
+                                 severity=Severity.CRITICAL,
                                  errors=errors_str)
         finally:
             CDCReaderStressEvent('finish', node=loader, stress_cmd=self.stress_cmd)

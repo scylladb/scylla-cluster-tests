@@ -24,8 +24,9 @@ from sdcm import mgmt
 from sdcm.sct_events.group_common_events import ignore_no_space_errors
 from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus, TaskStatus, ScyllaManagerError, ScyllaManagerTool, \
     SCYLLA_MANAGER_AGENT_YAML_PATH
-from sdcm.nemesis import MgmtRepair, DbEventsFilter
-from sdcm.sct_events import InfoEvent
+from sdcm.nemesis import MgmtRepair
+from sdcm.sct_events.system import InfoEvent
+from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
 from sdcm.tester import ClusterTester
 

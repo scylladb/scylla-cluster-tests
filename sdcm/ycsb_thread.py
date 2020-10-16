@@ -260,7 +260,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             except Exception as exc:  # pylint: disable=broad-except
                 errors_str = format_stress_cmd_error(exc)
                 YcsbStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
-                                log_file_name=log_file_name, severity=Severity.ERROR,
+                                log_file_name=log_file_name, severity=Severity.CRITICAL,
                                 errors=[errors_str])
                 raise
             finally:

@@ -1,8 +1,22 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
+import time
 import socket
 import logging
-import threading
-import time
 import datetime
+import threading
+from typing import Optional
 from http.server import HTTPServer
 from socketserver import ThreadingMixIn
 
@@ -10,7 +24,6 @@ import requests
 import prometheus_client
 
 from sdcm.utils.decorators import retrying, log_run_info
-from sdcm.sct_events import subscribe_events
 from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
 
 
@@ -199,7 +212,11 @@ class PrometheusAlertManagerListener(threading.Thread):
             if delta > 0:
                 time.sleep(int(delta))
 
-    def silence(self, alert_name: str, duration: int = None, start: datetime.datetime = None, end: datetime.datetime = None) -> str:
+    def silence(self,
+                alert_name: str,
+                duration: Optional[int] = None,
+                start: Optional[datetime.datetime] = None,
+                end: Optional[datetime.datetime] = None) -> str:
         """
         Silence an alert for a duration of time
 
@@ -247,8 +264,12 @@ class PrometheusAlertManagerListener(threading.Thread):
 
 
 class AlertSilencer:
-    def __init__(self, alert_manager: PrometheusAlertManagerListener, alert_name: str, duration: int = None,  # pylint: disable=too-many-arguments
-                 start: datetime.datetime = None, end: datetime.datetime = None):
+    def __init__(self,
+                 alert_manager: PrometheusAlertManagerListener,
+                 alert_name: str,
+                 duration: Optional[int] = None,
+                 start: Optional[datetime.datetime] = None,
+                 end: Optional[datetime.datetime] = None):
         self.alert_manager = alert_manager
         self.alert_name = alert_name
         self.duration = duration or 86400  # 24h
@@ -261,31 +282,3 @@ class AlertSilencer:
 
     def __exit__(self, *args):
         self.alert_manager.delete_silence(self.silence_id)
-
-# This is an example of how we'll send info into Prometheus,
-# Currently it's not in use, since the data we want to show, doesn't fit Prometheus model,
-# we are using the GrafanaAnnotator
-
-
-class PrometheusDumper(threading.Thread):
-    def __init__(self):
-        self.stop_event = threading.Event()
-        super().__init__(daemon=True)
-
-    def run(self):
-        events_gauge = nemesis_metrics_obj().create_gauge('sct_events_gauge',
-                                                          'Gauge for sct events',
-                                                          ['event_type', 'type', 'severity', 'node'])
-
-        for event_type, message_data in subscribe_events(stop_event=self.stop_event):
-            events_gauge.labels(event_type,  # pylint: disable=no-member
-                                getattr(message_data, 'type', ''),
-                                message_data.severity,
-                                getattr(message_data, 'node', '')).set(message_data.timestamp)
-
-    def terminate(self):
-        self.stop_event.set()
-
-    def stop(self, timeout: float = None):
-        self.stop_event.set()
-        self.join(timeout)

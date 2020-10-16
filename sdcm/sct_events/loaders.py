@@ -11,13 +11,13 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import json
 import time
 import logging
 
 import dateutil.parser
 
 from sdcm.sct_events.base import SctEvent, Severity
-from sdcm.sct_events.json import json
 from sdcm.sct_events.database import DatabaseLogEvent
 
 

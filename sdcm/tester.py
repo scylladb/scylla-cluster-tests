@@ -57,11 +57,11 @@ from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_events import get_events_grouped_by_category
 from sdcm.sct_events.base import Severity
+from sdcm.sct_events.setup import start_events_device, stop_events_device
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEvent
 from sdcm.sct_events.database import FullScanEvent
-from sdcm.sct_events.events_device import start_events_device, stop_events_device, get_logger_event_summary
+from sdcm.sct_events.file_logger import get_events_grouped_by_category, get_logger_event_summary
 from sdcm.sct_events.events_analyzer import stop_events_analyzer
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
@@ -205,6 +205,7 @@ signal.signal(signal.SIGUSR2, critical_failure_handler)
 class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     log = None
     localhost = None
+    events_processes_registry = None
     monitors: BaseMonitorSet
     loaders: BaseLoaderSet
     db_cluster: BaseScyllaCluster
@@ -296,7 +297,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
                                           user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
         self.alternator = alternator.api.Alternator(sct_params=self.params)
-        start_events_device(self.logdir)
+        start_events_device(log_dir=self.logdir, _registry=self.events_processes_registry)
         time.sleep(0.5)
         InfoEvent('TEST_START test_id=%s' % Setup.test_id())
 
@@ -409,9 +410,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def update_certificates():
         update_certificates()
 
-    @staticmethod
-    def get_event_summary() -> dict:
-        return get_logger_event_summary()
+    def get_event_summary(self) -> dict:
+        return get_logger_event_summary(_registry=self.events_processes_registry)
 
     def get_test_status(self) -> str:
         summary = self.get_event_summary()
@@ -2012,7 +2012,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def _get_test_result_event(self) -> TestResultEvent:
         return TestResultEvent(
             test_status=self.get_test_status(),
-            events=get_events_grouped_by_category(limit=1))
+            events=get_events_grouped_by_category(limit=1, _registry=self.events_processes_registry))
 
     @staticmethod
     def _remove_errors_from_unittest_results(result):
@@ -2038,7 +2038,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @silence()
     def stop_event_analyzer(self):  # pylint: disable=no-self-use
-        stop_events_analyzer()
+        stop_events_analyzer(_registry=self.events_processes_registry)
 
     @silence()
     def stop_timeout_thread(self):
@@ -2056,14 +2056,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @silence()
     def stop_event_device(self):  # pylint: disable=no-self-use
-        stop_events_device()
+        stop_events_device(_registry=self.events_processes_registry)
 
     @silence()
     def update_test_with_errors(self):
         coredumps = []
         if self.db_cluster:
             coredumps = self.db_cluster.coredumps
-        test_events = get_events_grouped_by_category()
+        test_events = get_events_grouped_by_category(_registry=self.events_processes_registry)
         self.update_test_details(
             errors=test_events['ERROR'] + test_events['CRITICAL'],
             coredumps=coredumps)
@@ -2518,7 +2518,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 "build_url": os.environ.get("BUILD_URL"),
                 "end_time": format_timestamp(time.time()),
                 "events_summary": self.get_event_summary(),
-                "last_events": get_events_grouped_by_category(100),
+                "last_events": get_events_grouped_by_category(limit=100, _registry=self.events_processes_registry),
                 "nodes": [],
                 "number_of_db_nodes": self.params.get('n_db_nodes'),
                 "region_name": region_name,

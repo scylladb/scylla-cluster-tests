@@ -9,7 +9,7 @@ import requests
 
 from sdcm.prometheus import start_metrics_server, nemesis_metrics_obj
 from sdcm.remote import RemoteCmdRunnerBase
-from sdcm.sct_events.events_device import start_events_device, stop_events_device
+from sdcm.sct_events.setup import start_events_device, stop_events_device
 
 from sdcm.ec2_client import EC2Client
 from sdcm.stress_thread import CassandraStressThread, CassandraStressEventsPublisher

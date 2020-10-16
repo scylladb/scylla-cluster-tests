@@ -13,25 +13,25 @@
 
 import re
 import time
-from typing import Optional, Type, List
-from contextlib import contextmanager, ExitStack
+import uuid
+from typing import Optional, Type
 
-from sdcm.sct_events.base import EventType, SctEvent, Severity
+from sdcm.sct_events.base import SctEvent, Severity
 from sdcm.sct_events.system import SystemEvent
 
 
 class BaseFilter(SystemEvent):
     def __init__(self):
         super().__init__()
-        self.id = id(self)  # pylint: disable=invalid-name
+        self.uuid = str(uuid.uuid4())
         self.clear_filter = False
         self.expire_time = None
         self.publish()
 
     def __eq__(self, other):
-        if not isinstance(other, self.__class__):
+        if not isinstance(other, type(self)):
             return False
-        return self.id == other.id
+        return self.uuid == other.uuid
 
     def cancel_filter(self):
         self.clear_filter = True
@@ -76,7 +76,9 @@ class DbEventsFilter(BaseFilter):
 
 
 class EventsFilter(BaseFilter):
-    def __init__(self, event_class: Optional[Type[EventType]] = None, regex: Optional[str] = None,
+    def __init__(self,
+                 event_class: Optional[Type[SctEvent]] = None,
+                 regex: Optional[str] = None,
                  extra_time_to_expiration: Optional[int] = None):
         """
         A filter used to stop events to being raised in `subscribe_events()` calls
@@ -96,13 +98,15 @@ class EventsFilter(BaseFilter):
         """
 
         assert event_class or regex, "Should call with event_class or regex, or both"
+
         if event_class:
             assert issubclass(event_class, SctEvent), "event_class should be a class inherits from SctEvent"
-            self.event_class = str(event_class.__name__)
+            self.event_class = event_class.__name__
         else:
             self.event_class = event_class
         self.regex = regex
         self.extra_time_to_expiration = extra_time_to_expiration
+
         super().__init__()
 
     def cancel_filter(self):
@@ -111,7 +115,7 @@ class EventsFilter(BaseFilter):
         super().cancel_filter()
 
     def eval_filter(self, event):
-        is_class_matching = self.event_class and str(event.__class__.__name__) == self.event_class
+        is_class_matching = self.event_class and type(event).__name__ == self.event_class
         is_regex_matching = self.regex and re.match(self.regex, str(event), re.MULTILINE | re.DOTALL) is not None
 
         result = True
@@ -124,7 +128,7 @@ class EventsFilter(BaseFilter):
 
 class EventsSeverityChangerFilter(EventsFilter):
     def __init__(self,
-                 event_class: Optional[Type[EventType]] = None,
+                 event_class: Optional[Type[SctEvent]] = None,
                  regex: Optional[str] = None,
                  extra_time_to_expiration: Optional[int] = None,
                  severity: Optional[Severity] = None):
@@ -155,11 +159,3 @@ class EventsSeverityChangerFilter(EventsFilter):
         if should_change and self.severity:
             event.severity = self.severity
         return False
-
-
-@contextmanager
-def apply_log_filters(*event_filters_list: List[BaseFilter]):
-    with ExitStack() as stack:
-        for event_filter in event_filters_list:
-            stack.enter_context(event_filter)  # pylint: disable=no-member
-        yield

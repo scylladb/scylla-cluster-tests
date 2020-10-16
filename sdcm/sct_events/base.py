@@ -12,66 +12,82 @@
 # Copyright (c) 2020 ScyllaDB
 
 import enum
+import json
 import time
 import logging
 import datetime
-from typing import TypeVar, Generic
+from typing import Optional
 
-from sdcm.sct_events.json import json
-from sdcm.sct_events.events_processes import EVENTS_PROCESSES
+from sdcm.sct_events.events_device import get_events_main_device
+from sdcm.sct_events.events_processes import EventsProcessesRegistry
 
 
 LOGGER = logging.getLogger(__name__)
 
 
 class Severity(enum.Enum):
+    UNKNOWN = 0
     NORMAL = 1
     WARNING = 2
     ERROR = 3
     CRITICAL = 4
 
 
-EventType = TypeVar('EventType', bound='SctEvent')
+class SctEvent:
+    _registry: Optional[EventsProcessesRegistry] = None
 
+    severity = Severity.NORMAL
+    type = None
+    subtype = None
 
-class SctEvent(Generic[EventType]):
     def __init__(self):
         self.timestamp = time.time()
-        self.severity = getattr(self, 'severity', Severity.NORMAL)
+
+        # Populate __dict__ with default values.
+        self.severity = self.severity
+        self.type = self.type
+        self.subtype = self.subtype
 
     @property
-    def formatted_timestamp(self):
+    def formatted_timestamp(self) -> str:
         try:
             return datetime.datetime.fromtimestamp(self.timestamp).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
         except ValueError:
-            LOGGER.exception("failed to format timestamp:[%d]", self.timestamp)
-            return '<UnknownTimestamp>'
+            LOGGER.exception("Failed to format a timestamp: %d", self.timestamp)
+            return "0000-00-00 <UnknownTimestamp>"
 
-    def publish(self, guaranteed=True):
-        if guaranteed:
-            return EVENTS_PROCESSES['MainDevice'].publish_event_guaranteed(self)
-        return EVENTS_PROCESSES['MainDevice'].publish_event(self)
+    def publish(self) -> None:
+        get_events_main_device(_registry=self._registry).publish_event(self)
 
-    def publish_or_dump(self, default_logger=None):
-        if 'MainDevice' in EVENTS_PROCESSES:
-            if EVENTS_PROCESSES['MainDevice'].is_alive():
+    def publish_or_dump(self, default_logger: Optional[logging.Logger] = None) -> None:
+        if proc := get_events_main_device(_registry=self._registry):
+            if proc.is_alive():
                 self.publish()
             else:
-                EVENTS_PROCESSES['EVENTS_FILE_LOGGER'].dump_event_into_files(self)
-            return
-        if default_logger:
+                # pylint: disable=import-outside-toplevel; to avoid cyclic imports
+                from sdcm.sct_events.file_logger import get_events_logger
+                get_events_logger(_registry=self._registry).write_event(self)
+        elif default_logger:
             default_logger.error(str(self))
 
     def __str__(self):
-        return "({} {})".format(self.__class__.__name__, self.severity)
+        return f"({type(self).__name__} {self.severity})"
 
-    def to_json(self):
-        return json.dumps(self.__dict__)
+    def to_json(self) -> str:
+        return json.dumps({"__class__": type(self).__name__, **self.__dict__})
 
     def __eq__(self, other):
-        if not isinstance(other, self.__class__):
+        if not isinstance(other, type(self)):
             return False
         return self.__dict__ == other.__dict__
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
 
-__all__ = ("Severity", "EventType", "SctEvent", )
+        # Remove non-picklable stuff.
+        state.pop("_registry", None)
+
+        return state
+
+
+__all__ = ("Severity", "SctEvent", )
