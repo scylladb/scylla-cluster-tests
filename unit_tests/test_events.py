@@ -114,13 +114,28 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         except ZeroDivisionError:
             _full_traceback = traceback.format_exc()
 
-        str(DisruptionEvent(type='end', name="ChaosMonkeyLimited", status=False, error=str(Exception("long one")),
-                            full_traceback=_full_traceback, duration=20, start=1, end=2, node='test'))
-
-        str(DisruptionEvent(type='end', name="ChaosMonkeyLimited", status=True, duration=20, start=1, end=2,
+        str(DisruptionEvent(type="ChaosMonkeyLimited",
+                            subtype='end',
+                            status=False,
+                            error=str(Exception("long one")),
+                            full_traceback=_full_traceback,
+                            duration=20,
+                            start=1,
+                            end=2,
                             node='test'))
 
-        print(str(DisruptionEvent(type='start', name="ChaosMonkeyLimited", status=True, node='test')))
+        str(DisruptionEvent(type="ChaosMonkeyLimited",
+                            subtype='end',
+                            status=True,
+                            duration=20,
+                            start=1,
+                            end=2,
+                            node='test'))
+
+        print(str(DisruptionEvent(type="ChaosMonkeyLimited",
+                                  subtype='start',
+                                  status=True,
+                                  node='test')))
 
     @staticmethod
     def test_test_framework_event():
