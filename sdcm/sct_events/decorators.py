@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
 from functools import wraps
 from traceback import format_exc
 
@@ -19,21 +18,15 @@ from sdcm.sct_events.system import ThreadFailedEvent
 
 
 def raise_event_on_failure(func):
-    """
-    Decorate a function that is running inside a thread,
-    when exception is raised in this function,
-    will raise an Error severity event
-    """
+    """Convert any exception to a ThreadFailedEvent."""
+
     @wraps(func)
     def wrapper(*args, **kwargs):
-        result = None
-        _test_pid = os.getpid()
         try:
-            result = func(*args, **kwargs)
-        except Exception as ex:  # pylint: disable=broad-except
-            ThreadFailedEvent(message=str(ex), traceback=format_exc())
+            return func(*args, **kwargs)
+        except Exception as exc:  # pylint: disable=broad-except
+            ThreadFailedEvent(message=str(exc), traceback=format_exc())
 
-        return result
     return wrapper
 
 

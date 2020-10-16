@@ -144,7 +144,7 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
             except Exception as exc:  # pylint: disable=broad-except
                 errors_str = format_stress_cmd_error(exc)
                 NdbenchStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
-                                   log_file_name=log_file_name, severity=Severity.ERROR,
+                                   log_file_name=log_file_name, severity=Severity.CRITICAL,
                                    errors=errors_str)
             finally:
                 NdbenchStressEvent('finish', node=loader, stress_cmd=self.stress_cmd, log_file_name=log_file_name)

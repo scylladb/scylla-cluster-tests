@@ -14,15 +14,18 @@
 import sys
 import logging
 import threading
+from typing import Tuple, Any, Optional
+from functools import partial
 
 from sdcm.cluster import Setup
-from sdcm.sct_events import subscribe_events
 from sdcm.sct_events.base import Severity
-from sdcm.sct_events.events_processes import EVENTS_PROCESSES
-from sdcm.sct_events.decorators import raise_event_on_failure
+from sdcm.sct_events.events_processes import \
+    EVENTS_ANALYZER_ID, EventsProcessesRegistry, BaseEventsProcess,\
+    start_events_process, get_events_process, verbose_suppress
 
 
-LOADERS_EVENTS = {"CassandraStressEvent", "ScyllaBenchEvent", "YcsbStressEvent", "NdbenchStressEvent", }
+LOADERS_EVENTS = \
+    {"CassandraStressEvent", "ScyllaBenchEvent", "YcsbStressEvent", "NdbenchStressEvent", "CDCReaderStressEvent"}
 
 LOGGER = logging.getLogger(__name__)
 
@@ -31,50 +34,37 @@ class TestFailure(Exception):
     pass
 
 
-class EventsAnalyzer(threading.Thread):
-    def __init__(self):
-        self.stop_event = threading.Event()
-        super().__init__(daemon=True)
+class EventsAnalyzer(BaseEventsProcess[Tuple[str, Any], None], threading.Thread):
+    def run(self) -> None:
+        for event_tuple in self.inbound_events():
+            with verbose_suppress("EventsAnalyzer failed to process %s", event_tuple):
+                event_class, event = event_tuple  # try to unpack event from EventsDevice
 
-    @raise_event_on_failure
-    def run(self):
-        for event_class, message_data in subscribe_events(stop_event=self.stop_event):
-            try:
-                if event_class == 'TestResultEvent':
-                    # don't send kill test cause of those event, test is already done when those are sent out
+                # Don't kill the test cause of TestResultEvent: it was done already when this event was sent out.
+                if event_class == "TestResultEvent" or event.severity != Severity.CRITICAL:
                     continue
 
-                if event_class in LOADERS_EVENTS and message_data.type == 'failure':
-                    raise TestFailure(f"Stress command failed: {message_data}")
+                try:
+                    if event_class in LOADERS_EVENTS:
+                        raise TestFailure(f"Stress command failed: {event}")
+                    raise TestFailure(f"Got critical event: {event}")
+                except TestFailure:
+                    self.kill_test(sys.exc_info())
 
-                if message_data.severity == Severity.CRITICAL:
-                    raise TestFailure(f"Got critical event: {message_data}")
-
-            except TestFailure:
-                self.kill_test(sys.exc_info())
-
-            except Exception:  # pylint: disable=broad-except
-                LOGGER.exception("analyzer logic failed")
-
-    def terminate(self):
-        self.stop_event.set()
-
-    def stop(self, timeout: float = None):
-        self.stop_event.set()
-        self.join(timeout)
-
-    def kill_test(self, backtrace_with_reason):
+    def kill_test(self, backtrace_with_reason) -> None:
         self.terminate()
-        if not Setup.tester_obj():
-            LOGGER.error("no test was register using 'Setup.set_tester_obj()', not killing")
-            return
-        Setup.tester_obj().kill_test(backtrace_with_reason)
+        if tester := Setup.tester_obj():
+            tester.kill_test(backtrace_with_reason)
+        else:
+            LOGGER.error("No test was registered using `Setup.set_tester_obj()', do not kill")
 
 
-def stop_events_analyzer():
-    if analyzer := EVENTS_PROCESSES.get("EVENTS_ANALYZER"):
-        analyzer.terminate()
-        analyzer.join(timeout=60)
+start_events_analyzer = partial(start_events_process, EVENTS_ANALYZER_ID, EventsAnalyzer)
 
 
-__all__ = ("EventsAnalyzer", "TestFailure", "stop_events_analyzer", )
+def stop_events_analyzer(_registry: Optional[EventsProcessesRegistry] = None) -> None:
+    if analyzer := get_events_process(EVENTS_ANALYZER_ID, _registry=_registry):
+        analyzer.stop(timeout=60)
+
+
+__all__ = ("start_events_analyzer", "stop_events_analyzer", )

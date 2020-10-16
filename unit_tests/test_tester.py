@@ -1,14 +1,29 @@
-from time import sleep
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 import os
 import shutil
 import logging
+import tempfile
+import unittest.mock
+from time import sleep
 
 from sdcm.tester import ClusterTester, silence, TestResultEvent
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.log import MultilineMessagesFormatter, configure_logging
-from sdcm.utils.common import generate_random_string
-from sdcm.sct_events import get_events_grouped_by_category
 from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.sct_events.file_logger import get_events_grouped_by_category
+from sdcm.sct_events.events_processes import EventsProcessesRegistry
 
 
 class FakeSCTConfiguration(SCTConfiguration):
@@ -30,8 +45,11 @@ class ClusterTesterForTests(ClusterTester):
     _unittest_final_event = False
 
     def __init__(self, *args):
-        self.logdir = os.path.join('/tmp', generate_random_string(10))
-        os.mkdir(self.logdir)
+        self.logdir = tempfile.mkdtemp()
+        self.events_processes_registry = EventsProcessesRegistry(log_dir=self.logdir)
+        self.events_processes_registry_patcher = \
+            unittest.mock.patch("sdcm.sct_events.base.SctEvent._registry", self.events_processes_registry)
+        self.events_processes_registry_patcher.start()
         configure_logging(
             formatters={
                 'default': {
@@ -71,6 +89,7 @@ class ClusterTesterForTests(ClusterTester):
     def tearDown(self):
         super().tearDown()
         self._validate_results()
+        self.events_processes_registry_patcher.stop()
 
     def _validate_results(self):
         final_event = self.final_event
@@ -138,7 +157,7 @@ class ClusterTesterForTests(ClusterTester):
     def events(self) -> dict:
         if self._events:
             return self._events
-        self._events = get_events_grouped_by_category()
+        self._events = get_events_grouped_by_category(_registry=self.events_processes_registry)
         return self._events
 
 

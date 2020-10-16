@@ -22,10 +22,7 @@ class SystemEvent(SctEvent):
 
 
 class StartupTestEvent(SystemEvent):
-    def __init__(self):
-        super().__init__()
-
-        self.severity = Severity.NORMAL
+    severity = Severity.NORMAL
 
 
 class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
@@ -63,13 +60,13 @@ class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attribu
 
 
 class SpotTerminationEvent(SctEvent):
+    severity = Severity.CRITICAL
+
     def __init__(self, node, message):
         super().__init__()
 
-        self.severity = Severity.CRITICAL
         self.node = str(node)
         self.message = message
-
         self.publish()
 
     def __str__(self):
@@ -77,12 +74,12 @@ class SpotTerminationEvent(SctEvent):
 
 
 class InfoEvent(SctEvent):
+    severity = Severity.NORMAL
+
     def __init__(self, message):
         super().__init__()
 
         self.message = message
-        self.severity = Severity.NORMAL
-
         self.publish()
 
     def __str__(self):
@@ -90,13 +87,13 @@ class InfoEvent(SctEvent):
 
 
 class ThreadFailedEvent(SctEvent):
+    severity = Severity.ERROR
+
     def __init__(self, message, traceback):
         super().__init__()
 
         self.message = message
-        self.severity = Severity.ERROR
         self.traceback = str(traceback)
-
         self.publish_or_dump()
 
     def __str__(self):
@@ -104,6 +101,8 @@ class ThreadFailedEvent(SctEvent):
 
 
 class CoreDumpEvent(SctEvent):
+    severity = Severity.ERROR
+
     def __init__(self,
                  corefile_url,
                  download_instructions,
@@ -115,11 +114,9 @@ class CoreDumpEvent(SctEvent):
         self.corefile_url = corefile_url
         self.download_instructions = download_instructions
         self.backtrace = backtrace
-        self.severity = Severity.ERROR
         self.node = str(node)
         if timestamp is not None:
             self.timestamp = timestamp
-
         self.publish()
 
     def __str__(self):
@@ -163,11 +160,6 @@ class TestResultEvent(SctEvent, Exception):
         result += f'{self._ending}\n{self.test_status} :('
         return result
 
-    def __reduce__(self):
-        """Needed to be able to serialize and deserialize this event via pickle
-        """
-        return self.__class__, (self.test_status, self.events)
-
     def __eq__(self, other: 'TestResultEvent'):
         """Needed to be able to find this event in publish_event_guaranteed cycle
         """
@@ -202,7 +194,6 @@ class DisruptionEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
             self.error = error
             self.full_traceback = str(full_traceback)
         self.__dict__.update(kwargs)
-
         self.publish()
 
     def __str__(self):

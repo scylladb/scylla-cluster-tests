@@ -11,22 +11,22 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import threading
-import multiprocessing
-from typing import Union
-
-from sdcm.sct_events.events_processes import EVENTS_PROCESSES
+import enum
+import json
 
 
-StopEvent = Union[multiprocessing.Event, threading.Event]
+# monkey patch JSONEncoder make enums jsonable
+_SAVED_DEFAULT = json.JSONEncoder().default  # Save default method.
 
 
-def subscribe_events(stop_event: StopEvent):
-    return EVENTS_PROCESSES["MainDevice"].subscribe_events(stop_event=stop_event)
+def _new_default(self, obj):  # pylint: disable=unused-argument
+    if isinstance(obj, enum.Enum):
+        return obj.name  # Could also be obj.value
+    else:
+        return _SAVED_DEFAULT
 
 
-def get_events_grouped_by_category(limit=0) -> dict:
-    return EVENTS_PROCESSES['EVENTS_FILE_LOGGER'].get_events_by_category(limit)
+json.JSONEncoder.default = _new_default  # Set new default method.
 
 
-__all__ = ("StopEvent", "subscribe_events", "get_events_grouped_by_category", )
+__all__ = ()

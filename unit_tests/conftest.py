@@ -24,7 +24,7 @@ from sdcm.cluster import BaseNode
 from sdcm.prometheus import start_metrics_server
 from sdcm.utils.decorators import timeout
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.sct_events.events_device import start_events_device, stop_events_device
+from sdcm.sct_events.setup import start_events_device, stop_events_device
 
 from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
 

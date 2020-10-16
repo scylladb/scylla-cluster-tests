@@ -48,7 +48,7 @@ from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
 from paramiko import SSHException
 
 from sdcm.collectd import ScyllaCollectdSetup
-from sdcm.mgmt import ScyllaManagerError, update_config_file, SCYLLA_MANAGER_YAML_PATH, SCYLLA_MANAGER_AGENT_YAML_PATH
+from sdcm.mgmt import ScyllaManagerError, update_config_file, SCYLLA_MANAGER_YAML_PATH
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd
@@ -72,7 +72,7 @@ from sdcm.sct_events.base import Severity
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.sct_events.loaders import ScyllaBenchEvent
 from sdcm.sct_events.database import DatabaseLogEvent, ClusterHealthValidatorEvent
-from sdcm.sct_events.monitors import set_grafana_url
+from sdcm.sct_events.grafana import set_grafana_url
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT

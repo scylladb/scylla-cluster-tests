@@ -12,10 +12,9 @@
 # Copyright (c) 2020 ScyllaDB
 
 import re
+import json
 
-from sdcm.sct_events.json import json
 from sdcm.sct_events.base import SctEvent, Severity
-from sdcm.sct_events.events_processes import EVENTS_PROCESSES
 
 
 class PrometheusAlertManagerEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
@@ -100,11 +99,3 @@ class PrometheusAlertManagerEvent(SctEvent):  # pylint: disable=too-many-instanc
             if value != other_value:
                 return False
         return True
-
-
-def set_grafana_url(url):
-    EVENTS_PROCESSES['EVENTS_GRAFANA_AGGRAGATOR'].set_grafana_url(url)
-
-
-def store_grafana_annotation(annotate_data):
-    EVENTS_PROCESSES['EVENTS_GRAFANA_AGGRAGATOR'].store_annotation(annotate_data=annotate_data)
