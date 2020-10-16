@@ -22,6 +22,7 @@ from parameterized import parameterized
 
 from sdcm.remote import RemoteLibSSH2CmdRunner, RemoteCmdRunner, LocalCmdRunner, RetryableNetworkException, \
     SSHConnectTimeoutError, shell_script_cmd
+from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.remote.base import CommandRunner, Result
 from sdcm.remote.remote_file import remote_file
 
@@ -41,8 +42,9 @@ for ip in ['::1', '127.0.0.1']:
                 for new_session_value in [False, True]:
                     for retry_value in [1, 2]:
                         for timeout_value in [None, 5]:
-                            ALL_COMMANDS_WITH_ALL_OPTIONS.append(
-                                (ip, cmd, verbose_value, ignore_status_value, new_session_value, retry_value, timeout_value))
+                            for remoter_type in [RemoteCmdRunner, RemoteLibSSH2CmdRunner, KubernetesCmdRunner]:
+                                ALL_COMMANDS_WITH_ALL_OPTIONS.append(
+                                    (remoter_type, ip, cmd, verbose_value, ignore_status_value, new_session_value, retry_value, timeout_value))
 
 
 class TestRemoteCmdRunners(unittest.TestCase):
@@ -58,7 +60,11 @@ class TestRemoteCmdRunners(unittest.TestCase):
 
     @staticmethod
     def _create_and_run_twice_in_same_thread(remoter_type, key_file, stmt, kwargs, paramiko_thread_results):
-        remoter = remoter_type(hostname='127.0.0.1', user=getpass.getuser(), key_file=key_file)
+        if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
+            remoter = remoter_type(hostname='127.0.0.1', user=getpass.getuser(), key_file=key_file)
+        else:
+            remoter = KubernetesCmdRunner(pod='sct-cluster-gce-minikube-0', container="scylla", namespace="scylla",
+                                          k8s_server_url='http://127.0.0.1:8001')
         try:
             result = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
@@ -73,7 +79,11 @@ class TestRemoteCmdRunners(unittest.TestCase):
 
     @staticmethod
     def _create_and_run_in_same_thread(remoter_type, host, key_file, stmt, kwargs, paramiko_thread_results):
-        remoter = remoter_type(hostname=host, user=getpass.getuser(), key_file=key_file)
+        if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
+            remoter = remoter_type(hostname=host, user=getpass.getuser(), key_file=key_file)
+        else:
+            remoter = KubernetesCmdRunner(pod='sct-cluster-gce-minikube-0', container="scylla", namespace="scylla",
+                                          k8s_server_url='http://127.0.0.1:8001')
         try:
             result = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
@@ -113,7 +123,8 @@ class TestRemoteCmdRunners(unittest.TestCase):
         elif isinstance(expected, SSHConnectTimeoutError):
             expected = object()
         if isinstance(expected, Exception):
-            expected = expected.result
+            if hasattr(expected, 'result'):
+                expected = expected.result
         for attr_name in fields_to_compare:
             expected_bucket[attr_name] = getattr(expected, attr_name, None)
         if isinstance(result, RetryableNetworkException):
@@ -121,7 +132,8 @@ class TestRemoteCmdRunners(unittest.TestCase):
         elif isinstance(result, SSHConnectTimeoutError):
             result = object()
         if isinstance(result, Exception):
-            result = result.result
+            if hasattr(result, 'result'):
+                result = result.result
         for attr_name in fields_to_compare:
             attr_value = getattr(result, attr_name, None)
             if attr_name in ['stderr'] and attr_value is not None and attr_value[:5] == 'bash:':
@@ -155,7 +167,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
     # @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
     @unittest.skip('To be ran manually')
     def test_run_in_mainthread(  # pylint: disable=too-many-arguments
-            self, host: str, stmt: str, verbose: bool, ignore_status: bool, new_session: bool, retry: int,
+            self, remoter_type, host: str, stmt: str, verbose: bool, ignore_status: bool, new_session: bool, retry: int,
             timeout: Union[float, None]):
         kwargs = {
             'verbose': verbose,
@@ -168,40 +180,29 @@ class TestRemoteCmdRunners(unittest.TestCase):
         except Exception as exc:  # pylint: disable=broad-except
             expected = exc
 
-        remoter = RemoteCmdRunner(
-            hostname=host, user=getpass.getuser(), key_file=self.key_file)
+        if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
+            remoter = remoter_type(hostname=host, user=getpass.getuser(), key_file=self.key_file)
+        else:
+            remoter = KubernetesCmdRunner(pod='sct-cluster-gce-minikube-0', container="scylla", namespace="scylla",
+                                          k8s_server_url='http://127.0.0.1:8001')
         try:
-            paramiko_result = remoter.run(stmt, **kwargs)
+            result = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
-            paramiko_result = exc
+            result = exc
         remoter._reconnect()
         try:
-            paramiko_result2 = remoter.run(stmt, **kwargs)
+            result2 = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
-            paramiko_result2 = exc
+            result2 = exc
         remoter.stop()
 
-        remoter = RemoteLibSSH2CmdRunner(
-            hostname='127.0.0.1', user=getpass.getuser(), key_file=self.key_file)
-        try:
-            lib2ssh_result = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
-            lib2ssh_result = exc
-        remoter._reconnect()
-        try:
-            lib2ssh_result2 = remoter.run(stmt, **kwargs)
-        except Exception as exc:  # pylint: disable=broad-except
-            lib2ssh_result2 = exc
-        remoter.stop()
-        self._compare_results(expected, paramiko_result, stmt=stmt, kwargs=kwargs)
-        self._compare_results(expected, paramiko_result2, stmt=stmt, kwargs=kwargs)
-        self._compare_results(expected, lib2ssh_result, stmt=stmt, kwargs=kwargs)
-        self._compare_results(expected, lib2ssh_result2, stmt=stmt, kwargs=kwargs)
+        self._compare_results(expected, result, stmt=stmt, kwargs=kwargs)
+        self._compare_results(expected, result2, stmt=stmt, kwargs=kwargs)
 
     # @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
     @unittest.skip('To be ran manually')
     def test_create_and_run_in_same_thread(  # pylint: disable=too-many-arguments,too-many-locals
-            self, host: str, stmt: str, verbose: bool, ignore_status: bool, new_session: bool,
+            self, remoter_type, host: str, stmt: str, verbose: bool, ignore_status: bool, new_session: bool,
             retry: int, timeout: Union[float, None]):
         kwargs = {
             'verbose': verbose,
@@ -219,26 +220,16 @@ class TestRemoteCmdRunners(unittest.TestCase):
         self._run_parallel(
             3,
             thread_body=self._create_and_run_in_same_thread,
-            args=(RemoteCmdRunner, host, self.key_file, stmt, kwargs, paramiko_thread_results),
-            kwargs={})
-
-        libssh2_thread_results = []
-        self._run_parallel(
-            3,
-            thread_body=self._create_and_run_in_same_thread,
-            args=(RemoteLibSSH2CmdRunner, host, self.key_file, stmt, kwargs, libssh2_thread_results),
+            args=(remoter_type, host, self.key_file, stmt, kwargs, paramiko_thread_results),
             kwargs={})
 
         for paramiko_result in paramiko_thread_results:
             self._compare_results(expected, paramiko_result, stmt=stmt, kwargs=kwargs)
 
-        for libssh2_result in libssh2_thread_results:
-            self._compare_results(expected, libssh2_result, stmt=stmt, kwargs=kwargs)
-
     # @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
     @unittest.skip('To be ran manually')
     def test_create_and_run_in_separate_thread(  # pylint: disable=too-many-arguments
-            self, host: str, stmt: str, verbose: bool, ignore_status: bool,
+            self, remoter_type, host: str, stmt: str, verbose: bool, ignore_status: bool,
             new_session: bool, retry: int, timeout: Union[float, None]):
         kwargs = {
             'verbose': verbose,
@@ -254,7 +245,11 @@ class TestRemoteCmdRunners(unittest.TestCase):
 
         # Paramiko fails too often when it is invoked like that, that is why it is not in the test
 
-        remoter = RemoteLibSSH2CmdRunner(hostname=host, user=getpass.getuser(), key_file=self.key_file)
+        if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
+            remoter = remoter_type(hostname=host, user=getpass.getuser(), key_file=self.key_file)
+        else:
+            remoter = KubernetesCmdRunner(pod='sct-cluster-gce-minikube-0', container="scylla", namespace="scylla",
+                                          k8s_server_url='http://127.0.0.1:8001')
         libssh2_thread_results = []
 
         self._run_parallel(
@@ -269,7 +264,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
 
     # @parameterized.expand([
     #     (
-    #         RemoteLibSSH2CmdRunner,
+    #         KubernetesCmdRunner,
     #         "/bin/bash -c \"printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     #         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     #         "AAA\\n%.0s' {1..100};\""
@@ -279,6 +274,12 @@ class TestRemoteCmdRunners(unittest.TestCase):
     #         "/bin/bash -c \"printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     #         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     #         "AA\\n%.0s' {1..100};\""
+    #     ),
+    #     (
+    #             KubernetesCmdRunner,
+    #             "/bin/bash -c \"printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    #             "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    #             "AA\\n%.0s' {1..100};\""
     #     )
     # ])
     @unittest.skip('To be ran manually')
@@ -306,16 +307,23 @@ class TestRemoteCmdRunners(unittest.TestCase):
             self.log.error(str(libssh2_result))
             self._compare_results(expected, libssh2_result, stmt=stmt, kwargs=kwargs)
 
-    @parameterized.expand([
-        (RemoteLibSSH2CmdRunner, "export | grep SSH_CONNECTION ; false", True),
-        (RemoteCmdRunner, "export | grep SSH_CONNECTION ; false", True),
-        (RemoteLibSSH2CmdRunner, "export | grep SSH_CONNECTION ; true", True),
-        (RemoteCmdRunner, "export | grep SSH_CONNECTION ; true", True),
-        (RemoteLibSSH2CmdRunner, "export | grep SSH_CONNECTION ; false", False),
-        (RemoteCmdRunner, "export | grep SSH_CONNECTION ; false", False),
-        (RemoteLibSSH2CmdRunner, "export | grep SSH_CONNECTION ; true", False),
-        (RemoteCmdRunner, "export | grep SSH_CONNECTION ; true", False)
-    ])
+    # @parameterized.expand([
+    #     (RemoteLibSSH2CmdRunner, "export | grep SSH_CONNECTION ; false", True),
+    #     (RemoteCmdRunner, "export | grep SSH_CONNECTION ; false", True),
+    #     (KubernetesCmdRunner, "export | grep SSH_CONNECTION ; false", True),
+    #
+    #     (RemoteLibSSH2CmdRunner, "export | grep SSH_CONNECTION ; true", True),
+    #     (RemoteCmdRunner, "export | grep SSH_CONNECTION ; true", True),
+    #     (KubernetesCmdRunner, "export | grep SSH_CONNECTION ; true", True),
+    #
+    #     (RemoteLibSSH2CmdRunner, "export | grep SSH_CONNECTION ; false", False),
+    #     (RemoteCmdRunner, "export | grep SSH_CONNECTION ; false", False),
+    #     (KubernetesCmdRunner, "export | grep SSH_CONNECTION ; false", False),
+    #
+    #     (RemoteLibSSH2CmdRunner, "export | grep SSH_CONNECTION ; true", False),
+    #     (RemoteCmdRunner, "export | grep SSH_CONNECTION ; true", False),
+    #     (KubernetesCmdRunner, "export | grep SSH_CONNECTION ; true", False)
+    # ])
     @unittest.skip('To be ran manually')
     def test_context_changing(self, remoter_type, stmt: str, change_context: bool):
         kwargs = {
