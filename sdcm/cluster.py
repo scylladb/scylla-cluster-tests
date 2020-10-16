@@ -2652,7 +2652,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     nodes_status[node_ip] = {'status': node_properties['state'], 'dc': dc}
 
         except Exception as ex:  # pylint: disable=broad-except
-            ClusterHealthValidatorEvent(type='warning', name='NodesStatus', status=Severity.WARNING,
+            ClusterHealthValidatorEvent(type='NodesStatus', subtype='warning', status=Severity.WARNING,
                                         node=self.name,
                                         message=f"Unable to get nodetool status from '{self.name}': {ex}")
         return nodes_status
@@ -3657,12 +3657,12 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             for node in self.nodes:
                 node.check_node_health()
         else:
-            ClusterHealthValidatorEvent(type='info', name='ClusterHealthCheck', status=Severity.NORMAL,
+            ClusterHealthValidatorEvent(type='ClusterHealthCheck', subtype='info', status=Severity.NORMAL,
                                         message='Test runs with parallel nemesis. Nodes health is disables')
 
         self.check_nodes_running_nemesis_count()
 
-        ClusterHealthValidatorEvent(type='done', name='ClusterHealthCheck', status=Severity.NORMAL,
+        ClusterHealthValidatorEvent(type='ClusterHealthCheck', subtype='done', status=Severity.NORMAL,
                                     message='Cluster health check finished')
 
     def check_nodes_running_nemesis_count(self):
@@ -3674,7 +3674,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         message = "; ".join(f"{node.ip_address} ({'seed' if node.is_seed else 'non-seed'}): {node.running_nemesis}"
                             for node in nodes_running_nemesis)
-        ClusterHealthValidatorEvent(type='warning', name='NodesNemesis', status=Severity.WARNING,
+        ClusterHealthValidatorEvent(type='NodesNemesis', subtype='warning', status=Severity.WARNING,
                                     message=f"There are more then expected nodes running nemesis: {message}")
 
     @retrying(n=6, sleep_time=10, allowed_exceptions=(AssertionError,))

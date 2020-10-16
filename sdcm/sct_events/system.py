@@ -170,7 +170,7 @@ class TestResultEvent(SctEvent, Exception):
 class DisruptionEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
     def __init__(self,
                  type,
-                 name,
+                 subtype,
                  status,
                  start=None,
                  end=None,
@@ -181,8 +181,8 @@ class DisruptionEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
                  **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
         super().__init__()
 
-        self.name = name
         self.type = type
+        self.subtype = subtype
         self.start = start
         self.end = end
         self.duration = duration
@@ -198,6 +198,6 @@ class DisruptionEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
 
     def __str__(self):
         if self.severity == Severity.ERROR:
-            return "{0}: type={1.type} name={1.name} node={1.node} duration={1.duration} error={1.error}\n{1.full_traceback}".format(
+            return "{0}: type={1.type} subtype={1.subtype} node={1.node} duration={1.duration} error={1.error}\n{1.full_traceback}".format(
                 super().__str__(), self)
-        return "{0}: type={1.type} name={1.name} node={1.node} duration={1.duration}".format(super().__str__(), self)
+        return "{0}: type={1.type} subtype={1.subtype} node={1.node} duration={1.duration}".format(super().__str__(), self)

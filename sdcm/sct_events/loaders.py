@@ -66,11 +66,8 @@ class CassandraStressEvent(SctEvent):
 
     def __str__(self):
         if self.errors:
-            return "{0}: type={1.type} node={1.node}\n{2}".format(
-                super(CassandraStressEvent, self).__str__(), self, "\n".join(self.errors))
-
-        return "{0}: type={1.type} node={1.node}\nstress_cmd={1.stress_cmd}".format(
-            super(CassandraStressEvent, self).__str__(), self)
+            return "{0}: type={1.type} node={1.node}\n{2}".format(super().__str__(), self, "\n".join(self.errors))
+        return "{0}: type={1.type} node={1.node}\nstress_cmd={1.stress_cmd}".format(super().__str__(), self)
 
 
 class ScyllaBenchEvent(SctEvent):
@@ -89,10 +86,8 @@ class ScyllaBenchEvent(SctEvent):
     def __str__(self):
         if self.errors:
             return "{0}: type={1.type} node={1.node} stress_cmd={1.stress_cmd} error={2}".format(
-                super(ScyllaBenchEvent, self).__str__(), self, "\n".join(self.errors))
-
-        return "{0}: type={1.type} node={1.node} stress_cmd={1.stress_cmd}".format(
-            super(ScyllaBenchEvent, self).__str__(), self)
+                super().__str__(), self, "\n".join(self.errors))
+        return "{0}: type={1.type} node={1.node} stress_cmd={1.stress_cmd}".format(super().__str__(), self)
 
 
 class StressEvent(SctEvent):
@@ -109,7 +104,7 @@ class StressEvent(SctEvent):
         self.publish()
 
     def __str__(self):
-        fmt = f"{super(StressEvent, self).__str__()}: type={self.type} node={self.node}\nstress_cmd={self.stress_cmd}"
+        fmt = f"{super().__str__()}: type={self.type} node={self.node}\nstress_cmd={self.stress_cmd}"
         if self.errors:
             errors_str = '\n'.join(self.errors)
             return f"{fmt}\nerrors:\n\n{errors_str}"

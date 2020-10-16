@@ -173,7 +173,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not data:
             data = {}
         data['node'] = self.target_node
-        DisruptionEvent(name=disrupt, status=status, **data)
+        DisruptionEvent(type=disrupt, status=status, **data)
 
     def set_current_running_nemesis(self, node):
         node.running_nemesis = self.__class__.__name__
@@ -507,7 +507,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.current_disruption = label
         self.log.info(label)
         if report:
-            DisruptionEvent(type='start', name=self.get_disrupt_name(), status=True, node=str(current_node))
+            DisruptionEvent(type=self.get_disrupt_name(), subtype='start', status=True, node=str(current_node))
 
     def disrupt_destroy_data_then_repair(self):  # pylint: disable=invalid-name
         self._set_current_disruption('CorruptThenRepair %s' % self.target_node)
@@ -2572,7 +2572,7 @@ def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
             'end': 0,
             'duration': 0,
             'node': str(args[0].target_node),
-            'type': 'end',
+            'subtype': 'end',
         }
         # TODO: Temporary print. Will be removed later
         data_validation_prints(args=args)
@@ -2580,7 +2580,7 @@ def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
         try:
             result = method(*args, **kwargs)
         except UnsupportedNemesis as exp:
-            log_info.update({'type': 'skipped', 'skip_reason': str(exp)})
+            log_info.update({'subtype': 'skipped', 'skip_reason': str(exp)})
             logging.info("skipping %s", args[0].get_disrupt_name())
             logging.info("cause of: %s", str(exp))
             raise
@@ -2608,7 +2608,7 @@ def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
             del log_info['operation']
 
             args[0].update_stats(disrupt, status, log_info)
-            DisruptionEvent(name=disrupt, status=status, **log_info)
+            DisruptionEvent(type=disrupt, status=status, **log_info)
             args[0].cluster.check_cluster_health()
             num_nodes_after = len(args[0].cluster.nodes)
             if num_nodes_before != num_nodes_after:

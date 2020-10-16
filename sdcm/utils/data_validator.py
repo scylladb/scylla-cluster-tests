@@ -306,7 +306,7 @@ class LongevityDataValidator:
         if self._validate_not_updated_data:
             if not (self.view_name_for_not_updated_data and self.expected_data_table_name):
                 self._validate_not_updated_data = False
-                DataValidatorEvent(type='warning', name='DataValidator', status=Severity.WARNING,
+                DataValidatorEvent(type='DataValidator', subtype='warning', status=Severity.WARNING,
                                    message=f'Problem during copying expected data: view not found.'
                                    f'View name for not updated_data: {self.view_name_for_not_updated_data}; '
                                    f'Expected data table name {self.expected_data_table_name}. '
@@ -322,7 +322,7 @@ class LongevityDataValidator:
                                                         dest_table=self.expected_data_table_name,
                                                         copy_data=True):
                 self._validate_not_updated_data = False
-                DataValidatorEvent(type='error', name='DataValidator', status=Severity.ERROR,
+                DataValidatorEvent(type='DataValidator', subtype='error', status=Severity.ERROR,
                                    error=f'Problem during copying expected data from {self.view_name_for_not_updated_data} '
                                          f'to {self.expected_data_table_name}. '
                                          f'Data validation of not updated rows won\' be performed')
@@ -332,7 +332,7 @@ class LongevityDataValidator:
         if self._validate_updated_data:
             if not self.view_names_for_updated_data:
                 self._validate_updated_per_view = [False]
-                DataValidatorEvent(type='warning', name='DataValidator', status=Severity.WARNING,
+                DataValidatorEvent(type='DataValidator', subtype='warning', status=Severity.WARNING,
                                    message=f'Problem during copying expected data: view not found. '
                                            f'View names for updated data: {self.view_names_for_updated_data}. '
                                            f'Data validation of updated rows won\' be performed')
@@ -349,7 +349,7 @@ class LongevityDataValidator:
                                                             columns_list=self.base_table_partition_keys,
                                                             copy_data=True):
                     self._validate_updated_per_view.append(False)
-                    DataValidatorEvent(type='error', name='DataValidator', status=Severity.ERROR,
+                    DataValidatorEvent(type='DataValidator', subtype='error', status=Severity.ERROR,
                                        error=f'Problem during copying expected data from {src_view} '
                                              f'to {expected_data_table_name}. '
                                              f'Data validation of updated rows won\' be performed')
@@ -357,7 +357,7 @@ class LongevityDataValidator:
 
     def save_count_rows_for_deletion(self):
         if not self.view_name_for_deletion_data:
-            DataValidatorEvent(type='warning', name='DataValidator', status=Severity.WARNING,
+            DataValidatorEvent(type='DataValidator', subtype='warning', status=Severity.WARNING,
                                message=f'Problem during copying expected data: not found. '
                                f'View name for deletion data: {self.view_name_for_deletion_data}. '
                                f'Data validation of deleted rows won\' be performed')
@@ -398,7 +398,7 @@ class LongevityDataValidator:
             statement=f"SELECT * FROM {self.view_name_for_not_updated_data}",
             verbose=not during_nemesis)
         if not actual_result:
-            DataValidatorEvent(type='warning', name='ImmutableRowsValidator', status=Severity.WARNING,
+            DataValidatorEvent(type='ImmutableRowsValidator', subtype='warning', status=Severity.WARNING,
                                message=f"Can't validate immutable rows. "
                                f"Fetch all rows from {self.view_name_for_not_updated_data} failed. "
                                f"See error above in the sct.log")
@@ -409,7 +409,7 @@ class LongevityDataValidator:
             statement=f"SELECT * FROM {self.expected_data_table_name}",
             verbose=not during_nemesis)
         if not expected_result:
-            DataValidatorEvent(type='warning', name='ImmutableRowsValidator', status=Severity.WARNING,
+            DataValidatorEvent(type='ImmutableRowsValidator', subtype='warning', status=Severity.WARNING,
                                message=f"Can't validate immutable rows. "
                                f"Fetch all rows from {self.expected_data_table_name} failed. "
                                f"See error above in the sct.log")
@@ -418,7 +418,7 @@ class LongevityDataValidator:
         # Issue https://github.com/scylladb/scylla/issues/6181
         # Not fail the test if unexpected additional rows where found in actual result table
         if len(actual_result) > len(expected_result):
-            DataValidatorEvent(type='warning', name='ImmutableRowsValidator', status=Severity.WARNING,
+            DataValidatorEvent(type='ImmutableRowsValidator', subtype='warning', status=Severity.WARNING,
                                message=f'Actual dataset length {len(actual_result)} more '
                                        f'then expected dataset length: {len(expected_result)}. Issue #6181')
         else:
@@ -432,11 +432,11 @@ class LongevityDataValidator:
                         'One or more rows are not as expected, suspected LWT wrong update')
 
                 # raise info event in the end of test only
-                DataValidatorEvent(type='info', name='ImmutableRowsValidator', status=Severity.NORMAL,
+                DataValidatorEvent(type='ImmutableRowsValidator', subtype='info', status=Severity.NORMAL,
                                    message='Validation immutable rows finished successfully')
             else:
                 if len(actual_result) < len(expected_result):
-                    DataValidatorEvent(type='error', name='ImmutableRowsValidator', status=Severity.ERROR,
+                    DataValidatorEvent(type='ImmutableRowsValidator', subtype='error', status=Severity.ERROR,
                                        error=f'Verify immutable rows. One or more rows didn\'t find as expected, '
                                        f'suspected LWT wrong update. '
                                        f'Actual dataset length: {len(actual_result)}, '
@@ -486,7 +486,7 @@ class LongevityDataValidator:
             if not during_nemesis:
                 LOGGER.debug(f'Verify updated row. View {views_set[0]}')
             if not views_set[3]:
-                DataValidatorEvent(type='warning', name='UpdatedRowsValidator', status=Severity.WARNING,
+                DataValidatorEvent(type='UpdatedRowsValidator', subtype='warning', status=Severity.WARNING,
                                    message=f"Can't start validation for {views_set[0]}. "
                                    f"Copying expected data failed. See error above in the sct.log")
                 return
@@ -496,7 +496,7 @@ class LongevityDataValidator:
                 statement=f"SELECT {partition_keys} FROM {views_set[0]}",
                 verbose=not during_nemesis)
             if not before_update_rows:
-                DataValidatorEvent(type='warning', name='UpdatedRowsValidator', status=Severity.WARNING,
+                DataValidatorEvent(type='UpdatedRowsValidator', subtype='warning', status=Severity.WARNING,
                                    message=f"Can't validate updated rows. "
                                    f"Fetch all rows from {views_set[0]} failed. See error above in the sct.log")
                 return
@@ -506,7 +506,7 @@ class LongevityDataValidator:
                 statement=f"SELECT {partition_keys} FROM {views_set[1]}",
                 verbose=not during_nemesis)
             if not after_update_rows:
-                DataValidatorEvent(type='warning', name='UpdatedRowsValidator', status=Severity.WARNING,
+                DataValidatorEvent(type='UpdatedRowsValidator', subtype='warning', status=Severity.WARNING,
                                    message=f"Can't validate updated rows. "
                                    f"Fetch all rows from {views_set[1]} failed. See error above in the sct.log")
                 return
@@ -516,7 +516,7 @@ class LongevityDataValidator:
                 statement=f"SELECT {partition_keys} FROM {views_set[2]}",
                 verbose=not during_nemesis)
             if not expected_rows:
-                DataValidatorEvent(type='warning', name='UpdatedRowsValidator', status=Severity.WARNING,
+                DataValidatorEvent(type='UpdatedRowsValidator', subtype='warning', status=Severity.WARNING,
                                    message=f"Can't validate updated row. "
                                    f"Fetch all rows from {views_set[2]} failed. See error above in the sct.log")
                 return
@@ -524,7 +524,7 @@ class LongevityDataValidator:
             # Issue https://github.com/scylladb/scylla/issues/6181
             # Not fail the test if unexpected additional rows where found in actual result table
             if len(before_update_rows) + len(after_update_rows) > len(expected_rows):
-                DataValidatorEvent(type='warning', name='UpdatedRowsValidator', status=Severity.WARNING,
+                DataValidatorEvent(type='UpdatedRowsValidator', subtype='warning', status=Severity.WARNING,
                                    message=f'View {views_set[0]}. '
                                            f'Actual dataset length {len(before_update_rows) + len(after_update_rows)} '
                                            f'more then expected dataset length: { len(expected_rows)}. Issue #6181')
@@ -541,7 +541,7 @@ class LongevityDataValidator:
                         f'Expected dataset length: {len(expected_rows)}'
 
                     # raise info event in the end of test only
-                    DataValidatorEvent(type='info', name='UpdatedRowsValidator', status=Severity.NORMAL,
+                    DataValidatorEvent(type='UpdatedRowsValidator', subtype='info', status=Severity.NORMAL,
                                        message=f'Validation updated rows finished successfully. View {views_set[0]}')
                 else:
                     LOGGER.debug(f'Validation updated rows.  View {views_set[0]}. '
@@ -570,7 +570,7 @@ class LongevityDataValidator:
                                                                   statement=f"SELECT {pk_name} FROM {self.view_name_for_deletion_data}",
                                                                   verbose=not during_nemesis)
         if not actual_result:
-            DataValidatorEvent(type='error', name='DeletedRowsValidator', status=Severity.ERROR,
+            DataValidatorEvent(type='DeletedRowsValidator', subtype='error', status=Severity.ERROR,
                                error=f"Can't validate deleted rows. "
                                      f"Fetch all rows from {self.view_name_for_deletion_data} failed. "
                                      f"See error above in the sct.log")
@@ -579,7 +579,7 @@ class LongevityDataValidator:
         if len(actual_result) < self.rows_before_deletion:
             if not during_nemesis:
                 # raise info event in the end of test only
-                DataValidatorEvent(type='info', name='DeletedRowsValidator', status=Severity.NORMAL,
+                DataValidatorEvent(type='DeletedRowsValidator', subtype='info', status=Severity.NORMAL,
                                    message='Validation deleted rows finished successfully')
             else:
                 LOGGER.debug('Validation deleted rows finished successfully')

@@ -24,11 +24,11 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ClusterHealthValidatorEvent(SctEvent):
-    def __init__(self, type, name, status=Severity.ERROR, node=None, message=None, error=None, publish=True, **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
+    def __init__(self, type, subtype, status=Severity.ERROR, node=None, message=None, error=None, publish=True, **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
         super().__init__()
 
-        self.name = name
         self.type = type
+        self.subtype = subtype
         self.node = str(node)
         self.severity = status
         self.error = error if error else ''
@@ -41,21 +41,21 @@ class ClusterHealthValidatorEvent(SctEvent):
 
     def __str__(self):
         if self.severity in (Severity.NORMAL, Severity.WARNING):
-            return "{0}: type={1.type} name={1.name} node={1.node} message={1.message}".format(
+            return "{0}: type={1.type} subtype={1.subtype} node={1.node} message={1.message}".format(
                 super().__str__(), self)
         elif self.severity in (Severity.CRITICAL, Severity.ERROR):
-            return "{0}: type={1.type} name={1.name} node={1.node} error={1.error}".format(
+            return "{0}: type={1.type} subtype={1.subtype} node={1.node} error={1.error}".format(
                 super().__str__(), self)
         else:
             return super().__str__()
 
 
 class DataValidatorEvent(SctEvent):
-    def __init__(self, type, name, status=Severity.ERROR, message=None, error=None, **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
+    def __init__(self, type, subtype, status=Severity.ERROR, message=None, error=None, **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
         super().__init__()
 
-        self.name = name
         self.type = type
+        self.subtype = subtype
         self.severity = status
         self.error = error if error else ''
         self.message = message if message else ''
@@ -66,9 +66,9 @@ class DataValidatorEvent(SctEvent):
 
     def __str__(self):
         if self.severity in (Severity.NORMAL, Severity.WARNING):
-            return "{0}: type={1.type} name={1.name} message={1.message}".format(super().__str__(), self)
+            return "{0}: type={1.type} subtype={1.subtype} message={1.message}".format(super().__str__(), self)
         elif self.severity in (Severity.CRITICAL, Severity.ERROR):
-            return "{0}: type={1.type} name={1.name} error={1.error}".format(super().__str__(), self)
+            return "{0}: type={1.type} subtype={1.subtype} error={1.error}".format(super().__str__(), self)
         else:
             return super().__str__()
 

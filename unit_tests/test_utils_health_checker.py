@@ -15,7 +15,7 @@
 import unittest
 from copy import deepcopy
 
-from sdcm.sct_events.base import Severity
+from sdcm.sct_events import Severity
 from sdcm.utils.health_checker import check_nodes_status, check_nulls_in_peers, \
     check_node_status_in_gossip_and_nodetool_status, check_schema_version
 
@@ -84,8 +84,8 @@ class TestHealthChecker(unittest.TestCase):
     def test_check_nodes_status_no_removed(self):
         event = next(check_nodes_status(NODES_STATUS, Node), None)
         self.assertIsNotNone(event)
-        self.assertEqual(event.type, "critical")
-        self.assertEqual(event.name, "NodeStatus")
+        self.assertEqual(event.type, "NodeStatus")
+        self.assertEqual(event.subtype, "CRITICAL")
         self.assertEqual(event.severity, Severity.CRITICAL)
         self.assertEqual(event.node, "node-0")
         self.assertEqual(event.message, "")
@@ -94,8 +94,8 @@ class TestHealthChecker(unittest.TestCase):
     def test_check_nodes_status_removed(self):
         event = next(check_nodes_status(NODES_STATUS, Node, ["127.0.0.2", ]), None)
         self.assertIsNotNone(event)
-        self.assertEqual(event.type, "critical")
-        self.assertEqual(event.name, "NodeStatus")
+        self.assertEqual(event.type, "NodeStatus")
+        self.assertEqual(event.subtype, "CRITICAL")
         self.assertEqual(event.severity, Severity.ERROR)
         self.assertEqual(event.node, "node-0")
         self.assertEqual(event.message, "")
@@ -109,8 +109,8 @@ class TestHealthChecker(unittest.TestCase):
         peers_info = deepcopy(PEERS_INFO)
         peers_info["127.0.0.2"]["data_center"] = "null"
         event = next(check_nulls_in_peers(GOSSIP_INFO, peers_info, Node), None)
-        self.assertEqual(event.type, "error")
-        self.assertEqual(event.name, "NodePeersNulls")
+        self.assertEqual(event.type, "NodePeersNulls")
+        self.assertEqual(event.subtype, "ERROR")
         self.assertEqual(event.severity, Severity.ERROR)
         self.assertEqual(event.node, "node-0")
         self.assertEqual(event.message, "")

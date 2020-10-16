@@ -55,8 +55,8 @@ def check_nodes_status(nodes_status: dict, current_node, removed_nodes_list=None
             # FIXME: https://github.com/scylladb/scylla-enterprise/issues/1419 must be reverted once it is fixed.
             error = f"Current node {current_node.ip_address}. Node with {node_ip}{is_target} " \
                     f"status is {node_properties['status']}"
-            yield ClusterHealthValidatorEvent(type='critical',
-                                              name='NodeStatus',
+            yield ClusterHealthValidatorEvent(type='NodeStatus',
+                                              subtype='critical',
                                               status=severity,
                                               node=current_node.name,
                                               error=error,
@@ -86,8 +86,8 @@ def check_nulls_in_peers(gossip_info, peers_details, current_node) -> HealthEven
         current_node.run_cqlsh(f"select * from system.peers where peer = '{ip}'", split=True, verbose=True)
 
         if ip in gossip_info and gossip_info[ip]['status'] not in current_node.GOSSIP_STATUSES_FILTER_OUT:
-            yield ClusterHealthValidatorEvent(type='error',
-                                              name='NodePeersNulls',
+            yield ClusterHealthValidatorEvent(type='NodePeersNulls',
+                                              subtype='error',
                                               status=Severity.ERROR,
                                               node=current_node.name,
                                               error=message,
@@ -109,8 +109,8 @@ def check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, c
         if ip not in nodes_status:
             if node_info['status'] not in current_node.GOSSIP_STATUSES_FILTER_OUT:
                 LOGGER.debug(f"Gossip info: {gossip_info}\nnodetool.status info: {nodes_status}")
-                yield ClusterHealthValidatorEvent(type='error',
-                                                  name='NodeStatus',
+                yield ClusterHealthValidatorEvent(type='NodeStatus',
+                                                  subtype='error',
                                                   status=Severity.ERROR,
                                                   node=current_node.name,
                                                   error=f"Current node {current_node.ip_address}. "
@@ -121,8 +121,8 @@ def check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, c
 
         if (node_info['status'] == 'NORMAL' and nodes_status[ip]['status'] != 'UN') or \
                 (node_info['status'] != 'NORMAL' and nodes_status[ip]['status'] == 'UN'):
-            yield ClusterHealthValidatorEvent(type='error',
-                                              name='NodeStatus',
+            yield ClusterHealthValidatorEvent(type='NodeStatus',
+                                              subtype='error',
                                               status=Severity.ERROR,
                                               node=current_node.name,
                                               error=f"Current node {current_node.ip_address}. Wrong node status. "
@@ -137,8 +137,8 @@ def check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, c
         if nodes_status[ip]['status'] == 'UN':
             is_target = current_node.print_node_running_nemesis(ip)
             LOGGER.debug(f"Gossip info: {gossip_info}\nnodetool.status info: {nodes_status}")
-            yield ClusterHealthValidatorEvent(type='error',
-                                              name='"NodeSchemaVersion',
+            yield ClusterHealthValidatorEvent(type='"NodeSchemaVersion',
+                                              subtype='error',
                                               status=Severity.ERROR,
                                               node=current_node.name,
                                               error=f"Current node {current_node.ip_address}. Node {ip}{is_target} "
@@ -176,8 +176,8 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
         is_target = current_node.print_node_running_nemesis(ip)
         if ip not in peers_details.keys():
             LOGGER.debug(debug_message)
-            yield ClusterHealthValidatorEvent(type='error',
-                                              name='NodeSchemaVersion',
+            yield ClusterHealthValidatorEvent(type='NodeSchemaVersion',
+                                              subtype='error',
                                               status=Severity.ERROR,
                                               node=current_node.name,
                                               error=f"Current node {current_node.ip_address}. Node {ip}{is_target} "
@@ -187,8 +187,8 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
 
         if node_info['schema'] != peers_details[ip]['schema_version']:
             LOGGER.debug(debug_message)
-            yield ClusterHealthValidatorEvent(type='error',
-                                              name='NodeSchemaVersion',
+            yield ClusterHealthValidatorEvent(type='NodeSchemaVersion',
+                                              subtype='error',
                                               status=Severity.ERROR,
                                               node=current_node.name,
                                               error=f"Current node {current_node.ip_address}. Wrong Schema version. "
@@ -201,8 +201,8 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
     not_in_gossip = list(set(peers_details.keys()) - set(gossip_info.keys()))
     if not_in_gossip:
         LOGGER.debug(debug_message)
-        yield ClusterHealthValidatorEvent(type='error',
-                                          name='NodeSchemaVersion',
+        yield ClusterHealthValidatorEvent(type='NodeSchemaVersion',
+                                          subtype='error',
                                           status=Severity.ERROR,
                                           node=current_node.name,
                                           error=f"Current node {current_node.ip_address}. "
@@ -218,8 +218,8 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
         LOGGER.debug(debug_message)
         gossip_info_str = '\n'.join(
             f"{ip}: {schema_version['schema']}" for ip, schema_version in gossip_info.items())
-        yield ClusterHealthValidatorEvent(type='warning',
-                                          name='NodeSchemaVersion',
+        yield ClusterHealthValidatorEvent(type='NodeSchemaVersion',
+                                          subtype='warning',
                                           status=Severity.WARNING,
                                           node=current_node.name,
                                           message=f"Current node {current_node.ip_address}. Schema version is not "
@@ -235,8 +235,8 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
         LOGGER.debug(debug_message)
         peers_info_str = '\n'.join(
             f"{ip}: {schema_version['schema_version']}" for ip, schema_version in peers_details.items())
-        yield ClusterHealthValidatorEvent(type='warning',
-                                          name='NodeSchemaVersion',
+        yield ClusterHealthValidatorEvent(type='NodeSchemaVersion',
+                                          subtype='warning',
                                           status=Severity.WARNING,
                                           node=current_node.name,
                                           message=f"Current node {current_node.ip_address}. Schema version is not "
