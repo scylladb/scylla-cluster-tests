@@ -46,7 +46,8 @@ from sdcm.log import SDCMAdapter
 from sdcm.keystore import KeyStore
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm import wait
-from sdcm.sct_events import DisruptionEvent, DbEventsFilter, Severity, InfoEvent, raise_event_on_failure
+from sdcm.sct_events import DisruptionEvent, DbEventsFilter, Severity, InfoEvent, raise_event_on_failure, \
+    CassandraStressLogEvent, EventsSeverityChangerFilter
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.cluster_k8s import PodCluster
@@ -309,17 +310,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             return str(self.__class__)
 
     def _kill_scylla_daemon(self):
-        self.log.info('Kill all scylla processes in %s', self.target_node)
-        self.target_node.remoter.sudo("pkill -9 scylla", ignore_status=True)
+        with EventsSeverityChangerFilter(event_class=CassandraStressLogEvent, regex=".*Connection reset by peer.*",
+                                         severity=Severity.WARNING, extra_time_to_expiration=30):
+            self.log.info('Kill all scylla processes in %s', self.target_node)
+            self.target_node.remoter.sudo("pkill -9 scylla", ignore_status=True)
 
-        # Wait for the process to be down before waiting for service to be restarted
-        self.target_node.wait_db_down(check_interval=2)
+            # Wait for the process to be down before waiting for service to be restarted
+            self.target_node.wait_db_down(check_interval=2)
 
-        # Let's wait for the target Node to have their services re-started
-        self.log.info('Waiting scylla services to be restarted after we killed them...')
-        self.target_node.wait_db_up(timeout=14400)
-        self.log.info('Waiting JMX services to be restarted after we killed them...')
-        self.target_node.wait_jmx_up()
+            # Let's wait for the target Node to have their services re-started
+            self.log.info('Waiting scylla services to be restarted after we killed them...')
+            self.target_node.wait_db_up(timeout=14400)
+            self.log.info('Waiting JMX services to be restarted after we killed them...')
+            self.target_node.wait_jmx_up()
         self.cluster.wait_for_schema_agreement()
 
     def disrupt_stop_wait_start_scylla_server(self, sleep_time=300):  # pylint: disable=invalid-name
