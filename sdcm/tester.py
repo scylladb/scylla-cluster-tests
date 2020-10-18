@@ -1178,8 +1178,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.warning('There is no stress results, probably stress thread has failed.')
         errors = errors[-5:]
         if errors:
-            self.fail("cassandra-stress errors on "
-                      "nodes:\n%s" % "\n".join(errors))
+            self.log.warning("cassandra-stress errors on "
+                             "nodes:\n%s" % "\n".join(errors))
 
     def get_stress_results(self, queue, store_results=True):
         results = queue.get_results()
