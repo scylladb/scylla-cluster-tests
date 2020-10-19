@@ -389,7 +389,8 @@ class GrafanaEntity(BaseMonitoringEntity):  # pylint: disable=too-few-public-met
         {
             'name': 'overview',
             'path': 'd/overview-{version}/scylla-{dashboard_name}',
-            'resolution': '1920px*4000px'
+            'resolution': '1920px*4000px',
+            'scroll_ready_locator': (By.XPATH, """//h1[contains(text(), "Your Panels")]""")
         },
         {
             'name': 'scylla-per-server-metrics-nemesis',
@@ -397,6 +398,7 @@ class GrafanaEntity(BaseMonitoringEntity):  # pylint: disable=too-few-public-met
             'resolution': '1920px*7000px',
         }
     ]
+    default_scroll_ready_locator = (By.XPATH, """//span[contains(text(), "Total Nodes")]""")
     grafana_port = 3000
     grafana_entity_url_tmpl = "http://{node_ip}:{grafana_port}/{path}?from={st}&to=now"
     sct_base_path = get_sct_root_path()
@@ -498,18 +500,21 @@ class GrafanaSnapshot(GrafanaEntity):
     panels_load_timeout = 10
     scroll_step = 1000
     snapshot_locators_sequence = [
-        (By.XPATH, """//button[contains(@class, "navbar-button--share")]"""),
+        (By.XPATH, """//div[contains(@class, "navbar-buttons--actions")]"""),
         (By.XPATH, """//ul/li[contains(text(), "Snapshot")]"""),
         (By.XPATH, """//button//span[contains(text(), "Publish to snapshot.raintank.io")]"""),
         (By.XPATH, """//a[contains(@href, "https://snapshot.raintank.io")]""")
     ]
 
-    scroll_ready_locator = (By.XPATH, """//span[contains(text(), "Total Nodes")]""")
+    snapshot_scroll_ready_locator = None
     scroll_element_locator = (By.XPATH, "//div[@class='view']")
 
     def scrolldown_dashboards_view(self, remote_browser: RemoteBrowser):
 
-        WebDriverWait(remote_browser, 60).until(EC.visibility_of_element_located(self.scroll_ready_locator))
+        if not self.snapshot_scroll_ready_locator:
+            self.snapshot_scroll_ready_locator = self.default_scroll_ready_locator
+
+        WebDriverWait(remote_browser, 60).until(EC.visibility_of_element_located(self.snapshot_scroll_ready_locator))
 
         scroll_element = remote_browser.find_element(*self.scroll_element_locator)
 
@@ -560,6 +565,7 @@ class GrafanaSnapshot(GrafanaEntity):
             self.remote_browser = RemoteBrowser(node)
             snapshots = []
             for snapshot in self.grafana_entity_names:
+                self.snapshot_scroll_ready_locator = snapshot.get("scroll_ready_locator")
                 version = monitoring_version.replace('.', '-')
                 dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=normalize_ipv6_url(node.grafana_address),
                                                                     uid="-".join([snapshot['name'],
