@@ -61,16 +61,20 @@ class KubernetesRunner(Runner):
 
     def start(self, command: str, shell: str, env: dict) -> None:
         with self._ws_lock:
-            self.process = k8s.stream.stream(self._k8s_core_v1_api.connect_get_namespaced_pod_exec,
-                                             name=self.context.config.k8s_pod,
-                                             container=self.context.config.k8s_container,
-                                             namespace=self.context.config.k8s_namespace,
-                                             command=[shell, "-c", command],
-                                             stderr=True,
-                                             stdin=True,
-                                             stdout=True,
-                                             tty=False,
-                                             _preload_content=False)
+            try:
+                self.process = k8s.stream.stream(
+                    self._k8s_core_v1_api.connect_get_namespaced_pod_exec,
+                    name=self.context.config.k8s_pod,
+                    container=self.context.config.k8s_container,
+                    namespace=self.context.config.k8s_namespace,
+                    command=[shell, "-c", command],
+                    stderr=True,
+                    stdin=True,
+                    stdout=True,
+                    tty=False,
+                    _preload_content=False)
+            except k8s.client.rest.ApiException as exc:
+                raise ConnectionError(str(exc)) from None
 
     def kill(self) -> None:
         self.stop()
@@ -150,8 +154,8 @@ class KubernetesCmdRunner(CommandRunner):
             start_time = time.perf_counter()
             if verbose:
                 self.log.debug('Running command "{}"...'.format(cmd))
+            connection = self._create_connection()
             try:
-                connection = self._create_connection() if new_session else self.connection
                 res = connection.run(command=cmd, warn=ignore_status, hide=True, watchers=watchers, timeout=timeout)
                 res.duration = time.perf_counter() - start_time
                 res.exit_status = res.exited
@@ -160,6 +164,8 @@ class KubernetesCmdRunner(CommandRunner):
                 if hasattr(details, "result"):
                     self._print_command_results(details.result, verbose, ignore_status)
                 raise
+            finally:
+                connection.stop()
 
         result = _run()
         self._print_command_results(result, verbose, ignore_status)
@@ -179,3 +185,11 @@ class KubernetesCmdRunner(CommandRunner):
         KubernetesOps.copy_file(self, src, f"{self.namespace}/{self.pod}:{dst}",
                                 container=self.container, timeout=timeout)
         return True
+
+    def stop(self):
+        # Websocket connection is getting closed when run is ended, so nothing is needed to be done here
+        pass
+
+    def _reconnect(self):
+        # Websocket connection is getting closed when run is ended, so nothing is needed to be done here
+        pass
