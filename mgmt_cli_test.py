@@ -222,7 +222,7 @@ class BackupFunctionsMixIn:
         else:
             throttle_per_node = 14666
 
-        throttle_per_loader = throttle_per_node * number_of_nodes / number_of_loaders
+        throttle_per_loader = int(throttle_per_node * number_of_nodes / number_of_loaders)
         stress_cmd = stress_cmd.replace("<THROTTLE_PLACE_HOLDER>", str(throttle_per_loader))
         stress_thread = self.run_stress_thread(stress_cmd=stress_cmd)
         self.log.info('Sleeping for 15s to let cassandra-stress run...')
