@@ -1,9 +1,23 @@
-from __future__ import absolute_import
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 import os
 import hashlib
 import shutil
 import logging
 import unittest
+import unittest.mock
+from pathlib import Path
 
 from sdcm.utils.common import tag_ami
 from sdcm.utils.common import download_dir_from_cloud
@@ -30,7 +44,12 @@ class TestDownloadDir(unittest.TestCase):
 
         self.clear_cloud_downloaded_path(sct_update_db_packages)
 
-        update_db_packages = download_dir_from_cloud(sct_update_db_packages)
+        def touch_file(client, bucket, key, local_file_path):
+            Path(local_file_path).touch()
+
+        with unittest.mock.patch("sdcm.utils.common._s3_download_file", new=touch_file):
+            update_db_packages = download_dir_from_cloud(sct_update_db_packages)
+
         assert os.path.exists(os.path.join(update_db_packages, "repomd.xml"))
 
     def test_update_db_packages_gce(self):
@@ -38,7 +57,12 @@ class TestDownloadDir(unittest.TestCase):
 
         self.clear_cloud_downloaded_path(sct_update_db_packages)
 
-        update_db_packages = download_dir_from_cloud(sct_update_db_packages)
+        def touch_file(**kwargs):
+            Path(kwargs["destination_path"]).touch()
+
+        with unittest.mock.patch("libcloud.storage.base.Object.download", side_effect=touch_file):
+            update_db_packages = download_dir_from_cloud(sct_update_db_packages)
+
         assert os.path.exists(os.path.join(update_db_packages, "text.txt"))
 
     @staticmethod
