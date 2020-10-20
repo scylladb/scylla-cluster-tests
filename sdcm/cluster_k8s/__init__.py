@@ -33,16 +33,15 @@ import kubernetes as k8s
 from kubernetes.client import V1Container
 from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance
 
-from sdcm import cluster, cluster_docker
-from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring, ScyllaOperatorStatusMonitoring
-from sdcm.coredump import CoredumpExportFileThread
+from sdcm import sct_abs_path, cluster, cluster_docker
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
-from sdcm.sct_config import sct_abs_path
+from sdcm.coredump import CoredumpExportFileThread
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.k8s import KubernetesOps, ApiCallRateLimiter, JSON_PATCH_TYPE, KUBECTL_TIMEOUT
 from sdcm.utils.decorators import log_run_info, timeout
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \
     KubectlClusterEventsLogger
+from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring, ScyllaOperatorStatusMonitoring
 
 
 SCYLLA_OPERATOR_CONFIG = sct_abs_path("sdcm/k8s_configs/operator.yaml")

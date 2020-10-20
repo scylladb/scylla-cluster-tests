@@ -24,8 +24,8 @@ from functools import cached_property
 import kubernetes as k8s
 from urllib3.util.retry import Retry
 
+from sdcm import sct_abs_path
 from sdcm.remote import LOCALRUNNER
-from sdcm.sct_config import sct_abs_path
 from sdcm.utils.decorators import timeout as timeout_decor
 from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
 

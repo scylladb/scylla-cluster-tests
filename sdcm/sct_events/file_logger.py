@@ -22,7 +22,8 @@ from functools import partial
 from itertools import chain
 from collections import deque
 
-from sdcm.sct_events.base import Severity, SctEvent
+from sdcm.sct_events import Severity
+from sdcm.sct_events.base import SctEvent
 from sdcm.sct_events.system import TestResultEvent
 from sdcm.sct_events.events_device import get_events_main_device
 from sdcm.sct_events.events_processes import \

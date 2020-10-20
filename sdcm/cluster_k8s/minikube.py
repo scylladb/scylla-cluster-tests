@@ -18,10 +18,9 @@ from functools import cached_property
 
 from invoke.exceptions import UnexpectedExit
 
-from sdcm import cluster, cluster_gce
+from sdcm import sct_abs_path, cluster, cluster_gce
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
-from sdcm.sct_config import sct_abs_path
 from sdcm.cluster_k8s import KubernetesCluster, BasePodContainer, ScyllaPodCluster
 from sdcm.cluster_k8s.iptables import IptablesPodPortsRedirectMixin, IptablesClusterOpsMixin
 from sdcm.utils.k8s import KubernetesOps

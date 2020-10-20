@@ -11,83 +11,402 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import enum
+from __future__ import annotations
+
 import json
 import time
+import uuid
+import pickle
+import fnmatch
 import logging
-import datetime
-from typing import Optional
+from types import new_class
+from typing import \
+    Any, Optional, Type, Dict, List, Tuple, Callable, Generic, TypeVar, Protocol, runtime_checkable, cast
+from keyword import iskeyword
+from weakref import proxy as weakproxy
+from datetime import datetime
+from functools import partialmethod
 
-from sdcm.sct_events.events_device import get_events_main_device
+import yaml
+import dateutil.parser
+
+from sdcm import sct_abs_path
+from sdcm.sct_events import Severity, SctEventProtocol
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
 
+
+DEFAULT_SEVERITIES = sct_abs_path("defaults/severities.yaml")
 
 LOGGER = logging.getLogger(__name__)
 
 
-class Severity(enum.Enum):
-    UNKNOWN = 0
-    NORMAL = 1
-    WARNING = 2
-    ERROR = 3
-    CRITICAL = 4
+class SctEventTypesRegistry(Dict[str, Type["SctEvent"]]):
+    def __init__(self, severities_conf: str = DEFAULT_SEVERITIES):
+        super().__init__()
+        with open(severities_conf) as fobj:
+            self.max_severities = {event_t: Severity[sev] for event_t, sev in yaml.safe_load(fobj).items()}
+        self.limit_rules = []
+
+    def __setitem__(self, key: str, value: Type[SctEvent]):
+        if not value.is_abstract() and key not in self.max_severities:
+            raise ValueError(f"There is no max severity configured for {key}")
+        super().__setitem__(key, weakproxy(value))  # pylint: disable=no-member; pylint doesn't know about Dict
+
+    def __set_name__(self, owner: Type[SctEvent], name: str) -> None:
+        self[owner.__name__] = owner  # add owner class to the registry.
 
 
 class SctEvent:
-    _registry: Optional[EventsProcessesRegistry] = None
+    _sct_event_types_registry: SctEventTypesRegistry = SctEventTypesRegistry()
+    _events_processes_registry: Optional[EventsProcessesRegistry] = None
 
-    severity = Severity.NORMAL
-    type = None
-    subtype = None
+    _abstract: bool = True  # this attribute set by __init_subclass__()
+    base: str = "SctEvent"  # this attribute set by __init_subclass__()
+    type: Optional[str] = None  # this attribute set by add_subevent_type()
+    subtype: Optional[str] = None  # this attribute set by add_subevent_type()
 
-    def __init__(self):
+    formatter: Callable[[str, SctEvent], str] = staticmethod(str.format)
+    msgfmt: str = "({0.base} {0.severity})"
+
+    timestamp: Optional[float] = None  # actual value should be set using __init__()
+    severity: Severity = Severity.UNKNOWN  # actual value should be set using __init__()
+
+    _ready_to_publish: bool = False  # set it to True in __init__() and to False in publish() to prevent double-publish
+
+    def __init_subclass__(cls, abstract: bool = False):
+        if cls.__name__ in cls._sct_event_types_registry:  # pylint: disable=unsupported-membership-test; pylint doesn't know about Dict
+            raise TypeError(f"Name {cls.__name__} is already used")
+        cls.base = cls.__name__.split(".", 1)[0]
+        cls._abstract = bool(abstract)
+        cls._sct_event_types_registry[cls.__name__] = cls
+
+    # Do it this way because abc.ABC doesn't prevent the instantiation if there are no abstract methods or properties.
+    def __new__(cls, *args, **kwargs):
+        if cls.is_abstract():
+            raise TypeError(f"Class {cls.__name__} may not be instantiated directly")
+        return super().__new__(cls)
+
+    def __init__(self, severity: Severity = Severity.UNKNOWN):
         self.timestamp = time.time()
+        self.severity = severity
+        self._ready_to_publish = True
 
-        # Populate __dict__ with default values.
-        self.severity = self.severity
-        self.type = self.type
-        self.subtype = self.subtype
+    @classmethod
+    def is_abstract(cls) -> bool:
+        return cls._abstract
+
+    @classmethod
+    def add_subevent_type(cls,
+                          name: str,
+                          /, *,
+                          abstract: bool = False,
+                          mixin: Optional[Type] = None,
+                          **kwargs) -> None:
+
+        # Check if we can add a new sub-event type:
+        #   1) only 2 levels of sub-events allowed (i.e., `Event.TYPE.subtype')
+        assert len(cls.__name__.split(".")) < 3, "max level of the event's nesting is already reached"
+
+        #   2) name of sub-event should be a correct Python identifier.
+        assert name.isidentifier() and not iskeyword(name), \
+            "name of an SCT event type should be a valid Python identifier and not a keyword"
+
+        #   3) Base event shouldn't have an attribute with same name.
+        assert not hasattr(cls, name), f"SCT event type {cls} already has attribute `{name}'"
+
+        bases = (cls, ) if mixin is None else (mixin, cls, )
+        init_index = 0 if mixin is None or "__init__" in vars(mixin) else 1  # check if mixin has own `__init__()'
+        nesting_level = "type" if cls.type is None else "subtype"
+
+        # Create a new type with `__init__()' based on the parent class using `partialmethod()' from `functools'.
+        event_t = new_class(
+            name=f"{cls.__name__}.{name}",
+            bases=bases,
+            kwds={"abstract": bool(abstract)},
+            exec_body=lambda ns: ns.update({
+                nesting_level: name,
+                "__init__": partialmethod(bases[init_index].__init__, **kwargs),
+            })
+        )
+
+        # For pickling to work, the __module__ variable needs to be set to the same as base class.
+        event_t.__module__ = cls.__module__
+
+        # Make the new class available in the base class as an attribute (i.e., `cls.name')
+        setattr(cls, name, event_t)
 
     @property
     def formatted_timestamp(self) -> str:
         try:
-            return datetime.datetime.fromtimestamp(self.timestamp).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        except ValueError:
-            LOGGER.exception("Failed to format a timestamp: %d", self.timestamp)
+            return datetime.fromtimestamp(self.timestamp).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        except (TypeError, OverflowError, OSError, ):
+            LOGGER.exception("Failed to format a timestamp: %r", self.timestamp)
             return "0000-00-00 <UnknownTimestamp>"
 
     def publish(self) -> None:
-        get_events_main_device(_registry=self._registry).publish_event(self)
+        # pylint: disable=import-outside-toplevel; to avoid cyclic imports
+        from sdcm.sct_events.events_device import get_events_main_device
+
+        if not self._ready_to_publish:
+            LOGGER.warning("[SCT internal warning] %s is not ready to be published", self)
+            return
+        get_events_main_device(_registry=self._events_processes_registry).publish_event(self)
+        self._ready_to_publish = False
 
     def publish_or_dump(self, default_logger: Optional[logging.Logger] = None) -> None:
-        if proc := get_events_main_device(_registry=self._registry):
+        # pylint: disable=import-outside-toplevel; to avoid cyclic imports
+        from sdcm.sct_events.events_device import get_events_main_device
+
+        if not self._ready_to_publish:
+            LOGGER.warning("[SCT internal warning] %s is not ready to be published", self)
+            return
+        if proc := get_events_main_device(_registry=self._events_processes_registry):
             if proc.is_alive():
                 self.publish()
             else:
-                # pylint: disable=import-outside-toplevel; to avoid cyclic imports
                 from sdcm.sct_events.file_logger import get_events_logger
-                get_events_logger(_registry=self._registry).write_event(self)
+                get_events_logger(_registry=self._events_processes_registry).write_event(self)
         elif default_logger:
             default_logger.error(str(self))
-
-    def __str__(self):
-        return f"({type(self).__name__} {self.severity})"
+        self._ready_to_publish = False
 
     def to_json(self) -> str:
-        return json.dumps({"__class__": type(self).__name__, **self.__dict__})
-
-    def __eq__(self, other):
-        if not isinstance(other, type(self)):
-            return False
-        return self.__dict__ == other.__dict__
+        return json.dumps({
+            "base": self.base,
+            "type": self.type,
+            "subtype": self.subtype,
+            **self.__getstate__(),
+        })
 
     def __getstate__(self):
-        state = self.__dict__.copy()
+        # Remove everything from the __dict__ that starts with "_".
+        return {attr: value for attr, value in self.__dict__.items() if not attr.startswith("_")}
 
-        # Remove non-picklable stuff.
-        state.pop("_registry", None)
+    def __str__(self):
+        return self.formatter(self.msgfmt, self)
 
-        return state
+    def __eq__(self, other):
+        return (isinstance(other, type(self)) or isinstance(self, type(other))) \
+            and self.__getstate__() == other.__getstate__()
+
+    def __del__(self):
+        if self._ready_to_publish:
+            LOGGER.warning(
+                "[SCT internal warning] %s has not been published or dumped, maybe you missed .publish()", self)
 
 
-__all__ = ("Severity", "SctEvent", )
+def add_severity_limit_rules(rules: List[str]) -> None:
+    for rule in rules:
+        try:
+            pattern, severity = rule.split("=", 1)
+            severity = Severity[severity.strip()]
+            SctEvent._sct_event_types_registry.limit_rules.insert(0, (pattern.strip(), severity))  # keep it reversed
+        except Exception:
+            LOGGER.exception("Unable to add a max severity limit rule `%s'", rule)
+
+
+def _max_severity(keys: Tuple[str, ...], name: str) -> Severity:
+    for pattern, severity in SctEvent._sct_event_types_registry.limit_rules:
+        if fnmatch.filter(keys, pattern):
+            return severity
+    return SctEvent._sct_event_types_registry.max_severities[name]
+
+
+def max_severity(event: SctEvent) -> Severity:
+    return _max_severity(
+        keys=(event.base, f"{event.base}.{event.type}", f"{event.base}.{event.type}.{event.subtype}", ),
+        name=type(event).__name__,
+    )
+
+
+def print_critical_events() -> None:
+    critical_event_lines = []
+    for event_name in SctEvent._sct_event_types_registry.max_severities:
+        if _max_severity(keys=(event_name, ), name=event_name) == Severity.CRITICAL:
+            critical_event_lines.append(f"  * {event_name}")
+    LOGGER.info("The run can be interrupted by following critical events:\n%s\n\n", "\n".join(critical_event_lines))
+
+
+class SystemEvent(SctEvent, abstract=True):
+    pass
+
+
+class BaseFilter(SystemEvent, abstract=True):
+    def __init__(self, severity: Severity = Severity.NORMAL):
+        super().__init__(severity=severity)
+
+        self.uuid = str(uuid.uuid4())
+        self.clear_filter = False
+        self.expire_time = None
+
+    def __eq__(self, other):
+        if not isinstance(self, type(other)):
+            return False
+        return self.uuid == other.uuid
+
+    def cancel_filter(self) -> None:
+        self.clear_filter = True
+        self._ready_to_publish = True
+        self.publish()
+
+    def __enter__(self):
+        self.publish()
+        return self
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        self.cancel_filter()
+
+    def eval_filter(self, event: SctEventProtocol) -> bool:
+        raise NotImplementedError()
+
+
+T_log_event = TypeVar("T_log_event", bound="LogEvent")
+
+
+@runtime_checkable
+class LogEventProtocol(SctEventProtocol, Protocol[T_log_event]):
+    regex: str
+    node: Any
+    line: Optional[str]
+    line_number: int
+    backtrace: Optional[str]
+    raw_backtrace: Optional[str]
+
+    def add_info(self: T_log_event, node, line: str, line_number: int) -> T_log_event:
+        ...
+
+    def clone(self: T_log_event) -> T_log_event:
+        ...
+
+
+class LogEvent(Generic[T_log_event], SctEvent, abstract=True):
+    def __init__(self, regex: str, severity=Severity.ERROR):
+        super().__init__(severity=severity)
+
+        self.regex = regex
+        self.node = None
+        self.line = None
+        self.line_number = 0
+        self.backtrace = None
+        self.raw_backtrace = None
+
+        self._ready_to_publish: bool = False  # set it to True in `.add_info()'
+
+    def add_info(self: T_log_event, node, line: str, line_number: int) -> T_log_event:
+        """Update the event info from the log line.
+
+        Set `self._ready_to_publish' flag and return self.
+        """
+
+        try:
+            self.timestamp = dateutil.parser.parse(line.split(None, 1)[0]).timestamp()
+        except ValueError:
+            self.timestamp = time.time()
+        self.node = str(node)
+        self.line = line
+        self.line_number = line_number
+
+        self._ready_to_publish = True  # this property not included to the clones, so need to call `.add_info()' first.
+
+        return self
+
+    def clone(self: T_log_event) -> T_log_event:
+        return pickle.loads(pickle.dumps(self))
+
+    @property
+    def msgfmt(self):
+        fmt = super().msgfmt + ": " + "type={0.type} regex={0.regex} line_number={0.line_number} node={0.node}\n" \
+                                      "{0.line}"
+        if self.backtrace:
+            fmt += "\n{0.backtrace}"
+        elif self.raw_backtrace:
+            fmt += "\n{0.raw_backtrace}"
+        return fmt
+
+
+@runtime_checkable
+class SeverityLevelProtocol(SctEventProtocol, Protocol):
+    INFO: Type[SctEventProtocol]
+    WARNING: Type[SctEventProtocol]
+    ERROR: Type[SctEventProtocol]
+    CRITICAL: Type[SctEventProtocol]
+
+
+class ValidatorEvent(SctEvent, abstract=True):
+    @classmethod
+    def add_subevent_type_with_severity_levels(cls,
+                                               name: str,
+                                               /, *,
+                                               abstract: bool = True,
+                                               mixin: Optional[Type] = None,
+                                               **kwargs) -> None:
+        cls.add_subevent_type(name, abstract=abstract, mixin=mixin, **kwargs)
+        subevent = cast(SctEvent, getattr(cls, name))
+        subevent.add_subevent_type("CRITICAL", severity=Severity.CRITICAL)
+        subevent.add_subevent_type("ERROR", severity=Severity.ERROR)
+        subevent.add_subevent_type("WARNING", severity=Severity.WARNING)
+        subevent.add_subevent_type("INFO", severity=Severity.NORMAL)
+
+
+class BaseStressEvent(SctEvent, abstract=True):
+    @classmethod
+    def add_stress_subevents(cls,
+                             failure: Optional[Severity] = None,
+                             error: Optional[Severity] = None,
+                             timeout: Optional[Severity] = None,
+                             start: Optional[Severity] = Severity.NORMAL,
+                             finish: Optional[Severity] = Severity.NORMAL) -> None:
+        if failure is not None:
+            cls.add_subevent_type("failure", severity=failure)
+        if error is not None:
+            cls.add_subevent_type("error", severity=error)
+        if timeout is not None:
+            cls.add_subevent_type("timeout", severity=timeout)
+        if start is not None:
+            cls.add_subevent_type("start", severity=start)
+        if finish is not None:
+            cls.add_subevent_type("finish", severity=finish)
+
+
+class StressEventProtocol(SctEventProtocol, Protocol):
+    node: str
+    stress_cmd: Optional[str]
+    log_file_name: Optional[str]
+    errors: Optional[List[str]]
+
+    @property
+    def errors_formatted(self):
+        ...
+
+
+class StressEvent(BaseStressEvent, abstract=True):
+    def __init__(self,
+                 node: Any,
+                 stress_cmd: Optional[str] = None,
+                 log_file_name: Optional[str] = None,
+                 errors: Optional[List[str]] = None,
+                 severity: Severity = Severity.NORMAL):
+        super().__init__(severity=severity)
+
+        self.node = str(node)
+        self.stress_cmd = stress_cmd
+        self.log_file_name = log_file_name
+        self.errors = errors
+
+    @property
+    def errors_formatted(self):
+        return "\n".join(self.errors)
+
+    @property
+    def msgfmt(self):
+        fmt = super().msgfmt + ": type={0.type} node={0.node}\nstress_cmd={0.stress_cmd}"
+        if self.errors:
+            return fmt + "\nerrors:\n\n{0.errors_formatted}"
+        return fmt
+
+
+__all__ = ("SctEvent", "SctEventProtocol", "SystemEvent", "BaseFilter",
+           "LogEvent", "LogEventProtocol", "T_log_event",
+           "ValidatorEvent", "SeverityLevelProtocol",
+           "BaseStressEvent", "StressEvent", "StressEventProtocol",
+           "add_severity_limit_rules", "max_severity", "print_critical_events", )
