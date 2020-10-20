@@ -1446,6 +1446,11 @@ def update_certificates(db_csr='data_dir/ssl_conf/example/db.csr', cadb_pem='dat
     return new_crt
 
 
+# Make it mockable.
+def _s3_download_file(client, bucket, key, local_file_path):
+    return client.download_file(bucket, key, local_file_path)
+
+
 def s3_download_dir(bucket, path, target):
     """
     Downloads recursively the given S3 path to the target directory.
@@ -1473,7 +1478,7 @@ def s3_download_dir(bucket, path, target):
             local_file_dir = os.path.dirname(local_file_path)
             os.makedirs(local_file_dir, exist_ok=True)
             LOGGER.info("Downloading %s from s3 to %s", key['Key'], local_file_path)
-            client.download_file(bucket, key['Key'], local_file_path)
+            _s3_download_file(client, bucket, key['Key'], local_file_path)
 
 
 def gce_download_dir(bucket, path, target):
