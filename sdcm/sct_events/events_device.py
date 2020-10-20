@@ -142,11 +142,9 @@ class EventsDevice(multiprocessing.Process):
     def outbound_events(self,
                         stop_event: StopEvent,
                         events_counter: multiprocessing.Value) -> Generator[Tuple[str, Any], None, None]:
-        # pylint: disable=import-outside-toplevel; to avoid cyclic imports
-
+        from sdcm.sct_events.base import LogEvent, max_severity
         from sdcm.sct_events.system import SystemEvent
         from sdcm.sct_events.filters import BaseFilter, EventsFilter
-        from sdcm.sct_events.database import DatabaseLogEvent
 
         filters = dict()
 
@@ -154,7 +152,7 @@ class EventsDevice(multiprocessing.Process):
             for events_counter.value, obj in enumerate(self.inbound_events(stop_event=stop_event), start=1):
                 for filter_key, filter_obj in list(filters.items()):
                     if filter_obj.expire_time and filter_obj.expire_time < obj.timestamp:
-                        if (isinstance(obj, DatabaseLogEvent) and getattr(filter_obj, "node", "") == obj.node) or \
+                        if (isinstance(obj, LogEvent) and getattr(filter_obj, "filter_node", None) == obj.node) or \
                                 isinstance(filter_obj, EventsFilter):
                             LOGGER.debug("%s: delete filter with uuid=%s", self, filter_key)
                             del filters[filter_key]
@@ -176,7 +174,11 @@ class EventsDevice(multiprocessing.Process):
                 if obj_filtered or isinstance(obj, SystemEvent):
                     continue
 
-                yield type(obj).__name__, obj
+                if (obj_max_severity := max_severity(obj)).value < obj.severity.value:
+                    LOGGER.warning("Limit %s severity to %s as configured", obj, obj_max_severity)
+                    obj.severity = obj_max_severity
+
+                yield obj.base, obj
 
 
 start_events_main_device = partial(start_events_process, EVENTS_MAIN_DEVICE_ID, EventsDevice)

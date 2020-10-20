@@ -18,7 +18,7 @@ from typing import Tuple, Any, Optional
 from functools import partial
 
 from sdcm.cluster import Setup
-from sdcm.sct_events.base import Severity
+from sdcm.sct_events import Severity
 from sdcm.sct_events.events_processes import \
     EVENTS_ANALYZER_ID, EventsProcessesRegistry, BaseEventsProcess,\
     start_events_process, get_events_process, verbose_suppress

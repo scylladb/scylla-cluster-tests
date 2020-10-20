@@ -19,11 +19,10 @@ from functools import cached_property
 
 import yaml
 
-from sdcm import cluster
-from sdcm.utils.common import shorten_cluster_name
+from sdcm import sct_abs_path, cluster
 from sdcm.utils.k8s import ApiCallRateLimiter
+from sdcm.utils.common import shorten_cluster_name
 from sdcm.utils.gce_utils import GcloudContextManager, GcloudTokenUpdateThread
-from sdcm.sct_config import sct_abs_path
 from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BasePodContainer
 from sdcm.cluster_k8s.iptables import IptablesPodIpRedirectMixin, IptablesClusterOpsMixin
 

@@ -1,45 +1,55 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 """
 Handling Scylla-cluster-test configuration loading
 """
 
 # pylint: disable=too-many-lines
-from __future__ import print_function
-
 import os
 import ast
 import logging
 import getpass
 import pathlib
+from typing import List, Union
 
 from distutils.util import strtobool  # pylint: disable=import-error,no-name-in-module
 
 import anyconfig
 
+from sdcm import sct_abs_path
 from sdcm.utils import alternator
 from sdcm.utils.common import find_scylla_repo, get_scylla_ami_versions, get_branched_ami, get_ami_tags, \
     ami_built_by_scylla, MAX_SPOT_DURATION_TIME
 from sdcm.utils.version_utils import get_branch_version, get_branch_version_for_multiple_repositories, \
     get_scylla_docker_repo_from_version
+from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 
 
-def str_or_list(value):
-    """
-    Convert an environment variable into a python list
+def str_or_list(value: Union[str, List[str]]) -> List[str]:
+    """Convert an environment variable into a Python's list."""
 
-    :param value: raw string variable
-    :return: list of strings
-    """
     if isinstance(value, str):
         try:
             return ast.literal_eval(value)
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             pass
-        return [str(value)]
+        return [str(value), ]
 
-    elif isinstance(value, list):
+    if isinstance(value, list):
         return value
 
-    raise ValueError("{} isn't string or list".format(value))
+    raise ValueError(f"{value} isn't a string or a list")
 
 
 def int_or_list(value):
@@ -71,11 +81,6 @@ def boolean(value):
         return bool(strtobool(value))
     else:
         raise ValueError("{} isn't a boolean".format(type(value)))
-
-
-def sct_abs_path(relative_filename):
-    sct_root = os.path.dirname(os.path.dirname(__file__))
-    return os.path.join(sct_root, relative_filename)
 
 
 class SCTConfiguration(dict):
@@ -1056,6 +1061,9 @@ class SCTConfiguration(dict):
         dict(name="stress_after_cluster_upgrade", env="SCT_STRESS_AFTER_CLUSTER_UPGRADE",
              type=str,
              help="Stress command to be run after full upgrade - usually used to read the dataset for verification"),
+
+        dict(name="max_events_severities", env="SCT_MAX_EVENTS_SEVERITIES", type=str_or_list,
+             help="Limit severity level for event types"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
@@ -1114,7 +1122,7 @@ class SCTConfiguration(dict):
 
     def __init__(self):
         # pylint: disable=too-many-locals,too-many-branches,too-many-statements
-        super(SCTConfiguration, self).__init__()
+        super().__init__()
         self.log = logging.getLogger(__name__)
         env = self._load_environment_variables()
         config_files = env.get('config_files', [])
@@ -1156,7 +1164,11 @@ class SCTConfiguration(dict):
         # 3) overwrite with environment variables
         anyconfig.merge(self, env)
 
-        # 4) assume multi dc by n_db_nodes set size
+        # 4) update events max severities
+        add_severity_limit_rules(self.get("max_events_severities"))
+        print_critical_events()
+
+        # 5) assume multi dc by n_db_nodes set size
         if 'aws' in cluster_backend:
             num_of_regions = len((self.get('region_name')).split())
             num_of_db_nodes_sets = len(str(self.get('n_db_nodes')).split(' '))
@@ -1168,7 +1180,7 @@ class SCTConfiguration(dict):
                         else:
                             self[key] += " {}".format(value)
 
-        # 5) handle scylla_version if exists
+        # 6) handle scylla_version if exists
         scylla_version = self.get('scylla_version')
         scylla_linux_distro = self.get('scylla_linux_distro')
         dist_type = scylla_linux_distro.split('-')[0]
@@ -1210,7 +1222,7 @@ class SCTConfiguration(dict):
                 self['scylla_repo_loader'] = find_scylla_repo(scylla_version_for_loader,
                                                               dist_type_loader, dist_version_loader)
 
-        # 5.1) handle oracle scylla_version if exists
+        # 6.1) handle oracle scylla_version if exists
         oracle_scylla_version = self.get('oracle_scylla_version')
         if oracle_scylla_version:
             if not self.get('ami_id_db_oracle') and self.get('cluster_backend') == 'aws':
@@ -1232,7 +1244,7 @@ class SCTConfiguration(dict):
             else:
                 raise ValueError("oracle_scylla_version and ami_id_db_oracle can't used together")
 
-        # 6) support lookup of repos for upgrade test
+        # 7) support lookup of repos for upgrade test
         new_scylla_version = self.get('new_version')
         if new_scylla_version:
             if not self.get('ami_id_db_scylla') and cluster_backend == 'aws':  # pylint: disable=no-else-raise
@@ -1241,7 +1253,7 @@ class SCTConfiguration(dict):
             elif not self.get('new_scylla_repo'):
                 self['new_scylla_repo'] = find_scylla_repo(new_scylla_version, dist_type, dist_version)
 
-        # 7) append username or ami_id_db_scylla_desc to the user_prefix
+        # 8) append username or ami_id_db_scylla_desc to the user_prefix
         version_tag = self.get('ami_id_db_scylla_desc')
         user_prefix = self.get('user_prefix')
         if user_prefix:
@@ -1250,16 +1262,16 @@ class SCTConfiguration(dict):
 
             self['user_prefix'] = "{}-{}".format(user_prefix, version_tag)[:35]
 
-        # 8) update target_upgrade_version automatically
+        # 9) update target_upgrade_version automatically
         new_scylla_repo = self.get('new_scylla_repo')
         if new_scylla_repo and not self.get('target_upgrade_version'):
             self['target_upgrade_version'] = get_branch_version(new_scylla_repo)
 
-        # 9) validate that supported instance_provision selected
+        # 10) validate that supported instance_provision selected
         if self.get('instance_provision') not in ['spot', 'on_demand', 'spot_fleet', 'spot_low_price', 'spot_duration']:
             raise ValueError(f"Selected instance_provision type '{self.get('instance_provision')}' is not supported!")
 
-        # 10) spot_duration instance can be created for test duration
+        # 11) spot_duration instance can be created for test duration
         if self.get('instance_provision').lower() == "spot_duration":
             test_duration = self.get('test_duration')
             if test_duration:
@@ -1267,7 +1279,7 @@ class SCTConfiguration(dict):
                     f'Test duration too long for spot_duration instance type. ' \
                     f'Max possible test duration time for this instance type is {MAX_SPOT_DURATION_TIME} minutes'
 
-        # 11) validate authenticator parameters
+        # 12) validate authenticator parameters
         if self.get('authenticator') and self.get('authenticator') == "PasswordAuthenticator":
             authenticator_user = self.get("authenticator_user")
             authenticator_password = self.get("authenticator_password")

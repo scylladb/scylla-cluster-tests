@@ -11,8 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from __future__ import annotations
-
 import time
 import logging
 import threading
@@ -49,6 +47,8 @@ class GrafanaAnnotator(EventsProcessPipe[Tuple[str, Any], Annotation]):
                 tags = [event_class, event.severity.name, "events", ]
                 if event_type := getattr(event, "type", None):
                     tags.append(event_type)
+                if event_subtype := getattr(event, "subtype", None):
+                    tags.append(event_subtype)
                 self.outbound_queue.put(
                     Annotation({
                         "time": int(event.timestamp * 1000.0),
