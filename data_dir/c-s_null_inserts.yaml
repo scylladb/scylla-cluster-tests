@@ -1,0 +1,80 @@
+# Keyspace Name
+keyspace: ks
+
+# The CQL for creating a keyspace (optional if it already exists)
+keyspace_definition: |
+  CREATE KEYSPACE ks WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
+
+# Table name
+table: targettable
+
+# The CQL for creating a table you wish to stress (optional if it already exists)
+table_definition: |
+  CREATE TABLE targettable (
+        pk timeuuid,
+        ck int,
+        c1 timeuuid,
+        c2 int,
+        c3 smallint,
+        c4 bigint,
+        c5 double,
+        c6 float,
+        PRIMARY KEY(pk, ck)
+  ) WITH compaction = { 'class':'SizeTieredCompactionStrategy' }
+    AND comment='A test table for null inserts'
+
+### Column Distribution Specifications ###
+
+columnspec:
+  - name: pk
+    size: uniform(1..1k)
+    population: uniform(1..20M)
+  - name: ck
+    cluster: uniform(1..1k)
+    population: uniform(1..20M)
+  - name: c1
+    size: uniform(1..1k)
+    population: uniform(1..1k)
+  - name: c2
+    size: uniform(1..1k)
+    population: uniform(1..1k)
+  - name: c3
+    size: uniform(1..1k)
+    population: uniform(1..1k)
+  - name: c4
+    size: uniform(1..1k)
+    population: uniform(1..1k)
+  - name: c5
+    size: uniform(1..1k)
+    population: uniform(1..1k)
+  - name: c6
+    size: uniform(1..1k)
+    population: uniform(1..1k)
+
+### Batch Ratio Distribution Specifications ###
+
+# Insert is used only to propagate data into the dataset. This is only query that supports batches,
+#   it is actually works only thru batches.
+# In order to call it add it to the ops statement: 'ops(insert=1,...)'
+# It overrides custom query 'insert' if it is defined
+# batch size maximum is hardcoded to 65535, it can be limiting row number in partition for
+#   big row insertation, by setting 'partitions' key to fixed(X)
+
+insert: # SchemaInsert.java, does batched prepared statements insert
+  partitions: fixed(2)
+  select:    fixed(2)/10240M
+  batchtype: UNLOGGED
+
+# After running "ops(insert=1) n=1000000" you will get ~1m records with ~1.3k avg row size
+#   across ~895k partitions, table size will be ~1.3g
+
+queries:
+   ck-select: # SchemaQuery.java: not batched execution
+      cql: select * from targettable where pk = ? and ck = ?
+      fields: samerow
+   pk-select: # SchemaQuery.java: not batched execution
+     cql: select * from targettable where pk = ?
+     fields: samerow
+   null-insert: # SchemaQuery.java: not batched execution
+      cql: insert into targettable(pk, ck, c1, c3, c6) values (?,?,?,?,?)
+      fields: samerow
