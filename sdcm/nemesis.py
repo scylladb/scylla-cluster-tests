@@ -86,6 +86,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     kubernetes = False
     MINUTE_IN_SEC = 60
     HOUR_IN_SEC = 60 * MINUTE_IN_SEC
+    disruptions_list = []
 
     def __init__(self, tester_obj, termination_event):
         self.tester = tester_obj  # ClusterTester object
@@ -797,6 +798,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # consume the random sequence
             disrupt_method = self._random_sequence.pop()
 
+        self.execute_disrupt_method(disrupt_method)
+
+    def execute_disrupt_method(self, disrupt_method):
         disrupt_method_name = disrupt_method.__name__.replace('disrupt_', '')
         self.log.info(">>>>>>>>>>>>>Started random_disrupt_method %s" % disrupt_method_name)
         self.metrics_srv.event_start(disrupt_method_name)
@@ -811,6 +815,33 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.info("<<<<<<<<<<<<<Finished random_disrupt_method %s" % disrupt_method_name)
         finally:
             self.metrics_srv.event_stop(disrupt_method_name)
+
+    def get_all_disrupt_methods(self):
+        all_disruptions = [attr[1] for attr in inspect.getmembers(self)
+                           if attr[0].startswith('disrupt_') and callable(attr[1])]
+        self.disruptions_list.extend(all_disruptions)
+
+    def shuffle_list_of_disruptions(self):
+        if self.cluster.params.get('nemesis_seed'):
+            nemesis_seed = self.cluster.params.get('nemesis_seed')
+        else:
+            nemesis_seed = random.randint(0, 1000)
+            self.log.info(f'nemesis_seed generated for this test is {nemesis_seed}')
+        self.log.debug(f'nemesis_seed to be used is {nemesis_seed}')
+
+        self.log.debug(f"nemesis stack BEFORE SHUFFLE is {self.disruptions_list}")
+        random.Random(nemesis_seed).shuffle(self.disruptions_list)
+        self.log.debug(f"nemesis stack AFTER SHUFFLE is {self.disruptions_list}")
+
+    def call_next_nemesis(self):
+        self.log.info(f'Selecting the next nemesis out of stack {self.disruptions_list}')
+        if self.disruptions_list is not None:
+            self.execute_disrupt_method(disrupt_method=self.disruptions_list.pop())
+            self.log.info(f'Remaining nemesis to execute {self.disruptions_list}')
+        else:
+            self.log.info('Nemesis stack is empty - setting termination_event')
+            self.termination_event.set()
+
 
     def repair_nodetool_repair(self, node=None):
         node = node if node else self.target_node
@@ -3143,6 +3174,18 @@ class TerminateAndRemoveNodeMonkey(Nemesis):
         self.disrupt_remove_node_then_add_node()
 
 
+class SisyphusMonkey(Nemesis):
+
+    def __init__(self, *args, **kwargs):
+        super(SisyphusMonkey, self).__init__(*args, **kwargs)
+        self.get_all_disrupt_methods()
+        self.shuffle_list_of_disruptions()
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.call_next_nemesis()
+
+
 # Disable unstable streaming err nemesises
 #
 # class DecommissionStreamingErrMonkey(Nemesis):
@@ -3178,7 +3221,7 @@ COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,
                    ScyllaCloudLimitedChaosMonkey,
                    AllMonkey, MdcChaosMonkey,
                    DisruptiveMonkey, NonDisruptiveMonkey, GeminiNonDisruptiveChaosMonkey,
-                   GeminiChaosMonkey, NetworkMonkey, KubernetesScyllaOperatorMonkey]
+                   GeminiChaosMonkey, NetworkMonkey, KubernetesScyllaOperatorMonkey, SisyphusMonkey]
 
 
 # TODO: https://trello.com/c/vwedwZK2/1881-corrupt-the-scrub-fails
