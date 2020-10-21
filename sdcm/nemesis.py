@@ -539,6 +539,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.monitoring_set.reconfigure_scylla_monitoring()
 
     def disrupt_nodetool_decommission(self, add_node=True, disruption_name=None):
+        if self._is_it_on_kubernetes() and disruption_name is None:
+            self.set_last_node_as_target()
         self._set_current_disruption(f"{disruption_name or 'Decommission'} {self.target_node}")
         self.cluster.decommission(self.target_node)
         new_node = None
