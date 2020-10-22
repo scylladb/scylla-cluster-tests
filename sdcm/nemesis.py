@@ -32,6 +32,7 @@ from typing import List, Optional, TypedDict, Type
 from collections import OrderedDict, defaultdict, Counter, namedtuple
 from functools import wraps, partial
 
+from concurrent.futures import ThreadPoolExecutor
 from invoke import UnexpectedExit
 from cassandra import ConsistencyLevel  # pylint: disable=ungrouped-imports
 
@@ -850,7 +851,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.info('Nemesis stack is empty - setting termination_event')
             self.termination_event.set()
 
-
     def repair_nodetool_repair(self, node=None):
         node = node if node else self.target_node
         node.run_nodetool("repair")
@@ -1500,8 +1500,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         self._set_current_disruption('AbortRepairMonkey')
         self.log.debug("Start repair target_node in background")
-        thread1 = threading.Thread(target=self.repair_nodetool_repair, name='NodeToolRepairThread', daemon=True)
-        thread1.start()
+
+        @raise_event_on_failure
+        def silenced_nodetool_repair_to_fail():
+            try:
+                self.target_node.run_nodetool("repair", verbose=False)
+            except (UnexpectedExit, Libssh2UnexpectedExit):
+                self.log.info('Repair failed as expected')
+            except Exception:
+                self.log.error('Repair failed due to the unknown error')
+                raise
+            else:
+                raise RuntimeError('This repair should fail due to the being aborted')
 
         def repair_streaming_exists():
             active_repair_cmd = 'curl -s -X GET --header "Content-Type: application/json" --header ' \
@@ -1513,22 +1523,24 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 return True
             return False
 
-        wait.wait_for(func=repair_streaming_exists,
-                      timeout=300,
-                      step=1,
-                      throw_exc=True,
-                      text='Wait for repair starts')
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix='NodeToolRepairThread') as tp:
+            thread = tp.submit(silenced_nodetool_repair_to_fail)
+            wait.wait_for(func=repair_streaming_exists,
+                          timeout=300,
+                          step=1,
+                          throw_exc=True,
+                          text='Wait for repair starts')
 
-        self.log.debug("Abort repair streaming by storage_service/force_terminate_repair API")
-        with DbEventsFilter(type='DATABASE_ERROR', line="repair's stream failed: streaming::stream_exception",
-                            node=self.target_node), \
-                DbEventsFilter(type='RUNTIME_ERROR', line='Can not find stream_manager', node=self.target_node), \
-                DbEventsFilter(type='RUNTIME_ERROR', line='is aborted', node=self.target_node), \
-                DbEventsFilter(type='RUNTIME_ERROR', line='Failed to repair', node=self.target_node):
-            self.target_node.remoter.run(
-                'curl -X POST --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/storage_service/force_terminate_repair"')
-            thread1.join(timeout=120)
-            time.sleep(10)  # to make sure all failed logs/events, are ignored correctly
+            self.log.debug("Abort repair streaming by storage_service/force_terminate_repair API")
+            with DbEventsFilter(type='DATABASE_ERROR', line="repair's stream failed: streaming::stream_exception",
+                                node=self.target_node), \
+                    DbEventsFilter(type='RUNTIME_ERROR', line='Can not find stream_manager', node=self.target_node), \
+                    DbEventsFilter(type='RUNTIME_ERROR', line='is aborted', node=self.target_node), \
+                    DbEventsFilter(type='RUNTIME_ERROR', line='Failed to repair', node=self.target_node):
+                self.target_node.remoter.run(
+                    'curl -X POST --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/storage_service/force_terminate_repair"')
+                thread.result(timeout=120)
+                time.sleep(10)  # to make sure all failed logs/events, are ignored correctly
 
         self.log.debug("Execute a complete repair for target node")
         self.repair_nodetool_repair()
