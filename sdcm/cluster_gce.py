@@ -166,7 +166,7 @@ class GCENode(cluster.BaseNode):
 
     def _safe_destroy(self):
         try:
-            self._gce_service.ex_get_node(self.name)
+            self._gce_service.ex_get_node(self.instance_name)
             self._instance.destroy()
         except ResourceNotFoundError:
             self.log.exception("Instance doesn't exist, skip destroy")
