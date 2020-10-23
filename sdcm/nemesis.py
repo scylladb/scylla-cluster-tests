@@ -53,6 +53,7 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.cluster_k8s import PodCluster
 from sdcm.cluster_k8s.minikube import MinikubeScyllaPodCluster
+from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
 
@@ -547,7 +548,22 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return new_node
 
     def _terminate_cluster_node(self, node):
-        self.cluster.terminate_node(node)
+        if isinstance(self.cluster, GkeScyllaPodCluster):
+            # Scylla-operator can't recover when k8s node is gone, so we disable terminate_k8s_host and terminate_k8s_node
+            # termination_methods = ('terminate_k8s_host', 'terminate_k8s_node', 'terminate_node')
+            # TBD: enable terminate_k8s_node when https://github.com/scylladb/scylla-operator/issues/215 is fixed
+            termination_methods = ('terminate_node',)
+        elif isinstance(self.cluster, MinikubeScyllaPodCluster):
+            # Scylla-operator can't recover when k8s node is gone, so we disable terminate_k8s_node
+            # termination_methods = ('terminate_k8s_node', 'terminate_node')
+            # TBD: enable terminate_k8s_node when https://github.com/scylladb/scylla-operator/issues/215 is fixed
+            termination_methods = ('terminate_node',)
+        else:
+            termination_methods = ('terminate_node',)
+        terminate_method_name = random.choice(termination_methods)
+        self.log.info(f"Terminate node via {terminate_method_name}")
+        terminate_method = getattr(self.cluster, terminate_method_name)
+        terminate_method(node)
         self.monitoring_set.reconfigure_scylla_monitoring()
 
     def disrupt_nodetool_decommission(self, add_node=True, disruption_name=None):
@@ -3001,9 +3017,12 @@ class AbortRepairMonkey(Nemesis):
 
 class NodeTerminateAndReplace(Nemesis):
     disruptive = True
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
+        if self._is_it_on_kubernetes():
+            self.set_last_node_as_target()
         self.disrupt_terminate_and_replace_node()
 
 

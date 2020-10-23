@@ -47,7 +47,7 @@ SCYLLA_API_VERSION = "scylla.scylladb.com/v1alpha1"
 SCYLLA_CLUSTER_RESOURCE_KIND = "ScyllaCluster"
 DEPLOY_SCYLLA_CLUSTER_DELAY = 15  # seconds
 SCYLLA_POD_READINESS_DELAY = 30  # seconds
-SCYLLA_POD_READINESS_TIMEOUT = 5  # minutes
+SCYLLA_POD_READINESS_TIMEOUT = 15  # minutes
 SCYLLA_POD_TERMINATE_TIMEOUT = 30  # minutes
 LOADER_POD_READINESS_DELAY = 30  # seconds
 LOADER_POD_READINESS_TIMEOUT = 5  # minutes
@@ -96,7 +96,7 @@ class KubernetesCluster:
                                f"--version v{self.params.get('k8s_cert_manager_version')} --set installCRDs=true",
                                namespace="cert-manager"))
         time.sleep(10)
-        self.kubectl("wait --timeout=5m --all --for=condition=Ready pod", namespace="cert-manager")
+        self.kubectl("wait --timeout=10m --all --for=condition=Ready pod", namespace="cert-manager")
         self.start_cert_manager_journal_thread()
 
     @property
@@ -175,11 +175,13 @@ class BasePodContainer(cluster.BaseNode):
     def __init__(self, name: str, parent_cluster: PodCluster, node_prefix: str = "node", node_index: int = 1,
                  base_logdir: Optional[str] = None, dc_idx: int = 0):
         self.node_index = node_index
-        super().__init__(name=name,
-                         parent_cluster=parent_cluster,
-                         base_logdir=base_logdir,
-                         node_prefix=node_prefix,
-                         dc_idx=dc_idx)
+        cluster.BaseNode.__init__(
+            self, name=name,
+            parent_cluster=parent_cluster,
+            base_logdir=base_logdir,
+            node_prefix=node_prefix,
+            dc_idx=dc_idx
+        )
 
     def init(self) -> None:
         super().init()
@@ -363,6 +365,20 @@ class BasePodContainer(cluster.BaseNode):
         self._coredump_thread = CoredumpExportFileThread(
             self, self._maximum_number_of_cores_to_publish, ['/var/lib/scylla/coredumps'])
         self._coredump_thread.start()
+
+    @cached_property
+    def node_name(self) -> str:
+        return self._pod.spec.node_name
+
+    @property
+    def instance_name(self) -> str:
+        return self.node_name
+
+    def terminate_k8s_node(self):
+        self.parent_cluster.k8s_cluster.kubectl(f'delete node {self.node_name} --now')
+
+    def terminate_k8s_host(self):
+        raise NotImplementedError("To be overridden in child class")
 
 
 class PodCluster(cluster.BaseCluster):
@@ -563,11 +579,29 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                                  dc_idx=dc_idx,
                                  enable_auto_bootstrap=enable_auto_bootstrap)
 
-    def terminate_node(self, node):
+    def terminate_node(self, node: BasePodContainer):
         assert self.nodes[-1] == node, "Can withdraw the last node only"
         current_members = self.scylla_cluster_spec.datacenter.racks[0].members
-        self.replace_scylla_cluster_value("/spec/datacenter/racks/0/members", current_members-1)
+        self.replace_scylla_cluster_value("/spec/datacenter/racks/0/members", current_members - 1)
         super().terminate_node(node)
+        self.k8s_cluster.kubectl(f"wait --timeout={SCYLLA_POD_TERMINATE_TIMEOUT}m --for=delete pod {node.name}",
+                                 namespace=self.namespace,
+                                 timeout=SCYLLA_POD_TERMINATE_TIMEOUT*60+10)
+
+    def terminate_k8s_node(self, node: BasePodContainer):
+        assert self.nodes[-1] == node, "Can withdraw the last node only"
+        current_members = self.scylla_cluster_spec.datacenter.racks[0].members
+        node.terminate_k8s_node()
+        self.replace_scylla_cluster_value("/spec/datacenter/racks/0/members", current_members - 1)
+        self.k8s_cluster.kubectl(f"wait --timeout={SCYLLA_POD_TERMINATE_TIMEOUT}m --for=delete pod {node.name}",
+                                 namespace=self.namespace,
+                                 timeout=SCYLLA_POD_TERMINATE_TIMEOUT*60+10)
+
+    def terminate_k8s_host(self, node: BasePodContainer):
+        assert self.nodes[-1] == node, "Can withdraw the last node only"
+        current_members = self.scylla_cluster_spec.datacenter.racks[0].members
+        node.terminate_k8s_host()
+        self.replace_scylla_cluster_value("/spec/datacenter/racks/0/members", current_members - 1)
         self.k8s_cluster.kubectl(f"wait --timeout={SCYLLA_POD_TERMINATE_TIMEOUT}m --for=delete pod {node.name}",
                                  namespace=self.namespace,
                                  timeout=SCYLLA_POD_TERMINATE_TIMEOUT*60+10)

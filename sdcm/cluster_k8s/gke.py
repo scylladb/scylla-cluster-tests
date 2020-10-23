@@ -13,6 +13,7 @@
 
 import os
 import logging
+import time
 from typing import Callable, List
 from functools import cached_property
 
@@ -192,10 +193,17 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
 
 
 class GkeScyllaPodContainer(BasePodContainer, IptablesPodIpRedirectMixin):
+    parent_cluster: 'GkeScyllaPodCluster'
+
+    def __init__(self, *args, **kwargs):
+        BasePodContainer.__init__(self, *args, **kwargs)
+
+    def init(self):
+        BasePodContainer.init(self)
+
     @cached_property
     def gce_node_ips(self):
-        gce_node_name = self._pod.spec.node_name
-        gce_node = self.parent_cluster.k8s_cluster.gce_services[0].ex_get_node(name=gce_node_name)
+        gce_node = self.k8s_node
         return gce_node.public_ips, gce_node.private_ips
 
     @cached_property
@@ -210,8 +218,47 @@ class GkeScyllaPodContainer(BasePodContainer, IptablesPodIpRedirectMixin):
             return self.gce_node_ips[0][0]
         return self.gce_node_ips[1][0]
 
+    @property
+    def k8s_node(self):
+        return self.parent_cluster.k8s_cluster.gce_services[0].ex_get_node(name=self.node_name)
+
+    def terminate_k8s_host(self):
+        self._instance_wait_safe(self._destroy)
+
+    def _destroy(self):
+        if self.k8s_node:
+            self.k8s_node.destroy()
+
+    def _instance_wait_safe(self, instance_method, *args, **kwargs):
+        """
+        Wrapper around GCE instance methods that is safer to use.
+
+        Let's try a method, and if it fails, let's retry using an exponential
+        backoff algorithm, similar to what Amazon recommends for it's own
+        service [1].
+
+        :see: [1] http://docs.aws.amazon.com/general/latest/gr/api-retries.html
+        """
+        threshold = 300
+        ok = False
+        retries = 0
+        max_retries = 9
+        while not ok and retries <= max_retries:
+            try:
+                return instance_method(*args, **kwargs)
+            except Exception as details:  # pylint: disable=broad-except
+                self.log.error('Call to method %s (retries: %s) failed: %s',
+                               instance_method, retries, details)
+                time.sleep(min((2 ** retries) * 2, threshold))
+                retries += 1
+
+        if not ok:
+            raise cluster.NodeError('GCE instance %s method call error after '
+                                    'exponential backoff wait' % self.k8s_node.id)
+
 
 class GkeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
+    k8s_cluster: 'GkeCluster'
     PodContainerClass = GkeScyllaPodContainer
 
     def add_nodes(self,

@@ -792,6 +792,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return self.ip_address
 
     @property
+    def instance_name(self) -> str:
+        """
+        Return name of the instance related to the node, when node is running in the cloud, or on the docker
+        """
+        return self.name
+
+    @property
     def is_spot(self):
         return False
 
