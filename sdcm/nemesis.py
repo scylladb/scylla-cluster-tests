@@ -50,6 +50,7 @@ from sdcm.sct_events import DisruptionEvent, DbEventsFilter, Severity, InfoEvent
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.cluster_k8s import PodCluster
+from sdcm.cluster_k8s.minikube import MinikubeScyllaPodCluster
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
 
@@ -735,6 +736,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             assert '(1 rows)' in result.stdout, 'The key is not loaded by `nodetool refresh`'
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
+        if isinstance(self.cluster, MinikubeScyllaPodCluster):
+            self.log.info('disrupt_nodetool_enospc is not supported on minikube cluster')
+            # Minikube cluster has shared file system, it is shared not only between cluster nodes
+            # but also between kubernetes services too, which make kubernetes inoperational once enospc is reached
+            return
+
         if all_nodes:
             nodes = self.cluster.nodes
         else:
@@ -2639,6 +2646,7 @@ class RefreshBigMonkey(Nemesis):
 
 class EnospcMonkey(Nemesis):
     disruptive = True
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -2647,6 +2655,7 @@ class EnospcMonkey(Nemesis):
 
 class EnospcAllNodesMonkey(Nemesis):
     disruptive = True
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
