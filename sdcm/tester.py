@@ -56,7 +56,8 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events import start_events_device, stop_events_device, InfoEvent, FullScanEvent, Severity, \
-    TestFrameworkEvent, TestResultEvent, get_logger_event_summary, EVENTS_PROCESSES, stop_events_analyzer
+    TestFrameworkEvent, TestResultEvent, get_logger_event_summary, EVENTS_PROCESSES, stop_events_analyzer, \
+    ScyllaBenchEvent
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.prepare_region import AwsRegion
@@ -1039,6 +1040,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             params['stop_test_on_failure'] = stop_test_on_failure
             return self.run_stress_cassandra_thread(**params)
         elif stress_cmd.startswith('scylla-bench'):
+            params['stop_test_on_failure'] = stop_test_on_failure
             return self.run_stress_thread_bench(**params)
         elif stress_cmd.startswith('bin/ycsb'):
             return self.run_ycsb_thread(**params)
@@ -1076,9 +1078,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return cs_thread
 
     def run_stress_thread_bench(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments,unused-argument
-                                round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, use_single_loader=False):  # pylint: disable=too-many-arguments,unused-argument
+                                round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, use_single_loader=False,
+                                stop_test_on_failure=True):  # pylint: disable=too-many-arguments,unused-argument
 
         timeout = self.get_duration(duration)
+        stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
+
+        credentials = self.db_cluster.get_db_auth()
+        if credentials and 'username=' not in stress_cmd:
+            stress_cmd += " -username {} -password {}".format(*credentials)
+
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
         bench_thread = self.loaders.run_stress_thread_bench(
@@ -1086,7 +1095,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             node_list=self.db_cluster.nodes,
             round_robin=round_robin,
             use_single_loader=use_single_loader,
-            stop_test_on_failure=self.params.get("stop_test_on_stress_failure"),
+            stop_test_on_failure=stop_test_on_failure,
         )
         scylla_encryption_options = self.params.get('scylla_encryption_options')
         if scylla_encryption_options and 'write' in stress_cmd:
