@@ -1218,6 +1218,14 @@ class SCTConfiguration(dict):
                     f'Test duration too long for spot_duration instance type. ' \
                     f'Max possible test duration time for this instance type is {MAX_SPOT_DURATION_TIME} minutes'
 
+        # 11) validate authenticator parameters
+        if self.get('authenticator') and self.get('authenticator') == "PasswordAuthenticator":
+            authenticator_user = self.get("authenticator_user")
+            authenticator_password = self.get("authenticator_password")
+            if not (authenticator_password and authenticator_user):
+                raise ValueError("For PasswordAuthenticator authenticator authenticator_user and authenticator_password"
+                                 " have to be provided")
+
         self._update_environment_variables()
 
     def log_config(self):
