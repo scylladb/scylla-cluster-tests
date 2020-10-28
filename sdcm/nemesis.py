@@ -739,10 +739,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
         if isinstance(self.cluster, MinikubeScyllaPodCluster):
-            self.log.info('disrupt_nodetool_enospc is not supported on minikube cluster')
             # Minikube cluster has shared file system, it is shared not only between cluster nodes
             # but also between kubernetes services too, which make kubernetes inoperational once enospc is reached
-            return
+            raise UnsupportedNemesis('disrupt_nodetool_enospc is not supported on minikube cluster')
 
         if all_nodes:
             nodes = self.cluster.nodes
