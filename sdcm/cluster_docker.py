@@ -25,7 +25,6 @@ from sdcm.remote import LOCALRUNNER
 from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, ContainerManager, DockerException
 from sdcm.utils.health_checker import check_nodes_status
 
-
 DEFAULT_SCYLLA_DB_IMAGE = "scylladb/scylla-nightly"
 DEFAULT_SCYLLA_DB_IMAGE_TAG = "latest"
 AIO_MAX_NR_RECOMMENDED_VALUE = 1048576
@@ -301,6 +300,9 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
 
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):
         self.install_gemini(node=node)
+
+        self.install_scylla_bench(node)
+
         if self.params.get('client_encrypt'):
             node.config_client_encrypt()
 
