@@ -75,6 +75,7 @@ from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
 from sdcm.coredump import CoredumpExportSystemdThread
 
+
 CREDENTIALS = []
 DEFAULT_USER_PREFIX = getpass.getuser()
 # Test duration (min). Parameter used to keep instances produced by tests that
@@ -3978,14 +3979,7 @@ class BaseLoaderSet():
 
         node.wait_cs_installed(verbose=verbose)
 
-        # scylla-bench
-        node.remoter.run('sudo yum install git -y')
-        node.remoter.run('curl -LO https://storage.googleapis.com/golang/go1.13.linux-amd64.tar.gz')
-        node.remoter.run('sudo tar -C /usr/local -xvzf go1.13.linux-amd64.tar.gz')
-        node.remoter.run("echo 'export GOPATH=$HOME/go' >> $HOME/.bashrc")
-        node.remoter.run("echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bashrc")
-        node.remoter.run("source $HOME/.bashrc")
-        node.remoter.run("go get github.com/scylladb/scylla-bench")
+        self.install_scylla_bench(node)
 
         # install docker
         docker_install = dedent("""
@@ -4273,6 +4267,19 @@ class BaseLoaderSet():
                 kill_result = loader.remoter.run('pkill -f -QUIT gemini', ignore_status=True)
                 if kill_result.exit_status != 0:
                     self.log.warning('Terminate gemini on node %s:\n%s', loader, kill_result)
+
+    @staticmethod
+    def install_scylla_bench(node):
+        cmd = dedent("""
+                    sudo yum install git -y
+                    curl -LO https://storage.googleapis.com/golang/go1.13.linux-amd64.tar.gz
+                    sudo tar -C /usr/local -xvzf go1.13.linux-amd64.tar.gz
+                    echo 'export GOPATH=$HOME/go' >> $HOME/.bashrc
+                    echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bashrc
+                    source $HOME/.bashrc
+                    go get github.com/scylladb/scylla-bench
+                """)
+        node.remoter.run(cmd)
 
 
 class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-instance-attributes
