@@ -7,7 +7,8 @@ n_loaders: 1
 n_monitor_nodes: 1
 
 instance_type_db: 'i3.4xlarge'
-instance_type_loader: 'c5.large'
+ami_id_loader: 'ami-03c856a491257cb7f'
+# This loader AMI is used to workaround master issue that uses a non-ICS supported AMI.
 
 nemesis_class_name: 'NoOpMonkey'
 user_prefix: 'ics_space_amplification'
