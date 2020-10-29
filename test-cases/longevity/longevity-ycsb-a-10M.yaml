@@ -21,7 +21,7 @@ prepare_write_cmd:
   - >-
     bin/ycsb load cassandra-cql -P workloads/workloada -threads 84 -p recordcount=10000000
     -p cassandra.readconsistencylevel=ONE -p cassandra.writeconsistencylevel=ONE
-    -p readproportion=0 -p updateproportion=1
+    -p readproportion=0 -p updateproportion=0
     -p fieldcount=10 -p fieldlength=128
     -p insertstart=0 -p insertcount=5000000
     -p cassandra.coreconnections=14 -p cassandra.maxconnections=14
@@ -30,25 +30,37 @@ prepare_write_cmd:
   - >-
     bin/ycsb load cassandra-cql -P workloads/workloada -threads 84 -p recordcount=10000000
     -p cassandra.readconsistencylevel=ONE -p cassandra.writeconsistencylevel=ONE
-    -p readproportion=0 -p updateproportion=1
+    -p readproportion=0 -p updateproportion=0
     -p fieldcount=10 -p fieldlength=128
     -p insertstart=5000000 -p insertcount=5000000
     -p cassandra.coreconnections=14 -p cassandra.maxconnections=14
     -p cassandra.username=cassandra -p cassandra.password=cassandra
 
+# --target must be set to have correct latency results for const throughput - see coordinated omission avoidance problem
+# 16 vCPU per node = 14 shards per node =>
+# we need high concurrency per shard to at least somewhat load request queues
+# 14 vCPUs * 20 parallelism factor = 280 connections per host
+# 840 threads = 280 conns / host * 3 nodes = 840 total threads
+# ops count 300 * 10^6 * / 60 = 40 minutes for workload
+# ycsb workloads use zipfian distribution so we will use a single loader with 32 vCPUs
+# fix framework to support custom CL: -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE
+# or at least-p scylla.readconsistencylevel=QUORUM -p scylla.writeconsistencylevel=ONE
+# to use scylla-cql with token awareness use:
+# $ $ bin/ycsb run scylla -P workloads/workloada -target 120000 -threads 840 -p recordcount=10000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000 -p scylla.coreconnections=280
+#     -p scylla.maxconnections=280 -p scylla.username=cassandra -p scylla.password=cassandra -p scylla.tokenaware=true -p hosts=10.0.2.51,10.0.3.133,10.0.3.67 -p scylla.readconsistencylevel=ONE -p
+#      scylla.writeconsistencylevel=ONE
 stress_cmd: [
-    "bin/ycsb run cassandra-cql -P workloads/workloada -threads 84 -p recordcount=10000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=10000000 -p cassandra.coreconnections=14 -p cassandra.maxconnections=14 -p cassandra.username=cassandra -p cassandra.password=cassandra",
-    "bin/ycsb run cassandra-cql -P workloads/workloada -threads 84 -p recordcount=10000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=10000000 -p cassandra.coreconnections=14 -p cassandra.maxconnections=14 -p cassandra.username=cassandra -p cassandra.password=cassandra",
+    "bin/ycsb run cassandra-cql -P workloads/workloada -target 120000 -threads 840 -p recordcount=10000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000 -p cassandra.coreconnections=280 -p cassandra.maxconnections=280 -p cassandra.username=cassandra -p cassandra.password=cassandra"
 ]
 
 round_robin: true
 
 n_db_nodes: 3
-n_loaders: 2
+n_loaders: 1
 n_monitor_nodes: 1
 
 instance_type_db: 'i3.4xlarge'
-instance_type_loader: 'm5.2xlarge' # 8 vCPU (4 cores), 32 GB RAM
+instance_type_loader: 'c5.9xlarge' # 32 vCPU, 72 GB RAM, 10GiB
 
 nemesis_class_name: 'NoOpMonkey'
 nemesis_interval: 5

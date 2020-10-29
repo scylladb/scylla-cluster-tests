@@ -3,9 +3,13 @@
 #         It can be run with Jenkins BYO as in https://jenkins.scylladb.com/view/staging/job/scylla-staging/job/ivan/job/ivan-byo-longevity/23/:
 #         test_name: longevity_test.LongevityTest.test_custom_time.
 #
+# avg load speed per 2*2*128 threads 44K ops/s each
+# 10M / 44K = ~3 minutes
+#
 # 240 = 4 hours * 60
+# 480 = 8 hours * 60
 # 10900 = 7 days * 24 hours a day * 60 minutes an hour
-test_duration: 240
+test_duration: 480
 
 pre_create_keyspace: [
   "CREATE KEYSPACE ycsb WITH REPLICATION = {'class' : 'SimpleStrategy', 'replication_factor': 3 };",
@@ -13,22 +17,23 @@ pre_create_keyspace: [
 ]
 
 # number of core connections must match number of vCPU (16) on a db node - 2
+# it will take about 20 minutes : 10^6 records / 120K QPS
 prepare_write_cmd:
   - >-
-    bin/ycsb load cassandra-cql -P workloads/workloada -threads 84 -p recordcount=500000
+    bin/ycsb load cassandra-cql -P workloads/workloada -threads 84 -p recordcount=100000000
     -p cassandra.readconsistencylevel=ONE -p cassandra.writeconsistencylevel=ONE
     -p readproportion=0 -p updateproportion=0
     -p fieldcount=10 -p fieldlength=128
-    -p insertstart=0 -p insertcount=500000
+    -p insertstart=0 -p insertcount=50000000
     -p cassandra.coreconnections=14 -p cassandra.maxconnections=14
     -p cassandra.username=cassandra -p cassandra.password=cassandra
 
   - >-
-    bin/ycsb load cassandra-cql -P workloads/workloada -threads 84 -p recordcount=500000
+    bin/ycsb load cassandra-cql -P workloads/workloada -threads 84 -p recordcount=100000000
     -p cassandra.readconsistencylevel=ONE -p cassandra.writeconsistencylevel=ONE
     -p readproportion=0 -p updateproportion=0
     -p fieldcount=10 -p fieldlength=128
-    -p insertstart=500000 -p insertcount=500000
+    -p insertstart=50000000 -p insertcount=50000000
     -p cassandra.coreconnections=14 -p cassandra.maxconnections=14
     -p cassandra.username=cassandra -p cassandra.password=cassandra
 
@@ -41,11 +46,11 @@ prepare_write_cmd:
 # ycsb workloads use zipfian distribution so we will use a single loader with 32 vCPUs
 # fix framework to support custom CL: -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE
 # or at least-p scylla.readconsistencylevel=QUORUM -p scylla.writeconsistencylevel=ONE
-# $ $ bin/ycsb run scylla -P workloads/workloada -target 120000 -threads 840 -p recordcount=1000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000 -p scylla.coreconnections=280
+# $ $ bin/ycsb run scylla -P workloads/workloada -target 120000 -threads 840 -p recordcount=100000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000 -p scylla.coreconnections=280
 #     -p scylla.maxconnections=280 -p scylla.username=cassandra -p scylla.password=cassandra -p scylla.tokenaware=true -p hosts=10.0.2.51,10.0.3.133,10.0.3.67 -p scylla.readconsistencylevel=ONE -p
 #      scylla.writeconsistencylevel=ONE
 stress_cmd: [
-    "bin/ycsb run cassandra-cql -P workloads/workloada -target 120000 -threads 840 -p recordcount=1000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000 -p cassandra.coreconnections=280 -p cassandra.maxconnections=280 -p cassandra.username=cassandra -p cassandra.password=cassandra"
+    "bin/ycsb run cassandra-cql -P workloads/workloada -target 120000 -threads 840 -p recordcount=100000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000 -p cassandra.coreconnections=280 -p cassandra.maxconnections=280 -p cassandra.username=cassandra -p cassandra.password=cassandra"
 ]
 
 round_robin: true
@@ -65,6 +70,6 @@ authenticator_user: cassandra
 authenticator_password: cassandra
 authorizer: 'CassandraAuthorizer'
 
-user_prefix: 'longevity-ycsb-a-1M-4h'
+user_prefix: 'longevity-ycsb-a-100M'
 space_node_threshold: 64424
 store_results_in_elasticsearch: false
