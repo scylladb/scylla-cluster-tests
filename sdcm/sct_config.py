@@ -370,8 +370,9 @@ class SCTConfiguration(dict):
         dict(name="alternator_port", env="SCT_ALTERNATOR_PORT", type=int,
              help="Port to configure for alternator in scylla.yaml"),
         dict(name="dynamodb_primarykey_type", env="SCT_DYNAMODB_PRIMARYKEY_TYPE", type=str,
-             help="Type of dynamodb table to create with range key or not, can be HASH or HASH_AND_RANGE",
-             choices=['HASH', 'HASH_AND_RANGE']),
+             help=f"Type of dynamodb table to create with range key or not, can be:\n"
+                  f"{','.join([schema.value for schema in alternator.enums.YCSBSchemaTypes])}",
+             choices=[schema.value for schema in alternator.enums.YCSBSchemaTypes]),
         dict(name="alternator_write_isolation", env="SCT_ALTERNATOR_WRITE_ISOLATION", type=str,
              help="Set the write isolation for the alternator table, see https://github.com/scylladb/scylla/blob"
                   "/master/docs/alternator/alternator.md#write-isolation-policies for more details"),

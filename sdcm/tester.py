@@ -274,7 +274,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.params.get("logs_transport") == 'rsyslog':
             Setup.configure_rsyslog(self.localhost, enable_ngrok=False)
 
-        self.alternator = alternator.api.Alternator(sct_params=self.params)
+        self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
         start_events_device(self.logdir)
         time.sleep(0.5)
         InfoEvent('TEST_START test_id=%s' % Setup.test_id())
