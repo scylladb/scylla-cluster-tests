@@ -1,6 +1,7 @@
 import logging
 from concurrent.futures.thread import ThreadPoolExecutor
 from itertools import chain
+from pprint import pformat
 from typing import NamedTuple
 
 import boto3
@@ -51,25 +52,25 @@ class Alternator:
         dynamodb_api.client.tag_resource(ResourceArn=arn, Tags=tags)
 
     def create_table(self, node,  # pylint: disable=too-many-arguments
-                     schema=enums.YCSVSchemaTypes.HASH_AND_RANGE, isolation=None, table_name=consts.TABLE_NAME,
+                     schema=enums.YCSBSchemaTypes.HASH_AND_RANGE, isolation=None, table_name=consts.TABLE_NAME,
                      wait_until_table_exists=True, **kwargs) -> Table:
-        if isinstance(schema, enums.YCSVSchemaTypes):
+        if isinstance(schema, enums.YCSBSchemaTypes):
             schema = schema.value
         schema = schemas.ALTERNATOR_SCHEMAS[schema]
         dynamodb_api = self.get_dynamodb_api(node=node)
-        LOGGER.debug(f"Creating a new table '{table_name}' using node '{node.name}'")
+        LOGGER.debug("Creating a new table '{}' using node '{}'".format(table_name, node.name))
         table = dynamodb_api.resource.create_table(
             TableName=table_name, BillingMode="PAY_PER_REQUEST", **schema, **kwargs)
         if wait_until_table_exists:
             waiter = dynamodb_api.client.get_waiter('table_exists')
             waiter.wait(TableName=table_name, WaiterConfig=dict(Delay=1, MaxAttempts=100))
 
-        LOGGER.info(f"The table '{table_name}' successfully created..")
+        LOGGER.info("The table '{}' successfully created..".format(table_name))
         response = dynamodb_api.client.describe_table(TableName=table_name)
 
         if isolation:
             self.set_write_isolation(node=node, isolation=isolation, table_name=table_name)
-        LOGGER.debug(f"Table's schema and configuration are: {response}")
+        LOGGER.debug("Table's schema and configuration are: {}".format(response))
         return table
 
     def scan_table(self, node, table_name=consts.TABLE_NAME, threads_num=None, **kwargs):
@@ -81,14 +82,15 @@ class Alternator:
             parallel_params, result, still_running_while = {}, [], True
             if is_parallel_scan:
                 parallel_params = {"TotalSegments": threads_num, "Segment": part_scan_idx}
-                LOGGER.debug(f"Starting parallel scan part '{part_scan_idx + 1}' on table '{table_name}'")
+                LOGGER.debug("Starting parallel scan part '{}' on table '{}'".format(part_scan_idx + 1, table_name))
             else:
-                LOGGER.debug(f"Starting full scan on table '{table_name}'")
+                LOGGER.debug("Starting full scan on table '{}'".format(table_name))
             while still_running_while:
                 response = table.scan(**parallel_params, **kwargs)
                 result.extend(response["Items"])
                 still_running_while = 'LastEvaluatedKey' in response
 
+            LOGGER.debug("Founding the following items:\n{}".format(pformat(result)))
             return result
 
         if is_parallel_scan:
@@ -105,9 +107,11 @@ class Alternator:
         assert new_items or delete_items, "should pass new_items or delete_items, other it's a no-op"
         new_items, delete_items = new_items or [], delete_items or []
         if new_items:
-            LOGGER.debug(f"Adding new {len(new_items)} items to table '{table_name}'..")
+            LOGGER.debug("Adding new {} items to table '{}'.\n{}..".format(
+                len(new_items), table_name, pformat(new_items)))
         if delete_items:
-            LOGGER.debug(f"Deleting {len(delete_items)} items from table '{table_name}'..")
+            LOGGER.debug("Deleting {} items from table '{table_name}'.\n{}..".format(
+                len(delete_items), table_name, pformat(delete_items)))
 
         table = dynamodb_api.resource.Table(name=table_name)
         with table.batch_writer() as batch:
@@ -119,11 +123,11 @@ class Alternator:
                     batch.delete_item({key: item[key] for key in table_keys})
         return table
 
-    def compare_table_data(self, node, table_data, table_name=consts.TABLE_NAME) -> bool:
+    def compare_table_data(self, node, table_data, table_name=consts.TABLE_NAME) -> set:
         data = self.scan_table(node=node, table_name=table_name)
-        return set(hash(tuple(str(xxx))) for xxx in table_data) == set(hash(tuple(str(xxx))) for xxx in data)
+        return set(str(line) for line in table_data) - set(str(line) for line in data)
 
-    def is_table_exists(self, node, table_name: consts.TABLE_NAME, endpoint_url=None):
+    def is_table_exists(self, node, table_name: consts.TABLE_NAME):
         dynamodb_api = self.get_dynamodb_api(node=node)
         is_table_exists = True
 
@@ -131,7 +135,8 @@ class Alternator:
             dynamodb_api.client.describe_table(TableName=table_name)
         except dynamodb_api.client.exceptions.ResourceNotFoundException:
             is_table_exists = False
-        LOGGER.info(f"The table '{table_name}'{'' if is_table_exists else 'not'} exists in endpoint {endpoint_url}..")
+        LOGGER.info("The table '{}'{} exists in endpoint {}..".format(
+            table_name, '' if is_table_exists else 'not', node.name))
         return is_table_exists
 
     def delete_table(self, node, table_name: consts.TABLE_NAME, wait_until_table_removed=True):
@@ -141,6 +146,6 @@ class Alternator:
         if wait_until_table_removed:
             waiter = dynamodb_api.client.get_waiter('table_not_exists')
             waiter.wait(TableName=table_name)
-            LOGGER.info(f"The '{table_name}' table successfully removed")
+            LOGGER.info("The '{}' table successfully removed".format(table_name))
         else:
-            LOGGER.info(f"Send request to removed '{table_name}' table")
+            LOGGER.info("Send request to removed '{}' table".format(table_name))
