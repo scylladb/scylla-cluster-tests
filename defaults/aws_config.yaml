@@ -26,7 +26,7 @@ regions_data:
 
 
 aws_root_disk_size_monitor: 50  # GB, remove this field if default disk size should be used
-aws_root_disk_size_db: 15
+aws_root_disk_size_db: 30
 aws_root_disk_size_loader: 30  # GB, Increase loader disk in order to have extra space for a larger swap
 loader_swap_size: 10240  #10GB SWAP space
 ami_db_scylla_user: 'centos'
