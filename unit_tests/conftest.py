@@ -10,7 +10,7 @@ from sdcm.utils.docker_utils import RemoteDocker
 from sdcm import wait
 from sdcm.utils.decorators import timeout
 from sdcm.sct_events import (start_events_device, stop_events_device)
-
+from sdcm.cluster import BaseNode
 from unit_tests.dummy_remote import LocalNode
 
 
@@ -65,7 +65,7 @@ def docker_scylla():
     entryfile_path = entryfile_path.joinpath('./docker/scylla-sct/entry.sh')
 
     alternator_flags = "--alternator-port 8000 --alternator-write-isolation=always"
-    docker_version = "scylladb/scylla:4.1.0"
+    docker_version = "scylladb/scylla-nightly:666.development-0.20201015.8068272b466"
     scylla = RemoteDocker(LocalNode(), image_name=docker_version,
                           command_line=f"--smp 1 --experimental 1 {alternator_flags}",
                           extra_docker_opts=f'-p 8000 -p 9042 --cpus="1" -v {entryfile_path}:/entry.sh --entrypoint'
@@ -73,15 +73,21 @@ def docker_scylla():
 
     def db_up():
         try:
-            # check that port is taken
-            result_netstat = scylla.run("nodetool status | grep '^UN '",
-                                        verbose=False, ignore_status=True)
-            return result_netstat.exit_status == 0
+            return scylla.is_port_used(port=BaseNode.CQL_PORT, service_name="scylla-server")
+        except Exception as details:  # pylint: disable=broad-except
+            logging.error("Error checking for scylla up normal: %s", details)
+            return False
+
+    def db_alternator_up():
+        try:
+            return scylla.is_port_used(port=8000, service_name="scylla-server")
         except Exception as details:  # pylint: disable=broad-except
             logging.error("Error checking for scylla up normal: %s", details)
             return False
 
     wait.wait_for(func=db_up, step=1, text='Waiting for DB services to be up', timeout=30, throw_exc=True)
+    wait.wait_for(func=db_alternator_up, step=1, text='Waiting for DB services to be up alternator)',
+                  timeout=30, throw_exc=True)
 
     yield scylla
 

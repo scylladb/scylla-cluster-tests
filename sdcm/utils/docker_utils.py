@@ -387,7 +387,7 @@ class RemoteDocker:
     def __init__(self, node, image_name, ports=None, command_line="tail -f /dev/null", extra_docker_opts=""):  # pylint: disable=too-many-arguments
         self.node = node
         self._internal_ip_address = None
-
+        self.log = LOGGER
         ports = " ".join([f'-p {port}:{port}' for port in ports]) if ports else ""
         res = self.node.remoter.run(
             f'docker run {extra_docker_opts} -d {ports} {image_name} {command_line}', verbose=True)
@@ -430,7 +430,7 @@ class RemoteDocker:
         return self.node.remoter.run(f"docker logs {self.docker_id}").stdout.strip()
 
     def run(self, cmd, *args, **kwargs):
-        return self.node.remoter.run(f"docker exec -i {self.docker_id} /bin/bash -c '{cmd}'", *args, **kwargs)
+        return self.node.remoter.run(f'docker exec -i {self.docker_id} /bin/bash -c "{cmd}"', *args, **kwargs)
 
     def kill(self):
         return self.node.remoter.run(f"docker rm -f {self.docker_id}", verbose=False, ignore_status=True)
@@ -442,6 +442,27 @@ class RemoteDocker:
     def receive_files(self, src, dst, **kwargs):  # pylint: disable=unused-argument
         self.node.remoter.run(f"docker cp {self.docker_id}:{src} {dst}", verbose=False, ignore_status=True)
         self.node.remoter.receive_files(dst, dst, **kwargs)
+
+    def is_port_used(self, port: int, service_name: str) -> bool:
+        try:
+            # Path to `ss' is /usr/sbin/ss for RHEL-like distros and /bin/ss for Debian-based.  Unfortunately,
+            # /usr/sbin is not always in $PATH, so need to set it explicitly.
+            #
+            # Output of `ss -ln' command in case of used port:
+            #   $ ss -ln '( sport = :8000 )'
+            #   Netid State      Recv-Q Send-Q     Local Address:Port                    Peer Address:Port
+            #   tcp   LISTEN     0      5                      *:8000                               *:*
+            #
+            # And if there are no processes listening on the port:
+            #   $ ss -ln '( sport = :8001 )'
+            #   Netid State      Recv-Q Send-Q     Local Address:Port                    Peer Address:Port
+            #
+            # Can't avoid the header by using `-H' option because of ss' core on Ubuntu 18.04.
+            cmd = f"PATH=/bin:/usr/sbin ss -ln '( sport = :{port} )'"
+            return len(self.run(cmd, verbose=False).stdout.splitlines()) > 1
+        except Exception as details:  # pylint: disable=broad-except
+            self.log.error("Error checking for '%s' on port %s: %s", service_name, port, details)
+            return False
 
 
 def running_in_docker():
