@@ -68,10 +68,11 @@ from sdcm.utils.decorators import retrying, log_run_info
 from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, BUILD_ID_RE, get_gemini_version, get_systemd_version
-from sdcm.sct_events.base import Severity
+from sdcm.sct_events import Severity
+from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.sct_events.loaders import ScyllaBenchEvent
-from sdcm.sct_events.database import DatabaseLogEvent, ClusterHealthValidatorEvent
+from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.grafana import set_grafana_url
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
@@ -2651,10 +2652,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 for node_ip, node_properties in dc_status.items():
                     nodes_status[node_ip] = {'status': node_properties['state'], 'dc': dc}
 
-        except Exception as ex:  # pylint: disable=broad-except
-            ClusterHealthValidatorEvent(type='NodesStatus', subtype='warning', status=Severity.WARNING,
-                                        node=self.name,
-                                        message=f"Unable to get nodetool status from '{self.name}': {ex}")
+        except Exception as exc:
+            ClusterHealthValidatorEvent.NodeStatus.WARNING(
+                node=self.name,
+                message=f"Unable to get nodetool status from `{self.name}': {exc}",
+            ).publish()
         return nodes_status
 
     @retrying(n=5, sleep_time=5, raise_on_exceeded=False)
@@ -3657,13 +3659,12 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             for node in self.nodes:
                 node.check_node_health()
         else:
-            ClusterHealthValidatorEvent(type='ClusterHealthCheck', subtype='info', status=Severity.NORMAL,
-                                        message='Test runs with parallel nemesis. Nodes health is disables')
+            ClusterHealthValidatorEvent.ClusterHealthCheck.info(
+                message="Test runs with parallel nemesis. Nodes health checks are disabled.",
+            ).publish()
 
         self.check_nodes_running_nemesis_count()
-
-        ClusterHealthValidatorEvent(type='ClusterHealthCheck', subtype='done', status=Severity.NORMAL,
-                                    message='Cluster health check finished')
+        ClusterHealthValidatorEvent.ClusterHealthCheck.done(message="Cluster health check finished").publish()
 
     def check_nodes_running_nemesis_count(self):
         nodes_running_nemesis = [node for node in self.nodes if node.running_nemesis]
@@ -3674,8 +3675,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         message = "; ".join(f"{node.ip_address} ({'seed' if node.is_seed else 'non-seed'}): {node.running_nemesis}"
                             for node in nodes_running_nemesis)
-        ClusterHealthValidatorEvent(type='NodesNemesis', subtype='warning', status=Severity.WARNING,
-                                    message=f"There are more then expected nodes running nemesis: {message}")
+        ClusterHealthValidatorEvent.NodesNemesis.WARNING(
+            message=f"There are more then expected nodes running nemesis: {message}",
+        ).publish()
 
     @retrying(n=6, sleep_time=10, allowed_exceptions=(AssertionError,))
     def wait_for_schema_agreement(self):
