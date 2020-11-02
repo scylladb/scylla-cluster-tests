@@ -110,7 +110,7 @@ def update_config_file(node, region, config_file=SCYLLA_MANAGER_AGENT_YAML_PATH)
     # 'us-east-1 us-west-2' and 'manager-backup-tests-us-east-1 manager-backup-tests-eu-west-2'
 
     node.remoter.run(f'sudo chmod o+w {config_file}')
-    configuration = yaml.load(node.remoter.run(f'cat {config_file}').stdout)
+    configuration = yaml.safe_load(node.remoter.run(f'cat {config_file}').stdout)
     if 's3' not in configuration:
         configuration['s3'] = {}
     configuration['s3']['region'] = region
