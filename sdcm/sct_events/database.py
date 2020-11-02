@@ -23,33 +23,6 @@ from sdcm.sct_events.base import SctEvent, Severity
 LOGGER = logging.getLogger(__name__)
 
 
-class ClusterHealthValidatorEvent(SctEvent):
-    def __init__(self, type, subtype, status=Severity.ERROR, node=None, message=None, error=None, publish=True, **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
-        super().__init__()
-
-        self.type = type
-        self.subtype = subtype
-        self.node = str(node)
-        self.severity = status
-        self.error = error if error else ''
-        self.message = message if message else ''
-
-        self.__dict__.update(kwargs)
-
-        if publish:
-            self.publish()
-
-    def __str__(self):
-        if self.severity in (Severity.NORMAL, Severity.WARNING):
-            return "{0}: type={1.type} subtype={1.subtype} node={1.node} message={1.message}".format(
-                super().__str__(), self)
-        elif self.severity in (Severity.CRITICAL, Severity.ERROR):
-            return "{0}: type={1.type} subtype={1.subtype} node={1.node} error={1.error}".format(
-                super().__str__(), self)
-        else:
-            return super().__str__()
-
-
 class DataValidatorEvent(SctEvent):
     def __init__(self, type, subtype, status=Severity.ERROR, message=None, error=None, **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
         super().__init__()
