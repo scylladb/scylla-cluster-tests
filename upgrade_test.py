@@ -24,7 +24,7 @@ from sdcm.fill_db_data import FillDatabaseData
 from sdcm import wait
 from sdcm.group_common_events import ignore_upgrade_schema_errors
 from sdcm.utils.version_utils import is_enterprise
-from sdcm.sct_events import IndexSpecialColumnErrorEvent
+from sdcm.sct_events import IndexSpecialColumnErrorEvent, InfoEvent
 from sdcm.utils.version_utils import get_node_supported_sstable_versions
 
 
@@ -111,7 +111,7 @@ class UpgradeTest(FillDatabaseData):
                                 msg='Expected truncated entry in the system.local table, but it\'s not found')
 
     @truncate_entries
-    def upgrade_node(self, node):
+    def upgrade_node(self, node, upgrade_sstables=True):
         # pylint: disable=too-many-branches,too-many-statements
         new_scylla_repo = self.params.get('new_scylla_repo', default=None)
         new_version = self.params.get('new_version', default='')
@@ -209,10 +209,11 @@ class UpgradeTest(FillDatabaseData):
         assert self.orig_ver != self.new_ver, "scylla-server version isn't changed"
         self.new_ver = new_ver
 
-        self.upgradesstables_if_command_available(node)
+        if upgrade_sstables:
+            self.upgradesstables_if_command_available(node)
 
     @truncate_entries
-    def rollback_node(self, node):
+    def rollback_node(self, node, upgrade_sstables=True):
         # pylint: disable=too-many-branches,too-many-statements
 
         self.log.info('Rollbacking a Node')
@@ -295,7 +296,8 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('original scylla-server version is %s, latest: %s', orig_ver, new_ver)
         assert orig_ver != new_ver, "scylla-server version isn't changed"
 
-        self.upgradesstables_if_command_available(node)
+        if upgrade_sstables:
+            self.upgradesstables_if_command_available(node)
 
     def upgradesstables_if_command_available(self, node, queue=None):  # pylint: disable=invalid-name
         upgradesstables_available = False
@@ -656,6 +658,83 @@ class UpgradeTest(FillDatabaseData):
                 error_factor, schema_load_error_num)
 
         self.log.info('all nodes were upgraded, and last workaround is verified.')
+
+    def test_generic_cluster_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
+        """
+        Upgrade half of nodes in the cluster, and start special read workload
+        during the stage. Checksum method is changed to xxhash from Scylla 2.2,
+        we want to use this case to verify the read (cl=ALL) workload works
+        well, upgrade all nodes to new version in the end.
+        """
+
+        # prepare workload (stress_before_upgrade)
+        InfoEvent('Starting stress_before_upgrade - aka prepare step')
+        stress_before_upgrade = self.params.get('stress_before_upgrade')
+        prepare_thread_pool = self.run_stress_thread(stress_cmd=stress_before_upgrade)
+
+        InfoEvent('Waiting for stress_before_upgrade to finish')
+        self.verify_stress_thread(prepare_thread_pool)
+
+        # Starting workload during entire upgrade
+        InfoEvent('Starting stress_during_entire_upgrade workload')
+        stress_during_entire_upgrade = self.params.get('stress_during_entire_upgrade')
+        stress_thread_pool = self.run_stress_thread(stress_cmd=stress_during_entire_upgrade)
+        self.log.info('Sleeping for 60s to let cassandra-stress start before the rollback...')
+        time.sleep(60)
+
+        num_nodes_to_rollback = self.params.get('num_nodes_to_rollback')
+        upgraded_nodes = []
+
+        # generate random order to upgrade
+        nodes_num = len(self.db_cluster.nodes)
+        # prepare an array containing the indexes
+        indexes = list(range(nodes_num))
+        # shuffle it so we will upgrade the nodes in a random order
+        random.shuffle(indexes)
+
+        upgrade_sstables = self.params.get('upgrade_sstables')
+
+        if num_nodes_to_rollback > 0:
+            # Upgrade all nodes that should be rollback later
+            for i in range(num_nodes_to_rollback):
+                InfoEvent(f'Step{i + 1} - Upgrade node{i + 1}')
+                self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[i]]
+                self.log.info(f'Upgrade Node {self.db_cluster.node_to_upgrade.name} begins')
+                self.upgrade_node(self.db_cluster.node_to_upgrade, upgrade_sstables=upgrade_sstables)
+                self.log.info(f'Upgrade Node {self.db_cluster.node_to_upgrade.name} ended')
+                self.db_cluster.node_to_upgrade.check_node_health()
+                upgraded_nodes.append(self.db_cluster.node_to_upgrade)
+
+            # Rollback all nodes that where upgraded (not necessarily in the same order)
+            random.shuffle(upgraded_nodes)
+            self.log.info(f'Upgraded Nodes to be rollback are: {upgraded_nodes}')
+            for node in upgraded_nodes:
+                InfoEvent(f'Step{num_nodes_to_rollback + upgraded_nodes.index(node) + 1} - '
+                          f'Rollback node{upgraded_nodes.index(node) + 1}')
+                self.log.info(f'Rollback Node {node} begin')
+                self.rollback_node(node, upgrade_sstables=upgrade_sstables)
+                self.log.info(f'Rollback Node {node} ended')
+                self.db_cluster.node.check_node_health()
+
+        # Upgrade all nodes
+        for i in range(nodes_num):
+            InfoEvent(f'Step{num_nodes_to_rollback * 2 + i + 1} - Upgrade node{i + 1}')
+            self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[i]]
+            self.log.info(f'Upgrade Node {self.db_cluster.node_to_upgrade.name} begins')
+            self.upgrade_node(self.db_cluster.node_to_upgrade, upgrade_sstables=upgrade_sstables)
+            self.log.info(f'Upgrade Node {self.db_cluster.node_to_upgrade.name} ended')
+            self.db_cluster.node_to_upgrade.check_node_health()
+            upgraded_nodes.append(self.db_cluster.node_to_upgrade)
+
+        InfoEvent('All nodes were upgraded successfully')
+
+        InfoEvent('Waiting for stress_during_entire_upgrade to finish')
+        self.verify_stress_thread(stress_thread_pool)
+
+        InfoEvent('Starting stress_after_cluster_upgrade')
+        stress_after_cluster_upgrade = self.params.get('stress_after_cluster_upgrade')
+        stress_after_cluster_upgrade_pool = self.run_stress_thread(stress_cmd=stress_after_cluster_upgrade)
+        self.verify_stress_thread(stress_after_cluster_upgrade_pool)
 
     def test_kubernetes_scylla_upgrade(self):
         """
