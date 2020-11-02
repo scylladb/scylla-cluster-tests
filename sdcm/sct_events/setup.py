@@ -20,6 +20,7 @@ from pathlib import Path
 
 from sdcm.sct_events.grafana import start_grafana_pipeline
 from sdcm.sct_events.filters import DbEventsFilter
+from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.file_logger import start_events_logger
 from sdcm.sct_events.events_device import start_events_main_device
 from sdcm.sct_events.events_analyzer import start_events_analyzer
@@ -54,8 +55,8 @@ def start_events_device(log_dir: Optional[Union[str, Path]] = None,
     time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
 
     # Default filters.
-    DbEventsFilter(type='BACKTRACE', line='Rate-limit: supressed')
-    DbEventsFilter(type='BACKTRACE', line='Rate-limit: suppressed')
+    DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: supressed').publish()
+    DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: suppressed').publish()
 
     atexit.register(stop_events_device, _registry=_registry)
 

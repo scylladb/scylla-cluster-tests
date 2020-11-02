@@ -12,135 +12,157 @@
 # Copyright (c) 2020 ScyllaDB
 
 import re
-import time
 import logging
+from typing import Type, List, Tuple, Generic, Optional
 
-import dateutil.parser
+from sdcm.sct_events import Severity, SctEventProtocol
+from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event
 
-from sdcm.sct_events.base import SctEvent, Severity
 
+TOLERABLE_REACTOR_STALL: int = 2000  # ms
 
 LOGGER = logging.getLogger(__name__)
 
 
-class DataValidatorEvent(SctEvent):
-    def __init__(self, type, subtype, status=Severity.ERROR, message=None, error=None, **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
-        super().__init__()
-
-        self.type = type
-        self.subtype = subtype
-        self.severity = status
-        self.error = error if error else ''
-        self.message = message if message else ''
-
-        self.__dict__.update(kwargs)
-
-        self.publish()
-
-    def __str__(self):
-        if self.severity in (Severity.NORMAL, Severity.WARNING):
-            return "{0}: type={1.type} subtype={1.subtype} message={1.message}".format(super().__str__(), self)
-        elif self.severity in (Severity.CRITICAL, Severity.ERROR):
-            return "{0}: type={1.type} subtype={1.subtype} error={1.error}".format(super().__str__(), self)
-        else:
-            return super().__str__()
-
-
-class FullScanEvent(SctEvent):
-    def __init__(self, type, ks_cf, db_node_ip, severity=Severity.NORMAL, message=None):   # pylint: disable=redefined-builtin,too-many-arguments
-        super().__init__()
-
-        self.type = type
-        self.ks_cf = ks_cf
-        self.db_node_ip = db_node_ip
-        self.severity = severity
-        self.msg = "{0}: type={1.type} select_from={1.ks_cf} on db_node={1.db_node_ip}"
-        if message:
-            self.message = message
-            self.msg += " {1.message}"
-
-        self.publish()
-
-    def __str__(self):
-        return self.msg.format(super().__str__(), self)
+class DatabaseLogEvent(LogEvent, abstract=True):
+    NO_SPACE_ERROR: Type[LogEventProtocol]
+    UNKNOWN_VERB: Type[LogEventProtocol]
+    BROKEN_PIPE: Type[LogEventProtocol]
+    SEMAPHORE_TIME_OUT: Type[LogEventProtocol]
+    EMPTY_NESTED_EXCEPTION: Type[LogEventProtocol]
+    DATABASE_ERROR: Type[LogEventProtocol]
+    BAD_ALLOC: Type[LogEventProtocol]
+    SCHEMA_FAILURE: Type[LogEventProtocol]
+    RUNTIME_ERROR: Type[LogEventProtocol]
+    FILESYSTEM_ERROR: Type[LogEventProtocol]
+    STACKTRACE: Type[LogEventProtocol]
+    BACKTRACE: Type[LogEventProtocol]
+    ABORTING_ON_SHARD: Type[LogEventProtocol]
+    SEGMENTATION: Type[LogEventProtocol]
+    INTEGRITY_CHECK: Type[LogEventProtocol]
+    REACTOR_STALLED: Type[LogEventProtocol]
+    BOOT: Type[LogEventProtocol]
+    SUPPRESSED_MESSAGES: Type[LogEventProtocol]
+    stream_exception: Type[LogEventProtocol]
 
 
-class DatabaseLogEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
-    def __init__(self, type, regex, severity=Severity.ERROR):  # pylint: disable=redefined-builtin
-        super().__init__()
+MILLI_RE = re.compile(r"(\d+) ms")
 
-        self.type = type
-        self.regex = regex
-        self.line_number = 0
-        self.line = None
-        self.node = None
-        self.backtrace = None
-        self.raw_backtrace = None
-        self.severity = severity
 
-    def add_info(self, node, line: str, line_number: int) -> bool:
-        """Update the event info from the log line.
+class ReactorStalledMixin(Generic[T_log_event]):
+    tolerable_reactor_stall: int = TOLERABLE_REACTOR_STALL
 
-        Return True if an event is ready to be published and False otherwise.
-        """
+    def add_info(self: T_log_event, node, line: str, line_number: int) -> T_log_event:
         try:
-            log_time = dateutil.parser.parse(line.split()[0])
-            self.timestamp = log_time.timestamp()
-        except ValueError:
-            self.timestamp = time.time()
-        self.line = line
-        self.line_number = line_number
-        self.node = str(node)
+            # Dynamically handle reactor stalls severity.
+            if int(MILLI_RE.findall(line)[0]) <= self.tolerable_reactor_stall:
+                self.severity = Severity.NORMAL
+        except (ValueError, IndexError, ):
+            LOGGER.warning("failed to read REACTOR_STALLED line=[%s] ", line)
+        return super().add_info(node=node, line=line, line_number=line_number)
 
-        # dynamically handle reactor stalls severity
-        if self.type == 'REACTOR_STALLED':
-            try:
-                stall_time = int(re.findall(r'(\d+) ms', line)[0])
-                if stall_time <= 2000:
-                    self.severity = Severity.NORMAL
 
-            except (ValueError, IndexError):
-                LOGGER.warning("failed to read REACTOR_STALLED line=[%s] ", line)
+DatabaseLogEvent.add_subevent_type("NO_SPACE_ERROR", severity=Severity.ERROR,
+                                   regex="No space left on device")
+DatabaseLogEvent.add_subevent_type("UNKNOWN_VERB", severity=Severity.WARNING,
+                                   regex="unknown verb exception")
+DatabaseLogEvent.add_subevent_type("BROKEN_PIPE", severity=Severity.WARNING,
+                                   regex="cql_server - exception while processing connection:.*Broken pipe")
+DatabaseLogEvent.add_subevent_type("SEMAPHORE_TIME_OUT", severity=Severity.WARNING,
+                                   regex="semaphore_timed_out")
+DatabaseLogEvent.add_subevent_type("EMPTY_NESTED_EXCEPTION", severity=Severity.WARNING,
+                                   regex=r"cql_server - exception while processing connection: "
+                                         r"seastar::nested_exception \(seastar::nested_exception\)$")
+DatabaseLogEvent.add_subevent_type("DATABASE_ERROR", severity=Severity.ERROR,
+                                   regex="Exception ")
+DatabaseLogEvent.add_subevent_type("BAD_ALLOC", severity=Severity.ERROR,
+                                   regex="std::bad_alloc")
+DatabaseLogEvent.add_subevent_type("SCHEMA_FAILURE", severity=Severity.ERROR,
+                                   regex="Failed to load schema version")
+DatabaseLogEvent.add_subevent_type("RUNTIME_ERROR", severity=Severity.ERROR,
+                                   regex="std::runtime_error")
+DatabaseLogEvent.add_subevent_type("FILESYSTEM_ERROR", severity=Severity.ERROR,
+                                   regex="filesystem_error")
+DatabaseLogEvent.add_subevent_type("STACKTRACE", severity=Severity.ERROR,
+                                   regex="stacktrace")
+DatabaseLogEvent.add_subevent_type("BACKTRACE", severity=Severity.ERROR,
+                                   regex="backtrace")
+DatabaseLogEvent.add_subevent_type("ABORTING_ON_SHARD", severity=Severity.ERROR,
+                                   regex="Aborting on shard")
+DatabaseLogEvent.add_subevent_type("SEGMENTATION", severity=Severity.ERROR,
+                                   regex="segmentation")
+DatabaseLogEvent.add_subevent_type("INTEGRITY_CHECK", severity=Severity.ERROR,
+                                   regex="integrity check failed")
+DatabaseLogEvent.add_subevent_type("REACTOR_STALLED", mixin=ReactorStalledMixin, severity=Severity.WARNING,
+                                   regex="Reactor stalled")
+DatabaseLogEvent.add_subevent_type("BOOT", severity=Severity.NORMAL,
+                                   regex="Starting Scylla Server")
+DatabaseLogEvent.add_subevent_type("SUPPRESSED_MESSAGES", severity=Severity.WARNING,
+                                   regex="journal: Suppressed")
+DatabaseLogEvent.add_subevent_type("stream_exception", severity=Severity.ERROR,
+                                   regex="stream_exception")
 
-        return True
 
-    def add_backtrace_info(self, backtrace=None, raw_backtrace=None):
-        if backtrace:
-            self.backtrace = backtrace
-        if raw_backtrace:
-            self.raw_backtrace = raw_backtrace
+SYSTEM_ERROR_EVENTS = (
+    DatabaseLogEvent.NO_SPACE_ERROR(),
+    DatabaseLogEvent.UNKNOWN_VERB(),
+    DatabaseLogEvent.BROKEN_PIPE(),
+    DatabaseLogEvent.SEMAPHORE_TIME_OUT(),
+    DatabaseLogEvent.EMPTY_NESTED_EXCEPTION(),
+    DatabaseLogEvent.DATABASE_ERROR(),
+    DatabaseLogEvent.BAD_ALLOC(),
+    DatabaseLogEvent.SCHEMA_FAILURE(),
+    DatabaseLogEvent.RUNTIME_ERROR(),
+    DatabaseLogEvent.FILESYSTEM_ERROR(),
+    DatabaseLogEvent.STACKTRACE(),
+    DatabaseLogEvent.BACKTRACE(),
+    DatabaseLogEvent.ABORTING_ON_SHARD(),
+    DatabaseLogEvent.SEGMENTATION(),
+    DatabaseLogEvent.INTEGRITY_CHECK(),
+    DatabaseLogEvent.REACTOR_STALLED(),
+    DatabaseLogEvent.BOOT(),
+    DatabaseLogEvent.SUPPRESSED_MESSAGES(),
+    DatabaseLogEvent.stream_exception(),
+)
+SYSTEM_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
+    [(re.compile(event.regex, re.IGNORECASE), event) for event in SYSTEM_ERROR_EVENTS]
+BACKTRACE_RE = re.compile(r'(?P<other_bt>/lib.*?\+0x[0-f]*\n)|(?P<scylla_bt>0x[0-f]*\n)', re.IGNORECASE)
 
-    def clone_with_info(self, node, line: str, line_number: int) -> "DatabaseLogEvent":
-        ret = DatabaseLogEvent(type='', regex='')
-        ret.__dict__.update(self.__dict__)
-        ret.add_info(node, line, line_number)
-        return ret
 
-    def add_info_and_publish(self, node, line: str, line_number: int) -> None:
-        if self.add_info(node, line, line_number):
-            self.publish()
+class FullScanEvent(SctEvent, abstract=True):
+    start: Type[SctEventProtocol]
+    finish: Type[SctEventProtocol]
 
-    def __str__(self):
-        if self.backtrace:
-            return "{0}: type={1.type} regex={1.regex} line_number={1.line_number} node={1.node}\n{1.line}\n{1.backtrace}".format(
-                super().__str__(), self)
+    message: str
 
-        if self.raw_backtrace:
-            return "{0}: type={1.type} regex={1.regex} line_number={1.line_number} node={1.node}\n{1.line}\n{1.raw_backtrace}".format(
-                super().__str__(), self)
+    def __init__(self, db_node_ip: str, ks_cf, message: Optional[str] = None, severity=Severity.NORMAL):
+        super().__init__(severity=severity)
 
-        return "{0}: type={1.type} regex={1.regex} line_number={1.line_number} node={1.node}\n{1.line}".format(
-            super().__str__(), self)
+        self.db_node_ip = db_node_ip
+        self.ks_cf = ks_cf
+
+        # Don't include `message' to the state if it's None.
+        if message is not None:
+            self.message = message
+
+    @property
+    def msgfmt(self):
+        fmt = super().msgfmt + ": type={0.type} select_from={0.ks_cf} on db_node={0.db_node_ip}"
+        if hasattr(self, "message"):
+            fmt += " message={0.message}"
+        return fmt
+
+
+FullScanEvent.add_subevent_type("start")
+FullScanEvent.add_subevent_type("finish")
 
 
 class IndexSpecialColumnErrorEvent(SctEvent):
-    def __init__(self, message):
-        super().__init__()
+    def __init__(self, message: str, severity: Severity = Severity.ERROR):
+        super().__init__(severity=severity)
 
         self.message = message
-        self.severity = Severity.ERROR
 
-        self.publish()
-
-    def __str__(self):
-        return f"{super().__str__()}: message={self.message}"
+    @property
+    def msgfmt(self) -> str:
+        return super().msgfmt + ": message={0.message}"
