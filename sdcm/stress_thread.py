@@ -19,6 +19,7 @@ import uuid
 import time
 import logging
 import concurrent.futures
+import random
 
 from sdcm.loader import CassandraStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
@@ -367,3 +368,15 @@ class DockerBasedStressThread:
             loader.remoter.run(cmd=f"docker rm -f `docker ps -a -q --filter label=shell_marker={self.shell_marker}`",
                                timeout=60,
                                ignore_status=True)
+
+    def db_node_to_query(self, loader):
+        """Select DB node in the same region as loader node to query"""
+        if self.params.get("region_aware_loader"):
+            nodes_in_region = self.loader_set.nodes_by_region(self.node_list).get(loader.region)
+            assert nodes_in_region, f"No DB nodes found in {loader.region}"
+            db_nodes = [db_node for db_node in nodes_in_region if not db_node.running_nemesis]
+            assert db_nodes, "No node to query, nemesis runs on all DB nodes!"
+            node_to_query = random.choice(db_nodes)
+            LOGGER.debug(f"Selected '{node_to_query}' to query for local nodes")
+            return node_to_query.ip_address
+        return self.node_list[0].ip_address
