@@ -1,0 +1,45 @@
+test_duration: 260
+
+prepare_write_cmd:
+  - >-
+    hydra-kcl -t usertable_streams -k 7812500
+
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 10 -p recordcount=7812500
+    -p fieldcount=1 -p fieldlength=128 -p dataintegrity=true
+    -p insertstart=0 -p insertcount=7812500 -p table=usertable_streams
+
+  - >-
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 10 -p recordcount=7812500
+    -p fieldcount=1 -p fieldlength=128 -p dataintegrity=true
+    -p insertstart=7812500 -p insertcount=7812500 -p table=usertable_streams
+
+stress_cmd:
+  >-
+  bin/ycsb run dynamodb -P workloads/workloadc -threads 80
+  -p readproportion=1.0 -p updateproportion=0.0 -p recordcount=7812500
+  -p fieldcount=1 -p fieldlength=128 -p operationcount=7812500
+  -p dataintegrity=true -p maxexecutiontime=10800 -p table=usertable_streams
+
+round_robin: true
+
+n_loaders: 3
+n_db_nodes: 3
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.4xlarge'
+instance_type_loader: 'c5.4xlarge'
+
+nemesis_class_name: 'NoOpMonkey'
+nemesis_interval: 5
+
+user_prefix: 'alternator-streams-4h'
+space_node_threshold: 64424
+experimental: true
+
+alternator_port: 8080
+dynamodb_primarykey_type: HASH
+alternator_use_dns_routing: true
+
+store_results_in_elasticsearch: false
+use_mgmt: true
