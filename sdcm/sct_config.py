@@ -1003,6 +1003,26 @@ class SCTConfiguration(dict):
         dict(name="availability_zone", env="SCT_AVAILABILITY_ZONE",
              type=str,
              help="Availability zone to use. Same for multi-region scenario."),
+
+        dict(name="num_nodes_to_rollback", env="SCT_NUM_NODES_TO_ROLLBACK",
+             type=str,
+             help="Number of nodes to upgrade and rollback in test_generic_cluster_upgrade"),
+
+        dict(name="upgrade_sstables", env="SCT_UPGRADE_SSTABLES",
+             type=boolean,
+             help="Whether to upgrade sstables as part of upgrade_node or not"),
+
+        dict(name="stress_before_upgrade", env="SCT_STRESS_BEFORE_UPGRADE",
+             type=str,
+             help="Stress command to be run before upgrade (preapre stage)"),
+
+        dict(name="stress_during_entire_upgrade", env="SCT_STRESS_DURING_ENTIRE_UPGRADE",
+             type=str,
+             help="Stress command to be run during the upgrade - user should take care for suitable duration"),
+
+        dict(name="stress_after_cluster_upgrade", env="SCT_STRESS_AFTER_CLUSTER_UPGRADE",
+             type=str,
+             help="Stress command to be run after full upgrade - usually used to read the dataset for verification"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
