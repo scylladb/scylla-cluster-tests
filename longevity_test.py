@@ -495,7 +495,7 @@ class LongevityTest(ClusterTester):
         cs_user_profiles = self.params.get('cs_user_profiles')
         # read user-profile
         for profile_file in cs_user_profiles:
-            profile_yaml = yaml.load(open(profile_file), Loader=yaml.SafeLoader)
+            profile_yaml = yaml.safe_load(open(profile_file))
             keyspace_definition = profile_yaml['keyspace_definition']
             keyspace_name = profile_yaml['keyspace']
             table_template = string.Template(profile_yaml['table_definition'])

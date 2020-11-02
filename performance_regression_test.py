@@ -554,7 +554,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
             # Get materialized view name from user profile
 
-            user_profile_yaml = yaml.load(open(user_profile), Loader=yaml.SafeLoader)
+            user_profile_yaml = yaml.safe_load(open(user_profile))
             mv_name = ''
 
             for k in user_profile_yaml:

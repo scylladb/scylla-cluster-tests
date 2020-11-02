@@ -3582,7 +3582,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         res = node.run_nodetool('info')
         # Removing unnecessary lines from the output
         proper_yaml_output = "\n".join([line for line in res.stdout.splitlines() if ":" in line])
-        info_res = yaml.load(proper_yaml_output)
+        info_res = yaml.safe_load(proper_yaml_output)
         return info_res
 
     def check_cluster_health(self):
@@ -4574,7 +4574,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             node.remoter.receive_files(src=prometheus_yaml_template,
                                        dst=local_template_tmp)
             with open(local_template_tmp) as output_file:
-                templ_yaml = yaml.load(output_file, Loader=yaml.SafeLoader)  # to override avocado
+                templ_yaml = yaml.safe_load(output_file)
                 self.log.debug("Configs %s" % templ_yaml)
             loader_targets_list = ["[%s]:9103" % n.ip_address for n in self.targets["loaders"].nodes]
 
