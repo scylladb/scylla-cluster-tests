@@ -216,7 +216,7 @@ class BackupFunctionsMixIn:
         number_of_loaders = self.params.get("n_loaders")
 
         scylla_version = self.db_cluster.nodes[0].scylla_version
-        if LooseVersion(scylla_version).version[0] == "2019":
+        if LooseVersion(scylla_version).version[0] == 2019:
             # Making sure scylla version is 2019.1.x
             throttle_per_node = 10666
         else:
