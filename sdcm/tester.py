@@ -945,25 +945,23 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                   n_nodes=self.params.get("n_db_nodes"),
                                                   params=self.params)
 
-        self.log.debug("Update startup script with iptables rules")
-        startup_script = "\n".join((Setup.get_startup_script(), *self.db_cluster.nodes_iptables_redirect_rules(), ))
-        Setup.get_startup_script = lambda: startup_script
+        self.k8s_cluster.add_gke_pool(name=self.params.get("k8s_loader_cluster_name"),
+                                      num_nodes=self.params.get("n_loaders"),
+                                      instance_type=self.params.get("gce_instance_type_loader"))
 
-        self.loaders = LoaderSetGCE(gce_image=self.params.get("gce_image"),
-                                    gce_image_type=self.params.get("gce_root_disk_type_loader"),
-                                    gce_image_size=None,
-                                    gce_network=self.params.get("gce_network"),
-                                    service=services[:1],
-                                    credentials=self.credentials,
-                                    gce_instance_type=self.params.get("gce_instance_type_loader"),
-                                    gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_loader"),
-                                    gce_image_username=self.params.get("gce_image_username"),
-                                    user_prefix=self.params.get("user_prefix"),
-                                    n_nodes=self.params.get('n_loaders'),
-                                    params=self.params,
-                                    gce_datacenter=gce_datacenter)
+        self.loaders = cluster_k8s.LoaderPodCluster(k8s_cluster=self.k8s_cluster,
+                                                    loader_cluster_config=gke.LOADER_CLUSTER_CONFIG,
+                                                    loader_cluster_name=self.params.get("k8s_loader_cluster_name"),
+                                                    user_prefix=self.params.get("user_prefix"),
+                                                    n_nodes=self.params.get("n_loaders"),
+                                                    params=self.params)
+
         if self.params.get("n_monitor_nodes") > 0:
-            self.monitors = MonitorSetGCE(gce_image=self.params.get("gce_image"),
+            self.log.debug("Update startup script with iptables rules")
+            startup_script = "\n".join((Setup.get_startup_script(), *self.db_cluster.nodes_iptables_redirect_rules(),))
+            Setup.get_startup_script = lambda: startup_script
+
+            self.monitors = MonitorSetGCE(gce_image=self.params.get("gce_image_monitor"),
                                           gce_image_type=self.params.get("gce_root_disk_type_monitor"),
                                           gce_image_size=self.params.get('gce_root_disk_size_monitor'),
                                           gce_network=self.params.get("gce_network"),
@@ -1925,9 +1923,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.create_stats:
             self.update_test_with_errors()
         self.tag_ami_with_result()
-        self.destroy_localhost()
         time.sleep(1)  # Sleep is needed to let final event being saved into files
         self.save_email_data()
+        self.destroy_localhost()
         self.send_email()
         self.stop_event_device()
         if self.params.get('collect_logs'):

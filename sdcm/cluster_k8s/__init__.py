@@ -13,6 +13,8 @@
 
 # pylint: disable=too-many-arguments
 
+from __future__ import annotations
+
 import os
 import time
 import logging
@@ -22,6 +24,7 @@ from copy import deepcopy
 from typing import Optional, Union, List, Dict, Any, ContextManager, Type
 from difflib import unified_diff
 from tempfile import NamedTemporaryFile
+from textwrap import dedent
 from functools import cached_property, partialmethod
 from threading import RLock
 
@@ -46,6 +49,9 @@ DEPLOY_SCYLLA_CLUSTER_DELAY = 15  # seconds
 SCYLLA_POD_READINESS_DELAY = 30  # seconds
 SCYLLA_POD_READINESS_TIMEOUT = 5  # minutes
 SCYLLA_POD_TERMINATE_TIMEOUT = 30  # minutes
+LOADER_POD_READINESS_DELAY = 30  # seconds
+LOADER_POD_READINESS_TIMEOUT = 5  # minutes
+LOADER_POD_TERMINATE_TIMEOUT = 30  # minutes
 
 LOGGER = logging.getLogger(__name__)
 
@@ -122,6 +128,15 @@ class KubernetesCluster:  # pylint: disable=too-few-public-methods
         time.sleep(DEPLOY_SCYLLA_CLUSTER_DELAY)
 
     @log_run_info
+    def deploy_loaders_cluster(self, config: str) -> None:
+        LOGGER.info("Create and initialize a loaders cluster")
+        self.apply_file(config)
+
+        LOGGER.debug("Check the loaders cluster")
+        self.kubectl("get statefulset", namespace="sct-loaders")
+        self.kubectl("get pods", namespace="sct-loaders")
+
+    @log_run_info
     def stop_k8s_task_threads(self, timeout=10):
         LOGGER.info("Stop k8s task threads")
         if self._cert_manager_journal_thread:
@@ -140,9 +155,9 @@ class KubernetesCluster:  # pylint: disable=too-few-public-methods
 
 
 class BasePodContainer(cluster.BaseNode):
-    parent_cluster: 'PodCluster'
+    parent_cluster: PodCluster
 
-    def __init__(self, name: str, parent_cluster: "PodCluster", node_prefix: str = "node", node_index: int = 1,
+    def __init__(self, name: str, parent_cluster: PodCluster, node_prefix: str = "node", node_index: int = 1,
                  base_logdir: Optional[str] = None, dc_idx: int = 0):
         self.node_index = node_index
         super().__init__(name=name,
@@ -232,10 +247,18 @@ class BasePodContainer(cluster.BaseNode):
         return None
 
     def _refresh_instance_state(self):
-        cluster_ip_service = self._cluster_ip_service
-        cluster_ip = cluster_ip_service and cluster_ip_service.spec.cluster_ip
-        pod_status = self._pod_status
-        return ([cluster_ip, ], [cluster_ip, pod_status and pod_status.pod_ip, ], )
+        public_ips = []
+        private_ips = []
+
+        if cluster_ip_service := self._cluster_ip_service:
+            cluster_ip = cluster_ip_service.spec.cluster_ip
+            public_ips.append(cluster_ip)
+            private_ips.append(cluster_ip)
+
+        if pod_status := self._pod_status:
+            private_ips.append(pod_status.pod_ip)
+
+        return (public_ips or [None, ], private_ips or [None, ])
 
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=300):
         if verify_down:
@@ -328,6 +351,9 @@ class BasePodContainer(cluster.BaseNode):
 class PodCluster(cluster.BaseCluster):
     PodContainerClass: Type[BasePodContainer] = BasePodContainer
 
+    pod_readiness_delay: int  # seconds
+    pod_readiness_timeout: int  # minutes
+
     def __init__(self,
                  k8s_cluster: KubernetesCluster,
                  namespace: str = "default",
@@ -349,6 +375,9 @@ class PodCluster(cluster.BaseCluster):
                          params=params,
                          region_names=k8s_cluster.datacenter,
                          node_type=node_type)
+
+    def __str__(self):
+        return f"{type(self).__name__} {self.name} | Namespace: {self.namespace}"
 
     @cached_property
     def _k8s_core_v1_api(self):
@@ -390,8 +419,21 @@ class PodCluster(cluster.BaseCluster):
     def wait_for_init(self):
         raise NotImplementedError("Derived class must implement 'wait_for_init' method!")
 
+    @timeout(message="Wait for pod(s) to be ready...", timeout=600)
+    def wait_for_pods_readiness(self, count: Optional[int] = None):
+        if count is None:
+            count = len(self.nodes)
+        for _ in range(count):
+            time.sleep(self.pod_readiness_delay)
+            self.k8s_cluster.kubectl(f"wait --timeout={self.pod_readiness_timeout}m --all --for=condition=Ready pod",
+                                     namespace=self.namespace,
+                                     timeout=self.pod_readiness_timeout*60+10)
+
 
 class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
+    pod_readiness_delay = SCYLLA_POD_READINESS_DELAY
+    pod_readiness_timeout = SCYLLA_POD_READINESS_TIMEOUT
+
     node_setup_requires_scylla_restart = False
 
     def __init__(self,
@@ -517,16 +559,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         if monitors := cluster.Setup.tester_obj().monitors:
             monitors.reconfigure_scylla_monitoring()
 
-    @timeout(message="Wait for pod(s) to be ready...", timeout=600)
-    def wait_for_pods_readiness(self, count: Optional[int] = None):
-        if count is None:
-            count = len(self.nodes)
-        for _ in range(count):
-            time.sleep(SCYLLA_POD_READINESS_DELAY)
-            self.k8s_cluster.kubectl(f"wait --timeout={SCYLLA_POD_READINESS_TIMEOUT}m --all --for=condition=Ready pod",
-                                     namespace=self.namespace,
-                                     timeout=SCYLLA_POD_READINESS_TIMEOUT*60+10)
-
     def upgrade_scylla_cluster(self, new_version: str) -> None:
         self.replace_scylla_cluster_value("/spec/version", new_version)
         self.rollout_restart()
@@ -548,3 +580,61 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
     def rollout_restart(self):
         self.k8s_cluster.kubectl("rollout restart statefulset", namespace=self.namespace)
         self.wait_for_pods_readiness()
+
+
+class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
+    pod_readiness_delay = LOADER_POD_READINESS_DELAY
+    pod_readiness_timeout = LOADER_POD_READINESS_TIMEOUT
+
+    def __init__(self,
+                 k8s_cluster: KubernetesCluster,
+                 loader_cluster_config: str,
+                 loader_cluster_name: Optional[str] = None,
+                 user_prefix: Optional[str] = None,
+                 n_nodes: Union[list, int] = 3,
+                 params: Optional[dict] = None) -> None:
+
+        self.loader_cluster_config = loader_cluster_config
+        self.loader_cluster_name = loader_cluster_name
+        self.loader_cluster_created = False
+
+        cluster.BaseLoaderSet.__init__(self, params=params)
+        PodCluster.__init__(self,
+                            k8s_cluster=k8s_cluster,
+                            namespace="sct-loaders",
+                            container="cassandra-stress",
+                            cluster_prefix=cluster.prepend_user_prefix(user_prefix, "loader-set"),
+                            node_prefix=cluster.prepend_user_prefix(user_prefix, "loader-node"),
+                            node_type="loader",
+                            n_nodes=n_nodes,
+                            params=params)
+
+    def node_setup(self,
+                   node: BasePodContainer,
+                   verbose: bool = False,
+                   db_node_address: Optional[str] = None,
+                   **kwargs) -> None:
+
+        self.install_scylla_bench(node)
+
+        if self.params.get('client_encrypt'):
+            node.config_client_encrypt()
+
+    def add_nodes(self,
+                  count: int,
+                  ec2_user_data: str = "",
+                  dc_idx: int = 0,
+                  enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
+
+        if self.loader_cluster_created:
+            raise NotImplementedError("Changing number of nodes in LoaderPodCluster is not supported.")
+
+        self.k8s_cluster.deploy_loaders_cluster(self.loader_cluster_config)
+        self.wait_for_pods_readiness(count)
+        new_nodes = super().add_nodes(count=count,
+                                      ec2_user_data=ec2_user_data,
+                                      dc_idx=dc_idx,
+                                      enable_auto_bootstrap=enable_auto_bootstrap)
+        self.loader_cluster_created = True
+
+        return new_nodes

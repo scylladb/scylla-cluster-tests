@@ -635,6 +635,15 @@ class SCTConfiguration(dict):
         dict(name="k8s_scylla_disk_gi", env="SCT_K8S_SCYLLA_DISK_GI", type=int,
              help=""),
 
+        dict(name="k8s_loader_cluster_name", env="SCT_K8S_LOADER_CLUSTER_NAME", type=str,
+             help=""),
+
+        dict(name="k8s_loader_cpu_n", env="SCT_K8S_LOADER_CPU_N", type=int,
+             help=""),
+
+        dict(name="k8s_loader_mem_gi", env="SCT_K8S_LOADER_MEM_GI", type=int,
+             help=""),
+
         dict(name="minikube_version", env="SCT_MINIKUBE_VERSION", type=str,
              help=""),
 
@@ -1065,10 +1074,10 @@ class SCTConfiguration(dict):
         'k8s-gke': ['gke_cluster_version', 'gke_cluster_n_nodes', 'gce_instance_type_db', 'gce_root_disk_type_db',
                     'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db', 'user_credentials_path', 'scylla_version',
                     'scylla_mgmt_agent_version', 'k8s_scylla_operator_docker_image', 'k8s_scylla_datacenter',
-                    'k8s_scylla_rack', 'k8s_scylla_cluster_name', 'k8s_scylla_cpu_n', 'k8s_scylla_mem_gi', 'gce_image',
-                    'gce_instance_type_loader', 'gce_root_disk_type_loader', 'gce_n_local_ssd_disk_loader',
-                    'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'gce_root_disk_size_monitor',
-                    'gce_n_local_ssd_disk_monitor'],
+                    'k8s_scylla_rack', 'k8s_scylla_cluster_name', 'k8s_scylla_cpu_n', 'k8s_scylla_mem_gi',
+                    'k8s_loader_cluster_name', 'k8s_loader_cpu_n', 'k8s_loader_mem_gi', 'gce_instance_type_loader',
+                    'gce_image_monitor', 'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
+                    'gce_root_disk_size_monitor', 'gce_n_local_ssd_disk_monitor'],
     }
 
     defaults_config_files = {

@@ -79,12 +79,14 @@ class IptablesClusterOpsMixin:
 
     def update_nodes_iptables_redirect_rules(self,
                                              command: IptablesChainCommand = "A",
-                                             nodes: Optional[list] = None) -> None:
+                                             nodes: Optional[list] = None,
+                                             loaders: bool = True,
+                                             monitors: bool = True) -> None:
         nodes_to_update = []
         if tester := cluster.Setup.tester_obj():
-            if tester.loaders:
+            if loaders and tester.loaders:
                 nodes_to_update.extend(tester.loaders.nodes)
-            if tester.monitors:
+            if monitors and tester.monitors:
                 nodes_to_update.extend(tester.monitors.nodes)
 
         if nodes_to_update:
