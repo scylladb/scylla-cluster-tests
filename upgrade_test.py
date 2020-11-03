@@ -691,6 +691,8 @@ class UpgradeTest(FillDatabaseData):
         upgradesstables = self.db_cluster.run_func_parallel(func=self.upgradesstables_if_command_available)
         # only check sstable format version if all nodes had 'nodetool upgradesstables' available
         if all(upgradesstables):
+            self.log.info("Waiting until jmx is up across the board")
+            self.wait_till_jmx_on_all_nodes()
             self.log.info('Upgrading sstables if new version is available')
             tables_upgraded = self.db_cluster.run_func_parallel(func=self.wait_for_sstable_upgrade)
             assert all(tables_upgraded), f"Failed to upgrade the sstable format {tables_upgraded}"
@@ -750,6 +752,10 @@ class UpgradeTest(FillDatabaseData):
             return True
         wait.wait_for(func=_is_cluster_upgraded, step=30, timeout=900, throw_exc=True,
                       text="Waiting until all nodes in the cluster are upgraded")
+
+    def wait_till_jmx_on_all_nodes(self):
+        for node in self.db_cluster.nodes:
+            node.wait_jmx_up(timeout=300)
 
     def count_log_errors(self, search_pattern, step, search_for_idx_token_error=True):
         schema_load_error_num = 0
