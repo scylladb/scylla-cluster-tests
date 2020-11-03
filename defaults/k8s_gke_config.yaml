@@ -15,7 +15,7 @@ n_db_nodes: 3
 
 k8s_scylla_operator_docker_image: 'scylladb/scylla-operator:v0.3.0'
 k8s_cert_manager_version: '1.0.3'
-scylla_version: '4.0.0'
+scylla_version: '4.2.0'
 scylla_mgmt_agent_version: '2.0.2'
 k8s_scylla_datacenter: 'us-east1-c'
 k8s_scylla_rack: 'us-east1'

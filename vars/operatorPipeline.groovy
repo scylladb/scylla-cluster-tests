@@ -22,10 +22,10 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: '',
                    name: 'k8s_scylla_operator_docker_image')
-            string(defaultValue: '4.1.7',
+            string(defaultValue: '',
                    description: '',
                    name: 'scylla_version')
-            string(defaultValue: '2.0.2',
+            string(defaultValue: '',
                    description: '',
                    name: 'scylla_mgmt_agent_version')
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'keep-on-failure')}",
@@ -65,8 +65,12 @@ def call(Map pipelineParams) {
                             if [[ -n "${params.k8s_scylla_operator_docker_image}" ]]; then
                                 export SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE=${params.k8s_scylla_operator_docker_image}
                             fi
-                            export SCT_SCYLLA_VERSION=${params.scylla_version}
-                            export SCT_SCYLLA_MGMT_AGENT_VERSION=${params.scylla_mgmt_agent_version}
+                            if [[ -n "${params.scylla_version}" ]]; then
+                                export SCT_SCYLLA_VERSION=${params.scylla_version}
+                            fi
+                            if [[ -n "${params.scylla_mgmt_agent_version}" ]]; then
+                                export SCT_SCYLLA_MGMT_AGENT_VERSION=${params.scylla_mgmt_agent_version}
+                            fi
 
                             export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                             export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
