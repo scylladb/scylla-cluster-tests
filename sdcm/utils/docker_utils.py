@@ -34,6 +34,10 @@ DOCKER_API_CALL_TIMEOUT = 180  # seconds
 LOGGER = logging.getLogger(__name__)
 
 
+# Monkey-patch `Container' class in `docker' module for prettier output.
+setattr(docker.models.containers.Container, "__str__", lambda self: f"<{self.short_id} {self.name}>")
+
+
 class ContainerAlreadyRegistered(DockerException):
     pass
 

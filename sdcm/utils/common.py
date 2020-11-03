@@ -570,7 +570,7 @@ def clean_resources_docker(tags_dict: dict, builder_name: Optional[str] = None, 
 
     def delete_container(container):
         container.reload()
-        LOGGER.info("Going to delete Docker container `%s' on `%s'", container.name, container.client.info()["Name"])
+        LOGGER.info("Going to delete Docker container %s on `%s'", container, container.client.info()["Name"])
         if not dry_run:
             container.remove(v=True, force=True)
             LOGGER.debug("Done.")
@@ -593,8 +593,7 @@ def clean_resources_docker(tags_dict: dict, builder_name: Optional[str] = None, 
         try:
             delete_container(container)
         except Exception:  # pylint: disable=broad-except
-            LOGGER.error("Failed to delete container `%s' on host `%s'",
-                         container.name, container.client.info()["Name"])
+            LOGGER.error("Failed to delete container %s on host `%s'", container, container.client.info()["Name"])
 
     for image in images:
         try:
