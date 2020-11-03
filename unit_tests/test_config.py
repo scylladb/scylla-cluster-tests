@@ -228,8 +228,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.verify_configuration()
 
         self.assertIn('scylla_repo', conf.dump_config())
-        self.assertEqual(conf.get('scylla_repo'),
-                         None)
+        self.assertFalse(conf.get('scylla_repo'))
         self.assertEqual(conf.get('scylla_repo_loader'),
                          'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-nightly.repo')
 
@@ -244,7 +243,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     def test_13_scylla_version_ami_branch_latest(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_SCYLLA_VERSION'] = 'branch-4.0:latest'
+        os.environ['SCT_SCYLLA_VERSION'] = 'branch-4.2:latest'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = SCTConfiguration()
         conf.verify_configuration()

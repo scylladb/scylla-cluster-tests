@@ -154,7 +154,7 @@ class BackupFunctionsMixIn:
         if not isinstance(stress_cmds, list):
             stress_cmds = [stress_cmds]
         # In some cases we want the same stress_cmd to run several times (can be used with round_robin or not).
-        stress_multiplier = self.params.get('stress_multiplier', default=1)
+        stress_multiplier = self.params.get('stress_multiplier')
         if stress_multiplier > 1:
             stress_cmds *= stress_multiplier
 
@@ -174,8 +174,8 @@ class BackupFunctionsMixIn:
     def run_prepare_write_cmd(self):
         # In some cases (like many keyspaces), we want to create the schema (all keyspaces & tables) before the load
         # starts - due to the heavy load, the schema propogation can take long time and c-s fails.
-        prepare_write_cmd = self.params.get('prepare_write_cmd', default=None)
-        keyspace_num = self.params.get('keyspace_num', default=1)
+        prepare_write_cmd = self.params.get('prepare_write_cmd')
+        keyspace_num = self.params.get('keyspace_num')
         write_queue = list()
 
         # When the load is too heavy for one loader when using MULTI-KEYSPACES, the load is spreaded evenly across
@@ -354,8 +354,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
         email_data = self._get_common_email_data()
         email_data.update({"manager_server_repo": self.params.get("scylla_mgmt_repo"),
-                           "manager_agent_repo": self.params.get("scylla_mgmt_agent_repo",
-                                                                 self.params.get("scylla_mgmt_repo")), })
+                           "manager_agent_repo": self.params.get("scylla_mgmt_agent_repo") or
+                           self.params.get("scylla_mgmt_repo"), })
 
         return email_data
 

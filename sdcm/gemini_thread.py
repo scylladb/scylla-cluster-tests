@@ -72,7 +72,7 @@ class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
         return self._gemini_result_file
 
     def _generate_gemini_command(self):
-        seed = self.params.get('gemini_seed', None)
+        seed = self.params.get('gemini_seed')
         table_options = self.params.get('gemini_table_options')
         if not seed:
             seed = random.randint(1, 100)

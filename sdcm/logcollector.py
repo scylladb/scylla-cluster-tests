@@ -100,7 +100,7 @@ class BaseMonitoringEntity(BaseLogEntity):
         # Avoid cyclic dependencies
         if hasattr(node, "parent_cluster") and node.parent_cluster:
             return node.parent_cluster.monitor_install_path_base
-        return self.get_monitoring_stack(self._params.get('cluster_backend', None)).get_monitor_install_path_base(node)
+        return self.get_monitoring_stack(self._params.get('cluster_backend')).get_monitor_install_path_base(node)
 
     @staticmethod
     def get_monitoring_stack(backend):

@@ -60,10 +60,10 @@ class GrowClusterTest(ClusterTester):
         :rtype: basestring
         """
         ip = self.db_cluster.get_node_private_ips()[0]
-        population_size = self.params.get('cassandra_stress_population_size', default=1000000)
+        population_size = self.params.get('cassandra_stress_population_size')
         if not duration:
-            duration = self.params.get('test_duration', default=60)
-        threads = self.params.get('cassandra_stress_threads', default=1000)
+            duration = self.params.get('test_duration')
+        threads = self.params.get('cassandra_stress_threads')
 
         return ("cassandra-stress %s cl=QUORUM duration=%sm "
                 "-schema 'replication(factor=3)' -port jmx=6868 -col 'size=FIXED(2) n=FIXED(1)' "
@@ -82,7 +82,7 @@ class GrowClusterTest(ClusterTester):
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
                                     tester_obj=self)
         # default=1440 min (one day) if test_duration is not defined
-        duration = self.params.get('test_duration', default=1440)
+        duration = self.params.get('test_duration')
         cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd,
                                                 duration=duration)
 
@@ -91,7 +91,7 @@ class GrowClusterTest(ClusterTester):
         start = datetime.datetime.now()
         self.log.info('Starting to grow cluster: %s', str(start))
 
-        add_node_cnt = self.params.get('add_node_cnt', default=1)
+        add_node_cnt = self.params.get('add_node_cnt')
         node_cnt = len(self.db_cluster.nodes)
         while node_cnt < cluster_target_size:
             time.sleep(60)

@@ -188,7 +188,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.create_test_stats(sub_type='read', doc_id_with_timestamp=True)
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=1, stats_aggregate_cmds=False)
         if nemesis:
-            interval = self.params.get('nemesis_interval', default=10)
+            interval = self.params.get('nemesis_interval')
             time.sleep(interval)  # Sleeping one interval before starting the nemesis
             self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
             self.db_cluster.start_nemesis(interval=interval)
@@ -205,7 +205,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=1, stats_aggregate_cmds=False)
         if nemesis:
             self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
-            self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval', default=10))
+            self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details()
         self.display_results(results, test_name='test_latency')
@@ -219,7 +219,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=1, stats_aggregate_cmds=False)
         if nemesis:
             self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
-            self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval', default=10))
+            self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details(scylla_conf=True)
         self.display_results(results, test_name='test_latency')
@@ -232,7 +232,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.create_test_stats(sub_type=sub_type, doc_id_with_timestamp=True)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
         if nemesis:
-            interval = self.params.get('nemesis_interval', default=15)
+            interval = self.params.get('nemesis_interval')
             time.sleep(interval * 60)  # Sleeping one interval (in minutes) before starting the nemesis
             self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
             self.db_cluster.start_nemesis(interval=interval)
@@ -584,7 +584,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             self.log.debug('Finish dropping materialized view {}'.format(mv_name))
 
         test_name = 'test_mv_write'
-        duration = self.params.get('test_duration', default='60m')
+        duration = self.params.get('test_duration')
         self.log.debug('Start materialized views performance test. Test duration {} minutes'.format(duration))
         self.create_test_stats()
         cmd_no_mv = self.params.get('stress_cmd_no_mv')

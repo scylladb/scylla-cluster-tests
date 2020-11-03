@@ -1799,13 +1799,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def install_manager_agent(self, package_path=None):
         auth_token = Setup.test_id()
-        manager_prometheus_port = self.parent_cluster.params.get("manager_prometheus_port", 5090)
+        manager_prometheus_port = self.parent_cluster.params.get("manager_prometheus_port")
         if package_path:
             package_name = '{}scylla-manager-agent*'.format(package_path)
         else:
             self.download_scylla_manager_repo(
-                self.parent_cluster.params.get("scylla_mgmt_agent_repo",
-                                               self.parent_cluster.params.get("scylla_mgmt_repo", None)))
+                self.parent_cluster.params.get("scylla_mgmt_agent_repo") or
+                self.parent_cluster.params.get("scylla_mgmt_repo"))
             package_name = 'scylla-manager-agent'
         package_mgr = "yum" if self.distro.is_rhel_like else "apt-get"
         install_and_config_agent_command = dedent(r"""
@@ -2184,7 +2184,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run('sudo systemctl restart scylla-manager.service')
             res = self.remoter.run('sudo systemctl status scylla-manager.service')
 
-        manager_prometheus_port = self.parent_cluster.params.get("manager_prometheus_port", 5090)
+        manager_prometheus_port = self.parent_cluster.params.get("manager_prometheus_port")
         if self.is_rhel_like():  # TODO: Add debian and ubuntu support
             configuring_manager_command = dedent("""
             scyllamgr_ssl_cert_gen
@@ -2750,8 +2750,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
         if Setup.REUSE_CLUSTER:
             # get_node_ips_param should be defined in child
-            self._node_public_ips = self.params.get(self.get_node_ips_param(public_ip=True), None) or []
-            self._node_private_ips = self.params.get(self.get_node_ips_param(public_ip=False), None) or []
+            self._node_public_ips = self.params.get(self.get_node_ips_param(public_ip=True)) or []
+            self._node_private_ips = self.params.get(self.get_node_ips_param(public_ip=False)) or []
             self.log.debug('Node public IPs: {}, private IPs: {}'.format(self._node_public_ips, self._node_private_ips))
 
         if isinstance(n_nodes, list):
@@ -2865,8 +2865,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         node.destroy()
 
     def get_db_auth(self):
-        user = self.params.get('authenticator_user', default=None)
-        password = self.params.get('authenticator_password', default=None)
+        user = self.params.get('authenticator_user')
+        password = self.params.get('authenticator_password')
         return (user, password) if user and password else None
 
     def write_node_public_ip_file(self):
@@ -2906,16 +2906,16 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             protocol_version = 3
 
         authenticator = self.params.get('authenticator')
-        if user is None and password is None and (authenticator and authenticator == 'PasswordAuthenticator'):
-            user = self.params.get('authenticator_user', default='cassandra')
-            password = self.params.get('authenticator_password', default='cassandra')
+        if authenticator and authenticator == 'PasswordAuthenticator':
+            user = self.params.get('authenticator_user')
+            password = self.params.get('authenticator_password')
 
         if user is not None:
             auth_provider = PlainTextAuthProvider(username=user, password=password)
         else:
             auth_provider = None
 
-        if ssl_opts is None and self.params.get('client_encrypt', default=None):
+        if ssl_opts is None and self.params.get('client_encrypt'):
             ssl_opts = {'ca_certs': './data_dir/ssl_conf/client/catest.pem'}
         self.log.debug(str(ssl_opts))
         cluster_driver = ClusterDriver(node_ips, auth_provider=auth_provider,
@@ -3694,8 +3694,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             self.log.info('io.conf right after reboot')
             node.remoter.sudo('cat /etc/scylla.d/io.conf')
 
-            if self.params.get('use_mgmt', None):
-                pkgs_url = self.params.get('scylla_mgmt_pkg', None)
+            if self.params.get('use_mgmt'):
+                pkgs_url = self.params.get('scylla_mgmt_pkg')
                 pkg_path = None
                 if pkgs_url:
                     pkg_path = download_dir_from_cloud(pkgs_url)
@@ -3890,7 +3890,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         Setup.tester_obj().monitors.reconfigure_scylla_monitoring()
 
     def get_cluster_manager(self):
-        if not self.params.get('use_mgmt', default=None):
+        if not self.params.get('use_mgmt'):
             raise ScyllaManagerError('Scylla-manager configuration is not defined!')
         manager_node = Setup.tester_obj().monitors.nodes[0]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
@@ -3932,7 +3932,7 @@ class BaseLoaderSet():
         return self._gemini_base_path
 
     def install_gemini(self, node):
-        gemini_version = self.params.get('gemini_version', default='0.9.2')
+        gemini_version = self.params.get('gemini_version')
         if gemini_version.lower() == 'latest':
             gemini_version = get_latest_gemini_version()
 
@@ -4292,13 +4292,13 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         # since monitoring node is started last (after db nodes and loader) we can't actually set the timeout
         # for starting the alert manager thread (since it depends on DB cluster size and num of loaders)
         node.start_alert_manager_thread()  # remove when start task threads will be started after node setup
-        if self.params.get("use_mgmt", default=None):
+        if self.params.get("use_mgmt"):
             self.install_scylla_manager(node, auth_token=self.mgmt_auth_token)
 
     def install_scylla_manager(self, node, auth_token):
-        if self.params.get('use_mgmt', default=None):
+        if self.params.get('use_mgmt'):
             node.install_scylla(scylla_repo=self.params.get('scylla_repo_m'))
-            package_path = self.params.get('scylla_mgmt_pkg', None)
+            package_path = self.params.get('scylla_mgmt_pkg')
             if package_path:
                 node.remoter.run('mkdir -p {}'.format(package_path))
                 node.remoter.send_files(src='{}*.rpm'.format(package_path), dst=package_path)
@@ -4541,7 +4541,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                 ''')
                 node.remoter.run("sudo bash -ce '%s'" % configure_self_node_exporter, verbose=True)
 
-            if self.params.get('cloud_prom_bearer_token', None):
+            if self.params.get('cloud_prom_bearer_token'):
                 cloud_prom_script = dedent("""
                                         echo "targets: [] " > {0.monitoring_conf_dir}/scylla_servers.yml
                                         echo "targets: [] " > {0.monitoring_conf_dir}/node_exporter_servers.yml

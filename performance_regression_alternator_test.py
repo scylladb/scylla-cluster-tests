@@ -115,7 +115,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         """
         # run a write workload
         base_cmd_w = self.params.get('stress_cmd_w')
-        stress_multiplier = self.params.get('stress_multiplier', default=1)
+        stress_multiplier = self.params.get('stress_multiplier')
 
         self.create_cql_ks_and_table(field_number=10)
 
@@ -148,7 +148,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         node = self.db_cluster.nodes[0]
 
         base_cmd_r = self.params.get('stress_cmd_r')
-        stress_multiplier = self.params.get('stress_multiplier', default=1)
+        stress_multiplier = self.params.get('stress_multiplier')
         self.run_fstrim_on_all_db_nodes()
         # run a prepare write workload
         self.create_cql_ks_and_table(field_number=10)
@@ -183,7 +183,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
         node = self.db_cluster.nodes[0]
 
         base_cmd_m = self.params.get('stress_cmd_m')
-        stress_multiplier = self.params.get('stress_multiplier', default=1)
+        stress_multiplier = self.params.get('stress_multiplier')
         self.run_fstrim_on_all_db_nodes()
 
         self.create_cql_ks_and_table(field_number=10)

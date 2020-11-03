@@ -42,8 +42,8 @@ class PerformanceRegressionUserProfilesTest(ClusterTester):
         """
         Run workload using user profiles
         """
-        duration = self.params.get('cs_duration', default='50m')
-        user_profiles = self.params.get('cs_user_profiles', default=[])
+        duration = self.params.get('cs_duration')
+        user_profiles = self.params.get('cs_user_profiles')
         assert user_profiles is not None, 'No user profiles defined!'
         for cs_profile in user_profiles:
             assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)

@@ -34,7 +34,7 @@ def truncate_entries(func):
         # Perform validation of truncate entries in case the new version is 3.1 or more
         node = args[0]
         if self.truncate_entries_flag:
-            base_version = self.params.get('scylla_version', default='')
+            base_version = self.params.get('scylla_version')
             system_truncated = bool(parse_version(base_version) >= parse_version('3.1')
                                     and not is_enterprise(base_version))
             with self.db_cluster.cql_connection_patient(node, keyspace='truncate_ks') as session:
@@ -113,9 +113,9 @@ class UpgradeTest(FillDatabaseData):
     @truncate_entries
     def upgrade_node(self, node, upgrade_sstables=True):
         # pylint: disable=too-many-branches,too-many-statements
-        new_scylla_repo = self.params.get('new_scylla_repo', default=None)
-        new_version = self.params.get('new_version', default='')
-        upgrade_node_packages = self.params.get('upgrade_node_packages', default=None)
+        new_scylla_repo = self.params.get('new_scylla_repo')
+        new_version = self.params.get('new_version')
+        upgrade_node_packages = self.params.get('upgrade_node_packages')
 
         self.log.info('Upgrading a Node')
         node.upgrade_system()
@@ -192,11 +192,11 @@ class UpgradeTest(FillDatabaseData):
                     node.remoter.run('sudo apt-get update')
                     node.remoter.run(
                         r'sudo apt-get dist-upgrade {} -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated'.format(scylla_pkg))
-        if self.params.get('test_sst3', default=None):
+        if self.params.get('test_sst3'):
             node.remoter.run("echo 'enable_sstables_mc_format: true' |sudo tee --append /etc/scylla/scylla.yaml")
-        if self.params.get('test_upgrade_from_installed_3_1_0', default=None):
+        if self.params.get('test_upgrade_from_installed_3_1_0'):
             node.remoter.run("echo 'enable_3_1_0_compatibility_mode: true' |sudo tee --append /etc/scylla/scylla.yaml")
-        authorization_in_upgrade = self.params.get('authorization_in_upgrade', default=None)
+        authorization_in_upgrade = self.params.get('authorization_in_upgrade')
         if authorization_in_upgrade:
             node.remoter.run("echo 'authorizer: \"%s\"' |sudo tee --append /etc/scylla/scylla.yaml" %
                              authorization_in_upgrade)
@@ -218,7 +218,7 @@ class UpgradeTest(FillDatabaseData):
 
         self.log.info('Rollbacking a Node')
         # fixme: auto identify new_introduced_pkgs, remove this parameter
-        new_introduced_pkgs = self.params.get('new_introduced_pkgs', default=None)
+        new_introduced_pkgs = self.params.get('new_introduced_pkgs')
         result = node.remoter.run('scylla --version')
         orig_ver = result.stdout
         # flush all memtables to SSTables
@@ -277,16 +277,16 @@ class UpgradeTest(FillDatabaseData):
         snapshot_name = re.findall(r"system/peers-[a-z0-9]+/snapshots/(\d+)\n", result.stdout)
         # cmd = r"DIR='/var/lib/scylla/data/system'; for i in `sudo ls $DIR`;do sudo test -e $DIR/$i/snapshots/%s && sudo find $DIR/$i/snapshots/%s -type f -exec sudo /bin/cp {} $DIR/$i/ \;; done" % (snapshot_name[0], snapshot_name[0])
         # recover the system tables
-        if self.params.get('recover_system_tables', default=None):
+        if self.params.get('recover_system_tables'):
             node.remoter.send_files('./data_dir/recover_system_tables.sh', '/tmp/')
             node.remoter.run('bash /tmp/recover_system_tables.sh %s' % snapshot_name[0], verbose=True)
-        if self.params.get('test_sst3', default=None):
+        if self.params.get('test_sst3'):
             node.remoter.run(
                 r'sudo sed -i -e "s/enable_sstables_mc_format:/#enable_sstables_mc_format:/g" /etc/scylla/scylla.yaml')
-        if self.params.get('test_upgrade_from_installed_3_1_0', default=None):
+        if self.params.get('test_upgrade_from_installed_3_1_0'):
             node.remoter.run(
                 r'sudo sed -i -e "s/enable_3_1_0_compatibility_mode:/#enable_3_1_0_compatibility_mode:/g" /etc/scylla/scylla.yaml')
-        if self.params.get('remove_authorization_in_rollback', default=None):
+        if self.params.get('remove_authorization_in_rollback'):
             node.remoter.run('sudo sed -i -e "s/authorizer:/#authorizer:/g" /etc/scylla/scylla.yaml')
         # Current default 300s aren't enough for upgrade test of Debian 9.
         # Related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1726
@@ -435,7 +435,7 @@ class UpgradeTest(FillDatabaseData):
         well, upgrade all nodes to new version in the end.
         """
         # In case the target version >= 3.1 we need to perform test for truncate entries
-        target_upgrade_version = self.params.get('target_upgrade_version', default='')
+        target_upgrade_version = self.params.get('target_upgrade_version')
         self.truncate_entries_flag = False
         if target_upgrade_version and parse_version(target_upgrade_version) >= parse_version('3.1') and \
                 not is_enterprise(target_upgrade_version):
@@ -747,7 +747,7 @@ class UpgradeTest(FillDatabaseData):
         """
         self.truncate_entries_flag = False  # not perform truncate entries test
         self.log.info('Step1 - Populate DB with many types of tables and data')
-        target_upgrade_version = self.params.get('new_version', default='')
+        target_upgrade_version = self.params.get('new_version')
         if target_upgrade_version and parse_version(target_upgrade_version) >= parse_version('3.1') and \
                 not is_enterprise(target_upgrade_version):
             self.truncate_entries_flag = True
@@ -856,6 +856,6 @@ class UpgradeTest(FillDatabaseData):
         grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(self.start_time) if self.monitors else {}
         email_data.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
                            "grafana_snapshots": grafana_dataset.get("snapshots", []),
-                           "scylla_ami_id": self.params.get("ami_id_db_scylla", "-"), })
+                           "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-", })
 
         return email_data

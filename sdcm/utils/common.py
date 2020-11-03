@@ -1524,7 +1524,7 @@ def download_dir_from_cloud(url):
     :param url: a url that starts with `s3://` or `gs://`
     :return: the temp directory create with the downloaded content
     """
-    if url is None:
+    if not url:
         return url
 
     md5 = hashlib.md5()  # deepcode ignore insecureHash: can't change it
