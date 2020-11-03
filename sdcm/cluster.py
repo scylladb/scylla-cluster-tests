@@ -4270,16 +4270,15 @@ class BaseLoaderSet():
 
     @staticmethod
     def install_scylla_bench(node):
-        cmd = dedent("""
-                    sudo yum install git -y
-                    curl -LO https://storage.googleapis.com/golang/go1.13.linux-amd64.tar.gz
-                    sudo tar -C /usr/local -xvzf go1.13.linux-amd64.tar.gz
-                    echo 'export GOPATH=$HOME/go' >> $HOME/.bashrc
-                    echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bashrc
-                    source $HOME/.bashrc
-                    go get github.com/scylladb/scylla-bench
-                """)
-        node.remoter.run(cmd)
+        node.remoter.sudo(shell_script_cmd("""\
+            yum install -y git
+            curl -LO https://storage.googleapis.com/golang/go1.13.linux-amd64.tar.gz
+            tar -C /usr/local -xvzf go1.13.linux-amd64.tar.gz
+            echo 'export GOPATH=$HOME/go' >> $HOME/.bashrc
+            echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bashrc
+            source $HOME/.bashrc
+            go get github.com/scylladb/scylla-bench
+        """))
 
 
 class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-instance-attributes

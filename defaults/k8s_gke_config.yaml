@@ -24,13 +24,14 @@ k8s_scylla_cpu_n: 6
 k8s_scylla_mem_gi: 16
 k8s_scylla_disk_gi: 500
 
-gce_image: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
-gce_instance_type_loader: 'e2-standard-2'
-gce_root_disk_type_loader: 'pd-standard'
-gce_n_local_ssd_disk_loader: 0
+k8s_loader_cluster_name: 'sct-loaders'
+k8s_loader_cpu_n: 3
+k8s_loader_mem_gi: 12
+gce_instance_type_loader: 'e2-standard-4'
 
 n_loaders: 1
 
+gce_image_monitor: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
 gce_instance_type_monitor: 'e2-medium'
 gce_root_disk_type_monitor: 'pd-standard'
 gce_root_disk_size_monitor: 50

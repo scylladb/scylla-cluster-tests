@@ -148,6 +148,9 @@
 | **<a name="k8s_scylla_cpu_n">k8s_scylla_cpu_n</a>**  |  | N/A | SCT_K8S_SCYLLA_CPU_N
 | **<a name="k8s_scylla_mem_gi">k8s_scylla_mem_gi</a>**  |  | N/A | SCT_K8S_SCYLLA_MEM_GI
 | **<a name="k8s_scylla_disk_gi">k8s_scylla_disk_gi</a>**  |  | N/A | SCT_K8S_SCYLLA_DISK_GI
+| **<a name="k8s_loader_cluster_name">k8s_loader_cluster_name</a>**  |  | N/A | SCT_K8S_LOADER_CLUSTER_NAME
+| **<a name="k8s_loader_cpu_n">k8s_loader_cpu_n</a>**  |  | N/A | SCT_K8S_LOADER_CPU_N
+| **<a name="k8s_loader_mem_gi">k8s_loader_mem_gi</a>**  |  | N/A | SCT_K8S_LOADER_MEM_GI
 | **<a name="minikube_version">minikube_version</a>**  |  | N/A | SCT_MINIKUBE_VERSION
 | **<a name="k8s_cert_manager_version">k8s_cert_manager_version</a>**  |  | N/A | SCT_K8S_CERT_MANAGER_VERSION
 | **<a name="gke_cluster_version">gke_cluster_version</a>**  |  | N/A | SCT_GKE_CLUSTER_VERSION
