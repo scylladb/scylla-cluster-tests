@@ -4,6 +4,8 @@ cs_duration: '55m'
 cs_user_profiles:
     - scylla-qa-internal/cust_d/templated_tables_mv.yaml
 
+pre_create_schema: true
+
 user_profile_table_count: 5000
 batch_size: 200
 

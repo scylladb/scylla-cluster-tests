@@ -312,7 +312,8 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         # lowercase letters, numbers, or hyphens, and cannot end with a hyphen
         assert len(name) <= 63, "Max length of instance name is 63"
         startup_script = cluster.Setup.get_startup_script()
-        if self.params.get("scylla_linux_distro", "") in ("ubuntu-bionic", "ubuntu-xenial", "ubuntu-focal", ):
+
+        if self.params.get("scylla_linux_distro") in ("ubuntu-bionic", "ubuntu-xenial", "ubuntu-focal",):
             # we need to disable sshguard to prevent blocking connections from the builder
             startup_script += dedent("""
                 sudo systemctl disable sshguard

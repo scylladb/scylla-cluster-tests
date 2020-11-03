@@ -180,8 +180,8 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
 
         email_data = self._get_common_email_data()
         email_data.update({"manager_server_repo": self.params.get("scylla_mgmt_repo"),
-                           "manager_agent_repo": self.params.get("scylla_mgmt_agent_repo",
-                                                                 self.params.get("scylla_mgmt_repo")),
+                           "manager_agent_repo": (self.params.get("scylla_mgmt_agent_repo") or
+                                                  self.params.get("scylla_mgmt_repo")),
                            "target_manager_server_repo": self.params.get('target_scylla_mgmt_server_repo'),
                            "target_manager_agent_repo": self.params.get('target_scylla_mgmt_agent_repo')})
 

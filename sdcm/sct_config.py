@@ -21,13 +21,6 @@ from sdcm.utils.common import find_scylla_repo, get_scylla_ami_versions, get_bra
 from sdcm.utils.version_utils import get_branch_version, get_branch_version_for_multiple_repositories
 
 
-# pylint: disable=too-few-public-methods
-class UnsetMarker():
-    """
-    Marker object for function empty default, used SCTConfiguration.get to mimic dict.get behavior
-    """
-
-
 def str_or_list(value):
     """
     Convert an environment variable into a python list
@@ -595,6 +588,18 @@ class SCTConfiguration(dict):
         dict(name="gce_n_local_ssd_disk_db", env="SCT_GCE_N_LOCAL_SSD_DISK_DB", type=int,
              help=""),
 
+        dict(name="gce_pd_standard_disk_size_db", env="SCT_GCE_PD_STANDARD_DISK_SIZE_DB", type=int,
+             help=""),
+
+        dict(name="gce_pd_ssd_disk_size_db", env="SCT_GCE_PD_SSD_DISK_SIZE_DB", type=int,
+             help=""),
+
+        dict(name="gce_pd_ssd_disk_size_loader", env="SCT_GCE_PD_SSD_DISK_SIZE_LOADER", type=int,
+             help=""),
+
+        dict(name="gce_pd_ssd_disk_size_monitor", env="SCT_GCE_SSD_DISK_SIZE_MONITOR", type=int,
+             help=""),
+
         # k8s-gce-minikube options
         dict(name="gce_image_minikube", env="SCT_GCE_IMAGE_MINIKUBE", type=str,
              help=""),
@@ -830,7 +835,7 @@ class SCTConfiguration(dict):
         dict(name="target_upgrade_version", env="SCT_TAGRET_UPGRADE_VERSION", type=str,
              help="Assign target upgrade version, use for decide if the truncate entries test should be run. "
                   "This test should be performed in case the target upgrade version >= 3.1"),
-        dict(name="upgrade_node_packages", env="SCT_UPGRADE_NODE_PACKAGES", type=int,
+        dict(name="upgrade_node_packages", env="SCT_UPGRADE_NODE_PACKAGES", type=str,
              help=""),
 
         dict(name="test_sst3", env="SCT_TEST_SST3", type=boolean,
@@ -1118,12 +1123,12 @@ class SCTConfiguration(dict):
         files = anyconfig.load(list(config_files))
         anyconfig.merge(self, files)
 
-        regions_data = self.get('regions_data', {})
+        regions_data = self.get('regions_data') or {}
         if regions_data:
             del self['regions_data']
 
         # 2.2) load the region data
-        region_names = self.get('region_name', '').split()
+        region_names = (self.get('region_name') or '').split()
         region_names = env.get('region_name', region_names)
 
         cluster_backend = self.get('cluster_backend')
@@ -1142,8 +1147,8 @@ class SCTConfiguration(dict):
 
         # 4) assume multi dc by n_db_nodes set size
         if 'aws' in cluster_backend:
-            num_of_regions = len(self.get('region_name', '').split())
-            num_of_db_nodes_sets = len(str(self.get('n_db_nodes', '')).split(' '))
+            num_of_regions = len((self.get('region_name')).split())
+            num_of_db_nodes_sets = len(str(self.get('n_db_nodes')).split(' '))
             if num_of_db_nodes_sets > num_of_regions:
                 for region in list(regions_data.keys())[:num_of_db_nodes_sets]:
                     for key, value in regions_data[region].items():
@@ -1153,15 +1158,15 @@ class SCTConfiguration(dict):
                             self[key] += " {}".format(value)
 
         # 5) handle scylla_version if exists
-        scylla_version = self.get('scylla_version', None)
-        scylla_linux_distro = self.get('scylla_linux_distro', '')
+        scylla_version = self.get('scylla_version')
+        scylla_linux_distro = self.get('scylla_linux_distro')
         dist_type = scylla_linux_distro.split('-')[0]
         dist_version = scylla_linux_distro.split('-')[-1]
 
         if scylla_version:
             if self.get("cluster_backend") in ["docker", "k8s-gce-minikube", "k8s-gke"]:
                 self.log.info("Assume that Scylla Docker image has repo file pre-installed.")
-            elif 'ami_id_db_scylla' not in self and self.get('cluster_backend') == 'aws':
+            elif not self.get('ami_id_db_scylla') and self.get('cluster_backend') == 'aws':
                 ami_list = []
                 for region in self.get('region_name').split():
                     if ':' in scylla_version:
@@ -1177,13 +1182,13 @@ class SCTConfiguration(dict):
                     else:
                         raise ValueError("AMI for scylla version {} wasn't found".format(scylla_version))
                 self['ami_id_db_scylla'] = " ".join(ami_list)
-            elif 'scylla_repo' not in self:
+            elif not self.get('scylla_repo'):
                 self['scylla_repo'] = find_scylla_repo(scylla_version, dist_type, dist_version)
             else:
                 raise ValueError("'scylla_version' can't used together with  'ami_id_db_scylla' or with 'scylla_repo'")
 
-            if self.get("n_loaders") and "scylla_repo_loader" not in self and self.get("cluster_backend") != "aws":
-                scylla_linux_distro_loader = self.get('scylla_linux_distro_loader', '')
+            if self.get("n_loaders") and not self.get("scylla_repo_loader") and self.get("cluster_backend") != "aws":
+                scylla_linux_distro_loader = self.get('scylla_linux_distro_loader')
                 dist_type_loader = scylla_linux_distro_loader.split('-')[0]
                 dist_version_loader = scylla_linux_distro_loader.split('-')[-1]
 
@@ -1193,9 +1198,9 @@ class SCTConfiguration(dict):
                                                               dist_type_loader, dist_version_loader)
 
         # 5.1) handle oracle scylla_version if exists
-        oracle_scylla_version = self.get('oracle_scylla_version', None)
+        oracle_scylla_version = self.get('oracle_scylla_version')
         if oracle_scylla_version:
-            if 'ami_id_db_oracle' not in self and self.get('cluster_backend') == 'aws':
+            if not self.get('ami_id_db_oracle') and self.get('cluster_backend') == 'aws':
                 ami_list = []
                 for region in self.get('region_name').split():
                     if ':' in oracle_scylla_version:
@@ -1215,17 +1220,17 @@ class SCTConfiguration(dict):
                 raise ValueError("oracle_scylla_version and ami_id_db_oracle can't used together")
 
         # 6) support lookup of repos for upgrade test
-        new_scylla_version = self.get('new_version', None)
+        new_scylla_version = self.get('new_version')
         if new_scylla_version:
-            if 'ami_id_db_scylla' not in self and cluster_backend == 'aws':  # pylint: disable=no-else-raise
+            if not self.get('ami_id_db_scylla') and cluster_backend == 'aws':  # pylint: disable=no-else-raise
                 raise ValueError("'new_version' isn't supported for AWS AMIs")
 
-            elif 'new_scylla_repo' not in self:
+            elif not self.get('new_scylla_repo'):
                 self['new_scylla_repo'] = find_scylla_repo(new_scylla_version, dist_type, dist_version)
 
         # 7) append username or ami_id_db_scylla_desc to the user_prefix
-        version_tag = self.get('ami_id_db_scylla_desc', default=None)
-        user_prefix = self.get('user_prefix', default=None)
+        version_tag = self.get('ami_id_db_scylla_desc')
+        user_prefix = self.get('user_prefix')
         if user_prefix:
             if not version_tag:
                 version_tag = getpass.getuser()
@@ -1233,8 +1238,8 @@ class SCTConfiguration(dict):
             self['user_prefix'] = "{}-{}".format(user_prefix, version_tag)[:35]
 
         # 8) update target_upgrade_version automatically
-        new_scylla_repo = self.get('new_scylla_repo', None)
-        if new_scylla_repo and 'target_upgrade_version' not in self:
+        new_scylla_repo = self.get('new_scylla_repo')
+        if new_scylla_repo and not self.get('target_upgrade_version'):
             self['target_upgrade_version'] = get_branch_version(new_scylla_repo)
 
         # 9) validate that supported instance_provision selected
@@ -1290,18 +1295,12 @@ class SCTConfiguration(dict):
             if opt["name"] in self and (opt["env"] not in os.environ or replace):
                 os.environ[opt["env"]] = str(self[opt["name"]])
 
-    def get(self, key, default=UnsetMarker):
+    def get(self, key: str):
         """
-        get a specific configuration by key
-        :param key: the key to get
-        :param default: default value if the key doesn't exist
-        :return: int / str / list
+        get the value of test configuration parameter by the name
         """
 
-        if default is not UnsetMarker:
-            ret_val = super(SCTConfiguration, self).get(key, default)
-        else:
-            ret_val = super(SCTConfiguration, self).get(key)
+        ret_val = super(SCTConfiguration, self).get(key)
 
         if key in self.multi_region_params and isinstance(ret_val, list):
             ret_val = ' '.join(ret_val)
@@ -1330,7 +1329,7 @@ class SCTConfiguration(dict):
                            'stress_cmd_complex_verify_delete', 'stress_cmd_lwt_mixed', 'stress_cmd_lwt_de',
                            'stress_cmd_lwt_dc', 'stress_cmd_lwt_ue', 'stress_cmd_lwt_uc', 'stress_cmd_lwt_ine',
                            'stress_cmd_lwt_d', 'stress_cmd_lwt_u', 'stress_cmd_lwt_i']:
-            stress_cmds = self.get(param_name, default=None)
+            stress_cmds = self.get(param_name)
             if stress_cmds is None:
                 continue
             if isinstance(stress_cmds, str):
@@ -1446,19 +1445,21 @@ class SCTConfiguration(dict):
                 raise ValueError(error_message_template.format('<max PK value> should be bigger then <min PK value>. '))
 
         # verify that the AMIs used all have 'user_data_format_version' tag
-        ami_id_db_scylla = self.get('ami_id_db_scylla', default='').split()
-        region_names = self.get('region_name', default='').split()
-        ami_id_db_oracle = self.get('ami_id_db_oracle', default='').split()
+        if 'aws' in backend:
+            ami_id_db_scylla = self.get('ami_id_db_scylla').split()
+            region_names = self.get('region_name').split()
+            ami_id_db_oracle = self.get('ami_id_db_oracle').split()
 
-        for ami_list in [ami_id_db_scylla, ami_id_db_oracle]:
-            if ami_list:
-                for ami_id, region_name in zip(ami_list, region_names):
-                    if not ami_built_by_scylla(ami_id, region_name):
-                        continue
-                    tags = get_ami_tags(ami_id, region_name)
-                    assert 'user_data_format_version' in tags.keys(), \
-                        f"\n\t'user_data_format_version' tag missing from [{ami_id}] on {region_name}\n\texisting " \
-                        f"tags: {tags}"
+            for ami_list in [ami_id_db_scylla, ami_id_db_oracle]:
+                if ami_list:
+                    for ami_id, region_name in zip(ami_list, region_names):
+                        if not ami_built_by_scylla(ami_id, region_name):
+                            continue
+                        tags = get_ami_tags(ami_id, region_name)
+                        assert 'user_data_format_version' in tags.keys(), \
+                            f"\n\t'user_data_format_version' tag missing from [{ami_id}] on {region_name}\n\texisting " \
+                            f"tags: {tags}"
+
         # For each Scylla repo file we will check that there is at least one valid URL through which to download a
         # version of SCYLLA, otherwise we will get an error.
         get_branch_version_for_multiple_repositories(urls=[self.get(url) for url in [

@@ -74,7 +74,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
             # Check if the prepare_cmd is a list of commands
             if not isinstance(prepare_write_cmd, six.string_types) and len(prepare_write_cmd) > 1:
                 # Check if it should be round_robin across loaders
-                if self.params.get('round_robin', default='').lower() == 'true':
+                if self.params.get('round_robin').lower() == 'true':
                     self.log.debug('Populating data using round_robin')
                     params.update({'stress_num': 1, 'round_robin': True})
 

@@ -1,10 +1,15 @@
 db_type: "scylla"
 
+test_duration: 60
+
 ip_ssh_connections: 'private'
 
 mgmt_port: 10090
+scylla_repo: ''
 scylla_repo_m: 'http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylla-2020.1.repo'
 scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylladb-manager-2.2.repo'
+
+scylla_repo_loader: ''
 
 experimental: true
 round_robin: false
@@ -25,6 +30,8 @@ space_node_threshold: 0
 
 cluster_health_check: true
 
+add_node_cnt: 1
+
 reuse_cluster: false
 nemesis_class_name: 'NoOpMonkey'
 nemesis_during_prepare: true
@@ -37,7 +44,6 @@ seeds_selector: "first"
 seeds_num: 1
 
 instance_provision: "spot"
-spot_max_price: 0.60
 
 execute_post_behavior: false
 post_behavior_db_nodes: "keep-on-failure"
@@ -46,16 +52,27 @@ post_behavior_monitor_nodes: "keep-on-failure"
 
 cloud_credentials_path: '~/.ssh/support'
 use_cloud_manager: false
+cloud_prom_bearer_token: ''
 
 backtrace_decoding: true
+
+update_db_packages: ''
 
 logs_transport: "rsyslog"
 
 store_perf_results: false
 send_email: false
 email_recipients: ['qa@scylladb.com']
+email_subject_postfix: ''
 
 collect_logs: false
+
+hinted_handoff: 'enabled'
+
+server_encrypt: false
+client_encrypt: false
+
+scylla_encryption_options: ''
 
 loader_swap_size: 1024 # Size of swap file for loader node in bytes 1024 * 1MB
 monitor_swap_size: 8192 # Size of swap file for monitor node in bytes 8192 * 1MB
@@ -78,3 +95,42 @@ stop_test_on_stress_failure: true
 stress_cdc_log_reader_batching_enable: true
 use_legacy_cluster_init: false
 internode_encryption: 'all'
+
+use_mgmt: false
+manager_prometheus_port: 5090
+scylla_mgmt_pkg: ''
+
+skip_download: false
+
+authenticator_user: ''
+authenticator_password: ''
+
+# gemini defaults
+gemini_version: '0.9.2'
+n_test_oracle_db_nodes: 1
+gemini_seed: 0
+oracle_scylla_version: ''
+
+# cassandra-stress defaults
+stress_multiplier: 1
+keyspace_num: 1
+cs_user_profiles: []
+cs_duration: '50m'
+batch_size: 1
+pre_create_schema: false
+user_profile_table_count: 1
+cassandra_stress_population_size: 1000000
+cassandra_stress_threads: 1000
+
+# upgrade params
+new_scylla_repo: ''
+new_version: ''
+upgrade_node_packages: ''
+test_sst3: false
+authorization_in_upgrade: ''
+new_introduced_pkgs: ''
+recover_system_tables: false
+scylla_version: ''
+remove_authorization_in_rollback: false
+test_upgrade_from_installed_3_1_0: false
+target_upgrade_version: ''

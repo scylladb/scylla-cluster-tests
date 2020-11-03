@@ -391,8 +391,8 @@ class CDCReplicationTest(ClusterTester):
                            "grafana_snapshots": grafana_dataset.get("snapshots", []),
                            "nemesis_details": self.get_nemesises_stats(),
                            "nemesis_name": self.params.get("nemesis_class_name"),
-                           "scylla_ami_id": self.params.get("ami_id_db_scylla", "-"),
-                           "number_of_oracle_nodes": self.params.get("n_test_oracle_db_nodes", 1),
+                           "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
+                           "number_of_oracle_nodes": self.params.get("n_test_oracle_db_nodes"),
                            "oracle_ami_id": self.params.get("ami_id_db_oracle"),
                            "oracle_db_version":
                                self.cs_db_cluster.nodes[0].scylla_version if self.cs_db_cluster else "N/A",

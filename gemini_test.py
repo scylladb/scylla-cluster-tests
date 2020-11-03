@@ -55,7 +55,7 @@ class GeminiTest(ClusterTester):
         test_queue = self.run_gemini(cmd=cmd)
 
         # sleep before run nemesis test_duration * .25
-        sleep_before_start = float(self.params.get('test_duration', 5)) * 60 * .1
+        sleep_before_start = float(self.params.get('test_duration')) * 60 * .1
         self.log.info('Sleep interval {}'.format(sleep_before_start))
         time.sleep(sleep_before_start)
 
@@ -108,7 +108,7 @@ class GeminiTest(ClusterTester):
                            "gemini_version": gemini_version,
                            "nemesis_details": self.get_nemesises_stats(),
                            "nemesis_name": self.params.get("nemesis_class_name"),
-                           "number_of_oracle_nodes": self.params.get("n_test_oracle_db_nodes", 1),
+                           "number_of_oracle_nodes": self.params.get("n_test_oracle_db_nodes"),
                            "oracle_ami_id": self.params.get("ami_id_db_oracle"),
                            "oracle_db_version":
                                self.cs_db_cluster.nodes[0].scylla_version if self.cs_db_cluster else "N/A",

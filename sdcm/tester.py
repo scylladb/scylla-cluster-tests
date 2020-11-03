@@ -210,13 +210,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.status = "RUNNING"
         self.start_time = time.time()
         self._init_params()
-        reuse_cluster_id = self.params.get('reuse_cluster', default=False)
+        reuse_cluster_id = self.params.get('reuse_cluster')
         if reuse_cluster_id:
             Setup.reuse_cluster(True)
             Setup.set_test_id(reuse_cluster_id)
         else:
             # Test id is set by Hydra or generated if running without Hydra
-            Setup.set_test_id(self.params.get('test_id', default=uuid4()))
+            Setup.set_test_id(self.params.get('test_id') or uuid4())
         Setup.set_test_name(self.id())
         Setup.set_tester_obj(self)
         self._init_logging()
@@ -231,7 +231,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.debug("IP used for SSH connections is '%s'",
                        ip_ssh_connections)
         set_cluster_ip_ssh_connections(ip_ssh_connections)
-        self._duration = self.params.get(key='test_duration', default=60)
+        self._duration = self.params.get(key='test_duration')
         post_behavior_db_nodes = self.params.get('post_behavior_db_nodes')
         self.log.debug('Post behavior for db nodes %s', post_behavior_db_nodes)
         Setup.keep_cluster(node_type='db_nodes', val=post_behavior_db_nodes)
@@ -243,7 +243,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         Setup.keep_cluster(node_type='loader_nodes', val=post_behavior_loader_nodes)
 
         set_cluster_duration(self._duration)
-        cluster_backend = self.params.get('cluster_backend', default='')
+        cluster_backend = self.params.get('cluster_backend')
         if cluster_backend == 'aws':
             Setup.set_multi_region(len(self.params.get('region_name').split()) > 1)
         elif cluster_backend == 'gce':
@@ -260,14 +260,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             Setup.AUTO_BOOTSTRAP = False
 
         # for saving test details in DB
-        self.create_stats = self.params.get(key='store_results_in_elasticsearch', default=True)
+        self.create_stats = self.params.get(key='store_results_in_elasticsearch')
         self.scylla_dir = SCYLLA_DIR
         self.left_processes_log = os.path.join(self.logdir, 'left_processes.log')
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
         self._logs = {}
         self.timeout_thread = self._init_test_timeout_thread()
         self.email_reporter = build_reporter(self.__class__.__name__,
-                                             self.params.get('email_recipients', default=()),
+                                             self.params.get('email_recipients'),
                                              self.logdir)
 
         self.localhost = self._init_localhost()
@@ -295,7 +295,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return th
 
     def _init_localhost(self):
-        return LocalHost(user_prefix=self.params.get("user_prefix", None), test_id=Setup.test_id())
+        return LocalHost(user_prefix=self.params.get("user_prefix"), test_id=Setup.test_id())
 
     def _init_params(self):
         self.params = SCTConfiguration()
@@ -402,7 +402,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.update_certificates()
 
         # download rpms for update_db_packages
-        update_db_packages = self.params.get('update_db_packages', default=None)
+        update_db_packages = self.params.get('update_db_packages')
         self.params['update_db_packages'] = download_dir_from_cloud(update_db_packages)
 
         append_scylla_yaml = self.params.get('append_scylla_yaml')
@@ -466,7 +466,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def pre_create_alternator_tables(self):
         node = self.db_cluster.nodes[0]
-        if self.params.get('alternator_port', default=None):
+        if self.params.get('alternator_port'):
             self.log.info("Going to create alternator tables")
             if self.params.get('alternator_enforce_authorization'):
                 with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
@@ -546,14 +546,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if monitor_info['n_local_ssd'] is None:
             monitor_info['n_local_ssd'] = self.params.get('gce_n_local_ssd_disk_monitor')
 
-        user_prefix = self.params.get('user_prefix', None)
+        user_prefix = self.params.get('user_prefix')
 
         services = get_gce_services(self.params.get('gce_datacenter').split())
         assert len(services) in (1, len(db_info['n_nodes']), )
         gce_datacenter, services = list(services.keys()), list(services.values())
         TEST_LOG.info("Using GCE AZs: %s", gce_datacenter)
 
-        user_credentials = self.params.get('user_credentials_path', None)
+        user_credentials = self.params.get('user_credentials_path')
         self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
 
         gce_image_db = self.params.get('gce_image_db')
@@ -562,12 +562,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         gce_image_monitor = self.params.get('gce_image_monitor')
         if not gce_image_monitor:
             gce_image_monitor = self.params.get('gce_image')
-        cluster_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_db', default=0),
-                                    'pd-standard': self.params.get('gce_pd_standard_disk_size_db', default=0)}
+        cluster_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_db'),
+                                    'pd-standard': self.params.get('gce_pd_standard_disk_size_db')}
 
         service_accounts = KeyStore().get_gcp_service_accounts()
         common_params = dict(gce_image_username=self.params.get('gce_image_username'),
-                             gce_network=self.params.get('gce_network', default='default'),
+                             gce_network=self.params.get('gce_network'),
                              credentials=self.credentials,
                              user_prefix=user_prefix,
                              params=self.params,
@@ -584,7 +584,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                            service_accounts=service_accounts,
                                            **common_params)
 
-        loader_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_loader', default=0)}
+        loader_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_loader')}
         self.loaders = LoaderSetGCE(gce_image=self.params.get('gce_image_loader'),
                                     gce_image_type=loader_info['disk_type'],
                                     gce_image_size=loader_info['disk_size'],
@@ -596,7 +596,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                     **common_params)
 
         if monitor_info['n_nodes'] > 0:
-            monitor_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_monitor', default=0)}
+            monitor_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_monitor')}
             self.monitors = MonitorSetGCE(gce_image=gce_image_monitor,
                                           gce_image_type=monitor_info['disk_type'],
                                           gce_image_size=monitor_info['disk_size'],
@@ -626,7 +626,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if loader_info['type'] is None:
             loader_info['type'] = self.params.get('instance_type_loader')
         if loader_info['disk_size'] is None:
-            loader_info['disk_size'] = self.params.get('aws_root_disk_size_loader', default=None)
+            loader_info['disk_size'] = self.params.get('aws_root_disk_size_loader')
         if loader_info['device_mappings'] is None:
             if loader_info['disk_size']:
                 loader_info['device_mappings'] = [{
@@ -651,7 +651,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if db_info['type'] is None:
             db_info['type'] = self.params.get('instance_type_db')
         if db_info['disk_size'] is None:
-            db_info['disk_size'] = self.params.get('aws_root_disk_size_db', default=None)
+            db_info['disk_size'] = self.params.get('aws_root_disk_size_db')
         if db_info['device_mappings'] is None and self.params.get('ami_id_db_scylla'):
             if db_info['disk_size']:
                 db_info['device_mappings'] = [{
@@ -670,7 +670,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if monitor_info['type'] is None:
             monitor_info['type'] = self.params.get('instance_type_monitor')
         if monitor_info['disk_size'] is None:
-            monitor_info['disk_size'] = self.params.get('aws_root_disk_size_monitor', default=None)
+            monitor_info['disk_size'] = self.params.get('aws_root_disk_size_monitor')
         if monitor_info['device_mappings'] is None:
             if monitor_info['disk_size']:
                 monitor_info['device_mappings'] = [{
@@ -683,9 +683,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 }]
             else:
                 monitor_info['device_mappings'] = []
-        user_prefix = self.params.get('user_prefix', None)
+        user_prefix = self.params.get('user_prefix')
 
-        user_credentials = self.params.get('user_credentials_path', None)
+        user_credentials = self.params.get('user_credentials_path')
         services = []
         regions = self.params.get('region_name').split()
         for region in regions:
@@ -694,7 +694,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             services.append(service)
             self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
 
-        ami_ids = self.params.get('ami_id_db_scylla', default='').split()
+        ami_ids = self.params.get('ami_id_db_scylla').split()
         for idx, ami_id in enumerate(ami_ids):
             wait_ami_available(services[idx].meta.client, ami_id)
         ec2_security_group_ids = []
@@ -742,7 +742,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     **cl_params)
             elif db_type == 'mixed_scylla':
                 Setup.mixed_cluster(True)
-                n_test_oracle_db_nodes = self.params.get('n_test_oracle_db_nodes', 1)
+                n_test_oracle_db_nodes = self.params.get('n_test_oracle_db_nodes')
                 cl_params.update(dict(ec2_instance_type=self.params.get('instance_type_db_oracle'),
                                       user_prefix=user_prefix + '-oracle',
                                       n_nodes=[n_test_oracle_db_nodes]))
@@ -751,12 +751,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     ec2_ami_username=self.params.get('ami_db_scylla_user'),
                     **cl_params)
             elif db_type == 'cloud_scylla':
-                cloud_credentials = self.params.get('cloud_credentials_path', None)
+                cloud_credentials = self.params.get('cloud_credentials_path')
 
                 credentials = [UserRemoteCredentials(key_file=cloud_credentials)]
                 params = dict(
                     n_nodes=[0],
-                    user_prefix=self.params.get('user_prefix', None),
+                    user_prefix=self.params.get('user_prefix'),
                     credentials=credentials,
                     params=self.params,
                 )
@@ -807,7 +807,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         container_node_params = dict(docker_image=self.params.get('docker_image'),
                                      docker_image_tag=self.params.get('scylla_version'),
                                      node_key_file=self.credentials[0].key_file)
-        common_params = dict(user_prefix=self.params.get('user_prefix', None),
+        common_params = dict(user_prefix=self.params.get('user_prefix'),
                              params=self.params)
 
         self.db_cluster = cluster_docker.ScyllaDockerCluster(n_nodes=[self.params.get("n_db_nodes"), ],
@@ -822,13 +822,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def get_cluster_baremetal(self):
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches
 
-        user_credentials = self.params.get('user_credentials_path', None)
+        user_credentials = self.params.get('user_credentials_path')
         self.credentials.append(UserRemoteCredentials(key_file=user_credentials))
         params = dict(
             n_nodes=[self.params.get('n_db_nodes')],
-            public_ips=self.params.get('db_nodes_public_ip', None),
-            private_ips=self.params.get('db_nodes_private_ip', None),
-            user_prefix=self.params.get('user_prefix', None),
+            public_ips=self.params.get('db_nodes_public_ip'),
+            private_ips=self.params.get('db_nodes_private_ip'),
+            user_prefix=self.params.get('user_prefix'),
             credentials=self.credentials,
             params=self.params,
             targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
@@ -1404,7 +1404,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                      (query, speculative_retry))
         if in_memory:
             query += " AND in_memory=true AND compaction={'class': 'InMemoryCompactionStrategy'}"
-        if scylla_encryption_options is not None:
+        if not scylla_encryption_options:
             query = '%s AND scylla_encryption_options=%s' % (query, scylla_encryption_options)
         if compact_storage:
             query += ' AND COMPACT STORAGE'
@@ -1863,7 +1863,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     @silence()
     def clean_resources(self):
         # pylint: disable=too-many-branches
-        if not self.params.get('execute_post_behavior', False):
+        if not self.params.get('execute_post_behavior'):
             self.log.info('Resources will continue to run')
             return
 
@@ -2044,7 +2044,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         """
         Update table encryption
         """
-        if scylla_encryption_options is None:
+        if not scylla_encryption_options:
             self.log.debug('scylla_encryption_options is not set, skipping to enable encryption at-rest for all test tables')
         else:
             with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
@@ -2129,19 +2129,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def check_regression(self):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
-                                                      send_email=self.params.get('send_email', default=True),
-                                                      email_recipients=self.params.get('email_recipients', default=None))
+                                                      send_email=self.params.get('send_email'),
+                                                      email_recipients=self.params.get('email_recipients'))
         is_gce = bool(self.params.get('cluster_backend') == 'gce')
         try:
             results_analyzer.check_regression(self._test_id, is_gce,
-                                              email_subject_postfix=self.params.get('email_subject_postfix', ''))
+                                              email_subject_postfix=self.params.get('email_subject_postfix'))
         except Exception as ex:  # pylint: disable=broad-except
             self.log.exception('Failed to check regression: %s', ex)
 
     def check_regression_with_baseline(self, subtest_baseline):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
-                                                      send_email=self.params.get('send_email', default=True),
-                                                      email_recipients=self.params.get('email_recipients', default=None))
+                                                      send_email=self.params.get('send_email'),
+                                                      email_recipients=self.params.get('email_recipients'))
         is_gce = bool(self.params.get('cluster_backend') == 'gce')
         try:
             results_analyzer.check_regression_with_subtest_baseline(self._test_id,
@@ -2153,11 +2153,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def check_regression_multi_baseline(self, subtests_info=None, metrics=None, email_subject=None):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
-                                                      send_email=self.params.get('send_email', default=True),
-                                                      email_recipients=self.params.get('email_recipients', default=None))
+                                                      send_email=self.params.get('send_email'),
+                                                      email_recipients=self.params.get('email_recipients'))
         if email_subject is None:
             email_subject = 'Performance Regression Compare Results - {test.test_name} - {test.software.scylla_server_any.version.as_string}'
-            email_postfix = self.params.get('email_subject_postfix', '')
+            email_postfix = self.params.get('email_subject_postfix')
             if email_postfix:
                 email_subject += ' - ' + email_postfix
         try:
@@ -2171,8 +2171,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def check_specified_stats_regression(self, stats):
         perf_analyzer = SpecifiedStatsPerformanceAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
-                                                          send_email=self.params.get('send_email', default=True),
-                                                          email_recipients=self.params.get('email_recipients', default=None))
+                                                          send_email=self.params.get('send_email'),
+                                                          email_recipients=self.params.get('email_recipients'))
         try:
             perf_analyzer.check_regression(self._test_id, stats)
         except Exception as ex:  # pylint: disable=broad-except
@@ -2398,7 +2398,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         which return the dict with 2 required fields:
             email_template, email_subject
         """
-        send_email = self.params.get('send_email', default=False)
+        send_email = self.params.get('send_email')
         email_results_file = os.path.join(self.logdir, "email_data.json")
         email_data = read_email_data_from_file(email_results_file)
 
@@ -2463,7 +2463,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @silence()
     def tag_ami_with_result(self):
-        if self.params.get('cluster_backend', '') != 'aws' or not self.params.get('tag_ami_with_result', False):
+        if self.params.get('cluster_backend') != 'aws' or not self.params.get('tag_ami_with_result'):
             return
         test_result = 'PASSED' if self.get_test_status() == 'SUCCESS' else 'ERROR'
         job_base_name = os.environ.get('JOB_BASE_NAME', 'UnknownJob')

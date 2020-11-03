@@ -167,7 +167,7 @@ class LongevityDataValidator:
     @property
     def keyspace_name(self):
         if not self._keyspace_name:
-            prepare_write_cmd = self.longevity_self_object.params.get(self.stress_cmds_part, default=[])
+            prepare_write_cmd = self.longevity_self_object.params.get(self.stress_cmds_part) or []
             profiles = [cmd for cmd in prepare_write_cmd if self.user_profile_name in cmd]
             if not profiles:
                 self._validate_not_updated_data = False
@@ -251,7 +251,7 @@ class LongevityDataValidator:
         mv_names = []
 
         if not cs_profile:
-            stress_cmd = self.longevity_self_object.params.get(self.stress_cmds_part, default=[])
+            stress_cmd = self.longevity_self_object.params.get(self.stress_cmds_part) or []
             cs_profile = [cmd for cmd in stress_cmd if self.user_profile_name in cmd]
 
         if not cs_profile:

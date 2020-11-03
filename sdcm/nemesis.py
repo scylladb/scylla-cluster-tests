@@ -821,7 +821,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 # Adjust the rate according to the test duration. Try to call more unique
                 # methods and don't wait to long time to meet the balance if the test
                 # duration is short.
-                test_duration = self.cluster.params.get('test_duration', default=180)
+                test_duration = self.cluster.params.get('test_duration')
                 if test_duration < 600:  # less than 10 hours
                     rate = 1
                 elif test_duration < 4320:  # less than 3 days
@@ -1489,8 +1489,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _mgmt_backup(self, backup_specific_tables):
         # TODO: When cloud backup is supported - add this to the below 'if' statement:
-        #  and not self.cluster.params.get('use_cloud_manager', default=None)
-        if not self.cluster.params.get('use_mgmt', default=None):
+        #  and not self.cluster.params.get('use_cloud_manager')
+        if not self.cluster.params.get('use_mgmt'):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
         if not self.cluster.params.get('backup_bucket_location'):
             raise UnsupportedNemesis('backup bucket location configuration is not defined!')
@@ -1522,8 +1522,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_mgmt_repair_cli(self):
         self._set_current_disruption('ManagementRepair')
-        if not self.cluster.params.get('use_mgmt', default=None) and not self.cluster.params.get('use_cloud_manager',
-                                                                                                 default=None):
+        if not self.cluster.params.get('use_mgmt') and not self.cluster.params.get('use_cloud_manager'):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
         mgr_cluster = self.cluster.get_cluster_manager()
         mgr_task = mgr_cluster.create_repair_task()
@@ -1589,7 +1588,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             during short stop of one of the nodes in cluster
         """
         self._set_current_disruption("ValidateHintedHandoffShortDowntime")
-        if self.cluster.params.get('hinted_handoff', 'enabled') == 'disabled':
+        if self.cluster.params.get('hinted_handoff') == 'disabled':
             raise UnsupportedNemesis('For this nemesis to work, `hinted_handoff` needs to be set to `enabled`')
 
         start_time = time.time()
@@ -2366,7 +2365,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         This test will create and reload new certificates for the inter node communication.
         '''
         self._set_current_disruption('ServerSslHotReloadingNemesis')
-        if not self.cluster.params.get('server_encrypt', None):
+        if not self.cluster.params.get('server_encrypt'):
             raise UnsupportedNemesis('Server Encryption is not enabled, hence skipping')
 
         @retrying(n=30, allowed_exceptions=(LogContentNotFound, ))
