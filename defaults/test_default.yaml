@@ -134,3 +134,5 @@ scylla_version: ''
 remove_authorization_in_rollback: false
 test_upgrade_from_installed_3_1_0: false
 target_upgrade_version: ''
+
+stress_cdclog_reader_cmd: "cdc-stressor -stream-query-round-duration 30s"

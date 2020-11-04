@@ -9,10 +9,10 @@ from sdcm.sct_events import CDCReaderStressEvent, Severity
 from sdcm.utils.common import get_docker_stress_image_name
 from sdcm.utils.docker_utils import RemoteDocker
 from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
+from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
 
 LOGGER = logging.getLogger(__name__)
 
-CDC_LOGTABLE_SUFFIX = "_scylla_cdc_log"
 CDCLOG_READER_IMAGE = get_docker_stress_image_name(tool_name="cdcstressor")
 PP = pprint.PrettyPrinter(indent=2)
 
