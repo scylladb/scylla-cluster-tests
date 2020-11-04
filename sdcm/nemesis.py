@@ -175,17 +175,21 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def set_current_running_nemesis(self, node):
         node.running_nemesis = self.__class__.__name__
 
-    def set_target_node(self):
+    def set_target_node(self, dc_idx=None):
         """Set node to run nemesis on"""
         if self.filter_seed:
             non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed and not node.running_nemesis]
             # if non_seed_nodes is empty, nemesis would failed.
             self.log.debug("List of NonSeed nodes: {}".format([node.name for node in non_seed_nodes]))
+            if dc_idx:
+                non_seed_nodes = [node for node in non_seed_nodes if node.dc_idx == dc_idx]
             if not non_seed_nodes:
                 self.log.warning("Cluster doesn't contain free nonseeds nodes. Test will failed")
             self.target_node = random.choice(non_seed_nodes)
         else:
             all_nodes = [node for node in self.cluster.nodes if not node.running_nemesis]
+            if dc_idx:
+                all_nodes = [node for node in all_nodes if node.dc_idx == dc_idx]
             self.target_node = random.choice(all_nodes)
 
         # Set name of nemesis, which is going to run on target node
@@ -2284,7 +2288,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_grow_shrink_cluster(self):
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
         self.target_node.running_nemesis = None
-
+        current_dc_idx = self.target_node.dc_idx
         self._set_current_disruption("GrowCluster")
         self.log.info("Start grow cluster on %s nodes", add_nodes_number)
         for _ in range(add_nodes_number):
@@ -2303,7 +2307,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if self._is_it_on_kubernetes():
                 self.set_last_node_as_target()
             else:
-                self.set_target_node()
+                self.set_target_node(dc_idx=current_dc_idx)
             self.log.info("Next node will be removed %s", self.target_node)
             try:
                 InfoEvent(message='StartEvent - ShrinkCluster started decommissioning a node')
