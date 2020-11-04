@@ -235,11 +235,11 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     def test_13_scylla_version_ami_branch(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_SCYLLA_VERSION'] = 'branch-3.1:9'
+        os.environ['SCT_SCYLLA_VERSION'] = 'branch-3.1:37'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = SCTConfiguration()
 
-        self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-00b5ac462978479c9 ami-0d911e53781d8a542')
+        self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-02a6cecd306b21e95 ami-098789231b05ed226')
         self.assertRaisesRegex(AssertionError, r".*tag missing.*", conf.verify_configuration)
 
     def test_13_scylla_version_ami_branch_latest(self):  # pylint: disable=invalid-name
@@ -350,7 +350,8 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.verify_configuration()
         self.assertEqual(conf.get('scylla_repo'),
                          "https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/branch-4.2/latest/scylla.repo")
-        self.assertEqual(conf.get('target_upgrade_version'), '666.development')
+        target_upgrade_version = conf.get('target_upgrade_version')
+        self.assertTrue(target_upgrade_version == '666.development' or target_upgrade_version.endswith(".dev"))
 
     def test_15b_new_scylla_repo_by_scylla_version_ubuntu(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'gce'

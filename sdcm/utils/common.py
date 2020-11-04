@@ -34,7 +34,7 @@ import warnings
 import getpass
 import json
 import uuid
-from typing import Iterable, List, Callable, Optional, Dict, Union
+from typing import Iterable, List, Callable, Optional, Dict, Union, Literal
 from urllib.parse import urlparse
 from unittest.mock import Mock
 
@@ -1278,7 +1278,9 @@ def find_scylla_repo(scylla_version, dist_type='centos', dist_version=None):
         raise ValueError(f"repo for scylla version {scylla_version} wasn't found")
 
 
-def get_branched_repo(scylla_version, dist_type='centos'):
+def get_branched_repo(scylla_version: str,
+                      dist_type: Literal["centos", "ubuntu", "debian"] = "centos",
+                      bucket: str = "downloads.scylladb.com") -> Optional[str]:
     """
     Get a repo/list of scylla, based on scylla version match
 
@@ -1286,29 +1288,31 @@ def get_branched_repo(scylla_version, dist_type='centos'):
     :param dist_type: one of ['centos', 'ubuntu', 'debian']
     :return: str url repo/list, or None if not found
     """
-    branch, branch_version = scylla_version.split(':', maxsplit=1)
-    s3_client: S3Client = boto3.client('s3', region_name=DEFAULT_AWS_REGION)
-    bucket = 'downloads.scylladb.com'
+    try:
+        branch, branch_version = scylla_version.split(':', maxsplit=1)
+    except ValueError:
+        raise ValueError(f"{scylla_version=} should be in `branch-x.y:<date>' or `branch-x.y:latest' format") from None
 
-    if dist_type == 'centos':
-        response = s3_client.list_objects(
-            Bucket=bucket, Prefix=f'rpm/unstable/centos/{branch}/{branch_version}/', Delimiter='/')
-        if 'Contents' not in response:
-            return
-        for repo_file in response['Contents']:
-            filename = os.path.basename(repo_file['Key'])
-            if filename == 'scylla.repo':
-                return f"https://s3.amazonaws.com/{bucket}/{repo_file['Key']}"
+    if dist_type == "centos":
+        prefix = f"rpm/unstable/centos/{branch}/{branch_version}/"
+        filename = "scylla.repo"
+    elif dist_type in ("ubuntu", "debian", ):
+        prefix = f"deb/unstable/unified/{branch}/{branch_version}/scylladb-master/"
+        filename = "scylla.list"
+    else:
+        raise ValueError(f"Unsupported {dist_type=}")
 
-    elif dist_type in ('ubuntu', 'debian'):
-        response = s3_client.list_objects(
-            Bucket=bucket, Prefix=f'deb/unstable/unified/{branch}/{branch_version}/scylladb-master/', Delimiter='/')
-        if 'Contents' not in response:
-            return
-        for repo_file in response['Contents']:
-            filename = os.path.basename(repo_file['Key'])
-            if filename == 'scylla.list':
-                return f"https://s3.amazonaws.com/{bucket}/{repo_file['Key']}"
+    s3_client: S3Client = boto3.client("s3", region_name=DEFAULT_AWS_REGION)
+    response = s3_client.list_objects(Bucket=bucket, Prefix=prefix, Delimiter='/')
+
+    for repo_file in response.get("Contents", ()):
+        if os.path.basename(repo_file['Key']) == filename:
+            return f"https://s3.amazonaws.com/{bucket}/{repo_file['Key']}"
+
+    if branch_version.isdigit():
+        LOGGER.warning("Repo path doesn't include `build-id' anymore, try to use a date.")
+
+    return None
 
 
 def get_branched_ami(ami_version, region_name):
