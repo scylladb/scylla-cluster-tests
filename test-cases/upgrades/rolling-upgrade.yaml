@@ -10,8 +10,8 @@ stress_cmd_read_cl_quorum: cassandra-stress read no-warmup cl=QUORUM n=10100200 
 stress_cmd_read_10m: cassandra-stress read no-warmup cl=QUORUM duration=10m -schema 'replication(factor=3) compression=SnappyCompressor' -port jmx=6868 -mode cql3 native compression=snappy -rate threads=1000 -pop seq=1..10100200 -log interval=5
 stress_cmd_read_60m: cassandra-stress read no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3) compression=LZ4Compressor' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..10100200 -log interval=5
 stress_cmd_complex_prepare: cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml  ops'(insert=1)' cl=ALL n=5000000 -mode cql3 native -rate threads=1000 -pop seq=1..5000000
-stress_cmd_complex_verify_read: cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml  ops'(read1=1)' cl=ONE n=5000000 -mode cql3 native -rate threads=1000 -pop seq=1..5000000
-stress_cmd_complex_verify_more: cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml  ops'(read1=1,read2=1,update_static=1,update_ttl=1,update_diff1_ts=1,update_diff2_ts=1,update_same1_ts=1,update_same2_ts=1)' cl=ALL n=5000000 -mode cql3 native -rate threads=200 -pop seq=1..5000000
+stress_cmd_complex_verify_read: cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml  ops'(read1=1,read3=1)' cl=ONE n=5000000 -mode cql3 native -rate threads=1000 -pop seq=1..5000000
+stress_cmd_complex_verify_more: cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml  ops'(read1=1,read2=1,read3=1,update_static=1,update_ttl=1,update_diff1_ts=1,update_diff2_ts=1,update_same1_ts=1,update_same2_ts=1)' cl=ALL n=5000000 -mode cql3 native -rate threads=200 -pop seq=1..5000000
 stress_cmd_complex_verify_delete: cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml  ops'(delete_row=1)' cl=ALL n=500000 -mode cql3 native -rate threads=200 -pop seq=1..500000
 
 n_db_nodes: 4
