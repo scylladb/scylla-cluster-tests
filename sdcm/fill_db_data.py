@@ -888,7 +888,7 @@ class FillDatabaseData(ClusterTester):
                                AND compaction = { 'class' : 'LeveledCompactionStrategy',
                                                   'sstable_size_in_mb' : 10 }
                                AND compression = { 'sstable_compression' : '' }
-                               AND caching = 'all'"""],
+                               AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}"""],
             'truncates': ['TRUNCATE table_options_test'],
             'inserts': [],
             'queries': ["""
