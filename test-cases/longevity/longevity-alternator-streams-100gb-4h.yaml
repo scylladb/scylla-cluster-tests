@@ -1,30 +1,41 @@
-test_duration: 260
+test_duration: 650
 
 prepare_write_cmd:
   - >-
-    hydra-kcl -t usertable_streams -k 7812500
+    hydra-kcl -t usertable_streams --timeout 32400
 
   - >-
-    bin/ycsb load dynamodb -P workloads/workloadc -threads 10 -p recordcount=7812500
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 10 -p recordcount=78125000
     -p fieldcount=1 -p fieldlength=128 -p dataintegrity=true
-    -p insertstart=0 -p insertcount=7812500 -p table=usertable_streams
+    -p insertstart=0 -p insertcount=39062500 -p table=usertable_streams
 
   - >-
-    bin/ycsb load dynamodb -P workloads/workloadc -threads 10 -p recordcount=7812500
+    bin/ycsb load dynamodb -P workloads/workloadc -threads 10 -p recordcount=78125000
     -p fieldcount=1 -p fieldlength=128 -p dataintegrity=true
-    -p insertstart=7812500 -p insertcount=7812500 -p table=usertable_streams
+    -p insertstart=39062500 -p insertcount=39062500 -p table=usertable_streams
+
+  - >-
+    table_compare interval=120 ; src_table="alternator_usertable_streams".usertable_streams ; dst_table="alternator_usertable_streams-dest"."usertable_streams-dest"
 
 stress_cmd:
   >-
   bin/ycsb run dynamodb -P workloads/workloadc -threads 80
-  -p readproportion=1.0 -p updateproportion=0.0 -p recordcount=7812500
-  -p fieldcount=1 -p fieldlength=128 -p operationcount=7812500
-  -p dataintegrity=true -p maxexecutiontime=10800 -p table=usertable_streams
+  -p readproportion=1.0 -p updateproportion=0.0 -p recordcount=78125000
+  -p fieldcount=1 -p fieldlength=128 -p operationcount=39062500
+  -p insertstart=0 -p insertcount=39062500
+  -p dataintegrity=true -p table=usertable_streams-dest
+
+  >-
+  bin/ycsb run dynamodb -P workloads/workloadc -threads 80
+  -p readproportion=1.0 -p updateproportion=0.0 -p recordcount=78125000
+  -p fieldcount=1 -p fieldlength=128 -p operationcount=39062500
+  -p insertstart=39062500 -p insertcount=39062500
+  -p dataintegrity=true -p table=usertable_streams-dest
 
 round_robin: true
 
 n_loaders: 3
-n_db_nodes: 3
+n_db_nodes: 6
 n_monitor_nodes: 1
 
 instance_type_db: 'i3.4xlarge'
@@ -42,4 +53,4 @@ dynamodb_primarykey_type: HASH
 alternator_use_dns_routing: true
 
 store_results_in_elasticsearch: false
-use_mgmt: true
+use_mgmt: false # just to make setup quicker for now
