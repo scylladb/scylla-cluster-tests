@@ -22,7 +22,7 @@ from pkg_resources import parse_version
 
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm import wait
-from sdcm.group_common_events import ignore_upgrade_schema_errors
+from sdcm.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused
 from sdcm.utils.version_utils import is_enterprise
 from sdcm.sct_events import IndexSpecialColumnErrorEvent, InfoEvent
 from sdcm.utils.version_utils import get_node_supported_sstable_versions
@@ -667,12 +667,12 @@ class UpgradeTest(FillDatabaseData):
         we want to use this case to verify the read (cl=ALL) workload works
         well, upgrade all nodes to new version in the end.
         """
-
         # prepare workload (stress_before_upgrade)
         InfoEvent('Starting stress_before_upgrade - aka prepare step')
         stress_before_upgrade = self.params.get('stress_before_upgrade')
         prepare_thread_pool = self.run_stress_thread(stress_cmd=stress_before_upgrade)
-
+        if self.params.get('alternator_port'):
+            self.pre_create_alternator_tables()
         InfoEvent('Waiting for stress_before_upgrade to finish')
         self.verify_stress_thread(prepare_thread_pool)
 
@@ -701,7 +701,8 @@ class UpgradeTest(FillDatabaseData):
                 InfoEvent(f'Step{i + 1} - Upgrade node{i + 1}')
                 self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[i]]
                 self.log.info(f'Upgrade Node {self.db_cluster.node_to_upgrade.name} begins')
-                self.upgrade_node(self.db_cluster.node_to_upgrade, upgrade_sstables=upgrade_sstables)
+                with ignore_ycsb_connection_refused():
+                    self.upgrade_node(self.db_cluster.node_to_upgrade, upgrade_sstables=upgrade_sstables)
                 self.log.info(f'Upgrade Node {self.db_cluster.node_to_upgrade.name} ended')
                 self.db_cluster.node_to_upgrade.check_node_health()
                 upgraded_nodes.append(self.db_cluster.node_to_upgrade)
@@ -713,7 +714,8 @@ class UpgradeTest(FillDatabaseData):
                 InfoEvent(f'Step{num_nodes_to_rollback + upgraded_nodes.index(node) + 1} - '
                           f'Rollback node{upgraded_nodes.index(node) + 1}')
                 self.log.info(f'Rollback Node {node} begin')
-                self.rollback_node(node, upgrade_sstables=upgrade_sstables)
+                with ignore_ycsb_connection_refused():
+                    self.rollback_node(node, upgrade_sstables=upgrade_sstables)
                 self.log.info(f'Rollback Node {node} ended')
                 node.check_node_health()
 
@@ -722,7 +724,8 @@ class UpgradeTest(FillDatabaseData):
             InfoEvent(f'Step{num_nodes_to_rollback * 2 + i + 1} - Upgrade node{i + 1}')
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[i]]
             self.log.info(f'Upgrade Node {self.db_cluster.node_to_upgrade.name} begins')
-            self.upgrade_node(self.db_cluster.node_to_upgrade, upgrade_sstables=upgrade_sstables)
+            with ignore_ycsb_connection_refused():
+                self.upgrade_node(self.db_cluster.node_to_upgrade, upgrade_sstables=upgrade_sstables)
             self.log.info(f'Upgrade Node {self.db_cluster.node_to_upgrade.name} ended')
             self.db_cluster.node_to_upgrade.check_node_health()
             upgraded_nodes.append(self.db_cluster.node_to_upgrade)

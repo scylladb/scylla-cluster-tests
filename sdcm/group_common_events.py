@@ -1,7 +1,7 @@
 from contextlib import contextmanager, ExitStack
 
 from sdcm.sct_events import DbEventsFilter, Severity, DatabaseLogEvent, EventsSeverityChangerFilter, YcsbStressEvent, \
-    PrometheusAlertManagerEvent
+    PrometheusAlertManagerEvent, EventsFilter
 
 
 @contextmanager
@@ -50,4 +50,10 @@ def ignore_no_space_errors(node):
             DbEventsFilter(type='BACKTRACE', line='No space left on device', node=node), \
             DbEventsFilter(type='DATABASE_ERROR', line='No space left on device', node=node), \
             DbEventsFilter(type='FILESYSTEM_ERROR', line='No space left on device', node=node):
+        yield
+
+
+@contextmanager
+def ignore_ycsb_connection_refused():
+    with EventsFilter(event_class=YcsbStressEvent, regex='*Unable to execute HTTP request: Connection refused.*'):
         yield

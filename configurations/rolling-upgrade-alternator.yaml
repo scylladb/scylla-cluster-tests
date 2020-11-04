@@ -1,0 +1,23 @@
+test_duration: 360
+
+stress_before_upgrade: >-2
+  bin/ycsb run dynamodb -P workloads/workloada -threads 100 -p recordcount=1010020
+  -p readproportion=0 -p updateproportion=1 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+  -p fieldcount=10 -p fieldlength=512 -p operationcount=1010020 -p table=usertable
+stress_during_entire_upgrade: >-2
+  bin/ycsb run dynamodb -P workloads/workloada -threads 100 -p recordcount=1005010
+  -p readproportion=0 -p updateproportion=1 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+  -p fieldcount=10 -p fieldlength=512 -p operationcount=1005010 -p table=usertable
+stress_after_cluster_upgrade: >-2
+  bin/ycsb run dynamodb -P workloads/workloada -threads 100 -p recordcount=1005010
+  -p readproportion=1 -p updateproportion=0 -p scanproportion=0 -p insertproportion=0 -p requestdistribution=uniform
+  -p fieldcount=10 -p fieldlength=512 -p operationcount=1005010 -p table=usertable
+
+dynamodb_primarykey_type: HASH_AND_RANGE
+alternator_enforce_authorization: true
+alternator_access_key_id: 'alternator'
+alternator_secret_access_key: 'password'
+
+
+alternator_port: 8080
+alternator_use_dns_routing: true
