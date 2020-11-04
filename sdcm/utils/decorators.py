@@ -17,7 +17,6 @@ import logging
 import datetime
 from functools import wraps, partial
 
-
 LOGGER = logging.getLogger(__name__)
 
 
@@ -31,7 +30,8 @@ class retrying:  # pylint: disable=invalid-name,too-few-public-methods
     """
 
     def __init__(self, n=3, sleep_time=1,  # pylint: disable=too-many-arguments
-                 allowed_exceptions=(Exception,), message="", timeout=0, raise_on_exceeded=True):  # pylint: disable=redefined-outer-name
+                 allowed_exceptions=(Exception,), message="", timeout=0,
+                 raise_on_exceeded=True):  # pylint: disable=redefined-outer-name
         if n:
             self.n = n  # number of times to retry  # pylint: disable=invalid-name
         else:
@@ -97,6 +97,7 @@ def log_run_info(arg):
                 BEGIN: Execute nemesis
                 END: Execute nemesis (ran 0.000271)s
     """
+
     def _inner(func, msg=None):
         @wraps(func)
         def inner(*args, **kwargs):
@@ -110,6 +111,7 @@ def log_run_info(arg):
             end_time = datetime.datetime.now()
             LOGGER.debug("END: %s (ran %ss)", action, (end_time - start_time).total_seconds())
             return res
+
         return inner
 
     if callable(arg):  # when decorator is used without a string message
@@ -133,11 +135,59 @@ def measure_time(func):
     :param func:
     :return:
     """
+
     @wraps(func)
     def wrapped(*args, **kwargs):
         start = time.time()
         func_res = func(*args, **kwargs)
         end = time.time()
         return end - start, func_res
+
+    return wrapped
+
+
+def latency_calculator_decorator(func):
+    """
+    Gets the start time, end time and then calculates the latency based on function 'calculate_latency'.
+
+    :param func: Remote method to run.
+    :return: Wrapped method.
+    """
+    # calling this import here, because of circular import
+    from sdcm.utils import latency
+
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        start = time.time()
+        start_node_list = args[0].cluster.nodes[:]
+        res = func(*args, **kwargs)
+        end_node_list = args[0].cluster.nodes[:]
+        all_nodes_list = list(set(start_node_list + end_node_list))
+        end = time.time()
+        test_name = args[0].tester.__repr__().split('testMethod=')[-1].split('>')[0]
+        monitor = args[0].monitoring_set.nodes[0]
+        if 'read' in test_name:
+            workload = ['read']
+        elif 'write' in test_name:
+            workload = ['write']
+        elif 'mixed' in test_name:
+            workload = ['read', 'write']
+        else:
+            return None
+        for workload_type in workload:
+            if workload_type not in args[0].cluster.latency_results:
+                args[0].cluster.latency_results[workload_type] = dict()
+            if "steady" not in func.__name__.lower():
+                if func.__name__ not in args[0].cluster.latency_results[workload_type]:
+                    args[0].cluster.latency_results[workload_type][func.__name__] = dict()
+                if 'cycles' not in args[0].cluster.latency_results[workload_type][func.__name__]:
+                    args[0].cluster.latency_results[workload_type][func.__name__]['cycles'] = list()
+            result = latency.collect_latency(monitor, start, end, workload_type, args[0].cluster, all_nodes_list)
+            if "steady" in func.__name__.lower() and \
+                    'Steady State' not in args[0].cluster.latency_results[workload_type]:
+                args[0].cluster.latency_results[workload_type]['Steady State'] = result
+            else:
+                args[0].cluster.latency_results[workload_type][func.__name__]['cycles'].append(result)
+        return res
 
     return wrapped

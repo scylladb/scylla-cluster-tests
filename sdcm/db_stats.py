@@ -195,11 +195,11 @@ class PrometheusDBStats():
         configs["scrape_configs"] = new_scrape_configs
         return configs
 
-    def query(self, query, start, end):
+    def query(self, query, start, end, scrap_metrics_step=None):
         """
-        :param start_time=<rfc3339 | unix_timestamp>: Start timestamp.
-        :param end_time=<rfc3339 | unix_timestamp>: End timestamp.
-
+        :param start: time=<rfc3339 | unix_timestamp>: Start timestamp.
+        :param end: time=<rfc3339 | unix_timestamp>: End timestamp.
+        :param scrap_metrics_step is the granularity of data requested from Prometheus DB
         :param query:
         :return: {
                   metric: { },
@@ -207,9 +207,10 @@ class PrometheusDBStats():
                  }
         """
         url = "http://{}:{}/api/v1/query_range?query=".format(normalize_ipv6_url(self.host), self.port)
-        step = self.scylla_scrape_interval
-        _query = "{url}{query}&start={start}&end={end}&step={step}".format(
-            url=url, query=query, start=start, end=end, step=step)
+        if not scrap_metrics_step:
+            scrap_metrics_step = self.scylla_scrape_interval
+        _query = "{url}{query}&start={start}&end={end}&step={scrap_metrics_step}".format(
+            url=url, query=query, start=start, end=end, scrap_metrics_step=scrap_metrics_step)
         LOGGER.debug("Query to PrometheusDB: %s", _query)
         result = self.request(url=_query)
         if result:
@@ -226,14 +227,14 @@ class PrometheusDBStats():
             return False
         return True
 
-    def _get_query_values(self, query, start_time, end_time):
-        results = self.query(query=query, start=start_time, end=end_time)
+    def _get_query_values(self, query, start_time, end_time, scrap_metrics_step=None):
+        results = self.query(query=query, start=start_time, end=end_time, scrap_metrics_step=scrap_metrics_step)
         if results:
             return results[0]["values"]
         else:
             return []
 
-    def get_throughput(self, start_time, end_time):
+    def get_throughput(self, start_time, end_time, scrap_metrics_step=None):
         """
         Get Scylla throughput (ops/second) from PrometheusDB
 
@@ -246,9 +247,9 @@ class PrometheusDBStats():
             query = "sum(irate(scylla_alternator_operation{}[30s]))"
         else:
             query = "sum(irate(scylla_transport_requests_served{}[30s]))%20%2B%20sum(irate(scylla_thrift_served{}[30s]))"
-        return self._get_query_values(query, start_time, end_time)
+        return self._get_query_values(query, start_time, end_time, scrap_metrics_step=scrap_metrics_step)
 
-    def get_scylla_reactor_utilization(self, start_time, end_time):
+    def get_scylla_reactor_utilization(self, start_time, end_time, scrap_metrics_step=None):
         """
         Get Scylla CPU (avg) from PrometheusDB
 
@@ -257,7 +258,7 @@ class PrometheusDBStats():
         if not self._check_start_end_time(start_time, end_time):
             return []
         query = "avg(scylla_reactor_utilization{})"
-        res = self._get_query_values(query, start_time, end_time)
+        res = self._get_query_values(query, start_time, end_time, scrap_metrics_step=scrap_metrics_step)
         if res:
             res = [float(value[1]) for value in res]
             return sum(res) / len(res)
@@ -298,20 +299,22 @@ class PrometheusDBStats():
             res[item['metric']['group']] = {int(i[1]) for i in item['values']}
         return res
 
-    def get_latency(self, start_time, end_time, latency_type):
+    def get_latency(self, start_time, end_time, latency_type, scrap_metrics_step=None):
         """latency values are returned in microseconds"""
         assert latency_type in ["read", "write"]
         if not self._check_start_end_time(start_time, end_time):
             return []
         query = "histogram_quantile(0.99, sum(rate(scylla_storage_proxy_" \
             "coordinator_%s_latency_bucket{}[30s])) by (le))" % latency_type
-        return self._get_query_values(query, start_time, end_time)
+        return self._get_query_values(query, start_time, end_time, scrap_metrics_step=scrap_metrics_step)
 
-    def get_latency_read_99(self, start_time, end_time):
-        return self.get_latency(start_time, end_time, latency_type="read")
+    def get_latency_read_99(self, start_time, end_time, scrap_metrics_step=None):
+        return self.get_latency(start_time, end_time, latency_type="read",
+                                scrap_metrics_step=scrap_metrics_step)
 
-    def get_latency_write_99(self, start_time, end_time):
-        return self.get_latency(start_time, end_time, latency_type="write")
+    def get_latency_write_99(self, start_time, end_time, scrap_metrics_step=None):
+        return self.get_latency(start_time, end_time, latency_type="write",
+                                scrap_metrics_step=scrap_metrics_step)
 
     def create_snapshot(self):
         url = "http://{}:{}/api/v1/admin/tsdb/snapshot".format(normalize_ipv6_url(self.host), self.port)
@@ -548,7 +551,7 @@ class TestStatsMixin(Stats):
             return {}
 
     @retrying(n=5, sleep_time=0, message="Retrying on getting prometheus stats")
-    def get_prometheus_stats(self, alternator=False):
+    def get_prometheus_stats(self, alternator=False, scrap_metrics_step=None):
         self.log.info("Calculating throughput stats from PrometheusDB...")
         prometheus_db_stats = PrometheusDBStats(host=self.monitors.nodes[0].external_address,
                                                 alternator=alternator)
@@ -558,7 +561,8 @@ class TestStatsMixin(Stats):
         prometheus_stats = {}
         for stat in self.PROMETHEUS_STATS:
             stat_calc_func = getattr(prometheus_db_stats, "get_" + stat)
-            prometheus_stats[stat] = self._calc_stats(ps_results=stat_calc_func(start_time=start, end_time=end))
+            prometheus_stats[stat] = self._calc_stats(ps_results=stat_calc_func(start_time=start, end_time=end,
+                                                                                scrap_metrics_step=scrap_metrics_step))
         self._stats['results'].update(prometheus_stats)
         return prometheus_stats
 
@@ -611,7 +615,8 @@ class TestStatsMixin(Stats):
                 total_stats[stat] = total
         self._stats['results']['stats_total'] = total_stats
 
-    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, extra_stats=None, alternator=False):
+    def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, extra_stats=None, alternator=False,
+                            scrap_metrics_step=None):
         if not self.create_stats:
             return
 
@@ -641,7 +646,8 @@ class TestStatsMixin(Stats):
 
         if self.monitors and self.monitors.nodes:
             if self.params.get("store_perf_results"):
-                update_data["results"] = self.get_prometheus_stats(alternator=alternator)
+                update_data["results"] = self.get_prometheus_stats(alternator=alternator,
+                                                                   scrap_metrics_step=scrap_metrics_step)
             grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(test_details["start_time"])
             test_details.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
                                  "grafana_snapshots": grafana_dataset.get("snapshots", []),

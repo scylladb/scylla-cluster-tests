@@ -101,6 +101,78 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         return "%s/%s" % (self._conf.get('kibana_url'), dashboard_path)
 
 
+class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
+    """
+    Get latency during operations performance analyzer
+    """
+
+    def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None):   # pylint: disable=too-many-arguments
+        super(LatencyDuringOperationsPerformanceAnalyzer, self).__init__(
+            es_index=es_index,
+            es_doc_type=es_doc_type,
+            send_email=send_email,
+            email_recipients=email_recipients,
+            email_template_fp="results_latency_during_ops.html",
+            logger=logger
+        )
+
+    @staticmethod
+    def _get_setup_details(test_doc, is_gce):
+        setup_details = {'cluster_backend': test_doc['_source']['setup_details'].get('cluster_backend')}
+        if setup_details['cluster_backend'] == "aws":
+            setup_details['ami_id_db_scylla'] = test_doc['_source']['setup_details']['ami_id_db_scylla']
+        for setup_param in QueryFilter(test_doc, is_gce).setup_instance_params():
+            setup_details.update(
+                [(setup_param.replace('gce_', ''), test_doc['_source']['setup_details'].get(setup_param))])
+        setup_details.update(test_doc['_source']['versions']['scylla-server'])
+        return setup_details
+
+    @staticmethod
+    def _get_grafana_snapshot(test_doc):
+        grafana_snapshots = test_doc['_source']['test_details'].get('grafana_snapshots')
+        if grafana_snapshots and isinstance(grafana_snapshots, list):
+            return grafana_snapshots
+        elif grafana_snapshots and isinstance(grafana_snapshots, str):
+            return [grafana_snapshots]
+        else:
+            return []
+
+    @staticmethod
+    def _get_grafana_screenshot(test_doc):
+        grafana_screenshots = test_doc['_source']['test_details'].get('grafana_screenshot')
+        if not grafana_screenshots:
+            grafana_screenshots = test_doc['_source']['test_details'].get('grafana_screenshots')
+
+        if grafana_screenshots and isinstance(grafana_screenshots, list):
+            return grafana_screenshots
+        elif grafana_screenshots and isinstance(grafana_screenshots, str):
+            return [grafana_screenshots]
+        else:
+            return []
+
+    def check_regression(self, test_id, data, is_gce=False):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+        doc = self.get_test_by_id(test_id)
+        full_test_name = doc["_source"]["test_details"]["test_name"]
+        test_name = full_test_name.split('.')[-1]  # Example: longevity_test.py:LongevityTest.test_custom_time
+        test_start_time = datetime.utcfromtimestamp(float(doc["_source"]["test_details"]["start_time"]))
+        test_version_info = self._test_version(doc)
+        test_version = test_version_info['version']
+        subject = f'Performance Regression Compare Results - {test_name} - {test_version} - {str(test_start_time)}'
+        results = dict(
+            stats=data,
+            test_name=full_test_name,
+            test_start_time=str(test_start_time),
+            test_id=doc['_source']['test_details'].get('test_id', doc["_id"]),
+            test_version=test_version,
+            setup_details=self._get_setup_details(doc, is_gce),
+            grafana_snapshots=self._get_grafana_snapshot(doc),
+            grafana_screenshots=self._get_grafana_screenshot(doc),
+            job_url=doc['_source']['test_details'].get('job_url', ""),
+        )
+        html = self.render_to_html(results=results)
+        self.send_email(subject=subject, content=html)
+
+
 class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
     """
     Get specified performance test results from elasticsearch DB and analyze it to find a regression

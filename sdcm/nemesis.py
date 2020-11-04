@@ -40,6 +40,7 @@ from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_st
     update_certificates, reach_enospc_on_node, clean_enospc_on_node, parse_nodetool_listsnapshots
 from sdcm.utils.decorators import retrying, timeout
 from sdcm.utils import cdc
+from sdcm.utils.decorators import retrying, latency_calculator_decorator
 from sdcm.log import SDCMAdapter
 from sdcm.keystore import KeyStore
 from sdcm.prometheus import nemesis_metrics_obj
@@ -95,6 +96,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     MINUTE_IN_SEC = 60
     HOUR_IN_SEC = 60 * MINUTE_IN_SEC
     disruptions_list = []
+    has_steady_run = False
 
     def __init__(self, tester_obj, termination_event):
         self.tester = tester_obj  # ClusterTester object
@@ -159,29 +161,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         setattr(cls, func.__name__, wrapper)  # bind it to Nemesis class
         return func  # returning func means func can still be used normally
-    @staticmethod
-    def latency_calculator_decorator(method):
-        """
-        Gets the start time, end time and then calculates the latency based on function 'calculate_latency'.
-
-        :param method: Remote method to run.
-        :return: Wrapped method.
-        """
-
-        def wrapper(*args, **kwargs):
-            start = time.time()
-            res = method(*args, **kwargs)
-            end = time.time()
-            if not args[0].cluster.latency_results[method.__name__]:
-                args[0].cluster.latency_results[method.__name__] = dict()
-            for workload_type in ['read', 'write']:
-                if not args[0].cluster.latency_results[method.__name__][workload_type]:
-                    args[0].cluster.latency_results[method.__name__][workload_type] = []
-                args[0].cluster.latency_results[method.__name__][workload_type].append(
-                    args[0].calculate_latency(start, end, 'read'))
-            return res
-
-        return wrapper
 
     def update_stats(self, disrupt, status=True, data=None):
         if not data:
@@ -659,36 +638,32 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             new_seed_node.is_seed = True
             self.cluster.update_seed_provider()
 
+    @latency_calculator_decorator
+    def _terminate_and_wait(self, target_node, sleep_time=300):
+        self._terminate_cluster_node(target_node)
+        time.sleep(sleep_time)  # Sleeping for 5 mins to let the cluster live with a missing node for a while
+
+    @latency_calculator_decorator
+    def _init_new_node_with_latency_calculation(self, old_node_ip):
+        return self._add_and_init_new_cluster_node(old_node_ip)
+
+    @latency_calculator_decorator
+    def run_nodetool_repair_on_new_node(self, node):
+        self.repair_nodetool_repair(node)
+
     def disrupt_terminate_and_replace_node(self):  # pylint: disable=invalid-name
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
         self._set_current_disruption('TerminateAndReplaceNode %s' % self.target_node)
         old_node_ip = self.target_node.ip_address
-        InfoEvent(message="StartEvent - Terminate node and wait 5 minutes").publish()
-        self._terminate_cluster_node(self.target_node)
-        time.sleep(300)  # Sleeping for 5 mins to let the cluster live with a missing node for a while
+        InfoEvent(message='StartEvent - Terminate node and wait 5 minutes').publish()
+        self._terminate_and_wait(target_node=self.target_node)
         InfoEvent(message='FinishEvent - target_node was terminated').publish()
         new_node = self._add_and_init_new_cluster_node(old_node_ip, rack=self.target_node.rack)
-
-        InfoEvent(message='StartEvent - Terminate node and wait 5 minutes').publish()
-
-        @self.latency_calculator_decorator
-        def terminate():
-            self._terminate_cluster_node(self.target_node)
-            time.sleep(300)  # Sleeping for 5 mins to let the cluster live with a missing node for a while
-        terminate()
-        InfoEvent(message='FinishEvent - target_node was terminated').publish()
-
-        @self.latency_calculator_decorator
-        def init_new_node():
-            return self._add_and_init_new_cluster_node(old_node_ip)
-        new_node = init_new_node()
-
-        @self.latency_calculator_decorator
-        def run_nodetool_repair_on_new_node(node):
-            self.repair_nodetool_repair(node)
         try:
             if new_node.get_scylla_config_param("enable_repair_based_node_ops") == 'false':
-                run_nodetool_repair_on_new_node(new_node)
+                InfoEvent(message='StartEvent - Run repair on new node').publish()
+                self.run_nodetool_repair_on_new_node(new_node)
+                InfoEvent(message='FinishEvent - Finished running repair on new node').publish()
 
             # wait until node gives up on the old node, the default timeout is `ring_delay_ms: 300000`
             # scylla: [shard 0] gossip - FatClient 10.0.22.115 has been silent for 30000ms, removing from gossip
@@ -952,6 +927,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.info('Nemesis stack is empty - setting termination_event')
             self.termination_event.set()
 
+    @latency_calculator_decorator
     def repair_nodetool_repair(self, node=None):
         node = node if node else self.target_node
         node.run_nodetool("repair")
@@ -1195,22 +1171,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not max_partitions_in_test_table:
             raise UnsupportedNemesis(
                 'This nemesis expects mandatory "max_partitions_in_test_table" parameter to be set')
-
-    def calculate_latency(self, start, end, load_type):
-        res = dict()
-        prometheus = PrometheusDBStats(host=self.monitoring_set.nodes[0].ip_address)
-        duration = end - start
-        precision_list = ['99', '95', '5', 'max']
-        for precision in precision_list:
-            if precision == 'max':
-                query = 'collectd_cassandra_stress_write_gauge{type="lat_max"}'
-            else:
-                query = f'histogram_quantile(0.{precision},sum(rate(scylla_storage_proxy_coordinator_write_' \
-                        f'latency_bucket{{}}[{duration}s])) by (instance, le))'
-            query_res = prometheus.query(query, start, end)
-            res[f'lat_{precision}_{load_type}'] = [{val['metric']['instance'].replace('[', '').replace(']', ''):
-                                                    val['values'][-1][-1]} for val in query_res]
-        return res
 
     def choose_partitions_for_delete(self, partitions_amount, ks_cf, with_clustering_key_data=False,
                                      exclude_partitions=None):
@@ -2446,62 +2406,49 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
-    def disrupt_grow_shrink_cluster(self):
-        add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
-        self.target_node.running_nemesis = None
-        current_dc_idx = self.target_node.dc_idx
-        self._set_current_disruption("GrowCluster")
+    @latency_calculator_decorator
+    def add_new_node(self):
+        return self._add_and_init_new_cluster_node()
 
-        @self.latency_calculator_decorator
-        def add_new_nodes():
-            for _ in range(add_nodes_number):
-                InfoEvent(message='GrowCluster - Add New node').publish()
-                added_node = self._add_and_init_new_cluster_node()
-                added_node.running_nemesis = None
-                InfoEvent(message='GrowCluster - Done adding New node').publish()
-                self.log.info("New node added %s", added_node.name)
+    @latency_calculator_decorator
+    def decommission_node(self, node):
+        self.cluster.decommission(node)
 
-        self.log.info("Start grow cluster on %s nodes", add_nodes_number)
-        if self._is_it_on_kubernetes():
-            rack = random.choice([0, 1])
-            InfoEvent(message=f'GrowCluster - Add New node to {rack} rack').publish()
-        else:
-            rack = 0
-            InfoEvent(message='GrowCluster - Add New node').publish()
-        add_new_nodes()
-        self.log.info("Finish cluster grow")
-
-        time.sleep(self.interval)
-
-        self._set_current_disruption("ShrinkCluster")
-        self.log.info("Start shrink cluster on %s nodes", add_nodes_number)
+    def decommission_nodes(self, add_nodes_number, rack):
         for _ in range(add_nodes_number):
             if self._is_it_on_kubernetes():
                 self.set_last_node_as_target(rack=rack)
             else:
-                self.set_target_node(dc_idx=current_dc_idx, rack=rack)
+                self.set_target_node()
             self.log.info("Next node will be removed %s", self.target_node)
             try:
-                InfoEvent(message="StartEvent - ShrinkCluster started decommissioning a node").publish()
-                self.cluster.decommission(self.target_node)
+                InfoEvent(message='StartEvent - ShrinkCluster started decommissioning a node').publish()
+                self.decommission_node(self.target_node)
             finally:
-                InfoEvent(message="FinishEvent - ShrinkCluster has done decommissioning a node").publish()
+                InfoEvent(message='FinishEvent - ShrinkCluster has done decommissioning a node').publish()
 
-        @self.latency_calculator_decorator
-        def decommission_nodes():
-            for _ in range(add_nodes_number):
-                if self._is_it_on_kubernetes():
-                    self.set_last_node_as_target()
-                else:
-                    self.set_target_node(dc_idx=current_dc_idx)
-                self.log.info("Next node will be removed %s", self.target_node)
-                try:
-                    InfoEvent(message='StartEvent - ShrinkCluster started decommissioning a node').publish()
-                    self.cluster.decommission(self.target_node)
-                finally:
-                    InfoEvent(message='FinishEvent - ShrinkCluster has done decommissioning a node').publish()
+    def disrupt_grow_shrink_cluster(self):
+        add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
+        self.target_node.running_nemesis = None
+        self._set_current_disruption("GrowCluster")
+        self.log.info("Start grow cluster on %s nodes", add_nodes_number)
+        for _ in range(add_nodes_number):
+            if self._is_it_on_kubernetes():
+                rack = random.choice([0, 1])
+                InfoEvent(message=f'GrowCluster - Add New node to {rack} rack').publish()
+            else:
+                rack = 0
+                InfoEvent(message='GrowCluster - Add New node').publish()
+            added_node = self.add_new_node()
+            added_node.running_nemesis = None
+            InfoEvent(message='GrowCluster - Done adding New node').publish()
+            self.log.info("New node added %s", added_node.name)
+        self.log.info("Finish cluster grow")
+        time.sleep(self.interval)
 
-        decommission_nodes()
+        self._set_current_disruption("ShrinkCluster")
+        self.log.info("Start shrink cluster on %s nodes", add_nodes_number)
+        self.decommission_nodes(add_nodes_number, rack)
         self.log.info("Finish cluster shrink. Current number of nodes %s", len(self.cluster.nodes))
 
     def disrupt_hot_reloading_internode_certificate(self):
@@ -2539,16 +2486,28 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if not check_ssl_reload_log(node_system_logs[node]):
                 raise Exception('SSL auto Reload did not happen')
 
+    @latency_calculator_decorator
+    def steady_state_latency(self, sleep_time=None):
+        if not sleep_time:
+            sleep_time = self.cluster.params.get('nemesis_interval') * 60
+        time.sleep(sleep_time)
+
     def disrupt_run_unique_sequence(self):
-        InfoEvent(message="StarEvent - start a repair by ScyllaManager").publish()
+        sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
+        sleep_time_between_ops = sleep_time_between_ops if sleep_time_between_ops else 8
+        sleep_time_between_ops = sleep_time_between_ops * 60
+        if not self.has_steady_run:
+            self.steady_state_latency()
+            self.has_steady_run = True
+        InfoEvent(message='StartEvent - start a repair by ScyllaManager').publish()
         self.disrupt_mgmt_repair_cli()
-        InfoEvent(message="FinishEvent - Manager repair has finished").publish()
-        time.sleep(180)
-        InfoEvent(message="Starting terminate_and_replace disruption").publish()
+        InfoEvent(message='FinishEvent - Manager repair has finished').publish()
+        time.sleep(sleep_time_between_ops)
+        InfoEvent(message='Starting terminate_and_replace disruption').publish()
         self.disrupt_terminate_and_replace_node()
-        InfoEvent(message="Finished terminate_and_replace disruption").publish()
-        time.sleep(180)
-        InfoEvent(message="Starting grow_shrink disruption").publish()
+        InfoEvent(message='Finished terminate_and_replace disruption').publish()
+        time.sleep(sleep_time_between_ops)
+        InfoEvent(message='Starting grow_shrink disruption').publish()
         self.disrupt_grow_shrink_cluster()
         InfoEvent(message="Finished grow_shrink disruption").publish()
 

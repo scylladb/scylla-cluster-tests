@@ -1,0 +1,94 @@
+{% extends 'results_base_custom.html' %}
+{% block body %}
+    {% block title %}
+    <h3>Test: {{ test_name }}</h3>
+    {% endblock %}
+    <h3>
+        <span>Test start time: </span>
+        <span class="blue">{{ test_start_time }}</span>
+        <br>
+        <span>Test test id: </span>
+        <span class="blue">{{ test_id }}</span>
+    </h3>
+    <h3>
+        <span>Version: </span>
+        <span class="blue">{{ test_version.version }} </span>
+    </h3>
+    <div>
+        <span> Setup Details: </span>
+        <ul>
+        {% for key, val in setup_details.items()|sort %}
+            <li>
+                {{ key }}: <span class="blue"> {{ val }} </span>
+            </li>
+        {% endfor %}
+        </ul>
+    </div>
+
+    {% for workload_type, operations in stats.items() %}
+        <h1>Test {{ workload_type }}</h1>
+        <div>
+            {% for operation, results in operations.items() %}
+                {% if operation != 'Steady State' %}
+                    <h2>{{ operation }}</h2>
+                    <table id="results_table">
+                        <th>Latency Type</th>
+                        {% for cycle in results['cycles'] %}
+                            <th>Cycle #{{ loop.index }}</th>
+                        {% endfor %}
+                        <th>Cycles Average</th>
+                        <th>Steady State</th>
+                        <th>Relative to Steady</th>
+                        {% set lat_type_list = [] %}
+                        {% for cycle in results['cycles'] %}
+                            {% for key, value in cycle.items() %}
+                                {% if key not in lat_type_list %}
+                                    {% do lat_type_list.append(key) %}
+                                {% endif %}
+                            {% endfor %}
+                        {% endfor %}
+
+                        {% for lat_type in lat_type_list|sort %}
+                            <tr>
+                                <td>{{ lat_type }}</td>
+                                {% for cycle in results['cycles'] %}
+                                    <td>{{ cycle[lat_type] }}</td>
+                                {% endfor %}
+                                <td>{{ results['Cycles Average'][lat_type] }}</td>
+                                <td>{{ operations['Steady State'][lat_type] }}</td>
+                                <td>{{ results['Relative to Steady'][lat_type] }}</td>
+                            </tr>
+                        {% endfor %}
+                    </table>
+                {% endif %}
+            {% endfor %}
+        </div>
+    {% endfor %}
+
+    <h3>Links:</h3>
+    <ul>
+        <li><a href="{{ job_url }}">Jenkins job</a></li>
+        {% if grafana_screenshots %}
+            {% if grafana_screenshots[0] %}
+                <li><a href={{ grafana_screenshots[0] }}>Download "Per server metrics nemesis" Grafana Screenshot</a></li>
+            {% endif %}
+            {% if grafana_snapshots[1] %}
+                <li><a href={{ grafana_screenshots[1] }}>Download "Overview metrics" Grafana Screenshot</a></li>
+            {% endif %}
+        {% endif %}
+        {% if grafana_snapshots %}
+            {% if grafana_snapshots[0] %}
+                <li><a href={{ grafana_snapshots[0] }}>Shared "Per server metrics nemesis" Grafana Snapshot</a></li>
+            {% endif %}
+            {% if grafana_snapshots[1] %}
+                <li><a href={{ grafana_snapshots[1] }}>Shared "Overview metrics" Grafana Snapshot</a></li>
+            {% endif %}
+        {% endif %}
+    </ul>
+    {% if grafana_screenshots %}
+        <h3>Grafana Screenshot:</h3>
+        {% for screenshot in grafana_screenshots %}
+            <img src="{{ screenshot }}"  height="50%" width="50%">
+        {% endfor %}
+    {% endif %}
+{% endblock %}
