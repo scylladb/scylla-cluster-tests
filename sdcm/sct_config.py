@@ -15,6 +15,7 @@ from distutils.util import strtobool  # pylint: disable=import-error,no-name-in-
 
 import anyconfig
 
+from sdcm.utils import alternator
 from sdcm.utils.common import find_scylla_repo, get_scylla_ami_versions, get_branched_ami, get_ami_tags, \
     ami_built_by_scylla, MAX_SPOT_DURATION_TIME
 from sdcm.utils.version_utils import get_branch_version, get_branch_version_for_multiple_repositories
