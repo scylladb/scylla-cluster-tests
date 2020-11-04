@@ -70,6 +70,7 @@ table_definition: |
 extra_definitions:
   - CREATE TYPE IF NOT EXISTS hash_and_basename (md5 text, basename text);
   - CREATE TYPE IF NOT EXISTS address (street text, city text, zip_code int, phones set<text>, map1 map<text,text>, map2 map<int,text>);
+  - CREATE INDEX IF NOT EXISTS email_ind ON keyspace_complex.user_with_ck (email);
 
 ### Column Distribution Specifications ###
 
@@ -91,6 +92,9 @@ queries:
     fields: samerow
   read2:
     cql: select * from user_with_ck where key = ? and md5 = ? LIMIT 1
+    fields: samerow
+  read3:
+    cql: select * from user_with_ck where email = ? LIMIT 1
     fields: samerow
   update_static:
     cql: update user_with_ck USING TTL 5 set static_int = ? where key = ?
