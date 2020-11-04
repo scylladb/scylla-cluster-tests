@@ -55,7 +55,8 @@ from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT
 from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.db_stats import PrometheusDBStats
-from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
+from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer, \
+    LatencyDuringOperationsPerformanceAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events import Severity
 from sdcm.sct_events.setup import start_events_device, stop_events_device
@@ -80,6 +81,7 @@ from sdcm.utils.profiler import ProfilerFactory
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.utils.gce_utils import get_gce_services
 from sdcm.keystore import KeyStore
+from sdcm.utils.latency import calculate_latency
 
 
 try:
@@ -2194,6 +2196,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         used = int(res[0]["values"][0][1]) / (2 ** 10)
         assert used >= size, f"Waiting for Scylla data dir to reach '{size}', " \
             f"current size is: '{used}'"
+
+    def check_latency_during_ops(self):
+        results_analyzer = LatencyDuringOperationsPerformanceAnalyzer(es_index=self._test_index,
+                                                                      es_doc_type=self._es_doc_type,
+                                                                      send_email=self.params.get('send_email'),
+                                                                      email_recipients=self.params.get(
+                                                                          'email_recipients'))
+        if self.db_cluster.latency_results and self.create_stats:
+            self.db_cluster.latency_results = calculate_latency(self.db_cluster.latency_results)
+            self.log.debug(f'collected latency are: {self.db_cluster.latency_results}')
+            self.update({"latency_during_ops": self.db_cluster.latency_results})
+            self.update_test_details()
+            results_analyzer.check_regression(test_id=self._test_id, data=self.db_cluster.latency_results)
 
     def check_regression(self):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,

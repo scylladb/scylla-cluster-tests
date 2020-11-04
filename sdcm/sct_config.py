@@ -423,6 +423,9 @@ class SCTConfiguration(dict):
         dict(name="nemesis_interval", env="SCT_NEMESIS_INTERVAL", type=int,
              help="""Nemesis sleep interval to use if None provided specifically in the test"""),
 
+        dict(name="nemesis_sequence_sleep_between_ops", env="SCT_NEMESIS_SEQUENCE_SLEEP_BETWEEN_OPS", type=int,
+             help="""Sleep interval between nemesis operations for use in unique_sequence nemesis kind of tests"""),
+
         dict(name="nemesis_during_prepare", env="SCT_NEMESIS_DURING_PREPARE", type=boolean,
              help="""Run nemesis during prepare stage of the test"""),
 
