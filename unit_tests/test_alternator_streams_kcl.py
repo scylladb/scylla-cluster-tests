@@ -4,7 +4,7 @@ import logging
 
 import sdcm.utils.alternator as alternator
 from sdcm.ycsb_thread import YcsbStressThread
-from sdcm.kcl_thread import KclStressThread
+from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
 from unit_tests.dummy_remote import LocalLoaderSetDummy
 
 pytestmark = [pytest.mark.usefixtures('events'),
@@ -28,6 +28,9 @@ def test_01_kcl_with_ycsb(request, docker_scylla, events):
     kcl_cmd = f"hydra-kcl -t usertable -k {num_of_keys}"
     kcl_thread = KclStressThread(loader_set, kcl_cmd, node_list=[docker_scylla], timeout=600, params=TEST_PARAMS)
 
+    compare_sizes = CompareTablesSizesThread(
+        loader_set, """table_compare interval=20; src_table="alternator_usertable".usertable; dst_table="alternator_usertable-dest"."usertable-dest" """, node_list=[docker_scylla], timeout=600, params=TEST_PARAMS)
+
     def cleanup_thread():
         ycsb_thread.kill()
         kcl_thread.kill()
@@ -38,6 +41,9 @@ def test_01_kcl_with_ycsb(request, docker_scylla, events):
     kcl_thread.run()
     time.sleep(30)
     ycsb_thread.run()
+
+    compare_sizes.run()
+    compare_sizes.get_results()
 
     output = ycsb_thread.get_results()
     assert 'latency mean' in output[0]
