@@ -2,16 +2,17 @@ import os
 import logging
 import tempfile
 from pathlib import Path
+import collections
 
 import pytest
 
 from sdcm.prometheus import start_metrics_server
-from sdcm.utils.docker_utils import RemoteDocker
+from sdcm.utils.docker_remote import RemoteDocker
 from sdcm import wait
 from sdcm.utils.decorators import timeout
 from sdcm.sct_events import (start_events_device, stop_events_device)
 from sdcm.cluster import BaseNode
-from unit_tests.dummy_remote import LocalNode
+from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
 
 
 class EventsLogUtils:
@@ -66,10 +67,14 @@ def docker_scylla():
 
     alternator_flags = "--alternator-port 8000 --alternator-write-isolation=always"
     docker_version = "scylladb/scylla-nightly:666.development-0.20201015.8068272b466"
-    scylla = RemoteDocker(LocalNode(), image_name=docker_version,
+    cluster = LocalScyllaClusterDummy()
+    scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
                           command_line=f"--smp 1 --experimental 1 {alternator_flags}",
                           extra_docker_opts=f'-p 8000 -p 9042 --cpus="1" -v {entryfile_path}:/entry.sh --entrypoint'
                           f' /entry.sh')
+
+    DummyRemoter = collections.namedtuple('DummyRemoter', 'run')
+    scylla.remoter = DummyRemoter(run=scylla.run)
 
     def db_up():
         try:

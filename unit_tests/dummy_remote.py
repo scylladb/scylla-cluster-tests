@@ -18,6 +18,7 @@ import shutil
 import logging
 
 from sdcm.remote import LocalCmdRunner
+from sdcm.cluster import BaseNode, BaseScyllaCluster
 
 
 class DummyOutput:
@@ -41,17 +42,33 @@ class DummyRemote:
         return True
 
 
-class LocalNode:
-    def __init__(self):
+class LocalNode(BaseNode):
+    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0):
+        super().__init__(name, parent_cluster)
         self.remoter = LocalCmdRunner()
-        self.ip_address = "127.0.0.1"
         self.logdir = os.path.dirname(__file__)
+
+    @property
+    def ip_address(self):
+        return "127.0.0.1"
+
+    def _refresh_instance_state(self):
+        return "127.0.0.1", "127.0.0.1"
 
 
 class LocalLoaderSetDummy:
     def __init__(self):
         self.name = "LocalLoaderSetDummy"
-        self.nodes = [LocalNode(), ]
+        self.nodes = [LocalNode("loader_node", parent_cluster=self), ]
+
+    @staticmethod
+    def get_db_auth():
+        return None
+
+
+class LocalScyllaClusterDummy(BaseScyllaCluster):
+    def __init__(self):
+        self.name = "LocalScyllaClusterDummy"
 
     @staticmethod
     def get_db_auth():

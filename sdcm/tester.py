@@ -65,7 +65,7 @@ from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.prepare_region import AwsRegion
 from sdcm.ycsb_thread import YcsbStressThread
 from sdcm.ndbench_thread import NdBenchStressThread
-from sdcm.kcl_thread import KclStressThread
+from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
 from sdcm.localhost import LocalHost
 from sdcm.cdclog_reader_thread import CDCLogReaderThread
 from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCollector, LoaderLogCollector, \
@@ -1085,6 +1085,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             return self.run_ndbench_thread(**params)
         elif stress_cmd.startswith('hydra-kcl'):
             return self.run_hydra_kcl_thread(**params)
+        elif stress_cmd.startswith('table_compare'):
+            return self.run_table_compare_thread(**params)
         else:
             raise ValueError(f'Unsupported stress command: "{stress_cmd[:50]}..."')
 
@@ -1172,6 +1174,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                stress_num=stress_num,
                                node_list=self.db_cluster.nodes,
                                round_robin=round_robin, params=self.params).run()
+
+    def run_table_compare_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',  # pylint: disable=too-many-arguments,unused-argument
+                                 round_robin=False, stats_aggregate_cmds=True,  # pylint: disable=too-many-arguments,unused-argument
+                                 keyspace_num=None, keyspace_name=None, profile=None, use_single_loader=False):  # pylint: disable=too-many-arguments,unused-argument
+
+        timeout = self.get_duration(duration)
+
+        return CompareTablesSizesThread(loader_set=self.loaders,
+                                        stress_cmd=stress_cmd,
+                                        timeout=timeout,
+                                        stress_num=stress_num,
+                                        node_list=self.db_cluster.nodes,
+                                        round_robin=round_robin, params=self.params).run()
 
     def run_ndbench_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',  # pylint: disable=too-many-arguments
                            round_robin=False, stats_aggregate_cmds=True,
