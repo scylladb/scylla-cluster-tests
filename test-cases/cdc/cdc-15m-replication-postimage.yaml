@@ -3,8 +3,6 @@ test_duration: 120
 user_prefix: 'cdc-replication-gemini'
 db_type: mixed_scylla
 
-use_legacy_cluster_init: false
-
 n_db_nodes: 3
 instance_type_db: 'i3.large'
 
