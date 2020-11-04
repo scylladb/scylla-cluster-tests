@@ -140,7 +140,9 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
 
     @cluster.wait_for_init_wrap
     def wait_for_init(self):
-        pass
+        LOGGER.info("--- List of nodes in GKE cluster `%s': ---\n%s\n", self.name, self.kubectl("get nodes").stdout)
+        LOGGER.info("--- List of pods in GKE cluster `%s': ---\n%s\n", self.name, self.kubectl("get pods -A").stdout)
+        self.kubectl("wait --timeout=10m -A --all --for=condition=Ready pod")
 
     def destroy(self):
         pass
