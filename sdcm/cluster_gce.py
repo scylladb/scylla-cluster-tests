@@ -338,8 +338,17 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             if not spot:
                 raise
             self.log.warning('Unable to create a spot instance, try to create an on-demand one: %s', details)
+
+            # May happen that spot instance was preempted during instance creating. This instance won't be
+            # destroyed but stopped and stays with the name in the instances pool. In this case we should destroy this
+            # instance before creating new one
+            if details.value["reason"] == "alreadyExists" and \
+                    (failed_instance := self._get_instances_by_name(dc_idx=dc_idx, name=name)):
+                self._gce_services[dc_idx].destroy_node(node=failed_instance, destroy_boot_disk=True)
+
             create_node_params['ex_preemptible'] = spot = False
             instance = self._gce_services[dc_idx].create_node(**create_node_params)
+
         self.log.info('Created %s instance %s', 'spot' if spot else 'on-demand', instance)
         if gce_job_default_timeout:
             self.log.info('Restore default job timeout %s' % gce_job_default_timeout)
@@ -353,9 +362,14 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             instances.append(self._create_instance(node_index, dc_idx, spot))
         return instances
 
-    def _get_instances_by_prefix(self, dc_idx=0):
+    def _get_instances_by_prefix(self, dc_idx: int = 0):
         instances_by_zone = self._gce_services[dc_idx].list_nodes(ex_zone=self._gce_region_names[dc_idx])
         return [node for node in instances_by_zone if node.name.startswith(self._node_prefix)]
+
+    def _get_instances_by_name(self, name: str, dc_idx: int = 0):
+        instances_by_zone = self._gce_services[dc_idx].list_nodes(ex_zone=self._gce_region_names[dc_idx])
+        found = [node for node in instances_by_zone if node.name == name]
+        return found[0] if found else None
 
     def _get_instances(self, dc_idx):
         test_id = cluster.Setup.test_id()
