@@ -192,7 +192,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertRaisesRegex(ValueError, r"repo for scylla version 99.0.3 wasn't found", SCTConfiguration)
 
     def test_12_scylla_version_repo_ubuntu(self):  # pylint: disable=invalid-name
-        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
@@ -206,7 +206,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                          "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list")
 
     def test_12_scylla_version_repo_ubuntu_loader_centos(self):  # pylint: disable=invalid-name
-        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'centos'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
@@ -235,12 +235,12 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     def test_13_scylla_version_ami_branch(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_SCYLLA_VERSION'] = 'branch-3.1:37'
+        os.environ['SCT_SCYLLA_VERSION'] = 'branch-4.2:100'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = SCTConfiguration()
+        conf.verify_configuration()
 
-        self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-02a6cecd306b21e95 ami-098789231b05ed226')
-        self.assertRaisesRegex(AssertionError, r".*tag missing.*", conf.verify_configuration)
+        self.assertEqual(conf.get('ami_id_db_scylla'), 'ami-07d3138defbd9a2cf ami-0f703fdc8e06723f0')
 
     def test_13_scylla_version_ami_branch_latest(self):  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
@@ -365,7 +365,8 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.verify_configuration()
         self.assertEqual(conf.get('scylla_repo'),
                          "https://s3.amazonaws.com/downloads.scylladb.com/deb/unstable/unified/master/latest/scylladb-master/scylla.list")
-        self.assertEqual(conf.get('target_upgrade_version'), '666.development')
+        target_upgrade_version = conf.get('target_upgrade_version')
+        self.assertTrue(target_upgrade_version == '666.development' or target_upgrade_version.endswith(".dev"))
 
     def test_16_oracle_scylla_version_us_east_1(self):
         ami_3_0_11 = "ami-0a49c99b529429c18"
