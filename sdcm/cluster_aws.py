@@ -675,6 +675,12 @@ class AWSNode(cluster.BaseNode):
             try:
                 self.stop_scylla_server(verify_down=False)
 
+                # Moving var-lib-scylla.mount away, since scylla_create_devices fails if it already exists
+                mount_path = "/etc/systemd/system/var-lib-scylla.mount"
+                existance_check = self.remoter.run(f'sudo test -e {mount_path}', ignore_status=True)
+                if existance_check.exit_status == 0:
+                    self.remoter.run(f'sudo mv {mount_path} /tmp/')
+
                 # the scylla_create_devices has been moved to the '/opt/scylladb' folder in the master branch
                 for create_devices_file in ['/usr/lib/scylla/scylla-ami/scylla_create_devices',
                                             '/opt/scylladb/scylla-ami/scylla_create_devices',
