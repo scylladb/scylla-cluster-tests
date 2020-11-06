@@ -25,6 +25,7 @@ import time
 import traceback
 import uuid
 import itertools
+import json
 
 from collections import defaultdict
 from typing import List, Optional, Dict, Union
@@ -66,7 +67,7 @@ from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, BUILD_ID_RE, get_gemini_version, get_systemd_version
 from sdcm.sct_events import Severity, DatabaseLogEvent, ClusterHealthValidatorEvent, set_grafana_url, \
-    ScyllaBenchEvent, raise_event_on_failure, TestFrameworkEvent
+    ScyllaBenchEvent, raise_event_on_failure, TestFrameworkEvent, JsonLogMessageRegexp
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3
@@ -1313,7 +1314,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         index = 0
         # prepare/compile all regexes
         for expression in self._system_error_events:
-            patterns += [(re.compile(expression.regex, re.IGNORECASE), expression)]
+            if isinstance(expression.regex, re.Pattern):
+                patterns.append((re.compile(expression.regex, re.IGNORECASE), expression))
+            elif isinstance(expression.regex, JsonLogMessageRegexp):
+                patterns.append((expression.regex, expression))
 
         backtrace_regex = re.compile(r'(?P<other_bt>/lib.*?\+0x[0-f]*\n)|(?P<scylla_bt>0x[0-f]*\n)', re.IGNORECASE)
 
@@ -1331,7 +1335,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if start_search_from_byte:
                 db_file.seek(start_search_from_byte)
             for index, line in enumerate(db_file, start=last_line_no):
-                if not start_from_beginning and Setup.RSYSLOG_ADDRESS:
+                json_log_message = None
+                if line.startswith("{"):
+                    try:
+                        json_log_message = json.loads(line)
+                    except Exception:
+                        pass
+                if not json_log_message and not start_from_beginning and Setup.RSYSLOG_ADDRESS:
                     line = line.strip()
                     if not exclude_from_logging:
                         LOGGER.debug(line)
@@ -1343,7 +1353,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                                 break
                         if not exclude:
                             LOGGER.debug(line)
-                match = backtrace_regex.search(line)
+                match = None if json_log_message else backtrace_regex.search(line)
                 one_line_backtrace = []
                 if match and backtraces:
                     data = match.groupdict()
@@ -1366,7 +1376,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 if index not in self._system_log_errors_index or start_from_beginning:
                     # for each line use all regexes to match, and if found send an event
                     for pattern, event in patterns:
-                        match = pattern.search(line)
+                        if json_log_message:
+                            if not isinstance(pattern, JsonLogMessageRegexp):
+                                continue
+                            match = pattern.search(json_log_message)
+                        else:
+                            if isinstance(pattern, JsonLogMessageRegexp):
+                                continue
+                            match = pattern.search(line)
                         if match:
                             self._system_log_errors_index.append(index)
                             cloned_event = event.clone_with_info(node=self, line_number=index, line=line)

@@ -725,7 +725,7 @@ class CDCReaderStressEvent(YcsbStressEvent):
 
 class DatabaseLogEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
     def __init__(self, type, regex, severity=Severity.ERROR):  # pylint: disable=redefined-builtin
-        super(DatabaseLogEvent, self).__init__()
+        super().__init__()
         self.type = type
         self.regex = regex
         self.line_number = 0
@@ -780,14 +780,39 @@ class DatabaseLogEvent(SctEvent):  # pylint: disable=too-many-instance-attribute
     def __str__(self):
         if self.backtrace:
             return "{0}: type={1.type} regex={1.regex} line_number={1.line_number} node={1.node}\n{1.line}\n{1.backtrace}".format(
-                super(DatabaseLogEvent, self).__str__(), self)
+                super().__str__(), self)
 
         if self.raw_backtrace:
             return "{0}: type={1.type} regex={1.regex} line_number={1.line_number} node={1.node}\n{1.line}\n{1.raw_backtrace}".format(
-                super(DatabaseLogEvent, self).__str__(), self)
+                super().__str__(), self)
 
         return "{0}: type={1.type} regex={1.regex} line_number={1.line_number} node={1.node}\n{1.line}".format(
-            super(DatabaseLogEvent, self).__str__(), self)
+            super().__str__(), self)
+
+
+class JsonLogMessageRegexp:
+    def __init__(self, **kwargs):
+        self._pattern = dict(kwargs)
+
+    def _re_pattern_call(self, method: str, data: dict, **kwargs):
+        for attr_name, attr_value in self._pattern.items():
+            data_value = data.get(attr_name)
+            if isinstance(attr_value, re.Pattern):
+                if not getattr(attr_value, method)(data_value, **kwargs):
+                    return False
+                continue
+            if attr_value != data_value:
+                return False
+        return True
+
+    def match(self, data: dict, **kwargs) -> bool:
+        return self._re_pattern_call('match', data, **kwargs)
+
+    def fullmatch(self, data: dict, **kwargs) -> bool:
+        return self._re_pattern_call('fullmatch', data, **kwargs)
+
+    def search(self, data: dict, **kwargs) -> bool:
+        return self._re_pattern_call('search', data, **kwargs)
 
 
 class CassandraStressLogEvent(DatabaseLogEvent):
