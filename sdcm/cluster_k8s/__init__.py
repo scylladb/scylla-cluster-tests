@@ -153,7 +153,9 @@ class BasePodContainer(cluster.BaseNode):
 
     def init(self) -> None:
         super().init()
-        self.remoter.run('mkdir -p /var/lib/scylla/coredumps', ignore_status=True)
+        if self.distro.is_rhel_like:
+            self.remoter.sudo("rpm -q iproute || yum install -y iproute")  # need this because of scylladb/scylla#7560
+        self.remoter.sudo('mkdir -p /var/lib/scylla/coredumps', ignore_status=True)
 
     @staticmethod
     def is_docker() -> bool:
