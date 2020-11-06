@@ -166,7 +166,7 @@ class PrometheusAlertManagerListener(threading.Thread):
 
     def _publish_new_alerts(self, alerts: dict):  # pylint: disable=no-self-use
         for alert in alerts.values():
-            PrometheusAlertManagerEvent(raw_alert=alert, event_type='start').publish()
+            PrometheusAlertManagerEvent.start(raw_alert=alert).publish()
 
     def _publish_end_of_alerts(self, alerts: dict):
         all_alerts = self._get_alerts()
@@ -181,7 +181,7 @@ class PrometheusAlertManagerListener(threading.Thread):
             if not alert.get('endsAt', None):
                 alert['endsAt'] = time.strftime("%Y-%m-%dT%H:%M:%S.0Z", time.gmtime())
             alert = updated_dict.get(alert['fingerprint'], alert)
-            PrometheusAlertManagerEvent(raw_alert=alert, event_type='end').publish()
+            PrometheusAlertManagerEvent.end(raw_alert=alert).publish()
 
     def run(self):
         self.wait_till_alert_manager_up()
