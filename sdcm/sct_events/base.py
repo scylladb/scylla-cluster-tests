@@ -74,7 +74,8 @@ class SctEvent:
     _ready_to_publish: bool = False  # set it to True in __init__() and to False in publish() to prevent double-publish
 
     def __init_subclass__(cls, abstract: bool = False):
-        if cls.__name__ in cls._sct_event_types_registry:  # pylint: disable=unsupported-membership-test; pylint doesn't know about Dict
+        # pylint: disable=unsupported-membership-test; pylint doesn't know about Dict
+        if cls.__name__ in cls._sct_event_types_registry:
             raise TypeError(f"Name {cls.__name__} is already used")
         cls.base = cls.__name__.split(".", 1)[0]
         cls._abstract = bool(abstract)

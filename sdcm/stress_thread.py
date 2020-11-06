@@ -11,59 +11,43 @@
 #
 # Copyright (c) 2019 ScyllaDB
 
-from __future__ import print_function
-
 import os
 import re
-import uuid
 import time
+import uuid
+import random
 import logging
 import concurrent.futures
-import random
+from typing import Any
 
 from sdcm.loader import CassandraStressExporter
-from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.cluster import BaseLoaderSet
+from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.utils.common import FileFollowerThread, generate_random_string, get_profile_content
-from sdcm.sct_events.base import Severity
-from sdcm.sct_events.loaders import CassandraStressEvent, CassandraStressLogEvent
+from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS
 
 
 LOGGER = logging.getLogger(__name__)
 
 
-def format_stress_cmd_error(exc):
-    """
-    format nicely the excpetion we get from stress command failures
+def format_stress_cmd_error(exc: Exception) -> str:
+    """Format nicely the exception from a stress command failure."""
 
-    :param exc: the exception
-    :return: string to add to the event
-    """
-    if hasattr(exc, 'result') and exc.result.failed:
-        stderr = exc.result.stderr
-        if len(stderr) > 100:
-            stderr = stderr[:100]
-        errors_str = f'Stress command completed with bad status {exc.result.exited}: {stderr}'
-    else:
-        errors_str = f'Stress command execution failed with: {str(exc)}'
-
-    return errors_str
+    if hasattr(exc, "result") and exc.result.failed:
+        return f"Stress command completed with bad status {exc.result.exited}: {exc.result.stderr:.100}"
+    return f"Stress command execution failed with: {exc}"
 
 
 class CassandraStressEventsPublisher(FileFollowerThread):
-    def __init__(self, node, cs_log_filename):
-        super(CassandraStressEventsPublisher, self).__init__()
-        self.cs_log_filename = cs_log_filename
+    def __init__(self, node: Any, cs_log_filename: str):
+        super().__init__()
+
         self.node = str(node)
-        self.cs_events = [CassandraStressLogEvent(type='IOException', regex=r'java\.io\.IOException', severity=Severity.ERROR),
-                          CassandraStressLogEvent(type='ConsistencyError', regex=r'Cannot achieve consistency level', severity=Severity.ERROR)]
+        self.cs_log_filename = cs_log_filename
 
-    def run(self):
-        patterns = [(event, re.compile(event.regex)) for event in self.cs_events]
-
+    def run(self) -> None:
         while not self.stopped():
-            exists = os.path.isfile(self.cs_log_filename)
-            if not exists:
+            if not os.path.isfile(self.cs_log_filename):
                 time.sleep(0.5)
                 continue
 
@@ -71,13 +55,12 @@ class CassandraStressEventsPublisher(FileFollowerThread):
                 if self.stopped():
                     break
 
-                for event, pattern in patterns:
-                    match = pattern.search(line)
-                    if match:
-                        event.add_info_and_publish(node=self.node, line=line, line_number=line_number)
+                for pattern, event in CS_ERROR_EVENTS_PATTERNS:
+                    if pattern.search(line):
+                        event.add_info(node=self.node, line=line, line_number=line_number).publish()
 
 
-class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
+class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
     def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='',  # pylint: disable=too-many-arguments
                  profile=None, node_list=None, round_robin=False, client_encrypt=False, stop_test_on_failure=True):
         if not node_list:
@@ -124,7 +107,8 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
             # put the credentials into the right place into -mode section
             stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*credentials), stress_cmd)
         if self.client_encrypt and 'transport' not in stress_cmd:
-            stress_cmd += ' -transport "truststore=/etc/scylla/ssl_conf/client/cacerts.jks truststore-password=cassandra"'
+            stress_cmd += \
+                ' -transport "truststore=/etc/scylla/ssl_conf/client/cacerts.jks truststore-password=cassandra"'
 
         if self.node_list and '-node' not in stress_cmd:
             first_node = [n for n in self.node_list if n.dc_idx == loader_idx %
@@ -159,7 +143,7 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
                 ignore_status=True).stdout
         except Exception:  # pylint: disable=broad-except
             return []
-        return re.findall(r' *\[([\w-]+?)[=?]*\] *', result)
+        return re.findall(r' *\[([\w-]+?)[=?]*] *', result)
 
     def _run_stress(self, node, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals
         stress_cmd = self.create_stress_cmd(node, loader_idx, keyspace_idx)
@@ -173,10 +157,9 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
 
         LOGGER.info('Stress command:\n%s', stress_cmd)
 
-        if not os.path.exists(node.logdir):
-            os.makedirs(node.logdir, exist_ok=True)
-        log_file_name = os.path.join(node.logdir,
-                                     f'cassandra-stress-l{loader_idx}-c{cpu_idx}-k{keyspace_idx}-{uuid.uuid4()}.log')
+        os.makedirs(node.logdir, exist_ok=True)
+        log_file_name = \
+            os.path.join(node.logdir, f'cassandra-stress-l{loader_idx}-c{cpu_idx}-k{keyspace_idx}-{uuid.uuid4()}.log')
 
         LOGGER.debug('cassandra-stress local log: %s', log_file_name)
 
@@ -188,37 +171,26 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
             node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; taskset -c {cpu_idx} {stress_cmd}'
         else:
             node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {stress_cmd}'
-
         node_cmd = f'echo {tag}; {node_cmd}'
 
-        CassandraStressEvent(type='start', node=str(node), stress_cmd=stress_cmd)
+        result = None
 
+        CassandraStressEvent.start(node=node, stress_cmd=stress_cmd).publish()
         with CassandraStressExporter(instance_name=node.ip_address,
                                      metrics=nemesis_metrics_obj(),
                                      stress_operation=stress_cmd_opt,
                                      stress_log_filename=log_file_name,
                                      loader_idx=loader_idx, cpu_idx=cpu_idx), \
                 CassandraStressEventsPublisher(node=node, cs_log_filename=log_file_name):
-            result = None
             try:
-                result = node.remoter.run(cmd=node_cmd,
-                                          timeout=self.timeout,
-                                          log_file=log_file_name)
-            except Exception as exc:  # pylint: disable=broad-except
-                errors_str = format_stress_cmd_error(exc)
-
-                if self.stop_test_on_failure:
-                    event_type = "failure"
-                    event_severity = Severity.CRITICAL
-                else:
-                    event_type = "error"
-                    event_severity = Severity.ERROR
-
-                CassandraStressEvent(type=event_type, node=str(node), stress_cmd=stress_cmd,
-                                     log_file_name=log_file_name, severity=event_severity,
-                                     errors=[errors_str])
-
-        CassandraStressEvent(type='finish', node=str(node), stress_cmd=stress_cmd, log_file_name=log_file_name)
+                result = node.remoter.run(cmd=node_cmd, timeout=self.timeout, log_file=log_file_name)
+            except Exception as exc:
+                event_type = CassandraStressEvent.failure if self.stop_test_on_failure else CassandraStressEvent.error
+                event_type(node=node,
+                           stress_cmd=stress_cmd,
+                           log_file_name=log_file_name,
+                           errors=[format_stress_cmd_error(exc), ]).publish()
+        CassandraStressEvent.finish(node=node, stress_cmd=stress_cmd, log_file_name=log_file_name).publish()
 
         return node, result
 
@@ -267,7 +239,7 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
 
         for _, result in results:
             if not result:
-                # Silently skip if stress command throwed error, since it was already reported in _run_stress
+                # Silently skip if stress command threw error, since it was already reported in _run_stress
                 continue
             output = result.stdout + result.stderr
             try:
@@ -276,9 +248,7 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
                 if node_cs_res:
                     ret.append(node_cs_res)
             except Exception as exc:  # pylint: disable=broad-except
-                CassandraStressEvent(
-                    type='failure', node='', severity=Severity.CRITICAL,
-                    errors=[f'Failed to proccess stress summary due to {exc}'])
+                CassandraStressEvent.failure(node="", errors=[f"Failed to process stress summary due to {exc}", ])
 
         return ret
 
@@ -293,7 +263,7 @@ class CassandraStressThread():  # pylint: disable=too-many-instance-attributes
 
         for node, result in results:
             if not result:
-                # Silently skip if stress command throwed error, since it was already reported in _run_stress
+                # Silently skip if stress command threw error, since it was already reported in _run_stress
                 continue
             output = result.stdout + result.stderr
             lines = output.splitlines()

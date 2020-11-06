@@ -1,3 +1,16 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 import os
 import time
 import random
@@ -7,14 +20,13 @@ import threading
 
 from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.sct_events import StressEvent, InfoEvent, Severity
+from sdcm.sct_events import Severity
+from sdcm.sct_events.system import InfoEvent
+from sdcm.sct_events.loaders import KclStressEvent
 from sdcm.cluster import BaseNode
 
+
 LOGGER = logging.getLogger(__name__)
-
-
-class KclStressEvent(StressEvent):
-    pass
 
 
 class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
@@ -63,7 +75,7 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
 
         node_cmd = 'cd /hydra-kcl && {}'.format(node_cmd)
 
-        KclStressEvent('start', node=loader, stress_cmd=stress_cmd)
+        KclStressEvent.start(node=loader, stress_cmd=stress_cmd).publish()
 
         try:
             result = docker.run(cmd=node_cmd,
@@ -75,12 +87,15 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
 
         except Exception as exc:  # pylint: disable=broad-except
             errors_str = format_stress_cmd_error(exc)
-            KclStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
-                           log_file_name=log_file_name, severity=Severity.ERROR,
-                           errors=[errors_str])
+            KclStressEvent.failure(
+                node=loader,
+                stress_cmd=self.stress_cmd,
+                log_file_name=log_file_name,
+                errors=[errors_str, ],
+            ).publish()
             raise
         finally:
-            KclStressEvent('finish', node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name)
+            KclStressEvent.finish(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name).publish()
 
 
 class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
@@ -100,7 +115,7 @@ class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-
         return node_to_query
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
-        KclStressEvent('start', node=loader, stress_cmd=self.stress_cmd)
+        KclStressEvent.start(node=loader, stress_cmd=self.stress_cmd).publish()
         try:
             options_str = self.stress_cmd.replace('table_compare', '').strip()
             options = dict(item.strip().split("=") for item in options_str.split(";"))
@@ -129,9 +144,7 @@ class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-
 
         except Exception as exc:  # pylint: disable=broad-except
             errors_str = format_stress_cmd_error(exc)
-            KclStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
-                           severity=Severity.ERROR,
-                           errors=[errors_str])
+            KclStressEvent.failure(node=loader, stress_cmd=self.stress_cmd, errors=[errors_str, ]).publish()
             raise
         finally:
-            KclStressEvent('finish', node=loader)
+            KclStressEvent.finish(node=loader).publish()

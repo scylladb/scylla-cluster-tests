@@ -17,7 +17,6 @@ import pprint
 from pathlib import Path
 from typing import List, Dict
 
-from sdcm.sct_events.base import Severity
 from sdcm.sct_events.loaders import CDCReaderStressEvent
 from sdcm.utils.common import get_docker_stress_image_name
 from sdcm.utils.docker_remote import RemoteDocker
@@ -63,13 +62,16 @@ class CDCLogReaderThread(DockerBasedStressThread):
         docker = RemoteDocker(loader, CDCLOG_READER_IMAGE,
                               extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
 
-        # update cdc-stressor with last changes
-        docker.run(cmd="go get -u github.com/piodul/cdc-stressor", timeout=self.timeout,
-                   ignore_status=True, log_file=log_file_name, verbose=True)
+        # Update cdc-stressor with last changes.
+        docker.run(cmd="go get -u github.com/piodul/cdc-stressor",
+                   timeout=self.timeout,
+                   ignore_status=True,
+                   log_file=log_file_name,
+                   verbose=True)
 
         node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {self.stress_cmd}'
 
-        CDCReaderStressEvent('start', node=loader, stress_cmd=self.stress_cmd)
+        CDCReaderStressEvent.start(node=loader, stress_cmd=self.stress_cmd).publish()
 
         try:
             result = docker.run(cmd=node_cmd,
@@ -78,18 +80,16 @@ class CDCLogReaderThread(DockerBasedStressThread):
                                 log_file=log_file_name,
                                 verbose=True)
             if not result.ok:
-                CDCReaderStressEvent(type="error", node=str(loader), stress_cmd=self.stress_cmd,
-                                     severity=Severity.ERROR,
-                                     errors=result.stderr.split("\n"))
-
+                CDCReaderStressEvent.error(node=loader,
+                                           stress_cmd=self.stress_cmd,
+                                           errors=result.stderr.split("\n")).publish()
             return result
-        except Exception as exc:  # pylint: disable=broad-except
-            errors_str = format_stress_cmd_error(exc)
-            CDCReaderStressEvent(type="failure", node=str(loader), stress_cmd=self.stress_cmd,
-                                 severity=Severity.CRITICAL,
-                                 errors=errors_str)
+        except Exception as exc:
+            CDCReaderStressEvent.failure(node=loader,
+                                         stress_cmd=self.stress_cmd,
+                                         errors=[format_stress_cmd_error(exc), ]).publish()
         finally:
-            CDCReaderStressEvent('finish', node=loader, stress_cmd=self.stress_cmd)
+            CDCReaderStressEvent.finish(node=loader, stress_cmd=self.stress_cmd).publish()
 
     @staticmethod
     def _parse_cdcreaderstressor_results(lines: List[str]) -> Dict:

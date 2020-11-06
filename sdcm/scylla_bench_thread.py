@@ -1,16 +1,15 @@
-# Copyright 2020 ScyllaDB
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+# See LICENSE for more details.
 #
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Copyright (c) 2020 ScyllaDB
 
 import os
 import re
@@ -21,9 +20,8 @@ import concurrent.futures
 
 from sdcm.loader import ScyllaBenchStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm.sct_events import ScyllaBenchLogEvent, ScyllaBenchEvent
+from sdcm.sct_events.loaders import ScyllaBenchEvent, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS
 from sdcm.utils.common import FileFollowerThread, generate_random_string, convert_metric_to_ms
-from sdcm.sct_events import Severity
 from sdcm.stress_thread import format_stress_cmd_error
 
 
@@ -32,16 +30,11 @@ LOGGER = logging.getLogger(__name__)
 
 class ScyllaBenchStressEventsPublisher(FileFollowerThread):
     def __init__(self, node, sb_log_filename):
-        super(ScyllaBenchStressEventsPublisher, self).__init__()
+        super().__init__()
         self.sb_log_filename = sb_log_filename
         self.node = str(node)
-        self.sb_events = []
-        # TODO: decide about error events
-        self.sb_events = [ScyllaBenchLogEvent(type='ConsistencyError', regex=r'received only', severity=Severity.ERROR)]
 
     def run(self):
-        patterns = [(event, re.compile(event.regex)) for event in self.sb_events]
-
         while not self.stopped():
             exists = os.path.isfile(self.sb_log_filename)
             if not exists:
@@ -52,10 +45,9 @@ class ScyllaBenchStressEventsPublisher(FileFollowerThread):
                 if self.stopped():
                     break
 
-                for event, pattern in patterns:
-                    match = pattern.search(line)
-                    if match:
-                        event.add_info_and_publish(node=self.node, line=line, line_number=line_number)
+                for pattern, event in SCYLLA_BENCH_ERROR_EVENTS_PATTERNS:
+                    if pattern.search(line):
+                        event.add_info(node=self.node, line=line, line_number=line_number).publish()
 
 
 class ScyllaBenchThread:
@@ -97,9 +89,10 @@ class ScyllaBenchThread:
                 node_cs_res = self._parse_bench_summary(lines)  # pylint: disable=protected-access
                 if node_cs_res:
                     ret.append(node_cs_res)
-            except Exception as exc:  # pylint: disable=broad-except
-                ScyllaBenchEvent(type='failure', node='', stress_cmd=self.stress_cmd, severity=Severity.ERROR,
-                                 errors=[f'Failed to proccess stress summary due to {exc}'])
+            except Exception as exc:
+                ScyllaBenchEvent.error(node="",
+                                       stress_cmd=self.stress_cmd,
+                                       errors=[f"Failed to proccess stress summary due to {exc}"]).publish()
 
         return ret
 
@@ -132,7 +125,7 @@ class ScyllaBenchThread:
 
     def _run_stress_bench(self, node, loader_idx, stress_cmd, node_list):
 
-        ScyllaBenchEvent(type='start', node=str(node), stress_cmd=stress_cmd)
+        ScyllaBenchEvent.start(node=node, stress_cmd=stress_cmd).publish()
         os.makedirs(node.logdir, exist_ok=True)
 
         log_file_name = os.path.join(node.logdir, f'scylla-bench-l{loader_idx}-{uuid.uuid4()}.log')
@@ -160,16 +153,19 @@ class ScyllaBenchThread:
             except Exception as exc:  # pylint: disable=broad-except
                 errors_str = format_stress_cmd_error(exc)
                 if "truncate: seastar::rpc::timeout_error" in errors_str:
-                    event_type, event_severity = 'timeout', Severity.ERROR
+                    event_type = ScyllaBenchEvent.timeout
+                elif self.stop_test_on_failure:
+                    event_type = ScyllaBenchEvent.failure
                 else:
-                    event_type = 'failure'
-                    event_severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR
-
-                ScyllaBenchEvent(type=event_type, node=str(node), stress_cmd=stress_cmd,
-                                 log_file_name=log_file_name, severity=event_severity,
-                                 errors=[errors_str])
+                    event_type = ScyllaBenchEvent.error
+                event_type(
+                    node=node,
+                    stress_cmd=stress_cmd,
+                    log_file_name=log_file_name,
+                    errors=[errors_str, ],
+                ).publish()
             else:
-                ScyllaBenchEvent(type='finish', node=str(node), stress_cmd=stress_cmd, log_file_name=log_file_name)
+                ScyllaBenchEvent.finish(node=node, stress_cmd=stress_cmd, log_file_name=log_file_name).publish()
 
         return node, result
 
