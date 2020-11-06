@@ -13,6 +13,7 @@ ENV USER scylla-test
 #
 # For more details see man page for useradd(8)
 RUN yum -y install \
+        iproute \
         sudo \
         collectd \
         rsync && \
