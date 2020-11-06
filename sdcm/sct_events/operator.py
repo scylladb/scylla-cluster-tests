@@ -11,14 +11,14 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from sdcm.sct_events.base import SctEvent, Severity
+from sdcm.sct_events import Severity
+from sdcm.sct_events.base import SctEvent
 
 
 class ScyllaOperatorLogEvent(SctEvent):
     def __init__(self, timestamp=None, namespace=None, cluster=None, message=None, error=None, trace_id=None):
-        super().__init__()
+        super().__init__(severity=Severity.ERROR)
 
-        self.severity = Severity.ERROR
         self.namespace = namespace
         self.cluster = cluster
         self.message = message
@@ -26,20 +26,21 @@ class ScyllaOperatorLogEvent(SctEvent):
         self.error = error
         self.trace_id = trace_id
 
-    def __str__(self):
-        cluster = f'/{self.cluster}' if self.cluster else ''
-        return f"{super().__str__()} {self.trace_id} {self.namespace}{cluster}: {self.message}, {self.error}"
+    @property
+    def msgfmt(self):
+        cluster = f"/{self.cluster}" if self.cluster else ""
+        return super().msgfmt + " {0.trace_id} {0.namespace}" + cluster + ": {0.message}, {0.error}"
 
 
 class ScyllaOperatorRestartEvent(SctEvent):
     def __init__(self, restart_count):
-        super().__init__()
+        super().__init__(severity=Severity.ERROR)
 
-        self.severity = Severity.ERROR
         self.restart_count = restart_count
 
-    def __str__(self):
-        return f"{super().__str__()}: Scylla operator has been restarted, restart_count={self.restart_count}"
+    @property
+    def msgfmt(self):
+        return super().msgfmt + ": Scylla Operator has been restarted, restart_count={0.restart_count}"
 
 
 __all__ = ("ScyllaOperatorLogEvent", "ScyllaOperatorRestartEvent", )
