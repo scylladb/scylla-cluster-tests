@@ -11,123 +11,165 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import re
 import json
 import time
 import logging
+from typing import Type, Optional, List, Tuple
 
 import dateutil.parser
+from invoke.runners import Result
 
-from sdcm.sct_events.base import SctEvent, Severity
-from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events import Severity
+from sdcm.sct_events.base import \
+    SctEvent, SctEventProtocol, LogEvent, LogEventProtocol, T_log_event, \
+    BaseStressEvent, StressEvent, StressEventProtocol
 
 
 LOGGER = logging.getLogger(__name__)
 
 
-class GeminiEvent(SctEvent):
-    def __init__(self, type, cmd, result=None):  # pylint: disable=redefined-builtin
-        super().__init__()
+class GeminiEvent(BaseStressEvent, abstract=True):
+    error: Type[SctEventProtocol]
+    start: Type[SctEventProtocol]
+    finish: Type[SctEventProtocol]
 
-        self.type = type
+    def __init__(self, cmd: str, result: Optional[Result] = None, severity: Severity = Severity.NORMAL):
+        super().__init__(severity=severity)
+
         self.cmd = cmd
-        self.msg = "{0}: type={1.type} gemini_cmd={1.cmd}"
         self.result = ""
-        if result:
-            self.result += "Exit code: {exit_code}\n"
-            if result['stdout']:
-                self.result += "Command output: {stdout}\n"
-                result['stdout'] = result['stdout'].strip().split('\n')[-2:]
-            if result['stderr']:
-                self.result += "Command error: {stderr}\n"
-            self.result = self.result.format(**result)
-            if result['exit_code'] != 0 or result['stderr']:
-                self.severity = Severity.CRITICAL
-                self.type = 'error'
-            self.msg += '\n{1.result}'
 
-        self.publish()
+        if result is not None:
+            self.result += f"Exit code: {result.exited}\n"
+            if result.stdout:
+                self.result += f"Command output: {result.stdout.strip().splitlines()[-2:]}\n"
+            if result.stderr:
+                self.result += f"Command error: {result.stderr}\n"
 
-    def __str__(self):
-        return self.msg.format(super().__str__(), self)
-
-
-class CassandraStressEvent(SctEvent):
-    def __init__(self, type, node, severity=Severity.NORMAL, stress_cmd=None, log_file_name=None, errors=None):  # pylint: disable=redefined-builtin,too-many-arguments
-        super().__init__()
-
-        self.type = type
-        self.node = str(node)
-        self.stress_cmd = stress_cmd
-        self.log_file_name = log_file_name
-        self.severity = severity
-        self.errors = errors
-
-        self.publish()
-
-    def __str__(self):
-        if self.errors:
-            return "{0}: type={1.type} node={1.node}\n{2}".format(super().__str__(), self, "\n".join(self.errors))
-        return "{0}: type={1.type} node={1.node}\nstress_cmd={1.stress_cmd}".format(super().__str__(), self)
-
-
-class ScyllaBenchEvent(SctEvent):
-    def __init__(self, type, node, severity=Severity.NORMAL, stress_cmd=None, log_file_name=None, errors=None):  # pylint: disable=redefined-builtin,too-many-arguments
-        super().__init__()
-
-        self.type = type
-        self.node = str(node)
-        self.stress_cmd = stress_cmd
-        self.log_file_name = log_file_name
-        self.severity = severity
-        self.errors = errors
-
-        self.publish()
-
-    def __str__(self):
-        if self.errors:
-            return "{0}: type={1.type} node={1.node} stress_cmd={1.stress_cmd} error={2}".format(
-                super().__str__(), self, "\n".join(self.errors))
-        return "{0}: type={1.type} node={1.node} stress_cmd={1.stress_cmd}".format(super().__str__(), self)
-
-
-class StressEvent(SctEvent):
-    def __init__(self, type, node, severity=Severity.NORMAL, stress_cmd=None, log_file_name=None, errors=None):  # pylint: disable=redefined-builtin,too-many-arguments
-        super().__init__()
-
-        self.type = type
-        self.node = str(node)
-        self.stress_cmd = stress_cmd
-        self.log_file_name = log_file_name
-        self.severity = severity
-        self.errors = errors
-
-        self.publish()
-
-    def __str__(self):
-        fmt = f"{super().__str__()}: type={self.type} node={self.node}\nstress_cmd={self.stress_cmd}"
-        if self.errors:
-            errors_str = '\n'.join(self.errors)
-            return f"{fmt}\nerrors:\n\n{errors_str}"
+    @property
+    def msgfmt(self):
+        fmt = super().msgfmt + ": type={0.type} gemini_cmd={0.cmd}"
+        if self.result:
+            fmt += "\n{0.result}"
         return fmt
 
 
-class YcsbStressEvent(StressEvent):
+GeminiEvent.add_stress_subevents(error=Severity.CRITICAL)
+
+
+class CassandraStressEvent(StressEvent, abstract=True):
+    failure: Type[StressEventProtocol]
+    error: Type[StressEventProtocol]
+    start: Type[StressEventProtocol]
+    finish: Type[StressEventProtocol]
+
+    @property
+    def msgfmt(self):
+        fmt = super(StressEvent, self).msgfmt + ": type={0.type} node={0.node}\n"
+        if self.errors:
+            return fmt + "{0.errors_formatted}"
+        return fmt + "stress_cmd={0.stress_cmd}"
+
+
+CassandraStressEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR)
+
+
+class ScyllaBenchEvent(StressEvent, abstract=True):
+    failure: Type[StressEventProtocol]
+    error: Type[SctEventProtocol]
+    timeout: Type[StressEventProtocol]
+    start: Type[StressEventProtocol]
+    finish: Type[StressEventProtocol]
+
+    @property
+    def msgfmt(self):
+        fmt = super(StressEvent, self).msgfmt + ": type={0.type} node={0.node} stress_cmd={0.stress_cmd}"
+        if self.errors:
+            return fmt + " error={0.errors_formatted}"
+        return fmt
+
+
+ScyllaBenchEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR, timeout=Severity.ERROR)
+
+
+class BaseYcsbStressEvent(StressEvent, abstract=True):
     pass
 
 
-class NdbenchStressEvent(StressEvent):
-    pass
+class YcsbStressEvent(BaseYcsbStressEvent, abstract=True):
+    failure: Type[StressEventProtocol]
+    error: Type[StressEventProtocol]
+    start: Type[StressEventProtocol]
+    finish: Type[StressEventProtocol]
 
 
-class CDCReaderStressEvent(YcsbStressEvent):
-    pass
+YcsbStressEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR)
 
 
-class CassandraStressLogEvent(DatabaseLogEvent):
-    pass
+class CDCReaderStressEvent(BaseYcsbStressEvent, abstract=True):
+    failure: Type[StressEventProtocol]
+    error: Type[StressEventProtocol]
+    start: Type[StressEventProtocol]
+    finish: Type[StressEventProtocol]
 
 
-class GeminiLogEvent(DatabaseLogEvent):
+CDCReaderStressEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR)
+
+
+class NdbenchStressEvent(StressEvent, abstract=True):
+    failure: Type[StressEventProtocol]
+    error: Type[StressEventProtocol]
+    start: Type[StressEventProtocol]
+    finish: Type[StressEventProtocol]
+
+
+NdbenchStressEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR)
+
+
+class KclStressEvent(StressEvent, abstract=True):
+    failure: Type[StressEventProtocol]
+    start: Type[StressEventProtocol]
+    finish: Type[StressEventProtocol]
+
+
+KclStressEvent.add_stress_subevents(failure=Severity.ERROR)
+
+
+class CassandraStressLogEvent(LogEvent, abstract=True):
+    IOException: Type[LogEventProtocol]
+    ConsistencyError: Type[LogEventProtocol]
+
+
+CassandraStressLogEvent.add_subevent_type("IOException", severity=Severity.ERROR,
+                                          regex=r"java\.io\.IOException")
+CassandraStressLogEvent.add_subevent_type("ConsistencyError", severity=Severity.ERROR,
+                                          regex="Cannot achieve consistency level")
+
+
+CS_ERROR_EVENTS = (
+    CassandraStressLogEvent.IOException(),
+    CassandraStressLogEvent.ConsistencyError(),
+)
+CS_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
+    [(re.compile(event.regex), event) for event in CS_ERROR_EVENTS]
+
+
+class ScyllaBenchLogEvent(LogEvent, abstract=True):
+    ConsistencyError: Type[LogEventProtocol]
+
+
+ScyllaBenchLogEvent.add_subevent_type("ConsistencyError", severity=Severity.ERROR, regex=r"received only")
+
+
+SCYLLA_BENCH_ERROR_EVENTS = (
+    ScyllaBenchLogEvent.ConsistencyError(),
+)
+SCYLLA_BENCH_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
+    [(re.compile(event.regex), event) for event in SCYLLA_BENCH_ERROR_EVENTS]
+
+
+class GeminiLogEvent(LogEvent[T_log_event], abstract=True):
     SEVERITY_MAPPING = {
         "INFO": "NORMAL",
         "DEBUG": "NORMAL",
@@ -136,30 +178,42 @@ class GeminiLogEvent(DatabaseLogEvent):
         "FATAL": "CRITICAL",
     }
 
-    def __init__(self, verbose=False):
-        super().__init__(type="geminievent", regex="", severity=Severity.CRITICAL)
+    geminievent: Type[LogEventProtocol]
 
+    def __init__(self, verbose=False):
+        super().__init__(regex="", severity=Severity.CRITICAL)
         self.verbose = verbose
 
-    def add_info(self, node, line: str, line_number: int) -> bool:
+    def add_info(self: T_log_event, node, line: str, line_number: int) -> T_log_event:
         try:
             data = json.loads(line)
         except json.JSONDecodeError:
             if self.verbose:
                 LOGGER.debug("Failed to parse a line: %s", line.rstrip())
-            return False
+            self._ready_to_publish = False
+            return self
+
         try:
             self.timestamp = dateutil.parser.parse(data.pop("T")).timestamp()
         except ValueError:
             self.timestamp = time.time()
-        self.severity = getattr(Severity, self.SEVERITY_MAPPING[data.pop("L")])
+
+        self.severity = Severity[self.SEVERITY_MAPPING[data.pop("L")]]
+
         self.line = data.pop("M")
         if data:
             self.line += " (" + " ".join(f'{key}="{value}"' for key, value in data.items()) + ")"
+
         self.line_number = line_number
         self.node = str(node)
-        return True
 
-    def __str__(self):
-        return f"{SctEvent.__str__(self)}: type={self.type} line_number={self.line_number} node={self.node}\n" \
-               f"{self.line}"
+        self._ready_to_publish = True
+        return self
+
+    @property
+    def msgfmt(self) -> str:
+        return SctEvent.msgfmt + ": " + "type={0.type} line_number={0.line_number} node={0.node}\n" \
+                                        "{0.line}"
+
+
+GeminiLogEvent.add_subevent_type("geminievent")

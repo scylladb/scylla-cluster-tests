@@ -21,7 +21,6 @@ import tempfile
 from textwrap import dedent
 
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm.sct_events.base import Severity
 from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.remote import FailuresWatcher
 from sdcm.utils import alternator
@@ -232,10 +231,9 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                                      (loader_idx, cpu_idx, uuid.uuid4()))
         LOGGER.debug('ycsb-stress local log: %s', log_file_name)
 
-        def raise_event_callback(sentinal, line):  # pylint: disable=unused-argument
+        def raise_event_callback(sentinel, line):  # pylint: disable=unused-argument
             if line:
-                YcsbStressEvent('error', severity=Severity.ERROR, node=loader,
-                                stress_cmd=stress_cmd, errors=[line, ])
+                YcsbStressEvent.error(node=loader, stress_cmd=stress_cmd, errors=[line, ]).publish()
 
         LOGGER.debug("running: %s", stress_cmd)
 
@@ -246,22 +244,32 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
 
         node_cmd = 'cd /YCSB && {}'.format(node_cmd)
 
-        YcsbStressEvent('start', node=loader, stress_cmd=stress_cmd)
+        YcsbStressEvent.start(node=loader, stress_cmd=stress_cmd).publish()
 
         with YcsbStatsPublisher(loader, loader_idx, ycsb_log_filename=log_file_name):
             try:
-                result = docker.run(cmd=node_cmd,
-                                    timeout=self.timeout + self.shutdown_timeout,
-                                    log_file=log_file_name,
-                                    watchers=[FailuresWatcher(r'\sERROR|=UNEXPECTED_STATE', callback=raise_event_callback, raise_exception=False)])
-
+                result = docker.run(
+                    cmd=node_cmd,
+                    timeout=self.timeout + self.shutdown_timeout,
+                    log_file=log_file_name,
+                    watchers=[
+                        FailuresWatcher(
+                            r'\sERROR|=UNEXPECTED_STATE',
+                            callback=raise_event_callback,
+                            raise_exception=False
+                        )
+                    ]
+                )
                 return self.parse_final_output(result)
 
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 errors_str = format_stress_cmd_error(exc)
-                YcsbStressEvent(type='failure', node=str(loader), stress_cmd=self.stress_cmd,
-                                log_file_name=log_file_name, severity=Severity.CRITICAL,
-                                errors=[errors_str])
+                YcsbStressEvent.failure(
+                    node=loader,
+                    stress_cmd=self.stress_cmd,
+                    log_file_name=log_file_name,
+                    errors=[errors_str, ],
+                ).publish()
                 raise
             finally:
-                YcsbStressEvent('finish', node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name)
+                YcsbStressEvent.finish(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name).publish()

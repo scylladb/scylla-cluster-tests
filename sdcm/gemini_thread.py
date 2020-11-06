@@ -19,8 +19,8 @@ import random
 import json
 import time
 
-from sdcm.sct_events.loaders import GeminiEvent, GeminiLogEvent
 from sdcm.utils.common import FileFollowerThread
+from sdcm.sct_events.loaders import GeminiEvent, GeminiLogEvent
 
 
 LOGGER = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class GeminiEventsPublisher(FileFollowerThread):
                 time.sleep(0.5)
                 continue
             for line_number, line in enumerate(self.follow_file(self.gemini_log_filename), start=1):
-                GeminiLogEvent(verbose=self.verbose).add_info_and_publish(self.node, line, line_number)
+                GeminiLogEvent.geminievent(verbose=self.verbose).add_info(self.node, line, line_number).publish()
                 if self.stopped():
                     break
 
@@ -108,7 +108,7 @@ class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
                                      (loader_idx, uuid.uuid4()))
         gemini_cmd = self._generate_gemini_command()
 
-        GeminiEvent(type='start', cmd=gemini_cmd)
+        GeminiEvent.start(cmd=gemini_cmd).publish()
         try:
             with GeminiEventsPublisher(node=node, gemini_log_filename=log_file_name):
 
@@ -122,10 +122,10 @@ class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
             LOGGER.error(details)
             result = getattr(details, "result", NotGeminiErrorResult(details))
 
-        GeminiEvent(type='finish', cmd=gemini_cmd,
-                    result={'exit_code': result.exited,
-                            'stdout': result.stdout,
-                            'stderr': result.stderr})
+        if result.exited or result.stderr:
+            GeminiEvent.error(cmd=gemini_cmd, result=result).publish()
+        else:
+            GeminiEvent.finish(cmd=gemini_cmd, result=result).publish()
 
         return node, result, self.gemini_result_file
 
