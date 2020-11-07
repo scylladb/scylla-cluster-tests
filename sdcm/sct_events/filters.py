@@ -13,149 +13,95 @@
 
 import re
 import time
-import uuid
-from typing import Optional, Type
+from typing import Optional, Type, Union
+from functools import cached_property
 
-from sdcm.sct_events.base import SctEvent, Severity
-from sdcm.sct_events.system import SystemEvent
-
-
-class BaseFilter(SystemEvent):
-    def __init__(self):
-        super().__init__()
-        self.uuid = str(uuid.uuid4())
-        self.clear_filter = False
-        self.expire_time = None
-        self.publish()
-
-    def __eq__(self, other):
-        if not isinstance(other, type(self)):
-            return False
-        return self.uuid == other.uuid
-
-    def cancel_filter(self):
-        self.clear_filter = True
-        self.publish()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exception_type, exception_value, traceback):
-        self.cancel_filter()
-
-    def eval_filter(self, event):
-        raise NotImplementedError()
+from sdcm.sct_events import Severity
+from sdcm.sct_events.base import SctEvent, SctEventProtocol, BaseFilter, LogEventProtocol
 
 
 class DbEventsFilter(BaseFilter):
-    def __init__(self, type, line=None, node=None):  # pylint: disable=redefined-builtin
-        self.type = type
-        self.line = line
-        self.node = str(node) if node else None
-        super(DbEventsFilter, self).__init__()
+    def __init__(self,
+                 db_event: Union[LogEventProtocol, Type[LogEventProtocol]],
+                 line: Optional[str] = None,
+                 node: Optional = None):
+        super().__init__()
 
-    def cancel_filter(self):
-        if self.node:
+        self.filter_type = db_event.type
+        self.filter_line = line
+        self.filter_node = str(node) if node else None
+
+    def cancel_filter(self) -> None:
+        if self.filter_node:
             self.expire_time = time.time()
         super().cancel_filter()
 
-    def eval_filter(self, event):
-        line = getattr(event, 'line', '')
-        _type = getattr(event, 'type', '')
-        node = getattr(event, 'node', '')
-        is_name_matching = self.type and _type and self.type == _type
-        is_line_matching = self.line and line and self.line in line
-        is_node_matching = self.node and node and self.node == node
+    def eval_filter(self, event: LogEventProtocol) -> bool:
+        if not isinstance(event, LogEventProtocol):
+            return False
 
-        result = is_name_matching
-        if self.line:
-            result = result and is_line_matching
-        if self.node:
-            result = result and is_node_matching
+        result = bool(self.filter_type) and self.filter_type == event.type
+
+        if self.filter_line:
+            result &= self.filter_line in getattr(event, "line", "")
+
+        if self.filter_node:
+            result &= self.filter_node == getattr(event, "node", "")
+
         return result
 
 
 class EventsFilter(BaseFilter):
     def __init__(self,
-                 event_class: Optional[Type[SctEvent]] = None,
-                 regex: Optional[str] = None,
+                 event_class: Optional[Type[SctEventProtocol]] = None,
+                 regex: Optional[Union[str, re.Pattern]] = None,
                  extra_time_to_expiration: Optional[int] = None):
-        """
-        A filter used to stop events to being raised in `subscribe_events()` calls
 
-        :param event_class: the event class to filter
-        :param regex: a regular expression to filter (used on the output of __str__ function of the event)
-        :param extra_time_to_expiration: extra time to add for the event expriation
-
-        example of usage:
-        >>> events_filter = EventsFilter(event_class=CoreDumpEvent, regex=r'.*bash.core.*')
-        >>> CoreDumpEvent("code creating coredump")
-        >>> events_filter.cancel_filter()
-
-        example as context manager, that will last 30sec more after exiting the context:
-        >>> with EventsFilter(event_class=CoreDumpEvent, regex=r'.*bash.core.*', extra_time_to_expiration=30):
-        ...     CoreDumpEvent("code creating coredump")
-        """
-
-        assert event_class or regex, "Should call with event_class or regex, or both"
-
-        if event_class:
-            assert issubclass(event_class, SctEvent), "event_class should be a class inherits from SctEvent"
-            self.event_class = event_class.__name__
-        else:
-            self.event_class = event_class
-        self.regex = regex
-        self.extra_time_to_expiration = extra_time_to_expiration
+        assert event_class or regex, \
+            "Should call with event_class or regex, or both"
+        assert not event_class or issubclass(event_class, SctEvent), \
+            "event_class should be a class inherits from SctEvent"
 
         super().__init__()
 
-    def cancel_filter(self):
+        self.event_class = event_class and event_class.__name__ + "."  # add a sentinel for a prefix match
+        if isinstance(regex, re.Pattern):
+            self.regex = regex.pattern
+            self.regex_flags = regex.flags
+        else:
+            self.regex = regex
+            self.regex_flags = re.MULTILINE | re.DOTALL
+        self.extra_time_to_expiration = extra_time_to_expiration
+
+    @cached_property
+    def _regex(self):
+        return self.regex and re.compile(self.regex, self.regex_flags)
+
+    def cancel_filter(self) -> None:
         if self.extra_time_to_expiration:
             self.expire_time = time.time() + self.extra_time_to_expiration
         super().cancel_filter()
 
-    def eval_filter(self, event):
-        is_class_matching = self.event_class and type(event).__name__ == self.event_class
-        is_regex_matching = self.regex and re.match(self.regex, str(event), re.MULTILINE | re.DOTALL) is not None
+    def eval_filter(self, event: SctEventProtocol) -> bool:
+        result = not self.event_class or (type(event).__name__ + ".").startswith(self.event_class)
 
-        result = True
-        if self.event_class:
-            result = is_class_matching
-        if self.regex:
-            result = result and is_regex_matching
+        if self._regex:
+            result &= self._regex.match(str(event)) is not None
+
         return result
 
 
 class EventsSeverityChangerFilter(EventsFilter):
     def __init__(self,
+                 new_severity: Severity,
                  event_class: Optional[Type[SctEvent]] = None,
                  regex: Optional[str] = None,
-                 extra_time_to_expiration: Optional[int] = None,
-                 severity: Optional[Severity] = None):
-        """
-        A filter that if matches, can change the severity of the matched event
-
-        :param event_class: the event class to filter
-        :param regex: a regular expression to filter (used on the output of __str__ function of the event)
-        :param extra_time_to_expiration: extra time to add for the event expriation
-        :param severity: the new sevirity to assign to the matched events
-
-        exmaple of lower all TestFrameworkEvent to WARNING severity
-        >>> severity_filter = EventsSeverityChangerFilter(event_class=TestFrameworkEvent, severity=Severity.WARNING)
-        >>> TestFrameworkEvent(source='setup', source_method='cluster_setup', severity=Severity.ERROR)
-        >>> severity_filter.cancel_filter()
-
-        example as context manager:
-        >>> with EventsSeverityChangerFilter(event_class=TestFrameworkEvent, severity=Severity.WARNING):
-        ...     TestFrameworkEvent(source='setup', source_method='cluster_setup', severity=Severity.ERROR)
-        """
-
-        assert severity, "EventsSeverityChangerFilter can't work without severity configured"
-        self.severity = severity
+                 extra_time_to_expiration: Optional[int] = None):
         super().__init__(event_class=event_class, regex=regex, extra_time_to_expiration=extra_time_to_expiration)
 
-    def eval_filter(self, event):
-        should_change = super().eval_filter(event)
-        if should_change and self.severity:
-            event.severity = self.severity
+        self.new_severity = new_severity
+
+    def eval_filter(self, event: SctEventProtocol) -> bool:
+        if super().eval_filter(event) and self.new_severity:
+            event.severity = self.new_severity
         return False
