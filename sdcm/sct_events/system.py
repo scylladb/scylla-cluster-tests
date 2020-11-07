@@ -11,193 +11,176 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from textwrap import dedent
+from typing import Any, Optional, Sequence
 from traceback import format_stack
 
-from sdcm.sct_events.base import SctEvent, Severity
-
-
-class SystemEvent(SctEvent):
-    pass
+from sdcm.sct_events import Severity
+from sdcm.sct_events.base import SctEvent, SystemEvent
 
 
 class StartupTestEvent(SystemEvent):
-    severity = Severity.NORMAL
+    def __init__(self):
+        super().__init__(severity=Severity.NORMAL)
 
 
 class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
     __test__ = False  # Mark this class to be not collected by pytest.
 
     def __init__(self,
-                 source,
-                 source_method=None,  # pylint: disable=redefined-builtin,too-many-arguments
-                 exception=None,
-                 message=None,
-                 args=None,
-                 kwargs=None,
-                 severity=None,
-                 trace=None):
-        super().__init__()
+                 source: Any,
+                 source_method: Optional = None,
+                 args: Optional[Sequence] = None,
+                 kwargs: Optional[dict] = None,
+                 message: Optional = None,
+                 exception: Optional = None,
+                 trace: Optional = None,
+                 severity: Optional[Severity] = None):
 
-        self.severity = Severity.ERROR if severity is None else severity
+        if severity is None:
+            severity = Severity.ERROR
+        super().__init__(severity=severity)
+
         self.source = str(source) if source else None
         self.source_method = str(source_method) if source_method else None
         self.exception = str(exception) if exception else None
         self.message = str(message) if message else None
-        self.trace = ''.join(format_stack(trace)) if trace else None
+        self.trace = "".join(format_stack(trace)) if trace else None
         self.args = args
         self.kwargs = kwargs
 
-    def __str__(self):
-        message = f'message={self.message}' if self.message else ''
-        message += f'\nexception={self.exception}' if self.exception else ''
-        args = f' args={self.args}' if self.args else ''
-        kwargs = f' kwargs={self.kwargs}' if self.kwargs else ''
-        params = ','.join([args, kwargs]) if kwargs or args else ''
-        source_method = f'.{self.source_method}({params})' if self.source_method else ''
-        message += f'\nTraceback (most recent call last):\n{self.trace}' if self.trace else ''
-        return f"{super().__str__()}, source={self.source}{source_method} {message}"
+    @property
+    def msgfmt(self) -> str:
+        fmt = super().msgfmt + ", source={0.source}"
+
+        if self.source_method:
+            args = []
+            if self.args:
+                args.append("args={0.args}")
+            if self.kwargs:
+                args.append("kwargs={0.kwargs}")
+            fmt += ".{0.source_method}(" + ", ".join(args) + ")"
+
+        if self.message:
+            fmt += " message={0.message}"
+        if self.exception:
+            fmt += "\nexception={0.exception}"
+        if self.trace:
+            fmt += "\nTraceback (most recent call last):\n{0.trace}"
+
+        return fmt
 
 
 class SpotTerminationEvent(SctEvent):
-    severity = Severity.CRITICAL
-
-    def __init__(self, node, message):
-        super().__init__()
+    def __init__(self, node: Any, message: str):
+        super().__init__(severity=Severity.CRITICAL)
 
         self.node = str(node)
         self.message = message
-        self.publish()
 
-    def __str__(self):
-        return f"{super().__str__()}: node={self.node} message={self.message}"
+    @property
+    def msgfmt(self) -> str:
+        return super().msgfmt + ": node={0.node} message={0.message}"
 
 
 class InfoEvent(SctEvent):
-    severity = Severity.NORMAL
-
-    def __init__(self, message):
-        super().__init__()
+    def __init__(self, message: str):
+        super().__init__(severity=Severity.NORMAL)
 
         self.message = message
-        self.publish()
 
-    def __str__(self):
-        return f"{super().__str__()}: message={self.message}"
+    @property
+    def msgfmt(self) -> str:
+        return super().msgfmt + ": message={0.message}"
 
 
 class ThreadFailedEvent(SctEvent):
-    severity = Severity.ERROR
-
-    def __init__(self, message, traceback):
-        super().__init__()
+    def __init__(self, message: str, traceback: Any):
+        super().__init__(severity=Severity.ERROR)
 
         self.message = message
         self.traceback = str(traceback)
-        self.publish_or_dump()
 
-    def __str__(self):
-        return f"{super().__str__()}: message={self.message}\n{self.traceback}"
+    @property
+    def msgfmt(self) -> str:
+        return super().msgfmt + ": message={0.message}\n{0.traceback}"
 
 
 class CoreDumpEvent(SctEvent):
-    severity = Severity.ERROR
-
     def __init__(self,
-                 corefile_url,
-                 download_instructions,
-                 backtrace,
-                 node,
-                 timestamp=None):
-        super().__init__()
+                 node: Any,
+                 corefile_url: str,
+                 backtrace: str,
+                 download_instructions: str,
+                 timestamp: Optional[float] = None):
 
-        self.corefile_url = corefile_url
-        self.download_instructions = download_instructions
-        self.backtrace = backtrace
+        super().__init__(severity=Severity.ERROR)
+
         self.node = str(node)
+        self.corefile_url = corefile_url
+        self.backtrace = backtrace
+        self.download_instructions = download_instructions
+
         if timestamp is not None:
             self.timestamp = timestamp
-        self.publish()
 
-    def __str__(self):
-        output = super().__str__()
-        for attr_name in ['node', 'corefile_url', 'backtrace', 'download_instructions']:
-            attr_value = getattr(self, attr_name, None)
-            if attr_value:
-                output += f"{attr_name}={attr_value}\n"
-        return output
+    @property
+    def msgfmt(self) -> str:
+        fmt = super().msgfmt + " "
+
+        if self.node:
+            fmt += "node={0.node}\n"
+        if self.corefile_url:
+            fmt += "corefile_url={0.corefile_url}\n"
+        if self.backtrace:
+            fmt += "backtrace={0.backtrace}\n"
+        if self.download_instructions:
+            fmt += "download_instructions={0.download_instructions}\n"
+
+        return fmt
 
 
 class TestResultEvent(SctEvent, Exception):
     """An event that is published and raised at the end of the test.
+
     It holds and displays all errors of the tests and framework happened.
     """
     __test__ = False  # Mark this class to be not collected by pytest.
-    _head = f'{"=" * 30} TEST RESULTS {"=" * 35}'
-    _ending = "=" * 80
 
-    def __init__(self, test_status: str, events: dict):
-        super().__init__()
+    _marker_width = 80
+    _head = f"{' TEST RESULTS ':=^{_marker_width}}"
+    _ending = "=" * _marker_width
+
+    def __init__(self, test_status: str, events: dict, timestamp: Optional[float] = None):
+        self._ok = test_status == "SUCCESS"
+        super().__init__(severity=Severity.NORMAL if self._ok else Severity.ERROR)
 
         self.test_status = test_status
         self.events = events
-        self.ok = test_status == 'SUCCESS'
-        self.severity = Severity.NORMAL if self.ok else Severity.ERROR
 
-    def __str__(self):
-        if self.ok:
-            return dedent(f"""
-            {self._head}
-            {self._ending}
-            SUCCESS :)
-            """)
-        result = f'\n{self._head}\n'
+        # Need to restore the timestamp on unpickling.  See `__reduce__()' also.
+        if timestamp is not None:
+            self.timestamp = timestamp
+
+        # We don't publish this event.  Suppress warning about unpublished event on exit.
+        self._ready_to_publish = False
+
+    @property
+    def events_formatted(self) -> str:
+        result = []
         for event_group, events in self.events.items():
             if not events:
                 continue
-            result += f'\n{"-" * 5} LAST {event_group} EVENT {"-" * (62 - len(event_group)) }\n'
-            result += '\n'.join(events)
-        result += f'{self._ending}\n{self.test_status} :('
-        return result
+            result.append(f"""{f'{"":-<5} LAST {event_group} EVENT ':-<{self._marker_width-2}}""")
+            result.extend(events)
+        return "\n".join(result)
 
-    def __eq__(self, other: 'TestResultEvent'):
-        """Needed to be able to find this event in publish_event_guaranteed cycle
-        """
-        return isinstance(other, type(self)) and self.test_status == other.test_status and \
-            self.events == other.events
+    @property
+    def msgfmt(self) -> str:
+        if self._ok:
+            return "{0._head}\n{0._ending}\nSUCCESS :)\n"
+        return "{0._head}\n\n{0.events_formatted}\n{0._ending}\n{0.test_status} :(\n"
 
+    def __reduce__(self):
+        """Need to define it for pickling because of Exception class in MRO."""
 
-class DisruptionEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
-    def __init__(self,
-                 type,
-                 subtype,
-                 status,
-                 start=None,
-                 end=None,
-                 duration=None,
-                 node=None,
-                 error=None,
-                 full_traceback=None,
-                 **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
-        super().__init__()
-
-        self.type = type
-        self.subtype = subtype
-        self.start = start
-        self.end = end
-        self.duration = duration
-        self.node = str(node)
-        self.severity = Severity.NORMAL if status else Severity.ERROR
-        self.error = None
-        self.full_traceback = ''
-        if error:
-            self.error = error
-            self.full_traceback = str(full_traceback)
-        self.__dict__.update(kwargs)
-        self.publish()
-
-    def __str__(self):
-        if self.severity == Severity.ERROR:
-            return "{0}: type={1.type} subtype={1.subtype} node={1.node} duration={1.duration} error={1.error}\n{1.full_traceback}".format(
-                super().__str__(), self)
-        return "{0}: type={1.type} subtype={1.subtype} node={1.node} duration={1.duration}".format(super().__str__(), self)
+        return type(self), (self.test_status, self.events, self.timestamp)
