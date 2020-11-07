@@ -20,7 +20,7 @@ from unittest.mock import patch
 
 from sdcm.sct_events import Severity, SctEventProtocol
 from sdcm.sct_events.base import \
-    SctEvent, SctEventTypesRegistry, LogEvent, LogEventProtocol, ValidatorEvent, SeverityLevelProtocol
+    SctEvent, SctEventTypesRegistry, BaseFilter, LogEvent, LogEventProtocol, ValidatorEvent, SeverityLevelProtocol
 
 
 Y = None  # define a global name for pickle.
@@ -370,6 +370,70 @@ class TestSctEvent(SctEventTestCase):
         yt_pickled = pickle.dumps(yt)
 
         self.assertEqual(yt, pickle.loads(yt_pickled))
+
+
+class TestBaseFilter(SctEventTestCase):
+    def test_create_instance(self):
+        self.assertRaisesRegex(TypeError, "may not be instantiated directly", BaseFilter)
+
+        class Y(BaseFilter):
+            pass
+
+        y = Y()
+        self.assertIsNotNone(y.uuid)
+        self.assertFalse(y.clear_filter)
+        self.assertIsNone(y.expire_time)
+
+    def test_cancel(self):
+        class Y(BaseFilter):
+            pass
+
+        with patch("sdcm.sct_events.base.SctEvent.publish") as mock:
+            y = Y()
+            mock.assert_not_called()
+            y.cancel_filter()
+            mock.assert_called_once()
+        self.assertTrue(y.clear_filter)
+
+    def test_context_manager(self):
+        class Y(BaseFilter):
+            pass
+
+        with patch("sdcm.sct_events.base.SctEvent.publish") as mock:
+            with Y() as y:
+                mock.assert_called_once()
+                self.assertFalse(y.clear_filter)
+            self.assertEqual(mock.call_count, 2)
+            self.assertTrue(y.clear_filter)
+
+    def test_eq(self):
+        class Y(BaseFilter):
+            pass
+
+        class Z(Y):
+            pass
+
+        y1 = Y()
+        y2 = Y()
+        z = Z()
+        z.uuid = y2.uuid = y1.uuid
+        self.assertEqual(y1, y2)
+        self.assertEqual(y2, y1)
+        self.assertEqual(y1, z)
+        self.assertEqual(z, y1)
+
+    def test_not_eq(self):
+        class Y(BaseFilter):
+            pass
+
+        class Z(BaseFilter):
+            pass
+
+        y = Y()
+        z = Z()
+        z.uuid = y.uuid
+        self.assertNotEqual(y, z)
+        self.assertNotEqual(z, y)
 
 
 class TestLogEvent(SctEventTestCase):

@@ -13,7 +13,8 @@
 
 from contextlib import contextmanager, ExitStack
 
-from sdcm.sct_events.base import Severity
+from sdcm.sct_events import Severity
+from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter, EventsFilter
 from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.sct_events.database import DatabaseLogEvent
@@ -24,17 +25,29 @@ from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
 def ignore_alternator_client_errors():
     with ExitStack() as stack:
         stack.enter_context(EventsSeverityChangerFilter(
-            event_class=PrometheusAlertManagerEvent, regex=".*YCSBTooManyErrors.*", severity=Severity.WARNING,
-            extra_time_to_expiration=60))
+            new_severity=Severity.WARNING,
+            event_class=PrometheusAlertManagerEvent,
+            regex=".*YCSBTooManyErrors.*",
+            extra_time_to_expiration=60,
+        ))
         stack.enter_context(EventsSeverityChangerFilter(
-            event_class=PrometheusAlertManagerEvent, regex=".*YCSBTooManyVerifyErrors.*", severity=Severity.WARNING,
-            extra_time_to_expiration=60))
+            new_severity=Severity.WARNING,
+            event_class=PrometheusAlertManagerEvent,
+            regex=".*YCSBTooManyVerifyErrors.*",
+            extra_time_to_expiration=60,
+        ))
         stack.enter_context(EventsSeverityChangerFilter(
-            event_class=YcsbStressEvent, regex=r".*Cannot achieve consistency level.*", severity=Severity.WARNING,
-            extra_time_to_expiration=30))
+            new_severity=Severity.WARNING,
+            event_class=YcsbStressEvent,
+            regex=r".*Cannot achieve consistency level.*",
+            extra_time_to_expiration=30,
+        ))
         stack.enter_context(EventsSeverityChangerFilter(
-            event_class=YcsbStressEvent, regex=r".*Operation timed out.*", severity=Severity.WARNING,
-            extra_time_to_expiration=30))
+            new_severity=Severity.WARNING,
+            event_class=YcsbStressEvent,
+            regex=r".*Operation timed out.*",
+            extra_time_to_expiration=30,
+        ))
         yield
 
 
@@ -42,30 +55,88 @@ def ignore_alternator_client_errors():
 def ignore_operation_errors():
     with ExitStack() as stack:
         stack.enter_context(EventsSeverityChangerFilter(
-            event_class=DatabaseLogEvent, regex=r".*Operation timed out.*", severity=Severity.WARNING,
-            extra_time_to_expiration=30))
+            new_severity=Severity.WARNING,
+            event_class=LogEvent,
+            regex=r".*Operation timed out.*",
+            extra_time_to_expiration=30,
+        ))
         stack.enter_context(EventsSeverityChangerFilter(
-            event_class=DatabaseLogEvent, regex=r'.*Operation failed for system.paxos.*', severity=Severity.WARNING,
-            extra_time_to_expiration=30))
+            new_severity=Severity.WARNING,
+            event_class=LogEvent,
+            regex=r".*Operation failed for system.paxos.*",
+            extra_time_to_expiration=30,
+        ))
         yield
 
 
 @contextmanager
 def ignore_upgrade_schema_errors():
     with ExitStack() as stack:
-        stack.enter_context(DbEventsFilter(type='DATABASE_ERROR', line='Failed to load schema'))
-        stack.enter_context(DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'))
-        stack.enter_context(DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'))
-        stack.enter_context(DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.DATABASE_ERROR,
+            line="Failed to load schema",
+        ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.SCHEMA_FAILURE,
+            line="Failed to load schema",
+        ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.DATABASE_ERROR,
+            line="Failed to pull schema",
+        ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.RUNTIME_ERROR,
+            line="Failed to load schema",
+        ))
         yield
 
 
 @contextmanager
 def ignore_no_space_errors(node):
-    with DbEventsFilter(type='NO_SPACE_ERROR', node=node), \
-            DbEventsFilter(type='BACKTRACE', line='No space left on device', node=node), \
-            DbEventsFilter(type='DATABASE_ERROR', line='No space left on device', node=node), \
-            DbEventsFilter(type='FILESYSTEM_ERROR', line='No space left on device', node=node):
+    with ExitStack() as stack:
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.NO_SPACE_ERROR,
+            node=node,
+        ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.BACKTRACE,
+            line="No space left on device",
+            node=node,
+        ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.DATABASE_ERROR,
+            line="No space left on device",
+            node=node,
+        ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.FILESYSTEM_ERROR,
+            line="No space left on device",
+            node=node,
+        ))
+        yield
+
+
+@contextmanager
+def ignore_mutation_write_errors():
+    with ExitStack() as stack:
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=LogEvent,
+            regex=r".*mutation_write_*",
+            extra_time_to_expiration=30
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=LogEvent,
+            regex=r".*Operation timed out for system.paxos.*",
+            extra_time_to_expiration=30,
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=LogEvent,
+            regex=r".*Operation failed for system.paxos.*",
+            extra_time_to_expiration=30,
+        ))
         yield
 
 
