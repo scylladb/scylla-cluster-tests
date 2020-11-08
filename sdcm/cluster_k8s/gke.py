@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
+import shlex
 import logging
 from typing import Callable, List
 from functools import cached_property
@@ -91,7 +92,8 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
     def setup_gke_cluster(self, num_nodes: int) -> None:
         LOGGER.info("Create GKE cluster `%s' with %d node(s) in default-pool and 1 node in operator-pool",
                     self.name, num_nodes)
-        tags = ",".join(f"{key}={value}" for key, value in self.tags.items())
+        metadata = ",".join(f"{key}={value}" for key, value in self.tags.items())
+        metadata += f",k8s-user-startup-script={shlex.quote(cluster.Setup.get_startup_script())}"
         self.gcloud(f"container --project {self.gce_project} clusters create {self.name}"
                     f" --zone {self.gce_zone}"
                     f" --cluster-version {self.gke_cluster_version}"
@@ -107,7 +109,7 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
                     f" --enable-stackdriver-kubernetes"
                     f" --no-enable-autoupgrade"
                     f" --no-enable-autorepair"
-                    f" --metadata {tags}")
+                    f" --metadata {metadata}")
         self.gcloud(f"container --project {self.gce_project} node-pools create operator-pool"
                     f" --zone {self.gce_zone}"
                     f" --cluster {self.name}"
