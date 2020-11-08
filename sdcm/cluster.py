@@ -4194,7 +4194,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         self.log.debug("Using %s ScyllaDB version to derive monitoring version" %
                        self.scylla_version)
         version = re.match(r"(\d+\.\d+)", self.scylla_version)
-        if not version:
+        if not version or 'dev' in self.scylla_version:
             return 'master'
         else:
             return version.group(1)
@@ -4281,7 +4281,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
 
     def set_local_sct_ip(self):
 
-        ngrok_name = self.params.get('sct_ngrok_name', default=None)
+        ngrok_name = self.params.get('sct_ngrok_name')
         if ngrok_name:
             return self.configure_ngrok()
 
