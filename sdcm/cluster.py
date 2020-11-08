@@ -4695,7 +4695,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             self.start_node_exporter(node)
 
     def get_grafana_annotations(self, node):
-        annotations_url = "http://{node_ip}:{grafana_port}/api/annotations"
+        annotations_url = "http://{node_ip}:{grafana_port}/api/annotations?limit=10000"
         try:
             res = requests.get(url=annotations_url.format(node_ip=normalize_ipv6_url(node.grafana_address),
                                                           grafana_port=self.grafana_port))
