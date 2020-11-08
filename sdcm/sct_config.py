@@ -1500,7 +1500,7 @@ class SCTConfiguration(dict):
 
             default = self.get_default_value(opt['name'])
             default_text = default if default else 'N/A'
-            ret += """| **<a name="{name}">{name}</a>**  | {help_text} | {default_text} | {env}\n""".format(
+            ret += """| **<a href="#user-content-{name}" name="{name}">{name}</a>**  | {help_text} | {default_text} | {env}\n""".format(
                 help_text=help_text, default_text=default_text, **opt)
 
         return ret
