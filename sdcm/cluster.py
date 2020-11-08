@@ -25,6 +25,7 @@ import time
 import traceback
 import uuid
 import itertools
+import json
 
 from collections import defaultdict
 from typing import List, Optional, Dict, Union
@@ -1331,6 +1332,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if start_search_from_byte:
                 db_file.seek(start_search_from_byte)
             for index, line in enumerate(db_file, start=last_line_no):
+                json_log = None
+                if line[0] == '{':
+                    try:
+                        json_log = json.loads(line)
+                    except Exception:
+                        pass
                 if not start_from_beginning and Setup.RSYSLOG_ADDRESS:
                     line = line.strip()
                     if not exclude_from_logging:
@@ -1343,6 +1350,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                                 break
                         if not exclude:
                             LOGGER.debug(line)
+                if json_log:
+                    continue
                 match = backtrace_regex.search(line)
                 one_line_backtrace = []
                 if match and backtraces:
