@@ -13,7 +13,7 @@ from weakref import proxy as weakproxy
 
 from invoke import Result
 
-from sdcm.cluster import BaseNode
+from sdcm.cluster import BaseNode, BaseCluster, BaseMonitorSet
 from sdcm.sct_events import start_events_device, stop_events_device
 from sdcm.sct_events import EVENTS_PROCESSES
 from sdcm.utils.distro import Distro
@@ -55,6 +55,11 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
 
     def wait_ssh_up(self, verbose=True, timeout=500):
         pass
+
+
+class DummyDbCluster(BaseCluster):
+    def __init__(self, nodes):
+        self.nodes = nodes
 
 
 logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
@@ -199,6 +204,14 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
         self.assertEqual(self.node.get_scylla_version(), "666.development")
         self.assertEqual(self.node.scylla_version, "666.development")
 
+    def test_scylla_master_new_format(self):
+        self.node.remoter = VersionDummyRemote(self, (
+            ("scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
+            ("readelf -n /usr/bin/scylla", (0, "Build ID: xxx", "")),
+        ))
+        self.assertEqual(self.node.get_scylla_version(), "4.4.dev")
+        self.assertEqual(self.node.scylla_version, "4.4.dev")
+
     def test_scylla_enterprise(self):
         self.node.is_enterprise = True
         self.node.remoter = VersionDummyRemote(self, (
@@ -216,3 +229,32 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
         ))
         self.assertEqual(self.node.get_scylla_version(), "2019.1.4")
         self.assertEqual(self.node.scylla_version, "2019.1.4")
+
+
+class TestBaseMonitorSet(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.temp_dir = tempfile.mkdtemp()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.temp_dir)
+
+    def setUp(self):
+        self.node = DummyNode(name='test_node',
+                              parent_cluster=None,
+                              base_logdir=self.temp_dir,
+                              ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
+        self.db_cluster = DummyDbCluster([self.node])
+        self.monitor_cluster = BaseMonitorSet({"db_cluster": self.db_cluster}, {})
+        self.monitor_cluster.log = logging
+
+    def test_monitoring_version(self):
+        """
+        verify that dev version are mapped to monitor master version
+        """
+        self.node.remoter = VersionDummyRemote(self, (
+            ("scylla --version", (0, "4.4.dev-0.20200205.2816404f575\n", "")),
+            ("readelf -n /usr/bin/scylla", (0, "Build ID: xxx", "")),
+        ))
+        self.assertEqual(self.monitor_cluster.monitoring_version, "master")
