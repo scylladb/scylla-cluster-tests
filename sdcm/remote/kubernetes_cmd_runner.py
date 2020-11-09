@@ -33,7 +33,7 @@ class KubernetesRunner(Runner):
         super().__init__(context)
 
         self.process = None
-        self._k8s_core_v1_api = KubernetesOps.core_v1_api(context.config)
+        self._k8s_core_v1_api = KubernetesOps.core_v1_api(context.k8s_kluster)
         self._ws_lock = threading.RLock()
 
     def should_use_pty(self, pty: bool, fallback: bool) -> bool:
@@ -103,29 +103,20 @@ class KubernetesRunner(Runner):
 class KubernetesCmdRunner(RemoteCmdRunnerBase):
     exception_retryable = (ConnectionError, )
 
-    def __init__(self, pod: str, container: Optional[str] = None, namespace: str = "default",
-                 k8s_server_url: Optional[str] = None,
-                 k8s_configuration: Optional[k8s.client.Configuration] = None) -> None:
+    def __init__(self, kluster, pod: str, container: Optional[str] = None, namespace: str = "default") -> None:
+        self.kluster = kluster
         self.pod = pod
         self.container = container
         self.namespace = namespace
-        if k8s_configuration is None:
-            self.k8s_server_url = k8s_server_url
-            k8s_configuration = KubernetesOps.create_k8s_configuration(self)
-        else:
-            if k8s_server_url is not None:
-                self.log.warning("`k8s_configuration' is not None, `k8s_server_url' parameter ignored")
-            self.k8s_server_url = k8s_configuration.host
-        self.k8s_configuration = k8s_configuration
 
         super().__init__(hostname=f"{pod}/{container}")
 
     def get_init_arguments(self) -> dict:
         return {
+            "kluster": self.kluster,
             "pod": self.pod,
             "container": self.container,
             "namespace": self.namespace,
-            "k8s_configuration": self.k8s_configuration,
         }
 
     @property
@@ -136,10 +127,10 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
         return True
 
     def _create_connection(self):
-        return KubernetesRunner(Context(Config(overrides={"k8s_pod": self.pod,
+        return KubernetesRunner(Context(Config(overrides={"k8s_kluster": self.kluster,
+                                                          "k8s_pod": self.pod,
                                                           "k8s_container": self.container,
-                                                          "k8s_namespace": self.namespace,
-                                                          "k8s_configuration": self.k8s_configuration, })))
+                                                          "k8s_namespace": self.namespace, })))
 
     # pylint: disable=too-many-arguments
     def _run_execute(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments

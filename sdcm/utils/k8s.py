@@ -14,9 +14,12 @@
 # pylint: disable=too-many-arguments
 
 import os
+import time
+import queue
 import logging
+import threading
 from typing import Optional
-from functools import cached_property
+from functools import cached_property, wraps
 
 import kubernetes as k8s
 
@@ -39,6 +42,65 @@ LOGGER = logging.getLogger(__name__)
 logging.getLogger("kubernetes.client.rest").setLevel(logging.INFO)
 
 
+class NoRateLimit:
+    def wait(self, message, *args, **kwargs) -> None:
+        pass
+
+    def stop(self) -> None:
+        pass
+
+    def start(self) -> None:
+        pass
+
+    def wrap_api_client(self, client):
+        return client
+
+
+class ApiCallRateLimiter(threading.Thread, NoRateLimit):
+    """Simple and not very accurate rate limiter.
+
+    Allow 1 call each `1 / rate_limit' seconds interval.
+    If some call not able to start after `queue_size / rate_limit' seconds then raise `queue.Full' for caller.
+    """
+
+    def __init__(self, rate_limit: int, queue_size: int):
+        super().__init__(name=type(self).__name__, daemon=True)
+        self._lock = threading.Lock()
+        self.rate_limit = rate_limit  # ops/s
+        self.queue_size = queue_size
+        self.running = threading.Event()
+
+    def wait(self, message, *args, **kwargs):
+        if not self._lock.acquire(timeout=self.queue_size / self.rate_limit):  # deepcode ignore E1123: deepcode error
+            LOGGER.error("k8s API call rate limiter queue size limit has been reached")
+            raise queue.Full
+
+    def stop(self):
+        self.running.clear()
+        self.join()
+
+    def run(self) -> None:
+        LOGGER.info("k8s API call rate limiter started: rate_limit=%s, queue_size=%s",
+                    self.rate_limit, self.queue_size)
+        self.running.set()
+        while self.running.is_set():
+            if self._lock.locked():
+                self._lock.release()
+            time.sleep(1 / self.rate_limit)
+
+    def wrap_api_client(self, client):
+        orig_call_api = client._ApiClient__call_api  # deepcode ignore W0212: monkey patching in here
+
+        @wraps(orig_call_api)
+        def call_api(*args, **kwargs):
+            self.wait("k8s API call: args=%s, kwargs=%s", args, kwargs)
+            return orig_call_api(*args, **kwargs)
+
+        client._ApiClient__call_api = call_api  # deepcode ignore W0212: monkey patching in here
+        LOGGER.debug("k8s ApiClient %s patched to be rate limited", client)
+        return client
+
+
 class KubernetesOps:
     @staticmethod
     def create_k8s_configuration(kluster):
@@ -52,7 +114,7 @@ class KubernetesOps:
     @classmethod
     def api_client(cls, kluster):
         conf = getattr(kluster, "k8s_configuration", None) or cls.create_k8s_configuration(kluster)
-        return k8s.client.ApiClient(conf)
+        return kluster.api_call_rate_limiter.wrap_api_client(k8s.client.ApiClient(conf))
 
     @classmethod
     def dynamic_client(cls, kluster):
@@ -93,6 +155,7 @@ class KubernetesOps:
         cmd = cls.kubectl_cmd(kluster, *command, namespace=namespace, ignore_k8s_server_url=bool(remoter))
         if remoter is None:
             remoter = LOCALRUNNER
+        kluster.api_call_rate_limiter.wait(cmd)
         return remoter.run(cmd, timeout=timeout)
 
     @classmethod
@@ -140,15 +203,15 @@ class HelmContainerMixin:
     def _helm_container(self) -> Container:
         return ContainerManager.run_container(self, "helm")
 
-    def helm(self, *command: str, namespace: Optional[str] = None, k8s_server_url: Optional[str] = None) -> str:
+    def helm(self, kluster, *command: str, namespace: Optional[str] = None) -> str:
         cmd = ["helm", ]
-        if k8s_server_url:
-            cmd.extend(("--kube-apiserver", k8s_server_url, ))
+        if kluster.k8s_server_url:
+            cmd.extend(("--kube-apiserver", kluster.k8s_server_url, ))
         if namespace:
             cmd.extend(("--namespace", namespace, ))
         cmd.extend(command)
         cmd = " ".join(cmd)
-
+        kluster.api_call_rate_limiter.wait(cmd)
         LOGGER.debug("Execute `%s'", cmd)
         res = self._helm_container.exec_run(["sh", "-c", cmd])
         if res.exit_code:

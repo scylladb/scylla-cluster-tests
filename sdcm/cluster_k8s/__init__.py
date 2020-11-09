@@ -24,7 +24,7 @@ from copy import deepcopy
 from typing import Optional, Union, List, Dict, Any, ContextManager, Type
 from difflib import unified_diff
 from tempfile import NamedTemporaryFile
-from functools import cached_property, partialmethod
+from functools import cached_property, partialmethod, partial
 from threading import RLock
 
 import yaml
@@ -35,7 +35,7 @@ from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.coredump import CoredumpExportFileThread
 from sdcm.sct_config import sct_abs_path
 from sdcm.sct_events import TestFrameworkEvent
-from sdcm.utils.k8s import KubernetesOps, JSON_PATCH_TYPE
+from sdcm.utils.k8s import KubernetesOps, NoRateLimit, JSON_PATCH_TYPE
 from sdcm.utils.decorators import log_run_info, timeout
 from sdcm.utils.remote_logger import get_system_logging_thread, \
     CertManagerLogger, ScyllaOperatorLogger, KubectlClusterEventsLogger
@@ -56,7 +56,9 @@ LOADER_POD_TERMINATE_TIMEOUT = 30  # minutes
 LOGGER = logging.getLogger(__name__)
 
 
-class KubernetesCluster:  # pylint: disable=too-few-public-methods
+class KubernetesCluster:
+    api_call_rate_limiter = NoRateLimit
+
     datacenter = ()
     _cert_manager_journal_thread: Optional[CertManagerLogger] = None
     _scylla_operator_journal_thread: Optional[ScyllaOperatorLogger] = None
@@ -75,7 +77,7 @@ class KubernetesCluster:  # pylint: disable=too-few-public-methods
 
     @cached_property
     def helm(self):
-        return cluster.Setup.tester_obj().localhost.helm
+        return partial(cluster.Setup.tester_obj().localhost.helm, self)
 
     @property
     def cert_manager_log(self) -> str:
@@ -92,7 +94,7 @@ class KubernetesCluster:  # pylint: disable=too-few-public-methods
         LOGGER.debug(self.helm("repo add jetstack https://charts.jetstack.io"))
         LOGGER.debug(self.helm(f"install cert-manager jetstack/cert-manager "
                                f"--version v{self.params.get('k8s_cert_manager_version')} --set installCRDs=true",
-                               namespace="cert-manager", k8s_server_url=self.k8s_server_url))
+                               namespace="cert-manager"))
         time.sleep(10)
         self.kubectl("wait --timeout=5m --all --for=condition=Ready pod", namespace="cert-manager")
         self.start_cert_manager_journal_thread()
@@ -194,10 +196,10 @@ class BasePodContainer(cluster.BaseNode):
                 "NodeIndex": str(self.node_index), }
 
     def _init_remoter(self, ssh_login_info):
-        self.remoter = KubernetesCmdRunner(pod=self.name,
+        self.remoter = KubernetesCmdRunner(kluster=self.parent_cluster.k8s_cluster,
+                                           pod=self.name,
                                            container=self.parent_cluster.container,
-                                           namespace=self.parent_cluster.namespace,
-                                           k8s_server_url=self.parent_cluster.k8s_cluster.k8s_server_url)
+                                           namespace=self.parent_cluster.namespace)
 
     def _init_port_mapping(self):
         pass

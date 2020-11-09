@@ -19,10 +19,14 @@ from functools import cached_property
 import yaml
 
 from sdcm import cluster
+from sdcm.utils.k8s import ApiCallRateLimiter
 from sdcm.sct_config import sct_abs_path
 from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BasePodContainer
 from sdcm.cluster_k8s.iptables import IptablesPodIpRedirectMixin, IptablesClusterOpsMixin
 
+
+GKE_API_CALL_RATE_LIMIT = 0.8  # ops/s
+GKE_API_CALL_QUEUE_SIZE = 1000  # ops
 
 SCYLLA_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/cluster-gke.yaml")
 LOADER_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/gke-loaders.yaml")
@@ -62,6 +66,11 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
         self.gce_user = services[0].key
         self.gce_zone = gce_datacenter[0]
         self.gke_cluster_created = False
+
+        self.api_call_rate_limiter = ApiCallRateLimiter(
+            rate_limit=GKE_API_CALL_RATE_LIMIT,
+            queue_size=GKE_API_CALL_QUEUE_SIZE)
+        self.api_call_rate_limiter.start()
 
         super().__init__(cluster_prefix=cluster_prefix,
                          node_prefix=node_prefix,
@@ -179,7 +188,7 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
         self.kubectl("wait --timeout=15m --all --for=condition=Ready pod", timeout=15*60+10)
 
     def destroy(self):
-        pass
+        self.api_call_rate_limiter.stop()
 
 
 class GkeScyllaPodContainer(BasePodContainer, IptablesPodIpRedirectMixin):
