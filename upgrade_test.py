@@ -714,7 +714,7 @@ class UpgradeTest(FillDatabaseData):
                 self.log.info(f'Rollback Node {node} begin')
                 self.rollback_node(node, upgrade_sstables=upgrade_sstables)
                 self.log.info(f'Rollback Node {node} ended')
-                self.db_cluster.node.check_node_health()
+                node.check_node_health()
 
         # Upgrade all nodes
         for i in range(nodes_num):
