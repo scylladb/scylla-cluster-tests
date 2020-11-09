@@ -25,9 +25,16 @@ from sdcm.remote import RemoteLibSSH2CmdRunner, RemoteCmdRunner, LocalCmdRunner,
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.remote.base import CommandRunner, Result
 from sdcm.remote.remote_file import remote_file
-
+from sdcm.utils.k8s import NoRateLimit
 
 ALL_COMMANDS_WITH_ALL_OPTIONS = []
+
+
+class FakeKluster:
+    api_call_rate_limiter = NoRateLimit()
+
+    def __init__(self, k8s_server_url):
+        self.k8s_server_url = k8s_server_url
 
 
 for ip in ['::1', '127.0.0.1']:
@@ -63,8 +70,9 @@ class TestRemoteCmdRunners(unittest.TestCase):
         if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
             remoter = remoter_type(hostname='127.0.0.1', user=getpass.getuser(), key_file=key_file)
         else:
-            remoter = KubernetesCmdRunner(pod='sct-cluster-gce-minikube-0', container="scylla", namespace="scylla",
-                                          k8s_server_url='http://127.0.0.1:8001')
+            remoter = KubernetesCmdRunner(
+                FakeKluster('http://127.0.0.1:8001'),
+                pod='sct-cluster-gce-minikube-0', container="scylla", namespace="scylla")
         try:
             result = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
@@ -82,8 +90,9 @@ class TestRemoteCmdRunners(unittest.TestCase):
         if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
             remoter = remoter_type(hostname=host, user=getpass.getuser(), key_file=key_file)
         else:
-            remoter = KubernetesCmdRunner(pod='sct-cluster-gce-minikube-0', container="scylla", namespace="scylla",
-                                          k8s_server_url='http://127.0.0.1:8001')
+            remoter = KubernetesCmdRunner(
+                FakeKluster('http://127.0.0.1:8001'),
+                pod='sct-cluster-gce-minikube-0', container="scylla", namespace="scylla")
         try:
             result = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
@@ -164,8 +173,8 @@ class TestRemoteCmdRunners(unittest.TestCase):
         for future in threads:
             future.join()
 
-    # @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
-    @unittest.skip('To be ran manually')
+    @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
+    # @unittest.skip('To be ran manually')
     def test_run_in_mainthread(  # pylint: disable=too-many-arguments
             self, remoter_type, host: str, stmt: str, verbose: bool, ignore_status: bool, new_session: bool, retry: int,
             timeout: Union[float, None]):
@@ -183,8 +192,9 @@ class TestRemoteCmdRunners(unittest.TestCase):
         if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
             remoter = remoter_type(hostname=host, user=getpass.getuser(), key_file=self.key_file)
         else:
-            remoter = KubernetesCmdRunner(pod='sct-cluster-gce-minikube-0', container="scylla", namespace="scylla",
-                                          k8s_server_url='http://127.0.0.1:8001')
+            remoter = KubernetesCmdRunner(
+                FakeKluster('http://127.0.0.1:8001'),
+                pod='sct-cluster-gce-minikube-0', container="scylla", namespace="scylla")
         try:
             result = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
@@ -248,8 +258,10 @@ class TestRemoteCmdRunners(unittest.TestCase):
         if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
             remoter = remoter_type(hostname=host, user=getpass.getuser(), key_file=self.key_file)
         else:
-            remoter = KubernetesCmdRunner(pod='sct-cluster-gce-minikube-0', container="scylla", namespace="scylla",
-                                          k8s_server_url='http://127.0.0.1:8001')
+            remoter = KubernetesCmdRunner(
+                FakeKluster('http://127.0.0.1:8001'),
+                pod='sct-cluster-gce-minikube-0', container="scylla", namespace="scylla")
+
         libssh2_thread_results = []
 
         self._run_parallel(
