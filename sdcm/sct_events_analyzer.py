@@ -27,8 +27,8 @@ class EventsAnalyzer(threading.Thread):
                 if event_class == 'TestResultEvent':
                     # don't send kill test cause of those event, test is already done when those are sent out
                     continue
-
-                if event_class in ['CassandraStressEvent', 'ScyllaBenchEvent', 'YcsbStressEvent', 'NdbenchStressEvent'] \
+                # TODO: add support for `stop_test_on_failure` for those too
+                if event_class in ['YcsbStressEvent', 'NdbenchStressEvent'] \
                         and message_data.type == 'failure':
                     raise TestFailure(f"Stress Command failed: {message_data}")
 
