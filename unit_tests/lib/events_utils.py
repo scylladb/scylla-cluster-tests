@@ -37,7 +37,8 @@ class EventsUtilsMixin:
         cls.events_processes_registry = EventsProcessesRegistry(log_dir=cls.temp_dir)
         if registry_patcher:
             cls.events_processes_registry_patcher = \
-                unittest.mock.patch("sdcm.sct_events.base.SctEvent._registry", cls.events_processes_registry)
+                unittest.mock.patch("sdcm.sct_events.base.SctEvent._events_processes_registry",
+                                    cls.events_processes_registry)
             cls.events_processes_registry_patcher.start()
         if events_device:
             start_events_device(_registry=cls.events_processes_registry)

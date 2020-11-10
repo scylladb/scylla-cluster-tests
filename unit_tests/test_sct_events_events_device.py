@@ -18,7 +18,7 @@ import unittest
 import threading
 import multiprocessing
 
-from sdcm.sct_events.base import SctEvent
+from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.events_device import EventsDevice, start_events_main_device, get_events_main_device
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
 
@@ -44,8 +44,8 @@ class TestEventsDevice(unittest.TestCase):
         self.assertEqual(self.events_device.raw_events_log, self.events_device.events_log_base_dir / "raw_events.log")
 
     def test_publish_subscribe(self):
-        event1 = SctEvent()
-        event2 = SctEvent()
+        event1 = ClusterHealthValidatorEvent.NodeStatus.INFO()
+        event2 = ClusterHealthValidatorEvent.NodePeersNulls.WARNING()
 
         # Put events to the publish queue.
         self.events_device.publish_event(event1)
@@ -62,12 +62,12 @@ class TestEventsDevice(unittest.TestCase):
             events_generator = self.events_device.outbound_events(stop_event=stop_event, events_counter=counter)
 
             event1_class, event1_received = next(events_generator)
-            self.assertEqual(event1_class, "SctEvent")
-            self.assertEqual(event1_received.__dict__, event1.__dict__)
+            self.assertEqual(event1_class, "ClusterHealthValidatorEvent")
+            self.assertEqual(event1_received, event1)
 
             event2_class, event2_received = next(events_generator)
-            self.assertEqual(event2_class, "SctEvent")
-            self.assertEqual(event2_received.__dict__, event2.__dict__)
+            self.assertEqual(event2_class, "ClusterHealthValidatorEvent")
+            self.assertEqual(event2_received, event2)
 
             self.assertRaises(StopIteration, next, events_generator)
         finally:

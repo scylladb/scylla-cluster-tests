@@ -13,37 +13,38 @@
 
 # pylint: disable=too-many-lines, too-many-public-methods
 
+import os
 import re
-import random
-import logging
+import json
 import time
 import uuid
-import os
-import tempfile
-import json
 import base64
-from typing import List, Dict, Optional
-from textwrap import dedent
-from datetime import datetime
-from distutils.version import LooseVersion  # pylint: disable=no-name-in-module,import-error
-from functools import cached_property
-
+import random
+import logging
+import tempfile
 from math import floor
+from typing import List, Dict, Optional
+from datetime import datetime
+from textwrap import dedent
+from functools import cached_property
+from contextlib import ExitStack
+
 import yaml
-from botocore.exceptions import WaiterError
 import boto3
 from mypy_boto3_ec2 import EC2Client
+from botocore.exceptions import WaiterError
+from distutils.version import LooseVersion  # pylint: disable=no-name-in-module,import-error
 
-from sdcm import cluster
-from sdcm import ec2_client
+from sdcm import wait, ec2_client, cluster
+from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
 from sdcm.cluster import INSTANCE_PROVISION_ON_DEMAND
 from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.utils.common import list_instances_aws, get_ami_tags, ec2_instance_wait_public_ip, MAX_SPOT_DURATION_TIME
 from sdcm.utils.decorators import retrying
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_events.filters import DbEventsFilter
-from sdcm import wait
-from sdcm.remote import LocalCmdRunner, NETWORK_EXCEPTIONS
+from sdcm.sct_events.database import DatabaseLogEvent
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -543,7 +544,7 @@ class AWSNode(cluster.BaseNode):
         terminate_action_timestamp = time.mktime(datetime.strptime(
             terminate_action['time'], "%Y-%m-%dT%H:%M:%SZ").timetuple())
         next_check_delay = terminate_action['time-left'] = terminate_action_timestamp - time.time()
-        SpotTerminationEvent(node=self, message=terminate_action)
+        SpotTerminationEvent(node=self, message=terminate_action).publish()
 
         return max(next_check_delay - SPOT_TERMINATION_CHECK_OVERHEAD, 0)
 
@@ -645,15 +646,14 @@ class AWSNode(cluster.BaseNode):
         LOGGER.debug('init.ipv6-global was {}updated'.format('' if res.stdout.strip else 'NOT '))
 
     def restart(self):
-        # We differenciate between "Restart" and "Reboot".
+        # We differentiate between "Restart" and "Reboot".
         # Restart in AWS will be a Stop and Start of an instance.
-        # When using storage optimized instances like i2 or i3, the data on disk is deleted upon STOP. therefore, we
+        # When using storage optimized instances like i2 or i3, the data on disk is deleted upon STOP.  Therefore, we
         # need to setup the instance and treat it as a new instance.
         if self._instance.spot_instance_request_id:
             LOGGER.debug("target node is spot instance, impossible to stop this instance, skipping the restart")
             return
 
-        event_filters = ()
         if self.is_seed:
             # Due to https://github.com/scylladb/scylla/issues/7588, when we restart a node that is defined as "seed",
             # we must state a different, living node as the seed provider in the scylla yaml of the restarted node
@@ -670,63 +670,62 @@ class AWSNode(cluster.BaseNode):
 
             with self.remote_scylla_yaml() as scylla_yml:
                 scylla_yml["seed_provider"] = seed_provider
-        if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
-            # since there's no disk yet in those type, lots of the errors here are acceptable, and we'll ignore them
-            event_filters = DbEventsFilter(type="DATABASE_ERROR", node=self), \
-                DbEventsFilter(type="SCHEMA_FAILURE", node=self), \
-                DbEventsFilter(type="NO_SPACE_ERROR", node=self), \
-                DbEventsFilter(type="FILESYSTEM_ERROR", node=self), \
-                DbEventsFilter(type="RUNTIME_ERROR", node=self)
 
-            clean_script = dedent("""
-                sudo sed -e '/.*scylla/s/^/#/g' -i /etc/fstab
-                sudo sed -e '/auto_bootstrap:.*/s/false/true/g' -i /etc/scylla/scylla.yaml
-            """)
-            self.remoter.run("sudo bash -cxe '%s'" % clean_script)
-            output = self.remoter.run('sudo grep replace_address: /etc/scylla/scylla.yaml', ignore_status=True)
-            if 'replace_address_first_boot:' not in output.stdout:
-                self.remoter.run('echo replace_address_first_boot: %s |sudo tee --append /etc/scylla/scylla.yaml' %
-                                 self.ip_address)
-        self._instance.stop()
-        self._instance_wait_safe(self._instance.wait_until_stopped)
-        self._instance.start()
-        self._instance_wait_safe(self._instance.wait_until_running)
-        self._wait_public_ip()
-        self.log.debug('Got new public IP %s',
-                       self._instance.public_ip_address)
+        need_to_setup = any(ss in self._instance.instance_type for ss in ("i2", "i3", ))
 
-        self.refresh_ip_address()
-        self.wait_ssh_up()
+        with ExitStack() as stack:
+            if need_to_setup:
+                # There is no disk yet, lots of the errors here are acceptable, and we'll ignore them.
+                for db_filter in (DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR, node=self),
+                                  DbEventsFilter(db_event=DatabaseLogEvent.SCHEMA_FAILURE, node=self),
+                                  DbEventsFilter(db_event=DatabaseLogEvent.NO_SPACE_ERROR, node=self),
+                                  DbEventsFilter(db_event=DatabaseLogEvent.FILESYSTEM_ERROR, node=self),
+                                  DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, node=self), ):
+                    stack.enter_context(db_filter)
 
-        if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
-            try:
+                self.remoter.sudo(shell_script_cmd(f"""\
+                    sed -e '/.*scylla/s/^/#/g' -i /etc/fstab
+                    sed -e '/auto_bootstrap:.*/s/false/true/g' -i /etc/scylla/scylla.yaml
+                    if ! grep replace_address_first_boot: /etc/scylla/scylla.yaml; then
+                        echo 'replace_address_first_boot: {self.ip_address}' | tee --append /etc/scylla/scylla.yaml
+                    fi
+                """))
+
+            self._instance.stop()
+            self._instance_wait_safe(self._instance.wait_until_stopped)
+            self._instance.start()
+            self._instance_wait_safe(self._instance.wait_until_running)
+            self._wait_public_ip()
+
+            self.log.debug("Got a new public IP: %s", self._instance.public_ip_address)
+
+            self.refresh_ip_address()
+            self.wait_ssh_up()
+
+            if need_to_setup:
                 self.stop_scylla_server(verify_down=False)
 
                 # Moving var-lib-scylla.mount away, since scylla_create_devices fails if it already exists
                 mount_path = "/etc/systemd/system/var-lib-scylla.mount"
-                existance_check = self.remoter.run(f'sudo test -e {mount_path}', ignore_status=True)
-                if existance_check.exit_status == 0:
-                    self.remoter.run(f'sudo mv {mount_path} /tmp/')
+                if self.remoter.sudo(f"test -e {mount_path}", ignore_status=True).ok:
+                    self.remoter.sudo(f"mv {mount_path} /tmp/")
 
-                # the scylla_create_devices has been moved to the '/opt/scylladb' folder in the master branch
-                for create_devices_file in ['/usr/lib/scylla/scylla-ami/scylla_create_devices',
-                                            '/opt/scylladb/scylla-ami/scylla_create_devices',
-                                            '/opt/scylladb/scylla-machine-image/scylla_create_devices']:
-                    result = self.remoter.run('sudo test -e %s' % create_devices_file, ignore_status=True)
-                    if result.exit_status == 0:
-                        self.remoter.run('sudo %s' % create_devices_file)
+                # The scylla_create_devices has been moved to the '/opt/scylladb' folder in the master branch.
+                for create_devices_file in ("/usr/lib/scylla/scylla-ami/scylla_create_devices",
+                                            "/opt/scylladb/scylla-ami/scylla_create_devices",
+                                            "/opt/scylladb/scylla-machine-image/scylla_create_devices", ):
+                    if self.remoter.sudo(f"test -x {create_devices_file}", ignore_status=True).ok:
+                        self.remoter.sudo(create_devices_file)
                         break
                 else:
-                    raise IOError('scylla_create_devices file isn\'t found')
+                    raise IOError("scylla_create_devices file isn't found")
 
                 self.start_scylla_server(verify_up=False)
-                self.remoter.run(
-                    'sudo sed -i -e "s/^replace_address_first_boot:/# replace_address_first_boot:/g" /etc/scylla/scylla.yaml')
-                self.remoter.run("sudo sed -e '/auto_bootstrap:.*/s/true/false/g' -i /etc/scylla/scylla.yaml")
-            finally:
-                if event_filters:
-                    for event_filter in event_filters:
-                        event_filter.cancel_filter()
+
+                self.remoter.sudo(shell_script_cmd("""\
+                    sed -e '/auto_bootstrap:.*/s/true/false/g' -i /etc/scylla/scylla.yaml
+                    sed -e 's/^replace_address_first_boot:/# replace_address_first_boot:/g' -i /etc/scylla/scylla.yaml
+                """))
 
     def hard_reboot(self):
         self._instance_wait_safe(self._instance.reboot)

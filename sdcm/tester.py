@@ -35,7 +35,7 @@ from cassandra.concurrent import execute_concurrent_with_args  # pylint: disable
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
-from sdcm import nemesis, cluster_docker, cluster_baremetal, db_stats, wait
+from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR, Setup, UserRemoteCredentials, set_duration as set_cluster_duration, \
     set_ip_ssh_connections as set_cluster_ip_ssh_connections, BaseLoaderSet, BaseMonitorSet, BaseScyllaCluster
 from sdcm.cluster_gce import ScyllaGCECluster
@@ -57,7 +57,7 @@ from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_events.base import Severity
+from sdcm.sct_events import Severity
 from sdcm.sct_events.setup import start_events_device, stop_events_device
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEvent
 from sdcm.sct_events.database import FullScanEvent
@@ -299,7 +299,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.alternator = alternator.api.Alternator(sct_params=self.params)
         start_events_device(log_dir=self.logdir, _registry=self.events_processes_registry)
         time.sleep(0.5)
-        InfoEvent('TEST_START test_id=%s' % Setup.test_id())
+        InfoEvent(message=f"TEST_START test_id={Setup.test_id()}").publish()
 
     def _init_test_timeout_thread(self) -> threading.Timer:
         start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
@@ -1323,7 +1323,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         read_pages = random.choice([100, 1000, 0])
 
-        FullScanEvent(type='start', db_node_ip=db_node.ip_address, ks_cf=ks_cf)
+        FullScanEvent.start(db_node_ip=db_node.ip_address, ks_cf=ks_cf).publish()
 
         cmd_select_all = 'select * from {}'
         cmd_bypass_cache = 'select * from {} bypass cache'
@@ -1338,18 +1338,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     result.fetch_next_page()
                     if read_pages > 0:
                         pages += 1
-            FullScanEvent(type='finish', db_node_ip=db_node.ip_address, ks_cf=ks_cf, message='finished successfully')
-        except Exception as details:  # pylint: disable=broad-except
+            FullScanEvent.finish(db_node_ip=db_node.ip_address, ks_cf=ks_cf, message="finished successfully").publish()
+        except Exception as exc:
             # 'unpack requires a string argument of length 4' error is received when cassandra.connection return
             # "Error decoding response from Cassandra":
-            # failure like: Operation failed for keyspace1.standard1 - received 0 responses and 1 failures from 1 CL=ONE
-            if 'timed out' in str(details) or 'unpack requires' in str(details) or 'timeout' in str(details)\
-                    or db_node.running_nemesis:
+            # failure like:
+            #   Operation failed for keyspace1.standard1 - received 0 responses and 1 failures from 1 CL=ONE
+            msg = str(exc)
+            if db_node.running_nemesis or any(s in msg for s in ("timed out", "unpack requires", "timeout")):
                 severity = Severity.WARNING
             else:
                 severity = Severity.ERROR
-            FullScanEvent(type='finish', db_node_ip=db_node.ip_address, ks_cf=ks_cf, message=str(details),
-                          severity=severity)
+            FullScanEvent.finish(db_node_ip=db_node.ip_address, ks_cf=ks_cf, message=msg, severity=severity).publish()
 
     def run_fullscan_thread(self, ks_cf='random', interval=1, duration=None):
         """Run thread of cql command select *
@@ -1980,7 +1980,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def tearDown(self):
         with silence(parent=self, name='Sending test end event'):
-            InfoEvent('TEST_END')
+            InfoEvent(message="TEST_END").publish()
         self.log.info('TearDown is starting...')
         self.stop_timeout_thread()
         self.stop_event_analyzer()
@@ -2012,7 +2012,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def _get_test_result_event(self) -> TestResultEvent:
         return TestResultEvent(
             test_status=self.get_test_status(),
-            events=get_events_grouped_by_category(limit=1, _registry=self.events_processes_registry))
+            events=get_events_grouped_by_category(limit=1, _registry=self.events_processes_registry),
+        )
 
     @staticmethod
     def _remove_errors_from_unittest_results(result):

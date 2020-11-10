@@ -1,10 +1,23 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 import math
 import time
 from textwrap import dedent
 
 from longevity_test import LongevityTest
 from sdcm.cluster import SCYLLA_DIR, BaseNode
-from sdcm.sct_events import InfoEvent
+from sdcm.sct_events.system import InfoEvent
 from test_lib.compaction import CompactionStrategy, LOGGER
 
 KB_SIZE = 2 ** 10
@@ -132,7 +145,7 @@ class IcsSpaceAmplificationTest(LongevityTest):
             dict_nodes_initial_capacity=dict_nodes_initial_capacity,
             written_data_size_gb=written_data_size_gb, start_time=start_time)
         InfoEvent(message=f"Space amplification results after a write of: {written_data_size_gb} are: "
-                          f"{dict_nodes_space_amplification}")
+                          f"{dict_nodes_space_amplification}").publish()
 
     def _get_nodes_used_capacity(self):
         """
@@ -160,7 +173,7 @@ class IcsSpaceAmplificationTest(LongevityTest):
         LOGGER.debug(f"Alter table query is: {full_alter_query}")
         node1: BaseNode = self.db_cluster.nodes[0]
         node1.run_cqlsh(cmd=full_alter_query)
-        InfoEvent(message=f"Altered table by: {full_alter_query}")
+        InfoEvent(message=f"Altered table by: {full_alter_query}").publish()
 
     def _set_enforce_min_threshold_true(self):
 
@@ -189,9 +202,9 @@ class IcsSpaceAmplificationTest(LongevityTest):
         self._set_enforce_min_threshold_true()
         # (1) writing new data.
         prepare_write_cmd = self.params.get('prepare_write_cmd')
-        InfoEvent(message=f"Starting C-S prepare load: {prepare_write_cmd}")
+        InfoEvent(message=f"Starting C-S prepare load: {prepare_write_cmd}").publish()
         self.run_prepare_write_cmd()
-        InfoEvent(message="Wait for compactions to finish after write is done.")
+        InfoEvent(message="Wait for compactions to finish after write is done.").publish()
         self.wait_no_compactions_running()
 
         stress_cmd = self.params.get('stress_cmd')
@@ -208,14 +221,14 @@ class IcsSpaceAmplificationTest(LongevityTest):
             dict_nodes_capacity_before_overwrite_data = self._get_nodes_used_capacity()
             InfoEvent(
                 message=f"Nodes used capacity before start overwriting data:"
-                        f" {dict_nodes_capacity_before_overwrite_data}")
+                        f" {dict_nodes_capacity_before_overwrite_data}").publish()
             additional_compaction_params = {'min_threshold': min_threshold}
             if sag:
                 additional_compaction_params.update({'space_amplification_goal': sag})
             # (3) Altering compaction with SAG=None,1.5,1.2,1.5,None
             self._alter_table_compaction(additional_compaction_params=additional_compaction_params)
             stress_queue = list()
-            InfoEvent(message=f"Starting C-S over-write load: {stress_cmd}")
+            InfoEvent(message=f"Starting C-S over-write load: {stress_cmd}").publish()
 
             start_time = time.time()
             params = {'keyspace_num': 1, 'stress_cmd': stress_cmd,
@@ -225,14 +238,14 @@ class IcsSpaceAmplificationTest(LongevityTest):
             for stress in stress_queue:
                 self.verify_stress_thread(cs_thread_pool=stress)
 
-            InfoEvent(message="Wait for compactions to finish after over-write is done.")
+            InfoEvent(message="Wait for compactions to finish after over-write is done.").publish()
             self.wait_no_compactions_running()
             # (3) measure space amplification for the re-written data
             self.measure_nodes_space_amplification_after_write(
                 dict_nodes_initial_capacity=dict_nodes_capacity_before_overwrite_data,
                 written_data_size_gb=total_data_to_overwrite_gb, start_time=start_time)
 
-        InfoEvent(message=f"Space-amplification-goal testing cycles are done.")
+        InfoEvent(message=f"Space-amplification-goal testing cycles are done.").publish()
 
 
 def generate_node_capacity_query_postfix(node):

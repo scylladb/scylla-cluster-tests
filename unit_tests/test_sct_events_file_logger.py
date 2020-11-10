@@ -14,7 +14,8 @@
 import time
 import unittest
 
-from sdcm.sct_events.base import SctEvent, Severity
+from sdcm.sct_events import Severity
+from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
 from sdcm.sct_events.file_logger import \
     EventsFileLogger, start_events_logger, get_events_logger, get_events_grouped_by_category, get_logger_event_summary
@@ -43,13 +44,13 @@ class TestFileLogger(unittest.TestCase, EventsUtilsMixin):
             self.assertEqual(file_logger._registry, self.events_main_device._registry)
             self.assertEqual(file_logger._registry, self.events_processes_registry)
 
-            event_normal = SctEvent()
+            event_normal = SpotTerminationEvent(node="n1", message="m1")
             event_normal.severity = Severity.NORMAL
-            event_warning = SctEvent()
+            event_warning = SpotTerminationEvent(node="n2", message="m2")
             event_warning.severity = Severity.WARNING
-            event_error = SctEvent()
+            event_error = SpotTerminationEvent(node="n3", message="m3")
             event_error.severity = Severity.ERROR
-            event_critical = SctEvent()
+            event_critical = SpotTerminationEvent(node="n4", message="m4")
             event_critical.severity = Severity.CRITICAL
 
             with self.wait_for_n_events(file_logger, count=10, timeout=3):

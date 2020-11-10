@@ -15,8 +15,7 @@ import time
 import unittest
 import unittest.mock
 
-from sdcm.sct_events.base import Severity, SctEvent
-from sdcm.sct_events.system import TestResultEvent
+from sdcm.sct_events.system import InfoEvent, SpotTerminationEvent
 from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
 from sdcm.sct_events.events_analyzer import EventsAnalyzer, start_events_analyzer
 from sdcm.sct_events.events_processes import EVENTS_ANALYZER_ID, get_events_process
@@ -45,11 +44,8 @@ class TestEventsAnalyzer(unittest.TestCase, EventsUtilsMixin):
             self.assertEqual(events_analyzer._registry, self.events_main_device._registry)
             self.assertEqual(events_analyzer._registry, self.events_processes_registry)
 
-            event1 = TestResultEvent("CRITICAL", {})
-            event1.severity = Severity.CRITICAL
-
-            event2 = SctEvent()
-            event2.severity = Severity.CRITICAL
+            event1 = InfoEvent(message="m1")
+            event2 = SpotTerminationEvent(node="n1", message="m2")
 
             with unittest.mock.patch("sdcm.sct_events.events_analyzer.EventsAnalyzer.kill_test") as mock:
                 with self.wait_for_n_events(events_analyzer, count=2, timeout=1):
