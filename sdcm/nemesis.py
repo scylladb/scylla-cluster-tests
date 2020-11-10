@@ -906,6 +906,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         it's used to cover one improvement of compaction.
         The increase frequency of checking abortion is very useful for truncate.
         """
+        raise UnsupportedNemesis('TruncateMonkeyLargePartition is failed in Scylla4.3')
         self._set_current_disruption('TruncateMonkeyLargePartition {}'.format(self.target_node))
 
         ks_name = 'ks_truncate_large_partition'
