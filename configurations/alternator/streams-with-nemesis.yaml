@@ -1,0 +1,5 @@
+nemesis_class_name: 'NemesisSequence'
+nemesis_interval: 30
+nemesis_during_prepare: true
+
+use_mgmt: true
