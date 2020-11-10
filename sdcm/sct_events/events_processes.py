@@ -126,11 +126,11 @@ EventsProcess = Union[EventsProcessProcess, EventsProcessThread]
 
 class EventsProcessesRegistry:
     def __init__(self, log_dir: Union[str, Path], _default: bool = False):
-        LOGGER.debug("New events processes registry created: %s", self)
         self.log_dir = Path(log_dir)
         self.default = _default
         self._registry_dict_lock = threading.RLock()
         self._registry_dict = dict()
+        LOGGER.debug("New events processes registry created: %s", self)
 
     def start_events_process(self, name: str, klass: Type[EventsProcess]) -> None:
         with self._registry_dict_lock:
@@ -183,7 +183,7 @@ def get_events_process(name: str, _registry: Optional[EventsProcessesRegistry] =
 def verbose_suppress(*args, **kwargs):
     try:
         yield
-    except Exception:  # pylint: disable=broad-except
+    except Exception:
         LOGGER.exception(*args, **kwargs)
 
 

@@ -23,7 +23,7 @@ from dataclasses import dataclass
 
 from sdcm.log import SDCMAdapter
 from sdcm.remote import NETWORK_EXCEPTIONS
-from sdcm.utils.decorators import retrying, timeout
+from sdcm.utils.decorators import timeout
 from sdcm.sct_events.system import CoreDumpEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 
@@ -43,12 +43,12 @@ class CoreDumpInfo:
 
     def publish_event(self):
         CoreDumpEvent(
-            corefile_url=self.download_url,
-            download_instructions=self.download_instructions,
-            backtrace=self.coredump_info,
             node=self.node,
+            corefile_url=self.download_url,
+            backtrace=self.coredump_info,
+            download_instructions=self.download_instructions,
             timestamp=self.timestamp
-        )
+        ).publish()
 
     def __str__(self):
         if self.corefile:

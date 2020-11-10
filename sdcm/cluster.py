@@ -68,11 +68,11 @@ from sdcm.utils.decorators import retrying, log_run_info
 from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, BUILD_ID_RE, get_gemini_version, get_systemd_version
-from sdcm.sct_events import Severity
+from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.sct_events.loaders import ScyllaBenchEvent
-from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, BACKTRACE_RE
 from sdcm.sct_events.grafana import set_grafana_url
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
@@ -419,32 +419,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self._alert_manager: Optional[PrometheusAlertManagerListener] = None
 
         self._system_log_errors_index = []
-        self._system_error_events = [
-            DatabaseLogEvent(type='NO_SPACE_ERROR', regex='No space left on device'),
-            DatabaseLogEvent(type='UNKNOWN_VERB', regex='unknown verb exception', severity=Severity.WARNING),
-            DatabaseLogEvent(type='BROKEN_PIPE', severity=Severity.WARNING,
-                             regex='cql_server - exception while processing connection:.*Broken pipe'),
-            DatabaseLogEvent(type='SEMAPHORE_TIME_OUT', regex='semaphore_timed_out', severity=Severity.WARNING),
-            DatabaseLogEvent(
-                type='EMPTY_NESTED_EXCEPTION',
-                regex='cql_server - exception while processing connection: seastar::nested_exception '
-                      '\(seastar::nested_exception\)$',
-                severity=Severity.WARNING),
-            DatabaseLogEvent(type='DATABASE_ERROR', regex='Exception '),
-            DatabaseLogEvent(type='BAD_ALLOC', regex='std::bad_alloc'),
-            DatabaseLogEvent(type='SCHEMA_FAILURE', regex='Failed to load schema version'),
-            DatabaseLogEvent(type='RUNTIME_ERROR', regex='std::runtime_error'),
-            DatabaseLogEvent(type='FILESYSTEM_ERROR', regex='filesystem_error'),
-            DatabaseLogEvent(type='STACKTRACE', regex='stacktrace'),
-            DatabaseLogEvent(type='BACKTRACE', regex='backtrace', severity=Severity.ERROR),
-            DatabaseLogEvent(type='ABORTING_ON_SHARD', regex='Aborting on shard'),
-            DatabaseLogEvent(type='SEGMENTATION', regex='segmentation'),
-            DatabaseLogEvent(type='INTEGRITY_CHECK', regex='integrity check failed'),
-            DatabaseLogEvent(type='REACTOR_STALLED', regex='Reactor stalled', severity=Severity.WARNING),
-            DatabaseLogEvent(type='BOOT', regex='Starting Scylla Server', severity=Severity.NORMAL),
-            DatabaseLogEvent(type='SUPPRESSED_MESSAGES', regex='journal: Suppressed', severity=Severity.WARNING),
-            DatabaseLogEvent(type='stream_exception', regex='stream_exception'),
-        ]
         self._exclude_system_log_from_being_logged = [
             ' !INFO    | sshd[',
             ' !INFO    | systemd:',
@@ -1352,44 +1326,33 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def follow_system_log(
             self,
-            patterns: Optional[List[Union[str, re.Pattern, DatabaseLogEvent]]] = None,
+            patterns: Optional[List[Union[str, re.Pattern, LogEvent]]] = None,
             start_from_beginning: bool = False
     ) -> List[str]:
         stream = File(self.system_log)
         if not start_from_beginning:
             stream.move_to_end()
         if not patterns:
-            patterns = self._system_error_events
+            patterns = [p[0] for p in SYSTEM_ERROR_EVENTS_PATTERNS]
         regexps = []
         for pattern in patterns:
             if isinstance(pattern, re.Pattern):
                 regexps.append(pattern)
             elif isinstance(pattern, str):
                 regexps.append(re.compile(pattern, flags=re.IGNORECASE))
-            elif isinstance(pattern, DatabaseLogEvent):
+            elif isinstance(pattern, LogEvent):
                 regexps.append(re.compile(pattern.regex, flags=re.IGNORECASE))
         return stream.read_lines_filtered(*regexps)
 
-    def _read_system_log_and_publish_events(
-            self, start_from_beginning: bool = False, exclude_from_logging: List[str] = None):
-        """
-        Search for all known patterns listed in  `_system_error_events`
+    def _read_system_log_and_publish_events(self,
+                                            start_from_beginning: bool = False,
+                                            exclude_from_logging: List[str] = None) -> None:
+        """Search for all known patterns listed in `sdcm.sct_events.database.SYSTEM_ERROR_EVENTS'."""
 
-        :param start_from_beginning: if True will search log from first line
-        :param publish_events: if True will publish events
-        :param exclude_from_logging: lis of patterns to exclude from being logged
-        :return: None
-        """
         # pylint: disable=too-many-branches,too-many-locals,too-many-statements
 
-        patterns = []
         backtraces = []
         index = 0
-        # prepare/compile all regexes
-        for expression in self._system_error_events:
-            patterns += [(re.compile(expression.regex, re.IGNORECASE), expression)]
-
-        backtrace_regex = re.compile(r'(?P<other_bt>/lib.*?\+0x[0-f]*\n)|(?P<scylla_bt>0x[0-f]*\n)', re.IGNORECASE)
 
         if not os.path.exists(self.system_log):
             return
@@ -1425,7 +1388,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                             LOGGER.debug(line)
                 if json_log:
                     continue
-                match = backtrace_regex.search(line)
+                match = BACKTRACE_RE.search(line)
                 one_line_backtrace = []
                 if match and backtraces:
                     data = match.groupdict()
@@ -1447,11 +1410,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
                 if index not in self._system_log_errors_index or start_from_beginning:
                     # for each line use all regexes to match, and if found send an event
-                    for pattern, event in patterns:
+                    for pattern, event in SYSTEM_ERROR_EVENTS_PATTERNS:
                         match = pattern.search(line)
                         if match:
                             self._system_log_errors_index.append(index)
-                            cloned_event = event.clone_with_info(node=self, line_number=index, line=line)
+                            cloned_event = event.clone().add_info(node=self, line_number=index, line=line)
                             backtraces.append(dict(event=cloned_event, backtrace=[]))
                             break  # Stop iterating patterns to avoid creating two events for one line of the log
 
@@ -1464,19 +1427,20 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         traces_count = 0
         for backtrace in backtraces:
-            backtrace['event'].add_backtrace_info(raw_backtrace="\n".join(backtrace['backtrace']))
+            backtrace['event'].raw_backtrace = "\n".join(backtrace['backtrace'])
             if backtrace['event'].type == 'BACKTRACE':
                 traces_count += 1
 
-        # filter function to attach the backtrace to the correct error and not to the back traces
-        # if the error is within 10 lines and the last isn't backtrace type, the backtrace would be appended to the previous error
+        # A filter function to attach the backtrace to the correct error and not to the backtraces.
+        # If the error is within 10 lines and the last isn't backtrace type, the backtrace would be
+        # appended to the previous error.
         def filter_backtraces(backtrace):
             last_error = filter_backtraces.last_error
             try:
                 if (last_error and
                         backtrace['event'].line_number <= filter_backtraces.last_error.line_number + 20
                         and not filter_backtraces.last_error.type == 'BACKTRACE' and backtrace['event'].type == 'BACKTRACE'):
-                    last_error.add_backtrace_info(raw_backtrace="\n".join(backtrace['backtrace']))
+                    last_error.raw_backtrace = "\n".join(backtrace['backtrace'])
                     return False
                 return True
             finally:
@@ -1517,7 +1481,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 if not scylla_debug_file:
                     scylla_debug_file = self.copy_scylla_debug_info(obj["node"], obj["debug_file"])
                 output = self.decode_raw_backtrace(scylla_debug_file, " ".join(event.raw_backtrace.split('\n')))
-                event.add_backtrace_info(backtrace=output.stdout)
+                event.backtrace = output.stdout
                 Setup.DECODING_QUEUE.task_done()
             except queue.Empty:
                 pass
@@ -4508,7 +4472,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         if Setup.REUSE_CLUSTER:
             self.configure_scylla_monitoring(node)
             self.restart_scylla_monitoring(sct_metrics=True)
-            set_grafana_url("http://{}:{}".format(normalize_ipv6_url(node.external_address), self.grafana_port))
+            set_grafana_url(f"http://{normalize_ipv6_url(node.external_address)}:{self.grafana_port}")
             return
 
         self.install_scylla_monitoring(node)
@@ -4521,7 +4485,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         # the data from this point to the end of test will
         # be captured.
         self.grafana_start_time = time.time()
-        set_grafana_url("http://{}:{}".format(normalize_ipv6_url(node.external_address), self.grafana_port))
+        set_grafana_url(f"http://{normalize_ipv6_url(node.external_address)}:{self.grafana_port}")
         # since monitoring node is started last (after db nodes and loader) we can't actually set the timeout
         # for starting the alert manager thread (since it depends on DB cluster size and num of loaders)
         node.start_alert_manager_thread()  # remove when start task threads will be started after node setup

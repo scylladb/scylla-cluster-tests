@@ -153,7 +153,7 @@ class GCENode(cluster.BaseNode):
         preempted = status.lower() == 'true'
         if preempted and not self._preempted_last_state:
             self.log.warning('Got spot termination notification from GCE')
-            SpotTerminationEvent(node=self, message='Instance was preempted.')
+            SpotTerminationEvent(node=self, message='Instance was preempted.').publish()
         self._preempted_last_state = preempted
         return SPOT_TERMINATION_CHECK_DELAY
 

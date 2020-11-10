@@ -15,6 +15,7 @@
 
 import json
 import shutil
+import logging
 import os.path
 import tempfile
 import unittest

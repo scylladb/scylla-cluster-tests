@@ -19,10 +19,8 @@
 import time
 
 from longevity_test import LongevityTest
-from sdcm.sct_events.base import Severity
-from sdcm.sct_events.filters import EventsSeverityChangerFilter
-from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.utils.data_validator import LongevityDataValidator
+from sdcm.sct_events.group_common_events import ignore_mutation_write_errors
 
 
 class LWTLongevityTest(LongevityTest):
@@ -33,15 +31,12 @@ class LWTLongevityTest(LongevityTest):
         self.data_validator = None
 
     def run_prepare_write_cmd(self):
-        # mutation_write_ warning is thrown when system is overloaded and got timeout on operations on system.paxos
-        # table. Decrease severity of this event during prepare. Shouldn't impact on test result
-        with EventsSeverityChangerFilter(event_class=DatabaseLogEvent, regex=r".*mutation_write_*",
-                                         severity=Severity.WARNING, extra_time_to_expiration=30), \
-            EventsSeverityChangerFilter(event_class=DatabaseLogEvent, regex=r'.*Operation failed for system.paxos.*',
-                                        severity=Severity.WARNING, extra_time_to_expiration=30), \
-            EventsSeverityChangerFilter(event_class=DatabaseLogEvent, regex=r'.*Operation timed out for system.paxos.*',
-                                        severity=Severity.WARNING, extra_time_to_expiration=30):
-            super(LWTLongevityTest, self).run_prepare_write_cmd()
+        # `mutation_write_*' errors are thrown when system is overloaded and got timeout on
+        # operations on system.paxos table.
+        #
+        # Decrease severity of this event during prepare.  Shouldn't impact on test result.
+        with ignore_mutation_write_errors():
+            super().run_prepare_write_cmd()
 
         # Stop nemesis. Prefer all nodes will be run before collect data for validation
         # Increase timeout to wait for nemesis finish

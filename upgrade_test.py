@@ -423,9 +423,10 @@ class UpgradeTest(FillDatabaseData):
         idx_token_error = list(node.follow_system_log(
             patterns=["Column idx_token doesn't exist"], start_from_beginning=True))
         if idx_token_error:
-            IndexSpecialColumnErrorEvent('Node: %s. Step: %s. '
-                                         'Found error: index special column "idx_token" is not recognized' %
-                                         (node.name, step))
+            IndexSpecialColumnErrorEvent(
+                message=f'Node: {node.name}. Step: {step}. '
+                        f'Found error: index special column "idx_token" is not recognized'
+            ).publish()
 
     def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
         """
@@ -668,16 +669,16 @@ class UpgradeTest(FillDatabaseData):
         well, upgrade all nodes to new version in the end.
         """
         # prepare workload (stress_before_upgrade)
-        InfoEvent('Starting stress_before_upgrade - aka prepare step')
+        InfoEvent(message="Starting stress_before_upgrade - aka prepare step").publish()
         stress_before_upgrade = self.params.get('stress_before_upgrade')
         prepare_thread_pool = self.run_stress_thread(stress_cmd=stress_before_upgrade)
         if self.params.get('alternator_port'):
             self.pre_create_alternator_tables()
-        InfoEvent('Waiting for stress_before_upgrade to finish')
+        InfoEvent(message="Waiting for stress_before_upgrade to finish").publish()
         self.verify_stress_thread(prepare_thread_pool)
 
         # Starting workload during entire upgrade
-        InfoEvent('Starting stress_during_entire_upgrade workload')
+        InfoEvent(message="Starting stress_during_entire_upgrade workload").publish()
         stress_during_entire_upgrade = self.params.get('stress_during_entire_upgrade')
         stress_thread_pool = self.run_stress_thread(stress_cmd=stress_during_entire_upgrade)
         self.log.info('Sleeping for 60s to let cassandra-stress start before the rollback...')
@@ -698,7 +699,7 @@ class UpgradeTest(FillDatabaseData):
         if num_nodes_to_rollback > 0:
             # Upgrade all nodes that should be rollback later
             for i in range(num_nodes_to_rollback):
-                InfoEvent(f'Step{i + 1} - Upgrade node{i + 1}')
+                InfoEvent(message=f"Step{i + 1} - Upgrade node{i + 1}").publish()
                 self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[i]]
                 self.log.info(f'Upgrade Node {self.db_cluster.node_to_upgrade.name} begins')
                 with ignore_ycsb_connection_refused():
@@ -711,8 +712,10 @@ class UpgradeTest(FillDatabaseData):
             random.shuffle(upgraded_nodes)
             self.log.info(f'Upgraded Nodes to be rollback are: {upgraded_nodes}')
             for node in upgraded_nodes:
-                InfoEvent(f'Step{num_nodes_to_rollback + upgraded_nodes.index(node) + 1} - '
-                          f'Rollback node{upgraded_nodes.index(node) + 1}')
+                InfoEvent(
+                    message=f"Step{num_nodes_to_rollback + upgraded_nodes.index(node) + 1} - "
+                            f"Rollback node{upgraded_nodes.index(node) + 1}"
+                ).publish()
                 self.log.info(f'Rollback Node {node} begin')
                 with ignore_ycsb_connection_refused():
                     self.rollback_node(node, upgrade_sstables=upgrade_sstables)
@@ -721,7 +724,7 @@ class UpgradeTest(FillDatabaseData):
 
         # Upgrade all nodes
         for i in range(nodes_num):
-            InfoEvent(f'Step{num_nodes_to_rollback * 2 + i + 1} - Upgrade node{i + 1}')
+            InfoEvent(message=f"Step{num_nodes_to_rollback * 2 + i + 1} - Upgrade node{i + 1}").publish()
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[i]]
             self.log.info(f'Upgrade Node {self.db_cluster.node_to_upgrade.name} begins')
             with ignore_ycsb_connection_refused():
@@ -730,12 +733,12 @@ class UpgradeTest(FillDatabaseData):
             self.db_cluster.node_to_upgrade.check_node_health()
             upgraded_nodes.append(self.db_cluster.node_to_upgrade)
 
-        InfoEvent('All nodes were upgraded successfully')
+        InfoEvent(message="All nodes were upgraded successfully").publish()
 
-        InfoEvent('Waiting for stress_during_entire_upgrade to finish')
+        InfoEvent(message="Waiting for stress_during_entire_upgrade to finish").publish()
         self.verify_stress_thread(stress_thread_pool)
 
-        InfoEvent('Starting stress_after_cluster_upgrade')
+        InfoEvent(message="Starting stress_after_cluster_upgrade").publish()
         stress_after_cluster_upgrade = self.params.get('stress_after_cluster_upgrade')
         stress_after_cluster_upgrade_pool = self.run_stress_thread(stress_cmd=stress_after_cluster_upgrade)
         self.verify_stress_thread(stress_after_cluster_upgrade_pool)

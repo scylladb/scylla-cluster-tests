@@ -27,6 +27,7 @@ from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus, TaskStatus, ScyllaMan
 from sdcm.nemesis import MgmtRepair
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.filters import DbEventsFilter
+from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
 from sdcm.tester import ClusterTester
 
@@ -334,17 +335,17 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self._repair_intensity_feature(fault_multiple_nodes=False)
 
     def _repair_intensity_feature(self, fault_multiple_nodes):
-        InfoEvent(message="Starting C-S write load")
+        InfoEvent(message="Starting C-S write load").publish()
         self.run_prepare_write_cmd()
-        InfoEvent(message="Flushing")
+        InfoEvent(message="Flushing").publish()
         for node in self.db_cluster.nodes:
             node.run_nodetool("flush")
-        InfoEvent(message="Waiting for compactions to end")
+        InfoEvent(message="Waiting for compactions to end").publish()
         self.wait_no_compactions_running(n=30, sleep_time=30)
-        InfoEvent(message="Starting C-S read load")
+        InfoEvent(message="Starting C-S read load").publish()
         stress_read_thread = self.generate_background_read_load()
         time.sleep(600)  # So we will see the base load of the cluster
-        InfoEvent(message="Sleep ended - Starting tests")
+        InfoEvent(message="Sleep ended - Starting tests").publish()
         with self.subTest('test_intensity_and_parallel'):
             self.test_intensity_and_parallel(fault_multiple_nodes=fault_multiple_nodes)
         load_results = stress_read_thread.get_results()
@@ -461,11 +462,14 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
             assert host_health.ssl == HostSsl.OFF, "Not all hosts ssl is 'OFF'"
-        with DbEventsFilter(type='DATABASE_ERROR', line="failed to do checksum for"), \
-                DbEventsFilter(type='RUNTIME_ERROR', line="failed to do checksum for"), \
-                DbEventsFilter(type='DATABASE_ERROR', line="Reactor stalled"), \
-                DbEventsFilter(type='RUNTIME_ERROR', line='get_repair_meta: repair_meta_id'):
+
+        with DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR, line="failed to do checksum for"), \
+                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="failed to do checksum for"), \
+                DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR, line="Reactor stalled"), \
+                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="get_repair_meta: repair_meta_id"):
+
             self.db_cluster.enable_client_encrypt()
+
         mgr_cluster.update(client_encrypt=True)
         repair_task.start()
         sleep = 40
@@ -722,22 +726,25 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
     def test_intensity_and_parallel(self, fault_multiple_nodes):
         keyspace_to_be_repaired = "keyspace2"
-        InfoEvent(message='starting test_intensity_and_parallel')
+        InfoEvent(message='starting test_intensity_and_parallel').publish()
         if not self.is_cred_file_configured:
             self.update_config_file()
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_intensity_and_parallel', db_cluster=self.db_cluster,
-                                               auth_token=self.monitors.mgmt_auth_token)
+        mgr_cluster = manager_tool.add_cluster(
+            name=self.CLUSTER_NAME + '_intensity_and_parallel',
+            db_cluster=self.db_cluster,
+            auth_token=self.monitors.mgmt_auth_token,
+        )
 
-        InfoEvent(message="Starting faulty load (to be repaired)")
+        InfoEvent(message="Starting faulty load (to be repaired)").publish()
         self.create_missing_rows_in_cluster(create_missing_rows_in_multiple_nodes=fault_multiple_nodes,
                                             keyspace_to_be_repaired=keyspace_to_be_repaired)
 
-        InfoEvent(message="Starting a repair with no intensity")
+        InfoEvent(message="Starting a repair with no intensity").publish()
         base_repair_task = mgr_cluster.create_repair_task(keyspace="keyspace*")
         base_repair_task.wait_and_get_final_status(step=30)
         assert base_repair_task.status == TaskStatus.DONE, "The base repair task did not end in the expected time"
-        InfoEvent(message=f"The base repair, with no intensity argument, took {str(base_repair_task.duration)}")
+        InfoEvent(message=f"The base repair, with no intensity argument, took {base_repair_task.duration}").publish()
 
         with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
             session.execute(f"DROP KEYSPACE IF EXISTS {keyspace_to_be_repaired}")
@@ -754,15 +761,15 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                     {"intensity": 0}]
 
         for arg_dict in arg_list:
-            InfoEvent(message="Starting faulty load (to be repaired)")
+            InfoEvent(message="Starting faulty load (to be repaired)").publish()
             self.create_missing_rows_in_cluster(create_missing_rows_in_multiple_nodes=fault_multiple_nodes,
                                                 keyspace_to_be_repaired=keyspace_to_be_repaired)
 
-            InfoEvent(message=f"Starting a repair with {arg_dict}")
+            InfoEvent(message=f"Starting a repair with {arg_dict}").publish()
             repair_task = mgr_cluster.create_repair_task(**arg_dict, keyspace="keyspace*")
             repair_task.wait_and_get_final_status(step=30)
-            InfoEvent(message=f"repair with {arg_dict} took {str(repair_task.duration)}")
+            InfoEvent(message=f"repair with {arg_dict} took {repair_task.duration}").publish()
 
             with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
                 session.execute(f"DROP KEYSPACE IF EXISTS {keyspace_to_be_repaired}")
-        InfoEvent(message='finishing test_intensity_and_parallel')
+        InfoEvent(message='finishing test_intensity_and_parallel').publish()
