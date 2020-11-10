@@ -884,33 +884,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
     @staticmethod
     def _wait_for_preinstalled_scylla(node):
-        def scylla_ami_setup_done():
-            """
-            Scylla-ami-setup will update config files and trigger to start the scylla-server service.
-            `--stop-services` parameter in ec2 user-data, not really stop running scylla-server
-            service, but deleting a flag file (/etc/scylla/ami_disabled) in first start of scylla-server
-            (by scylla_prepare), and fail the first start.
-
-            We use this function to make sure scylla-ami-setup finishes, and first start is
-            done (fail as expected, /etc/scylla/ami_disabled is deleted). Then it won't effect
-            reconfig in SCT.
-
-            The fllowing two examples are different opportunity to help understand.
-
-            # opportunity 1: scylla-ami-setup finishes:
-              result = node.remoter.run('systemctl status scylla-ami-setup', ignore_status=True)
-              return 'Started Scylla AMI Setup' in result.stdout
-
-            # opportunity 2: flag file is deleted in scylla_prepare:
-              result = node.remoter.run('test -e /etc/scylla/ami_disabled', ignore_status=True)
-              return result.exit_status != 0
-            """
-
-            # make sure scylla-ami-setup finishes, flag file is deleted, and first start fails as expected.
-            result = node.remoter.run('systemctl status scylla-server', ignore_status=True)
-            return 'Failed to start Scylla Server.' in result.stdout
-
-        wait.wait_for(scylla_ami_setup_done, step=10, timeout=300)
+        node.wait_for_machine_image_configured()
 
     def _scylla_post_install(self, node: AWSNode, new_scylla_installed: bool) -> None:
         super()._scylla_post_install(node, new_scylla_installed)
