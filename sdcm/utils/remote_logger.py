@@ -1,5 +1,6 @@
 import logging
 import subprocess
+import time
 from functools import cached_property
 from abc import abstractmethod, ABCMeta
 from multiprocessing import Process, Event
@@ -138,13 +139,16 @@ class SSHGeneralFileLogger(SSHLoggerBase):
 
 
 class CommandLoggerBase(LoggerBase):
-    _cached_logger_cmd = None
     _child_process = None
+    restart_delay = 0.1
 
     def __init__(self, target_log_file: str):
         super().__init__(target_log_file)
         self._thread = Thread(target=self._thread_body, daemon=True)
         self._termination_event = ThreadEvent()
+        # When first started it picks up logs for an hour before
+        # to cover cases when logger is started long after node is started
+        self._last_time_completed = time.time() - 60*60
 
     @property
     @abstractmethod
@@ -152,10 +156,19 @@ class CommandLoggerBase(LoggerBase):
         pass
 
     def _thread_body(self):
-        while not self._termination_event.wait(0.1):
+        while not self._termination_event.wait(self.restart_delay):
             try:
                 self._child_process = subprocess.Popen(self._logger_cmd, shell=True)
+                started = False
+                try:
+                    self._child_process.wait(10)
+                except subprocess.TimeoutExpired:
+                    # Assume that command successfully started if it is running for more than 10 seconds
+                    started = True
                 self._child_process.wait()
+                if started:
+                    # Update last time only if command successfully started
+                    self._last_time_completed = time.time()
             except:  # pylint: disable=bare-except
                 pass
 
@@ -168,6 +181,10 @@ class CommandLoggerBase(LoggerBase):
         if self._child_process:
             self._child_process.kill()
         self._thread.join(timeout)
+
+    @property
+    def time_delta(self):
+        return time.time() - self._last_time_completed
 
 
 class CommandClusterLoggerBase(CommandLoggerBase, metaclass=ABCMeta):
@@ -196,25 +213,20 @@ class DockerGeneralLogger(CommandNodeLoggerBase):
         return f'docker logs -f {self._node.name} >>{self._target_log_file} 2>&1'
 
 
-class KubectlScyllaLogger(CommandNodeLoggerBase):
-
-    @property
-    def _logger_cmd(self) -> str:
-        pc = self._node.parent_cluster
-        cmd = pc.k8s_cluster.kubectl_cmd("logs -f", self._node.name, "-c", pc.container, namespace=pc.namespace)
-        return f"{cmd} 2>&1 | grep scylla >> {self._target_log_file}"
-
-
 class KubectlGeneralLogger(CommandNodeLoggerBase):
+    restart_delay = 1
 
     @property
     def _logger_cmd(self) -> str:
         pc = self._node.parent_cluster
-        cmd = pc.k8s_cluster.kubectl_cmd("logs -f", self._node.name, "-c", pc.container, namespace=pc.namespace)
+        cmd = pc.k8s_cluster.kubectl_cmd(
+            f"logs --previous=false -f --since={int(self.time_delta)}s", self._node.name, "-c", pc.container,
+            namespace=pc.namespace)
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
 class KubectlClusterEventsLogger(CommandClusterLoggerBase):
+    restart_delay = 1
 
     @property
     def _logger_cmd(self) -> str:
@@ -223,6 +235,7 @@ class KubectlClusterEventsLogger(CommandClusterLoggerBase):
 
 
 class CertManagerLogger(CommandClusterLoggerBase):
+    restart_delay = 1
 
     @property
     def _logger_cmd(self) -> str:
@@ -232,6 +245,7 @@ class CertManagerLogger(CommandClusterLoggerBase):
 
 
 class ScyllaOperatorLogger(CommandClusterLoggerBase):
+    restart_delay = 1
 
     @property
     def _logger_cmd(self) -> str:
@@ -246,8 +260,6 @@ def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint:
             return DockerScyllaLogger(node, target_log_file)
         return DockerGeneralLogger(node, target_log_file)
     if logs_transport == 'kubectl':
-        if 'db-node' in node.name:
-            return KubectlScyllaLogger(node, target_log_file)
         return KubectlGeneralLogger(node, target_log_file)
     if logs_transport == 'ssh':
         if node.init_system == 'systemd':
