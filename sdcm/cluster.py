@@ -2648,6 +2648,15 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         else:
             self.remoter.run('sudo yum install -y epel-release', retry=3)
 
+    def is_machine_image_configured(self):
+        smi_configured_path = "/etc/scylla/machine_image_configured"
+        result = self.remoter.run(cmd=f"test -e {smi_configured_path}", ignore_status=True, verbose=False)
+        return result.ok
+
+    def wait_for_machine_image_configured(self):
+        self.log.info("Waiting for Scylla Machine Image setup to finish...")
+        wait.wait_for(self.is_machine_image_configured, step=10, timeout=300)
+
 
 class FlakyRetryPolicy(RetryPolicy):
 

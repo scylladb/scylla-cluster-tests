@@ -467,6 +467,10 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
                                                )
         self.version = '2.1'
 
+    @staticmethod
+    def _wait_for_preinstalled_scylla(node):
+        node.wait_for_machine_image_configured()
+
 
 class LoaderSetGCE(cluster.BaseLoaderSet, GCECluster):
 
