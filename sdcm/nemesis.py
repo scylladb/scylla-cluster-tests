@@ -44,10 +44,13 @@ from sdcm.log import SDCMAdapter
 from sdcm.keystore import KeyStore
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm import wait
-from sdcm.sct_events.base import Severity
-from sdcm.sct_events.system import DisruptionEvent, InfoEvent
+from sdcm.sct_events import Severity
+from sdcm.sct_events.base import LogEvent
+from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import CassandraStressLogEvent
+from sdcm.sct_events.nemesis import DisruptionEvent
+from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.group_common_events import ignore_alternator_client_errors, ignore_no_space_errors
 from sdcm.db_stats import PrometheusDBStats
@@ -173,7 +176,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not data:
             data = {}
         data['node'] = self.target_node
-        DisruptionEvent(type=disrupt, status=status, **data)
+        DisruptionEvent(type=disrupt, status=status, **data).publish()
 
     def set_current_running_nemesis(self, node):
         node.running_nemesis = self.__class__.__name__
@@ -317,8 +320,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             return str(self.__class__)
 
     def _kill_scylla_daemon(self):
-        with EventsSeverityChangerFilter(event_class=CassandraStressLogEvent, regex=".*Connection reset by peer.*",
-                                         severity=Severity.WARNING, extra_time_to_expiration=30):
+        with EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                         event_class=CassandraStressLogEvent,
+                                         regex=".*Connection reset by peer.*",
+                                         extra_time_to_expiration=30):
             self.log.info('Kill all scylla processes in %s', self.target_node)
             self.target_node.remoter.sudo("pkill -9 scylla", ignore_status=True)
 
@@ -353,7 +358,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('RestartThenRepairNode %s' % self.target_node)
         # Task https://trello.com/c/llRuLIOJ/2110-add-dbeventfilter-for-nosuchcolumnfamily-error
         # If this error happens during the first boot with the missing disk this issue is expected and it's not an issue
-        with DbEventsFilter(type='DatabaseLogEvent', line="Can't find a column family with UUID", node=self.target_node):
+        with DbEventsFilter(db_event=LogEvent, line="Can't find a column family with UUID", node=self.target_node):
             self.target_node.restart()
 
         self.log.info('Waiting scylla services to start after node restart')
@@ -507,7 +512,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.current_disruption = label
         self.log.info(label)
         if report:
-            DisruptionEvent(type=self.get_disrupt_name(), subtype='start', status=True, node=str(current_node))
+            DisruptionEvent(
+                type=self.get_disrupt_name(),
+                subtype="start",
+                status=True,
+                node=current_node
+            ).publish()
 
     def disrupt_destroy_data_then_repair(self):  # pylint: disable=invalid-name
         self._set_current_disruption('CorruptThenRepair %s' % self.target_node)
@@ -537,7 +547,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def _add_and_init_new_cluster_node(self, old_node_ip=None, timeout=HOUR_IN_SEC * 6):
         """When old_node_private_ip is not None replacement node procedure is initiated"""
         self.log.info("Adding new node to cluster...")
-        InfoEvent(message='StartEvent - Adding new node to cluster')
+        InfoEvent(message="StartEvent - Adding new node to cluster").publish()
         new_node = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True)[0]
         self.monitoring_set.reconfigure_scylla_monitoring()
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
@@ -551,7 +561,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.warning("Node will not be terminated. Please terminate manually!!!")
             raise
         self.cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
-        InfoEvent(message='FinishEvent - New Node is up and normal')
+        InfoEvent(message="FinishEvent - New Node is up and normal").publish()
         return new_node
 
     def _terminate_cluster_node(self, node):
@@ -616,10 +626,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
         self._set_current_disruption('TerminateAndReplaceNode %s' % self.target_node)
         old_node_ip = self.target_node.ip_address
-        InfoEvent(message='StartEvent - Terminate node and wait 5 minutes')
+        InfoEvent(message="StartEvent - Terminate node and wait 5 minutes").publish()
         self._terminate_cluster_node(self.target_node)
         time.sleep(300)  # Sleeping for 5 mins to let the cluster live with a missing node for a while
-        InfoEvent(message='FinishEvent - target_node was terminated')
+        InfoEvent(message="FinishEvent - target_node was terminated").publish()
         new_node = self._add_and_init_new_cluster_node(old_node_ip)
 
         try:
@@ -1580,13 +1590,23 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                           text='Wait for repair starts')
 
             self.log.debug("Abort repair streaming by storage_service/force_terminate_repair API")
-            with DbEventsFilter(type='DATABASE_ERROR', line="repair's stream failed: streaming::stream_exception",
+
+            with DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,
+                                line="repair's stream failed: streaming::stream_exception",
                                 node=self.target_node), \
-                    DbEventsFilter(type='RUNTIME_ERROR', line='Can not find stream_manager', node=self.target_node), \
-                    DbEventsFilter(type='RUNTIME_ERROR', line='is aborted', node=self.target_node), \
-                    DbEventsFilter(type='RUNTIME_ERROR', line='Failed to repair', node=self.target_node):
+                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                               line="Can not find stream_manager",
+                               node=self.target_node), \
+                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                               line="is aborted",
+                               node=self.target_node), \
+                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                               line="Failed to repair",
+                               node=self.target_node):
                 self.target_node.remoter.run(
-                    'curl -X POST --header "Content-Type: application/json" --header "Accept: application/json" "http://127.0.0.1:10000/storage_service/force_terminate_repair"')
+                    "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
+                    " http://127.0.0.1:10000/storage_service/force_terminate_repair"
+                )
                 thread.result(timeout=120)
                 time.sleep(10)  # to make sure all failed logs/events, are ignored correctly
 
@@ -1910,14 +1930,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         delay_in_secs = random.randrange(1, 30)
 
         list_of_tc_options = [
-            ("NetworkRandomInterruption_{}%-loss".format(loss_percentage), "--loss {}%".format(loss_percentage)),
-            ("NetworkRandomInterruption_{}%-corrupt".format(corrupt_percentage),
+            ("NetworkRandomInterruption_{}pct_loss".format(loss_percentage), "--loss {}%".format(loss_percentage)),
+            ("NetworkRandomInterruption_{}pct_corrupt".format(corrupt_percentage),
              "--corrupt {}%".format(corrupt_percentage)),
-            ("NetworkRandomInterruption_{}sec-delay".format(delay_in_secs),
+            ("NetworkRandomInterruption_{}sec_delay".format(delay_in_secs),
              "--delay {}s --delay-distro 500ms".format(delay_in_secs))]
         if rate_limit:
             list_of_tc_options.append(
-                ("NetworkRandomInterruption_{}-limit".format(rate_limit), "--rate {}".format(rate_limit)))
+                ("NetworkRandomInterruption_{}_limit".format(rate_limit), "--rate {}".format(rate_limit)))
 
         list_of_timeout_options = [10, 60, 120, 300, 500]
         option_name, selected_option = random.choice(list_of_tc_options)
@@ -2037,7 +2057,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         textual_matching_rule, matching_rule = self._iptables_randomly_get_random_matching_rule()
         textual_pkt_action, pkt_action = self._iptables_randomly_get_disrupting_target()
         wait_time = random.choice([10, 60, 120, 300, 500])
-        self._set_current_disruption(f'{name}: {textual_matching_rule} that belongs to '
+        self._set_current_disruption(f'{name} {textual_matching_rule} that belongs to '
                                      'inter node communication connections (port=7000 and 7001) will be'
                                      f' {textual_pkt_action} for {wait_time}s')
 
@@ -2065,7 +2085,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         textual_matching_rule, matching_rule = self._iptables_randomly_get_random_matching_rule()
         textual_pkt_action, pkt_action = self._iptables_randomly_get_disrupting_target()
         wait_time = random.choice([10, 60, 120, 300, 500])
-        self._set_current_disruption(f'{name}: {textual_matching_rule} that belongs to '
+        self._set_current_disruption(f'{name} {textual_matching_rule} that belongs to '
                                      f'node-exporter(port=9100) connections will be {textual_pkt_action} for {wait_time}s')
         return self._run_commands_wait_and_cleanup(
             self.target_node,
@@ -2083,7 +2103,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         textual_matching_rule, matching_rule = self._iptables_randomly_get_random_matching_rule()
         textual_pkt_action, pkt_action = self._iptables_randomly_get_disrupting_target()
         wait_time = random.choice([10, 60, 120, 300, 500])
-        self._set_current_disruption(f'{name}: {textual_matching_rule} that belongs to '
+        self._set_current_disruption(f'{name} {textual_matching_rule} that belongs to '
                                      f'Thrift(port=9160) connections will be {textual_pkt_action} for {wait_time}s')
         return self._run_commands_wait_and_cleanup(
             self.target_node,
@@ -2344,10 +2364,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption("GrowCluster")
         self.log.info("Start grow cluster on %s nodes", add_nodes_number)
         for _ in range(add_nodes_number):
-            InfoEvent(message='GrowCluster - Add New node')
+            InfoEvent(message="GrowCluster - Add New node").publish()
             added_node = self._add_and_init_new_cluster_node()
             added_node.running_nemesis = None
-            InfoEvent(message='GrowCluster - Done adding New node')
+            InfoEvent(message="GrowCluster - Done adding New node").publish()
             self.log.info("New node added %s", added_node.name)
         self.log.info("Finish cluster grow")
 
@@ -2362,10 +2382,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.set_target_node(dc_idx=current_dc_idx)
             self.log.info("Next node will be removed %s", self.target_node)
             try:
-                InfoEvent(message='StartEvent - ShrinkCluster started decommissioning a node')
+                InfoEvent(message="StartEvent - ShrinkCluster started decommissioning a node").publish()
                 self.cluster.decommission(self.target_node)
             finally:
-                InfoEvent(message='FinishEvent - ShrinkCluster has done decommissioning a node')
+                InfoEvent(message="FinishEvent - ShrinkCluster has done decommissioning a node").publish()
 
         self.log.info("Finish cluster shrink. Current number of nodes %s", len(self.cluster.nodes))
 
@@ -2408,17 +2428,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info('hot reloading internode ssl nemesis finished')
 
     def disrupt_run_unique_sequence(self):
-        InfoEvent(message='StarEvent - start a repair by ScyllaManager')
+        InfoEvent(message="StarEvent - start a repair by ScyllaManager").publish()
         self.disrupt_mgmt_repair_cli()
-        InfoEvent(message='FinishEvent - Manager repair has finished')
+        InfoEvent(message="FinishEvent - Manager repair has finished").publish()
         time.sleep(180)
-        InfoEvent(message='Starting terminate_and_replace disruption')
+        InfoEvent(message="Starting terminate_and_replace disruption").publish()
         self.disrupt_terminate_and_replace_node()
-        InfoEvent(message='Finished terminate_and_replace disruption')
+        InfoEvent(message="Finished terminate_and_replace disruption").publish()
         time.sleep(180)
-        InfoEvent(message='Starting grow_shrink disruption')
+        InfoEvent(message="Starting grow_shrink disruption").publish()
         self.disrupt_grow_shrink_cluster()
-        InfoEvent(message='Finished grow_shrink disruption')
+        InfoEvent(message="Finished grow_shrink disruption").publish()
 
     def disrupt_memory_stress(self):
         """
@@ -2608,7 +2628,7 @@ def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
             del log_info['operation']
 
             args[0].update_stats(disrupt, status, log_info)
-            DisruptionEvent(type=disrupt, status=status, **log_info)
+            DisruptionEvent(type=disrupt, status=status, **log_info).publish()
             args[0].cluster.check_cluster_health()
             num_nodes_after = len(args[0].cluster.nodes)
             if num_nodes_before != num_nodes_after:
