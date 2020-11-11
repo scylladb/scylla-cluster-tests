@@ -35,6 +35,9 @@ def call(Map params, String region){
 
     if [[ -n "${params.scylla_ami_id ? params.scylla_ami_id : ''}" ]] ; then
         export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
+    elif [[ ! -z "${params.scylla_gce_image_id}" ]] ; then
+        export SCT_GCE_IMAGE_DB="${params.scylla_gce_image_id}"
+
     elif [[ -n "${params.scylla_version ? params.scylla_version : ''}" ]] ; then
         export SCT_SCYLLA_VERSION="${params.scylla_version}"
     elif [[ -n "${params.scylla_repo ? params.scylla_repo : ''}" ]] ; then
