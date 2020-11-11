@@ -14,6 +14,7 @@
 import datetime
 import re
 
+from sdcm.cluster import SCYLLA_YAML_PATH
 from sdcm.tester import ClusterTester
 
 
@@ -26,6 +27,14 @@ class ArtifactsTest(ClusterTester):
         if self.db_cluster is None or not self.db_cluster.nodes:
             raise ValueError('DB cluster has not been initiated')
         return self.db_cluster.nodes[0]
+
+    def check_cluster_name(self):
+        with self.node.remote_scylla_yaml(SCYLLA_YAML_PATH) as scylla_yaml:
+            yaml_cluster_name = scylla_yaml.get('cluster_name', '')
+
+        self.assertTrue(self.db_cluster.name == yaml_cluster_name,
+                        f"Cluster name is not as expected. Cluster name in scylla.yaml: {yaml_cluster_name}. "
+                        f"Cluster name: {self.db_cluster.name}")
 
     def run_cassandra_stress(self, args: str):
         result = self.node.remoter.run(f"{STRESS_CMD} {args} -node {self.node.ip_address}")
@@ -71,6 +80,9 @@ class ArtifactsTest(ClusterTester):
 
         if self.params["cluster_backend"] == "gce":
             self.verify_users()
+
+        with self.subTest("check the cluster name"):
+            self.check_cluster_name()
 
         with self.subTest("check Scylla server after installation"):
             self.check_scylla()
