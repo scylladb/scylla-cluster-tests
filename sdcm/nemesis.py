@@ -1459,8 +1459,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         disrupt_func = getattr(self, disrupt_func_name)
         disrupt_func()
 
+    def disrupt_mgmt_backup_specific_keyspaces(self):
+        self._set_current_disruption('ManagementBackupWithSpecificKeyspaces')
+        self._mgmt_backup(backup_specific_tables=True)
+
     def disrupt_mgmt_backup(self):
         self._set_current_disruption('ManagementBackup')
+        self._mgmt_backup(backup_specific_tables=False)
+
+    def _mgmt_backup(self, backup_specific_tables):
         # TODO: When cloud backup is supported - add this to the below 'if' statement:
         #  and not self.cluster.params.get('use_cloud_manager', default=None)
         if not self.cluster.params.get('use_mgmt', default=None):
@@ -1477,7 +1484,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             bucket_name = f"gcs:{backup_bucket_location}"
         else:
             raise ValueError(f"cluster_backend={cluster_backend} not supported in ManagementBackup")
-        mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ])
+        if backup_specific_tables:
+            non_test_keyspaces = self.cluster.get_test_keyspaces()
+            mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ], keyspace_list=non_test_keyspaces)
+        else:
+            mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ])
 
         succeeded, status = mgr_task.wait_for_task_done_status(timeout=54000)
         if succeeded and status == TaskStatus.DONE:
@@ -2757,6 +2768,7 @@ class LimitedChaosMonkey(Nemesis):
         #  - SnapshotOperations
         #  - AbortRepairMonkey
         #  - MgmtBackup
+        #  - MgmtBackupSpecificKeyspaces
         #  - AddDropColumnMonkey
         self.call_random_disrupt_method(disrupt_methods=['disrupt_nodetool_cleanup', 'disrupt_nodetool_decommission',
                                                          'disrupt_nodetool_drain', 'disrupt_nodetool_refresh',
@@ -2767,7 +2779,8 @@ class LimitedChaosMonkey(Nemesis):
                                                          'disrupt_truncate', 'disrupt_show_toppartitions',
                                                          'disrupt_mgmt_repair_cli', 'disrupt_no_corrupt_repair',
                                                          'disrupt_snapshot_operations', 'disrupt_abort_repair',
-                                                         'disrupt_mgmt_backup', 'disrupt_add_drop_column'])
+                                                         'disrupt_mgmt_backup', 'disrupt_mgmt_backup_specific_keyspaces',
+                                                         'disrupt_add_drop_column'])
 
 
 class ScyllaCloudLimitedChaosMonkey(Nemesis):
@@ -2953,6 +2966,14 @@ class MgmtBackup(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_mgmt_backup()
+
+
+class MgmtBackupSpecificKeyspaces(Nemesis):
+    disruptive = False
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_mgmt_backup_specific_keyspaces()
 
 
 class MgmtRepair(Nemesis):
