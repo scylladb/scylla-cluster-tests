@@ -48,6 +48,10 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
+
+            string(defaultValue: "false",
+                   description: 'Initialize cluster in parallel (false) or sequentially(true)',
+                   name: 'use_legacy_cluster_init')
         }
         options {
             timestamps()
@@ -94,7 +98,7 @@ def call(Map pipelineParams) {
                                                         rm -fv ./latest
 
                                                         export SCT_CLUSTER_BACKEND=${params.backend}
-                                                        export SCT_REGION_NAME=${pipelineParams.aws_region}
+                                                        export SCT_REGION_NAME=${params.aws_region}
                                                         export SCT_CONFIG_FILES=${pipelineParams.test_config}
                                                         export SCT_EMAIL_RECIPIENTS="${email_recipients}"
                                                         if [[ ! -z "${params.scylla_ami_id}" ]] ; then
@@ -108,7 +112,7 @@ def call(Map pipelineParams) {
                                                             exit 1
                                                         fi
 
-
+                                                        export SCT_USE_LEGACY_CLUSTER_INIT=${params.use_legacy_cluster_init}
                                                         export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                                         export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
                                                         export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
@@ -128,6 +132,7 @@ def call(Map pipelineParams) {
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {
+                                                        def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
                                                         def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
                                                         sh """
                                                         #!/bin/bash
