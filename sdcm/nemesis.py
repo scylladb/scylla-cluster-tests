@@ -2334,14 +2334,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         Scylla has the ability to hot reload SSL certificates.
         This test will create and reload new certificates for the inter node communication.
         '''
-        self._set_current_disruption('HotReloadInternodeCertificate')
+        self._set_current_disruption('ServerSslHotReloadingNemesis')
         if not self.cluster.params.get('server_encrypt', None):
             raise UnsupportedNemesis('Server Encryption is not enabled, hence skipping')
 
-        @retrying(allowed_exceptions=LogContentNotFound)
-        def check_ssl_reload_log(target_node, file_path, since_time):
-            msg = target_node.remoter.run(f'journalctl -u scylla-server --since="{since_time}" | '
-                                          f'grep Reload | grep {file_path}', ignore_status=True)
+        @retrying(n=30, allowed_exceptions=(LogContentNotFound, ))
+        def check_ssl_reload_log(target_node, since_time):
+            msg = target_node.remoter.run(f'journalctl -u scylla-server --since="{since_time}" | grep '
+                                          f'messaging_service - Reloaded {{{ssl_files_location}}}', ignore_status=True)
             if not msg.stdout:
                 raise LogContentNotFound('Reload SSL message not found in node log')
             return msg.stdout
@@ -2360,8 +2360,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             new_crt = node.remoter.run(f"cat {ssl_files_location}").stdout
             if in_place_crt == new_crt:
                 raise Exception('The CRT file was not replaced with the new one')
-            reload = check_ssl_reload_log(target_node=node, file_path=ssl_files_location,
-                                          since_time=time_now)
+            reload = check_ssl_reload_log(target_node=node, since_time=time_now)
             if not reload:
                 raise Exception('SSL auto Reload did not happen')
 
