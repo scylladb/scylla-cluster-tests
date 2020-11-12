@@ -24,9 +24,12 @@ import threading
 import time
 import uuid
 import itertools
+import traceback
+
 from typing import List, Optional
 from textwrap import dedent
 from datetime import datetime
+from functools import wraps
 import subprocess
 
 from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
@@ -104,6 +107,8 @@ class Setup:
     INTRA_NODE_COMM_PUBLIC = False
     RSYSLOG_ADDRESS = None
     DECODING_QUEUE = None
+    USE_LEGACY_CLUSTER_INIT = False
+    AUTO_BOOTSTRAP = True
 
     _test_id = None
     _test_name = None
@@ -209,6 +214,8 @@ class Setup:
         post_boot_script = '#!/bin/bash'
         post_boot_script += dedent(r'''
                sudo sed -i 's/#MaxSessions \(.*\)$/MaxSessions 1000/' /etc/ssh/sshd_config
+               sudo sed -i 's/#MaxStartups \(.*\)$/MaxStartups 60/' /etc/ssh/sshd_config
+               sudo sed -i 's/#LoginGraceTime \(.*\)$/LoginGraceTime 15s/' /etc/ssh/sshd_config
                sudo systemctl restart sshd
                ''')
         if cls.RSYSLOG_ADDRESS:
@@ -395,7 +402,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         # We should disable bootstrap when we create nodes to establish the cluster,
         # if we want to add more nodes when the cluster already exists, then we should
         # enable bootstrap.
-        self.enable_auto_bootstrap = False
+        self.enable_auto_bootstrap = Setup.AUTO_BOOTSTRAP
         self.scylla_version = ''
         self._is_enterprise = None
         self.replacement_node_ip = None  # if node is a replacement for a dead node, store dead node private ip here
@@ -1544,6 +1551,41 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         cmd = cmd.format(datacenters[self.dc_idx], dc_suffix)
         self.remoter.run(cmd)
 
+    def patch_scylla_yaml_with_seeds(self, seed_address: str) -> None:
+        self.patch_scylla_yaml(seed_provider=[dict(class_name='org.apache.cassandra.locator.SimpleSeedProvider',
+                                                   parameters=[dict(seeds=seed_address)])])
+
+    def patch_scylla_yaml(self, yaml_file=SCYLLA_YAML_PATH, **kwargs):
+        """
+        A user can send a dictionary of values(just like the function "config_setup") and thus only change the
+        values he has chosen. If one of the keys contains a "None" value, the same value will be removed from the Yaml
+        file.
+        """
+        yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
+        wait.wait_for(self.remoter.receive_files, step=10, text='Waiting for copying scylla.yaml',
+                      timeout=300, throw_exc=True, src=yaml_file, dst=yaml_dst_path)
+        with open(file=yaml_dst_path, mode='r') as scylla_yaml_file:
+            scylla_yml = yaml.safe_load(scylla_yaml_file)
+
+        for key, value in kwargs.items():
+            if value is None:
+                self.log.debug(f"The variable '{key}'is successfully removed")
+                scylla_yml.pop(key, None)
+            else:
+                if scylla_yml.get(key, None) is None:
+                    self.log.debug(f"Create new variable '{key}' with value '{value}'")
+                else:
+                    self.log.debug(f"Change variable '{key}' from '{scylla_yml.get(key)}' to '{value}'")
+                scylla_yml[key] = value
+
+        scylla_yaml_contents = yaml.safe_dump(scylla_yml)
+        with open(yaml_dst_path, 'w') as scylla_yaml_file:
+            scylla_yaml_file.write(scylla_yaml_contents)
+        self.log.debug("Scylla YAML configuration:\n%s", scylla_yaml_contents)
+        wait.wait_for(self.remoter.send_files, step=10, text='Waiting for copying scylla.yaml to node',
+                      timeout=300, throw_exc=True, src=yaml_dst_path, dst='/tmp/scylla.yaml')
+        self.remoter.run('sudo mv /tmp/scylla.yaml {}'.format(yaml_file))
+
     # pylint: disable=invalid-name,too-many-arguments,too-many-locals,too-many-branches,too-many-statements
     def config_setup(self, seed_address=None, cluster_name=None, enable_exp=True, endpoint_snitch=None,
                      yaml_file=SCYLLA_YAML_PATH, broadcast=None, authenticator=None, server_encrypt=None,
@@ -1817,6 +1859,22 @@ server_encryption_options:
         version = self.remoter.run('scylla-manager-agent --version').stdout
         self.log.info(f'node {self.name} has scylla-manager-agent version {version}')
 
+    def clean_scylla_data(self):
+        """Clean all scylla data file
+
+        Commands are taken from instruction in docs.
+        See https://docs.scylladb.com/operating-scylla/procedures/cluster-management/clear_data/
+        """
+        clean_commands_list = [
+            "sudo rm -rf /var/lib/scylla/data",
+            "sudo find /var/lib/scylla/commitlog -type f -delete",
+            "sudo find /var/lib/scylla/hints -type f -delete",
+            "sudo find /var/lib/scylla/view_hints -type f -delete"
+        ]
+        self.log.debug("Clean all files from scylla data dirs")
+        for cmd in clean_commands_list:
+            self.remoter.run(cmd)
+
     def clean_scylla(self):
         """
         Uninstall scylla
@@ -1828,8 +1886,7 @@ server_encryption_options:
             self.remoter.run('sudo rm -f /etc/apt/sources.list.d/scylla.list')
             self.remoter.run('sudo apt-get remove -y scylla\\*', ignore_status=True)
         self.update_repo_cache()
-        self.remoter.run('sudo rm -rf /var/lib/scylla/commitlog/*')
-        self.remoter.run('sudo rm -rf /var/lib/scylla/data/*')
+        self.clean_scylla_data()
 
     def update_repo_cache(self):
         try:
@@ -2032,7 +2089,12 @@ server_encryption_options:
         result = self.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
         devname = result.stdout.strip()
         extra_setup_args = self.parent_cluster.params.get('append_scylla_setup_args')
-        if self.parent_cluster.params.get('workaround_kernel_bug_for_iotune') or "3.10.0-1062" in self.kernel_version:
+        result = self.remoter.run('sudo /usr/lib/scylla/scylla_setup --help')
+        if '--swap-directory' in result.stdout:
+            # swap setup is supported
+            extra_setup_args += ' --swap-directory / '
+
+        if self.parent_cluster.params.get('workaround_kernel_bug_for_iotune'):
             self.log.warning(dedent("""
                 Kernel version is {}. Due to known kernel bug in this version using predefined iotune.
                 related issue: https://github.com/scylladb/scylla/issues/5181
@@ -2047,7 +2109,7 @@ server_encryption_options:
                                         dst='/tmp/')
                 self.remoter.run('sudo mv /tmp/{0} /etc/scylla.d/{0}'.format(conf))
         else:
-            self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} {}'
+            self.remoter.run('sudo /usr/lib/scylla/scylla_setup --nic {} --disks {} --setup-nic-and-disks {}'
                              .format(devname, ','.join(disks), extra_setup_args))
 
         result = self.remoter.run('cat /proc/mounts')
@@ -2055,6 +2117,7 @@ server_encryption_options:
         self.remoter.run('sudo sync')
         self.log.info('io.conf right after setup')
         self.remoter.run('sudo cat /etc/scylla.d/io.conf')
+
         if not self.is_ubuntu14():
             self.remoter.run('sudo systemctl enable scylla-server.service')
             self.remoter.run('sudo systemctl enable scylla-jmx.service')
@@ -2608,6 +2671,15 @@ server_encryption_options:
             cmd = "dpkg-query --show 'scylla*'"
         return self.remoter.run(cmd).stdout.splitlines()
 
+    def is_machine_image_configured(self):
+        smi_configured_path = "/etc/scylla/machine_image_configured"
+        result = self.remoter.run(cmd=f"test -e {smi_configured_path}", ignore_status=True, verbose=False)
+        return result.ok
+
+    def wait_for_machine_image_configured(self):
+        self.log.info("Waiting for Scylla Machine Image setup to finish...")
+        wait.wait_for(self.is_machine_image_configured, step=10, timeout=300)
+
 
 class BaseCluster:  # pylint: disable=too-many-instance-attributes
     """
@@ -2646,9 +2718,9 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes
 
         if isinstance(n_nodes, list):
             for dc_idx, num in enumerate(n_nodes):
-                self.add_nodes(num, dc_idx=dc_idx)
+                self.add_nodes(num, dc_idx=dc_idx, enable_auto_bootstrap=Setup.AUTO_BOOTSTRAP)
         elif isinstance(n_nodes, int):  # legacy type
-            self.add_nodes(n_nodes)
+            self.add_nodes(n_nodes, enable_auto_bootstrap=Setup.AUTO_BOOTSTRAP)
         else:
             raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
         self.coredumps = dict()
@@ -2783,44 +2855,35 @@ def wait_for_init_wrap(method):
     Run setup of nodes simultaneously and wait for all the setups finished.
     Raise exception if setup failed or timeout expired.
     """
+    @wraps(method)
     def wrapper(*args, **kwargs):
         cl_inst = args[0]
         LOGGER.debug('Class instance: %s', cl_inst)
         LOGGER.debug('Method kwargs: %s', kwargs)
         node_list = kwargs.get('node_list', None) or cl_inst.nodes
         timeout = kwargs.get('timeout', None)
-        setup_kwargs = {k: kwargs[k] for k in kwargs if k != 'node_list'}
+        # remove all arguments which is not supported by BaseScyllaCluster.node_setup method
+        setup_kwargs = {k: kwargs[k] for k in kwargs if k not in ["node_list", "check_node_health"]}
 
         _queue = queue.Queue()
 
         @raise_event_on_failure
-        def node_setup(node):
-            status = True
+        def node_setup(_node):
+            exception_details = None
             try:
-                cl_inst.node_setup(node, **setup_kwargs)
-            except Exception:  # pylint: disable=broad-except
-                cl_inst.log.exception('Node setup failed: %s', str(node))
-                status = False
+                cl_inst.node_setup(_node, **setup_kwargs)
+            except Exception as ex:  # pylint: disable=broad-except
+                exception_details = (str(ex), traceback.format_exc())
+            _queue.put((_node, exception_details))
 
-            _queue.put((node, status))
             _queue.task_done()
 
-        start_time = time.time()
-
-        for node in node_list:
-            setup_thread = threading.Thread(target=node_setup,
-                                            args=(node,))
-            setup_thread.daemon = True
-            setup_thread.start()
-            time.sleep(240)
-
-        results = []
-        while len(results) != len(node_list):
-            time_elapsed = time.time() - start_time
+        def verify_node_setup(start_time):
+            time_elapsed = time.perf_counter() - start_time
             try:
-                node, node_status = _queue.get(block=True, timeout=5)
-                if not node_status:
-                    raise NodeSetupFailed(f"{node}:{node_status}")
+                node, setup_exception = _queue.get(block=True, timeout=5)
+                if setup_exception:
+                    raise NodeSetupFailed(node=node, error_msg=setup_exception[0], traceback_str=setup_exception[1])
                 results.append(node)
                 cl_inst.log.info("(%d/%d) nodes ready, node %s. Time elapsed: %d s",
                                  len(results), len(node_list), str(node), int(time_elapsed))
@@ -2832,7 +2895,26 @@ def wait_for_init_wrap(method):
                 cl_inst.log.error(msg)
                 raise NodeSetupTimeout(msg)
 
-        time_elapsed = time.time() - start_time
+        start_time = time.perf_counter()
+        init_nodes = []
+        results = []
+        for node in node_list:
+            if isinstance(cl_inst, BaseScyllaCluster) and not Setup.USE_LEGACY_CLUSTER_INIT:
+                init_nodes.append(node)
+                start_time = time.perf_counter()
+                node_setup(node)
+                verify_node_setup(start_time)
+                cl_inst.wait_for_nodes_up_and_normal(nodes=init_nodes, verification_node=node)
+            else:
+                setup_thread = threading.Thread(target=node_setup, name='NodeSetupThread',
+                                                args=(node,), daemon=True)
+                setup_thread.start()
+                time.sleep(120)
+
+        while len(results) != len(node_list):
+            verify_node_setup(start_time)
+
+        time_elapsed = time.perf_counter() - start_time
         cl_inst.log.debug('Setup duration -> %s s', int(time_elapsed))
 
         method(*args, **kwargs)
@@ -2849,9 +2931,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
         self.termination_event = threading.Event()
         self.nemesis = []
         self.nemesis_threads = []
-        self._seed_nodes_ips = []
-        self._seed_nodes = []
-        self._non_seed_nodes = []
         super(BaseScyllaCluster, self).__init__(*args, **kwargs)
 
     @staticmethod
@@ -2865,13 +2944,17 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
         return self.params.get('append_scylla_args_oracle') if self.name.find('oracle') > 0 else \
             self.params.get('append_scylla_args')
 
-    def set_seeds(self, wait_for_timeout=300):
+    def set_seeds(self, wait_for_timeout=300, first_only=False):
         seeds_selector = self.params.get('seeds_selector')
         seeds_num = self.params.get('seeds_num')
         cluster_backend = self.params.get('cluster_backend')
 
         seed_nodes_ips = None
-        if seeds_selector == 'reflector' or Setup.REUSE_CLUSTER or cluster_backend == 'aws-siren':
+        if first_only:
+            node = self.nodes[0]
+            node.wait_ssh_up()
+            seed_nodes_ips = [node.ip_address]
+        elif seeds_selector == 'reflector' or Setup.REUSE_CLUSTER or cluster_backend == 'aws-siren':
             node = self.nodes[0]
             node.wait_ssh_up()
             # When cluster just started, seed IP in the scylla.yaml may be like '127.0.0.1'
@@ -2895,23 +2978,20 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
 
     @property
     def seed_nodes_ips(self):
-        if not self._seed_nodes_ips:
-            self._seed_nodes_ips = [node.ip_address for node in self.nodes if node.is_seed]
-            assert self._seed_nodes_ips, "We should have at least one selected seed by now"
-        return self._seed_nodes_ips
+        _seed_nodes_ips = [node.ip_address for node in self.nodes if node.is_seed]
+
+        assert _seed_nodes_ips, "We should have at least one selected seed by now"
+        return _seed_nodes_ips
 
     @property
     def seed_nodes(self):
-        if not self._seed_nodes:
-            self._seed_nodes = [node for node in self.nodes if node.is_seed]
-            assert self._seed_nodes, "We should have at least one selected seed by now"
-        return self._seed_nodes
+        _seed_nodes = [node for node in self.nodes if node.is_seed]
+        assert _seed_nodes, "We should have at least one selected seed by now"
+        return _seed_nodes
 
     @property
     def non_seed_nodes(self):
-        if not self._non_seed_nodes:
-            self._non_seed_nodes = [node for node in self.nodes if not node.is_seed]
-        return self._non_seed_nodes
+        return [node for node in self.nodes if not node.is_seed]
 
     def validate_seeds_on_all_nodes(self):
         for node in self.nodes:
@@ -3077,6 +3157,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
                     pass
         return node_info_list
 
+    @retrying(n=3, sleep_time=5)
     def get_nodetool_status(self, verification_node=None):  # pylint: disable=too-many-locals
         """
             Runs nodetool status and generates status structure.
@@ -3110,7 +3191,14 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
                     if line.startswith('--'):  # ignore the title line in result
                         continue
                     try:
-                        state, ip, load, load_unit, tokens, owns, host_id, rack = line.split()
+                        splitted_line = line.split()
+                        # Regulary nodetool status returns node load as "21.71 GB"
+                        # Example: "UN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a"
+                        # But it may be the "?" instead and has no load_unit. Add empty string to prevent the failure
+                        # Example: "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a"
+                        if len(splitted_line) == 7 and splitted_line[3].isdigit():
+                            splitted_line.insert(3, '')
+                        state, ip, load, load_unit, tokens, owns, host_id, rack = splitted_line
                         node_info = {'state': state,
                                      'load': '%s%s' % (load, load_unit),
                                      'tokens': tokens,
@@ -3156,16 +3244,19 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
         status = self.get_nodetool_status(verification_node=verification_node)
         up_statuses = []
         for node in nodes:
+            found_node_status = False
             for dc_status in status.values():
                 ip_status = dc_status.get(node.ip_address)
-                if ip_status and ip_status["state"] == "UN":
-                    up_statuses.append(True)
-                else:
-                    up_statuses.append(False)
+                if ip_status:
+                    found_node_status = True
+                    up_statuses.append(ip_status["state"] == "UN")
+                    break
+            if not found_node_status:
+                up_statuses.append(False)
         if not all(up_statuses):
             raise ClusterNodesNotReady("Not all nodes joined the cluster")
 
-    @retrying(n=30, sleep_time=3, allowed_exceptions=(ClusterNodesNotReady, UnexpectedExit),
+    @retrying(n=60, sleep_time=30, allowed_exceptions=(ClusterNodesNotReady, UnexpectedExit),
               message="Waiting for nodes to join the cluster")
     def wait_for_nodes_up_and_normal(self, nodes, verification_node=None):
         self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
@@ -3286,6 +3377,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods
             self._scylla_post_install(node)
 
             node.stop_scylla_server(verify_down=False)
+            node.clean_scylla_data()
             node.start_scylla_server(verify_up=False)
 
             self.log.info('io.conf right after reboot')

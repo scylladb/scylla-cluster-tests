@@ -188,3 +188,4 @@
 | **<a name="loader_swap_size">loader_swap_size</a>**  | The size of the swap file for the loaders. Its size in bytes calculated by x * 1MB | 1024 | SCT_LOADER_SWAP_SIZE
 | **<a name="monitor_swap_size">monitor_swap_size</a>**  | The size of the swap file for the monitors. Its size in bytes calculated by x * 1MB | 8192 | SCT_MONITOR_SWAP_SIZE
 | **<a name="store_perf_results">store_perf_results</a>**  | A flag that indicates whether or not to gather the prometheus stats at the end of the run.<br>Intended to be used in performance testing | N/A | SCT_STORE_PERF_RESULTS
+| **<a name="use_legacy_cluster_init">use_legacy_cluster_init</a>**  | Use legacy cluster initialization with autobootsrap disabled and parallel node setup | True | SCT_USE_LEGACY_CLUSTER_INIT
