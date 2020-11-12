@@ -21,7 +21,6 @@ from sdcm import ec2_client
 from sdcm.cluster import INSTANCE_PROVISION_ON_DEMAND
 from sdcm.utils.common import retrying, list_instances_aws, get_ami_tags
 from sdcm.sct_events import SpotTerminationEvent, DbEventsFilter
-from sdcm import wait
 from sdcm.remote import LocalCmdRunner, NETWORK_EXCEPTIONS
 
 LOGGER = logging.getLogger(__name__)
@@ -851,35 +850,9 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
         if self._need_to_install_scylla:
             self.log.info("Can't find Scylla on the %s (%s), will try to install", node, node.image)
-            return super()._scylla_pre_install(node)
+            super()._scylla_pre_install(node)
 
-        def scylla_ami_setup_done():
-            """
-            Scylla-ami-setup will update config files and trigger to start the scylla-server service.
-            `--stop-services` parameter in ec2 user-data, not really stop running scylla-server
-            service, but deleting a flag file (/etc/scylla/ami_disabled) in first start of scylla-server
-            (by scylla_prepare), and fail the first start.
-
-            We use this function to make sure scylla-ami-setup finishes, and first start is
-            done (fail as expected, /etc/scylla/ami_disabled is deleted). Then it won't effect
-            reconfig in SCT.
-
-            The fllowing two examples are different opportunity to help understand.
-
-            # opportunity 1: scylla-ami-setup finishes:
-              result = node.remoter.run('systemctl status scylla-ami-setup', ignore_status=True)
-              return 'Started Scylla AMI Setup' in result.stdout
-
-            # opportunity 2: flag file is deleted in scylla_prepare:
-              result = node.remoter.run('test -e /etc/scylla/ami_disabled', ignore_status=True)
-              return result.exit_status != 0
-            """
-
-            # make sure scylla-ami-setup finishes, flag file is deleted, and first start fails as expected.
-            result = node.remoter.run('systemctl status scylla-server', ignore_status=True)
-            return 'Failed to start Scylla Server.' in result.stdout
-
-        wait.wait_for(scylla_ami_setup_done, step=10, timeout=300)
+        node.wait_for_machine_image_configured()
 
     def _scylla_install(self, node):
         if self._need_to_install_scylla:

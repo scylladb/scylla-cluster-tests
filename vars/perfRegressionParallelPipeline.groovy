@@ -46,6 +46,10 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
+            string(defaultValue: "false",
+                   description: 'use legacy cluster initializtion',
+                   name: 'use_legacy_cluster_init')
+
         }
         options {
             timestamps()
@@ -87,7 +91,7 @@ def call(Map pipelineParams) {
                                                         env
 
                                                         export SCT_CLUSTER_BACKEND=${params.backend}
-                                                        export SCT_REGION_NAME=${pipelineParams.aws_region}
+                                                        export SCT_REGION_NAME=${params.aws_region}
                                                         export SCT_CONFIG_FILES=${pipelineParams.test_config}
 
                                                         if [[ ! -z "${params.scylla_ami_id}" ]] ; then
@@ -100,6 +104,9 @@ def call(Map pipelineParams) {
                                                             echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO"
                                                             exit 1
                                                         fi
+
+                                                        export SCT_USE_LEGACY_CLUSTER_INIT=${params.use_legacy_cluster_init}
+
 
                                                         export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                                         export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
@@ -120,6 +127,7 @@ def call(Map pipelineParams) {
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {
+                                                        def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
                                                         def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
                                                         sh """
                                                         #!/bin/bash
@@ -129,7 +137,7 @@ def call(Map pipelineParams) {
 
                                                         export SCT_CLUSTER_BACKEND="${params.backend}"
                                                         export SCT_REGION_NAME=${aws_region}
-                                                        export SCT_CONFIG_FILES=${test_config}
+                                                        export SCT_CONFIG_FILES=${pipelineParams.test_config}
 
                                                         echo "start collect logs ..."
                                                         ./docker/env/hydra.sh collect-logs --logdir /sct
@@ -153,9 +161,9 @@ def call(Map pipelineParams) {
                                                             set -xe
                                                             env
 
-                                                            export SCT_CONFIG_FILES=${test_config}
+                                                            export SCT_CONFIG_FILES=${pipelineParams.test_config}
                                                             export SCT_CLUSTER_BACKEND="${params.backend}"
-                                                            export SCT_REGION_NAME=${aws_region}
+                                                            export SCT_REGION_NAME=${params.aws_region}
                                                             export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                                             export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
                                                             export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"

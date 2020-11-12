@@ -183,6 +183,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         cluster.Setup.set_intra_node_comm_public(self.params.get(
             'intra_node_comm_public') or cluster.Setup.MULTI_REGION)
 
+        cluster.Setup.USE_LEGACY_CLUSTER_INIT = self.params.get('use_legacy_cluster_init')
+        if cluster.Setup.USE_LEGACY_CLUSTER_INIT:
+            cluster.Setup.AUTO_BOOTSTRAP = False
+
         # for saving test details in DB
         self.create_stats = self.params.get(key='store_results_in_elasticsearch', default=True)
         self.scylla_dir = SCYLLA_DIR
@@ -224,7 +228,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return duration * 60 + 600
 
     @staticmethod
-    def init_nodes(db_cluster):
+    def legacy_init_nodes(db_cluster):
         db_cluster.set_seeds()
 
         # Init seed nodes
@@ -234,9 +238,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if db_cluster.non_seed_nodes:
             db_cluster.wait_for_init(node_list=db_cluster.non_seed_nodes)
 
+    @staticmethod
+    def init_nodes(db_cluster):
+        db_cluster.set_seeds(first_only=True)
+        db_cluster.wait_for_init(node_list=db_cluster.nodes)
+        db_cluster.set_seeds()
+
+        for node in db_cluster.nodes:
+            node.patch_scylla_yaml_with_seeds(",".join(db_cluster.seed_nodes_ips))
+
     @teardown_on_exception
     @log_run_info
     def setUp(self):
+        # pylint: disable=too-many-branches,too-many-statements
         self.credentials = []
         self.db_cluster = None
         self.cs_db_cluster = None
@@ -257,7 +271,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.init_resources()
 
             if self.db_cluster.nodes:
-                self.init_nodes(db_cluster=self.db_cluster)
+                if cluster.Setup.USE_LEGACY_CLUSTER_INIT:
+                    self.legacy_init_nodes(db_cluster=self.db_cluster)
+                else:
+                    self.init_nodes(db_cluster=self.db_cluster)
                 self.set_system_auth_rf()
                 db_node_address = self.db_cluster.nodes[0].ip_address
                 self.loaders.wait_for_init(db_node_address=db_node_address)
