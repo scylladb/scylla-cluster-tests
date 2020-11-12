@@ -758,7 +758,10 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                 continue
             for metric_path in metrics:
                 # Getting main test of the subtest that showed best score in this metric
-                best_subtest = prior_tests.sort_by(f'{metric_path}.betterness')[-1]
+                sorted_subtests = prior_tests.sort_by(f'{metric_path}.betterness')
+                if not sorted_subtests:
+                    continue
+                best_subtest = sorted_subtests[-1]
                 # Find subtests from any other tests
                 self._add_best_for_info(
                     main_tests_by_id[best_subtest.main_test_id][0],
@@ -797,7 +800,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                     elif version_int < current_test_version_int:
                         if prior_tests_grouped2:
                             self._add_remarks_to_test(prior_tests_grouped2[0], [], tests_info)
-            elif version_major_int < current_test_version_major_int:
+            elif version_major_int != current_test_version_major_int:
                 limit = 2
                 for version_int, prior_tests_grouped2 in prior_tests_grouped.items():
                     if limit < 0:
