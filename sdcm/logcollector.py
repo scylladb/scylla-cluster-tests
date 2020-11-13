@@ -622,6 +622,7 @@ class LogCollector:
     """
     _current_run = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     cluster_log_type = 'base'
+    cluster_dir_prefix = 'base'
     log_entities = []
     node_remote_dir = '/tmp'
     collect_timeout = 300
@@ -741,13 +742,14 @@ class LogCollector:
         if not local_search_path:
             return
         for root, _, _ in os.walk(local_search_path):
-            if self.cluster_log_type in root:
-                node_dirs = {dir_name for dir_name in os.listdir(
-                    root) if os.path.isdir(os.path.join(root, dir_name))}
-                if len(node_names) != len(node_dirs):
-                    inactive_nodes = node_dirs.difference(node_names)
-                    for dir_name in inactive_nodes:
-                        for entity in self.log_entities:
+            if self.cluster_dir_prefix in root:
+                for entity in self.log_entities:
+                    entity.collect(CollectingNode(name=root), self.local_dir, local_search_path=root)
+                    node_dirs = {dir_name for dir_name in os.listdir(root)
+                                 if os.path.isdir(os.path.join(root, dir_name))}
+                    if len(node_names) != len(node_dirs):
+                        inactive_nodes = node_dirs.difference(node_names)
+                        for dir_name in inactive_nodes:
                             entity.collect(CollectingNode(name=dir_name),
                                            os.path.join(self.local_dir, dir_name),
                                            local_search_path=os.path.join(root, dir_name))
@@ -804,6 +806,7 @@ class ScyllaLogCollector(LogCollector):
                                command='sudo coredumpctl info')
                     ]
     cluster_log_type = "db-cluster"
+    cluster_dir_prefix = "db-cluster"
     collect_timeout = 600
 
     def collect_logs(self, local_search_path=None):
@@ -811,7 +814,7 @@ class ScyllaLogCollector(LogCollector):
         return super(ScyllaLogCollector, self).collect_logs(local_search_path)
 
 
-class MinikubeLogCollector(LogCollector):
+class KubernetesLogCollector(LogCollector):
     """Minikube cluster log collecting
 
     Collect on each node the logs for Scylla DB cluster
@@ -826,6 +829,9 @@ class MinikubeLogCollector(LogCollector):
     log_entities = [FileLog(name='system.log',
                             command="sudo journalctl --no-tail --no-pager",
                             search_locally=True),
+                    FileLog(name='scylla_operator.log', search_locally=True),
+                    FileLog(name='cert_manager.log', search_locally=True),
+                    FileLog(name='scylla_cluster_events.log', search_locally=True),
                     CommandLog(name='cpu_info',
                                command='cat /proc/cpuinfo'),
                     CommandLog(name='mem_info',
@@ -837,7 +843,8 @@ class MinikubeLogCollector(LogCollector):
                     CommandLog(name='coredumps.info',
                                command='sudo coredumpctl info')
                     ]
-    cluster_log_type = "k8s-minikube"
+    cluster_log_type = "kubernetes"
+    cluster_dir_prefix = "k8s-"
     collect_timeout = 600
 
     def collect_logs(self, local_search_path=None):
@@ -847,6 +854,8 @@ class MinikubeLogCollector(LogCollector):
 
 class LoaderLogCollector(LogCollector):
     cluster_log_type = "loader-set"
+    cluster_dir_prefix = "loader-set"
+
     log_entities = [
         FileLog(name='system.log',
                 command="sudo journalctl --no-tail --no-pager",
@@ -892,6 +901,7 @@ class MonitorLogCollector(LogCollector):
         GrafanaSnapshot(name='grafana-snapshot')
     ]
     cluster_log_type = "monitor-set"
+    cluster_dir_prefix = "monitor-set"
     collect_timeout = 3600
 
 
@@ -930,6 +940,7 @@ class SCTLogCollector(LogCollector):
                 search_locally=True),
     ]
     cluster_log_type = 'sct-runner'
+    cluster_dir_prefix = 'sct-runner'
 
     def collect_logs(self, local_search_path: Optional[str] = None) -> Optional[str]:
         for ent in self.log_entities:
@@ -991,13 +1002,13 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
         self.db_cluster = []
         self.monitor_set = []
         self.loader_set = []
-        self.minikube_set = []
+        self.kubernetes_set = []
         self.sct_set = []
         self.cluster_log_collectors = {
             ScyllaLogCollector: self.db_cluster,
             MonitorLogCollector: self.monitor_set,
             LoaderLogCollector: self.loader_set,
-            MinikubeLogCollector: self.minikube_set,
+            KubernetesLogCollector: self.kubernetes_set,
             SCTLogCollector: self.sct_set
         }
 
@@ -1055,11 +1066,11 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                   instance=instance,
                                                   global_ip=instance['PublicIpAddress'],
                                                   tags={**self.tags, "NodeType": "loader", }))
-        for instance in filtered_instances['minikube_nodes']:
+        for instance in filtered_instances['kubernetes_nodes']:
             name = [tag['Value']
                     for tag in instance['Tags'] if tag['Key'] == 'Name']
-            self.minikube_set.append(CollectingNode(name=name[0],
-                                                    ssh_login_info={
+            self.kubernetes_set.append(CollectingNode(name=name[0],
+                                                      ssh_login_info={
                 "hostname": instance['PublicIpAddress'],
                 "user": self.params['ami_loader_user'],
                 "key_file": self.params['user_credentials_path']},
@@ -1097,15 +1108,15 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                   instance=instance,
                                                   global_ip=instance.public_ips[0],
                                                   tags={**self.tags, "NodeType": "loader", }))
-        for instance in filtered_instances['minikube_nodes']:
-            self.loader_set.append(CollectingNode(name=instance.name,
-                                                  ssh_login_info={
-                                                      "hostname": instance.public_ips[0],
-                                                      "user": self.params['gce_image_username'],
-                                                      "key_file": self.params['user_credentials_path']},
-                                                  instance=instance,
-                                                  global_ip=instance.public_ips[0],
-                                                  tags={**self.tags, "NodeType": "loader", }))
+        for instance in filtered_instances['kubernetes_nodes']:
+            self.kubernetes_set.append(CollectingNode(name=instance.name,
+                                                      ssh_login_info={
+                                                          "hostname": instance.public_ips[0],
+                                                          "user": self.params['gce_image_username'],
+                                                          "key_file": self.params['user_credentials_path']},
+                                                      instance=instance,
+                                                      global_ip=instance.public_ips[0],
+                                                      tags={**self.tags, "NodeType": "loader", }))
 
     def get_docker_instances_by_testid(self):
         instances = list_instances_gce({"TestId": self.test_id}, running=True)

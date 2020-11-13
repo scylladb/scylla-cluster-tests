@@ -67,7 +67,7 @@ from sdcm.ndbench_thread import NdBenchStressThread
 from sdcm.localhost import LocalHost
 from sdcm.cdclog_reader_thread import CDCLogReaderThread
 from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCollector, LoaderLogCollector, \
-    MinikubeLogCollector
+    KubernetesLogCollector
 from sdcm.send_email import build_reporter, read_email_data_from_file, get_running_instances_for_email_report, \
     save_email_data_to_file
 from sdcm.utils import alternator
@@ -2231,7 +2231,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                      "logname": "monitoring_log", },
                     {"name": "k8s_cluster",
                      "nodes": getattr(self, "k8s_cluster", None) and self.k8s_cluster.nodes,
-                     "collector": MinikubeLogCollector,
+                     "collector": KubernetesLogCollector,
                      "logname": "k8s_minikube_log", }, )
 
         for cluster in clusters:
