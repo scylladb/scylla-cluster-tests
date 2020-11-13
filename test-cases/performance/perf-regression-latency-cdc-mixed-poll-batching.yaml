@@ -1,6 +1,14 @@
+# test runs 4 subtest with duration 60 min
+# and time for clear table between subtest
 test_duration: 500
 
 stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=10 throttle=2500/s' -col 'size=FIXED(1024) n=FIXED(1)' -pop 'dist=gauss(1..500000000,250000000,25000000)' "
+
+stress_cdclog_reader_cmd: "cdc-stressor -duration 70m -stream-query-round-duration 30s"
+store_cdclog_reader_stats_in_es: false
+stress_cdc_log_reader_batching_enable: true
+
+
 n_db_nodes: 3
 n_loaders: 4
 n_monitor_nodes: 1
@@ -9,13 +17,12 @@ instance_type_loader: 'c4.2xlarge'
 instance_type_monitor: 't3.small'
 instance_type_db: 'i3.2xlarge'
 
-user_prefix: 'perf-cdc-latency-write'
+user_prefix: 'perf-cdc-latency-mixed'
 space_node_threshold: 644245094
 
 
 store_perf_results: true
 append_scylla_args: '--blocked-reactor-notify-ms 50'
-
 
 send_email: true
 email_recipients: ['qa@scylladb.com', 'piotr@scylladb.com ', 'piodul@scylladb.com', 'shlomi@scylladb.com ']

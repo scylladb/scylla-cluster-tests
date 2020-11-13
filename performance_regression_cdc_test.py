@@ -12,6 +12,8 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
     keyspace = None
     table = None
     cdclog_reader_cmd = None
+    enable_batching = False
+    update_es = False
 
     def test_write_with_cdc(self):
         write_cmd = self.params.get("stress_cmd_w")
@@ -80,6 +82,7 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
 
     def test_write_latency(self):
         self.cdc_workflow()
+        self.update_test_details()
 
     def test_mixed_throughput(self):
         self.cdc_workflow(use_cdclog_reader=True)
@@ -91,12 +94,11 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
         self.keyspace = "keyspace1"
         self.table = "standard1"
         write_cmd = self.params.get("stress_cmd_w")
-        update_es = None
 
         if use_cdclog_reader:
             self.cdclog_reader_cmd = self.params.get('stress_cdclog_reader_cmd')
-            update_es = self.params.get('store_cdclog_reader_stats_in_es')
-            enable_batching = self.params.get('stress_cdc_log_reader_batching_enable')
+            self.update_es = self.params.get('store_cdclog_reader_stats_in_es')
+            self.enable_batching = self.params.get('stress_cdc_log_reader_batching_enable')
 
         self._workload_cdc(write_cmd,
                            stress_num=2,
@@ -115,8 +117,8 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
                            test_name="test_write",
                            sub_type="cdc_enabled",
                            read_cdclog_cmd=self.cdclog_reader_cmd,
-                           update_cdclog_stats=update_es,
-                           enable_batching=enable_batching)
+                           update_cdclog_stats=self.update_es,
+                           enable_batching=self.enable_batching)
 
         self.wait_no_compactions_running()
         self.run_fstrim_on_all_db_nodes()
@@ -129,8 +131,8 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
                            test_name="test_write",
                            sub_type="cdc_preimage_enabled",
                            read_cdclog_cmd=self.cdclog_reader_cmd,
-                           update_cdclog_stats=update_es,
-                           enable_batching=enable_batching)
+                           update_cdclog_stats=self.update_es,
+                           enable_batching=self.enable_batching)
 
         self.wait_no_compactions_running()
         self.run_fstrim_on_all_db_nodes()
@@ -143,8 +145,8 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
                            test_name="test_write",
                            sub_type="cdc_postimage_enabled",
                            read_cdclog_cmd=self.cdclog_reader_cmd,
-                           update_cdclog_stats=update_es,
-                           enable_batching=enable_batching)
+                           update_cdclog_stats=self.update_es,
+                           enable_batching=self.enable_batching)
 
         self.wait_no_compactions_running()
 
