@@ -48,7 +48,7 @@ class SctRunner:
     @staticmethod
     def instance_type(test_duration):
         if test_duration > 7 * 60:
-            return "m5.large"
+            return "r5.large"
         return "t3.large"  # has 7h 12m CPU burst
 
     @staticmethod
