@@ -488,8 +488,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         raise AssertionError(f"Could not find the requested node {self.ip_address} in nodetool status")
 
     def refresh_ip_address(self):
+        if self.ssh_login_info["hostname"] == self.external_address:
+            return
         self.ssh_login_info["hostname"] = self.external_address
-        self.remoter.hostname = self.external_address
+        self.remoter.stop()
+        self._init_remoter(self.ssh_login_info)
         self._init_port_mapping()
 
     @cached_property
