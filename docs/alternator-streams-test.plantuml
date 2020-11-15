@@ -1,0 +1,35 @@
+@startuml
+skinparam nodesep 30
+skinparam ranksep 300
+
+
+legend
+|= |= API |
+|<back:red>   </back>| DynamoDB |
+|<back:green>   </back>| DynamoDB Streams |
+|<back:blue>   </back>| nodetool cfstats - estimate table size |
+endlegend
+
+database "DB Nodes" {
+    card [source table]
+    card [destination table]
+    card [kinesis housekeeping table]
+}
+
+package "Loaders" {
+    card [YCSB]
+    card [hydra-kcl]
+    card [TableSizeCompare]
+    [YCSB - Validate pass]
+
+}
+
+[YCSB] -[dashed,#red]-> [source table]: **2)** write with\nPutItem\n
+[source table] -[bold,#green]-> [hydra-kcl]: **1)** Stream via \ndynamodb streams\napi
+[hydra-kcl] -[dashed,#red]-> [destination table]: **3)** PutItem/DeleteItem
+[hydra-kcl] <-[dashed,#red]-> [kinesis housekeeping table]: Leases,\nCheckpoints
+
+TableSizeCompare -[dotted,#blue]->  [source table]
+TableSizeCompare -[dotted,#blue]-> [destination table]
+[YCSB - Validate pass] -[dashed,#red]-> [destination table]: **4)** validation
+@enduml
