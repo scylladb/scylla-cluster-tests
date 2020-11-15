@@ -24,6 +24,7 @@ jenkins-pipelines
 |-- artifacts-oel76.jenkinsfile
 |-- artifacts-ubuntu1604.jenkinsfile
 |-- artifacts-ubuntu1804.jenkinsfile
+|-- artifacts-ubuntu2004.jenkinsfile
 `-- private-repo.jenkinsfile
 ```
 
@@ -100,6 +101,11 @@ hydra run-test artifacts_test --backend gce --config test-cases/artifacts/ubuntu
 ## Ubuntu 18.04 LTS (bionic)
 ```sh
 hydra run-test artifacts_test --backend gce --config test-cases/artifacts/ubuntu1804.yaml
+```
+
+## Ubuntu 20.04 LTS (focal)
+```sh
+hydra run-test artifacts_test --backend gce --config test-cases/artifacts/ubuntu2004.yaml
 ```
 
 ## AMI

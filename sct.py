@@ -363,8 +363,8 @@ def list_ami_branch(region, version):
 @cli.command('list-repos', help='List repos url of Scylla formal versions')
 @click.option('-d', '--dist-type', type=click.Choice(['centos', 'ubuntu', 'debian']),
               default='centos', help='Distribution type')
-@click.option('-v', '--dist-version', type=click.Choice(['xenial', 'trusty', 'bionic', 'focal'     # Ubuntu
-                                                         'jessie', 'stretch', 'buster']),          # Debian
+@click.option('-v', '--dist-version', type=click.Choice(['xenial', 'trusty', 'bionic', 'focal'  # Ubuntu
+                                                         'jessie', 'stretch', 'buster']),       # Debian
               default=None, help='deb style versions')
 def list_repos(dist_type, dist_version):
     add_file_logger()

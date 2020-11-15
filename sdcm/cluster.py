@@ -819,6 +819,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @property
     def init_system(self):
+        deprecation("consider to use node.distro.uses_systemd property instead")
         if self._init_system is None:
             result = self.remoter.run('journalctl --version',
                                       ignore_status=True)
