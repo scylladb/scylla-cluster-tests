@@ -37,6 +37,7 @@ class Distro(enum.Enum):
     UBUNTU14 = ("ubuntu", "14.04")
     UBUNTU16 = ("ubuntu", "16.04")
     UBUNTU18 = ("ubuntu", "18.04")
+    UBUNTU20 = ("ubuntu", "20.04")
 
     @classmethod
     def _missing_(cls, value):
@@ -131,6 +132,10 @@ class Distro(enum.Enum):
         return self == self.UBUNTU18
 
     @property
+    def is_ubuntu20(self):
+        return self == self.UBUNTU20
+
+    @property
     def is_ubuntu(self):
         return self.value[0] == "ubuntu"  # pylint: disable=unsubscriptable-object
 
@@ -149,3 +154,8 @@ class Distro(enum.Enum):
     @property
     def is_debian(self):
         return self.value[0] == "debian"  # pylint: disable=unsubscriptable-object
+
+    @property
+    def uses_systemd(self):
+        # Debian uses systemd as a default init system since 8.0, Ubuntu since 15.04, and RedHat-based since 7.0
+        return self not in (self.UNKNOWN, self.UBUNTU14, )

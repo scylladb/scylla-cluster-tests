@@ -50,26 +50,6 @@ def cli():
     pass
 
 
-'''
-Work in progress
-
-from sdcm.tester import ClusterTester
-
-@cli.command()
-@click.option('--scylla-version', type=str, default='3.0.3')
-@sct_option('--db-nodes', 'n_db_nodes')
-@sct_option('--loader-nodes', 'n_loaders')
-@sct_option('--monitor-nodes', 'n_monitor_nodes')
-def provision(**kwargs):
-    logging.basicConfig(level=logging.INFO)
-    # click.secho('Going to install scylla cluster version={}'.format(kwargs['scylla_version']), reverse=True, fg='bright_yellow')
-    # TODO: find a better way for ctrl+c to kill this process
-    test = ClusterTester(methodName='setUp')
-    test._setup_environment_variables()
-    test.setUp()
-'''  # pylint: disable=pointless-string-statement
-
-
 @cli.command('clean-resources', help='clean tagged instances in both clouds (AWS/GCE)')
 @click.option('--user', type=str, help='user name to filter instances by')
 @sct_option('--test-id', 'test_id', help='test id to filter by. Could be used multiple times', multiple=True)
@@ -251,8 +231,8 @@ def list_ami_branch(region, version):
 @cli.command('list-repos', help='List repos url of Scylla formal versions')
 @click.option('-d', '--dist-type', type=click.Choice(['centos', 'ubuntu', 'debian']),
               default='centos', help='Distribution type')
-@click.option('-v', '--dist-version', type=click.Choice(['xenial', 'trusty', 'bionic',     # Ubuntu
-                                                         'jessie', 'stretch', 'buster']),  # Debian
+@click.option('-v', '--dist-version', type=click.Choice(['xenial', 'trusty', 'bionic', 'focal'  # Ubuntu
+                                                         'jessie', 'stretch', 'buster']),       # Debian
               default=None, help='deb style versions')
 def list_repos(dist_type, dist_version):
     if not dist_type == 'centos' and dist_version is None:

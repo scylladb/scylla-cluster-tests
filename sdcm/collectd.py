@@ -393,32 +393,31 @@ LoadPlugin processes
         return "/etc/collectd.d/scylla.conf"
 
     def start_collectd_service(self):
-        if self.node.is_rhel_like():
+        if self.node.distro.is_rhel_like:
             # Disable SELinux to allow the unix socket plugin to work
-            self.node.remoter.run('sudo setenforce 0', ignore_status=True)
-        if self.node.is_rhel_like() or self.node.is_ubuntu16() or self.node.is_ubuntu18():
-            self.node.remoter.run('sudo systemctl enable collectd.service')
+            self.node.remoter.sudo("setenforce 0", ignore_status=True)
         if self.node.is_docker():
-            self.node.remoter.run('sudo /usr/sbin/collectd')
+            self.node.remoter.sudo("/usr/sbin/collectd")
+        elif self.node.distro.uses_systemd:
+            self.node.remoter.sudo("systemctl enable collectd.service")
+            self.node.remoter.sudo("systemctl restart collectd.service")
         else:
-            if self.node.is_rhel_like() or self.node.is_ubuntu16() or self.node.is_ubuntu18():
-                self.node.remoter.run('sudo systemctl restart collectd.service')
-            else:
-                self.node.remoter.run('sudo service collectd restart')
+            self.node.remoter.sudo("service collectd restart")
 
     def collectd_exporter_setup(self):
-        systemd_unit = """[Unit]
-Description=Collectd Exporter
+        systemd_unit = dedent(f"""\
+            [Unit]
+            Description=Collectd Exporter
 
-[Service]
-Type=simple
-User=root
-Group=root
-ExecStart=%s -collectd.listen-address=:65534
+            [Service]
+            Type=simple
+            User=root
+            Group=root
+            ExecStart={self.collectd_exporter_path} -collectd.listen-address=:65534
 
-[Install]
-WantedBy=multi-user.target
-""" % self.collectd_exporter_path
+            [Install]
+            WantedBy=multi-user.target
+        """)
 
         tmp_dir_exporter = tempfile.mkdtemp(prefix='collectd-systemd-service')
         tmp_path_exporter = os.path.join(tmp_dir_exporter, 'collectd-exporter.service')
@@ -428,16 +427,14 @@ WantedBy=multi-user.target
             tmp_cfg_prom.write(systemd_unit)
         try:
             self.node.remoter.send_files(src=tmp_path_exporter, dst=tmp_path_remote)
-            self.node.remoter.run('sudo mv %s %s' %
-                                  (tmp_path_remote, system_path_remote))
+            self.node.remoter.sudo(f"mv {tmp_path_remote} {system_path_remote}")
 
             if self.node.is_docker():
-                self.node.remoter.run('sudo {} -collectd.listen-address=:65534 &'.format(self.collectd_exporter_path))
+                self.node.remoter.sudo(f"{self.collectd_exporter_path} -collectd.listen-address=:65534 &")
+            elif self.node.distro.uses_systemd:
+                self.node.remoter.sudo("systemctl start collectd-exporter.service")
             else:
-                if self.node.is_rhel_like() or self.node.is_ubuntu16() or self.node.is_ubuntu18():
-                    self.node.remoter.run('sudo systemctl start collectd-exporter.service')
-                else:
-                    self.node.remoter.run('sudo service collectd-exporter start')
+                self.node.remoter.sudo("service collectd-exporter start")
         finally:
             shutil.rmtree(tmp_dir_exporter)
 
