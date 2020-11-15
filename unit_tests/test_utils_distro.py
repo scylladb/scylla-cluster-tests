@@ -177,6 +177,21 @@ VERSION_CODENAME=bionic
 UBUNTU_CODENAME=bionic
 """,
 
+    "Ubuntu 20.04": """\
+NAME="Ubuntu"
+VERSION="20.04 LTS (Focal Fossa)"
+ID=ubuntu
+ID_LIKE=debian
+PRETTY_NAME="Ubuntu 20.04 LTS"
+VERSION_ID="20.04"
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+VERSION_CODENAME=focal
+UBUNTU_CODENAME=focal
+""",
+
     "Amazon Linux 2": """\
 NAME="Amazon Linux"
 VERSION="2"
@@ -265,6 +280,12 @@ class TestDistro(unittest.TestCase):
         self.assertTrue(Distro.UBUNTU18.is_ubuntu18)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Ubuntu 18.04"])
         self.assertTrue(distro.is_ubuntu18)
+        self.assertTrue(distro.is_ubuntu)
+
+    def test_ubuntu20(self):
+        self.assertTrue(Distro.UBUNTU20.is_ubuntu20)
+        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Ubuntu 20.04"])
+        self.assertTrue(distro.is_ubuntu20)
         self.assertTrue(distro.is_ubuntu)
 
     def test_amazon2(self):
