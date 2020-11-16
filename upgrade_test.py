@@ -426,8 +426,9 @@ class UpgradeTest(FillDatabaseData):
     def search_for_idx_token_error_after_upgrade(self, node, step):
         self.log.debug('Search for idx_token error. Step {}'.format(step))
         idx_token_error = node.search_system_log(
-            search_pattern='idx_token',
+            search_pattern="Column idx_token doesn't exist",
             start_from_beginning=True)
+
         if idx_token_error:
             IndexSpecialColumnErrorEvent('Node: %s. Step: %s. '
                                          'Found error: index special column "idx_token" is not recognized' %
