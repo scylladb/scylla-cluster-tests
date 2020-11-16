@@ -10,16 +10,18 @@ List<Integer> call(Map params, String region){
     ./docker/env/hydra.sh output-conf -b "${params.backend}" 2>/dev/null | grep test_duration | awk '{print \$2}'
     """
     def testDuration = sh(script: cmd, returnStdout: true).trim()
-    println("Test duration: $testDuration")
     testDuration = testDuration.toInteger()
+    Integer testStartupTimeout = 20
+    Integer testTeardownTimeout = 40
+    Integer collectLogsTimeout = 70
+    Integer resourceCleanupTimeout = 15
+    Integer sendEmailTimeout = 5
+    Integer testRunTimeout = testStartupTimeout + testDuration + testTeardownTimeout
+    Integer runnerTimeout = testRunTimeout + collectLogsTimeout + resourceCleanupTimeout + sendEmailTimeout
     println("Test duration: $testDuration")
-    Integer testRunTimeout = testDuration + Math.max( (int) (testDuration * 0.2), (int) 40)
     println("Test run timeout: $testRunTimeout")
-    Integer runnerTimeout = (int) (testRunTimeout * 1.2)
-    println("Runner timeout: $runnerTimeout")
-    Integer collectLogsTimeout = Math.max( (int) (testDuration * 0.2), (int) 40)
     println("Collect logs timeout: $collectLogsTimeout")
-    Integer resourceCleanupTimeout = Math.max( (int) (testDuration * 0.2), (int) 40)
     println("Resource cleanup timeout: $resourceCleanupTimeout")
+    println("Runner timeout: $runnerTimeout")
     return [testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout]
 }
