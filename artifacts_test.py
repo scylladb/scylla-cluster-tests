@@ -81,8 +81,9 @@ class ArtifactsTest(ClusterTester):
         if self.params["cluster_backend"] == "gce":
             self.verify_users()
 
-        with self.subTest("check the cluster name"):
-            self.check_cluster_name()
+        if self.params["use_preinstalled_scylla"] and "docker" not in self.params["cluster_backend"]:
+            with self.subTest("check the cluster name"):
+                self.check_cluster_name()
 
         with self.subTest("check Scylla server after installation"):
             self.check_scylla()
