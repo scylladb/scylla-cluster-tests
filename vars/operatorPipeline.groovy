@@ -58,10 +58,11 @@ def call(Map pipelineParams) {
             stage('Run SCT Test') {
                 steps {
                     script {
+                        def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
                         sctScript """
                             rm -fv ./latest
 
-                            export SCT_CONFIG_FILES=${pipelineParams.test_config}
+                            export SCT_CONFIG_FILES=${test_config}
                             if [[ -n "${params.k8s_scylla_operator_docker_image}" ]]; then
                                 export SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE=${params.k8s_scylla_operator_docker_image}
                             fi
