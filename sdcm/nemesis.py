@@ -1285,6 +1285,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self._add_drop_column_target_table)
         if self._add_drop_column_target_table is None:
             raise UnsupportedNemesis("AddDropColumnMonkey: can't find table to run on")
+        self._set_current_disruption(f'AddDropColumnMonkey table {".".join(self._add_drop_column_target_table)}')
         self._add_drop_column_run_in_cycle()
 
     def modify_table_comment(self):
