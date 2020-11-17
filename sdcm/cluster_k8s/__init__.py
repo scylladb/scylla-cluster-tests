@@ -24,7 +24,6 @@ from copy import deepcopy
 from typing import Optional, Union, List, Dict, Any, ContextManager, Type
 from difflib import unified_diff
 from tempfile import NamedTemporaryFile
-from textwrap import dedent
 from functools import cached_property, partialmethod
 from threading import RLock
 
@@ -38,7 +37,8 @@ from sdcm.sct_config import sct_abs_path
 from sdcm.sct_events import TestFrameworkEvent
 from sdcm.utils.k8s import KubernetesOps, JSON_PATCH_TYPE
 from sdcm.utils.decorators import log_run_info, timeout
-from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger
+from sdcm.utils.remote_logger import get_system_logging_thread, \
+    CertManagerLogger, ScyllaOperatorLogger, KubectlClusterEventsLogger
 from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring, ScyllaOperatorStatusMonitoring
 
 
@@ -60,6 +60,8 @@ class KubernetesCluster:  # pylint: disable=too-few-public-methods
     datacenter = ()
     _cert_manager_journal_thread: Optional[CertManagerLogger] = None
     _scylla_operator_journal_thread: Optional[ScyllaOperatorLogger] = None
+    _scylla_cluster_events_thread: Optional[KubectlClusterEventsLogger] = None
+
     _scylla_operator_log_monitor_thread: Optional[ScyllaOperatorLogMonitoring] = None
     _scylla_operator_status_monitor_thread: Optional[ScyllaOperatorStatusMonitoring] = None
 
@@ -99,6 +101,10 @@ class KubernetesCluster:  # pylint: disable=too-few-public-methods
     def scylla_operator_log(self) -> str:
         return os.path.join(self.logdir, "scylla_operator.log")
 
+    @property
+    def scylla_cluster_event_log(self) -> str:
+        return os.path.join(self.logdir, "scylla_cluster_events.log")
+
     def start_scylla_operator_journal_thread(self) -> None:
         self._scylla_operator_journal_thread = ScyllaOperatorLogger(self, self.scylla_operator_log)
         self._scylla_operator_journal_thread.start()
@@ -106,6 +112,10 @@ class KubernetesCluster:  # pylint: disable=too-few-public-methods
         self._scylla_operator_log_monitor_thread.start()
         self._scylla_operator_status_monitor_thread = ScyllaOperatorStatusMonitoring(self)
         self._scylla_operator_status_monitor_thread.start()
+
+    def start_scylla_cluster_events_thread(self) -> None:
+        self._scylla_cluster_events_thread = KubectlClusterEventsLogger(self, self.scylla_cluster_event_log)
+        self._scylla_cluster_events_thread.start()
 
     @log_run_info
     def deploy_scylla_operator(self) -> None:
@@ -126,6 +136,7 @@ class KubernetesCluster:  # pylint: disable=too-few-public-methods
 
         LOGGER.debug("Wait for %d secs before we start to apply changes to the cluster", DEPLOY_SCYLLA_CLUSTER_DELAY)
         time.sleep(DEPLOY_SCYLLA_CLUSTER_DELAY)
+        self.start_scylla_cluster_events_thread()
 
     @log_run_info
     def deploy_loaders_cluster(self, config: str) -> None:
@@ -147,6 +158,8 @@ class KubernetesCluster:  # pylint: disable=too-few-public-methods
             self._scylla_operator_status_monitor_thread.stop()
         if self._scylla_operator_journal_thread:
             self._scylla_operator_journal_thread.stop(timeout)
+        if self._scylla_cluster_events_thread:
+            self._scylla_cluster_events_thread.stop(timeout)
 
     @property
     def operator_pod_status(self):
