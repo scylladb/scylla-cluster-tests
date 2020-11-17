@@ -66,7 +66,6 @@ prepare_write_cmd:
 #     -p scylla.maxconnections=280 -p scylla.username=cassandra -p scylla.password=cassandra -p scylla.tokenaware=true -p hosts=10.0.2.51,10.0.3.133,10.0.3.67 -p scylla.readconsistencylevel=ONE -p
 #      scylla.writeconsistencylevel=ONE
 stress_cmd: [
-    "bin/ycsb run cassandra-cql -P workloads/workloada -target 120000 -threads 840 -p recordcount=1000000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000 -p cassandra.coreconnections=280 -p cassandra.maxconnections=280 -p cassandra.username=cassandra -p cassandra.password=cassandra"
 ]
 
 round_robin: true
