@@ -40,6 +40,7 @@ from sdcm.sct_events import TestFrameworkEvent
 from sdcm.utils.k8s import KubernetesOps, JSON_PATCH_TYPE
 from sdcm.utils.decorators import log_run_info, timeout
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger
+from sdcm.utils.scylla_yaml import get_scylla_yaml_from_config, get_config_from_params
 from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring, ScyllaOperatorStatusMonitoring
 
 
@@ -176,6 +177,9 @@ class BasePodContainer(cluster.BaseNode):
 
     @staticmethod
     def is_docker() -> bool:
+        return True
+
+    def is_scylla_installed(self) -> bool:
         return True
 
     def tags(self) -> Dict[str, str]:
@@ -334,6 +338,7 @@ class BasePodContainer(cluster.BaseNode):
 
         More details here: https://github.com/scylladb/scylla-operator/blob/master/docs/generic.md#configure-scylla
         """
+        self.log.info('remote_scylla_yaml is readonly on kubernetes')
         with self.parent_cluster.scylla_yaml_lock:
             scylla_yaml_copy = deepcopy(self.parent_cluster.scylla_yaml)
             yield self.parent_cluster.scylla_yaml
@@ -383,7 +388,9 @@ class PodCluster(cluster.BaseCluster):
         self.k8s_cluster = k8s_cluster
         self.namespace = namespace
         self.container = container
-
+        self.scylla_yaml_lock = RLock()
+        self.scylla_yaml = {}
+        self.scylla_yaml_update_required = False
         super().__init__(cluster_uuid=cluster_uuid,
                          cluster_prefix=cluster_prefix,
                          node_prefix=node_prefix,
@@ -505,13 +512,15 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
 
         cluster_yaml['spec']['repository'] = self.get_docker_repo_from_scylla_version(params['scylla_version'])
 
+        scylla_yaml = get_scylla_yaml_from_config(**get_config_from_params(
+            name=scylla_cluster_name, params=params))
+
+        self.update_scylla_config(scylla_yaml, k8s_cluster=k8s_cluster, namespace="scylla")
+
         with NamedTemporaryFile(mode='w') as cluster_config:
             cluster_config.write(json.dumps(cluster_yaml))
             cluster_config.flush()
             k8s_cluster.deploy_scylla_cluster(cluster_config.name)
-        self.scylla_yaml_lock = RLock()
-        self.scylla_yaml = {}
-        self.scylla_yaml_update_required = False
         self.scylla_cluster_name = scylla_cluster_name
         super().__init__(k8s_cluster=k8s_cluster,
                          namespace="scylla",
@@ -528,8 +537,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
     def wait_for_init(self, node_list=None, verbose=False, timeout=None, *_, **__):
         node_list = node_list if node_list else self.nodes
         self.wait_for_nodes_up_and_normal(nodes=node_list)
-        if self.update_scylla_config():
-            self.wait_for_nodes_up_and_normal(nodes=node_list)
 
     @cached_property
     def _k8s_scylla_cluster_api(self) -> Resource:
@@ -590,11 +597,14 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                           endpoint_snitch=None,
                           murmur3_partitioner_ignore_msb_bits=None,
                           client_encrypt=None):  # pylint: disable=too-many-arguments,invalid-name
-        if self.get_scylla_args():
-            raise NotImplementedError("custom SCYLLA_ARGS is not supported by k8s-* backends yet")
-        super().node_config_setup(
-            node, seed_address=seed_address, endpoint_snitch=endpoint_snitch,
-            murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits, client_encrypt=client_encrypt)
+        # There is no way to setup config of one particular node on kubernetes
+        pass
+
+        # if self.get_scylla_args():
+        #     raise NotImplementedError("custom SCYLLA_ARGS is not supported by k8s-* backends yet")
+        # super().node_config_setup(
+        #     node, seed_address=seed_address, endpoint_snitch=endpoint_snitch,
+        #     murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits, client_encrypt=client_encrypt)
 
     def validate_seeds_on_all_nodes(self):
         pass
@@ -635,31 +645,29 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         self.replace_scylla_cluster_value("/spec/version", new_version)
         self.rollout_restart()
 
-    def update_scylla_config(self) -> bool:
-        if not self.scylla_yaml_update_required:
-            return False
-
-        scylla_yaml = self.scylla_yaml.copy()
+    def update_scylla_config(self, scylla_yaml: dict, k8s_cluster: 'KubernetesCluster' = None,
+                             namespace: Optional[str] = None):
+        if k8s_cluster is None:
+            k8s_cluster = self.k8s_cluster
+        if namespace is None:
+            namespace = self.namespace
+        scylla_yaml = scylla_yaml.copy()
         # Remove parameters not allowed by scylla-operator
-        for param in ['seed_provider', 'rpc_address', 'cluster_name', 'listen_address']:
-            del scylla_yaml[param]
+        for param in ['seed_provider', 'rpc_address', 'cluster_name', 'listen_address', '']:
+            if param in scylla_yaml:
+                del scylla_yaml[param]
 
-        with self.scylla_yaml_lock:
-            with NamedTemporaryFile("w", delete=False) as tmp:
-                tmp.write(yaml.safe_dump(scylla_yaml))
-                tmp.flush()
-                try:
-                    self.k8s_cluster.kubectl(f"get configmap scylla-config", namespace=self.namespace)
-                    self.k8s_cluster.kubectl(f"delete configmap scylla-config", namespace=self.namespace)
-                except UnexpectedExit:
-                    pass
-                self.k8s_cluster.kubectl(f"create configmap scylla-config --from-file=scylla.yaml={tmp.name}",
-                                         namespace=self.namespace)
-                os.remove(tmp.name)
-            time.sleep(5)
-            self.rollout_restart()
-            self.scylla_yaml_update_required = False
-        return True
+        with NamedTemporaryFile("w", delete=False) as tmp:
+            tmp.write(yaml.safe_dump(scylla_yaml))
+            tmp.flush()
+            try:
+                k8s_cluster.kubectl(f"get configmap scylla-config", namespace=namespace)
+                k8s_cluster.kubectl(f"delete configmap scylla-config", namespace=namespace)
+            except UnexpectedExit:
+                pass
+            k8s_cluster.kubectl(f"create configmap scylla-config --from-file=scylla.yaml={tmp.name}",
+                                namespace=namespace)
+            os.remove(tmp.name)
 
     def rollout_restart(self):
         self.k8s_cluster.kubectl("rollout restart statefulset", namespace=self.namespace)
@@ -703,9 +711,9 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
                    **kwargs) -> None:
 
         self.install_scylla_bench(node)
-
+        self.log.error('XXXXXXXXXXXXXXXXXXX')
         if self.params.get('client_encrypt'):
-            node.config_client_encrypt()
+            node.prepare_client_encryption()
 
     def add_nodes(self,
                   count: int,

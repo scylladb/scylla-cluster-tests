@@ -73,6 +73,7 @@ from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3
 from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.scylla_args import ScyllaArgParser
+from sdcm.utils.scylla_yaml import get_scylla_yaml_from_config, get_config_from_params
 from sdcm.utils.file import File
 from sdcm.coredump import CoredumpExportSystemdThread
 
@@ -1583,128 +1584,77 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                      alternator_enforce_authorization=False,
                      internode_compression=None,
                      internode_encryption=None):
-        with self.remote_scylla_yaml(yaml_file) as scylla_yml:
-            if seed_address:
-                # Set seeds
-                scylla_yml['seed_provider'] = [
-                    dict(class_name='org.apache.cassandra.locator.SimpleSeedProvider',
-                         parameters=[dict(seeds=seed_address)])]
+        self.prepare_node_for_config(
+            server_encrypt=server_encrypt,
+            client_encrypt=client_encrypt,
+            append_scylla_yaml=append_scylla_yaml,
+            append_scylla_args=append_scylla_args,
+            debug_install=debug_install)
 
-                # NOTICE: the following configuration always have to use private_ip_address for multi-region to work
-                # Set listen_address
-                scylla_yml['listen_address'] = self.private_ip_address
-                # Set rpc_address
-                scylla_yml['rpc_address'] = self.private_ip_address
+        with self.remote_scylla_yaml(yaml_file) as scylla_yaml:
+            get_scylla_yaml_from_config(
+                seed_address=seed_address,
+                cluster_name=cluster_name,
+                enable_exp=enable_exp,
+                endpoint_snitch=endpoint_snitch,
+                broadcast=broadcast,
+                authenticator=authenticator,
+                server_encrypt=server_encrypt,
+                client_encrypt=client_encrypt,
+                append_scylla_yaml=append_scylla_yaml,
+                hinted_handoff=hinted_handoff,
+                murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
+                authorizer=authorizer,
+                alternator_port=alternator_port,
+                listen_on_all_interfaces=listen_on_all_interfaces,
+                ip_ssh_connections=ip_ssh_connections,
+                alternator_enforce_authorization=alternator_enforce_authorization,
+                internode_compression=internode_compression,
+                internode_encryption=internode_encryption,
+                private_ip_address=self.private_ip_address,
+                ip_address=self.ip_address,
+                enable_auto_bootstrap=self.enable_auto_bootstrap,
+                replacement_node_ip=self.replacement_node_ip,
+                scylla_yaml=scylla_yaml
+            )
 
-            if listen_on_all_interfaces:
-                # Set listen_address
-                scylla_yml['listen_address'] = "0.0.0.0"
-                # Set rpc_address
-                scylla_yml['rpc_address'] = "0.0.0.0"
+    def prepare_node_for_config(
+            self,
+            server_encrypt=None,
+            client_encrypt=None,
+            append_scylla_yaml=None,
+            append_scylla_args=None,
+            debug_install=False):
 
-            if broadcast:
-                # Set broadcast_address
-                scylla_yml['broadcast_address'] = broadcast
+        if server_encrypt:
+            self.prepare_server_encryption()
 
-                # Set broadcast_rpc_address
-                scylla_yml['broadcast_rpc_address'] = broadcast
-
-            if cluster_name:
-                scylla_yml['cluster_name'] = cluster_name
-
-            # disable hinted handoff (it is enabled by default in Scylla). Expected values: "enabled"/"disabled"
-            if hinted_handoff == 'disabled':
-                scylla_yml['hinted_handoff_enabled'] = False
-
-            if ip_ssh_connections == 'ipv6':
-                self.log.debug('Enable IPv6 DNS lookup')
-                scylla_yml['enable_ipv6_dns_lookup'] = True
-
-                scylla_yml['prometheus_address'] = self.ip_address
-                scylla_yml['broadcast_rpc_address'] = self.ip_address
-                scylla_yml['listen_address'] = self.ip_address
-                scylla_yml['rpc_address'] = self.ip_address
-
-            if murmur3_partitioner_ignore_msb_bits:
-                self.log.debug('Change murmur3_partitioner_ignore_msb_bits to {}'.format(
-                    murmur3_partitioner_ignore_msb_bits))
-                scylla_yml['murmur3_partitioner_ignore_msb_bits'] = int(murmur3_partitioner_ignore_msb_bits)
-
-            if enable_exp:
-                scylla_yml['experimental'] = True
-
-            if endpoint_snitch:
-                scylla_yml['endpoint_snitch'] = endpoint_snitch
-
-
-            if self.enable_auto_bootstrap:
-                scylla_yml['auto_bootstrap'] = True
-            else:
-                if 'auto_bootstrap' in scylla_yml:
-                    scylla_yml['auto_bootstrap'] = False
-
-            if authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator']:
-                scylla_yml['authenticator'] = authenticator
-
-            if authorizer in ['AllowAllAuthorizer', 'CassandraAuthorizer']:
-                scylla_yml['authorizer'] = authorizer
-
-            if server_encrypt:
-                self.prepare_server_encryption()
-                scylla_yml['server_encryption_options'] = dict(internode_encryption=internode_encryption,
-                                                               certificate='/etc/scylla/ssl_conf/db.crt',
-                                                               keyfile='/etc/scylla/ssl_conf/db.key',
-                                                               truststore='/etc/scylla/ssl_conf/cadb.pem')
-
-            if client_encrypt:
-                self.prepare_client_encryption()
-                scylla_yml['client_encryption_options'] = dict(enabled=True,
-                                                               certificate='/etc/scylla/ssl_conf/client/test.crt',
-                                                               keyfile='/etc/scylla/ssl_conf/client/test.key',
-                                                               truststore='/etc/scylla/ssl_conf/client/catest.pem')
-            else:
-                scylla_yml['client_encryption_options'] = dict(enabled=False)
-
-            if self.replacement_node_ip:
-                scylla_yml['replace_address_first_boot'] = self.replacement_node_ip
-            else:
-                if 'replace_address_first_boot' in scylla_yml:
-                    del scylla_yml['replace_address_first_boot']
-
-            if alternator_port:
-                scylla_yml['alternator_port'] = alternator_port
-                scylla_yml['alternator_write_isolation'] = alternator.enums.WriteIsolation.ALWAYS_USE_LWT.value
-
-            if alternator_enforce_authorization:
-                scylla_yml['alternator_enforce_authorization'] = True
-            else:
-                scylla_yml['alternator_enforce_authorization'] = False
-
-            if internode_compression:
-                scylla_yml['internode_compression'] = internode_compression
-
-            if append_scylla_yaml:
-                scylla_yml.update(yaml.safe_load(append_scylla_yaml))
+        if client_encrypt:
+            self.prepare_client_encryption()
 
         if self.parent_cluster.is_kmip_enabled(append_scylla_yaml=append_scylla_yaml):
             self.prepare_for_kmip()
 
         if append_scylla_args:
-            scylla_help = self.remoter.run("scylla --help", ignore_status=True).stdout
-            scylla_arg_parser = ScyllaArgParser.from_scylla_help(scylla_help)
-            append_scylla_args = scylla_arg_parser.filter_args(append_scylla_args)
-
-        if append_scylla_args:
-            self.log.debug("Append following args to scylla: `%s'", append_scylla_args)
-            scylla_server_config = f"/etc/{'sysconfig' if self.distro.is_rhel_like else 'default'}/scylla-server"
-            self.remoter.sudo(
-                f"sed -i '/{append_scylla_args}/! s/SCYLLA_ARGS=\"/&{append_scylla_args} /' {scylla_server_config}")
+            self.patch_scylla_args(self.filter_scylla_args(append_scylla_args))
 
         if debug_install and self.distro.is_rhel_like:
             self.remoter.sudo("yum install -y scylla-gdb", verbose=True, ignore_status=True)
 
         if self.init_system == "systemd":
             self.patch_systemd()
+
+    def filter_scylla_args(self, append_scylla_args: str) -> str:
+        scylla_help = self.remoter.run("scylla --help", ignore_status=True).stdout
+        scylla_arg_parser = ScyllaArgParser.from_scylla_help(scylla_help)
+        return scylla_arg_parser.filter_args(append_scylla_args)
+
+    def patch_scylla_args(self, append_scylla_args: str):
+        if append_scylla_args:
+            self.log.debug("Append following args to scylla: `%s'", append_scylla_args)
+            scylla_server_config = f"/etc/{'sysconfig' if self.distro.is_rhel_like else 'default'}/scylla-server"
+            self.remoter.sudo(
+                f"sed -i '/{append_scylla_args}/! s/SCYLLA_ARGS=\"/&{append_scylla_args} /' {scylla_server_config}")
 
     def patch_systemd(self):
         systemd_version = get_systemd_version(self.remoter.run("systemctl --version", ignore_status=True).stdout)
@@ -3659,23 +3609,15 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.nemesis_threads = []
 
     def node_config_setup(self, node, seed_address=None, endpoint_snitch=None, murmur3_partitioner_ignore_msb_bits=None, client_encrypt=None):  # pylint: disable=too-many-arguments,invalid-name
-        node.config_setup(seed_address=seed_address,
-                          cluster_name=self.name,  # pylint: disable=no-member
-                          enable_exp=self.params.get('experimental'),
-                          endpoint_snitch=endpoint_snitch,
-                          authenticator=self.params.get('authenticator'),
-                          server_encrypt=self.params.get('server_encrypt'),
-                          client_encrypt=client_encrypt if client_encrypt is not None else self.params.get(
-                              'client_encrypt'),
-                          append_scylla_yaml=self.params.get('append_scylla_yaml'),
-                          append_scylla_args=self.get_scylla_args(),
-                          hinted_handoff=self.params.get('hinted_handoff'),
-                          authorizer=self.params.get('authorizer'),
-                          alternator_port=self.params.get('alternator_port'),
-                          murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
-                          alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'),
-                          internode_compression=self.params.get('internode_compression'),
-                          internode_encryption=self.params.get('internode_encryption'))
+        node.config_setup(**get_config_from_params(
+            name=self.name,
+            params=self.params,
+            seed_address=seed_address,
+            endpoint_snitch=endpoint_snitch,
+            murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
+            client_encrypt=client_encrypt,
+            append_scylla_args=self.get_scylla_args()
+        ))
 
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # pylint: disable=too-many-branches
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
