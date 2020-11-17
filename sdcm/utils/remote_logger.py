@@ -12,8 +12,7 @@ from sdcm.remote import RemoteCmdRunnerBase
 
 
 class LoggerBase(metaclass=ABCMeta):
-    def __init__(self, node, target_log_file: str):
-        self._node = node
+    def __init__(self, target_log_file: str):
         self._target_log_file = target_log_file
         self._log = logging.getLogger(self.__class__.__name__)
 
@@ -26,7 +25,13 @@ class LoggerBase(metaclass=ABCMeta):
         pass
 
 
-class SSHLoggerBase(LoggerBase):
+class NodeLoggerBase(LoggerBase, metaclass=ABCMeta):
+    def __init__(self, node, target_log_file: str):
+        self._node = node
+        super(NodeLoggerBase, self).__init__(target_log_file=target_log_file)
+
+
+class SSHLoggerBase(NodeLoggerBase):
     _retrieve_message = "Reading Scylla logs from {since}"
 
     def __init__(self, node, target_log_file: str):
@@ -136,8 +141,8 @@ class CommandLoggerBase(LoggerBase):
     _cached_logger_cmd = None
     _child_process = None
 
-    def __init__(self, node, target_log_file: str):
-        super().__init__(node, target_log_file)
+    def __init__(self, target_log_file: str):
+        super().__init__(target_log_file)
         self._thread = Thread(target=self._thread_body, daemon=True)
         self._termination_event = ThreadEvent()
 
@@ -165,21 +170,33 @@ class CommandLoggerBase(LoggerBase):
         self._thread.join(timeout)
 
 
-class DockerScyllaLogger(CommandLoggerBase):
+class CommandClusterLoggerBase(CommandLoggerBase, metaclass=ABCMeta):
+    def __init__(self, cluster, target_log_file: str):
+        self._cluster = cluster
+        super().__init__(target_log_file)
+
+
+class CommandNodeLoggerBase(CommandLoggerBase, metaclass=ABCMeta):
+    def __init__(self, node, target_log_file: str):
+        self._node = node
+        super().__init__(target_log_file)
+
+
+class DockerScyllaLogger(CommandNodeLoggerBase):
 
     @cached_property
     def _logger_cmd(self) -> str:
         return f'docker logs -f {self._node.name} 2>&1 | grep scylla >>{self._target_log_file}'
 
 
-class DockerGeneralLogger(CommandLoggerBase):
+class DockerGeneralLogger(CommandNodeLoggerBase):
 
     @cached_property
     def _logger_cmd(self) -> str:
         return f'docker logs -f {self._node.name} >>{self._target_log_file} 2>&1'
 
 
-class KubectlScyllaLogger(CommandLoggerBase):
+class KubectlScyllaLogger(CommandNodeLoggerBase):
 
     @property
     def _logger_cmd(self) -> str:
@@ -188,7 +205,7 @@ class KubectlScyllaLogger(CommandLoggerBase):
         return f"{cmd} 2>&1 | grep scylla >> {self._target_log_file}"
 
 
-class KubectlGeneralLogger(CommandLoggerBase):
+class KubectlGeneralLogger(CommandNodeLoggerBase):
 
     @property
     def _logger_cmd(self) -> str:
@@ -197,21 +214,29 @@ class KubectlGeneralLogger(CommandLoggerBase):
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
-class CertManagerLogger(CommandLoggerBase):
+class KubectlClusterEventsLogger(CommandClusterLoggerBase):
 
     @property
     def _logger_cmd(self) -> str:
-        cmd = self._node.kubectl_cmd("logs -f -l app.kubernetes.io/instance=cert-manager --all-containers=true",
-                                     namespace="cert-manager")
+        cmd = self._cluster.kubectl_cmd("get events -w", namespace="scylla")
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
-class ScyllaOperatorLogger(CommandLoggerBase):
+class CertManagerLogger(CommandClusterLoggerBase):
 
     @property
     def _logger_cmd(self) -> str:
-        cmd = self._node.kubectl_cmd("logs -f scylla-operator-controller-manager-0 --all-containers=true",
-                                     namespace="scylla-operator-system")
+        cmd = self._cluster.kubectl_cmd("logs -f -l app.kubernetes.io/instance=cert-manager --all-containers=true",
+                                        namespace="cert-manager")
+        return f"{cmd} >> {self._target_log_file} 2>&1"
+
+
+class ScyllaOperatorLogger(CommandClusterLoggerBase):
+
+    @property
+    def _logger_cmd(self) -> str:
+        cmd = self._cluster.kubectl_cmd("logs -f scylla-operator-controller-manager-0 --all-containers=true",
+                                        namespace="scylla-operator-system")
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
