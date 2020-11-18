@@ -15,31 +15,32 @@
 
 from __future__ import annotations
 
+import contextlib
+import logging
 import os
 import time
-import logging
-import contextlib
-from datetime import datetime
+
 from copy import deepcopy
-from typing import Optional, Union, List, Dict, Any, ContextManager, Type
+from datetime import datetime
 from difflib import unified_diff
-from tempfile import NamedTemporaryFile
 from functools import cached_property, partialmethod, partial
+from tempfile import NamedTemporaryFile
 from threading import RLock
+from typing import Optional, Union, List, Dict, Any, ContextManager, Type
 
 import yaml
 from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance
 
 from sdcm import cluster, cluster_docker
-from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
+from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring, ScyllaOperatorStatusMonitoring
 from sdcm.coredump import CoredumpExportFileThread
+from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.sct_config import sct_abs_path
 from sdcm.sct_events import TestFrameworkEvent
 from sdcm.utils.k8s import KubernetesOps, NoRateLimit, JSON_PATCH_TYPE
 from sdcm.utils.decorators import log_run_info, timeout
-from sdcm.utils.remote_logger import get_system_logging_thread, \
-    CertManagerLogger, ScyllaOperatorLogger, KubectlClusterEventsLogger
-from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring, ScyllaOperatorStatusMonitoring
+from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \
+    KubectlClusterEventsLogger
 
 
 SCYLLA_OPERATOR_CONFIG = sct_abs_path("sdcm/k8s_configs/operator.yaml")
@@ -386,6 +387,17 @@ class BasePodContainer(cluster.BaseNode):
 
     def terminate_k8s_host(self):
         raise NotImplementedError("To be overridden in child class")
+
+    def _restart_node_with_resharding(self, murmur3_partitioner_ignore_msb_bits: int = 12):
+        # Change murmur3_partitioner_ignore_msb_bits parameter to cause resharding.
+        self.stop_scylla()
+        with self.remote_scylla_yaml() as scylla_yml:
+            scylla_yml["murmur3_partitioner_ignore_msb_bits"] = murmur3_partitioner_ignore_msb_bits
+        self.parent_cluster.update_scylla_config()
+        self.soft_reboot()
+        search_reshard = self.follow_system_log(patterns=['Reshard', 'Reshap'])
+        self.wait_db_up(timeout=self.parent_cluster.pod_readiness_timeout * 60)
+        return search_reshard
 
 
 class PodCluster(cluster.BaseCluster):
