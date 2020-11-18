@@ -13,10 +13,10 @@ gce_n_local_ssd_disk_db: 3
 
 n_db_nodes: 3
 
-k8s_scylla_operator_docker_image: 'scylladb/scylla-operator:v0.3.0'
+k8s_scylla_operator_docker_image: 'scylladb/scylla-operator:nightly'
 k8s_cert_manager_version: '1.0.3'
 scylla_version: '4.2.1'
-scylla_mgmt_agent_version: '2.0.2'
+scylla_mgmt_agent_version: '2.2.0'
 k8s_scylla_datacenter: 'us-east1-b'
 k8s_scylla_rack: 'us-east1'
 k8s_scylla_cluster_name: 'sct-cluster'
