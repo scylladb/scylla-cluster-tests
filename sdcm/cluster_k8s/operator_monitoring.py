@@ -110,6 +110,8 @@ class ScyllaOperatorStatusMonitoring(threading.Thread):
         restart_happened = False
         try:
             status = self.kluster.operator_pod_status
+            if status is None:
+                return
             current_restart_count = status.container_statuses[0].restart_count
             if self.last_restart_count != current_restart_count:
                 restart_happened = True
