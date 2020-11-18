@@ -2384,13 +2384,17 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return bool(found) if status == 'start' else not bool(found)
 
     # Default value of murmur3_partitioner_ignore_msb_bits parameter is 12
-    def restart_node_with_resharding(self, murmur3_partitioner_ignore_msb_bits: int = 12) -> None:
+    def _restart_node_with_resharding(self, murmur3_partitioner_ignore_msb_bits: int = 12):
         self.stop_scylla()
         # Change murmur3_partitioner_ignore_msb_bits parameter to cause resharding.
         with self.remote_scylla_yaml() as scylla_yml:
             scylla_yml["murmur3_partitioner_ignore_msb_bits"] = murmur3_partitioner_ignore_msb_bits
         search_reshard = self.follow_system_log(patterns=['Reshard', 'Reshap'])
         self.start_scylla(timeout=7200)
+        return search_reshard
+
+    def restart_node_with_resharding(self, murmur3_partitioner_ignore_msb_bits: int = 12) -> None:
+        search_reshard = self._restart_node_with_resharding(murmur3_partitioner_ignore_msb_bits)
 
         resharding_started = wait.wait_for(func=self._resharding_status, step=5, timeout=180,
                                            text="Wait for re-sharding to be started", status='start')
