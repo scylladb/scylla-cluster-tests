@@ -44,7 +44,7 @@ from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring, Sc
 
 SCYLLA_OPERATOR_CONFIG = sct_abs_path("sdcm/k8s_configs/operator.yaml")
 SCYLLA_API_VERSION = "scylla.scylladb.com/v1alpha1"
-SCYLLA_CLUSTER_RESOURCE_KIND = "Cluster"
+SCYLLA_CLUSTER_RESOURCE_KIND = "ScyllaCluster"
 DEPLOY_SCYLLA_CLUSTER_DELAY = 15  # seconds
 SCYLLA_POD_READINESS_DELAY = 30  # seconds
 SCYLLA_POD_READINESS_TIMEOUT = 5  # minutes
@@ -131,7 +131,7 @@ class KubernetesCluster:  # pylint: disable=too-few-public-methods
         self.apply_file(config)
 
         LOGGER.debug("Check Scylla cluster")
-        self.kubectl("get clusters.scylla.scylladb.com", namespace="scylla")
+        self.kubectl("get scyllaclusters.scylla.scylladb.com", namespace="scylla")
         self.kubectl("get pods", namespace="scylla")
 
         LOGGER.debug("Wait for %d secs before we start to apply changes to the cluster", DEPLOY_SCYLLA_CLUSTER_DELAY)
