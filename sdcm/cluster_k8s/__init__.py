@@ -434,7 +434,7 @@ class PodCluster(cluster.BaseCluster):
     def wait_for_init(self):
         raise NotImplementedError("Derived class must implement 'wait_for_init' method!")
 
-    @timeout(message="Wait for pod(s) to be ready...", timeout=600)
+    @timeout(message="Wait for pod(s) to be ready...", timeout=900)
     def wait_for_pods_readiness(self, count: Optional[int] = None):
         if count is None:
             count = len(self.nodes)
