@@ -335,6 +335,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
         self.log.info("Sleep for %s seconds", sleep_time)
         time.sleep(sleep_time)
+        if self._is_it_on_kubernetes():
+            # Kubernetes brings node up automatically, no need to start it up
+            self.target_node.wait_db_up(timeout=sleep_time)
+            return
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     def disrupt_stop_start_scylla_server(self):  # pylint: disable=invalid-name
