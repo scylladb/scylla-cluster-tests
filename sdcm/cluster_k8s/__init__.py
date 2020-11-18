@@ -438,11 +438,13 @@ class PodCluster(cluster.BaseCluster):
     def wait_for_pods_readiness(self, count: Optional[int] = None):
         if count is None:
             count = len(self.nodes)
-        for _ in range(count):
-            time.sleep(self.pod_readiness_delay)
-            self.k8s_cluster.kubectl(f"wait --timeout={self.pod_readiness_timeout}m --all --for=condition=Ready pod",
-                                     namespace=self.namespace,
-                                     timeout=self.pod_readiness_timeout*60+10)
+        time.sleep(self.pod_readiness_delay)
+        result = self.k8s_cluster.kubectl(
+            f"wait --timeout={self.pod_readiness_timeout}m --all --for=condition=Ready pod",
+            namespace=self.namespace,
+            timeout=self.pod_readiness_timeout * 60 + 10)
+        if result.stdout.count('condition met') != count:
+            raise RuntimeError('Not all nodes reported')
 
 
 class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
@@ -553,7 +555,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                   enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
         current_members = self.scylla_cluster_spec.datacenter.racks[0].members
         self.replace_scylla_cluster_value("/spec/datacenter/racks/0/members", current_members+count)
-        self.wait_for_pods_readiness(count)
+        self.wait_for_pods_readiness(current_members+count)
         return super().add_nodes(count=count,
                                  ec2_user_data=ec2_user_data,
                                  dc_idx=dc_idx,
