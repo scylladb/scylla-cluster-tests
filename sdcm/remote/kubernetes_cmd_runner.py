@@ -11,20 +11,19 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import time
 import inspect
 import threading
-from typing import Optional, Callable, Iterator
+from typing import Optional, Callable, Iterator, List
 
 import kubernetes as k8s
 from invoke import Runner, Context, Config
-from invoke.exceptions import UnexpectedExit, Failure
 
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.common import deprecation
 from sdcm.utils.decorators import retrying
 
-from .base import CommandRunner, RetryableNetworkException
+from .base import RetryableNetworkException
+from .remote_base import RemoteCmdRunnerBase, StreamWatcher
 
 
 class KubernetesRunner(Runner):
@@ -94,10 +93,16 @@ class KubernetesRunner(Runner):
             if self.process:
                 self.process.close()
 
+    def __enter__(self):
+        return self
 
-class KubernetesCmdRunner(CommandRunner):
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
 
-    # pylint: disable=too-many-arguments
+
+class KubernetesCmdRunner(RemoteCmdRunnerBase):
+    exception_retryable = (ConnectionError, )
+
     def __init__(self, pod: str, container: Optional[str] = None, namespace: str = "default",
                  k8s_server_url: Optional[str] = None,
                  k8s_configuration: Optional[k8s.client.Configuration] = None) -> None:
@@ -123,6 +128,10 @@ class KubernetesCmdRunner(CommandRunner):
             "k8s_configuration": self.k8s_configuration,
         }
 
+    @property
+    def connection(self):
+        raise RuntimeError('KubernetesCmdRunner does not hold any connection, use _create_connection instead')
+
     def is_up(self, timeout=None) -> bool:
         return True
 
@@ -133,10 +142,9 @@ class KubernetesCmdRunner(CommandRunner):
                                                           "k8s_configuration": self.k8s_configuration, })))
 
     # pylint: disable=too-many-arguments
-    def run(self, cmd, timeout=300, ignore_status=False, verbose=True, new_session=False,
-            log_file=None, retry=1, watchers=None):
-        watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
-
+    def _run_execute(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
+                     ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
+                     watchers: Optional[List[StreamWatcher]] = None):
         # TODO: This should be removed than sudo calls will be done in more organized way.
         tmp = cmd.split(maxsplit=3)
         if tmp[0] == 'sudo':
@@ -148,29 +156,9 @@ class KubernetesCmdRunner(CommandRunner):
                 cmd = tmp[3]
             else:
                 cmd = cmd[cmd.find('sudo') + 5:]
-
-        @retrying(n=retry or 1)
-        def _run():
-            start_time = time.perf_counter()
-            if verbose:
-                self.log.debug('Running command "{}"...'.format(cmd))
-            connection = self._create_connection()
-            try:
-                res = connection.run(command=cmd, warn=ignore_status, hide=True, watchers=watchers, timeout=timeout)
-                res.duration = time.perf_counter() - start_time
-                res.exit_status = res.exited
-                return res
-            except (Failure, UnexpectedExit) as details:
-                if hasattr(details, "result"):
-                    self._print_command_results(details.result, verbose, ignore_status)
-                raise
-            finally:
-                connection.stop()
-
-        result = _run()
-        self._print_command_results(result, verbose, ignore_status)
-
-        return result
+        # Session should be created for each run
+        return super()._run_execute(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose,
+                                    new_session=True, watchers=watchers)
 
     # pylint: disable=too-many-arguments,unused-argument
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException, ))
@@ -185,6 +173,20 @@ class KubernetesCmdRunner(CommandRunner):
         KubernetesOps.copy_file(self, src, f"{self.namespace}/{self.pod}:{dst}",
                                 container=self.container, timeout=timeout)
         return True
+
+    def _run_on_retryable_exception(self, exc: Exception, new_session: bool) -> bool:
+        self.log.error(exc)
+        if isinstance(exc, self.exception_retryable):
+            raise RetryableNetworkException(str(exc), original=exc)
+        return True
+
+    def _close_connection(self):
+        # Websocket connection is getting closed when run is ended, so nothing is needed to be done here
+        pass
+
+    def _open_connection(self):
+        # Websocket connection is getting opened for each run, so nothing is needed to be done here
+        pass
 
     def stop(self):
         # Websocket connection is getting closed when run is ended, so nothing is needed to be done here
