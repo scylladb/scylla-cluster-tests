@@ -2496,6 +2496,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         peers_details = {}
         for line in cql_result[3:-2]:
             line_splitted = line.split('|')
+            if len(line_splitted) < 8:
+                continue
             peers_details[line_splitted[0].strip()] = {'data_center': line_splitted[1].strip(),
                                                        'host_id': line_splitted[2].strip(),
                                                        'rack': line_splitted[3].strip(),
