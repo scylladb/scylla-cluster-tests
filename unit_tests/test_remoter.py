@@ -173,8 +173,8 @@ class TestRemoteCmdRunners(unittest.TestCase):
         for future in threads:
             future.join()
 
-    @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
-    # @unittest.skip('To be ran manually')
+    # @parameterized.expand(ALL_COMMANDS_WITH_ALL_OPTIONS)
+    @unittest.skip('To be ran manually')
     def test_run_in_mainthread(  # pylint: disable=too-many-arguments
             self, remoter_type, host: str, stmt: str, verbose: bool, ignore_status: bool, new_session: bool, retry: int,
             timeout: Union[float, None]):
