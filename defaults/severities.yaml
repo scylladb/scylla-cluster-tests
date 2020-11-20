@@ -31,6 +31,7 @@ DatabaseLogEvent.SUPPRESSED_MESSAGES: WARNING
 DatabaseLogEvent.stream_exception: ERROR
 IndexSpecialColumnErrorEvent: ERROR
 GeminiEvent.error: CRITICAL
+GeminiEvent.warning: WARNING
 GeminiEvent.start: NORMAL
 GeminiEvent.finish: NORMAL
 CassandraStressEvent.failure: CRITICAL

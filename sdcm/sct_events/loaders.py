@@ -31,6 +31,7 @@ LOGGER = logging.getLogger(__name__)
 
 class GeminiEvent(BaseStressEvent, abstract=True):
     error: Type[SctEventProtocol]
+    warning: Type[SctEventProtocol]
     start: Type[SctEventProtocol]
     finish: Type[SctEventProtocol]
 
@@ -55,7 +56,7 @@ class GeminiEvent(BaseStressEvent, abstract=True):
         return fmt
 
 
-GeminiEvent.add_stress_subevents(error=Severity.CRITICAL)
+GeminiEvent.add_stress_subevents(error=Severity.CRITICAL, warning=Severity.WARNING)
 
 
 class CassandraStressEvent(StressEvent, abstract=True):

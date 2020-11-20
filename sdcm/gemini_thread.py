@@ -122,9 +122,11 @@ class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
             LOGGER.error(details)
             result = getattr(details, "result", NotGeminiErrorResult(details))
 
-        if result.exited or result.stderr:
+        if result.exited:
             GeminiEvent.error(cmd=gemini_cmd, result=result).publish()
         else:
+            if result.stderr:
+                GeminiEvent.warning(cmd=gemini_cmd, result=result).publish()
             GeminiEvent.finish(cmd=gemini_cmd, result=result).publish()
 
         return node, result, self.gemini_result_file

@@ -336,11 +336,14 @@ class BaseStressEvent(SctEvent, abstract=True):
                              error: Optional[Severity] = None,
                              timeout: Optional[Severity] = None,
                              start: Optional[Severity] = Severity.NORMAL,
-                             finish: Optional[Severity] = Severity.NORMAL) -> None:
+                             finish: Optional[Severity] = Severity.NORMAL,
+                             warning: Optional[Severity] = None) -> None:
         if failure is not None:
             cls.add_subevent_type("failure", severity=failure)
         if error is not None:
             cls.add_subevent_type("error", severity=error)
+        if warning is not None:
+            cls.add_subevent_type("warning", severity=warning)
         if timeout is not None:
             cls.add_subevent_type("timeout", severity=timeout)
         if start is not None:
