@@ -168,6 +168,14 @@ class KubernetesCluster:
         pods = KubernetesOps.list_pods(self, namespace='scylla-operator-system')
         return pods[0].status if pods else None
 
+    @cached_property
+    def k8s_core_v1_api(self):
+        return KubernetesOps.core_v1_api(self)
+
+    @cached_property
+    def k8s_apps_v1_api(self):
+        return KubernetesOps.apps_v1_api(self)
+
 
 class BasePodContainer(cluster.BaseNode):
     parent_cluster: PodCluster
@@ -413,12 +421,12 @@ class PodCluster(cluster.BaseCluster):
         return f"{type(self).__name__} {self.name} | Namespace: {self.namespace}"
 
     @cached_property
-    def _k8s_apps_v1_api(self):
-        return KubernetesOps.apps_v1_api(self.k8s_cluster)
+    def k8s_apps_v1_api(self):
+        return self.k8s_cluster.k8s_apps_v1_api
 
     @cached_property
-    def _k8s_core_v1_api(self):
-        return KubernetesOps.core_v1_api(self.k8s_cluster)
+    def k8s_core_v1_api(self):
+        return self.k8s_cluster.k8s_core_v1_api
 
     def _create_node(self, node_index: int, pod_name: str) -> BasePodContainer:
         node = self.PodContainerClass(parent_cluster=self,
