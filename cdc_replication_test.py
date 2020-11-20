@@ -153,8 +153,8 @@ class CDCReplicationTest(ClusterTester):
             stress_results = self.verify_gemini_results(queue=stress_thread)
             self.log.info('gemini results: {}'.format(stress_results))
 
-            self.log.info('Waiting for replicator to finish (sleeping 60s)...')
-            time.sleep(60)
+            self.log.info('Waiting for replicator to finish (sleeping 180s)...')
+            time.sleep(180)
 
             self.log.info('Stopping nemesis...')
             self.db_cluster.stop_nemesis(timeout=1800)
