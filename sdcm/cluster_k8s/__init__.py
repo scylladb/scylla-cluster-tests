@@ -57,7 +57,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class KubernetesCluster:
-    api_call_rate_limiter = NoRateLimit
+    api_call_rate_limiter = NoRateLimit()
 
     datacenter = ()
     _cert_manager_journal_thread: Optional[CertManagerLogger] = None
