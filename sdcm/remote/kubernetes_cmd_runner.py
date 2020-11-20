@@ -33,7 +33,7 @@ class KubernetesRunner(Runner):
         super().__init__(context)
 
         self.process = None
-        self._k8s_core_v1_api = KubernetesOps.core_v1_api(context.k8s_kluster)
+        self._k8s_core_v1_api = context.k8s_kluster.k8s_core_v1_api
         self._ws_lock = threading.RLock()
 
     def should_use_pty(self, pty: bool, fallback: bool) -> bool:

@@ -126,29 +126,29 @@ class KubernetesOps:
 
     @classmethod
     def apps_v1_api(cls, kluster):
-        return getattr(kluster, "_k8s_apps_v1_api", None) or k8s.client.AppsV1Api(cls.api_client(kluster))
+        return k8s.client.AppsV1Api(cls.api_client(kluster))
 
     @classmethod
     def core_v1_api(cls, kluster):
-        return getattr(kluster, "_k8s_core_v1_api", None) or k8s.client.CoreV1Api(cls.api_client(kluster))
+        return k8s.client.CoreV1Api(cls.api_client(kluster))
 
     @classmethod
     def list_statefulsets(cls, kluster, namespace=None, **kwargs):
         if namespace is None:
-            return cls.apps_v1_api(kluster).list_stateful_set_for_all_namespaces(watch=False, **kwargs).items
-        return cls.apps_v1_api(kluster).list_namespaced_stateful_set(namespace=namespace, watch=False, **kwargs).items
+            return kluster.k8s_apps_v1_api.list_stateful_set_for_all_namespaces(watch=False, **kwargs).items
+        return kluster.k8s_apps_v1_api.list_namespaced_stateful_set(namespace=namespace, watch=False, **kwargs).items
 
     @classmethod
     def list_pods(cls, kluster, namespace=None, **kwargs):
         if namespace is None:
-            return cls.core_v1_api(kluster).list_pod_for_all_namespaces(watch=False, **kwargs).items
-        return cls.core_v1_api(kluster).list_namespaced_pod(namespace=namespace, watch=False, **kwargs).items
+            return kluster.k8s_core_v1_api.list_pod_for_all_namespaces(watch=False, **kwargs).items
+        return kluster.k8s_core_v1_api.list_namespaced_pod(namespace=namespace, watch=False, **kwargs).items
 
     @classmethod
     def list_services(cls, kluster, namespace=None, **kwargs):
         if namespace is None:
-            return cls.core_v1_api(kluster).list_service_all_namespaces(watch=False, **kwargs).items
-        return cls.core_v1_api(kluster).list_namespaced_service(namespace=namespace, watch=False, **kwargs).items
+            return kluster.k8s_core_v1_api.list_service_all_namespaces(watch=False, **kwargs).items
+        return kluster.k8s_core_v1_api.list_namespaced_service(namespace=namespace, watch=False, **kwargs).items
 
     @staticmethod
     def kubectl_cmd(kluster, *command, namespace=None, ignore_k8s_server_url=False):
