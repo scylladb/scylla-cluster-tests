@@ -512,7 +512,11 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
     def wait_for_init(self, node_list=None, verbose=False, timeout=None, *_, **__):
         node_list = node_list if node_list else self.nodes
         self.wait_for_nodes_up_and_normal(nodes=node_list)
-        if self.update_scylla_config():
+        if self.scylla_yaml_update_required:
+            self.update_scylla_config()
+            time.sleep(30)
+            self.rollout_restart()
+            self.scylla_yaml_update_required = False
             self.wait_for_nodes_up_and_normal(nodes=node_list)
 
     @cached_property
@@ -630,19 +634,19 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         self.replace_scylla_cluster_value("/spec/version", new_version)
         self.rollout_restart()
 
-    def update_scylla_config(self) -> bool:
+    def update_scylla_config(self):
         with self.scylla_yaml_lock:
-            if not self.scylla_yaml_update_required:
-                return False
             with NamedTemporaryFile("w", delete=False) as tmp:
                 tmp.write(yaml.safe_dump(self.scylla_yaml))
-            self.k8s_cluster.kubectl(f"create configmap scylla-config --from-file=scylla.yaml={tmp.name}",
-                                     namespace=self.namespace)
-            time.sleep(30)
-            self.rollout_restart()
+                tmp.flush()
+                KubernetesOps.kubectl_multi_cmd(
+                    self.k8s_cluster,
+                    f'kubectl create configmap scylla-config --from-file=scylla.yaml={tmp.name} ||'
+                    f'kubectl create configmap scylla-config --from-file=scylla.yaml={tmp.name} -o yaml '
+                    '--dry-run=client | kubectl replace -f -',
+                    namespace=self.namespace
+                )
             os.remove(tmp.name)
-            self.scylla_yaml_update_required = False
-        return True
 
 
 class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
