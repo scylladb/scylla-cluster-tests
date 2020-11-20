@@ -151,12 +151,31 @@ class KubernetesOps:
         return " ".join(cmd)
 
     @classmethod
-    def kubectl(cls, kluster, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None):
+    def kubectl(cls, kluster, *command, namespace: Optional[str] = None, timeout: int = KUBECTL_TIMEOUT,
+                remoter: Optional['KubernetesCmdRunner'] = None, ignore_status: bool = False, verbose: bool = True):
         cmd = cls.kubectl_cmd(kluster, *command, namespace=namespace, ignore_k8s_server_url=bool(remoter))
         if remoter is None:
             remoter = LOCALRUNNER
         kluster.api_call_rate_limiter.wait(cmd)
-        return remoter.run(cmd, timeout=timeout)
+        return remoter.run(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose)
+
+    @classmethod
+    def kubectl_multi_cmd(cls, kluster, *command, namespace: Optional[str] = None, timeout: int = KUBECTL_TIMEOUT,
+                         remoter: Optional['KubernetesCmdRunner'] = None, ignore_status: bool = False,
+                         verbose: bool = True):
+        total_command = ' '.join(command)
+        final_command = []
+        for cmd in total_command.split(' '):
+            if cmd == 'kubectl':
+                final_command.append(
+                    cls.kubectl_cmd(kluster, namespace=namespace, ignore_k8s_server_url=bool(remoter)))
+            else:
+                final_command.append(cmd)
+        if remoter is None:
+            remoter = LOCALRUNNER
+        final_command = ' '.join(final_command)
+        kluster.api_call_rate_limiter.wait(final_command)
+        return remoter.run(final_command, timeout=timeout, ignore_status=ignore_status, verbose=verbose)
 
     @classmethod
     def apply_file(cls, kluster, config_path, namespace=None, timeout=KUBECTL_TIMEOUT, envsubst=True):
