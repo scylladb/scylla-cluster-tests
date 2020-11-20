@@ -25,13 +25,14 @@ from sdcm.remote import RemoteLibSSH2CmdRunner, RemoteCmdRunner, LocalCmdRunner,
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.remote.base import CommandRunner, Result
 from sdcm.remote.remote_file import remote_file
-from sdcm.utils.k8s import NoRateLimit
+from sdcm.cluster_k8s import KubernetesCluster
+
 
 ALL_COMMANDS_WITH_ALL_OPTIONS = []
 
 
-class FakeKluster:
-    api_call_rate_limiter = NoRateLimit()
+class FakeKluster(KubernetesCluster):
+    k8s_server_url = None
 
     def __init__(self, k8s_server_url):
         self.k8s_server_url = k8s_server_url

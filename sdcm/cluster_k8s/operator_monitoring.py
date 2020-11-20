@@ -55,7 +55,7 @@ class ScyllaOperatorLogMonitoring(threading.Thread):
         self.kluster = kluster
         super().__init__(daemon=True)
 
-    @timeout(timeout=300, message='Wait for file to be available')
+    @timeout(timeout=300, sleep_time=10, message='Wait for file to be available')
     def _get_file_follower(self) -> Iterable[str]:
         return File(self.kluster.scylla_operator_log, 'r').read_lines_filtered(*self.patterns)
 

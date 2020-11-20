@@ -28,6 +28,7 @@ from functools import cached_property, partialmethod, partial
 from threading import RLock
 
 import yaml
+import kubernetes as k8s
 from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance
 
 from sdcm import cluster, cluster_docker
@@ -35,7 +36,7 @@ from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.coredump import CoredumpExportFileThread
 from sdcm.sct_config import sct_abs_path
 from sdcm.sct_events import TestFrameworkEvent
-from sdcm.utils.k8s import KubernetesOps, NoRateLimit, JSON_PATCH_TYPE
+from sdcm.utils.k8s import KubernetesOps, ApiCallRateLimiter, JSON_PATCH_TYPE, KUBECTL_TIMEOUT
 from sdcm.utils.decorators import log_run_info, timeout
 from sdcm.utils.remote_logger import get_system_logging_thread, \
     CertManagerLogger, ScyllaOperatorLogger, KubectlClusterEventsLogger
@@ -57,7 +58,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class KubernetesCluster:
-    api_call_rate_limiter = NoRateLimit()
+    api_call_rate_limiter: Optional[ApiCallRateLimiter] = None
 
     datacenter = ()
     _cert_manager_journal_thread: Optional[CertManagerLogger] = None
@@ -72,11 +73,22 @@ class KubernetesCluster:
         return None
 
     kubectl_cmd = partialmethod(KubernetesOps.kubectl_cmd)
-    kubectl = partialmethod(KubernetesOps.kubectl)
     apply_file = partialmethod(KubernetesOps.apply_file)
+
+    def kubectl(self, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None):
+        if self.api_call_rate_limiter:
+            self.api_call_rate_limiter.wait()
+        return KubernetesOps.kubectl(self, *command, namespace=namespace, timeout=timeout, remoter=remoter)
+
+    def kubectl_multi_cmd(self, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None):
+        if self.api_call_rate_limiter:
+            self.api_call_rate_limiter.wait()
+        return KubernetesOps.kubectl_multi_cmd(self, *command, namespace=namespace, timeout=timeout, remoter=remoter)
 
     @cached_property
     def helm(self):
+        if self.api_call_rate_limiter:
+            self.api_call_rate_limiter.wait()
         return partial(cluster.Setup.tester_obj().localhost.helm, self)
 
     @property
@@ -168,13 +180,32 @@ class KubernetesCluster:
         pods = KubernetesOps.list_pods(self, namespace='scylla-operator-system')
         return pods[0].status if pods else None
 
-    @cached_property
-    def k8s_core_v1_api(self):
-        return KubernetesOps.core_v1_api(self)
+    @property
+    def k8s_core_v1_api(self) -> k8s.client.CoreV1Api:
+        return KubernetesOps.core_v1_api(self.api_client)
 
-    @cached_property
-    def k8s_apps_v1_api(self):
-        return KubernetesOps.apps_v1_api(self)
+    @property
+    def k8s_apps_v1_api(self) -> k8s.client.AppsV1Api:
+        return KubernetesOps.apps_v1_api(self.api_client)
+
+    @property
+    def k8s_configuration(self) -> k8s.client.Configuration:
+        if self.api_call_rate_limiter:
+            return self.api_call_rate_limiter.get_k8s_configuration(self)
+        return KubernetesOps.create_k8s_configuration(self)
+
+    @property
+    def api_client(self) -> k8s.client.ApiClient:
+        return self.get_api_client()
+
+    def get_api_client(self) -> k8s.client.ApiClient:
+        if self.api_call_rate_limiter:
+            return self.api_call_rate_limiter.get_api_client(self.k8s_configuration)
+        return KubernetesOps.api_client(self.k8s_configuration)
+
+    @property
+    def dynamic_client(self) -> k8s.dynamic.DynamicClient:
+        return KubernetesOps.dynamic_client(self.api_client)
 
 
 class BasePodContainer(cluster.BaseNode):
@@ -284,7 +315,6 @@ class BasePodContainer(cluster.BaseNode):
 
         if pod_status := self._pod_status:
             private_ips.append(pod_status.pod_ip)
-
         return (public_ips or [None, ], private_ips or [None, ])
 
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=300):
@@ -419,11 +449,11 @@ class PodCluster(cluster.BaseCluster):
     def __str__(self):
         return f"{type(self).__name__} {self.name} | Namespace: {self.namespace}"
 
-    @cached_property
+    @property
     def k8s_apps_v1_api(self):
         return self.k8s_cluster.k8s_apps_v1_api
 
-    @cached_property
+    @property
     def k8s_core_v1_api(self):
         return self.k8s_cluster.k8s_core_v1_api
 
@@ -526,9 +556,9 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
             self.scylla_yaml_update_required = False
             self.wait_for_nodes_up_and_normal(nodes=node_list)
 
-    @cached_property
+    @property
     def _k8s_scylla_cluster_api(self) -> Resource:
-        return KubernetesOps.dynamic_api(self.k8s_cluster,
+        return KubernetesOps.dynamic_api(self.k8s_cluster.dynamic_client,
                                          api_version=SCYLLA_API_VERSION,
                                          kind=SCYLLA_CLUSTER_RESOURCE_KIND)
 
@@ -646,8 +676,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
             with NamedTemporaryFile("w", delete=False) as tmp:
                 tmp.write(yaml.safe_dump(self.scylla_yaml))
                 tmp.flush()
-                KubernetesOps.kubectl_multi_cmd(
-                    self.k8s_cluster,
+                self.k8s_cluster.kubectl_multi_cmd(
                     f'kubectl create configmap scylla-config --from-file=scylla.yaml={tmp.name} ||'
                     f'kubectl create configmap scylla-config --from-file=scylla.yaml={tmp.name} -o yaml '
                     '--dry-run=client | kubectl replace -f -',

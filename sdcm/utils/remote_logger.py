@@ -214,7 +214,7 @@ class DockerGeneralLogger(CommandNodeLoggerBase):
 
 
 class KubectlGeneralLogger(CommandNodeLoggerBase):
-    restart_delay = 1
+    restart_delay = 30
 
     @property
     def _logger_cmd(self) -> str:
@@ -226,7 +226,7 @@ class KubectlGeneralLogger(CommandNodeLoggerBase):
 
 
 class KubectlClusterEventsLogger(CommandClusterLoggerBase):
-    restart_delay = 1
+    restart_delay = 30
 
     @property
     def _logger_cmd(self) -> str:
@@ -235,22 +235,26 @@ class KubectlClusterEventsLogger(CommandClusterLoggerBase):
 
 
 class CertManagerLogger(CommandClusterLoggerBase):
-    restart_delay = 1
+    restart_delay = 30
 
     @property
     def _logger_cmd(self) -> str:
-        cmd = self._cluster.kubectl_cmd("logs -f -l app.kubernetes.io/instance=cert-manager --all-containers=true",
-                                        namespace="cert-manager")
+        cmd = self._cluster.kubectl_cmd(
+            f"logs --previous=false -f --since={int(self.time_delta)}s --all-containers=true "
+            "-l app.kubernetes.io/instance=cert-manager",
+            namespace="cert-manager")
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
 class ScyllaOperatorLogger(CommandClusterLoggerBase):
-    restart_delay = 1
+    restart_delay = 30
 
     @property
     def _logger_cmd(self) -> str:
-        cmd = self._cluster.kubectl_cmd("logs -f scylla-operator-controller-manager-0 --all-containers=true",
-                                        namespace="scylla-operator-system")
+        cmd = self._cluster.kubectl_cmd(
+            f"logs  --previous=false -f --since={int(self.time_delta)}s scylla-operator-controller-manager-0 "
+            "--all-containers=true",
+            namespace="scylla-operator-system")
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 

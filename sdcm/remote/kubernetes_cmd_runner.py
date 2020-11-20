@@ -17,6 +17,7 @@ from typing import Optional, Callable, Iterator, List
 
 import kubernetes as k8s
 from invoke import Runner, Context, Config
+from urllib3.exceptions import MaxRetryError
 
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.common import deprecation
@@ -33,7 +34,7 @@ class KubernetesRunner(Runner):
         super().__init__(context)
 
         self.process = None
-        self._k8s_core_v1_api = context.k8s_kluster.k8s_core_v1_api
+        self._k8s_core_v1_api = KubernetesOps.core_v1_api(context.k8s_kluster.get_api_client())
         self._ws_lock = threading.RLock()
 
     def should_use_pty(self, pty: bool, fallback: bool) -> bool:
@@ -101,7 +102,7 @@ class KubernetesRunner(Runner):
 
 
 class KubernetesCmdRunner(RemoteCmdRunnerBase):
-    exception_retryable = (ConnectionError, )
+    exception_retryable = (ConnectionError, MaxRetryError, )
 
     def __init__(self, kluster, pod: str, container: Optional[str] = None, namespace: str = "default") -> None:
         self.kluster = kluster
