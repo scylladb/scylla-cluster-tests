@@ -19,9 +19,10 @@ import queue
 import logging
 import threading
 from typing import Optional
-from functools import cached_property, wraps
+from functools import cached_property
 
 import kubernetes as k8s
+from urllib3.util.retry import Retry
 
 from sdcm.remote import LOCALRUNNER
 from sdcm.sct_config import sct_abs_path
@@ -42,35 +43,52 @@ LOGGER = logging.getLogger(__name__)
 logging.getLogger("kubernetes.client.rest").setLevel(logging.INFO)
 
 
-class NoRateLimit:
-    def wait(self, message, *args, **kwargs) -> None:
-        pass
+class ApiLimiterClient(k8s.client.ApiClient):
+    _api_rate_limiter: 'ApiCallRateLimiter' = None
 
-    def stop(self) -> None:
-        pass
+    def call_api(self, *args, **kwargs):
+        if self._api_rate_limiter:
+            self._api_rate_limiter.wait()
+        return super().call_api(*args, **kwargs)
 
-    def start(self) -> None:
-        pass
-
-    def wrap_api_client(self, client):
-        return client
+    def bind_api_limiter(self, instance: 'ApiCallRateLimiter'):
+        self._api_rate_limiter = instance
 
 
-class ApiCallRateLimiter(threading.Thread, NoRateLimit):
+class ApiLimiterRetry(Retry):
+    _api_rate_limiter: 'ApiCallRateLimiter' = None
+
+    def sleep(self, *args, **kwargs):
+        super().sleep(*args, **kwargs)
+        if self._api_rate_limiter:
+            self._api_rate_limiter.wait()
+
+    def new(self, *args, **kwargs):
+        result = super().new(*args, **kwargs)
+        if self._api_rate_limiter:
+            ApiLimiterRetry.bind_api_limiter(result, self._api_rate_limiter)
+        return result
+
+    def bind_api_limiter(self, instance: 'ApiCallRateLimiter'):
+        self._api_rate_limiter = instance
+
+
+class ApiCallRateLimiter(threading.Thread):
     """Simple and not very accurate rate limiter.
 
     Allow 1 call each `1 / rate_limit' seconds interval.
     If some call not able to start after `queue_size / rate_limit' seconds then raise `queue.Full' for caller.
     """
 
-    def __init__(self, rate_limit: int, queue_size: int):
+    def __init__(self, rate_limit: float, queue_size: int, urllib_retry: int):
         super().__init__(name=type(self).__name__, daemon=True)
         self._lock = threading.Lock()
         self.rate_limit = rate_limit  # ops/s
         self.queue_size = queue_size
+        self.urllib_retry = urllib_retry
         self.running = threading.Event()
 
-    def wait(self, message, *args, **kwargs):
+    def wait(self):
         if not self._lock.acquire(timeout=self.queue_size / self.rate_limit):  # deepcode ignore E1123: deepcode error
             LOGGER.error("k8s API call rate limiter queue size limit has been reached")
             raise queue.Full
@@ -88,22 +106,22 @@ class ApiCallRateLimiter(threading.Thread, NoRateLimit):
                 self._lock.release()
             time.sleep(1 / self.rate_limit)
 
-    def wrap_api_client(self, client):
-        orig_call_api = client._ApiClient__call_api  # deepcode ignore W0212: monkey patching in here
+    def get_k8s_configuration(self, kluster) -> k8s.client.Configuration:
+        output = KubernetesOps.create_k8s_configuration(kluster)
+        output.retries = ApiLimiterRetry(self.urllib_retry)
+        output.retries.bind_api_limiter(self)
+        return output
 
-        @wraps(orig_call_api)
-        def call_api(*args, **kwargs):
-            self.wait("k8s API call: args=%s, kwargs=%s", args, kwargs)
-            return orig_call_api(*args, **kwargs)
-
-        client._ApiClient__call_api = call_api  # deepcode ignore W0212: monkey patching in here
-        LOGGER.debug("k8s ApiClient %s patched to be rate limited", client)
-        return client
+    def get_api_client(self, k8s_configuration: k8s.client.Configuration) -> ApiLimiterClient:
+        output = ApiLimiterClient(k8s_configuration)
+        output.bind_api_limiter(self)
+        return output
 
 
 class KubernetesOps:
+
     @staticmethod
-    def create_k8s_configuration(kluster):
+    def create_k8s_configuration(kluster) -> k8s.client.Configuration:
         k8s_configuration = k8s.client.Configuration()
         if kluster.k8s_server_url:
             k8s_configuration.host = kluster.k8s_server_url
@@ -112,25 +130,24 @@ class KubernetesOps:
         return k8s_configuration
 
     @classmethod
-    def api_client(cls, kluster):
-        conf = getattr(kluster, "k8s_configuration", None) or cls.create_k8s_configuration(kluster)
-        return kluster.api_call_rate_limiter.wrap_api_client(k8s.client.ApiClient(conf))
+    def api_client(cls, k8s_configuration: k8s.client.Configuration) -> k8s.client.ApiClient:
+        return k8s.client.ApiClient(k8s_configuration)
 
     @classmethod
-    def dynamic_client(cls, kluster):
-        return k8s.dynamic.DynamicClient(cls.api_client(kluster))
+    def dynamic_client(cls, api_client: k8s.client.ApiClient) -> k8s.dynamic.DynamicClient:
+        return k8s.dynamic.DynamicClient(api_client)
 
     @classmethod
-    def dynamic_api(cls, kluster, api_version, kind):
-        return cls.dynamic_client(kluster).resources.get(api_version=api_version, kind=kind)
+    def dynamic_api(cls, dynamic_client: k8s.dynamic.DynamicClient, api_version, kind):
+        return dynamic_client.resources.get(api_version=api_version, kind=kind)
 
     @classmethod
-    def apps_v1_api(cls, kluster):
-        return k8s.client.AppsV1Api(cls.api_client(kluster))
+    def apps_v1_api(cls, api_client: k8s.client.ApiClient) -> k8s.client.AppsV1Api:
+        return k8s.client.AppsV1Api(api_client)
 
     @classmethod
-    def core_v1_api(cls, kluster):
-        return k8s.client.CoreV1Api(cls.api_client(kluster))
+    def core_v1_api(cls, api_client: k8s.client.ApiClient) -> k8s.client.CoreV1Api:
+        return k8s.client.CoreV1Api(api_client)
 
     @classmethod
     def list_statefulsets(cls, kluster, namespace=None, **kwargs):
@@ -166,7 +183,6 @@ class KubernetesOps:
         cmd = cls.kubectl_cmd(kluster, *command, namespace=namespace, ignore_k8s_server_url=bool(remoter))
         if remoter is None:
             remoter = LOCALRUNNER
-        kluster.api_call_rate_limiter.wait(cmd)
         return remoter.run(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose)
 
     @classmethod
@@ -184,7 +200,6 @@ class KubernetesOps:
         if remoter is None:
             remoter = LOCALRUNNER
         final_command = ' '.join(final_command)
-        kluster.api_call_rate_limiter.wait(final_command)
         return remoter.run(final_command, timeout=timeout, ignore_status=ignore_status, verbose=verbose)
 
     @classmethod
@@ -240,7 +255,6 @@ class HelmContainerMixin:
             cmd.extend(("--namespace", namespace, ))
         cmd.extend(command)
         cmd = " ".join(cmd)
-        kluster.api_call_rate_limiter.wait(cmd)
         LOGGER.debug("Execute `%s'", cmd)
         res = self._helm_container.exec_run(["sh", "-c", cmd])
         if res.exit_code:

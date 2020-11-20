@@ -26,8 +26,9 @@ from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BasePodContain
 from sdcm.cluster_k8s.iptables import IptablesPodIpRedirectMixin, IptablesClusterOpsMixin
 
 
-GKE_API_CALL_RATE_LIMIT = 0.8  # ops/s
+GKE_API_CALL_RATE_LIMIT = 0.5  # ops/s
 GKE_API_CALL_QUEUE_SIZE = 1000  # ops
+GKE_URLLIB_RETRY = 6  # How many times api request is retried before reporting failure
 
 SCYLLA_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/cluster-gke.yaml")
 LOADER_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/gke-loaders.yaml")
@@ -70,7 +71,9 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
 
         self.api_call_rate_limiter = ApiCallRateLimiter(
             rate_limit=GKE_API_CALL_RATE_LIMIT,
-            queue_size=GKE_API_CALL_QUEUE_SIZE)
+            queue_size=GKE_API_CALL_QUEUE_SIZE,
+            urllib_retry=GKE_URLLIB_RETRY
+        )
         self.api_call_rate_limiter.start()
 
         super().__init__(cluster_prefix=cluster_prefix,
