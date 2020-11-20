@@ -130,6 +130,7 @@ class CDCReplicationTest(ClusterTester):
         self.start_replicator(Mode.DELTA)
 
         self.consistency_ok = True
+        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
 
         # 9 rounds, ~1h30 minutes each -> ~11h30m total
         # The number of rounds is tuned according to the available disk space in an i3.large AWS instance.
