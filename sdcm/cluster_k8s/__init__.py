@@ -413,6 +413,10 @@ class PodCluster(cluster.BaseCluster):
         return f"{type(self).__name__} {self.name} | Namespace: {self.namespace}"
 
     @cached_property
+    def _k8s_apps_v1_api(self):
+        return KubernetesOps.apps_v1_api(self.k8s_cluster)
+
+    @cached_property
     def _k8s_core_v1_api(self):
         return KubernetesOps.core_v1_api(self.k8s_cluster)
 
@@ -463,6 +467,16 @@ class PodCluster(cluster.BaseCluster):
             timeout=self.pod_readiness_timeout * 60 + 10)
         if result.stdout.count('condition met') != count:
             raise RuntimeError('Not all nodes reported')
+
+    def rollout_restart(self):
+        self.k8s_cluster.kubectl("rollout restart statefulset", namespace=self.namespace)
+        cluster_readiness_timeout = self.pod_readiness_timeout * len(self.nodes)
+        for statefulset in KubernetesOps.list_statefulsets(self.k8s_cluster, namespace=self.namespace):
+            self.k8s_cluster.kubectl(
+                f"rollout status statefulset/{statefulset.metadata.name} "
+                f"--watch=true --timeout={cluster_readiness_timeout}m",
+                namespace=self.namespace,
+                timeout=cluster_readiness_timeout * 60 + 10)
 
 
 class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
@@ -629,10 +643,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
             os.remove(tmp.name)
             self.scylla_yaml_update_required = False
         return True
-
-    def rollout_restart(self):
-        self.k8s_cluster.kubectl("rollout restart statefulset", namespace=self.namespace)
-        self.wait_for_pods_readiness()
 
 
 class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):

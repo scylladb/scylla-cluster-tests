@@ -125,8 +125,18 @@ class KubernetesOps:
         return cls.dynamic_client(kluster).resources.get(api_version=api_version, kind=kind)
 
     @classmethod
+    def apps_v1_api(cls, kluster):
+        return getattr(kluster, "_k8s_apps_v1_api", None) or k8s.client.AppsV1Api(cls.api_client(kluster))
+
+    @classmethod
     def core_v1_api(cls, kluster):
         return getattr(kluster, "_k8s_core_v1_api", None) or k8s.client.CoreV1Api(cls.api_client(kluster))
+
+    @classmethod
+    def list_statefulsets(cls, kluster, namespace=None, **kwargs):
+        if namespace is None:
+            return cls.apps_v1_api(kluster).list_stateful_set_for_all_namespaces(watch=False, **kwargs).items
+        return cls.apps_v1_api(kluster).list_namespaced_stateful_set(namespace=namespace, watch=False, **kwargs).items
 
     @classmethod
     def list_pods(cls, kluster, namespace=None, **kwargs):
