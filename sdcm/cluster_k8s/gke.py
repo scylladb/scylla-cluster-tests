@@ -20,6 +20,7 @@ from functools import cached_property
 import yaml
 
 from sdcm import cluster
+from sdcm.utils.common import shorten_cluster_name
 from sdcm.utils.k8s import ApiCallRateLimiter
 from sdcm.utils.gce_utils import GcloudContextManager, GcloudTokenUpdateThread
 from sdcm.sct_config import sct_abs_path
@@ -85,6 +86,10 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
                          region_names=gce_datacenter,
                          node_type="scylla-db")
 
+    @cached_property
+    def gke_cluster_name(self):
+        return shorten_cluster_name(self.name, 40)
+
     def __str__(self):
         return f"{type(self).__name__} {self.name} | Zone: {self.gce_zone} | Version: {self.gke_cluster_version}"
 
@@ -101,10 +106,10 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
 
     def setup_gke_cluster(self, num_nodes: int) -> None:
         LOGGER.info("Create GKE cluster `%s' with %d node(s) in default-pool and 1 node in operator-pool",
-                    self.name, num_nodes)
+                    self.gke_cluster_name, num_nodes)
         tags = ",".join(f"{key}={value}" for key, value in self.tags.items())
         with self.gcloud as gcloud:
-            gcloud.run(f"container --project {self.gce_project} clusters create {self.name}"
+            gcloud.run(f"container --project {self.gce_project} clusters create {self.gke_cluster_name}"
                        f" --zone {self.gce_zone}"
                        f" --cluster-version {self.gke_cluster_version}"
                        f" --username admin"
@@ -122,7 +127,7 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
                        f" --metadata {tags}")
             gcloud.run(f"container --project {self.gce_project} node-pools create operator-pool"
                        f" --zone {self.gce_zone}"
-                       f" --cluster {self.name}"
+                       f" --cluster {self.gke_cluster_name}"
                        f" --num-nodes 1"
                        f" --machine-type n1-standard-4"
                        f" --image-type UBUNTU"
@@ -132,7 +137,7 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
                        f" --no-enable-autorepair")
 
             LOGGER.info("Get credentials for GKE cluster `%s'", self.name)
-            gcloud.run(f"container clusters get-credentials {self.name} --zone {self.gce_zone}")
+            gcloud.run(f"container clusters get-credentials {self.gke_cluster_name} --zone {self.gce_zone}")
         self.start_gcloud_token_update_thread()
         self.patch_kube_config()
 
@@ -154,7 +159,7 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
         LOGGER.info("Create sct-loaders pool with %d node(s) in GKE cluster `%s'", num_nodes, self.name)
         self.gcloud.run(f"container --project {self.gce_project} node-pools create {name}"
                         f" --zone {self.gce_zone}"
-                        f" --cluster {self.name}"
+                        f" --cluster {self.gke_cluster_name}"
                         f" --num-nodes {num_nodes}"
                         f" --machine-type {instance_type}"
                         f" --image-type UBUNTU"
@@ -185,7 +190,7 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
         # we will get it's output from the cache file located at gcloud_token_path
         # To keep this cache file updated we run GcloudTokenUpdateThread thread
         kube_config_path = os.path.expanduser(os.environ.get('KUBECONFIG', '~/.kube/config'))
-        user_name = f"gke_{self.gce_project}_{self.gce_zone}_{self.name}"
+        user_name = f"gke_{self.gce_project}_{self.gce_zone}_{self.gke_cluster_name}"
         LOGGER.debug("Patch %s to use dockerized gcloud for auth against GKE cluster `%s'", kube_config_path, self.name)
 
         with open(kube_config_path) as kube_config:
