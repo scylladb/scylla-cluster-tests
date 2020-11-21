@@ -82,12 +82,10 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
         return {**super().tags,
                 "NodeIndex": str(self.node_index), }
 
-    @cached_property
-    def public_ip_address(self):
+    def _get_public_ip_address(self) -> Optional[str]:
         return ContainerManager.get_ip_address(self, "node")
 
-    @cached_property
-    def private_ip_address(self):
+    def _get_private_ip_address(self) -> Optional[str]:
         return self.public_ip_address
 
     def is_running(self):

@@ -380,6 +380,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self._spot_monitoring_thread = None
         self._journal_thread = None
         self._docker_log_process = None
+        self._public_ip_address_cached = None
+        self._private_ip_address_cached = None
+        self._ipv6_ip_address_cached = None
         self._maximum_number_of_cores_to_publish = 10
 
         self.last_line_no = 1
@@ -488,8 +491,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         raise AssertionError(f"Could not find the requested node {self.ip_address} in nodetool status")
 
     def refresh_ip_address(self):
+        # Invalidate ip address cache
+        self._private_ip_address_cached = self._public_ip_address_cached = self._ipv6_ip_address_cached = None
+
         if self.ssh_login_info["hostname"] == self.external_address:
             return
+
         self.ssh_login_info["hostname"] = self.external_address
         self.remoter.stop()
         self._init_remoter(self.ssh_login_info)
@@ -719,7 +726,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return "scylla-enterprise" in self.remoter.sudo("apt-cache search scylla-enterprise", ignore_status=True).stdout
 
     @property
-    def public_ip_address(self):
+    def public_ip_address(self) -> Optional[str]:
+        if self._public_ip_address_cached is None:
+            self._public_ip_address_cached = self._get_public_ip_address()
+        return self._public_ip_address_cached
+
+    def _get_public_ip_address(self) -> Optional[str]:
         public_ips, _ = self._refresh_instance_state()
         if public_ips:
             return public_ips[0]
@@ -727,7 +739,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return None
 
     @property
-    def private_ip_address(self):
+    def private_ip_address(self) -> Optional[str]:
+        if self._private_ip_address_cached is None:
+            self._private_ip_address_cached = self._get_private_ip_address()
+        return self._private_ip_address_cached
+
+    def _get_private_ip_address(self) -> Optional[str]:
         _, private_ips = self._refresh_instance_state()
         if private_ips:
             return private_ips[0]
@@ -735,7 +752,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return None
 
     @property
-    def ipv6_ip_address(self):
+    def ipv6_ip_address(self) -> Optional[str]:
+        if self._ipv6_ip_address_cached is None:
+            self._ipv6_ip_address_cached = self._get_ipv6_ip_address()
+        return self._ipv6_ip_address_cached
+
+    def _get_ipv6_ip_address(self) -> Optional[str]:
         raise NotImplementedError()
 
     def _wait_public_ip(self):

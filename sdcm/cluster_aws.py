@@ -8,7 +8,7 @@ import os
 import tempfile
 import json
 import base64
-from typing import List, Dict
+from typing import List, Dict, Optional
 from textwrap import dedent
 from datetime import datetime
 from distutils.version import LooseVersion  # pylint: disable=no-name-in-module,import-error
@@ -545,19 +545,15 @@ class AWSNode(cluster.BaseNode):
         else:
             return self._instance.private_ip_address
 
-    @property
-    def public_ip_address(self):
+    def _get_public_ip_address(self) -> Optional[str]:
         return self._instance.public_ip_address
 
-    @property
-    def private_ip_address(self):
+    def _get_private_ip_address(self) -> Optional[str]:
         if self._eth1_private_ip_address:
             return self._eth1_private_ip_address
-
         return self._instance.private_ip_address
 
-    @property
-    def ipv6_ip_address(self):
+    def _get_ipv6_ip_address(self) -> Optional[str]:
         return self._instance.network_interfaces[0].ipv6_addresses[0]["Ipv6Address"]
 
     def _refresh_instance_state(self):
