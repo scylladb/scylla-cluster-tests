@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from sdcm import cluster
 
@@ -33,12 +34,10 @@ class PhysicalMachineNode(cluster.BaseNode):
         self.set_hostname()
         self.run_startup_script()
 
-    @property
-    def public_ip_address(self):
+    def _get_public_ip_address(self) -> Optional[str]:
         return self._public_ip
 
-    @property
-    def private_ip_address(self):
+    def _get_private_ip_address(self) -> Optional[str]:
         return self._private_ip
 
     def set_hostname(self):

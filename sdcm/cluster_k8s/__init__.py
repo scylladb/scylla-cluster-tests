@@ -324,8 +324,7 @@ class BasePodContainer(cluster.BaseNode):
     def image(self) -> str:
         return self._container_status.image
 
-    @property
-    def ipv6_ip_address(self):
+    def _get_ipv6_ip_address(self):
         raise NotImplementedError()
 
     def restart(self):

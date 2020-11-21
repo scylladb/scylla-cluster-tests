@@ -15,13 +15,11 @@ class DummyNode(sdcm.cluster.BaseNode):  # pylint: disable=abstract-method
         super().init()
         self.remoter.stop()
 
-    @property
-    def private_ip_address(self):
+    def _get_private_ip_address(self):
         # Expected node name like : node1, node2, node3 ...
         return '127.0.0.%s' % self.name.replace('node', '')
 
-    @property
-    def public_ip_address(self):
+    def _get_public_ip_address(self):
         # Expected node name like : node1, node2, node3 ...
         return '127.0.0.%s' % self.name.replace('node', '')
 

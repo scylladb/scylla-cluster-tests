@@ -30,12 +30,10 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
         super().init()
         self.remoter.stop()
 
-    @property
-    def private_ip_address(self):
+    def _get_private_ip_address(self):
         return '127.0.0.1'
 
-    @property
-    def public_ip_address(self):
+    def _get_public_ip_address(self):
         return '127.0.0.1'
 
     def start_task_threads(self):
