@@ -2077,3 +2077,64 @@ def convert_metric_to_ms(metric: str) -> float:
         metric_converted = metric
         LOGGER.error("Value %s can't be converted to float. Exception: %s", metric, ve)
     return metric_converted
+
+
+def _shorten_alpha_sequences(value: str, max_alpha_chunk_size: int) -> str:
+    if not value:
+        return value
+    is_alpha = value[0].isalpha()
+    num = 0
+    output = ''
+    for char in value:
+        if is_alpha == char.isalpha():
+            if is_alpha and num >= max_alpha_chunk_size:
+                continue
+            num += 1
+            output += char
+            continue
+        output += char
+        num = 1
+    return output
+
+
+def _shorten_sequences_in_string(value: Union[str, List[str]], max_alpha_chunk_size: int) -> str:
+    chunks = []
+    if isinstance(value, str):
+        tmp = value.split('-')
+    else:
+        tmp = value
+    for chunk in tmp:
+        chunks.append(_shorten_alpha_sequences(chunk, max_alpha_chunk_size))
+    return '-'.join(chunks)
+
+
+def _string_max_chunk_size(value):
+    return max([len(chunk) for chunk in value.split('-')])
+
+
+def shorten_cluster_name(name: str, max_string_len: int):
+    """
+    Make an attempt to shorten cluster/any name so that it would fit into max_string_len limit
+    If it can't make it that short, it will return original name
+    Shortening is done in following manner:
+    1. It split string by '-' and take out and preserve last chunk (supposedly short test id there)
+    2. Array of chunks that is left it splits into sequences of digits and non-digits
+    3. Next it goes over non-digit chunks and trims them from right side by 1 char
+    4. On each trimming round it recombine name back in exact same order
+    5. Check if resulted string has len less than max_string_len and return it if it does
+    6. If trimming is not possible anymore it return original name
+
+    Example:
+        original name - longevity-scylla-operator-3h-gke-je-k8s-gke-cd86ad2b
+        shorten name - lon-scy-ope-3h-gke-je-k8s-gke-cd86ad2b
+    """
+    max_alpha_chunk_size = _string_max_chunk_size(name)
+    last_chunk = name.split('-')[-1]
+    current = '-'.join(name.split('-')[0:-1])
+    last_chunk_len = len(last_chunk)
+    while len(current) + last_chunk_len + 1 > max_string_len and max_alpha_chunk_size > 0:
+        current = _shorten_sequences_in_string(name.split('-')[0:-1], max_alpha_chunk_size)
+        max_alpha_chunk_size -= 1
+    if max_alpha_chunk_size == 0:
+        return name
+    return '-'.join([current, last_chunk])
