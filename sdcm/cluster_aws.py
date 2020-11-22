@@ -8,6 +8,7 @@ import os
 import tempfile
 import json
 import base64
+import random
 from typing import List, Dict
 from textwrap import dedent
 from datetime import datetime
@@ -643,6 +644,21 @@ class AWSNode(cluster.BaseNode):
             return
 
         event_filters = ()
+        if self.is_seed:
+            # Due to https://github.com/scylladb/scylla/issues/7588
+            other_nodes = list(set(self.parent_cluster.nodes).remove(self))
+            free_nodes = [node for node in other_nodes if not node.running_nemesis]
+            random_node = random.choice(free_nodes)
+
+            seed_provider = [{
+                "class_name": "org.apache.cassandra.locator.SimpleSeedProvider",
+                "parameters": [{
+                    "seeds": ",".join(random_node),
+                }, ],
+            }, ]
+
+            with self.remote_manager_yaml() as scylla_yml:
+                scylla_yml["seed_provider"] = seed_provider
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
             # since there's no disk yet in those type, lots of the errors here are acceptable, and we'll ignore them
             event_filters = DbEventsFilter(type="DATABASE_ERROR", node=self), \
