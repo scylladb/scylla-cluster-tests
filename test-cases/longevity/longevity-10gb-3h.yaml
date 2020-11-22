@@ -8,9 +8,11 @@ n_monitor_nodes: 1
 
 instance_type_db: 'i3.4xlarge'
 
-nemesis_class_name: 'SisyphusMonkey'
+nemesis_class_name: 'RestartThenRepairNodeMonkey'
 nemesis_seed: '111'
 nemesis_interval: 2
+seeds_num: 6
+nemesis_filter_seeds: false
 ssh_transport: 'libssh2'
 
 user_prefix: 'longevity-10gb-3h'

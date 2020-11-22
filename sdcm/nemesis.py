@@ -2429,26 +2429,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             "stress-ng --vm-bytes $(awk '/MemTotal/{printf \"%d\\n\", $2 * 0.9;}' < /proc/meminfo)k --vm-keep -m 1 -t 100")
 
 
-class NotSpotNemesis(Nemesis):
-    def set_target_node(self):
-
-        if isinstance(self.cluster, ScyllaAWSCluster):
-            non_seed_nodes = [node for node in self.cluster.nodes
-                              if not node.is_seed and
-                              not node.is_spot and
-                              not node.running_nemesis]
-            if non_seed_nodes:
-                self.target_node = random.choice(non_seed_nodes)
-
-        else:
-            super(NotSpotNemesis, self).set_target_node()
-
-        self.log.info('Current Target: %s', self.target_node)
-
-    def disrupt(self):
-        raise NotImplementedError()
-
-
 def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
     """
     Log time elapsed for method to run
@@ -2577,7 +2557,7 @@ class StopStartMonkey(Nemesis):
         self.disrupt_stop_start_scylla_server()
 
 
-class RestartThenRepairNodeMonkey(NotSpotNemesis):
+class RestartThenRepairNodeMonkey(Nemesis):
     disruptive = True
     kubernetes = True
 
