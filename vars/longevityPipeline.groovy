@@ -31,7 +31,7 @@ def call(Map pipelineParams) {
                name: 'availability_zone')
 
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
-            string(defaultValue: '', description: '', name: 'scylla_gce_image_id')
+            string(defaultValue: '', description: '', name: 'gce_image_db')
 
             string(defaultValue: '',
                    description: 'cloud path for RPMs, s3:// or gs://',
