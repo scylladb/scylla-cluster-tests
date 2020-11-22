@@ -136,6 +136,27 @@ ORACLE_SUPPORT_PRODUCT="Oracle Linux"
 ORACLE_SUPPORT_PRODUCT_VERSION=7.3
 """,
 
+    "OEL 8.1": """\
+NAME="Oracle Linux Server"
+VERSION="8.1"
+ID="ol"
+ID_LIKE="fedora"
+VARIANT="Server"
+VARIANT_ID="server"
+VERSION_ID="8.1"
+PLATFORM_ID="platform:el8"
+PRETTY_NAME="Oracle Linux Server 8.1"
+ANSI_COLOR="0;31"
+CPE_NAME="cpe:/o:oracle:linux:8:1:server"
+HOME_URL="https://linux.oracle.com/"
+BUG_REPORT_URL="https://bugzilla.oracle.com/"
+
+ORACLE_BUGZILLA_PRODUCT="Oracle Linux 8"
+ORACLE_BUGZILLA_PRODUCT_VERSION=8.1
+ORACLE_SUPPORT_PRODUCT="Oracle Linux"
+ORACLE_SUPPORT_PRODUCT_VERSION=8.1
+""",
+
     "Ubuntu 14.04": """\
 NAME="Ubuntu"
 VERSION="14.04.6 LTS, Trusty Tahr"
@@ -262,6 +283,12 @@ class TestDistro(unittest.TestCase):
         self.assertTrue(Distro.OEL7.is_oel7)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["OEL 7.3"])
         self.assertTrue(distro.is_oel7)
+        self.assertTrue(distro.is_rhel_like)
+
+    def test_oel8(self):
+        self.assertTrue(Distro.OEL8.is_oel8)
+        distro = Distro.from_os_release(DISTROS_OS_RELEASE["OEL 8.1"])
+        self.assertTrue(distro.is_oel8)
         self.assertTrue(distro.is_rhel_like)
 
     def test_ubuntu14(self):

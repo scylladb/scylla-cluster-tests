@@ -1959,7 +1959,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         force = '--force-yes '
         if self.is_rhel_like():
             # `screen' package is missed in CentOS/RHEL 8. Should be installed from EPEL repository.
-            if self.distro.is_centos8 or self.distro.is_rhel8:
+            if self.distro.is_centos8 or self.distro.is_rhel8 or self.distro.is_oel8:
                 self.install_epel()
             self.remoter.run('sudo yum install -y rsync tcpdump screen')
             self.download_scylla_repo(scylla_repo)
@@ -2821,6 +2821,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if self.distro.is_rhel8:
             self.remoter.run(
                 "sudo yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm")
+        elif self.distro.is_oel8:
+            self.remoter.run('sudo yum install -y oracle-epel-release-el8')
         else:
             self.remoter.run('sudo yum install -y epel-release', retry=3)
 
