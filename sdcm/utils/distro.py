@@ -30,6 +30,7 @@ class Distro(enum.Enum):
     RHEL7 = ("rhel", "7")
     RHEL8 = ("rhel", "8")
     OEL7 = ("ol", "7")
+    OEL8 = ("ol", "8")
     AMAZON2 = ("amzn", "2")
     DEBIAN8 = ("debian", "8")
     DEBIAN9 = ("debian", "9")
@@ -110,6 +111,10 @@ class Distro(enum.Enum):
     @property
     def is_oel7(self):
         return self == self.OEL7
+
+    @property
+    def is_oel8(self):
+        return self == self.OEL8
 
     @property
     def is_amazon2(self):
