@@ -15,7 +15,7 @@ import os
 import json
 import random
 import logging
-from functools import cached_property
+import threading
 
 from libcloud.compute.providers import Provider, get_driver
 
@@ -50,24 +50,73 @@ def get_gce_services(regions: list) -> dict:
     return {region_az: _get_gce_service(credentials, region_az) for region_az in map(append_zone, regions)}
 
 
+class GcloudContextManager:
+    def __init__(self, instance: 'GcloudContainerMixin', name: str):
+        self._instance = instance
+        self._name = name
+        self._container = None
+
+    def _span_container(self):
+        try:
+            self._container = self._instance._get_gcloud_container()  # pylint: disable=protected-access
+        except Exception as exc:
+            try:
+                ContainerManager.destroy_container(self._instance, self._name)
+            except Exception:  # pylint: disable=broad-except
+                pass
+            raise exc from None
+
+    def _destroy_container(self):
+        try:
+            ContainerManager.destroy_container(self._instance, self._name)
+        except Exception:  # pylint: disable=broad-except
+            pass
+        self._container = None
+
+    def __enter__(self):
+        self._span_container()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._destroy_container()
+
+    def run(self, command) -> str:
+        one_time = self._container is None
+        if one_time:
+            self._span_container()
+        try:
+            LOGGER.debug("Execute `gcloud %s'", command)
+            res = self._container.exec_run(["sh", "-c", f"gcloud {command}"])
+            if res.exit_code:
+                raise DockerException(f"{self._container}: {res.output.decode('utf-8')}")
+            return res.output.decode("utf-8")
+        finally:
+            if one_time:
+                self._destroy_container()
+
+
 class GcloudContainerMixin:
     """Run gcloud command using official Google Cloud SDK Docker image.
 
     See more details here: https://hub.docker.com/r/google/cloud-sdk
     """
+    _gcloud_container_instance = None
 
     def gcloud_container_run_args(self) -> dict:
-        volumes = {os.path.expanduser("~/.kube"): {"bind": "/.kube", "mode": "rw"},
-                   os.path.expanduser("~/.config/gcloud"): {"bind": "/.config/gcloud", "mode": "rw"}, }
+        kube_config_path = os.path.expanduser(os.environ.get('KUBECONFIG', '~/.kube/config'))
+        volumes = {
+            os.path.dirname(kube_config_path): {"bind": "/.kube", "mode": "rw"}
+        }
         return dict(image=GOOGLE_CLOUD_SDK_IMAGE,
                     command="cat",
                     tty=True,
                     name=f"{self.name}-gcloud",
                     volumes=volumes,
-                    user=f"{os.getuid()}:{os.getgid()}")
+                    user=f"{os.getuid()}:{os.getgid()}",
+                    tmpfs={'/.config': f'size=50M,uid={os.getuid()}'}
+                    )
 
-    @cached_property
-    def _gcloud_container(self) -> Container:
+    def _get_gcloud_container(self) -> Container:
         """Create Google Cloud SDK container.
 
         Cloud SDK requires to enable some authorization method first.  Because of that we start a container which
@@ -86,16 +135,40 @@ class GcloudContainerMixin:
                                   "--key-file", "/tmp/gcloud_svc_account.json",
                                   "--project", credentials["project_id"]])
         if res.exit_code:
-            raise DockerException(f"{container}: {res.output.decode('utf-8')}")
+            raise DockerException(f"{container}[]: {res.output.decode('utf-8')}")
         return container
 
-    def gcloud(self, command: str) -> str:
-        LOGGER.debug("Execute `gcloud %s'", command)
-        res = self._gcloud_container.exec_run(["sh", "-c", f"gcloud {command}"])
-        if res.exit_code:
-            raise DockerException(f"{self._gcloud_container}: {res.output.decode('utf-8')}")
-        return res.output.decode("utf-8")
+    @property
+    def gcloud(self) -> GcloudContextManager:
+        return GcloudContextManager(self, 'gcloud')
 
-    @cached_property
-    def gcloud_container_id(self):
-        return self._gcloud_container.id
+
+class GcloudTokenUpdateThread(threading.Thread):
+    update_period = 1800
+
+    def __init__(self, gcloud: GcloudContextManager, config_path: str, token_min_duration: int = 480):
+        self._gcloud = gcloud
+        self._config_path = config_path
+        self._token_min_duration = token_min_duration
+        self._termination_event = threading.Event()
+        super().__init__(daemon=True)
+
+    def run(self):
+        wait_time = 0.01
+        while not self._termination_event.wait(wait_time):
+            try:
+                gcloud_config = self._gcloud.run(
+                    f'config config-helper --min-expiry={self._token_min_duration} --format=json')
+                with open(self._config_path, 'w') as gcloud_config_file:
+                    gcloud_config_file.write(gcloud_config)
+                    gcloud_config_file.flush()
+                LOGGER.debug('Gcloud token has been updated and stored at %s', self._config_path)
+            except Exception as exc:  # pylint: disable=broad-except
+                LOGGER.debug('Failed to read gcloud config: %s', exc)
+                wait_time = 5
+            else:
+                wait_time = self.update_period
+
+    def stop(self, timeout=None):
+        self._termination_event.set()
+        self.join(timeout)

@@ -14,13 +14,14 @@
 import os
 import logging
 import time
-from typing import Callable, List
+from typing import List
 from functools import cached_property
 
 import yaml
 
 from sdcm import cluster
 from sdcm.utils.k8s import ApiCallRateLimiter
+from sdcm.utils.gce_utils import GcloudContextManager, GcloudTokenUpdateThread
 from sdcm.sct_config import sct_abs_path
 from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BasePodContainer
 from sdcm.cluster_k8s.iptables import IptablesPodIpRedirectMixin, IptablesClusterOpsMixin
@@ -39,6 +40,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class GkeCluster(KubernetesCluster, cluster.BaseCluster):
+
     def __init__(self,
                  gke_cluster_version,
                  gce_image_type,
@@ -54,7 +56,7 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
                  gce_datacenter=None):
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, "k8s-gke")
         node_prefix = cluster.prepend_user_prefix(user_prefix, "node")
-
+        self._gcloud_token_thread = None
         self.gke_cluster_version = gke_cluster_version
         self.gce_image_type = gce_image_type
         self.gce_image_size = gce_image_size
@@ -93,47 +95,45 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
         else:
             raise NotImplementedError
 
-    @cached_property
-    def gcloud(self) -> Callable[[str], str]:
+    @property
+    def gcloud(self) -> GcloudContextManager:
         return cluster.Setup.tester_obj().localhost.gcloud
-
-    @cached_property
-    def gcloud_container_id(self) -> str:
-        return cluster.Setup.tester_obj().localhost.gcloud_container_id
 
     def setup_gke_cluster(self, num_nodes: int) -> None:
         LOGGER.info("Create GKE cluster `%s' with %d node(s) in default-pool and 1 node in operator-pool",
                     self.name, num_nodes)
         tags = ",".join(f"{key}={value}" for key, value in self.tags.items())
-        self.gcloud(f"container --project {self.gce_project} clusters create {self.name}"
-                    f" --zone {self.gce_zone}"
-                    f" --cluster-version {self.gke_cluster_version}"
-                    f" --username admin"
-                    f" --network {self.gce_network}"
-                    f" --num-nodes {num_nodes}"
-                    f" --machine-type {self.gce_instance_type}"
-                    f" --image-type UBUNTU"
-                    f" --disk-type {self.gce_image_type}"
-                    f" --disk-size {self.gce_image_size}"
-                    f" --local-ssd-count {self.gce_n_local_ssd}"
-                    f" --node-taints role=scylla-clusters:NoSchedule"
-                    f" --enable-stackdriver-kubernetes"
-                    f" --no-enable-autoupgrade"
-                    f" --no-enable-autorepair"
-                    f" --metadata {tags}")
-        self.gcloud(f"container --project {self.gce_project} node-pools create operator-pool"
-                    f" --zone {self.gce_zone}"
-                    f" --cluster {self.name}"
-                    f" --num-nodes 1"
-                    f" --machine-type n1-standard-4"
-                    f" --image-type UBUNTU"
-                    f" --disk-type pd-ssd"
-                    f" --disk-size 20"
-                    f" --no-enable-autoupgrade"
-                    f" --no-enable-autorepair")
+        with self.gcloud as gcloud:
+            gcloud.run(f"container --project {self.gce_project} clusters create {self.name}"
+                       f" --zone {self.gce_zone}"
+                       f" --cluster-version {self.gke_cluster_version}"
+                       f" --username admin"
+                       f" --network {self.gce_network}"
+                       f" --num-nodes {num_nodes}"
+                       f" --machine-type {self.gce_instance_type}"
+                       f" --image-type UBUNTU"
+                       f" --disk-type {self.gce_image_type}"
+                       f" --disk-size {self.gce_image_size}"
+                       f" --local-ssd-count {self.gce_n_local_ssd}"
+                       f" --node-taints role=scylla-clusters:NoSchedule"
+                       f" --enable-stackdriver-kubernetes"
+                       f" --no-enable-autoupgrade"
+                       f" --no-enable-autorepair"
+                       f" --metadata {tags}")
+            gcloud.run(f"container --project {self.gce_project} node-pools create operator-pool"
+                       f" --zone {self.gce_zone}"
+                       f" --cluster {self.name}"
+                       f" --num-nodes 1"
+                       f" --machine-type n1-standard-4"
+                       f" --image-type UBUNTU"
+                       f" --disk-type pd-ssd"
+                       f" --disk-size 20"
+                       f" --no-enable-autoupgrade"
+                       f" --no-enable-autorepair")
 
-        LOGGER.info("Get credentials for GKE cluster `%s'", self.name)
-        self.gcloud(f"container clusters get-credentials {self.name} --zone {self.gce_zone}")
+            LOGGER.info("Get credentials for GKE cluster `%s'", self.name)
+            gcloud.run(f"container clusters get-credentials {self.name} --zone {self.gce_zone}")
+        self.start_gcloud_token_update_thread()
         self.patch_kube_config()
 
         LOGGER.info("Setup RBAC for GKE cluster `%s'", self.name)
@@ -152,36 +152,57 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
 
     def add_gke_pool(self, name: str, num_nodes: int, instance_type: str) -> None:
         LOGGER.info("Create sct-loaders pool with %d node(s) in GKE cluster `%s'", num_nodes, self.name)
-        self.gcloud(f"container --project {self.gce_project} node-pools create {name}"
-                    f" --zone {self.gce_zone}"
-                    f" --cluster {self.name}"
-                    f" --num-nodes {num_nodes}"
-                    f" --machine-type {instance_type}"
-                    f" --image-type UBUNTU"
-                    f" --node-taints role=sct-loaders:NoSchedule"
-                    f" --no-enable-autoupgrade"
-                    f" --no-enable-autorepair")
+        self.gcloud.run(f"container --project {self.gce_project} node-pools create {name}"
+                        f" --zone {self.gce_zone}"
+                        f" --cluster {self.name}"
+                        f" --num-nodes {num_nodes}"
+                        f" --machine-type {instance_type}"
+                        f" --image-type UBUNTU"
+                        f" --node-taints role=sct-loaders:NoSchedule"
+                        f" --no-enable-autoupgrade"
+                        f" --no-enable-autorepair")
+
+    def get_kubectl_config_for_user(self, config, username):
+        for user in config["users"]:
+            if user["name"] == username:
+                return user["user"]["auth-provider"]["config"]
+        return None
+
+    @cached_property
+    def gcloud_token_path(self):
+        return os.path.join(self.logdir, 'gcloud.output')
+
+    def start_gcloud_token_update_thread(self):
+        self._gcloud_token_thread = GcloudTokenUpdateThread(self.gcloud, self.gcloud_token_path)
+        self._gcloud_token_thread.start()
+        # Wait till GcloudTokenUpdateThread get tokens and dump them to gcloud_token_path
+        while not os.path.exists(self.gcloud_token_path):
+            time.sleep(0.1)
 
     def patch_kube_config(self) -> None:
-        kube_config_path = os.path.expanduser("~/.kube/config")
-
+        # It assumes that config is already created by gcloud
+        # It patches kube config so that instead of running gcloud each time
+        # we will get it's output from the cache file located at gcloud_token_path
+        # To keep this cache file updated we run GcloudTokenUpdateThread thread
+        kube_config_path = os.path.expanduser(os.environ.get('KUBECONFIG', '~/.kube/config'))
+        user_name = f"gke_{self.gce_project}_{self.gce_zone}_{self.name}"
         LOGGER.debug("Patch %s to use dockerized gcloud for auth against GKE cluster `%s'", kube_config_path, self.name)
+
         with open(kube_config_path) as kube_config:
             data = yaml.safe_load(kube_config)
+        user_config = self.get_kubectl_config_for_user(data, user_name)
 
-        user_name = f"gke_{self.gce_project}_{self.gce_zone}_{self.name}"
-        for user in data["users"]:
-            if user["name"] == user_name:
-                config = user["user"]["auth-provider"]["config"]
-                break
-        else:
+        if user_config is None:
             raise RuntimeError(f"Unable to find configuration for `{user_name}' in ~/.kube/config")
 
-        config["cmd-args"] = f"exec {self.gcloud_container_id} gcloud config config-helper --format=json"
-        config["cmd-path"] = "/usr/bin/docker"
+        user_config["cmd-args"] = self.gcloud_token_path
+        user_config["cmd-path"] = "cat"
 
         with open(kube_config_path, "w") as kube_config:
             yaml.safe_dump(data, kube_config)
+
+        self.log.debug(f'Patched kubectl config at {kube_config_path} '
+                       f'with static gcloud config from {self.gcloud_token_path}')
 
     @cluster.wait_for_init_wrap
     def wait_for_init(self):
@@ -193,6 +214,8 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
 
     def destroy(self):
         self.api_call_rate_limiter.stop()
+        if self._gcloud_token_thread:
+            self._gcloud_token_thread.stop()
 
 
 class GkeScyllaPodContainer(BasePodContainer, IptablesPodIpRedirectMixin):

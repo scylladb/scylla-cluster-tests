@@ -126,7 +126,9 @@ class KubernetesOps:
         if kluster.k8s_server_url:
             k8s_configuration.host = kluster.k8s_server_url
         else:
-            k8s.config.load_kube_config(client_configuration=k8s_configuration)
+            k8s.config.load_kube_config(
+                config_file=os.environ.get('KUBECONFIG', '~/.kube/config'),
+                client_configuration=k8s_configuration)
         return k8s_configuration
 
     @classmethod
@@ -233,9 +235,12 @@ class KubernetesOps:
 
 class HelmContainerMixin:
     def helm_container_run_args(self) -> dict:
-        volumes = {os.path.expanduser("~/.kube"): {"bind": "/root/.kube", "mode": "rw"},
-                   os.path.expanduser("~/.helm"): {"bind": "/root/.helm", "mode": "rw"},
-                   K8S_CONFIGS: {"bind": "/apps", "mode": "rw"}, }
+        kube_config_path = os.path.expanduser(os.environ.get('KUBECONFIG', '~/.kube/config'))
+        helm_config_path = os.path.expanduser(os.environ.get('HELM_CONFIG_HOME', '~/.helm'))
+        volumes = {
+            os.path.dirname(kube_config_path): {"bind": "/root/.kube", "mode": "rw"},
+            helm_config_path: {"bind": "/root/.helm", "mode": "rw"},
+            K8S_CONFIGS: {"bind": "/apps", "mode": "rw"}, }
         return dict(image=HELM_IMAGE,
                     entrypoint="/bin/cat",
                     tty=True,

@@ -913,7 +913,7 @@ def list_clusters_gke(tags_dict: Optional[dict] = None, verbose: bool = False) -
             return self.cluster_info["zone"]
 
         def destroy(self):
-            return self.cleaner.gcloud(f"container clusters delete {self.name} --zone {self.zone} --quiet")
+            return self.cleaner.gcloud.run(f"container clusters delete {self.name} --zone {self.zone} --quiet")
 
     class GkeCleaner(GcloudContainerMixin):
         name = f"gke-cleaner-{uuid.uuid4()!s:.8}"
@@ -922,7 +922,7 @@ def list_clusters_gke(tags_dict: Optional[dict] = None, verbose: bool = False) -
 
         def list_gke_clusters(self) -> list:
             try:
-                output = self.gcloud("container clusters list --format json")
+                output = self.gcloud.run("container clusters list --format json")
             except Exception as exc:
                 LOGGER.error("`gcloud container clusters list --format json' failed to run: %s", exc)
             else:
