@@ -20,7 +20,7 @@ import random
 import unittest
 import warnings
 from uuid import uuid4
-from functools import wraps
+from functools import wraps, cached_property
 import threading
 import multiprocessing
 import inspect
@@ -270,6 +270,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                              self.params.get('email_recipients', default=()),
                                              self.logdir)
 
+        self._move_kubectl_config()
         self.localhost = self._init_localhost()
         if self.params.get("logs_transport") == 'rsyslog':
             Setup.configure_rsyslog(self.localhost, enable_ngrok=False)
@@ -296,6 +297,25 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def _init_localhost(self):
         return LocalHost(user_prefix=self.params.get("user_prefix", None), test_id=Setup.test_id())
+
+    def _move_kubectl_config(self):
+        os.environ['KUBECONFIG'] = self.kubectl_config_path
+        if not(os.path.exists(self.kubectl_config_path)):
+            os.makedirs(os.path.dirname(self.kubectl_config_path), exist_ok=True)
+            with open(self.kubectl_config_path, 'w') as kube_config_file:
+                kube_config_file.write('')
+                kube_config_file.flush()
+        os.environ['HELM_CONFIG_HOME'] = self.helm_config_path
+        if not(os.path.exists(self.helm_config_path)):
+            os.makedirs(os.path.dirname(self.helm_config_path), exist_ok=True)
+
+    @cached_property
+    def kubectl_config_path(self):
+        return os.path.join(os.path.expanduser(self.logdir), '.kube/config')
+
+    @cached_property
+    def helm_config_path(self):
+        return os.path.join(os.path.expanduser(self.logdir), '.helm')
 
     def _init_params(self):
         self.params = SCTConfiguration()
