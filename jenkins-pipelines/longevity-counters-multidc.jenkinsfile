@@ -9,5 +9,5 @@ longevityPipeline(
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: 'test-cases/longevity/longevity-counters-multidc.yaml',
 
-    timeout: [time: 500, unit: 'MINUTES']
+    timeout: [time: 550, unit: 'MINUTES']
 )
