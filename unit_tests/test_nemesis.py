@@ -28,6 +28,7 @@ def test_list_nemesis_of_added_disrupt_methods():
     assert 'disrupt_add_remove_dc' in nemesis.get_list_of_methods_by_flags(disruptive=False)
     assert nemesis.call_random_disrupt_method(disrupt_methods=['disrupt_add_remove_dc']) is None
 
+
 def test_is_it_on_kubernetes():
     class FakeMinikubeScyllaPodCluster(MinikubeScyllaPodCluster):
         def __init__(self, params: dict = None):
@@ -65,10 +66,14 @@ def test_is_it_on_kubernetes():
     assert not Nemesis(FakeTester(FakeScyllaDockerCluster()), None)._is_it_on_kubernetes()
 
 # pylint: disable=protected-access
+
+
 def test_categorical_monkey():
     runs = []
+
     def disrupt_m1(_):
         runs.append(1)
+
     def disrupt_m2(_):
         runs.append(2)
     setattr(CategoricalMonkey, 'disrupt_m1', disrupt_m1)

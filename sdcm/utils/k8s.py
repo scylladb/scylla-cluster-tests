@@ -171,8 +171,8 @@ class KubernetesOps:
 
     @classmethod
     def kubectl_multi_cmd(cls, kluster, *command, namespace: Optional[str] = None, timeout: int = KUBECTL_TIMEOUT,
-                         remoter: Optional['KubernetesCmdRunner'] = None, ignore_status: bool = False,
-                         verbose: bool = True):
+                          remoter: Optional['KubernetesCmdRunner'] = None, ignore_status: bool = False,
+                          verbose: bool = True):
         total_command = ' '.join(command)
         final_command = []
         for cmd in total_command.split(' '):
