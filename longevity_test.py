@@ -95,21 +95,28 @@ class LongevityTest(ClusterTester):
                                                                              params['interval']))
         return params
 
-    def run_prepare_write_cmd(self):
-        # In some cases (like many keyspaces), we want to create the schema (all keyspaces & tables) before the load
-        # starts - due to the heavy load, the schema propogation can take long time and c-s fails.
-        prepare_write_cmd = self.params.get('prepare_write_cmd', default=None)
+    def run_pre_create_schema(self):
         pre_create_schema = self.params.get('pre_create_schema', default=False)
         keyspace_num = self.params.get('keyspace_num', default=1)
-        write_queue = list()
-        verify_queue = list()
-        if self.params.get('pre_create_keyspace'):
-            self._pre_create_keyspace()
-
         if pre_create_schema:
             self._pre_create_schema(keyspace_num, scylla_encryption_options=self.params.get(
                 'scylla_encryption_options', None))
 
+    def run_pre_create_keyspace(self):
+        if self.params.get('pre_create_keyspace'):
+            self._pre_create_keyspace()
+
+    def run_prepare_write_cmd(self):
+        # In some cases (like many keyspaces), we want to create the schema (all keyspaces & tables) before the load
+        # starts - due to the heavy load, the schema propogation can take long time and c-s fails.
+        prepare_write_cmd = self.params.get('prepare_write_cmd', default=None)
+        keyspace_num = self.params.get('keyspace_num', default=1)
+        write_queue = list()
+        verify_queue = list()
+
+        if not prepare_write_cmd:
+            self.log.debug("No prepare write commands are configured to run. Continue with stress commands")
+            return
         # When the load is too heavy for one loader when using MULTI-KEYSPACES, the load is spreaded evenly across
         # the loaders (round_robin).
         if keyspace_num > 1 and self.params.get('round_robin'):
@@ -181,8 +188,9 @@ class LongevityTest(ClusterTester):
 
         self.pre_create_alternator_tables()
 
-        if prepare_write_cmd:
-            self.run_prepare_write_cmd()
+        self.run_pre_create_keyspace()
+        self.run_pre_create_schema()
+        self.run_prepare_write_cmd()
 
         # Collect data about partitions and their rows amount
         validate_partitions = self.params.get('validate_partitions', default=None)
