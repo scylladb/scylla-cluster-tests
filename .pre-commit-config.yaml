@@ -27,7 +27,7 @@ repos:
     hooks:
     -   id: autopep8
         name: autopep8
-        entry: autopep8 -i -j 2 -v --max-line-length=120 --ignore=E226,E24,W50,W690,E402
+        entry: autopep8 -i -j 2 --max-line-length=120 --ignore=E226,E24,W50,W690,E402
         language: system
         types: [python]
 
