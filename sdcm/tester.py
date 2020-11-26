@@ -1404,7 +1404,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                      (query, speculative_retry))
         if in_memory:
             query += " AND in_memory=true AND compaction={'class': 'InMemoryCompactionStrategy'}"
-        if not scylla_encryption_options:
+        if scylla_encryption_options:
             query = '%s AND scylla_encryption_options=%s' % (query, scylla_encryption_options)
         if compact_storage:
             query += ' AND COMPACT STORAGE'
