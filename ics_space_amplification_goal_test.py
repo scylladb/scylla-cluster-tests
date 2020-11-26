@@ -194,7 +194,7 @@ class IcsSpaceAmplificationTest(LongevityTest):
         InfoEvent(message="Wait for compactions to finish after write is done.")
         self.wait_no_compactions_running()
 
-        stress_cmd = self.params.get('stress_cmd', default=None)
+        stress_cmd = self.params.get('stress_cmd')
         sag_testing_values = [None, '1.5', '1.2', '1.5', None]
         column_size = 205
         num_of_columns = 5
