@@ -4197,6 +4197,12 @@ class BaseLoaderSet():
                 update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64
             """)
             node.remoter.run('sudo bash -cxe "%s"' % install_java_script)
+        elif node.distro.is_debian10:
+            node.remoter.sudo(shell_script_cmd("""\
+                apt-get update
+                apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5E08FBD8B5D6EC9C
+                apt-get install -y openjdk-11-jre openjdk-11-jre-headless
+            """))
 
         scylla_repo_loader = self.params.get('scylla_repo_loader')
         if not scylla_repo_loader:
@@ -4385,13 +4391,19 @@ class BaseLoaderSet():
 
     @staticmethod
     def install_scylla_bench(node):
+        if node.distro.is_rhel_like:
+            node.remoter.sudo("yum install -y git")
+        else:
+            node.remoter.sudo(shell_script_cmd("""\
+                apt-get update
+                apt-get install -y git
+            """))
         node.remoter.sudo(shell_script_cmd("""\
-            yum install -y git
             curl -LO https://storage.googleapis.com/golang/go1.13.linux-amd64.tar.gz
             tar -C /usr/local -xvzf go1.13.linux-amd64.tar.gz
-            echo 'export GOPATH=$HOME/go' >> $HOME/.bashrc
-            echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bashrc
-            source $HOME/.bashrc
+            echo 'export GOPATH=$HOME/go' >> $HOME/.bash_profile
+            echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bash_profile
+            source $HOME/.bash_profile
             go get github.com/scylladb/scylla-bench
         """))
 

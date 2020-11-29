@@ -1065,6 +1065,12 @@ class SCTConfiguration(dict):
              type=str,
              help="Stress command to be run after full upgrade - usually used to read the dataset for verification"),
 
+        # Jepsen test.
+        dict(name="jepsen_scylla_repo", env="SCT_JEPSEN_SCYLLA_REPO", type=str,
+             help="Link to the git repository with Jepsen Scylla tests"),
+        dict(name="jepsen_test_cmd", env="SCT_JEPSEN_TEST_CMD", type=str,
+             help="Jepsen test command (e.g., 'test-all')"),
+
         dict(name="max_events_severities", env="SCT_MAX_EVENTS_SEVERITIES", type=str_or_list,
              help="Limit severity level for event types"),
     ]
