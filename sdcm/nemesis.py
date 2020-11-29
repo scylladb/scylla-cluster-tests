@@ -43,6 +43,7 @@ from sdcm.mgmt import TaskStatus
 from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_string, \
     update_certificates, reach_enospc_on_node, clean_enospc_on_node, parse_nodetool_listsnapshots
 from sdcm.utils.decorators import retrying
+from sdcm.utils import cdc
 from sdcm.log import SDCMAdapter
 from sdcm.keystore import KeyStore
 from sdcm.prometheus import nemesis_metrics_obj
@@ -2427,6 +2428,103 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.remoter.run(
             "stress-ng --vm-bytes $(awk '/MemTotal/{printf \"%d\\n\", $2 * 0.9;}' < /proc/meminfo)k --vm-keep -m 1 -t 100")
 
+    def disrupt_toggle_cdc_feature_properties_on_table(self):
+        """Manipulate cdc feature settings
+
+        Find table with CDC enabled (skip nemesis if not found).
+        Randomly select on CDC parameter.
+        Toggle the selected parameter state (True/False) or select a random value for TTL
+
+        """
+        self._set_current_disruption("ToggleCDCProperties")
+
+        ks_tables_with_cdc = self.cluster.get_all_tables_with_cdc(self.target_node)
+        self.log.debug(f"Found next tables with enabled cdc feature: {ks_tables_with_cdc}")
+
+        if not ks_tables_with_cdc:
+            self.log.warning("CDC is not enabled on any table. Skipping")
+            UnsupportedNemesis("CDC is not enabled on any table. Skipping")
+            return
+
+        ks, table = random.choice(ks_tables_with_cdc).split(".")
+
+        self.log.debug(f"Get table {ks}.{table} cdc extension state")
+        with self.cluster.cql_connection_patient(node=self.target_node) as session:
+            cdc_settings = cdc.options.get_table_cdc_properties(session, ks, table)
+        self.log.debug(f"table {ks}.{table} cdc extension state: {cdc_settings}")
+
+        self.log.debug("Choose random cdc property to toggle")
+        cdc_property = random.choice(cdc.options.get_cdc_settings_names())
+        self.log.debug(f"Next cdc property will be changed {cdc_property}")
+
+        cdc_settings[cdc_property] = cdc.options.toggle_cdc_property(cdc_property, cdc_settings[cdc_property])
+        self.log.debug(f"New table cdc extension state: {cdc_settings}")
+
+        self.log.info(f"Apply new cdc settigs for table {ks}.{table}: {cdc_settings}")
+        self._alter_table_with_cdc_properties(ks, table, cdc_settings)
+        self._verify_cdc_feature_status(ks, table, cdc_settings)
+
+    def disrupt_run_cdcstressor_tool(self):
+        self._set_current_disruption(label="RunCDCStressorTool")
+
+        ks_tables_with_cdc = self.cluster.get_all_tables_with_cdc(self.target_node)
+        if not ks_tables_with_cdc:
+            self.log.warning("CDC is not enabled on any table. Skipping")
+            UnsupportedNemesis("CDC is not enabled on any table. Skipping")
+            return
+        ks, table = random.choice(ks_tables_with_cdc).split(".")
+        self._run_cdc_stressor_tool(ks, table)
+
+    def _run_cdc_stressor_tool(self, ks, table):
+        cdc_stressor_cmd = self.tester.params.get("stress_cdclog_reader_cmd")
+
+        if " -duration" not in cdc_stressor_cmd:
+            read_time = random.randint(5, 20)
+            cdc_stressor_cmd += f" -duration {read_time}m "
+
+        cdc_reader_thread = self.tester.run_cdclog_reader_thread(stress_cmd=cdc_stressor_cmd,
+                                                                 stress_num=1,
+                                                                 keyspace_name=ks,
+                                                                 base_table_name=table)
+
+        self.tester.verify_cdclog_reader_results(cdc_reader_thread, update_es=False)
+
+    def _alter_table_with_cdc_properties(self, keyspace: str, table: str, cdc_settings: dict) -> None:
+        """Alter base table with cdc properties
+
+        Build valid query and alter table with cdc properties
+        :param keyspace: keyspace name
+        :type keyspace: str
+        :param table: base table name
+        :type table: str
+        :param cdc_enabled: is cdc enabled for base table, defaults to True
+        :type cdc_enabled: bool, optional
+        :param preimage: is preimage enabled for base table, defaults to False
+        :type preimage: bool, optional
+        :param postimage: is postimage enabled for base table, defaults to False
+        :type postimage: bool, optional
+        :param ttl: set ttl for scylla_cdc_log table, defaults to None
+        :type ttl: Optional[int], optional
+        """
+        cmd = f"ALTER TABLE {keyspace}.{table} WITH cdc = {cdc_settings};"
+        self.log.debug(f"Alter command: {cmd}")
+        with self.cluster.cql_connection_patient(self.target_node) as session:
+            session.execute(cmd)
+        # wait applying cdc configuration
+        time.sleep(15)
+
+    def _verify_cdc_feature_status(self, keyspace: str, table: str, cdc_settings: dict) -> None:
+
+        self.log.debug("Wait for cdc enabled and cdc log tables will be populated")
+        time.sleep(60)
+        output = self.target_node.run_cqlsh(f"desc keyspace {keyspace}")
+        self.log.debug(output.stdout)
+
+        with self.cluster.cql_connection_patient(node=self.target_node) as session:
+            actual_cdc_settings = cdc.options.get_table_cdc_properties(session, keyspace, table)
+
+        assert actual_cdc_settings == cdc_settings, f"CDC extension settings are differs"
+
 
 class NotSpotNemesis(Nemesis):
     def set_target_node(self):
@@ -3343,6 +3441,20 @@ class SisyphusMonkey(Nemesis):
         self.call_next_nemesis()
 
 
+class ToggleCDCMonkey(Nemesis):
+    disruptive = False
+
+    def disrupt(self):
+        self.disrupt_toggle_cdc_feature_properties_on_table()
+
+
+class CDCStressorMonkey(Nemesis):
+    disruptive = False
+
+    def disrupt(self):
+        self.disrupt_run_cdcstressor_tool()
+
+
 # Disable unstable streaming err nemesises
 #
 # class DecommissionStreamingErrMonkey(Nemesis):
@@ -3370,7 +3482,6 @@ class SisyphusMonkey(Nemesis):
 #     @log_time_elapsed_and_status
 #     def disrupt(self):
 #         self.disrupt_repair_streaming_err()
-
 DEPRECATED_LIST_OF_NEMESISES = [UpgradeNemesis, UpgradeNemesisOneNode, RollbackNemesis]
 
 COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,

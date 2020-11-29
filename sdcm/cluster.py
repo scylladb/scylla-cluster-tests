@@ -74,6 +74,7 @@ from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnap
 from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
+from sdcm.utils import cdc
 from sdcm.coredump import CoredumpExportSystemdThread
 
 
@@ -2999,11 +3000,11 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                                   filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True) -> List[str]:
         return self.get_any_ks_cf_list(db_node, filter_out_table_with_counter=filter_out_table_with_counter,
                                        filter_out_mv=filter_out_mv, filter_empty_tables=filter_empty_tables,
-                                       filter_out_system=True)
+                                       filter_out_system=True, filter_out_cdc_log_tables=True)
 
     def get_any_ks_cf_list(self, db_node,  # pylint: disable=too-many-arguments
                            filter_out_table_with_counter=False, filter_out_mv=False, filter_empty_tables=True,
-                           filter_out_system=False) -> List[str]:
+                           filter_out_system=False, filter_out_cdc_log_tables=False) -> List[str]:
         regular_column_names = ["keyspace_name", "table_name"]
         materialized_view_column_names = ["keyspace_name", "view_name"]
         regular_table_names, materialized_view_table_names = set(), set()
@@ -3027,6 +3028,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                 if filter_out_system and getattr(row, column_names[0]).startswith(("system", "alternator_usertable")):
                     is_valid_table = False
                 elif is_column_type and (filter_out_table_with_counter and "counter" in row.type):
+                    is_valid_table = False
+                elif filter_out_cdc_log_tables and getattr(row, column_names[1]).endswith(cdc.options.CDC_LOGTABLE_SUFFIX):
                     is_valid_table = False
                 elif is_column_type and filter_empty_tables:
                     current_rows = 0
@@ -3057,6 +3060,26 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             return []
 
         return list(regular_table_names - materialized_view_table_names)
+
+    def get_all_tables_with_cdc(self, db_node: BaseNode) -> List[str]:
+        """Return list of all tables with enabled cdc feature
+
+        Get all non system keyspaces and tables and return
+        list of keyspace.table with enable cdc feature
+        :param db_node: [description]
+        :type db_node: BaseNode
+        :returns: [description]
+        :rtype: {List[str]}
+        """
+        all_ks_cf = self.get_any_ks_cf_list(db_node,
+                                            filter_out_system=True,
+                                            filter_out_mv=True)
+        self.log.debug(all_ks_cf)
+        ks_tables_with_cdc = [ks_cf_cdc.strip(cdc.options.CDC_LOGTABLE_SUFFIX)
+                              for ks_cf_cdc in all_ks_cf if ks_cf_cdc.endswith(cdc.options.CDC_LOGTABLE_SUFFIX)]
+        self.log.info(ks_tables_with_cdc)
+
+        return ks_tables_with_cdc
 
 
 class NodeSetupFailed(Exception):
