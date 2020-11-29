@@ -2431,10 +2431,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_toggle_cdc_feature_properties_on_table(self):
         """Manipulate cdc feature settings
 
-        randomly choose table form list and toggle cdc feature settings
-        if cdc was disaled, wait settings applying and scylla_cdc_log table
-        removing and enable cdc back
-        if cdc was enabled, run cdc stressor tool for table for period [5-20] minutes
+        Find table with CDC enabled (skip nemesis if not found).
+        Randomly select on CDC parameter.
+        Toggle the selected parameter state (True/False) or select a random value for TTL
 
         """
         self._set_current_disruption("ToggleCDCProperties")
