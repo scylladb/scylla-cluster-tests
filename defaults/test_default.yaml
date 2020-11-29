@@ -137,4 +137,7 @@ target_upgrade_version: ''
 
 stress_cdclog_reader_cmd: "cdc-stressor -stream-query-round-duration 30s"
 
+jepsen_scylla_repo: 'https://github.com/jepsen-io/scylla.git'
+jepsen_test_cmd: 'test-all'
+
 max_events_severities: ""
