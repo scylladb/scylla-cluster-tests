@@ -350,6 +350,25 @@ class ManagerTask(ScyllaManagerBase):
                                           timeout=timeout)
         return is_status_reached
 
+    def wait_for_percentage(self, minimum_percentage, timeout=3600, step=10):
+        text = f"Waiting until task: {self.id} reaches at least {minimum_percentage}% progress"
+        is_percentage_reached = wait.wait_for(func=self.has_progress_reached_percentage,
+                                              minimum_percentage=minimum_percentage,
+                                              step=step, text=text, timeout=timeout)
+        return is_percentage_reached
+
+    def has_progress_reached_percentage(self, minimum_percentage):
+        """
+        The function receives an expected percentage number, whether int or float (between 0 and 100)
+        and the function will return True if the current progress percentage of the task is at least the
+        minimum_percentage, and False otherwise.
+        """
+        progress_string = self.progress.strip()
+        if progress_string == "N/A":
+            return 0.0
+        current_progress_percentage = float(progress_string.replace("%", ""))
+        return current_progress_percentage >= minimum_percentage
+
     def wait_and_get_final_status(self, timeout=REPAIR_TIMEOUT_SEC, step=120):
         """
         1) Wait for task to reach a 'final' status. meaning one of: done/error/stopped
@@ -547,6 +566,17 @@ class ManagerCluster(ScyllaManagerBase):
 
         return RepairTask(task_id=task_id, cluster_id=self.id,
                           manager_node=self.manager_node)  # return the manager's object with new repair-task-id
+
+    def control_repair(self, intensity=None, parallel=None):
+        cmd = " repair control -c {} ".format(self.id)
+        if intensity is not None:
+            cmd += f" --intensity {intensity}"
+        if parallel is not None:
+            cmd += f" --parallel {parallel}"
+
+        res = self.sctool.run(cmd=cmd, parse_table_res=False)
+        if not res:
+            raise ScyllaManagerError("Unknown failure for sctool {} command".format(cmd))
 
     def get_backup_files_dict(self, snapshot_tag):
         command = f" -c {self.id} backup files --snapshot-tag {snapshot_tag}"

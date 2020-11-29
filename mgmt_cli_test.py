@@ -335,6 +335,52 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     def test_repair_intensity_feature_on_single_node(self):
         self._repair_intensity_feature(fault_multiple_nodes=False)
 
+    def test_repair_control(self):
+        InfoEvent(message="Starting C-S write load")
+        self.run_prepare_write_cmd()
+        InfoEvent(message="Flushing")
+        for node in self.db_cluster.nodes:
+            node.run_nodetool("flush")
+        InfoEvent(message="Waiting for compactions to end")
+        self.wait_no_compactions_running(n=90, sleep_time=30)
+        InfoEvent(message="Starting C-S read load")
+        stress_read_thread = self.generate_background_read_load()
+        time.sleep(600)  # So we will see the base load of the cluster
+        InfoEvent(message="Sleep ended - Starting tests")
+        self._create_repair_and_alter_it_with_repair_control()
+        load_results = stress_read_thread.get_results()
+        self.log.info(f'load={load_results}')
+
+    def _create_repair_and_alter_it_with_repair_control(self):
+        keyspace_to_be_repaired = "keyspace2"
+        if not self.is_cred_file_configured:
+            self.update_config_file()
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_repair_control',
+                                               db_cluster=self.db_cluster,
+                                               auth_token=self.monitors.mgmt_auth_token)
+        # writing 292968720 rows, equal to the amount of data written in the prepare (around 100gb per node),
+        # to create a large data fault and therefore a longer running repair
+        self.create_missing_rows_in_cluster(create_missing_rows_in_multiple_nodes=True,
+                                            keyspace_to_be_repaired=keyspace_to_be_repaired,
+                                            total_num_of_rows=292968720)
+        arg_list = [{"intensity": .0001},
+                    {"intensity": 0},
+                    {"parallel": 1},
+                    {"intensity": 2, "parallel": 1}]
+
+        InfoEvent(message="Repair started")
+        repair_task = mgr_cluster.create_repair_task(keyspace="keyspace2")
+        next_percentage_block = 20
+        repair_task.wait_for_percentage(next_percentage_block)
+        for args in arg_list:
+            next_percentage_block += 20
+            InfoEvent(message=f"Changing repair args to: {args}")
+            mgr_cluster.control_repair(**args)
+            repair_task.wait_for_percentage(next_percentage_block)
+        repair_task.wait_and_get_final_status(step=30)
+        InfoEvent(message="Repair ended")
+
     def _repair_intensity_feature(self, fault_multiple_nodes):
         InfoEvent(message="Starting C-S write load").publish()
         self.run_prepare_write_cmd()
@@ -716,9 +762,10 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         for node in self.db_cluster.nodes:
             node.run_nodetool("flush")
 
-    def create_missing_rows_in_cluster(self, create_missing_rows_in_multiple_nodes, keyspace_to_be_repaired=None):
+    def create_missing_rows_in_cluster(self, create_missing_rows_in_multiple_nodes, total_num_of_rows,
+                                       keyspace_to_be_repaired=None):
         if create_missing_rows_in_multiple_nodes:
-            self._insert_data_while_excluding_each_node(total_num_of_rows=29296872,
+            self._insert_data_while_excluding_each_node(total_num_of_rows=total_num_of_rows,
                                                         keyspace_name=keyspace_to_be_repaired)
             self.wait_no_compactions_running(n=40, sleep_time=10)
         else:
@@ -739,7 +786,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
         InfoEvent(message="Starting faulty load (to be repaired)").publish()
         self.create_missing_rows_in_cluster(create_missing_rows_in_multiple_nodes=fault_multiple_nodes,
-                                            keyspace_to_be_repaired=keyspace_to_be_repaired)
+                                            keyspace_to_be_repaired=keyspace_to_be_repaired,
+                                            total_num_of_rows=29296872)
 
         InfoEvent(message="Starting a repair with no intensity").publish()
         base_repair_task = mgr_cluster.create_repair_task(keyspace="keyspace*")
@@ -764,7 +812,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         for arg_dict in arg_list:
             InfoEvent(message="Starting faulty load (to be repaired)").publish()
             self.create_missing_rows_in_cluster(create_missing_rows_in_multiple_nodes=fault_multiple_nodes,
-                                                keyspace_to_be_repaired=keyspace_to_be_repaired)
+                                                keyspace_to_be_repaired=keyspace_to_be_repaired,
+                                                total_num_of_rows=29296872)
 
             InfoEvent(message=f"Starting a repair with {arg_dict}").publish()
             repair_task = mgr_cluster.create_repair_task(**arg_dict, keyspace="keyspace*")
