@@ -1,6 +1,7 @@
 # pylint: disable=too-many-lines, too-many-public-methods
 
 import re
+import random
 import logging
 import time
 import uuid
@@ -639,6 +640,22 @@ class AWSNode(cluster.BaseNode):
             return
 
         event_filters = ()
+        if self.is_seed:
+            # Due to https://github.com/scylladb/scylla/issues/7588, when we restart a node that is defined as "seed",
+            # we must state a different, living node as the seed provider in the scylla yaml of the restarted node
+            other_nodes = list(set(self.parent_cluster.nodes) - {self})
+            free_nodes = [node for node in other_nodes if not node.running_nemesis]
+            random_node = random.choice(free_nodes)
+
+            seed_provider = [{
+                "class_name": "org.apache.cassandra.locator.SimpleSeedProvider",
+                "parameters": [{
+                    "seeds": f"{random_node.ip_address}"
+                }, ],
+            }, ]
+
+            with self.remote_scylla_yaml() as scylla_yml:
+                scylla_yml["seed_provider"] = seed_provider
         if any(ss in self._instance.instance_type for ss in ['i3', 'i2']):
             # since there's no disk yet in those type, lots of the errors here are acceptable, and we'll ignore them
             event_filters = DbEventsFilter(type="DATABASE_ERROR", node=self), \
