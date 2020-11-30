@@ -19,12 +19,12 @@ from types import SimpleNamespace
 from typing import List, Optional, Union, Any, Tuple
 
 import docker
-import paramiko  # pylint: disable=wrong-import-order; false warning because of docker import (local file vs. package)
 from docker.errors import DockerException, NotFound, ImageNotFound, NullResource
 from docker.models.images import Image
 from docker.models.containers import Container
 
 from sdcm.remote import LOCALRUNNER
+from sdcm.keystore import pub_key_from_private_key_file
 from sdcm.utils.common import deprecation
 from sdcm.utils.decorators import retrying, Retry
 
@@ -262,7 +262,7 @@ class ContainerManager:
                     key_file: str,
                     comment: str = "test@local") -> None:
         container = cls.get_container(instance, name)
-        pub_key = paramiko.rsakey.RSAKey.from_private_key_file(os.path.expanduser(key_file)).get_base64()
+        pub_key = pub_key_from_private_key_file(key_file)
         shell_command = f"umask 077 && echo 'ssh-rsa {pub_key} {comment}' >> ~/.ssh/authorized_keys"
         res = container.exec_run(["sh", "-c", shell_command], user=user)
         if res.exit_code:

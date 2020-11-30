@@ -1,8 +1,24 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
+import os
 import json
 from collections import namedtuple
 
 import boto3
+import paramiko
 from mypy_boto3_s3.service_resource import S3ServiceResource
+
 
 KEYSTORE_S3_BUCKET = "scylla-qa-keystore"
 
@@ -62,3 +78,7 @@ class KeyStore:
 
     def get_housekeeping_db_credentials(self):
         return self.get_json("housekeeping-db.json")
+
+
+def pub_key_from_private_key_file(key_file):
+    return paramiko.rsakey.RSAKey.from_private_key_file(os.path.expanduser(key_file)).get_base64()
