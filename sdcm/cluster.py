@@ -26,6 +26,7 @@ import traceback
 import uuid
 import itertools
 import json
+import ipaddress
 
 from collections import defaultdict
 from typing import List, Optional, Dict, Union
@@ -2607,18 +2608,28 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         cql_result = self.run_cqlsh('select peer, data_center, host_id, rack, release_version, '
                                     'rpc_address, schema_version, supported_features from system.peers',
                                     split=True, verbose=False)
+        # peer | data_center | host_id | rack | release_version | rpc_address | schema_version | supported_features
+        # ------+-------------+---------+------+-----------------+-------------+----------------+--------------------
+
         peers_details = {}
-        for line in cql_result[3:-2]:
+        for line in cql_result:
             line_splitted = line.split('|')
             if len(line_splitted) < 8:
                 continue
-            peers_details[line_splitted[0].strip()] = {'data_center': line_splitted[1].strip(),
-                                                       'host_id': line_splitted[2].strip(),
-                                                       'rack': line_splitted[3].strip(),
-                                                       'release_version': line_splitted[4].strip(),
-                                                       'rpc_address': line_splitted[5].strip(),
-                                                       'schema_version': line_splitted[6].strip(),
-                                                       'supported_features': line_splitted[7].strip()}
+            peer = line_splitted[0].strip()
+            try:
+                ipaddress.ip_address(peer)
+            except ValueError:
+                continue
+            peers_details[peer] = {
+                'data_center': line_splitted[1].strip(),
+                'host_id': line_splitted[2].strip(),
+                'rack': line_splitted[3].strip(),
+                'release_version': line_splitted[4].strip(),
+                'rpc_address': line_splitted[5].strip(),
+                'schema_version': line_splitted[6].strip(),
+                'supported_features': line_splitted[7].strip(),
+            }
 
         return peers_details
 
