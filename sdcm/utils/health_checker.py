@@ -227,7 +227,8 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
 
     # Validate that same schema on all nodes in the SYSTEM.PEERS
     schema_version_on_all_nodes = [values['schema_version'] for ip, values in peers_details.items()
-                                   if gossip_info[ip]['status'] not in current_node.GOSSIP_STATUSES_FILTER_OUT]
+                                   if ip in gossip_info and gossip_info[ip]['status'] not in
+                                   current_node.GOSSIP_STATUSES_FILTER_OUT]
 
     if len(set(schema_version_on_all_nodes)) > 1:
         LOGGER.debug(debug_message)
