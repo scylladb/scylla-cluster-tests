@@ -874,6 +874,9 @@ class LoaderLogCollector(LogCollector):
                 search_locally=True)
     ]
 
+    def collect_logs(self, local_search_path=None):
+        self.collect_logs_for_inactive_nodes(local_search_path)
+        return super().collect_logs(local_search_path)
 
 class MonitorLogCollector(LogCollector):
     """SCT monitor set log collector
