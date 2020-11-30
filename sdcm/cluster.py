@@ -4101,13 +4101,24 @@ class BaseLoaderSet():
                 continue
             # Parse loader & cpu info
             if line.startswith('TAG:'):
+                # TAG: loader_idx:1-cpu_idx:0-keyspace_idx:1
                 ret = re.findall(r"TAG: loader_idx:(\d+)-cpu_idx:(\d+)-keyspace_idx:(\d+)", line)
                 results['loader_idx'] = ret[0][0]
                 results['cpu_idx'] = ret[0][1]
                 results['keyspace_idx'] = ret[0][2]
+                continue
             if line.startswith('Username:'):
+                # Mode:
+                # ...
+                #   Username: null
+                #   Password: null
                 results['username'] = line.split('Username:')[1].strip()
             if line.startswith('Results:'):
+                # Results:
+                # Op rate                   :    9,999 op/s  [WRITE: 9,999 op/s]
+                # Partition rate            :    9,999 pk/s  [WRITE: 9,999 pk/s]
+                # Row rate                  :    9,999 row/s [WRITE: 9,999 row/s]
+                # ....
                 enable_parse = True
                 continue
             if line == '':
@@ -4116,8 +4127,23 @@ class BaseLoaderSet():
                 break
             if not enable_parse:
                 continue
-
-            split_idx = line.index(':')
+            split_idx = line.find(':')
+            if split_idx < 0:
+                continue
+            # Op rate                   :    9,999 op/s  [WRITE: 9,999 op/s]
+            # Partition rate            :    9,999 pk/s  [WRITE: 9,999 pk/s]
+            # Row rate                  :    9,999 row/s [WRITE: 9,999 row/s]
+            # Latency mean              :    1.1 ms [WRITE: 1.1 ms]
+            # Latency median            :    0.6 ms [WRITE: 0.6 ms]
+            # Latency 95th percentile   :    2.3 ms [WRITE: 2.3 ms]
+            # Latency 99th percentile   :    5.4 ms [WRITE: 5.4 ms]
+            # Latency 99.9th percentile :   23.7 ms [WRITE: 23.7 ms]
+            # Latency max               : 15787.4 ms [WRITE: 15,787.4 ms]
+            # Total partitions          : 108,000,096 [WRITE: 108,000,096]
+            # Total errors              :          0 [WRITE: 0]
+            # Total GC count            : 0
+            # Total GC memory           : 0.000 KiB
+            # Total GC time             :    0.0 seconds
             key = line[:split_idx].strip().lower()
             value = line[split_idx + 1:].split()[0].replace(",", "")
             results[key] = value
