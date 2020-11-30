@@ -1815,6 +1815,11 @@ spec:
         - containerPort: 443
           name: webhook-server
           protocol: TCP
+        readinessProbe:
+          tcpSocket:
+            port: 443
+          initialDelaySeconds: 5
+          periodSeconds: 10
         resources:
           limits:
             cpu: 100m
