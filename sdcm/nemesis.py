@@ -562,6 +562,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         else:
             termination_methods = ('terminate_node',)
         terminate_method_name = random.choice(termination_methods)
+        if terminate_method_name == 'terminate_node' and self._is_it_on_kubernetes():
+            # terminate_node on kubernetes works only for last node
+            self.set_last_node_as_target()
         self.log.info(f"Terminate node via {terminate_method_name}")
         terminate_method = getattr(self.cluster, terminate_method_name)
         terminate_method(node)
