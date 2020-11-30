@@ -1456,9 +1456,6 @@ class SCTConfiguration(dict):
                         if not ami_built_by_scylla(ami_id, region_name):
                             continue
                         tags = get_ami_tags(ami_id, region_name)
-                        assert 'user_data_format_version' in tags.keys(), \
-                            f"\n\t'user_data_format_version' tag missing from [{ami_id}] on {region_name}\n\texisting " \
-                            f"tags: {tags}"
 
         # For each Scylla repo file we will check that there is at least one valid URL through which to download a
         # version of SCYLLA, otherwise we will get an error.

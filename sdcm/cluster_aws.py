@@ -792,7 +792,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
         ami_tags = get_ami_tags(ec2_ami_id[0], region_name=params.get('region_name').split()[0])
         # TODO: remove once all other related code is merged in scylla-pkg and scylla-machine-image
-        user_data_format_version = ami_tags.get('sci_version', '2')
+        user_data_format_version = ami_tags.get('sci_version', '1')
         user_data_format_version = ami_tags.get('user_data_format_version', user_data_format_version)
 
         if LooseVersion(user_data_format_version) >= LooseVersion('2'):
