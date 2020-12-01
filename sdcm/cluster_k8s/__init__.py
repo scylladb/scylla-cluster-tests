@@ -30,6 +30,7 @@ from typing import Optional, Union, List, Dict, Any, ContextManager, Type
 
 import yaml
 import kubernetes as k8s
+from kubernetes.client import V1Container
 from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance
 
 from sdcm import cluster, cluster_docker
@@ -564,6 +565,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         if self.scylla_yaml_update_required:
             self.update_scylla_config()
             time.sleep(30)
+            self.add_sidecar_injection()
             self.rollout_restart()
             self.scylla_yaml_update_required = False
             self.wait_for_nodes_up_and_normal(nodes=node_list)
@@ -695,6 +697,54 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                     namespace=self.namespace
                 )
             os.remove(tmp.name)
+
+    def add_sidecar_injection(self) -> bool:
+        statefulset = None
+        for pod in KubernetesOps.list_pods(self, namespace=self.namespace):
+            for owner_reference in pod.metadata.owner_references:
+                if owner_reference.kind != 'StatefulSet':
+                    continue
+                try:
+                    statefulset = self.k8s_apps_v1_api.read_namespaced_stateful_set(
+                        owner_reference.name,
+                        namespace=self.namespace
+                    )
+                except Exception:
+                    pass
+
+        if not statefulset:
+            self.log.error("add_sidecar_injection: Can't find statefull set to patch")
+            return False
+
+        if any([container for container in statefulset.spec.template.spec.containers if
+                container.name == 'injected-busybox-sidecar']):
+            self.log.debug("add_sidecar_injection: sidecar is already injected")
+            return False
+
+        statefulset.spec.template.spec.containers.insert(
+            0,
+            V1Container(
+                command=['/bin/sh', '-c', 'while true; do sleep 1 ; done'],
+                image='busybox:1.32.0',
+                name='injected-busybox-sidecar'
+            )
+        )
+
+        self.k8s_apps_v1_api.patch_namespaced_stateful_set(
+            statefulset.metadata.name, self.namespace,
+            {
+                'spec': {
+                    'template': {
+                        'spec': {
+                            'containers': statefulset.spec.template.spec.containers
+                        }
+                    }
+                }
+            }
+        )
+
+        self.log.info("add_sidecar_injection: sidecar has been injected")
+        return True
 
 
 class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
