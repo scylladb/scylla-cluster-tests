@@ -4306,7 +4306,7 @@ class BaseLoaderSet():
         for loader in self.nodes:
             sb_active = loader.remoter.run(cmd='pgrep -f scylla-bench', verbose=False, ignore_status=True)
             if sb_active.exit_status == 0:
-                kill_result = loader.remoter.run('pkill -f -TERM scylla-bench', ignore_status=True)
+                kill_result = loader.remoter.run('pkill -f -SIGINT scylla-bench', ignore_status=True)
                 if kill_result.exit_status != 0:
                     self.log.warning('Terminate scylla-bench on node %s:\n%s',
                                      loader, kill_result)
