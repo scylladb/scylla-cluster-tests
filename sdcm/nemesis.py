@@ -3220,7 +3220,9 @@ class ScyllaKillMonkey(Nemesis):
 
 class ValidateHintedHandoffShortDowntime(Nemesis):
     disruptive = True
-    kubernetes = True
+    # Disabled on k8s due to the performance hit that scylla can't handle in k8s environment
+    # https://github.com/scylladb/scylla-operator/issues/278
+    kubernetes = False
 
     @log_time_elapsed_and_status
     def disrupt(self):
