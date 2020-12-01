@@ -31,6 +31,9 @@ def call(Map pipelineParams) {
                name: 'availability_zone')
 
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
+            string(defaultValue: '',
+                   description: 'cloud path for RPMs, s3:// or gs://',
+                   name: 'update_db_packages')
             string(defaultValue: '', description: '', name: 'scylla_version')
             string(defaultValue: '', description: '', name: 'scylla_repo')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
