@@ -347,7 +347,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             # May happen that spot instance was preempted during instance creating. This instance won't be
             # destroyed but stopped and stays with the name in the instances pool. In this case we should destroy this
             # instance before creating new one
-            if details.value["reason"] == "alreadyExists" and \
+            if "Instance failed to start due to preemption" in str(details) and \
                     (failed_instance := self._get_instances_by_name(dc_idx=dc_idx, name=name)):
                 self._gce_services[dc_idx].destroy_node(node=failed_instance, destroy_boot_disk=True)
 
