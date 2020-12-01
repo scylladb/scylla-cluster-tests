@@ -556,14 +556,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _terminate_cluster_node(self, node):
         if isinstance(self.cluster, GkeScyllaPodCluster):
-            # Scylla-operator can't recover when k8s node is gone, so we disable terminate_k8s_host and terminate_k8s_node
-            # termination_methods = ('terminate_k8s_host', 'terminate_k8s_node', 'terminate_node')
-            # TBD: enable terminate_k8s_node when https://github.com/scylladb/scylla-operator/issues/215 is fixed
-            termination_methods = ('terminate_node',)
+            termination_methods = ('terminate_k8s_host', 'terminate_k8s_node', 'terminate_node')
         elif isinstance(self.cluster, MinikubeScyllaPodCluster):
-            # Scylla-operator can't recover when k8s node is gone, so we disable terminate_k8s_node
-            # termination_methods = ('terminate_k8s_node', 'terminate_node')
-            # TBD: enable terminate_k8s_node when https://github.com/scylladb/scylla-operator/issues/215 is fixed
+            # Minikube is deployed with only one node setup, it can't be deleted
             termination_methods = ('terminate_node',)
         else:
             termination_methods = ('terminate_node',)

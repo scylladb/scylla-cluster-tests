@@ -662,19 +662,21 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         assert self.nodes[-1] == node, "Can withdraw the last node only"
         current_members = self.scylla_cluster_spec.datacenter.racks[0].members
         node.terminate_k8s_node()
+        timeout_in_minutes = SCYLLA_POD_TERMINATE_TIMEOUT + SCYLLA_POD_READINESS_TIMEOUT
         self.replace_scylla_cluster_value("/spec/datacenter/racks/0/members", current_members - 1)
-        self.k8s_cluster.kubectl(f"wait --timeout={SCYLLA_POD_TERMINATE_TIMEOUT}m --for=delete pod {node.name}",
+        self.k8s_cluster.kubectl(f"wait --timeout={timeout_in_minutes}m --for=ready pod {node.name}",
                                  namespace=self.namespace,
-                                 timeout=SCYLLA_POD_TERMINATE_TIMEOUT*60+10)
+                                 timeout=timeout_in_minutes*60+10)
 
     def terminate_k8s_host(self, node: BasePodContainer):
         assert self.nodes[-1] == node, "Can withdraw the last node only"
         current_members = self.scylla_cluster_spec.datacenter.racks[0].members
         node.terminate_k8s_host()
         self.replace_scylla_cluster_value("/spec/datacenter/racks/0/members", current_members - 1)
-        self.k8s_cluster.kubectl(f"wait --timeout={SCYLLA_POD_TERMINATE_TIMEOUT}m --for=delete pod {node.name}",
+        timeout_in_minutes = SCYLLA_POD_TERMINATE_TIMEOUT + SCYLLA_POD_READINESS_TIMEOUT
+        self.k8s_cluster.kubectl(f"wait --timeout={timeout_in_minutes}m --for=ready pod {node.name}",
                                  namespace=self.namespace,
-                                 timeout=SCYLLA_POD_TERMINATE_TIMEOUT*60+10)
+                                 timeout=timeout_in_minutes*60+10)
 
     def decommission(self, node):
         self.terminate_node(node)
