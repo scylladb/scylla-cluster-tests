@@ -189,3 +189,11 @@ def get_systemd_version(output: str) -> int:
         except ValueError:
             pass
     return 0
+
+
+def get_scylla_docker_repo_from_version(version: str):
+    if version == 'latest':
+        return 'scylladb/scylla-nightly'
+    if is_enterprise(version):
+        return 'scylladb/scylla-enterprise'
+    return 'scylladb/scylla'

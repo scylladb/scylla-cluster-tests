@@ -41,3 +41,4 @@ use_preinstalled_scylla: true
 backtrace_decoding: false
 
 append_scylla_args: ''
+docker_image: ''

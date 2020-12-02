@@ -270,7 +270,7 @@ class MinikubeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
         super().terminate_node(node)
 
     def upgrade_scylla_cluster(self, new_version: str) -> None:
-        self.k8s_cluster.docker_pull(f"scylladb/scylla:{new_version}")
+        self.k8s_cluster.docker_pull(f"{self.params.get('docker_image')}:{new_version}")
         return super().upgrade_scylla_cluster(new_version)
 
     @retrying(n=20, sleep_time=60, allowed_exceptions=(cluster.ClusterNodesNotReady, UnexpectedExit),
