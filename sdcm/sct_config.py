@@ -1071,7 +1071,7 @@ class SCTConfiguration(dict):
                 'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'gce_root_disk_size_monitor',
                 'gce_n_local_ssd_disk_monitor', 'gce_datacenter'],
 
-        'docker': ['user_credentials_path'],
+        'docker': ['user_credentials_path', 'scylla_version'],
 
         'baremetal': ['db_nodes_private_ip', 'db_nodes_public_ip', 'user_credentials_path'],
 
