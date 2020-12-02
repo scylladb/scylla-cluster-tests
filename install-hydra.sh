@@ -13,10 +13,7 @@ if ! docker --version ; then
     echo "==================================================================================================="
 fi
 echo "Docker is installed."
-if [ ! -L "${HYDRA_LINK_PATH}" ]; then
-    echo "Installing  Hydra"
-    ln -s $(pwd)/docker/env/hydra.sh ${HYDRA_LINK_PATH}
-fi
+ln -vsf $(pwd)/docker/env/hydra.sh ${HYDRA_LINK_PATH}
 echo "Hydra installed."
 if ! aws --version; then
     echo "Installing AWS CLI..."
