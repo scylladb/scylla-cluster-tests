@@ -18,7 +18,8 @@ import anyconfig
 from sdcm.utils import alternator
 from sdcm.utils.common import find_scylla_repo, get_scylla_ami_versions, get_branched_ami, get_ami_tags, \
     ami_built_by_scylla, MAX_SPOT_DURATION_TIME
-from sdcm.utils.version_utils import get_branch_version, get_branch_version_for_multiple_repositories
+from sdcm.utils.version_utils import get_branch_version, get_branch_version_for_multiple_repositories, \
+    get_scylla_docker_repo_from_version
 
 
 def str_or_list(value):
@@ -665,7 +666,8 @@ class SCTConfiguration(dict):
 
         # docker config options
 
-        dict(name="docker_image", env="SCT_DOCKER_IMAGE", type=str, help=""),
+        dict(name="docker_image", env="SCT_DOCKER_IMAGE", type=str,
+             help="Scylla docker image repo, i.e. 'scylladb/scylla', if omitted is calculated from scylla_version"),
 
         # baremetal config options
 
@@ -1069,7 +1071,7 @@ class SCTConfiguration(dict):
                 'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'gce_root_disk_size_monitor',
                 'gce_n_local_ssd_disk_monitor', 'gce_datacenter'],
 
-        'docker': ['docker_image', 'user_credentials_path'],
+        'docker': ['user_credentials_path'],
 
         'baremetal': ['db_nodes_private_ip', 'db_nodes_public_ip', 'user_credentials_path'],
 
@@ -1170,6 +1172,8 @@ class SCTConfiguration(dict):
         dist_version = scylla_linux_distro.split('-')[-1]
 
         if scylla_version:
+            if not self.get('docker_image'):
+                self['docker_image'] = get_scylla_docker_repo_from_version(scylla_version)
             if self.get("cluster_backend") in ["docker", "k8s-gce-minikube", "k8s-gke"]:
                 self.log.info("Assume that Scylla Docker image has repo file pre-installed.")
             elif not self.get('ami_id_db_scylla') and self.get('cluster_backend') == 'aws':

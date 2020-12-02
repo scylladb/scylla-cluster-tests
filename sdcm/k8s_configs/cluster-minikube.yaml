@@ -82,6 +82,7 @@ metadata:
   namespace: scylla
 spec:
   version: ${SCT_SCYLLA_VERSION}
+  repository: ${SCT_DOCKER_IMAGE}
   agentVersion: ${SCT_SCYLLA_MGMT_AGENT_VERSION}
   developerMode: true
   datacenter:

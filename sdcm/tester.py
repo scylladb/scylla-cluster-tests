@@ -76,6 +76,7 @@ from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.utils.gce_utils import get_gce_services
 from sdcm.keystore import KeyStore
 
+
 try:
     import cluster_cloud
 except ImportError:
@@ -891,7 +892,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_cluster.deploy_scylla_operator()
 
         # This should remove some of the unpredictability of pods startup time.
-        self.k8s_cluster.docker_pull(f'scylladb/scylla:{self.params.get("scylla_version")}')
+        self.k8s_cluster.docker_pull(f"{self.params.get('docker_image')}:{self.params.get('scylla_version')}")
 
         self.db_cluster = \
             minikube.MinikubeScyllaPodCluster(k8s_cluster=self.k8s_cluster,
