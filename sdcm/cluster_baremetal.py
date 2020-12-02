@@ -92,7 +92,7 @@ class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-m
         node.init()
         return node
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):  # pylint: disable=unused-argument
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):  # pylint: disable=unused-argument
         for node_index in range(count):
             node_name = '%s-%s' % (self.node_prefix, node_index)
             self.nodes.append(self._create_node(node_name,

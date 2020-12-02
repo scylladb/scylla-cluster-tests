@@ -199,7 +199,7 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
             self.nodes.append(node)
         return self.nodes
 
-    def add_nodes(self, count, ec2_user_data="", dc_idx=0, enable_auto_bootstrap=False):
+    def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False):
         return self._get_nodes() if cluster.Setup.REUSE_CLUSTER else self._create_nodes(count, enable_auto_bootstrap)
 
 
@@ -382,7 +382,7 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disabl
         node.init()
         return node
 
-    def add_nodes(self, count, ec2_user_data="", dc_idx=0, enable_auto_bootstrap=False):
+    def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False):
         return self._create_nodes(count, enable_auto_bootstrap)
 
     @staticmethod
