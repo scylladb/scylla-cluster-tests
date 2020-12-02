@@ -26,7 +26,7 @@ import os
 import re
 import traceback
 import json
-from typing import List, Optional, Type, Callable, Tuple, Dict, Set
+from typing import List, Optional, TypedDict, Type, Callable, Tuple, Dict, Set
 from functools import wraps, partial
 from collections import OrderedDict, defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
@@ -181,29 +181,45 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def set_current_running_nemesis(self, node):
         node.running_nemesis = self.__class__.__name__
 
-    def set_target_node(self, dc_idx=None):
+    def _get_target_nodes(
+            self,
+            is_seed: Optional[bool] = None,
+            dc_idx: Optional[int] = None,
+            rack: Optional[int] = None) -> list:
+        """
+        Filters and return nodes in the cluster that has no running nemesis on them
+        It can filter node by following criteria: is_seed, dc_idx, rack
+        If you want to get only seed nodes you pass is_seed = True, and is_seed = False if you want non-seed nodes.
+        If you don't care nodes seed status, you don't pass is_seed parameter to the function.
+        Same mechanism works for other parameters, if multiple criteria provided it will return nodes
+        that match all of them.
+        """
+        nodes = [node for node in self.cluster.nodes if not node.running_nemesis]
+        if is_seed is not None:
+            nodes = [node for node in nodes if node.is_seed == is_seed]
+        if dc_idx is not None:
+            nodes = [node for node in nodes if node.dc_idx == dc_idx]
+        if rack is not None:
+            nodes = [node for node in nodes if node.rack == rack]
+        return nodes
+
+    def set_target_node(self, dc_idx: Optional[int] = None, rack: Optional[int] = None):
         """Set node to run nemesis on"""
-        if self.filter_seed:
-            non_seed_nodes = [node for node in self.cluster.nodes if not node.is_seed and not node.running_nemesis]
-            # if non_seed_nodes is empty, nemesis would failed.
-            self.log.debug("List of NonSeed nodes: {}".format([node.name for node in non_seed_nodes]))
-            if dc_idx:
-                non_seed_nodes = [node for node in non_seed_nodes if node.dc_idx == dc_idx]
-            if not non_seed_nodes:
-                self.log.warning("Cluster doesn't contain free nonseeds nodes. Test will failed")
-            self.target_node = random.choice(non_seed_nodes)
-        else:
-            all_nodes = [node for node in self.cluster.nodes if not node.running_nemesis]
-            if dc_idx:
-                all_nodes = [node for node in all_nodes if node.dc_idx == dc_idx]
-            self.target_node = random.choice(all_nodes)
-
+        nodes = self._get_target_nodes(is_seed=False if self.filter_seed else None, dc_idx=dc_idx, rack=rack)
+        if not nodes:
+            raise UnsupportedNemesis("Can't allocate node to run nemesis on")
         # Set name of nemesis, which is going to run on target node
+        self.target_node = random.choice(nodes)
         self.set_current_running_nemesis(node=self.target_node)
-
         self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
 
-    def set_last_node_as_target(self):
+    def set_last_node_as_target(self, dc_idx: Optional[int] = None, rack: Optional[int] = None):
+        nodes = self._get_target_nodes(is_seed=False if self.filter_seed else None, dc_idx=dc_idx, rack=rack)
+        if not nodes:
+            dc_str = '' if dc_idx is None else f'dc {dc_idx} '
+            rack_str = '' if rack is None else f'rack {rack} '
+            raise UnsupportedNemesis(f"Can't allocate node from {dc_str}{rack_str}to run nemesis on")
+        nodes = sorted(nodes, key=lambda n: n.name)
         self.target_node = self.cluster.nodes[-1]  # can withdraw last node only
         self.set_current_running_nemesis(node=self.target_node)
         self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
@@ -544,11 +560,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     @retrying(n=3, sleep_time=60, allowed_exceptions=(NodeSetupFailed, NodeSetupTimeout))
-    def _add_and_init_new_cluster_node(self, old_node_ip=None, timeout=HOUR_IN_SEC * 6):
+    def _add_and_init_new_cluster_node(self, old_node_ip=None, timeout=HOUR_IN_SEC * 6, rack=0):
         """When old_node_private_ip is not None replacement node procedure is initiated"""
         self.log.info("Adding new node to cluster...")
-        InfoEvent(message="StartEvent - Adding new node to cluster").publish()
-        new_node = self.cluster.add_nodes(count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True)[0]
+        InfoEvent(message='StartEvent - Adding new node to cluster').publish()
+        new_node = self.cluster.add_nodes(
+            count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack)[0]
         self.monitoring_set.reconfigure_scylla_monitoring()
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
         new_node.replacement_node_ip = old_node_ip
@@ -578,9 +595,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         else:
             termination_methods = ('terminate_node',)
         terminate_method_name = random.choice(termination_methods)
-        if terminate_method_name == 'terminate_node' and self._is_it_on_kubernetes():
-            # terminate_node on kubernetes works only for last node
-            self.set_last_node_as_target()
         self.log.info(f"Terminate node via {terminate_method_name}")
         terminate_method = getattr(self.cluster, terminate_method_name)
         terminate_method(node)
@@ -595,7 +609,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if add_node:
             # When adding node after decommission the node is declared as up only after it completed bootstrapping,
             # increasing the timeout for now
-            new_node = self._add_and_init_new_cluster_node()
+            new_node = self._add_and_init_new_cluster_node(rack=self.target_node.rack)
             # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
             # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
             # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
@@ -629,8 +643,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message="StartEvent - Terminate node and wait 5 minutes").publish()
         self._terminate_cluster_node(self.target_node)
         time.sleep(300)  # Sleeping for 5 mins to let the cluster live with a missing node for a while
-        InfoEvent(message="FinishEvent - target_node was terminated").publish()
-        new_node = self._add_and_init_new_cluster_node(old_node_ip)
+        InfoEvent(message='FinishEvent - target_node was terminated').publish()
+        new_node = self._add_and_init_new_cluster_node(old_node_ip, rack=self.target_node.rack)
 
         try:
             if new_node.get_scylla_config_param("enable_repair_based_node_ops") == 'false':
@@ -1064,7 +1078,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 drop.append(column_name)
         return drop
 
-    def _add_drop_column_run_cql_query(self, cmd, ks, consistency_level=ConsistencyLevel.ALL):  # pylint: disable=too-many-branches
+    def _add_drop_column_run_cql_query(self, cmd, ks,
+                                       consistency_level=ConsistencyLevel.ALL):  # pylint: disable=too-many-branches
         try:
             with self.cluster.cql_connection_patient(self.target_node, keyspace=ks) as session:
                 session.default_consistency_level = consistency_level
@@ -1117,7 +1132,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     del added_columns_info['column_names'][column_name]
         if add:
             cmd = f"ALTER TABLE {self._add_drop_column_target_table[1]} " \
-                f"ADD ( {', '.join(['%s %s' % (col[0], col[1]) for col in add])} );"
+                  f"ADD ( {', '.join(['%s %s' % (col[0], col[1]) for col in add])} );"
             if self._add_drop_column_run_cql_query(cmd, self._add_drop_column_target_table[0]):
                 for column_name, column_type in add:
                     added_columns_info['column_names'][column_name] = column_type
@@ -1159,13 +1174,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if partition_range_with_data_validation and '-' in partition_range_with_data_validation:
             partition_range_splitted = partition_range_with_data_validation.split('-')
             exclude_partitions.extend(
-                [i for i in range(int(partition_range_splitted[0]), int(partition_range_splitted[1]))])  # pylint: disable=unnecessary-comprehension
+                [i for i in range(int(partition_range_splitted[0]),
+                                  int(partition_range_splitted[1]))])  # pylint: disable=unnecessary-comprehension
 
         partitions_for_delete = defaultdict(list)
         with self.cluster.cql_connection_patient(self.target_node, connect_timeout=300) as session:
             session.default_consistency_level = ConsistencyLevel.ONE
 
-            for partition_key in [i*2+50 for i in range(max_partitions_in_test_table)]:
+            for partition_key in [i * 2 + 50 for i in range(max_partitions_in_test_table)]:
                 if len(partitions_for_delete) == partitions_amount:
                     break
 
@@ -1215,7 +1231,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         queries = []
         for pkey, ckey in partitions_for_delete.items():
-            queries.append(f"delete from {ks_cf} where pk = {pkey} and ck > {int(ckey[1]/2)}")
+            queries.append(f"delete from {ks_cf} where pk = {pkey} and ck > {int(ckey[1] / 2)}")
         self.run_deletions(queries=queries, ks_cf=ks_cf)
 
         return partitions_for_delete
@@ -1238,7 +1254,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         clustering_keys = []
         if max_clustering_key > min_clustering_key:
             third_ck = int((max_clustering_key - min_clustering_key) / 3)
-            clustering_keys = range(min_clustering_key+third_ck, max_clustering_key-third_ck)
+            clustering_keys = range(min_clustering_key + third_ck, max_clustering_key - third_ck)
 
         if not clustering_keys:
             clustering_keys = range(min_clustering_key, max_clustering_key)
@@ -1684,6 +1700,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         - create snapshot of few keyspaces
         - create snapshot of few tables, including MVs
         """
+
         def _full_snapshot():
             self.log.info("Take all keyspaces snapshot")
             return 'snapshot'
@@ -1750,7 +1767,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             return f'snapshot {selected_keyspace} -cf {tables}'
 
         self._set_current_disruption('SnapshotOperations')
-        functions_map = [(_few_tables,), (_full_snapshot,), (_ks_snapshot, True),  (_ks_snapshot, False)]
+        functions_map = [(_few_tables,), (_full_snapshot,), (_ks_snapshot, True), (_ks_snapshot, False)]
         snapshot_option = random.choice(functions_map)
 
         try:
@@ -2045,7 +2062,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         assert removed_node_status is None, "Node was not removed properly (Node status:{})".format(removed_node_status)
 
         # add new node
-        new_node = self._add_and_init_new_cluster_node()
+        new_node = self._add_and_init_new_cluster_node(rack=self.target_node.rack)
         # in case the removed node was a seed
         if node_to_remove.is_seed:
             new_node.is_seed = True
@@ -2141,11 +2158,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if match_type == 'random':
                 probability = random.choice(['0.0001', '0.001', '0.01', '0.1', '0.3', '0.6', '0.8', '0.9'])
                 return f'randomly chosen packet with {probability} probability', \
-                    f'-m statistic --mode {mode} --probability {probability}'
+                       f'-m statistic --mode {mode} --probability {probability}'
             elif match_type == 'nth':
                 every = random.choice(['2', '4', '8', '16', '32', '64', '128'])
                 return f'every {every} packet', \
-                    f'-m statistic --mode {mode} --every {every} --packet 0'
+                       f'-m statistic --mode {mode} --every {every} --packet 0'
         elif match_type == 'limit':
             period = random.choice(['second', 'minute'])
             pkts_per_period = random.choice({
@@ -2153,11 +2170,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 'minute': [2, 10, 40, 80]
             }.get(period))
             return f'string of {pkts_per_period} very first packets every {period}', \
-                f'-m limit --limit {pkts_per_period}/{period}'
+                   f'-m limit --limit {pkts_per_period}/{period}'
         elif match_type == 'connbytes':
             bytes_from = random.choice(['100', '200', '400', '800', '1600', '3200', '6400', '12800', '1280000'])
             return f'every packet from connection that total byte counter exceeds {bytes_from}', \
-                f'-m connbytes --connbytes-mode bytes --connbytes-dir both --connbytes {bytes_from}'
+                   f'-m connbytes --connbytes-mode bytes --connbytes-dir both --connbytes {bytes_from}'
         return 'every packet', ''
 
     @staticmethod
@@ -2176,10 +2193,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 'icmp-host-prohibited',
                 'icmp-admin-prohibited'
             ])
-            return f'rejected with {reject_with}',\
-                f'{target_type} --reject-with {reject_with}'
+            return f'rejected with {reject_with}', \
+                   f'{target_type} --reject-with {reject_with}'
         return f'dropped', \
-            f'{target_type}'
+               f'{target_type}'
 
     def _run_commands_wait_and_cleanup(  # pylint: disable=too-many-arguments
             self, node, name: str, start_commands: List[str],
@@ -2235,6 +2252,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         Stop streaming task in middle and rebuild the data on the node.
         """
+
         def decommission_post_action():
             decommission_done = list(self.target_node.follow_system_log(
                 patterns=['DECOMMISSIONING: done'], start_from_beginning=True))
@@ -2253,7 +2271,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.log.error(
                     'The target node is decommission unexpectedly, decommission might complete before stopping it. Re-add a new node')
                 self._terminate_cluster_node(self.target_node)
-                new_node = self._add_and_init_new_cluster_node()
+                new_node = self._add_and_init_new_cluster_node(rack=self.target_node.rack)
                 new_node.running_nemesis = None
                 return new_node
             return None
@@ -2366,7 +2384,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for ks_cf in self.cluster.get_non_system_ks_cf_list(self.target_node):
             self.target_node.run_nodetool("scrub", args=f"{ks_cf.split('.')[0]}")
 
-        self.log.debug('Refreshing the cache by restart the node, and verify the rebuild sstable can be loaded successfully.')
+        self.log.debug(
+            'Refreshing the cache by restart the node, and verify the rebuild sstable can be loaded successfully.')
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
@@ -2376,9 +2395,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         current_dc_idx = self.target_node.dc_idx
         self._set_current_disruption("GrowCluster")
         self.log.info("Start grow cluster on %s nodes", add_nodes_number)
+        if self._is_it_on_kubernetes():
+            rack = random.choice([0, 1])
+            InfoEvent(message=f'GrowCluster - Add New node to {rack} rack').publish()
+        else:
+            rack = 0
+            InfoEvent(message='GrowCluster - Add New node').publish()
         for _ in range(add_nodes_number):
-            InfoEvent(message="GrowCluster - Add New node").publish()
-            added_node = self._add_and_init_new_cluster_node()
+            added_node = self._add_and_init_new_cluster_node(rack=rack)
             added_node.running_nemesis = None
             InfoEvent(message="GrowCluster - Done adding New node").publish()
             self.log.info("New node added %s", added_node.name)
@@ -2390,9 +2414,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info("Start shrink cluster on %s nodes", add_nodes_number)
         for _ in range(add_nodes_number):
             if self._is_it_on_kubernetes():
-                self.set_last_node_as_target()
+                self.set_last_node_as_target(rack=rack)
             else:
-                self.set_target_node(dc_idx=current_dc_idx)
+                self.set_target_node(dc_idx=current_dc_idx, rack=rack)
             self.log.info("Next node will be removed %s", self.target_node)
             try:
                 InfoEvent(message="StartEvent - ShrinkCluster started decommissioning a node").publish()
@@ -3001,7 +3025,8 @@ class LimitedChaosMonkey(Nemesis):
                                                          'disrupt_truncate', 'disrupt_show_toppartitions',
                                                          'disrupt_mgmt_repair_cli', 'disrupt_no_corrupt_repair',
                                                          'disrupt_snapshot_operations', 'disrupt_abort_repair',
-                                                         'disrupt_mgmt_backup', 'disrupt_mgmt_backup_specific_keyspaces',
+                                                         'disrupt_mgmt_backup',
+                                                         'disrupt_mgmt_backup_specific_keyspaces',
                                                          'disrupt_add_drop_column'])
 
 
@@ -3302,6 +3327,7 @@ class BlockNetworkMonkey(Nemesis):
     def disrupt(self):
         self.disrupt_network_block()
 
+
 # Temporary disable due to  https://github.com/scylladb/scylla/issues/6522
 # class RejectInterNodeNetworkMonkey(Nemesis):
 #     disruptive = True
@@ -3532,7 +3558,6 @@ COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,
 
 
 class MemoryStressMonkey(Nemesis):
-
     disruptive = True
 
     @log_time_elapsed_and_status

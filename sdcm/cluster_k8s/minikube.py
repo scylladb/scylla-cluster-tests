@@ -245,10 +245,12 @@ class MinikubeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
                   count: int,
                   ec2_user_data: str = "",
                   dc_idx: int = 0,
+                  rack: int = 0,
                   enable_auto_bootstrap: bool = False) -> List[MinikubeScyllaPodContainer]:
         new_nodes = super().add_nodes(count=count,
                                       ec2_user_data=ec2_user_data,
                                       dc_idx=dc_idx,
+                                      rack=rack,
                                       enable_auto_bootstrap=enable_auto_bootstrap)
         for node in new_nodes:
             KubernetesOps.expose_pod_ports(self.k8s_cluster, node.name,

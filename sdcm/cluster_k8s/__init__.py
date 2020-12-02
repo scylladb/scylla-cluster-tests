@@ -26,12 +26,12 @@ from difflib import unified_diff
 from functools import cached_property, partialmethod, partial
 from tempfile import NamedTemporaryFile
 from threading import RLock
-from typing import Optional, Union, List, Dict, Any, ContextManager, Type
+from typing import Optional, Union, List, Dict, Any, ContextManager, Type, Callable
 
 import yaml
 import kubernetes as k8s
 from kubernetes.client import V1Container
-from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance
+from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance, ResourceList, Subresource
 
 from sdcm import sct_abs_path, cluster, cluster_docker
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
@@ -43,6 +43,7 @@ from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogge
     KubectlClusterEventsLogger
 from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring, ScyllaOperatorStatusMonitoring
 
+ANY_KUBERNETES_RESOURCE = Union[Resource, ResourceField, ResourceInstance, ResourceList, Subresource]
 
 SCYLLA_OPERATOR_CONFIG = sct_abs_path("sdcm/k8s_configs/operator.yaml")
 SCYLLA_API_VERSION = "scylla.scylladb.com/v1alpha1"
@@ -213,15 +214,15 @@ class BasePodContainer(cluster.BaseNode):
     parent_cluster: PodCluster
 
     def __init__(self, name: str, parent_cluster: PodCluster, node_prefix: str = "node", node_index: int = 1,
-                 base_logdir: Optional[str] = None, dc_idx: int = 0):
+                 base_logdir: Optional[str] = None, dc_idx: int = 0, rack=0):
         self.node_index = node_index
         cluster.BaseNode.__init__(
             self, name=name,
             parent_cluster=parent_cluster,
             base_logdir=base_logdir,
             node_prefix=node_prefix,
-            dc_idx=dc_idx
-        )
+            dc_idx=dc_idx,
+            rack=rack)
 
     def init(self) -> None:
         super().init()
@@ -422,6 +423,7 @@ class BasePodContainer(cluster.BaseNode):
         self.parent_cluster.k8s_cluster.kubectl(
             f'delete node {self.node_name} --now',
             timeout=SCYLLA_POD_TERMINATE_TIMEOUT * 60 + 10)
+        self.destroy()
 
     def terminate_k8s_host(self):
         raise NotImplementedError("To be overridden in child class")
@@ -477,12 +479,14 @@ class PodCluster(cluster.BaseCluster):
     def k8s_core_v1_api(self):
         return self.k8s_cluster.k8s_core_v1_api
 
-    def _create_node(self, node_index: int, pod_name: str) -> BasePodContainer:
+    def _create_node(self, node_index: int, pod_name: str, dc_idx: int, rack: int) -> BasePodContainer:
         node = self.PodContainerClass(parent_cluster=self,
                                       name=pod_name,
                                       base_logdir=self.logdir,
                                       node_prefix=self.node_prefix,
-                                      node_index=node_index)
+                                      node_index=node_index,
+                                      dc_idx=dc_idx,
+                                      rack=rack)
         node.init()
         return node
 
@@ -490,18 +494,27 @@ class PodCluster(cluster.BaseCluster):
                   count: int,
                   ec2_user_data: str = "",
                   dc_idx: int = 0,
+                  rack: int = 0,
                   enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
-        pods = KubernetesOps.list_pods(self, namespace=self.namespace)
-
-        self.log.debug("Numbers of pods: %s", len(pods))
-        assert count <= len(pods), "You can't alter number of pods here"
-
+        # PodCluster only register new nodes and return whatever was registered
+        k8s_pods = KubernetesOps.list_pods(self, namespace=self.namespace)
         nodes = []
-        for node_index, pod in enumerate(pods[-count:]):
-            node = self._create_node(node_index, pod.metadata.name)
+        for pod in k8s_pods:
+            is_already_registered = False
+            for node in self.nodes:
+                if node.name == pod.metadata.name:
+                    is_already_registered = True
+                    break
+            if is_already_registered:
+                continue
+            # TBD: A rack validation might be needed
+            # Register a new node
+            node = self._create_node(len(self.nodes), pod.metadata.name, dc_idx, rack)
             nodes.append(node)
             self.nodes.append(node)
-
+        if len(nodes) != count:
+            raise RuntimeError(
+                f'Requested {count} number of nodes to add, while only {len(nodes)} new nodes where found')
         return nodes
 
     def node_setup(self, node, verbose=False, timeout=3600):
@@ -583,12 +596,55 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                                          api_version=SCYLLA_API_VERSION,
                                          kind=SCYLLA_CLUSTER_RESOURCE_KIND)
 
-    def replace_scylla_cluster_value(self, path: str, value: Any) -> ResourceInstance:
+    def replace_scylla_cluster_value(self, path: str, value: Any) -> Optional[ANY_KUBERNETES_RESOURCE]:
         LOGGER.debug("Replace `%s' with `%s' in %s's spec", path, value, self.scylla_cluster_name)
         return self._k8s_scylla_cluster_api.patch(body=[{"op": "replace", "path": path, "value": value}],
                                                   name=self.scylla_cluster_name,
                                                   namespace=self.namespace,
                                                   content_type=JSON_PATCH_TYPE)
+
+    def get_scylla_cluster_value(self, path: str) -> Optional[ANY_KUBERNETES_RESOURCE]:
+        current = self._k8s_scylla_cluster_api.get(namespace=self.namespace, name=self.scylla_cluster_name)
+        current = current.to_dict()
+        for name in path.split('/'):
+            if current is None:
+                return None
+            if not name:
+                continue
+            if name.isalnum() and isinstance(current, (list, tuple, set)):
+                try:
+                    current = current[int(name)]
+                except Exception:
+                    current = None
+                continue
+            current = current.get(name, None)
+        return current
+
+    def add_scylla_cluster_value(self, path: str, element: Any):
+        init = self.get_scylla_cluster_value(path) is None
+        if path.endswith('/'):
+            path = path[0:-1]
+        if init:
+            # You can't add to empty array, so you need to replace it
+            op = "replace"
+            path = path
+            value = [element]
+        else:
+            op = "add"
+            path = path + "/-"
+            value = element
+        self._k8s_scylla_cluster_api.patch(
+            body=[
+                {
+                    "op": op,
+                    "path": path,
+                    "value": value
+                }
+            ],
+            name=self.scylla_cluster_name,
+            namespace=self.namespace,
+            content_type=JSON_PATCH_TYPE
+        )
 
     @property
     def scylla_cluster_spec(self) -> ResourceField:
@@ -647,41 +703,62 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                   count: int,
                   ec2_user_data: str = "",
                   dc_idx: int = 0,
+                  rack: int = 0,
                   enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
-        current_members = self.scylla_cluster_spec.datacenter.racks[0].members
-        self.replace_scylla_cluster_value("/spec/datacenter/racks/0/members", current_members+count)
-        self.wait_for_pods_readiness(current_members+count)
+        self.create_rack_if_not_exists(rack)
+        current_members = self.scylla_cluster_spec.datacenter.racks[rack].members
+        self.replace_scylla_cluster_value(f"/spec/datacenter/racks/{rack}/members", current_members + count)
+        self.wait_for_pods_readiness(len(self.nodes) + count)
         return super().add_nodes(count=count,
                                  ec2_user_data=ec2_user_data,
                                  dc_idx=dc_idx,
+                                 rack=rack,
                                  enable_auto_bootstrap=enable_auto_bootstrap)
 
+    def create_rack_if_not_exists(self, rack: int):
+        if self.get_scylla_cluster_value(f'/spec/datacenter/racks/{rack}') is not None:
+            return
+        # Create new rack of very first rack of the cluster
+        new_rack = self.get_scylla_cluster_value('/spec/datacenter/racks/0')
+        new_rack['members'] = 0
+        new_rack['name'] = f'{new_rack["name"]}-{rack}'
+        self.add_scylla_cluster_value('/spec/datacenter/racks', new_rack)
+
+    def delete_rack(self, rack: int):
+        racks = self.get_scylla_cluster_value(f'/spec/datacenter/racks/')
+        if len(racks) == 1:
+            return
+        racks.pop(rack)
+        self.replace_scylla_cluster_value('/spec/datacenter/racks', racks)
+
     def terminate_node(self, node: BasePodContainer):
-        assert self.nodes[-1] == node, "Can withdraw the last node only"
-        current_members = self.scylla_cluster_spec.datacenter.racks[0].members
-        self.replace_scylla_cluster_value("/spec/datacenter/racks/0/members", current_members - 1)
-        super().terminate_node(node)
-        self.k8s_cluster.kubectl(f"wait --timeout={SCYLLA_POD_TERMINATE_TIMEOUT}m --for=delete pod {node.name}",
-                                 namespace=self.namespace,
-                                 timeout=SCYLLA_POD_TERMINATE_TIMEOUT * 60 + 10)
+        self._remove_node(node, partial(super().terminate_node, node))
 
     def terminate_k8s_node(self, node: BasePodContainer):
-        assert self.nodes[-1] == node, "Can withdraw the last node only"
-        current_members = self.scylla_cluster_spec.datacenter.racks[0].members
-        node.terminate_k8s_node()
-        self.replace_scylla_cluster_value("/spec/datacenter/racks/0/members", current_members - 1)
-        self.k8s_cluster.kubectl(f"wait --timeout={SCYLLA_POD_TERMINATE_TIMEOUT}m --for=delete pod {node.name}",
-                                 namespace=self.namespace,
-                                 timeout=SCYLLA_POD_TERMINATE_TIMEOUT * 60 + 10)
+        self._remove_node(node, node.terminate_k8s_node)
 
     def terminate_k8s_host(self, node: BasePodContainer):
-        assert self.nodes[-1] == node, "Can withdraw the last node only"
-        current_members = self.scylla_cluster_spec.datacenter.racks[0].members
-        node.terminate_k8s_host()
-        self.replace_scylla_cluster_value("/spec/datacenter/racks/0/members", current_members - 1)
+        self._remove_node(node, node.terminate_k8s_host)
+
+    def _remove_node(self, node: BasePodContainer, terminate_method: Callable):
+        rack = node.rack
+        assert self.get_rack_nodes(rack)[-1] == node, "Can withdraw the last node only"
+        current_members = self.scylla_cluster_spec.datacenter.racks[rack].members
+        terminate_method()
+        self.replace_scylla_cluster_value(f"/spec/datacenter/racks/{rack}/members", current_members - 1)
         self.k8s_cluster.kubectl(f"wait --timeout={SCYLLA_POD_TERMINATE_TIMEOUT}m --for=delete pod {node.name}",
                                  namespace=self.namespace,
                                  timeout=SCYLLA_POD_TERMINATE_TIMEOUT * 60 + 10)
+        # TBD: Enable rack deletion after https://github.com/scylladb/scylla-operator/issues/287 is resolved
+        # if current_members - 1 == 0:
+        #     self.delete_rack(rack)
+
+    def get_rack_nodes(self, rack: int) -> list:
+        output = []
+        for node in self.nodes:
+            if node.rack == rack:
+                output.append(node)
+        return sorted(output, key=lambda n: n.name)
 
     def decommission(self, node):
         self.terminate_node(node)
@@ -707,52 +784,48 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
             os.remove(tmp.name)
 
     def add_sidecar_injection(self) -> bool:
-        statefulset = None
-        for pod in KubernetesOps.list_pods(self, namespace=self.namespace):
-            for owner_reference in pod.metadata.owner_references:
-                if owner_reference.kind != 'StatefulSet':
-                    continue
-                try:
-                    statefulset = self.k8s_apps_v1_api.read_namespaced_stateful_set(
-                        owner_reference.name,
-                        namespace=self.namespace
-                    )
-                except Exception:
-                    pass
+        result = False
+        for statefulset in self.k8s_apps_v1_api.list_namespaced_stateful_set(namespace=self.namespace).items:
+            is_owned_by_scylla_cluster = False
+            for owner_reference in statefulset.metadata.owner_references:
+                if owner_reference.kind == 'ScyllaCluster' and owner_reference.name == self.scylla_cluster_name:
+                    is_owned_by_scylla_cluster = True
+                    break
 
-        if not statefulset:
-            self.log.error("add_sidecar_injection: Can't find statefull set to patch")
-            return False
+            if not is_owned_by_scylla_cluster:
+                self.log.debug(f"add_sidecar_injection: statefulset {statefulset.metadata.name} skipped")
+                continue
 
-        if any([container for container in statefulset.spec.template.spec.containers if
-                container.name == 'injected-busybox-sidecar']):
-            self.log.debug("add_sidecar_injection: sidecar is already injected")
-            return False
+            if any([container for container in statefulset.spec.template.spec.containers if
+                    container.name == 'injected-busybox-sidecar']):
+                self.log.debug(
+                    f"add_sidecar_injection: statefulset {statefulset.metadata.name} sidecar is already injected")
+                continue
 
-        statefulset.spec.template.spec.containers.insert(
-            0,
-            V1Container(
-                command=['/bin/sh', '-c', 'while true; do sleep 1 ; done'],
-                image='busybox:1.32.0',
-                name='injected-busybox-sidecar'
+            result = True
+            statefulset.spec.template.spec.containers.insert(
+                0,
+                V1Container(
+                    command=['/bin/sh', '-c', 'while true; do sleep 1 ; done'],
+                    image='busybox:1.32.0',
+                    name='injected-busybox-sidecar'
+                )
             )
-        )
 
-        self.k8s_apps_v1_api.patch_namespaced_stateful_set(
-            statefulset.metadata.name, self.namespace,
-            {
-                'spec': {
-                    'template': {
-                        'spec': {
-                            'containers': statefulset.spec.template.spec.containers
+            self.k8s_apps_v1_api.patch_namespaced_stateful_set(
+                statefulset.metadata.name, self.namespace,
+                {
+                    'spec': {
+                        'template': {
+                            'spec': {
+                                'containers': statefulset.spec.template.spec.containers
+                            }
                         }
                     }
                 }
-            }
-        )
-
-        self.log.info("add_sidecar_injection: sidecar has been injected")
-        return True
+            )
+            self.log.info(f"add_sidecar_injection: statefulset {statefulset.metadata.name} sidecar has been injected")
+        return result
 
 
 class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
@@ -797,6 +870,7 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
                   count: int,
                   ec2_user_data: str = "",
                   dc_idx: int = 0,
+                  rack: int = 0,
                   enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
 
         if self.loader_cluster_created:
@@ -807,6 +881,7 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
         new_nodes = super().add_nodes(count=count,
                                       ec2_user_data=ec2_user_data,
                                       dc_idx=dc_idx,
+                                      rack=rack,
                                       enable_auto_bootstrap=enable_auto_bootstrap)
         self.loader_cluster_created = True
 

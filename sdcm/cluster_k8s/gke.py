@@ -92,7 +92,7 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
     def __str__(self):
         return f"{type(self).__name__} {self.name} | Zone: {self.gce_zone} | Version: {self.gke_cluster_version}"
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
         if not self.gke_cluster_created:
             self.setup_gke_cluster(num_nodes=count)
             self.gke_cluster_created = True
@@ -254,6 +254,7 @@ class GkeScyllaPodContainer(BasePodContainer, IptablesPodIpRedirectMixin):
 
     def terminate_k8s_host(self):
         self._instance_wait_safe(self._destroy)
+        self.destroy()
 
     def _destroy(self):
         if self.k8s_node:
@@ -295,10 +296,12 @@ class GkeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
                   count: int,
                   ec2_user_data: str = "",
                   dc_idx: int = 0,
+                  rack: int = 0,
                   enable_auto_bootstrap: bool = False) -> List[GkeScyllaPodContainer]:
         new_nodes = super().add_nodes(count=count,
                                       ec2_user_data=ec2_user_data,
                                       dc_idx=dc_idx,
+                                      rack=rack,
                                       enable_auto_bootstrap=enable_auto_bootstrap)
 
         self.add_hydra_iptables_rules(nodes=new_nodes)

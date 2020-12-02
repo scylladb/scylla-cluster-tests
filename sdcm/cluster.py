@@ -386,8 +386,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                                   'shutdown'  # when node was removed it may take more time to update the gossip info
                                   ]
 
-    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0):  # pylint: disable=too-many-arguments,unused-argument
+    def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, rack=0):  # pylint: disable=too-many-arguments,unused-argument
         self.name = name
+        self.rack = rack
         self.parent_cluster = parent_cluster  # reference to the Cluster object that the node belongs to
         self.ssh_login_info = ssh_login_info
         self.logdir = os.path.join(base_logdir, self.name) if base_logdir else None
@@ -1093,6 +1094,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return None
 
     def destroy(self):
+        self.stop_task_threads()
         ContainerManager.destroy_all_containers(self)
         LOGGER.info("%s destroyed", self)
 
@@ -2945,7 +2947,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def wait_for_init(self):
         raise NotImplementedError("Derived class must implement 'wait_for_init' method!")
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, enable_auto_bootstrap=False):
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
         """
         :param count: number of nodes to add
         :param ec2_user_data:
