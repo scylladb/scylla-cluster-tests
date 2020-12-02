@@ -56,6 +56,10 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
     def wait_ssh_up(self, verbose=True, timeout=500):
         pass
 
+    @property
+    def is_nonroot_install(self):
+        return False
+
 
 logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
 
@@ -167,7 +171,7 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
 
     def test_no_scylla_binary_rhel_like(self):
         self.node.remoter = VersionDummyRemote(self, (
-            ("scylla --version", (127, "", "bash: scylla: command not found\n")),
+            ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
             ("rpm --query --queryformat '%{VERSION}' scylla", (0, "3.3.rc1", "")),
         ))
         self.assertEqual(self.node.get_scylla_version(), "3.3.rc1")
@@ -176,7 +180,7 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
     def test_no_scylla_binary_other(self):
         self.node.distro = Distro.DEBIAN9
         self.node.remoter = VersionDummyRemote(self, (
-            ("scylla --version", (127, "", "bash: scylla: command not found\n")),
+            ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
             ("dpkg-query --show --showformat '${Version}' scylla", (0, "3.3~rc1-0.20200209.0d0c1d43188-1", "")),
         ))
         self.assertEqual(self.node.get_scylla_version(), "3.3.rc1")
@@ -184,7 +188,7 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
 
     def test_scylla(self):
         self.node.remoter = VersionDummyRemote(self, (
-            ("scylla --version", (0, "3.3.rc1-0.20200209.0d0c1d43188\n", "")),
+            ("/usr/bin/scylla --version", (0, "3.3.rc1-0.20200209.0d0c1d43188\n", "")),
             ("readelf -n /usr/bin/scylla", (0, "Build ID: xxx", "")),
         ))
         self.assertEqual(self.node.get_scylla_version(), "3.3.rc1")
@@ -193,7 +197,7 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
 
     def test_scylla_master(self):
         self.node.remoter = VersionDummyRemote(self, (
-            ("scylla --version", (0, "666.development-0.20200205.2816404f575\n", "")),
+            ("/usr/bin/scylla --version", (0, "666.development-0.20200205.2816404f575\n", "")),
             ("readelf -n /usr/bin/scylla", (0, "Build ID: xxx", "")),
         ))
         self.assertEqual(self.node.get_scylla_version(), "666.development")
@@ -202,7 +206,7 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
     def test_scylla_enterprise(self):
         self.node.is_enterprise = True
         self.node.remoter = VersionDummyRemote(self, (
-            ("scylla --version", (0, "2019.1.4-0.20191217.b59e92dbd\n", "")),
+            ("/usr/bin/scylla --version", (0, "2019.1.4-0.20191217.b59e92dbd\n", "")),
             ("readelf -n /usr/bin/scylla", (0, "Build ID: xxx", "")),
         ))
         self.assertEqual(self.node.get_scylla_version(), "2019.1.4")
@@ -211,7 +215,7 @@ class TestBaseNodeGetScyllaVersion(unittest.TestCase):
     def test_scylla_enterprise_no_scylla_binary(self):
         self.node.is_enterprise = True
         self.node.remoter = VersionDummyRemote(self, (
-            ("scylla --version", (127, "", "bash: scylla: command not found\n")),
+            ("/usr/bin/scylla --version", (127, "", "bash: scylla: command not found\n")),
             ("rpm --query --queryformat '%{VERSION}' scylla-enterprise", (0, "2019.1.4", "")),
         ))
         self.assertEqual(self.node.get_scylla_version(), "2019.1.4")
