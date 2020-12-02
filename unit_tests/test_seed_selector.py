@@ -28,6 +28,10 @@ class DummyNode(sdcm.cluster.BaseNode):  # pylint: disable=abstract-method
         # Expected node name like : node1, node2, node3 ...
         return '127.0.0.%s' % self.name.replace('node', '')
 
+    @property
+    def is_nonroot_install(self):
+        return False
+
 
 class DummyCluster(sdcm.cluster.BaseScyllaCluster):
     def __init__(self, *args, **kwargs):
