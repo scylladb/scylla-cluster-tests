@@ -1,0 +1,81 @@
+{% extends 'results_base_custom.html' %}
+{% block body %}
+    <div>
+        *Installation details*<br>
+        Scylla version (or git commit hash): `{{ scylla_version }}`<br>
+        Cluster size: {{ number_of_db_nodes }} nodes ({{ scylla_instance_type }})<br>
+        OS (RHEL/CentOS/Ubuntu/AWS AMI): {% if scylla_ami_id %} `{{ scylla_ami_id }}` {% endif %} {% if scylla_node_image %} `{{ scylla_node_image }}`{% endif %} ({{ backend }}{% if region_name %}: {{ region_name }}{% endif %})<br>
+        {% if scylla_repo %}
+        Private repo: `{{ scylla_repo }}`<br>
+        {% endif %}
+        {% if repo_uuid %}
+        Private repo UUID: `{{ repo_uuid }}`<br>
+        {% endif %}
+        {% if repo_ostype %}
+        Private repo OS type: `{{ repo_ostype }}`<br>
+        {% endif %}
+    </div>
+    <br>
+    <div>
+        {% if gemini_cmd %}
+        Gemini command: <br>
+            {% for cmd in gemini_cmd %}
+                `{{ cmd }}`<br>
+            {% endfor %}
+            {% if gemini_version %}
+                Gemini version: `{{ gemini_version }}`<br>
+            {% endif %}
+        {% endif %}
+    </div>
+    <br>
+    <div>
+        {% if job_name %}
+        Test: {{ job_name }}<br>
+        {% endif %}
+        {% if test_name %}
+        Test name: {{ test_name }}<br>
+        {% endif %}
+        {% if config_files %}
+        Test config file(s):<br>
+            {% for config_file_link in config_files_link %}
+                - [{{ config_file_link.file }}]({{ config_file_link.link }})<br>
+            {% endfor %}
+        {% endif %}
+    </div>
+    <br>
+    <br>
+    {% if nodes %}
+    <div>
+        {% for node in nodes %}
+            {% if node[0] == "Monitor" %}
+            [Live monitor link](https://{{ node[1] }}:3000)<br>
+            {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+    <br>
+    <br>
+    {% if test_id %}
+    <div>
+        Restore Monitor Stack command: `$ hydra investigate show-monitor {{ test_id }}`<br>
+        Show all stored logs command: `$ hydra investigate show-logs {{ test_id }}`<br>
+        <br>
+        Test id: `{{ test_id }}`<br>
+    </div>
+    {% endif %}
+    <br>
+    <br>
+    {% if logs_links %}
+    <div>
+        Logs:<br>
+        {% for logs_link in logs_links %}
+            {{ logs_link.type }} - [{{ logs_link.link }}]({{ logs_link.link }})<br>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <br>
+    <br>
+    {% if build_url %}
+        [Jenkins job URL]({{ build_url }})<br>
+    {% endif %}
+{% endblock %}

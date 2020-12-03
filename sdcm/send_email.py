@@ -1,5 +1,7 @@
 import smtplib
 import os.path
+import subprocess
+
 import logging
 import tempfile
 import json
@@ -123,6 +125,8 @@ class BaseEmailReporter:
         "scylla_version",
         "start_time",
         "subject",
+        "job_name",
+        "config_files",
         "test_id",
         "test_name",
         "test_status",
@@ -152,27 +156,34 @@ class BaseEmailReporter:
     def build_data_for_attachments(self, results):
         return {key: results.get(key, "N/A") for key in self.fields}
 
-    def render_to_html(self, results, template_str=None):
+    def render_to_html(self, results, template_str=None, template_file=None):
         """
         Render analysis results to html template_init_es
         :param results: results dictionary
         :param template_str: template string
+        :param template_file: template file (instead of default self.email_template_fp). If template_str is supplied,
+                              template_file will be ignored
         :return: html string
         """
-        self.log.info("Rendering results to html using '%s' template...", self.email_template_fp)
+        if not template_str:
+            current_template = self.email_template_fp if not template_file else template_file
+        else:
+            current_template = self.email_template_fp
+
+        self.log.info("Rendering results to html using '%s' template...", current_template)
         loader = jinja2.FileSystemLoader(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'report_templates'))
         env = jinja2.Environment(loader=loader, autoescape=True, extensions=['jinja2.ext.loopcontrols'])
         if template_str is None:
-            template = env.get_template(self.email_template_fp)
+            template = env.get_template(current_template)
         else:
             template = env.from_string(template_str)
         html = template.render(results)
         self.log.info("Results has been rendered to html")
         return html
 
-    def save_html_to_file(self, results, html_file_path="", template_str=None):
+    def save_html_to_file(self, results, html_file_path="", template_str=None, template_file=None):
         if html_file_path:
-            html = self.render_to_html(results, template_str=template_str)
+            html = self.render_to_html(results, template_str=template_str, template_file=template_file)
             with open(html_file_path, "wb") as html_file:
                 html_file.write(html.encode('utf-8'))
             self.log.info("HTML report saved to '%s'.", html_file_path)
@@ -369,6 +380,11 @@ class LongevityEmailReporter(BaseEmailReporter):
         return super().build_report(report_data)
 
     def build_report_attachments(self, attachments_data, template_str=None):
+        attachments = (self.build_email_report(attachments_data, template_str),
+                       self.build_issue_template(attachments_data))
+        return attachments
+
+    def build_email_report(self, attachments_data, template_str=None):
         report_file = os.path.join(self.logdir, 'email_report.html')
         attachments_data['last_events'] = self._get_last_events(
             attachments_data,
@@ -377,8 +393,24 @@ class LongevityEmailReporter(BaseEmailReporter):
             self.last_events_limit_in_attachment,
             self.last_events_severities_in_attachment)
         self.save_html_to_file(attachments_data, report_file, template_str=template_str)
-        attachments = (report_file,)
-        return attachments
+        return report_file
+
+    def build_issue_template(self, attachments_data):
+        report_file = os.path.join(self.logdir, 'issue_template.html')
+        template_file = 'results_issue_template.html'
+        attachments_data["config_files_link"] = self.get_config_file_link(attachments_data)
+        self.save_html_to_file(attachments_data, report_file, template_file=template_file)
+        return report_file
+
+    def get_config_file_link(self, attachments_data):
+        config_files = []
+        for config_file in attachments_data["config_files"]:
+
+            last_commit = subprocess.run(['git', 'rev-list', 'HEAD', '-1', config_file], capture_output=True, text=True)
+            config_files.append({"file": config_file.split("/")[-1],
+                                 "link": f"https://github.com/scylladb/scylla-cluster-tests/blob"
+                                 f"/{last_commit.stdout.strip()}/{config_file}"})
+        return config_files
 
 
 class GeminiEmailReporter(LongevityEmailReporter):

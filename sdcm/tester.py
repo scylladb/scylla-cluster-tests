@@ -2446,6 +2446,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         build_id = f'#{os.environ.get("BUILD_NUMBER")}' if os.environ.get('BUILD_NUMBER', '') else ''
         scylla_version = self.db_cluster.nodes[0].scylla_version_detailed if self.db_cluster else "N/A"
         scylla_instance_type = self.params.get('instance_type_db') or self.params.get('gce_instance_type_db') or "N/A"
+        job_name = os.environ.get('JOB_NAME').split("/")[-1] if os.environ.get('JOB_NAME') else config_file_name
         return {"backend": backend,
                 "build_id": os.environ.get('BUILD_NUMBER', ''),
                 "build_url": os.environ.get("BUILD_URL"),
@@ -2459,6 +2460,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 "scylla_version": scylla_version,
                 "start_time": start_time,
                 "subject": f"{test_status}: {os.environ.get('JOB_NAME') or config_file_name}{build_id}: {start_time}",
+                "job_name": job_name,
+                "config_files": self.params["config_files"],
                 "test_id": self.test_id,
                 "test_name": self.id(),
                 "test_status": test_status,
