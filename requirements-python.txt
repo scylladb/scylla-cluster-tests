@@ -9,7 +9,7 @@ aexpect==1.2.0
 cassandra-driver==3.22.0
 apache-libcloud==2.6.0
 requests==2.20.0
-elasticsearch==6.0.0
+elasticsearch>=7.0.0,<8.0.0
 sortedcontainers==1.5.9
 jinja2==2.10.1
 prometheus_client==0.3.1
@@ -24,7 +24,7 @@ tenacity==5.0.4
 # this package isn't in pypi
 https://github.com/fruch/repodataParser/archive/py3.zip ; python_version > '3'
 pytest==4.6.4
-tcconfig==0.23.0
+tcconfig==0.26.0
 selenium==3.141.0
 mysql-connector-python==8.0.19
 docker==4.2.0

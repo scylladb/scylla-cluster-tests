@@ -463,7 +463,7 @@ class TestStatsMixin(Stats):
         from sdcm.cluster import Setup
 
         test_details = {}
-        test_details['sct_git_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip()
+        test_details['sct_git_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
         test_details['job_name'] = get_job_name()
         test_details['job_url'] = os.environ.get('BUILD_URL', '')
         test_details['start_host'] = platform.node()
