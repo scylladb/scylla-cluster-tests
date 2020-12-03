@@ -26,6 +26,7 @@ from urllib3.util.retry import Retry
 
 from sdcm.remote import LOCALRUNNER
 from sdcm.sct_config import sct_abs_path
+from sdcm.utils.decorators import timeout as timeout_decor
 from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
 
 
@@ -152,18 +153,21 @@ class KubernetesOps:
         return k8s.client.CoreV1Api(api_client)
 
     @classmethod
+    @timeout_decor(timeout=600)
     def list_statefulsets(cls, kluster, namespace=None, **kwargs):
         if namespace is None:
             return kluster.k8s_apps_v1_api.list_stateful_set_for_all_namespaces(watch=False, **kwargs).items
         return kluster.k8s_apps_v1_api.list_namespaced_stateful_set(namespace=namespace, watch=False, **kwargs).items
 
     @classmethod
+    @timeout_decor(timeout=600)
     def list_pods(cls, kluster, namespace=None, **kwargs):
         if namespace is None:
             return kluster.k8s_core_v1_api.list_pod_for_all_namespaces(watch=False, **kwargs).items
         return kluster.k8s_core_v1_api.list_namespaced_pod(namespace=namespace, watch=False, **kwargs).items
 
     @classmethod
+    @timeout_decor(timeout=600)
     def list_services(cls, kluster, namespace=None, **kwargs):
         if namespace is None:
             return kluster.k8s_core_v1_api.list_service_all_namespaces(watch=False, **kwargs).items
