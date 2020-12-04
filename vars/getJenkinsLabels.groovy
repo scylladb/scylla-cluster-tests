@@ -15,6 +15,8 @@ def call(String backend, String aws_region=null) {
                           'aws-eu-central-1': 'aws-sct-builders-eu-central-1',
                           'aws-us-east-1' : 'aws-sct-builders-us-east-1-new',
                           'gce': 'gce-sct-builders',
+                          'k8s-gce-minikube': 'gce-sct-builders',
+                          'k8s-gke': 'gce-sct-builders',
                           'docker': 'sct-builders']
 
     if (backend == 'aws' && aws_region)
