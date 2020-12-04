@@ -420,6 +420,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             DatabaseLogEvent(type='BROKEN_PIPE', severity=Severity.WARNING,
                              regex='cql_server - exception while processing connection:.*Broken pipe'),
             DatabaseLogEvent(type='SEMAPHORE_TIME_OUT', regex='semaphore_timed_out', severity=Severity.WARNING),
+            DatabaseLogEvent(
+                type='EMPTY_NESTED_EXCEPTION',
+                regex='cql_server - exception while processing connection: seastar::nested_exception '
+                      '\(seastar::nested_exception\)$',
+                severity=Severity.WARNING),
             DatabaseLogEvent(type='DATABASE_ERROR', regex='Exception '),
             DatabaseLogEvent(type='BAD_ALLOC', regex='std::bad_alloc'),
             DatabaseLogEvent(type='SCHEMA_FAILURE', regex='Failed to load schema version'),
