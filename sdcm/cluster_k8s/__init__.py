@@ -362,11 +362,17 @@ class BasePodContainer(cluster.BaseNode):
         raise NotImplementedError("Not implemented yet")  # TODO: implement this method.
 
     def hard_reboot(self):
-        self.parent_cluster.k8s_cluster.kubectl(f'delete pod {self.name} --now', namespace='scylla')
+        self.parent_cluster.k8s_cluster.kubectl(
+            f'delete pod {self.name} --now',
+            namespace='scylla',
+            timeout=SCYLLA_POD_TERMINATE_TIMEOUT * 60 + 10)
 
     def soft_reboot(self):
         # Kubernetes brings pods back to live right after it is deleted
-        self.parent_cluster.k8s_cluster.kubectl(f'delete pod {self.name} --grace-period=300', namespace='scylla')
+        self.parent_cluster.k8s_cluster.kubectl(
+            f'delete pod {self.name} --grace-period={SCYLLA_POD_TERMINATE_TIMEOUT * 60}',
+            namespace='scylla',
+            timeout=SCYLLA_POD_TERMINATE_TIMEOUT * 60 + 10)
 
     # On kubernetes there is no stop/start, closest analog of node restart would be soft_restart
     restart = soft_reboot
@@ -413,7 +419,9 @@ class BasePodContainer(cluster.BaseNode):
         return self.node_name
 
     def terminate_k8s_node(self):
-        self.parent_cluster.k8s_cluster.kubectl(f'delete node {self.node_name} --now')
+        self.parent_cluster.k8s_cluster.kubectl(
+            f'delete node {self.node_name} --now',
+            timeout=SCYLLA_POD_TERMINATE_TIMEOUT * 60 + 10)
 
     def terminate_k8s_host(self):
         raise NotImplementedError("To be overridden in child class")
@@ -655,7 +663,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         super().terminate_node(node)
         self.k8s_cluster.kubectl(f"wait --timeout={SCYLLA_POD_TERMINATE_TIMEOUT}m --for=delete pod {node.name}",
                                  namespace=self.namespace,
-                                 timeout=SCYLLA_POD_TERMINATE_TIMEOUT*60+10)
+                                 timeout=SCYLLA_POD_TERMINATE_TIMEOUT * 60 + 10)
 
     def terminate_k8s_node(self, node: BasePodContainer):
         assert self.nodes[-1] == node, "Can withdraw the last node only"
@@ -664,7 +672,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         self.replace_scylla_cluster_value("/spec/datacenter/racks/0/members", current_members - 1)
         self.k8s_cluster.kubectl(f"wait --timeout={SCYLLA_POD_TERMINATE_TIMEOUT}m --for=delete pod {node.name}",
                                  namespace=self.namespace,
-                                 timeout=SCYLLA_POD_TERMINATE_TIMEOUT*60+10)
+                                 timeout=SCYLLA_POD_TERMINATE_TIMEOUT * 60 + 10)
 
     def terminate_k8s_host(self, node: BasePodContainer):
         assert self.nodes[-1] == node, "Can withdraw the last node only"
@@ -673,7 +681,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         self.replace_scylla_cluster_value("/spec/datacenter/racks/0/members", current_members - 1)
         self.k8s_cluster.kubectl(f"wait --timeout={SCYLLA_POD_TERMINATE_TIMEOUT}m --for=delete pod {node.name}",
                                  namespace=self.namespace,
-                                 timeout=SCYLLA_POD_TERMINATE_TIMEOUT*60+10)
+                                 timeout=SCYLLA_POD_TERMINATE_TIMEOUT * 60 + 10)
 
     def decommission(self, node):
         self.terminate_node(node)
