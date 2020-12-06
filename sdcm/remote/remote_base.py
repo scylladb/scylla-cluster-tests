@@ -44,6 +44,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
     exception_failure: Type[Exception] = None
     exception_retryable: Tuple[Type[Exception]] = None
     connection_thread_map = threading.local()
+    default_run_retry = 3
 
     def __init__(self, hostname: str, user: str = 'root',  # pylint: disable=too-many-arguments
                  password: str = None, port: int = None, connect_timeout: int = None, key_file: str = None,
@@ -552,6 +553,20 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             self._print_command_results(exc.result, verbose, ignore_status)  # pylint: disable=no-member
         return True
 
+    def _get_retry_params(self, retry: int = 1) -> dict:
+        if retry == 0:
+            # Won't retry on any case
+            allowed_exception = tuple()
+            retry = 1
+        elif retry == 1:
+            # Only retry 3 times on network exception
+            allowed_exception = (RetryableNetworkException,)
+            retry = self.default_run_retry
+        else:
+            # Retry times that user wants on any exception
+            allowed_exception = (Exception, )
+        return {'n': retry, 'sleep_time': 5, 'allowed_exception': allowed_exception}
+
     def run(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
             ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
             log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None,
@@ -574,19 +589,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
 
         watchers = self._setup_watchers(verbose=verbose, log_file=log_file, additional_watchers=watchers)
 
-        if retry == 0:
-            # Won't retry on any case
-            allowed_exception = tuple()
-            retry = 1
-        elif retry == 1:
-            # Only retry 3 times on network exception
-            allowed_exception = (RetryableNetworkException,)
-            retry = 3
-        else:
-            # Retry times that user wants on any exception
-            allowed_exception = (Exception, )
-
-        @retrying(n=retry, sleep_time=5, allowed_exceptions=allowed_exception)
+        @retrying(**self._get_retry_params(retry))
         def _run():
             self._run_pre_run(cmd, timeout, ignore_status, verbose, new_session, log_file, retry, watchers)
             try:
