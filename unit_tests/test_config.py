@@ -320,7 +320,6 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_REGION_NAME'] = 'us-east-1'
         os.environ['SCT_N_DB_NODES'] = '2'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
-        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-eae4f795'
         os.environ['SCT_AUTHENTICATOR_USER'] = "user"
         os.environ['SCT_AUTHENTICATOR_PASSWORD'] = "pass"
         os.environ['SCT_CLOUD_CLUSTER_ID'] = "193712947904378"
