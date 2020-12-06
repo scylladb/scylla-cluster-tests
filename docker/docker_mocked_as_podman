@@ -1,0 +1,12 @@
+if [[ "$*" == "--help" ]]; then
+   echo "podman"
+   exit 0
+fi
+args=("$@")
+for ((i=0; i<"${#args[@]}"; ++i)); do
+    case ${args[i]} in
+        --userns) unset args[i]; unset args[i+1]; break;;
+        --userns=*) unset args[i]; break;;
+    esac
+done
+/usr/bin/docker "${args[@]}"

@@ -5,7 +5,7 @@ set -eo pipefail
 CMD=$@
 DOCKER_ENV_DIR=$(readlink -f "$0")
 DOCKER_ENV_DIR=$(dirname "${DOCKER_ENV_DIR}")
-DOCKER_REPO=scylladb/hydra
+DOCKER_REPO=docker.io/scylladb/hydra
 SCT_DIR=$(dirname "${DOCKER_ENV_DIR}")
 SCT_DIR=$(dirname "${SCT_DIR}")
 VERSION=v$(cat "${DOCKER_ENV_DIR}/version")
@@ -151,14 +151,17 @@ else
     TERM_SET_SIZE="export COLUMNS=`tput $TPUT_OPTIONS cols`; export LINES=`tput $TPUT_OPTIONS lines`;"
 fi
 
-if ! docker --version; then
-    echo "Docker not installed!!! Please run 'install-hydra.sh'!"
-    exit 1
+if which docker >/dev/null 2>&1 ; then
+  tool=${HYDRA_TOOL-docker}
+elif which podman >/dev/null 2>&1 ; then
+  tool=${HYDRA_TOOL-podman}
+else
+  die "Please make sure you install either podman or docker on this machine to run hydra"
 fi
 
-if [[ ${USER} == "jenkins" || -z "`docker images ${DOCKER_REPO}:${VERSION} -q`" ]]; then
+if [[ ${USER} == "jenkins" || -z "`$tool images ${DOCKER_REPO}:${VERSION} -q`" ]]; then
     echo "Pull version $VERSION from Docker Hub..."
-    docker pull ${DOCKER_REPO}:${VERSION}
+    $tool pull ${DOCKER_REPO}:${VERSION}
 else
     echo "There is ${DOCKER_REPO}:${VERSION} in local cache, use it."
 fi
@@ -202,26 +205,51 @@ AWS_OPTIONS=$(env | sed -n 's/^\(AWS_[^=]\+\)=.*/--env \1/p')
 # export all JENKINS_* env vars into the docker run
 JENKINS_OPTIONS=$(env | sed -n 's/^\(JENKINS_[^=]\+\)=.*/--env \1/p')
 
+is_podman="$($tool --help | { grep -o podman || :; })"
+docker_common_args=()
+
+function EPHEMERAL_PORT() {
+    LOW_BOUND=49152
+    RANGE=16384
+    while true; do
+        CANDIDATE=$[$LOW_BOUND + ($RANDOM % $RANGE)]
+        (echo "" >/dev/tcp/127.0.0.1/${CANDIDATE}) >/dev/null 2>&1
+        if [ $? -ne 0 ]; then
+            echo $CANDIDATE
+            break
+        fi
+    done
+}
+
 function run_in_docker () {
     CMD_TO_RUN=$1
     REMOTE_DOCKER_HOST=$2
+    if [ -z "$is_podman" ]; then
+        docker_common_args+=(
+           -v /var/run:/run
+           )
+    else
+        PODMAN_PORT=$(EPHEMERAL_PORT)
+        podman system service -t 0 tcp:localhost:${PODMAN_PORT} &
+        trap "exit" INT TERM
+        trap "kill 0" EXIT
+        docker_common_args+=(
+          -v $SCT_DIR/docker/docker_mocked_as_podman:/usr/local/bin/docker
+          --userns=keep-id
+          -e DOCKER_HOST=tcp://localhost:$PODMAN_PORT
+        )
+    fi
+
     echo "Going to run '${CMD_TO_RUN}'..."
     $([[ -n "$HYDRA_DRY_RUN" ]] && echo echo) \
-    docker ${REMOTE_DOCKER_HOST} run --rm ${TTY_STDIN} --privileged \
+    $tool ${REMOTE_DOCKER_HOST} run --rm ${TTY_STDIN} --privileged \
         -h ${HOST_NAME} \
         -l "TestId=${SCT_TEST_ID}" \
         -l "RunByUser=${RUN_BY_USER}" \
-        -v /var/run:/run \
         -v "${SCT_DIR}:${SCT_DIR}" \
-        -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
         -v /tmp:/tmp \
         -v /var/tmp:/var/tmp \
         -v "${HOME_DIR}:${HOME_DIR}" \
-        -v /etc/passwd:/etc/passwd:ro \
-        -v /etc/group:/etc/group:ro \
-        -v /etc/sudoers:/etc/sudoers:ro \
-        -v /etc/sudoers.d/:/etc/sudoers.d:ro \
-        -v /etc/shadow:/etc/shadow:ro \
         -w "${SCT_DIR}" \
         -e JOB_NAME="${JOB_NAME}" \
         -e BUILD_URL="${BUILD_URL}" \
@@ -230,8 +258,15 @@ function run_in_docker () {
         -e GIT_USER_EMAIL \
         -e RUNNER_IP \
         -u ${USER_ID} \
+        -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
+        -v /etc/passwd:/etc/passwd:ro \
+        -v /etc/group:/etc/group:ro \
+        -v /etc/sudoers:/etc/sudoers:ro \
+        -v /etc/sudoers.d/:/etc/sudoers.d:ro \
+        -v /etc/shadow:/etc/shadow:ro \
         ${DOCKER_GROUP_ARGS[@]} \
         ${DOCKER_ADD_HOST_ARGS[@]} \
+        ${docker_common_args[@]} \
         ${SCT_OPTIONS} \
         ${PYTEST_OPTIONS} \
         ${BUILD_OPTIONS} \

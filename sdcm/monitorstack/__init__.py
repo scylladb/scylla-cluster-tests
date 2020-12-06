@@ -359,6 +359,8 @@ def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_vers
     cmd = dedent("""cd {monitoring_dockers_dir};
             echo "" > UA.sh
             ./start-all.sh \
+            $(grep -q -- --no-renderer ./start-all.sh && echo "--no-renderer")  \
+            $(grep -q -- --no-loki ./start-all.sh && echo "--no-loki")  \
             -g {graf_port} -m {alert_port} -p {prom_port} \
             -s {monitoring_dockers_dir}/config/scylla_servers.yml \
             -n {monitoring_dockers_dir}/config/node_exporter_servers.yml \

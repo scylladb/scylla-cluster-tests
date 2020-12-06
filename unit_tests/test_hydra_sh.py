@@ -121,7 +121,7 @@ class LongevityPipelineTest:
             re.compile('sudo chown -R [^: ]+:[^ ]+ ~/sct-results &> /dev/null [|][|] true'),
             re.compile(f"sudo chown -R [^: ]+:[^ ]+ \"{self.sct_base_path}/sct-results\" &> /dev/null [|][|] true"),
             re.compile(f"{docker_run_prefix} -l TestId=11111111-1111-1111-1111-111111111111"),
-            re.compile(f"{docker_run_prefix} -v /var/run:/run -v {sct_dir}:{sct_dir}"),
+            re.compile(f"{docker_run_prefix} -v {sct_dir}:{sct_dir} .* -v /var/run:/run"),
             re.compile(f"{docker_run_prefix} --group-add 1 --group-add 2 --group-add 3"),
         )
         if not runner:
