@@ -104,6 +104,7 @@ class KubernetesRunner(Runner):
 
 class KubernetesCmdRunner(RemoteCmdRunnerBase):
     exception_retryable = (ConnectionError, MaxRetryError, ThreadException)
+    default_run_retry = 8
 
     def __init__(self, kluster, pod: str, container: Optional[str] = None, namespace: str = "default") -> None:
         self.kluster = kluster
