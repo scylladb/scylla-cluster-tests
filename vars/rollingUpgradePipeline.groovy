@@ -19,6 +19,14 @@ def call(Map pipelineParams) {
                description: 'aws|gce',
                name: 'backend')
 
+            string(defaultValue: "${pipelineParams.get('aws_region', 'eu-west-1')}",
+               description: 'Supported: us-east-1|eu-west-1|eu-west-2|eu-north-1|random (randomly select region)',
+               name: 'aws_region')
+            string(defaultValue: "a",
+               description: 'Availability zone',
+               name: 'availability_zone')
+
+            string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'new_scylla_repo')
 
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
@@ -74,7 +82,7 @@ def call(Map pipelineParams) {
 
                                                         rm -fv ./latest
 
-                                                        export SCT_CLUSTER_BACKEND=gce
+                                                        export SCT_CLUSTER_BACKEND=${params.backend}
 
                                                         export SCT_CONFIG_FILES=${test_config}
                                                         export SCT_SCYLLA_VERSION=${base_version}
@@ -115,11 +123,11 @@ def call(Map pipelineParams) {
                                                         set -xe
                                                         env
 
-                                                        export SCT_CLUSTER_BACKEND=gce
+                                                        export SCT_CLUSTER_BACKEND=${params.backend}
                                                         export SCT_CONFIG_FILES=${test_config}
 
                                                         echo "start collect logs ..."
-                                                        ./docker/env/hydra.sh collect-logs --logdir "`pwd`" --backend gce
+                                                        ./docker/env/hydra.sh collect-logs --logdir "`pwd`" --backend ${params.backend}
                                                         echo "end collect logs"
                                                         """
                                                     }
