@@ -459,6 +459,9 @@ def docker_hub_login(remoter: CommandRunner) -> None:
     if match := re.search(r"^\s+Username: (.+)$", docker_info.stdout, re.MULTILINE):
         remoter.log.debug("Docker daemon is already logged in as `%s'.", match.group(1))
         return
+    if "Podman Engine" in remoter.run("docker version", ignore_status=True).stdout:
+        remoter.log.info("When Podman daemon is used we don't login")
+        return
     docker_hub_creds = get_docker_hub_credentials()
     password_file = remoter.run("mktemp").stdout.strip()
     with remote_file(remoter=remoter, remote_path=password_file) as fobj:
