@@ -1416,7 +1416,7 @@ class SCTConfiguration(dict):
             raise ValueError("Unsupported backend [{}]".format(backend))
 
         # verify multi-region aws params
-        if backend in ['aws', 'aws-siren']:
+        if backend in ['aws']:
             region_count = {}
             for opt in self.multi_region_params:
                 val = self.get(opt)
