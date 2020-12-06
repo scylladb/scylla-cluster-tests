@@ -17,6 +17,7 @@ from typing import Optional, Callable, Iterator, List
 
 import kubernetes as k8s
 from invoke import Runner, Context, Config
+from invoke.exceptions import ThreadException
 from urllib3.exceptions import MaxRetryError
 
 from sdcm.utils.k8s import KubernetesOps
@@ -102,7 +103,7 @@ class KubernetesRunner(Runner):
 
 
 class KubernetesCmdRunner(RemoteCmdRunnerBase):
-    exception_retryable = (ConnectionError, MaxRetryError, )
+    exception_retryable = (ConnectionError, MaxRetryError, ThreadException)
 
     def __init__(self, kluster, pod: str, container: Optional[str] = None, namespace: str = "default") -> None:
         self.kluster = kluster
