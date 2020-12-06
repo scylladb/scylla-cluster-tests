@@ -200,9 +200,11 @@ class ContainerManager:
                 container = docker_client.containers.run(**run_args)
             instance._containers[name.full] = container
             LOGGER.info("Container %s started.", container)
-        else:
+        elif container.status != 'running':
             LOGGER.warning("Re-run container %s", container)
             container.start()
+        else:
+            LOGGER.debug("Container %s is running already.", container)
         return container
 
     @staticmethod
