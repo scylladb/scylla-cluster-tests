@@ -171,6 +171,9 @@ class SctEvent:
             default_logger.error(str(self))
         self._ready_to_publish = False
 
+    def dont_publish(self):
+        self._ready_to_publish = False
+
     def to_json(self) -> str:
         return json.dumps({
             "base": self.base,

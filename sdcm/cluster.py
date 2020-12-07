@@ -1443,6 +1443,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                         backtrace['event'].line_number <= filter_backtraces.last_error.line_number + 20
                         and not filter_backtraces.last_error.type == 'BACKTRACE' and backtrace['event'].type == 'BACKTRACE'):
                     last_error.raw_backtrace = "\n".join(backtrace['backtrace'])
+                    backtrace['event'].dont_publish()
                     return False
                 return True
             finally:
