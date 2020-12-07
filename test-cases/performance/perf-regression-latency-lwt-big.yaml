@@ -61,5 +61,5 @@ append_scylla_args: '--blocked-reactor-notify-ms 400 --memory 4G --experimental 
 backtrace_decoding: false
 store_perf_results: true
 send_email: true
-email_recipients: ['qa@scylladb.com', 'lwt@scylladb.com']
+email_recipients: ['scylla-perf-results@scylladb.com', 'lwt@scylladb.com']
 email_subject_postfix: 'disk-wise(big dataset)'

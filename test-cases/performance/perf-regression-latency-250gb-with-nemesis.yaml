@@ -32,4 +32,4 @@ use_mgmt: true
 
 store_perf_results: true
 send_email: true
-email_recipients: ['qa@scylladb.com']
+email_recipients: ['scylla-perf-results@scylladb.com']

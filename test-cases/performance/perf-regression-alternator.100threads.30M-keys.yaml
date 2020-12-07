@@ -54,4 +54,4 @@ space_node_threshold: 644245094
 
 store_perf_results: true
 send_email: true
-email_recipients: ['qa@scylladb.com', 'alternator@scylladb.com']
+email_recipients: ['scylla-perf-results@scylladb.com', 'alternator@scylladb.com']
