@@ -26,3 +26,5 @@ store_perf_results: true
 send_email: 'true'
 
 backtrace_decoding: false
+
+email_recipients: ['scylla-perf-results@scylladb.com']
