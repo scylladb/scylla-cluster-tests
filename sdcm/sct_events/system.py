@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import time
 from typing import Any, Optional, Sequence
 from traceback import format_stack
 
@@ -21,6 +22,18 @@ from sdcm.sct_events.base import SctEvent, SystemEvent
 class StartupTestEvent(SystemEvent):
     def __init__(self):
         super().__init__(severity=Severity.NORMAL)
+
+
+class TestTimeoutEvent(SctEvent):
+    def __init__(self, start_time: float, duration: int):
+        super().__init__(severity=Severity.CRITICAL)
+        self.start_time = start_time
+        self.duration = duration
+
+    @property
+    def msgfmt(self) -> str:
+        start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
+        return f"{super().msgfmt}, Test started at {start_time}, reached it's timeout ({self.duration} minute)"
 
 
 class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
@@ -170,7 +183,7 @@ class TestResultEvent(SctEvent, Exception):
         for event_group, events in self.events.items():
             if not events:
                 continue
-            result.append(f"""{f'{"":-<5} LAST {event_group} EVENT ':-<{self._marker_width-2}}""")
+            result.append(f"""{f'{"":-<5} LAST {event_group} EVENT ':-<{self._marker_width - 2}}""")
             result.extend(events)
         return "\n".join(result)
 
