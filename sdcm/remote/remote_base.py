@@ -556,16 +556,16 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
     def _get_retry_params(self, retry: int = 1) -> dict:
         if retry == 0:
             # Won't retry on any case
-            allowed_exception = tuple()
+            allowed_exceptions = tuple()
             retry = 1
         elif retry == 1:
             # Only retry 3 times on network exception
-            allowed_exception = (RetryableNetworkException,)
+            allowed_exceptions = (RetryableNetworkException,)
             retry = self.default_run_retry
         else:
             # Retry times that user wants on any exception
-            allowed_exception = (Exception, )
-        return {'n': retry, 'sleep_time': 5, 'allowed_exception': allowed_exception}
+            allowed_exceptions = (Exception, )
+        return {'n': retry, 'sleep_time': 5, 'allowed_exceptions': allowed_exceptions}
 
     def run(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
             ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
