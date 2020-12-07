@@ -90,6 +90,7 @@ PrometheusAlertManagerEvent.end: WARNING
 ScyllaOperatorLogEvent: ERROR
 ScyllaOperatorRestartEvent: ERROR
 StartupTestEvent: NORMAL
+TestTimeoutEvent: CRITICAL
 TestFrameworkEvent: ERROR
 SpotTerminationEvent: CRITICAL
 InfoEvent: NORMAL

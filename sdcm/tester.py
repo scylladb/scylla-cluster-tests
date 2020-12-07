@@ -59,7 +59,7 @@ from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerfo
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events import Severity
 from sdcm.sct_events.setup import start_events_device, stop_events_device
-from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEvent
+from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEvent, TestTimeoutEvent
 from sdcm.sct_events.database import FullScanEvent
 from sdcm.sct_events.file_logger import get_events_grouped_by_category, get_logger_event_summary
 from sdcm.sct_events.events_analyzer import stop_events_analyzer
@@ -303,14 +303,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def _init_test_timeout_thread(self) -> threading.Timer:
         start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
+        end_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time + int(self.test_duration) * 60))
+        self.log.info(f'Test start time {start_time}, duration is {self.test_duration} and timeout set to {end_time}')
 
         def kill_the_test():
-            try:
-                raise RuntimeError(
-                    f"Test started at {start_time} has reached timeout ({self.test_duration} minutes)"
-                )
-            except:  # pylint: disable=bare-except
-                self.kill_test(sys.exc_info())
+            TestTimeoutEvent(start_time=self.start_time, duration=self.test_duration).publish()
         th = threading.Timer(60 * int(self.test_duration), kill_the_test)
         th.daemon = True
         th.start()
