@@ -1486,6 +1486,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     keyspaces = list(set([ks.split('.')[0] for ks in ks_cf]))
                 keyspace = ','.join(keyspaces)
 
+            if not keyspace:
+                # it's unexpected situation. We have system keyspaces, so the keyspace(s) should be found always.
+                # If not - raise exception to investigate the issue
+                raise Exception(f'Something wrong happened, not empty keyspace(s) was not'
+                                f'found in the list:\n{ks_cf}')
+
             return f'snapshot -kc {keyspace}'
 
         def _few_tables():
@@ -1504,8 +1510,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
             ks_with_few_tables = get_ks_with_few_tables(ks_cf)
             if not ks_with_few_tables:
-                any_ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node)
-                ks_with_few_tables = get_ks_with_few_tables(any_ks_cf)
+                # If non-system keyspace with few tables wasn't found - take system table snapshot
+                ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node)
+                ks_with_few_tables = get_ks_with_few_tables(ks_cf)
 
             if not ks_with_few_tables:
                 self.log.warning('Keyspace with few tables has not been found')
@@ -1513,6 +1520,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
             selected_keyspace = random.choice(ks_with_few_tables)
             tables = ','.join([k_c.split('.')[1] for k_c in ks_cf if k_c.startswith(f"{selected_keyspace}.")])
+
+            if not tables:
+                # it's unexpected situation. We have system keyspaces with few tables, so the keyspaces should be found.
+                # If not - raise exception to investigate the issue
+                raise Exception(f'Something wrong happened, tables for "{selected_keyspace}" keyspace were not'
+                                f'found in the list:\n{ks_cf}')
 
             return f'snapshot {selected_keyspace} -cf {tables}'
 
