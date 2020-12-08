@@ -70,6 +70,7 @@ def call(Map pipelineParams) {
 
                                                     export SCT_CONFIG_FILES=${test_config}
                                                     export SCT_SCYLLA_VERSION=${base_version}
+                                                    export SCT_NEW_VERSION=${new_version}
 
                                                     export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                                     export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
