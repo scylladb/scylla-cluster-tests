@@ -2322,7 +2322,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         }
         return checklist.get(abs_path, INSTALL_DIR + abs_path)
 
-    def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=300):
+    def start_scylla_server(self, verify_up=True, verify_down=False, timeout=500, verify_up_timeout=300):
         if verify_down:
             self.wait_db_down(timeout=timeout)
         if self.is_ubuntu14():
@@ -2343,7 +2343,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.wait_jmx_up(timeout=verify_up_timeout)
 
     @log_run_info
-    def start_scylla(self, verify_up=True, verify_down=False, timeout=300):
+    def start_scylla(self, verify_up=True, verify_down=False, timeout=500):
         self.start_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
         if verify_up:
             self.wait_jmx_up(timeout=timeout)
@@ -2377,7 +2377,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if verify_down:
             self.wait_jmx_down(timeout=timeout)
 
-    def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=300, ignore_status=False):
+    def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=500, ignore_status=False):
         if verify_up_before:
             self.wait_db_up(timeout=timeout)
         if self.distro.is_ubuntu14:
@@ -2400,7 +2400,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.wait_jmx_up(timeout=timeout)
 
     @log_run_info
-    def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=300):
+    def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=500):
         self.restart_scylla_server(verify_up_before=verify_up_before, verify_up_after=verify_up_after, timeout=timeout)
         if verify_up_after:
             self.wait_jmx_up(timeout=timeout)
