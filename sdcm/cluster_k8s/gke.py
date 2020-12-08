@@ -225,6 +225,10 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
 class GkeScyllaPodContainer(BasePodContainer, IptablesPodIpRedirectMixin):
     parent_cluster: 'GkeScyllaPodCluster'
 
+    pod_readiness_delay = 30  # seconds
+    pod_readiness_timeout = 30  # minutes
+    pod_terminate_timeout = 30  # minutes
+
     def __init__(self, *args, **kwargs):
         BasePodContainer.__init__(self, *args, **kwargs)
 
