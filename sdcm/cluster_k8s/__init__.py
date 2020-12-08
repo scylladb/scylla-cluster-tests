@@ -49,12 +49,7 @@ SCYLLA_OPERATOR_CONFIG = sct_abs_path("sdcm/k8s_configs/operator.yaml")
 SCYLLA_API_VERSION = "scylla.scylladb.com/v1alpha1"
 SCYLLA_CLUSTER_RESOURCE_KIND = "ScyllaCluster"
 DEPLOY_SCYLLA_CLUSTER_DELAY = 15  # seconds
-SCYLLA_POD_READINESS_DELAY = 30  # seconds
-SCYLLA_POD_READINESS_TIMEOUT = 15  # minutes
-SCYLLA_POD_TERMINATE_TIMEOUT = 30  # minutes
-LOADER_POD_READINESS_DELAY = 30  # seconds
-LOADER_POD_READINESS_TIMEOUT = 5  # minutes
-LOADER_POD_TERMINATE_TIMEOUT = 30  # minutes
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -212,6 +207,9 @@ class KubernetesCluster:
 
 class BasePodContainer(cluster.BaseNode):
     parent_cluster: PodCluster
+    pod_readiness_delay = 30  # seconds
+    pod_readiness_timeout = 5  # minutes
+    pod_terminate_timeout = 5  # minutes
 
     def __init__(self, name: str, parent_cluster: PodCluster, node_prefix: str = "node", node_index: int = 1,
                  base_logdir: Optional[str] = None, dc_idx: int = 0, rack=0):
@@ -223,6 +221,10 @@ class BasePodContainer(cluster.BaseNode):
             node_prefix=node_prefix,
             dc_idx=dc_idx,
             rack=rack)
+
+    @cached_property
+    def pod_reboot_timeout(self):
+        return self.pod_terminate_timeout + self.pod_readiness_timeout
 
     def init(self) -> None:
         super().init()
@@ -366,14 +368,14 @@ class BasePodContainer(cluster.BaseNode):
         self.parent_cluster.k8s_cluster.kubectl(
             f'delete pod {self.name} --now',
             namespace='scylla',
-            timeout=SCYLLA_POD_TERMINATE_TIMEOUT * 60 + 10)
+            timeout=self.pod_terminate_timeout * 60 + 10)
 
     def soft_reboot(self):
         # Kubernetes brings pods back to live right after it is deleted
         self.parent_cluster.k8s_cluster.kubectl(
-            f'delete pod {self.name} --grace-period={SCYLLA_POD_TERMINATE_TIMEOUT * 60}',
+            f'delete pod {self.name} --grace-period={self.pod_terminate_timeout * 60}',
             namespace='scylla',
-            timeout=SCYLLA_POD_TERMINATE_TIMEOUT * 60 + 10)
+            timeout=self.pod_terminate_timeout * 60 + 10)
 
     # On kubernetes there is no stop/start, closest analog of node restart would be soft_restart
     restart = soft_reboot
@@ -422,7 +424,7 @@ class BasePodContainer(cluster.BaseNode):
     def terminate_k8s_node(self):
         self.parent_cluster.k8s_cluster.kubectl(
             f'delete node {self.node_name} --now',
-            timeout=SCYLLA_POD_TERMINATE_TIMEOUT * 60 + 10)
+            timeout=self.pod_terminate_timeout * 60 + 10)
         self.destroy()
 
     def terminate_k8s_host(self):
@@ -436,15 +438,12 @@ class BasePodContainer(cluster.BaseNode):
         self.parent_cluster.update_scylla_config()
         self.soft_reboot()
         search_reshard = self.follow_system_log(patterns=['Reshard', 'Reshap'])
-        self.wait_db_up(timeout=self.parent_cluster.pod_readiness_timeout * 60)
+        self.wait_db_up(timeout=self.pod_readiness_timeout * 60)
         return search_reshard
 
 
 class PodCluster(cluster.BaseCluster):
     PodContainerClass: Type[BasePodContainer] = BasePodContainer
-
-    pod_readiness_delay: int  # seconds
-    pod_readiness_timeout: int  # minutes
 
     def __init__(self,
                  k8s_cluster: KubernetesCluster,
@@ -526,33 +525,45 @@ class PodCluster(cluster.BaseCluster):
     def wait_for_init(self):
         raise NotImplementedError("Derived class must implement 'wait_for_init' method!")
 
-    @timeout(message="Wait for pod(s) to be ready...", timeout=900)
-    def wait_for_pods_readiness(self, count: Optional[int] = None):
-        if count is None:
-            count = len(self.nodes)
-        time.sleep(self.pod_readiness_delay)
-        result = self.k8s_cluster.kubectl(
-            f"wait --timeout={self.pod_readiness_timeout}m --all --for=condition=Ready pod",
-            namespace=self.namespace,
-            timeout=self.pod_readiness_timeout * 60 + 10)
-        if result.stdout.count('condition met') != count:
-            raise RuntimeError('Not all nodes reported')
+    def get_nodes_reboot_timeout(self, count) -> Union[float, int]:
+        """
+        Return readiness timeout (in minutes) for case when nodes are restarted
+        sums out readiness and terminate timeouts for given nodes
+        """
+        return count * self.PodContainerClass.pod_readiness_timeout
+
+    @cached_property
+    def get_nodes_readiness_delay(self) -> Union[float, int]:
+        return self.PodContainerClass.pod_readiness_delay
+
+    def wait_for_pods_readiness(self, pods_to_wait: int, total_pods: int):
+        time.sleep(self.get_nodes_readiness_delay)
+        readiness_timeout = self.get_nodes_reboot_timeout(pods_to_wait)
+
+        @timeout(message="Wait for pod(s) to be ready...", timeout=readiness_timeout * 60)
+        def wait_cluster_is_ready():
+            # To make it more informative in worst case scenario made it repeat 5 times, by readiness_timeout // 5
+            result = self.k8s_cluster.kubectl(
+                f"wait --timeout={readiness_timeout // 5}m --all --for=condition=Ready pod",
+                namespace=self.namespace,
+                timeout=readiness_timeout // 5 * 60 + 10)
+            if result.stdout.count('condition met') != total_pods:
+                raise RuntimeError('Not all nodes reported')
+
+        wait_cluster_is_ready()
 
     def rollout_restart(self):
         self.k8s_cluster.kubectl("rollout restart statefulset", namespace=self.namespace)
-        cluster_readiness_timeout = self.pod_readiness_timeout * len(self.nodes)
+        readiness_timeout = self.get_nodes_reboot_timeout(len(self.nodes))
         for statefulset in KubernetesOps.list_statefulsets(self.k8s_cluster, namespace=self.namespace):
             self.k8s_cluster.kubectl(
                 f"rollout status statefulset/{statefulset.metadata.name} "
-                f"--watch=true --timeout={cluster_readiness_timeout}m",
+                f"--watch=true --timeout={readiness_timeout}m",
                 namespace=self.namespace,
-                timeout=cluster_readiness_timeout * 60 + 10)
+                timeout=readiness_timeout * 60 + 10)
 
 
 class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
-    pod_readiness_delay = SCYLLA_POD_READINESS_DELAY
-    pod_readiness_timeout = SCYLLA_POD_READINESS_TIMEOUT
-
     node_setup_requires_scylla_restart = False
 
     def __init__(self,
@@ -708,7 +719,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         self.create_rack_if_not_exists(rack)
         current_members = self.scylla_cluster_spec.datacenter.racks[rack].members
         self.replace_scylla_cluster_value(f"/spec/datacenter/racks/{rack}/members", current_members + count)
-        self.wait_for_pods_readiness(len(self.nodes) + count)
+        self.wait_for_pods_readiness(pods_to_wait=count, total_pods=current_members + count)
         return super().add_nodes(count=count,
                                  ec2_user_data=ec2_user_data,
                                  dc_idx=dc_idx,
@@ -746,9 +757,9 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         current_members = self.scylla_cluster_spec.datacenter.racks[rack].members
         terminate_method()
         self.replace_scylla_cluster_value(f"/spec/datacenter/racks/{rack}/members", current_members - 1)
-        self.k8s_cluster.kubectl(f"wait --timeout={SCYLLA_POD_TERMINATE_TIMEOUT}m --for=delete pod {node.name}",
+        self.k8s_cluster.kubectl(f"wait --timeout={node.pod_terminate_timeout}m --for=delete pod {node.name}",
                                  namespace=self.namespace,
-                                 timeout=SCYLLA_POD_TERMINATE_TIMEOUT * 60 + 10)
+                                 timeout=node.pod_terminate_timeout * 60 + 10)
         # TBD: Enable rack deletion after https://github.com/scylladb/scylla-operator/issues/287 is resolved
         # if current_members - 1 == 0:
         #     self.delete_rack(rack)
@@ -829,9 +840,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
 
 
 class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
-    pod_readiness_delay = LOADER_POD_READINESS_DELAY
-    pod_readiness_timeout = LOADER_POD_READINESS_TIMEOUT
-
     def __init__(self,
                  k8s_cluster: KubernetesCluster,
                  loader_cluster_config: str,
@@ -877,7 +885,7 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
             raise NotImplementedError("Changing number of nodes in LoaderPodCluster is not supported.")
 
         self.k8s_cluster.deploy_loaders_cluster(self.loader_cluster_config)
-        self.wait_for_pods_readiness(count)
+        self.wait_for_pods_readiness(pods_to_wait=count, total_pods=count)
         new_nodes = super().add_nodes(count=count,
                                       ec2_user_data=ec2_user_data,
                                       dc_idx=dc_idx,

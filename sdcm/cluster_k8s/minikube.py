@@ -212,6 +212,11 @@ class GceMinikubeCluster(MinikubeCluster, cluster_gce.GCECluster):
 
 
 class MinikubeScyllaPodContainer(BasePodContainer, IptablesPodPortsRedirectMixin):
+
+    pod_readiness_delay = 30  # seconds
+    pod_readiness_timeout = 30  # minutes
+    pod_terminate_timeout = 30  # minutes
+
     @cached_property
     def host_remoter(self):
         return self.parent_cluster.k8s_cluster.remoter
