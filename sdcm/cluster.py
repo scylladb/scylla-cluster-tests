@@ -57,7 +57,7 @@ from sdcm import wait, mgmt
 from sdcm.utils import alternator
 from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
     get_latest_gemini_version, normalize_ipv6_url, download_dir_from_cloud, generate_random_string, ScyllaCQLSession, \
-    SCYLLA_YAML_PATH
+    SCYLLA_YAML_PATH, get_test_name
 from sdcm.utils.distro import Distro
 from sdcm.utils.docker_utils import ContainerManager, NotFound
 
@@ -4397,6 +4397,9 @@ class BaseLoaderSet():
 
 class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-instance-attributes
     # This is a Mixin for monitoring cluster and should not be inherited
+
+    json_file_params_for_replace = {"$test_name": get_test_name()}
+
     def __init__(self, targets, params):
         self.targets = targets
         self.params = params
@@ -4464,7 +4467,21 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                 sct_dashboard_json_filename = "scylla-dash-per-server-nemesis.master.json"
                 sct_dashboard_json_path = get_data_dir_path(sct_dashboard_json_filename)
             self._sct_dashboard_json_file = sct_dashboard_json_path
+            self.sct_dashboard_json_file_content_update(update_params=self.json_file_params_for_replace,
+                                                        json_file=self._sct_dashboard_json_file)
         return self._sct_dashboard_json_file
+
+    @staticmethod
+    def sct_dashboard_json_file_content_update(update_params: dict, json_file: str):
+        # Read json data to the string
+        with open(json_file, 'r') as file:
+            json_data = file.read()
+
+        for param, value in update_params.items():
+            json_data = json_data.replace(param, value)
+
+        with open(json_file, 'w') as file:
+            json.dump(json.loads(json_data), file, indent=2)
 
     def node_setup(self, node, **kwargs):  # pylint: disable=unused-argument
         self.log.info('Setup in BaseMonitorSet')

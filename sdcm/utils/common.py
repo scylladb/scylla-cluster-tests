@@ -142,6 +142,19 @@ def get_job_name():
     return os.environ.get('JOB_NAME', 'local_run')
 
 
+def get_test_name():
+    job_name = get_job_name()
+    if job_name and job_name != 'local_run':
+        return job_name.split("/")[-1]
+
+    if config_files := os.environ.get("SCT_CONFIG_FILES"):
+        # Example: 'test-cases/gemini/gemini-1tb-10h.yaml,test-cases/gemini/gemini-10tb-10h.yaml'
+        config_file = config_files[0] if isinstance(config_files, list) else config_files.split(",")[0].strip()
+        return config_file.split("/")[-1].replace('.yaml', '')
+
+    return ""
+
+
 def verify_scylla_repo_file(content, is_rhel_like=True):
     LOGGER.info('Verifying Scylla repo file')
     if is_rhel_like:
