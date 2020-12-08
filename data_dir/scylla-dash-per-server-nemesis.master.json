@@ -5374,7 +5374,8 @@
         "schemaVersion": 14,
         "style": "dark",
         "tags": [
-            "master"
+            "master",
+            "$test_name"
         ],
         "templating": {
             "list": [
@@ -5604,7 +5605,7 @@
             ]
         },
         "timezone": "utc",
-        "title": "Scylla Per Server Metrics Nemesis Master",
+        "title": "[$test_name] Scylla Per Server Metrics Nemesis Master",
         "version": 1
     }
 }

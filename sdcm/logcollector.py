@@ -33,7 +33,7 @@ from sdcm.utils.common import (S3Storage, list_instances_aws, list_instances_gce
                                ParallelObject, remove_files, get_builder_by_test_id,
                                get_testrun_dir, search_test_id_in_latest, filter_aws_instances_by_type,
                                filter_gce_instances_by_type, get_sct_root_path, normalize_ipv6_url,
-                               SCYLLA_YAML_PATH)
+                               SCYLLA_YAML_PATH, get_test_name)
 from sdcm.utils.decorators import retrying
 from sdcm.utils.get_username import get_username
 from sdcm.db_stats import PrometheusDBStats
@@ -386,6 +386,9 @@ class GrafanaEntity(BaseMonitoringEntity):  # pylint: disable=too-few-public-met
         grafana_entity_url_tmpl {str} -- template of grafana url to collect
         phantomjs_base {str} -- name and version of phantomjs package
     """
+    if test_name := get_test_name():
+        test_name = f"{test_name.lower()}-"
+
     base_grafana_entity_names = [
         {
             'name': 'overview',
@@ -394,7 +397,7 @@ class GrafanaEntity(BaseMonitoringEntity):  # pylint: disable=too-few-public-met
             'scroll_ready_locator': (By.XPATH, """//h1[contains(text(), "Your Panels")]""")
         },
         {
-            'name': 'scylla-per-server-metrics-nemesis',
+            'name': f'{test_name}scylla-per-server-metrics-nemesis',
             'path': 'dashboard/db/{dashboard_name}-{version}',
             'resolution': '1920px*7000px',
         }
