@@ -272,6 +272,18 @@ class StartupTestEvent(SystemEvent):
         self.severity = Severity.NORMAL
 
 
+class TestTimeoutEvent(SctEvent):
+    def __init__(self, start_time: float, duration: int):
+        super().__init__()
+        self.severity = Severity.CRITICAL
+        self.start_time = start_time
+        self.duration = duration
+
+    def __str__(self):
+        start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
+        return f"{super().__str__()}, Test started at {start_time}, reached it's timeout ({self.duration} minutes)"
+
+
 class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
     __test__ = False  # Mark this class to be not collected by pytest.
 

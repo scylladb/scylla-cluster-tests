@@ -858,7 +858,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.info('Nemesis stack is empty - setting termination_event')
             self.termination_event.set()
 
-
     def repair_nodetool_repair(self, node=None):
         node = node if node else self.target_node
         node.run_nodetool("repair")
