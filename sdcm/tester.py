@@ -1978,7 +1978,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                            values=', '.join(['?' for _ in columns])))
 
             # Save all rows
-            # Workers = Parallel queries = (nodes in cluster) ✕ (cores in node) ✕ 3
+            # Workers = Parallel queries = (nodes in cluster) x (cores in node) x 3
             # (from https://www.scylladb.com/2017/02/13/efficient-full-table-scans-with-scylla-1-6/)
             cores = self.db_cluster.nodes[0].cpu_cores
             if not cores:
@@ -2667,8 +2667,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         This function will run fstrim command all db nodes in the cluster to clear any bad state of the disks.
         :return:
         """
-        for node in self.db_cluster.nodes:
-            node.fstrim_scylla_disks()
+        self.db_cluster.fstrim_scylla_disks_on_nodes()
 
     @silence()
     def collect_logs(self) -> None:

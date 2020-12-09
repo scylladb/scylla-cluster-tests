@@ -1161,7 +1161,24 @@ class SCTConfiguration(dict):
              help="Configure rsyslog on Scylla nodes to send logs to monitoring nodes"),
 
         dict(name="events_limit_in_email", env="SCT_EVENTS_LIMIT_IN_EMAIL", type=int,
-             help="Limit number events in email reports")
+             help="Limit number events in email reports"),
+
+        dict(name="data_volume_disk_num", env="SCT_DATA_VOLUME_DISK_NUM",
+             type=int,
+             help="""Number of additional data volumes attached to instances
+             if data_volume_disk_num > 0, then data volumes (ebs on aws) will be
+             used for scylla data directory"""),
+        dict(name="data_volume_disk_type", env="SCT_DATA_VOLUME_DISK_TYPE",
+             type=str,
+             help="Type of addtitional volumes: gp2|gp3|io2|io3"),
+
+        dict(name="data_volume_disk_size", env="SCT_DATA_VOLUME_DISK_SIZE",
+             type=int,
+             help="Size of additional volume in GB"),
+
+        dict(name="data_volume_disk_iops", env="SCT_DATA_VOLUME_DISK_IOPS",
+             type=int,
+             help="Number of iops for ebs type io2|io3|gp3"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
@@ -1581,6 +1598,9 @@ class SCTConfiguration(dict):
         self._check_per_backend_required_values(backend)
         if backend in ['aws']:
             self._check_aws_multi_region_params()
+
+        self._verify_data_volume_configuration(backend)
+
         self._validate_seeds_number()
         if 'extra_network_interface' in self and len(self.region_names) >= 2:
             raise ValueError("extra_network_interface isn't supported for multi region use cases")
@@ -1686,7 +1706,6 @@ class SCTConfiguration(dict):
                         assert 'user_data_format_version' in tags.keys(), \
                             f"\n\t'user_data_format_version' tag missing from [{ami_id}] on {region_name}\n\texisting " \
                             f"tags: {tags}"
-
         # For each Scylla repo file we will check that there is at least one valid URL through which to download a
         # version of SCYLLA, otherwise we will get an error.
         get_branch_version_for_multiple_repositories(urls=(self.get(url) for url in [
@@ -1752,6 +1771,17 @@ class SCTConfiguration(dict):
             ret += "{help_text}{name}: {default}\n\n".format(help_text=help_text, default=default, **opt)
 
         return ret
+
+    def _verify_data_volume_configuration(self, backend):
+        dev_num = self.get("data_volume_disk_num")
+        if dev_num == 0:
+            return
+
+        if backend not in ['aws', 'k8s-eks']:
+            raise ValueError('Data volume configuration is supported only for aws, k8s-eks')
+
+        if not self.get('data_volume_disk_size') or not self.get('data_volume_disk_type'):
+            raise ValueError('Data volume configuration requires: data_volume_disk_type, data_volume_disk_size')
 
 
 def init_and_verify_sct_config() -> SCTConfiguration:

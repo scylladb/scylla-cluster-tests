@@ -46,3 +46,8 @@ use_preinstalled_scylla: true
 backup_bucket_backend: 's3'
 backup_bucket_location: 'manager-backup-tests-us-east-1'
 backup_bucket_region: 'us-east-1'
+
+data_volume_disk_num: 0
+data_volume_disk_type: 'gp2'
+data_volume_disk_size: 500
+data_volume_disk_iops: 10000 # depend on type iops could be 100-16000 for io2|io3 and 3000-16000 for gp3
