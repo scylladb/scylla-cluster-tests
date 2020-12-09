@@ -619,6 +619,7 @@ class SCTConfiguration(dict):
              help=""),
 
         # k8s-gce-minikube options
+
         dict(name="gce_image_minikube", env="SCT_GCE_IMAGE_MINIKUBE", type=str,
              help=""),
 
@@ -674,6 +675,17 @@ class SCTConfiguration(dict):
 
         dict(name="k8s_cert_manager_version", env="SCT_K8S_CERT_MANAGER_VERSION", type=str,
              help=""),
+
+        # common k8s config options
+
+        dict(name="k8s_min_scylla_nodes", env="SCT_K8S_MIN_SCYLLA_NODES", type=str,
+             help="Minimum number of nodes in the pool. "
+                  "Autoscaler stop draining k8s nodes if scylla pods getting lower this number"),
+
+        dict(name="k8s_max_scylla_nodes", env="SCT_K8S_MAX_SCYLLA_NODES", type=str,
+             help="Maximum number of nodes in the pool. "
+                  "Autoscaler stop creating k8s nodes after scylla pods getting higher than this number."
+                  "When you hit this number, pod creation is getting failed"),
 
         # docker config options
 

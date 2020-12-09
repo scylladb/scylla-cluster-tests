@@ -970,7 +970,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                           user_prefix=self.params.get("user_prefix"),
                                           n_nodes=self.params.get("gke_cluster_n_nodes"),
                                           params=self.params,
-                                          gce_datacenter=gce_datacenter)
+                                          gce_datacenter=gce_datacenter,
+                                          min_nodes_num=self.params.get('k8s_min_scylla_nodes'),
+                                          max_nodes_num=self.params.get('k8s_max_scylla_nodes'),
+                                          )
         self.k8s_cluster.wait_for_init()
         self.k8s_cluster.deploy_cert_manager()
         self.k8s_cluster.deploy_scylla_operator()

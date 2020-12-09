@@ -53,7 +53,10 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
                  n_nodes=3,
                  user_prefix=None,
                  params=None,
-                 gce_datacenter=None):
+                 gce_datacenter=None,
+                 min_nodes_num=None,
+                 max_nodes_num=None
+                 ):
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, "k8s-gke")
         node_prefix = cluster.prepend_user_prefix(user_prefix, "node")
         self._gcloud_token_thread = None
@@ -70,6 +73,8 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
         self.gce_user = services[0].key
         self.gce_zone = gce_datacenter[0]
         self.gke_cluster_created = False
+        self.min_nodes_num = min_nodes_num
+        self.max_nodes_num = max_nodes_num
 
         self.api_call_rate_limiter = ApiCallRateLimiter(
             rate_limit=GKE_API_CALL_RATE_LIMIT,
@@ -107,6 +112,14 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
         LOGGER.info("Create GKE cluster `%s' with %d node(s) in default-pool and 1 node in operator-pool",
                     self.gke_cluster_name, num_nodes)
         tags = ",".join(f"{key}={value}" for key, value in self.tags.items())
+
+        if self.min_nodes_num is not None or self.max_nodes_num is not None:
+            autoscale_option = f" --enable-autoscaling"
+            autoscale_option += '' if self.min_nodes_num in [None, ''] else f' --min-nodes {self.min_nodes_num}'
+            autoscale_option += '' if self.max_nodes_num in [None, ''] else f' --max-nodes {self.max_nodes_num}'
+        else:
+            autoscale_option = ''
+
         with self.gcloud as gcloud:
             gcloud.run(f"container --project {self.gce_project} clusters create {self.gke_cluster_name}"
                        f" --zone {self.gce_zone}"
@@ -121,8 +134,9 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
                        f" --local-ssd-count {self.gce_n_local_ssd}"
                        f" --node-taints role=scylla-clusters:NoSchedule"
                        f" --enable-stackdriver-kubernetes"
+                       f"{autoscale_option}"
                        f" --no-enable-autoupgrade"
-                       f" --no-enable-autorepair"
+                       f" --enable-autorepair"
                        f" --metadata {tags}")
             gcloud.run(f"container --project {self.gce_project} node-pools create operator-pool"
                        f" --zone {self.gce_zone}"
