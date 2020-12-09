@@ -644,8 +644,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         time.sleep(sleep_time)  # Sleeping for 5 mins to let the cluster live with a missing node for a while
 
     @latency_calculator_decorator
-    def _init_new_node_with_latency_calculation(self, old_node_ip):
-        return self._add_and_init_new_cluster_node(old_node_ip)
+    def _init_new_node_with_latency_calculation(self, old_node_ip, rack=0):
+        return self._add_and_init_new_cluster_node(old_node_ip, rack=rack)
 
     @latency_calculator_decorator
     def run_nodetool_repair_on_new_node(self, node):
@@ -2407,8 +2407,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     @latency_calculator_decorator
-    def add_new_node(self):
-        return self._add_and_init_new_cluster_node()
+    def add_new_node(self, rack=0):
+        return self._add_and_init_new_cluster_node(rack=rack)
 
     @latency_calculator_decorator
     def decommission_node(self, node):
@@ -2428,18 +2428,24 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 InfoEvent(message='FinishEvent - ShrinkCluster has done decommissioning a node').publish()
 
     def disrupt_grow_shrink_cluster(self):
+        self._disrupt_grow_shrink_cluster(rack=0)
+
+    def disrupt_grow_shrink_new_rack(self):
+        self._disrupt_grow_shrink_cluster(rack=max(self.cluster.racks) + 1)
+
+    def _disrupt_grow_shrink_cluster(self, rack=0):
+        if rack > 0:
+            if not self._is_it_on_kubernetes():
+                raise UnsupportedNemesis("SCT rack functionality is implemented only on kubernetes")
+            self.log.info("Rack deletion is not supported on kubernetes yet. "
+                          "Please see https://github.com/scylladb/scylla-operator/issues/287")
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
         self.target_node.running_nemesis = None
         self._set_current_disruption("GrowCluster")
         self.log.info("Start grow cluster on %s nodes", add_nodes_number)
+        InfoEvent(message=f'GrowCluster - Add New node to {rack} rack').publish()
         for _ in range(add_nodes_number):
-            if self._is_it_on_kubernetes():
-                rack = random.choice([0, 1])
-                InfoEvent(message=f'GrowCluster - Add New node to {rack} rack').publish()
-            else:
-                rack = 0
-                InfoEvent(message='GrowCluster - Add New node').publish()
-            added_node = self.add_new_node()
+            added_node = self.add_new_node(rack=rack)
             added_node.running_nemesis = None
             InfoEvent(message='GrowCluster - Done adding New node').publish()
             self.log.info("New node added %s", added_node.name)
@@ -2735,6 +2741,15 @@ class GrowShrinkClusterNemesis(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_grow_shrink_cluster()
+
+
+class AddRemoveRackNemesis(Nemesis):
+    disruptive = True
+    kubernetes = True
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_grow_shrink_new_rack()
 
 
 class StopWaitStartMonkey(Nemesis):

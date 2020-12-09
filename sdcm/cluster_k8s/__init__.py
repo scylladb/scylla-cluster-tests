@@ -705,7 +705,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                   dc_idx: int = 0,
                   rack: int = 0,
                   enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
-        self.create_rack_if_not_exists(rack)
+        self._create_k8s_rack_if_not_exists(rack)
         current_members = self.scylla_cluster_spec.datacenter.racks[rack].members
         self.replace_scylla_cluster_value(f"/spec/datacenter/racks/{rack}/members", current_members + count)
         self.wait_for_pods_readiness(len(self.nodes) + count)
@@ -715,7 +715,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                                  rack=rack,
                                  enable_auto_bootstrap=enable_auto_bootstrap)
 
-    def create_rack_if_not_exists(self, rack: int):
+    def _create_k8s_rack_if_not_exists(self, rack: int):
         if self.get_scylla_cluster_value(f'/spec/datacenter/racks/{rack}') is not None:
             return
         # Create new rack of very first rack of the cluster
@@ -724,7 +724,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         new_rack['name'] = f'{new_rack["name"]}-{rack}'
         self.add_scylla_cluster_value('/spec/datacenter/racks', new_rack)
 
-    def delete_rack(self, rack: int):
+    def _delete_k8s_rack(self, rack: int):
         racks = self.get_scylla_cluster_value(f'/spec/datacenter/racks/')
         if len(racks) == 1:
             return
@@ -752,13 +752,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         # TBD: Enable rack deletion after https://github.com/scylladb/scylla-operator/issues/287 is resolved
         # if current_members - 1 == 0:
         #     self.delete_rack(rack)
-
-    def get_rack_nodes(self, rack: int) -> list:
-        output = []
-        for node in self.nodes:
-            if node.rack == rack:
-                output.append(node)
-        return sorted(output, key=lambda n: n.name)
 
     def decommission(self, node):
         self.terminate_node(node)
