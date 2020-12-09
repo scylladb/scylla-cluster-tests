@@ -7,10 +7,19 @@ List<Integer> call(Map params, String region){
     #!/bin/bash
     export SCT_CLUSTER_BACKEND="${params.backend}"
     export SCT_CONFIG_FILES=${test_config}
-    ./docker/env/hydra.sh output-conf -b "${params.backend}" 2>/dev/null | grep test_duration | awk '{print \$2}'
+    if [[ -n "${params.k8s_scylla_operator_docker_image ? params.k8s_scylla_operator_docker_image : ''}" ]] ; then
+        export SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE=${params.k8s_scylla_operator_docker_image}
+    fi
+
+    if [[ -n "${params.scylla_mgmt_agent_version ? params.scylla_mgmt_agent_version : ''}" ]] ; then
+        export SCT_SCYLLA_MGMT_AGENT_VERSION=${params.scylla_mgmt_agent_version}
+    fi
+    ./docker/env/hydra.sh output-conf -b "${params.backend}"
     """
-    def testDuration = sh(script: cmd, returnStdout: true).trim()
-    testDuration = testDuration.toInteger()
+    def testData = sh(script: cmd, returnStdout: true).trim()
+    println(testData)
+    testData = testData =~ /test_duration: (\d+)/
+    testDuration = testData[0][1].toInteger()
     Integer testStartupTimeout = 20
     Integer testTeardownTimeout = 40
     Integer collectLogsTimeout = 70
