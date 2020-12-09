@@ -29,7 +29,7 @@ import json
 import ipaddress
 
 from collections import defaultdict
-from typing import List, Optional, Dict, Union
+from typing import List, Optional, Dict, Union, Set
 from textwrap import dedent
 from datetime import datetime
 from functools import cached_property, wraps
@@ -3319,6 +3319,13 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         # pylint: disable=no-member
         return self.params.get('append_scylla_args_oracle') if self.name.find('oracle') > 0 else \
             self.params.get('append_scylla_args')
+
+    def get_rack_nodes(self, rack: int) -> list:
+        return sorted([node for node in self.nodes if node.rack == rack], key=lambda n: n.name)
+
+    @property
+    def racks(self) -> Set[int]:
+        return set([node.rack for node in self.nodes])
 
     def set_seeds(self, wait_for_timeout=300, first_only=False):
         seeds_selector = self.params.get('seeds_selector')
