@@ -13,7 +13,11 @@ def call(Map params, String region){
 
     export SCT_CONFIG_FILES=${test_config}
     export SCT_CLUSTER_BACKEND="${params.backend}"
-    export SCT_REGION_NAME=${aws_region}
+
+    if [[ -n "${params.aws_region ? params.aws_region : ''}" ]] ; then
+        export SCT_REGION_NAME=${aws_region}
+    fi
+
     export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
     export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
     export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
@@ -21,7 +25,7 @@ def call(Map params, String region){
     echo "Starting to clean resources ..."
     if [[ "$cloud_provider" == "aws" ]]; then
         SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
-        if [[ ! -z "\${SCT_RUNNER_IP}" ]] ; then
+        if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
             ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} clean-resources --post-behavior --test-id \$SCT_TEST_ID
         else
             echo "SCT runner IP file is empty. Probably SCT Runner was not created."

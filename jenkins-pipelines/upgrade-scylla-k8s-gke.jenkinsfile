@@ -6,5 +6,4 @@ rollingOperatorUpgradePipeline(
     backend: 'k8s-gke',
     test_name: 'upgrade_test.UpgradeTest.test_kubernetes_scylla_upgrade',
     test_config: 'test-cases/scylla-operator/kubernetes-scylla-upgrade-gke.yaml',
-    timeout: [time: 300, unit: 'MINUTES']
 )

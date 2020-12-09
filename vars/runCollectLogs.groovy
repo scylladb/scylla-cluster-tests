@@ -19,7 +19,7 @@ def call(Map params, String region){
     echo "start collect logs ..."
     if [[ "$cloud_provider" == "aws" ]]; then
         SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
-        if [[ ! -z "\${SCT_RUNNER_IP}" ]] ; then
+        if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
             ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} collect-logs
         else
             echo "SCT runner IP file is empty. Probably SCT Runner was not created."
