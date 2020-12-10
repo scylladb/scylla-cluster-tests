@@ -153,7 +153,9 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
                 LOGGER.info('Profile content:\n%s', profile_file.read())
             node.remoter.send_files(self.profile, os.path.join('/tmp', os.path.basename(self.profile)), delete_dst=True)
 
-        stress_cmd_opt = stress_cmd.split()[1]
+        # Get next word after `cassandra-stress' in stress_cmd.
+        # Do it this way because stress_cmd can contain env variables before `cassandra-stress'.
+        stress_cmd_opt = stress_cmd.split("cassandra-stress", 1)[1].split(None, 1)[0]
 
         LOGGER.info('Stress command:\n%s', stress_cmd)
 
