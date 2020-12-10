@@ -173,7 +173,7 @@ def latency_calculator_decorator(func):
         elif 'mixed' in test_name:
             workload = ['read', 'write']
         else:
-            return None
+            return res
         for workload_type in workload:
             if workload_type not in args[0].cluster.latency_results:
                 args[0].cluster.latency_results[workload_type] = dict()
