@@ -1,0 +1,56 @@
+keyspace: keyspace1
+
+# The CQL for creating a keyspace (optional if it already exists)
+keyspace_definition: |
+  CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 3};
+
+table: twcstest
+
+table_definition: |
+
+  CREATE TABLE twcstest (
+  id text,
+
+  time timestamp,
+
+  metric int,
+
+  value blob,
+
+  PRIMARY KEY((id), time)
+
+  ) WITH CLUSTERING ORDER BY (time DESC)
+
+  AND compaction = { 'class':'TimeWindowCompactionStrategy', 'compaction_window_unit':'MINUTES', 'compaction_window_size':'1' }
+
+  AND comment='A table to see what happens with TWCS & Stress'
+
+columnspec:
+  - name: id
+
+    size: fixed(64)
+
+    population: uniform(1..1500M)
+
+  - name: time
+
+    cluster: fixed(288)
+
+  - name: value
+
+    size: fixed(50)
+
+
+queries:
+
+  insert:
+
+    cql: insert into twcstest (id, time, metric, value) VALUES (?, toTimestamp(now()), ?, ?)
+
+  select5m:
+
+    cql: select * from twcstest where id = ? and time <= toTimestamp(now()) and time >= minutesAgo(5, toTimestamp(now()))
+
+  select10m:
+
+    cql: select * from twcstest where id = ? and time <= toTimestamp(now()) and time >= minutesAgo(5, toTimestamp(now()))
