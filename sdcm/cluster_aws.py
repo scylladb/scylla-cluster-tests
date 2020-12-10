@@ -32,10 +32,10 @@ from contextlib import ExitStack
 import yaml
 import boto3
 from mypy_boto3_ec2 import EC2Client
+from pkg_resources import parse_version
 from botocore.exceptions import WaiterError
-from distutils.version import LooseVersion  # pylint: disable=no-name-in-module,import-error
 
-from sdcm import wait, ec2_client, cluster
+from sdcm import ec2_client, cluster
 from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
 from sdcm.cluster import INSTANCE_PROVISION_ON_DEMAND
 from sdcm.ec2_client import CreateSpotInstancesError
@@ -825,7 +825,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         user_data_format_version = ami_tags.get('sci_version', '2')
         user_data_format_version = ami_tags.get('user_data_format_version', user_data_format_version)
 
-        if LooseVersion(user_data_format_version) >= LooseVersion('2'):
+        if parse_version(user_data_format_version) >= parse_version('2'):
             user_data = dict(scylla_yaml=dict(cluster_name=name), start_scylla_on_first_boot=False)
         else:
             user_data = ('--clustername %s '

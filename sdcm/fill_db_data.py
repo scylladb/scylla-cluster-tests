@@ -21,12 +21,12 @@ import random
 import time
 from collections import OrderedDict
 from uuid import UUID
-from distutils.version import LooseVersion
 
 from cassandra import InvalidRequest
 from cassandra.util import sortedset, SortedSet  # pylint: disable=no-name-in-module
 from cassandra import ConsistencyLevel
 from cassandra.protocol import ProtocolException  # pylint: disable=no-name-in-module
+from pkg_resources import parse_version
 
 from sdcm.tester import ClusterTester
 from sdcm.utils.decorators import retrying
@@ -2975,7 +2975,7 @@ class FillDatabaseData(ClusterTester):
         else:
             version_with_support = self.NON_FROZEN_SUPPORT_OS_MIN_VERSION
 
-        if LooseVersion(scylla_version) < LooseVersion(version_with_support):
+        if parse_version(scylla_version) < parse_version(version_with_support):
             return False  # current version doesn't support non-frozen UDT
         else:
             return True  # current version supports non-frozen UDT

@@ -17,8 +17,9 @@ import os
 import time
 import re
 from random import randint
+
 from invoke import exceptions
-from distutils.version import LooseVersion
+from pkg_resources import parse_version
 
 from sdcm import mgmt
 from sdcm.sct_events.group_common_events import ignore_no_space_errors
@@ -218,7 +219,7 @@ class BackupFunctionsMixIn:
         number_of_loaders = self.params.get("n_loaders")
 
         scylla_version = self.db_cluster.nodes[0].scylla_version
-        if LooseVersion(scylla_version).version[0] == 2019:
+        if parse_version(scylla_version).release[0] == 2019:
             # Making sure scylla version is 2019.1.x
             throttle_per_node = 10666
         else:
