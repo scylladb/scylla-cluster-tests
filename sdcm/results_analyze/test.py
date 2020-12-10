@@ -113,7 +113,7 @@ class SoftwareVersion(ClassBase):
 
     @property
     def as_int(self):
-        if self.as_string == '666.development':
+        if self.as_string == '666.development' or self.as_string.endswith('.dev'):
             return (100 ** 5) * 10
         version_parts = self.as_string.split('.')
         idx = 100**5
@@ -130,7 +130,7 @@ class SoftwareVersion(ClassBase):
 
     @property
     def major_as_int(self):
-        if self.as_string == '666.development':
+        if self.as_string == '666.development' or self.as_string.endswith('.dev'):
             return (100 ** 5) * 10
         version_parts = self.as_string.split('.')
         idx = 100**5
