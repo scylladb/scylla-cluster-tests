@@ -224,7 +224,7 @@ class BasePodContainer(cluster.BaseNode):
             rack=rack)
 
     @cached_property
-    def pod_replace_timeout(self):
+    def pod_replace_timeout(self) -> int:
         return self.pod_terminate_timeout + self.pod_readiness_timeout
 
     def init(self) -> None:
@@ -840,7 +840,25 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
 
     def upgrade_scylla_cluster(self, new_version: str) -> None:
         self.replace_scylla_cluster_value("/spec/version", new_version)
-        self.rollout_restart()
+        new_image = f"{self.params.get('docker_image')}:{new_version}"
+
+        if not self.nodes:
+            return True
+
+        @timeout(timeout=self.nodes[0].pod_replace_timeout * 2 * 60)
+        def wait_till_any_node_get_new_image(nodes_with_old_image: list):
+            for node in nodes_with_old_image.copy():
+                if node.image == new_image:
+                    nodes_with_old_image.remove(node)
+                    return True
+            time.sleep(self.PodContainerClass.pod_readiness_delay)
+            raise RuntimeError('No node was upgraded')
+
+        nodes = self.nodes.copy()
+        while nodes:
+            wait_till_any_node_get_new_image(nodes)
+
+        self.wait_for_pods_readiness(len(self.nodes), len(self.nodes))
 
     def update_scylla_config(self):
         with self.scylla_yaml_lock:

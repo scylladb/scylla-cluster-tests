@@ -247,6 +247,7 @@ class MinikubeScyllaPodContainer(BasePodContainer, IptablesPodPortsRedirectMixin
 
 
 class MinikubeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
+    k8s_cluster: MinikubeCluster
     PodContainerClass = MinikubeScyllaPodContainer
 
     def add_nodes(self,

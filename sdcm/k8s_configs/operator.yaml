@@ -60,6 +60,8 @@ spec:
                   description: Port on which to bind the Alternator API
                   format: int32
                   type: integer
+                write_isolation:
+                  type: string
               type: object
             automaticOrphanedNodeCleanup:
               description: AutomaticOrphanedNodeCleanup controls if automatic orphan node cleanup should be performed.
@@ -1631,6 +1633,35 @@ spec:
                 - name
                 type: object
               type: array
+            upgrade:
+              description: UpgradeStatus contains state of ongoing upgrade procedure.
+              properties:
+                currentNode:
+                  description: CurrentNode node under upgrade.
+                  type: string
+                currentRack:
+                  description: CurrentRack rack under upgrade.
+                  type: string
+                dataSnapshotTag:
+                  description: SystemSnapshotTag snapshot tag of data keyspaces.
+                  type: string
+                fromVersion:
+                  description: FromVersion reflects from which version ScyllaCluster is being upgraded.
+                  type: string
+                state:
+                  description: State reflect current state machine state.
+                  type: string
+                systemSnapshotTag:
+                  description: SystemSnapshotTag snapshot tag of system keyspaces.
+                  type: string
+                toVersion:
+                  description: ToVersion reflects to which version ScyllaCluster is being upgraded.
+                  type: string
+              required:
+              - fromVersion
+              - state
+              - toVersion
+              type: object
           type: object
       type: object
   version: v1alpha1
@@ -1840,10 +1871,10 @@ spec:
           name: webhook-server
           protocol: TCP
         readinessProbe:
-          tcpSocket:
-            port: 443
           initialDelaySeconds: 5
           periodSeconds: 10
+          tcpSocket:
+            port: 443
         resources:
           limits:
             cpu: 100m
