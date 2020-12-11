@@ -18,6 +18,7 @@ import time
 import queue
 import logging
 import threading
+import multiprocessing
 from typing import Optional
 from functools import cached_property
 
@@ -83,7 +84,7 @@ class ApiCallRateLimiter(threading.Thread):
 
     def __init__(self, rate_limit: float, queue_size: int, urllib_retry: int):
         super().__init__(name=type(self).__name__, daemon=True)
-        self._lock = threading.Lock()
+        self._lock = multiprocessing.Semaphore(value=1)
         self.rate_limit = rate_limit  # ops/s
         self.queue_size = queue_size
         self.urllib_retry = urllib_retry
@@ -103,7 +104,7 @@ class ApiCallRateLimiter(threading.Thread):
                     self.rate_limit, self.queue_size)
         self.running.set()
         while self.running.is_set():
-            if self._lock.locked():
+            if self._lock.get_value() == 0:
                 self._lock.release()
             time.sleep(1 / self.rate_limit)
 
