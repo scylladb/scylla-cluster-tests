@@ -158,7 +158,7 @@ class GcloudTokenUpdateThread(threading.Thread):
         while not self._termination_event.wait(wait_time):
             try:
                 gcloud_config = self._gcloud.run(
-                    f'config config-helper --min-expiry={self._token_min_duration} --format=json')
+                    f'config config-helper --min-expiry={self._token_min_duration * 60} --format=json')
                 with open(self._config_path, 'w') as gcloud_config_file:
                     gcloud_config_file.write(gcloud_config)
                     gcloud_config_file.flush()
