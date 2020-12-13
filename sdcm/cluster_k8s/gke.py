@@ -23,6 +23,7 @@ from sdcm import sct_abs_path, cluster
 from sdcm.utils.k8s import ApiCallRateLimiter
 from sdcm.utils.common import shorten_cluster_name
 from sdcm.utils.gce_utils import GcloudContextManager, GcloudTokenUpdateThread
+from sdcm.wait import wait_for
 from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BasePodContainer
 from sdcm.cluster_k8s.iptables import IptablesPodIpRedirectMixin, IptablesClusterOpsMixin
 
@@ -180,8 +181,8 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
         self._gcloud_token_thread = GcloudTokenUpdateThread(self.gcloud, self.gcloud_token_path)
         self._gcloud_token_thread.start()
         # Wait till GcloudTokenUpdateThread get tokens and dump them to gcloud_token_path
-        while not os.path.exists(self.gcloud_token_path):
-            time.sleep(0.1)
+        wait_for(os.path.exists, timeout=30, step=5, text="Wait for gcloud token", throw_exc=True,
+                 path=self.gcloud_token_path)
 
     def patch_kube_config(self) -> None:
         # It assumes that config is already created by gcloud

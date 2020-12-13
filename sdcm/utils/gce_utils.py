@@ -146,7 +146,7 @@ class GcloudContainerMixin:
 class GcloudTokenUpdateThread(threading.Thread):
     update_period = 1800
 
-    def __init__(self, gcloud: GcloudContextManager, config_path: str, token_min_duration: int = 480):
+    def __init__(self, gcloud: GcloudContextManager, config_path: str, token_min_duration: int = 60):
         self._gcloud = gcloud
         self._config_path = config_path
         self._token_min_duration = token_min_duration
