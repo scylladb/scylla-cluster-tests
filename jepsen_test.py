@@ -53,3 +53,16 @@ class JepsenTest(ClusterTester):
 
         self.log.info("Run Jepsen test: `%s'", jepsen_cmd)
         self.jepsen_node.remoter.run(jepsen_cmd)
+
+    def get_email_data(self):
+        self.log.info("Prepare data for email")
+        email_data = self._get_common_email_data()
+        grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(self.start_time) if self.monitors else {}
+        email_data.update({
+            "grafana_screenshots": grafana_dataset.get("screenshots", []),
+            "grafana_snapshots": grafana_dataset.get("snapshots", []),
+            "jepsen_scylla_repo": self.params.get("jepsen_scylla_repo"),
+            "jepsen_test_cmd": self.params.get("jepsen_test_cmd"),
+            "scylla_repo": self.params.get("scylla_repo"),
+        })
+        return email_data
