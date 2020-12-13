@@ -595,7 +595,7 @@ def clean_resources_docker(tags_dict: dict, builder_name: Optional[str] = None, 
             image.client.images.remove(image=image.id, force=True)
             LOGGER.debug("Done.")
 
-    resources_to_clean = list_resources_docker(tags_dict, builder_name=builder_name, group_as_builder=False)
+    resources_to_clean = list_resources_docker(tags_dict=tags_dict, builder_name=builder_name, group_as_builder=False)
     containers = resources_to_clean.get("containers", [])
     images = resources_to_clean.get("images", [])
 
