@@ -1,7 +1,19 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 import smtplib
 import os.path
 import subprocess
-
 import logging
 import tempfile
 import json
@@ -475,6 +487,17 @@ class CDCReplicationReporter(LongevityEmailReporter):
     email_template_file = "results_cdcreplication.html"
 
 
+class JepsenEmailReporter(BaseEmailReporter):
+    _fields = (
+        "grafana_screenshots",
+        "grafana_snapshots",
+        "jepsen_scylla_repo",
+        "jepsen_test_cmd",
+        "scylla_repo",
+    )
+    email_template_file = "results_jepsen.html"
+
+
 def build_reporter(name: str,
                    email_recipients: Sequence[str] = (),
                    logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
@@ -497,6 +520,8 @@ def build_reporter(name: str,
         return TestAbortedEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "CDCReplication" in name:
         return CDCReplicationReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "Jepsen" in name:
+        return JepsenEmailReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
 

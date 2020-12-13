@@ -1,0 +1,25 @@
+{% extends 'results_base.html' %}
+{% block body %}
+    <h3>
+        <span>Jepsen parameters</span>
+    </h3>
+    <div>
+        <ul>
+            <li>Jepsen repo: {{ jepsen_scylla_repo }}</li>
+            <li>Jepsen test command: {{ jepsen_test_cmd }}</li>
+        </ul>
+    </div>
+    <h3>
+        <span>System under test </span>
+    </h3>
+    <div>
+        <ul>
+            <li>ScyllaDB version: {{ scylla_version }}</li>
+            {% if scylla_repo -%}
+                <li>ScyllaDB repo: {{ scylla_repo }}</li>
+            {% endif -%}
+            <li>Instance type: {{ scylla_instance_type }}</li>
+            <li>Number of ScyllaDB nodes: {{ number_of_db_nodes }}</li>
+        </ul>
+    </div>
+{% endblock %}
