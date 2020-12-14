@@ -404,12 +404,25 @@ class LongevityEmailReporter(BaseEmailReporter):
 
     def get_config_file_link(self, attachments_data):
         config_files = []
-        for config_file in attachments_data["config_files"]:
 
-            last_commit = subprocess.run(['git', 'rev-list', 'HEAD', '-1', config_file], capture_output=True, text=True)
-            config_files.append({"file": config_file.split("/")[-1],
+        if "N/A" in attachments_data["config_files"]:
+            return config_files
+
+        for config_file in attachments_data["config_files"]:
+            if not config_file:
+                continue
+
+            if 'cloud' in config_file or 'cloud' in attachments_data["job_name"]:
+                config_files.append({"file": f"{config_file.split('/')[-1]} ",
+                                     "link": "Siren repo"})
+                continue
+
+            last_commit = subprocess.run(['git', 'rev-list', 'HEAD', '-1', config_file], capture_output=True,
+                                         text=True)
+            config_files.append({"file": f"[{config_file.split('/')[-1]}]",
                                  "link": f"https://github.com/scylladb/scylla-cluster-tests/blob"
                                  f"/{last_commit.stdout.strip()}/{config_file}"})
+
         return config_files
 
 
