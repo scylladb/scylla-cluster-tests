@@ -3517,6 +3517,26 @@ class KubernetesScyllaOperatorMonkey(Nemesis):
         self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
 
 
+class ScyllaOperatorBasicOperationsMonkey(Nemesis):
+    """
+    Selected number of nemesis that is focused on scylla-operator functionality
+    """
+    disruptive = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.disrupt_methods_list = [
+            'disrupt_rolling_restart_cluster',
+            'disrupt_grow_shrink_cluster',
+            'disrupt_grow_shrink_new_rack',
+            'disrupt_stop_start_scylla_server'
+        ]
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list, predefined_sequence=True)
+
+
 class NemesisSequence(Nemesis):
     disruptive = True
     networking = False
