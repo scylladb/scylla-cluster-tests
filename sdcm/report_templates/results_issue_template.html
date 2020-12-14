@@ -30,15 +30,15 @@
     <br>
     <div>
         {% if job_name %}
-        Test: {{ job_name }}<br>
+        Test: `{{ job_name }}`<br>
         {% endif %}
         {% if test_name %}
-        Test name: {{ test_name }}<br>
+        Test name: `{{ test_name }}`<br>
         {% endif %}
         {% if config_files %}
         Test config file(s):<br>
             {% for config_file_link in config_files_link %}
-                - [{{ config_file_link.file }}]({{ config_file_link.link }})<br>
+                - {{ config_file_link.file }} ({{ config_file_link.link }})<br>
             {% endfor %}
         {% endif %}
     </div>
@@ -69,7 +69,9 @@
     <div>
         Logs:<br>
         {% for logs_link in logs_links %}
-            {{ logs_link.type }} - [{{ logs_link.link }}]({{ logs_link.link }})<br>
+            {% if logs_link.type != "prometheus" %}
+                {{ logs_link.type }} - [{{ logs_link.link }}]({{ logs_link.link }})<br>
+            {% endif %}
         {% endfor %}
     </div>
     {% endif %}
