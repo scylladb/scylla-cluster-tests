@@ -173,6 +173,7 @@ class SctEvent:
 
     def dont_publish(self):
         self._ready_to_publish = False
+        LOGGER.debug("%s marked to not publish", self)
 
     def to_json(self) -> str:
         return json.dumps({
