@@ -3394,15 +3394,14 @@ class BlockNetworkMonkey(Nemesis):
         self.disrupt_network_block()
 
 
-# Temporary disable due to  https://github.com/scylladb/scylla/issues/6522
-# class RejectInterNodeNetworkMonkey(Nemesis):
-#     disruptive = True
-#     networking = True
-#     run_with_gemini = False
-#
-#     @log_time_elapsed_and_status
-#     def disrupt(self):
-#         self.disrupt_network_reject_inter_node_communication()
+class RejectInterNodeNetworkMonkey(Nemesis):
+    disruptive = True
+    networking = True
+    run_with_gemini = False
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_network_reject_inter_node_communication()
 
 
 class RejectNodeExporterNetworkMonkey(Nemesis):
@@ -3596,33 +3595,33 @@ class CDCStressorMonkey(Nemesis):
         self.disrupt_run_cdcstressor_tool()
 
 
-# Disable unstable streaming err nemesises
-#
-# class DecommissionStreamingErrMonkey(Nemesis):
-#
-#     disruptive = True
-#
-#     @log_time_elapsed_and_status
-#     def disrupt(self):
-#         self.disrupt_decommission_streaming_err()
-#
-#
-# class RebuildStreamingErrMonkey(Nemesis):
-#
-#     disruptive = True
-#
-#     @log_time_elapsed_and_status
-#     def disrupt(self):
-#         self.disrupt_rebuild_streaming_err()
-#
-#
-# class RepairStreamingErrMonkey(Nemesis):
-#
-#     disruptive = True
-#
-#     @log_time_elapsed_and_status
-#     def disrupt(self):
-#         self.disrupt_repair_streaming_err()
+class DecommissionStreamingErrMonkey(Nemesis):
+
+    disruptive = True
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_decommission_streaming_err()
+
+
+class RebuildStreamingErrMonkey(Nemesis):
+
+    disruptive = True
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_rebuild_streaming_err()
+
+
+class RepairStreamingErrMonkey(Nemesis):
+
+    disruptive = True
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_repair_streaming_err()
+
+
 DEPRECATED_LIST_OF_NEMESISES = [UpgradeNemesis, UpgradeNemesisOneNode, RollbackNemesis]
 
 COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,
