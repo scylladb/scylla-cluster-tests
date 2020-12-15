@@ -65,7 +65,8 @@ def call(Map pipelineParams) {
         }
         options {
             timestamps()
-            timeout(pipelineParams.timeout)
+            // Timeout for the whole test, add 30 MINUTES for waiting the builder
+            timeout([time: pipelineParams.timeout.time + 30, unit: 'MINUTES'])
             buildDiscarder(logRotator(numToKeepStr: "${pipelineParams.get('builds_to_keep', '20')}",))
         }
         stages {
@@ -77,96 +78,99 @@ def call(Map pipelineParams) {
                             def instance_type = it
                             tasks["${instance_type}"] = {
                                 node(builder.label) {
-                                    withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
-                                             "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",]) {
-                                        stage("Checkout (${instance_type})") {
-                                            dir('scylla-cluster-tests') {
-                                                checkout scm
+                                    // Timeout for the test itself
+                                    timeout(pipelineParams.timeout) {
+                                        withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
+                                                 "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",]) {
+                                            stage("Checkout (${instance_type})") {
+                                                dir('scylla-cluster-tests') {
+                                                    checkout scm
+                                                }
                                             }
-                                        }
-                                        stage("Run SCT Test (${instance_type})") {
-                                            sctScript """
-                                                rm -fv ./latest
+                                            stage("Run SCT Test (${instance_type})") {
+                                                sctScript """
+                                                    rm -fv ./latest
 
-                                                export SCT_COLLECT_LOGS=false
-                                                export SCT_CONFIG_FILES=${params.test_config}
+                                                    export SCT_COLLECT_LOGS=false
+                                                    export SCT_CONFIG_FILES=${params.test_config}
 
-                                                if [[ ! -z "${params.scylla_ami_id}" ]]; then
-                                                    export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
-                                                    export SCT_REGION_NAME="${params.region_name}"
-                                                elif [[ ! -z "${params.gce_image_db}" ]]; then
-                                                    export SCT_GCE_IMAGE_DB="${params.gce_image_db}"
-                                                elif [[ ! -z "${params.scylla_version}" ]]; then
-                                                    export SCT_SCYLLA_VERSION="${params.scylla_version}"
-                                                elif [[ ! -z "${params.scylla_repo}" ]]; then
-                                                    export SCT_SCYLLA_REPO="${params.scylla_repo}"
-                                                    if [[ ! -z "${params.scylla_mgmt_repo}" ]]; then
-                                                        export SCT_USE_MGMT=true
-                                                        export SCT_SCYLLA_REPO_M="${params.scylla_repo}"
-                                                        export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
-                                                    fi
-                                                elif [[ ! -z "${params.unified_package}" ]]; then
-                                                    export SCT_UNIFIED_PACKAGE="${params.unified_package}"
-                                                    export SCT_NONROOT_OFFLINE_INSTALL=${params.nonroot_offline_install}
-                                                else
-                                                    echo "need to choose one of SCT_GCE_IMAGE_DB | SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO | SCT_UNIFIED_PACKAGE"
-                                                    exit 1
-                                                fi
-
-                                                if [[ ! -z "${params.scylla_docker_image}" ]]; then
-                                                    export SCT_DOCKER_IMAGE="${params.scylla_docker_image}"
-                                                    if [[ -z "${params.scylla_version}" ]]; then
-                                                        echo "need to provide SCT_SCYLLA_VERSION for Docker backend"
+                                                    if [[ ! -z "${params.scylla_ami_id}" ]]; then
+                                                        export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
+                                                        export SCT_REGION_NAME="${params.region_name}"
+                                                    elif [[ ! -z "${params.gce_image_db}" ]]; then
+                                                        export SCT_GCE_IMAGE_DB="${params.gce_image_db}"
+                                                    elif [[ ! -z "${params.scylla_version}" ]]; then
+                                                        export SCT_SCYLLA_VERSION="${params.scylla_version}"
+                                                    elif [[ ! -z "${params.scylla_repo}" ]]; then
+                                                        export SCT_SCYLLA_REPO="${params.scylla_repo}"
+                                                        if [[ ! -z "${params.scylla_mgmt_repo}" ]]; then
+                                                            export SCT_USE_MGMT=true
+                                                            export SCT_SCYLLA_REPO_M="${params.scylla_repo}"
+                                                            export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
+                                                        fi
+                                                    elif [[ ! -z "${params.unified_package}" ]]; then
+                                                        export SCT_UNIFIED_PACKAGE="${params.unified_package}"
+                                                        export SCT_NONROOT_OFFLINE_INSTALL=${params.nonroot_offline_install}
+                                                    else
+                                                        echo "need to choose one of SCT_GCE_IMAGE_DB | SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO | SCT_UNIFIED_PACKAGE"
                                                         exit 1
                                                     fi
-                                                fi
 
-                                                if [[ ! -z "${instance_type}" ]]; then
-                                                    case "${params.backend}" in
-                                                        "aws")
-                                                            export SCT_INSTANCE_TYPE_DB="${instance_type}"
-                                                            ;;
-                                                        "gce")
-                                                            export SCT_GCE_INSTANCE_TYPE_DB="${instance_type}"
-                                                            ;;
-                                                    esac
-                                                fi
+                                                    if [[ ! -z "${params.scylla_docker_image}" ]]; then
+                                                        export SCT_DOCKER_IMAGE="${params.scylla_docker_image}"
+                                                        if [[ -z "${params.scylla_version}" ]]; then
+                                                            echo "need to provide SCT_SCYLLA_VERSION for Docker backend"
+                                                            exit 1
+                                                        fi
+                                                    fi
 
-                                                export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
-                                                export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
-                                                export SCT_INSTANCE_PROVISION="${params.provision_type}"
+                                                    if [[ ! -z "${instance_type}" ]]; then
+                                                        case "${params.backend}" in
+                                                            "aws")
+                                                                export SCT_INSTANCE_TYPE_DB="${instance_type}"
+                                                                ;;
+                                                            "gce")
+                                                                export SCT_GCE_INSTANCE_TYPE_DB="${instance_type}"
+                                                                ;;
+                                                        esac
+                                                    fi
 
-                                                echo "start test ......."
-                                                ./docker/env/hydra.sh run-test artifacts_test --backend ${params.backend} --logdir "`pwd`"
-                                                echo "end test ....."
-                                            """
-                                        }
-                                        stage("Collect log data (${instance_type})") {
-                                            sctScript """
-                                                export SCT_CONFIG_FILES=${params.test_config}
+                                                    export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                                    export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
+                                                    export SCT_INSTANCE_PROVISION="${params.provision_type}"
 
-                                                echo "start collect logs ..."
-                                                ./docker/env/hydra.sh collect-logs --backend ${params.backend} --logdir "`pwd`"
-                                                echo "end collect logs"
-                                            """
-                                        }
-                                        stage("Clean resources (${instance_type})") {
-                                            sctScript """
-                                                export SCT_CONFIG_FILES=${params.test_config}
-                                                export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                                    echo "start test ......."
+                                                    ./docker/env/hydra.sh run-test artifacts_test --backend ${params.backend} --logdir "`pwd`"
+                                                    echo "end test ....."
+                                                """
+                                            }
+                                            stage("Collect log data (${instance_type})") {
+                                                sctScript """
+                                                    export SCT_CONFIG_FILES=${params.test_config}
 
-                                                echo "start clean resources ..."
-                                                ./docker/env/hydra.sh clean-resources --post-behavior --logdir "`pwd`"
-                                                echo "end clean resources"
-                                            """
-                                        }
-                                        stage("Send email with result ${instance_type}") {
-                                            def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
-                                            sctScript """
-                                                echo "Start send email ..."
-                                                ./docker/env/hydra.sh send-email --logdir "`pwd`" --email-recipients "${email_recipients}"
-                                                echo "Email sent"
-                                            """
+                                                    echo "start collect logs ..."
+                                                    ./docker/env/hydra.sh collect-logs --backend ${params.backend} --logdir "`pwd`"
+                                                    echo "end collect logs"
+                                                """
+                                            }
+                                            stage("Clean resources (${instance_type})") {
+                                                sctScript """
+                                                    export SCT_CONFIG_FILES=${params.test_config}
+                                                    export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+
+                                                    echo "start clean resources ..."
+                                                    ./docker/env/hydra.sh clean-resources --post-behavior --logdir "`pwd`"
+                                                    echo "end clean resources"
+                                                """
+                                            }
+                                            stage("Send email with result ${instance_type}") {
+                                                def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
+                                                sctScript """
+                                                    echo "Start send email ..."
+                                                    ./docker/env/hydra.sh send-email --logdir "`pwd`" --email-recipients "${email_recipients}"
+                                                    echo "Email sent"
+                                                """
+                                            }
                                         }
                                     }
                                 }
