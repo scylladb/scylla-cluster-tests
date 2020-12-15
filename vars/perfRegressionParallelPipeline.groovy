@@ -27,11 +27,11 @@ def call(Map pipelineParams) {
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'scylla_version')
             string(defaultValue: '', description: '', name: 'scylla_repo')
-            string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
-                   description: 'spot_low_price|on_demand|spot_fleet|spot_low_price|spot_duration',
+            string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
+                   description: 'spot_low_price|on_demand|spot_fleet|spot_low_price|spot_duration|spot',
                    name: 'provision_type')
 
-            string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'keep-on-failure')}",
+            string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_db_nodes')
             string(defaultValue: "${pipelineParams.get('post_behavior_loader_nodes', 'destroy')}",
@@ -45,7 +45,7 @@ def call(Map pipelineParams) {
                    description: 'subtests in format ["sub_test1", "sub_test2"] or empty',
                    name: 'sub_tests')
 
-            string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
+            string(defaultValue: "${pipelineParams.get('email_recipients', 'scylla-perf-results@scylladb.com')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
         }
