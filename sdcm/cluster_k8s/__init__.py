@@ -41,6 +41,7 @@ from sdcm.utils.k8s import KubernetesOps, ApiCallRateLimiter, JSON_PATCH_TYPE, K
 from sdcm.utils.decorators import log_run_info, timeout
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \
     KubectlClusterEventsLogger
+from sdcm.wait import wait_for
 from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring, ScyllaOperatorStatusMonitoring
 
 ANY_KUBERNETES_RESOURCE = Union[Resource, ResourceField, ResourceInstance, ResourceList, Subresource]
@@ -223,7 +224,7 @@ class BasePodContainer(cluster.BaseNode):
             rack=rack)
 
     @cached_property
-    def pod_reboot_timeout(self):
+    def pod_replace_timeout(self):
         return self.pod_terminate_timeout + self.pod_readiness_timeout
 
     def init(self) -> None:
@@ -284,6 +285,12 @@ class BasePodContainer(cluster.BaseNode):
         return pods[0] if pods else None
 
     @property
+    def _pod(self):
+        pods = KubernetesOps.list_pods(self.parent_cluster, namespace=self.parent_cluster.namespace,
+                                       field_selector=f"metadata.name={self.name}")
+        return pods[0] if pods else None
+
+    @property
     def _pod_status(self):
         if pod := self._pod:
             return pod.status
@@ -299,6 +306,12 @@ class BasePodContainer(cluster.BaseNode):
     def _loadbalancer_service(self):
         services = KubernetesOps.list_services(self.parent_cluster, namespace=self.parent_cluster.namespace,
                                                field_selector=f"metadata.name={self.name}-loadbalancer")
+        return services[0] if services else None
+
+    @property
+    def _svc(self):
+        services = KubernetesOps.list_services(self.parent_cluster, namespace=self.parent_cluster.namespace,
+                                               field_selector=f"metadata.name={self.name}")
         return services[0] if services else None
 
     @property
@@ -430,6 +443,15 @@ class BasePodContainer(cluster.BaseNode):
     def terminate_k8s_host(self):
         raise NotImplementedError("To be overridden in child class")
 
+    def drain_k8s_node(self):
+        """
+        Gracefully terminating kubernetes host and return it back to life
+        """
+        self.parent_cluster.k8s_cluster.kubectl(
+            f'drain {self.node_name} -n scylla --ignore-daemonsets --delete-local-data')
+        time.sleep(5)
+        self.parent_cluster.k8s_cluster.kubectl(f'uncordon {self.node_name}')
+
     def _restart_node_with_resharding(self, murmur3_partitioner_ignore_msb_bits: int = 12):
         # Change murmur3_partitioner_ignore_msb_bits parameter to cause resharding.
         self.stop_scylla()
@@ -440,6 +462,47 @@ class BasePodContainer(cluster.BaseNode):
         search_reshard = self.follow_system_log(patterns=['Reshard', 'Reshap'])
         self.wait_db_up(timeout=self.pod_readiness_timeout * 60)
         return search_reshard
+
+    @property
+    def is_seed(self) -> bool:
+        try:
+            return 'scylla/seed' in self._svc.metadata.labels
+        except Exception:
+            return False
+
+    @is_seed.setter
+    def is_seed(self, value):
+        pass
+
+    @property
+    def k8s_pod_uid(self) -> str:
+        return str(self._pod.metadata.uid)
+
+    def mark_to_be_replaced(self):
+        if self.is_seed:
+            raise RuntimeError("Scylla-operator does not support seed nodes replacement")
+        # Mark pod with label that is going to be picked up by scylla-operator, pod to be removed and reconstructed
+        self.parent_cluster.k8s_cluster.kubectl(
+            f'label svc {self.name} scylla/replace=""',
+            namespace=self.parent_cluster.namespace)
+
+    def wait_for_pod_readiness(self):
+        time.sleep(self.pod_readiness_delay)
+
+        # To make it more informative in worst case scenario it repeat waiting text 5 times
+        wait_for(self._wait_for_pod_readiness,
+                 text="Wait for pod(s) to be ready...",
+                 timeout=self.pod_readiness_timeout * 60,
+                 throw_exc=True)
+
+    def _wait_for_pod_readiness(self):
+        result = self.parent_cluster.k8s_cluster.kubectl(
+            f"wait --timeout={self.pod_readiness_timeout // 3}m --for=condition=Ready pod {self.name}",
+            namespace=self.parent_cluster.namespace,
+            timeout=self.pod_readiness_timeout // 3 * 60 + 10)
+        if result.stdout.count('condition met') != 1:
+            raise RuntimeError('Pod is not reported as ready')
+        return True
 
 
 class PodCluster(cluster.BaseCluster):
@@ -747,6 +810,9 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
 
     def terminate_k8s_node(self, node: BasePodContainer):
         self._remove_node(node, node.terminate_k8s_node)
+
+    def drain_k8s_node(self, node: BasePodContainer):
+        self._remove_node(node, node.drain_k8s_node)
 
     def terminate_k8s_host(self, node: BasePodContainer):
         self._remove_node(node, node.terminate_k8s_host)

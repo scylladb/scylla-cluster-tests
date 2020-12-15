@@ -85,6 +85,7 @@ spec:
   repository: ${SCT_DOCKER_IMAGE}
   agentVersion: ${SCT_SCYLLA_MGMT_AGENT_VERSION}
   cpuset: true
+  automaticOrphanedNodeCleanup: true
   sysctls:
     - "fs.aio-max-nr=2097152"
   network:
