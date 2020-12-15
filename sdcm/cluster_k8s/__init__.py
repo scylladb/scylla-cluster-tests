@@ -719,7 +719,9 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         self._create_k8s_rack_if_not_exists(rack)
         current_members = self.scylla_cluster_spec.datacenter.racks[rack].members
         self.replace_scylla_cluster_value(f"/spec/datacenter/racks/{rack}/members", current_members + count)
-        self.wait_for_pods_readiness(pods_to_wait=count, total_pods=current_members + count)
+
+        # Wait while whole cluster (on all racks) including new nodes are up and running
+        self.wait_for_pods_readiness(pods_to_wait=count, total_pods=len(self.nodes) + count)
         return super().add_nodes(count=count,
                                  ec2_user_data=ec2_user_data,
                                  dc_idx=dc_idx,
