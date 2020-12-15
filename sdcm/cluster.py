@@ -1042,9 +1042,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return
         self.log.info('Set termination_event')
         self.termination_event.set()
-        if self._coredump_thread:
+        if self._coredump_thread and self._coredump_thread.is_alive():
             self._coredump_thread.stop()
-        if self._alert_manager:
+        if self._alert_manager and self._alert_manager.is_alive():
             self._alert_manager.stop()
 
     @log_run_info
@@ -3000,8 +3000,10 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             node.destroy()
 
     def terminate_node(self, node):
-        self.dead_nodes_ip_address_list.add(node.ip_address)
-        self.nodes.remove(node)
+        if node.ip_address not in self.dead_nodes_ip_address_list:
+            self.dead_nodes_ip_address_list.add(node.ip_address)
+        if node in self.nodes:
+            self.nodes.remove(node)
         node.destroy()
 
     def get_db_auth(self):
