@@ -212,6 +212,7 @@ class GceMinikubeCluster(MinikubeCluster, cluster_gce.GCECluster):
 
 
 class MinikubeScyllaPodContainer(BasePodContainer, IptablesPodPortsRedirectMixin):
+    parent_cluster: 'MinikubeScyllaPodCluster'
 
     pod_readiness_delay = 30  # seconds
     pod_readiness_timeout = 30  # minutes
@@ -245,6 +246,12 @@ class MinikubeScyllaPodContainer(BasePodContainer, IptablesPodPortsRedirectMixin
     def drain_k8s_node(self):
         self.log.debug('Node draining is not possible on minikube')
 
+    def destroy(self):
+        self.parent_cluster.update_nodes_iptables_redirect_rules(command="D", nodes=[self, ])
+        KubernetesOps.unexpose_pod_ports(
+            self.parent_cluster.k8s_cluster, self.name, namespace=self.parent_cluster.namespace)
+        super().destroy()
+
 
 class MinikubeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
     k8s_cluster: MinikubeCluster
@@ -272,12 +279,6 @@ class MinikubeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
         self.update_nodes_iptables_redirect_rules(nodes=new_nodes)
 
         return new_nodes
-
-    def terminate_node(self, node: BasePodContainer) -> None:
-        assert self.nodes[-1] == node, "Can withdraw the last node only"
-        self.update_nodes_iptables_redirect_rules(command="D", nodes=[node, ])
-        KubernetesOps.unexpose_pod_ports(self.k8s_cluster, node.name, namespace=self.namespace)
-        super().terminate_node(node)
 
     def upgrade_scylla_cluster(self, new_version: str) -> None:
         self.k8s_cluster.docker_pull(f"{self.params.get('docker_image')}:{new_version}")

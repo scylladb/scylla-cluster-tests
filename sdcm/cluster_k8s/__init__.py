@@ -25,6 +25,7 @@ from datetime import datetime
 from difflib import unified_diff
 from functools import cached_property, partialmethod, partial
 from tempfile import NamedTemporaryFile
+from textwrap import dedent
 from threading import RLock
 from typing import Optional, Union, List, Dict, Any, ContextManager, Type, Callable
 
@@ -426,7 +427,7 @@ class BasePodContainer(cluster.BaseNode):
             self, self._maximum_number_of_cores_to_publish, ['/var/lib/scylla/coredumps'])
         self._coredump_thread.start()
 
-    @cached_property
+    @property
     def node_name(self) -> str:
         return self._pod.spec.node_name
 
@@ -435,22 +436,41 @@ class BasePodContainer(cluster.BaseNode):
         return self.node_name
 
     def terminate_k8s_node(self):
+        """
+        Delete kubernetes node, which will terminate scylla node that is running on it
+        """
+        self.log.info('terminate_k8s_node: kubernetes node will be deleted, the following is affected :\n' + dedent('''
+            GCE instance  -
+            K8s node      X  <-
+            Scylla Pod    X
+            Scylla node   X
+            '''))
         self.parent_cluster.k8s_cluster.kubectl(
             f'delete node {self.node_name} --now',
             timeout=self.pod_terminate_timeout * 60 + 10)
-        self.destroy()
 
     def terminate_k8s_host(self):
+        """
+        Terminate kubernetes node via GCE interface, which will terminate scylla node that is running on it
+        """
         raise NotImplementedError("To be overridden in child class")
 
     def drain_k8s_node(self):
         """
-        Gracefully terminating kubernetes host and return it back to life
+        Gracefully terminating kubernetes host and return it back to life.
+        It terminates scylla node that is running on it
         """
+        self.log.info('drain_k8s_node: kubernetes node will be drained, the following is affected :\n' + dedent('''
+            GCE instance  -
+            K8s node      X  <-
+            Scylla Pod    X
+            Scylla node   X
+            '''))
+        k8s_node_name = self.node_name
         self.parent_cluster.k8s_cluster.kubectl(
-            f'drain {self.node_name} -n scylla --ignore-daemonsets --delete-local-data')
+            f'drain {k8s_node_name} -n scylla --ignore-daemonsets --delete-local-data')
         time.sleep(5)
-        self.parent_cluster.k8s_cluster.kubectl(f'uncordon {self.node_name}')
+        self.parent_cluster.k8s_cluster.kubectl(f'uncordon {k8s_node_name}')
 
     def _restart_node_with_resharding(self, murmur3_partitioner_ignore_msb_bits: int = 12):
         # Change murmur3_partitioner_ignore_msb_bits parameter to cause resharding.
@@ -476,14 +496,28 @@ class BasePodContainer(cluster.BaseNode):
 
     @property
     def k8s_pod_uid(self) -> str:
-        return str(self._pod.metadata.uid)
+        try:
+            return str(self._pod.metadata.uid)
+        except Exception:
+            return ''
+
+    def wait_k8s_pod_uid(self, timeout: int = None, old_uid=None) -> str:
+        """
+        Wait till pod get any valid uid.
+        If old_uid is provided it wait till any valid uid different from old_uid
+        """
+        if timeout is None:
+            timeout = self.pod_replace_timeout
+        wait_for(lambda: self.k8s_pod_uid and self.k8s_pod_uid != old_uid, timeout=timeout,
+                 text=f"Wait till host {self} get uid")
+        return self.k8s_pod_uid
 
     def mark_to_be_replaced(self):
         if self.is_seed:
             raise RuntimeError("Scylla-operator does not support seed nodes replacement")
         # Mark pod with label that is going to be picked up by scylla-operator, pod to be removed and reconstructed
         self.parent_cluster.k8s_cluster.kubectl(
-            f'label svc {self.name} scylla/replace=""',
+            f'label svc {self.name} scylla/replace="" --overwrite',
             namespace=self.parent_cluster.namespace)
 
     def wait_for_pod_readiness(self):
@@ -503,6 +537,16 @@ class BasePodContainer(cluster.BaseNode):
         if result.stdout.count('condition met') != 1:
             raise RuntimeError('Pod is not reported as ready')
         return True
+
+    def refresh_ip_address(self):
+        # Invalidate ip address cache
+        old_ip_info = (self.public_ip_address, self.private_ip_address)
+        self._private_ip_address_cached = self._public_ip_address_cached = self._ipv6_ip_address_cached = None
+
+        if old_ip_info == (self.public_ip_address, self.private_ip_address):
+            return
+
+        self._init_port_mapping()
 
 
 class PodCluster(cluster.BaseCluster):
@@ -808,32 +852,21 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         self.replace_scylla_cluster_value('/spec/datacenter/racks', racks)
 
     def terminate_node(self, node: BasePodContainer):
-        self._remove_node(node, partial(super().terminate_node, node))
+        raise NotImplementedError("Kubernetes can't terminate nodes")
 
-    def terminate_k8s_node(self, node: BasePodContainer):
-        self._remove_node(node, node.terminate_k8s_node)
-
-    def drain_k8s_node(self, node: BasePodContainer):
-        self._remove_node(node, node.drain_k8s_node)
-
-    def terminate_k8s_host(self, node: BasePodContainer):
-        self._remove_node(node, node.terminate_k8s_host)
-
-    def _remove_node(self, node: BasePodContainer, terminate_method: Callable):
+    def decommission(self, node):
         rack = node.rack
         assert self.get_rack_nodes(rack)[-1] == node, "Can withdraw the last node only"
         current_members = self.scylla_cluster_spec.datacenter.racks[rack].members
-        terminate_method()
+
         self.replace_scylla_cluster_value(f"/spec/datacenter/racks/{rack}/members", current_members - 1)
         self.k8s_cluster.kubectl(f"wait --timeout={node.pod_terminate_timeout}m --for=delete pod {node.name}",
                                  namespace=self.namespace,
                                  timeout=node.pod_terminate_timeout * 60 + 10)
+        super().terminate_node(node)
         # TBD: Enable rack deletion after https://github.com/scylladb/scylla-operator/issues/287 is resolved
         # if current_members - 1 == 0:
         #     self.delete_rack(rack)
-
-    def decommission(self, node):
-        self.terminate_node(node)
 
         if monitors := cluster.Setup.tester_obj().monitors:
             monitors.reconfigure_scylla_monitoring()

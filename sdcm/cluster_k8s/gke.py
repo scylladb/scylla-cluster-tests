@@ -14,6 +14,7 @@
 import os
 import logging
 import time
+from textwrap import dedent
 from typing import List
 from functools import cached_property
 
@@ -258,6 +259,13 @@ class GkeScyllaPodContainer(BasePodContainer, IptablesPodIpRedirectMixin):
         return self.parent_cluster.k8s_cluster.gce_services[0].ex_get_node(name=self.node_name)
 
     def terminate_k8s_host(self):
+        self.log.info('terminate_k8s_host: GCE instance of kubernetes node will be terminated, '
+                      'the following is affected :\n' + dedent('''
+            GCE instance  X  <-
+            K8s node      X
+            Scylla Pod    X
+            Scylla node   X
+            '''))
         self._instance_wait_safe(self._destroy)
         self.destroy()
 
