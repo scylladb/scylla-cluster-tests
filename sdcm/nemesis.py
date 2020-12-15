@@ -216,13 +216,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
 
     def set_last_node_as_target(self, dc_idx: Optional[int] = None, rack: Optional[int] = None):
-        nodes = self._get_target_nodes(is_seed=False if self.filter_seed else None, dc_idx=dc_idx, rack=rack)
-        if not nodes:
+        target_nodes = self._get_target_nodes(is_seed=False if self.filter_seed else None, dc_idx=dc_idx, rack=rack)
+        if not target_nodes:
             dc_str = '' if dc_idx is None else f'dc {dc_idx} '
             rack_str = '' if rack is None else f'rack {rack} '
             raise UnsupportedNemesis(f"Can't allocate node from {dc_str}{rack_str}to run nemesis on")
-        nodes = sorted(nodes, key=lambda n: n.name)
-        self.target_node = self.cluster.nodes[-1]  # can withdraw last node only
+        self.target_node = target_nodes[-1]
         self.set_current_running_nemesis(node=self.target_node)
         self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
 
