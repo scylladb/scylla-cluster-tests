@@ -242,6 +242,9 @@ class MinikubeScyllaPodContainer(BasePodContainer, IptablesPodPortsRedirectMixin
     def nodes_dest_ip(self):
         return self.parent_cluster.k8s_cluster.nodes_dest_ip
 
+    def drain_k8s_node(self):
+        self.log.debug('Node draining is not possible on minikube')
+
 
 class MinikubeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
     PodContainerClass = MinikubeScyllaPodContainer
