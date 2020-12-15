@@ -1588,12 +1588,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 backtraces = list(filter(filter_backtraces, backtraces))
 
             for backtrace in backtraces:
-                if Setup.BACKTRACE_DECODING:
-                    if backtrace['event'].raw_backtrace:
-                        scylla_debug_info = self.get_scylla_debuginfo_file()
-                        self.log.debug('Debug info file %s', scylla_debug_info)
-                        Setup.DECODING_QUEUE.put({"node": self, "debug_file": scylla_debug_info,
-                                                  "event": backtrace['event']})
+                if Setup.BACKTRACE_DECODING and backtrace['event'].raw_backtrace:
+                    scylla_debug_info = self.get_scylla_debuginfo_file()
+                    self.log.debug('Debug info file %s', scylla_debug_info)
+                    Setup.DECODING_QUEUE.put({"node": self, "debug_file": scylla_debug_info,
+                                              "event": backtrace['event']})
                 else:
                     backtrace['event'].publish()
 
