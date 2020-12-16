@@ -44,8 +44,8 @@ class TestEventsDevice(unittest.TestCase):
         self.assertEqual(self.events_device.raw_events_log, self.events_device.events_log_base_dir / "raw_events.log")
 
     def test_publish_subscribe(self):
-        event1 = ClusterHealthValidatorEvent.NodeStatus.INFO()
-        event2 = ClusterHealthValidatorEvent.NodePeersNulls.WARNING()
+        event1 = ClusterHealthValidatorEvent.NodeStatus()
+        event2 = ClusterHealthValidatorEvent.NodePeersNulls()
 
         # Put events to the publish queue.
         self.events_device.publish_event(event1)

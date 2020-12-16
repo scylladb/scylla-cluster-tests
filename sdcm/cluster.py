@@ -29,6 +29,7 @@ import json
 import ipaddress
 
 from collections import defaultdict
+from sdcm.sct_events import Severity
 from typing import List, Optional, Dict, Union, Set
 from textwrap import dedent
 from datetime import datetime
@@ -2624,7 +2625,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     nodes_status[node_ip] = {'status': node_properties['state'], 'dc': dc}
 
         except Exception as exc:
-            ClusterHealthValidatorEvent.NodeStatus.WARNING(
+            ClusterHealthValidatorEvent.NodeStatus(
+                severity=Severity.WARNING,
                 node=self.name,
                 message=f"Unable to get nodetool status from `{self.name}': {exc}",
             ).publish()
@@ -3639,12 +3641,12 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             for node in self.nodes:
                 node.check_node_health()
         else:
-            ClusterHealthValidatorEvent.ClusterHealthCheck.info(
+            ClusterHealthValidatorEvent.Info(
                 message="Test runs with parallel nemesis. Nodes health checks are disabled.",
             ).publish()
 
         self.check_nodes_running_nemesis_count()
-        ClusterHealthValidatorEvent.ClusterHealthCheck.done(message="Cluster health check finished").publish()
+        ClusterHealthValidatorEvent.Done(message="Cluster health check finished").publish()
 
     def check_nodes_running_nemesis_count(self):
         nodes_running_nemesis = [node for node in self.nodes if node.running_nemesis]
@@ -3655,7 +3657,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         message = "; ".join(f"{node.ip_address} ({'seed' if node.is_seed else 'non-seed'}): {node.running_nemesis}"
                             for node in nodes_running_nemesis)
-        ClusterHealthValidatorEvent.NodesNemesis.WARNING(
+        ClusterHealthValidatorEvent.NodesNemesis(
+            severity=Severity.WARNING,
             message=f"There are more then expected nodes running nemesis: {message}",
         ).publish()
 

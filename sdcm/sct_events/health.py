@@ -14,7 +14,7 @@
 from typing import Type, Protocol, Optional, runtime_checkable
 
 from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import SeverityLevelProtocol, ValidatorEvent
+from sdcm.sct_events.base import SctEvent
 
 
 @runtime_checkable
@@ -23,13 +23,13 @@ class ClusterHealthValidatorEventClusterHealthCheck(SctEventProtocol, Protocol):
     done: Type[SctEventProtocol]
 
 
-class ClusterHealthValidatorEvent(ValidatorEvent, abstract=True):
-    NodeStatus: Type[SeverityLevelProtocol]
-    NodePeersNulls: Type[SeverityLevelProtocol]
-    NodeSchemaVersion: Type[SeverityLevelProtocol]
-    NodesNemesis: Type[SeverityLevelProtocol]
-
-    ClusterHealthCheck: Type[ClusterHealthValidatorEventClusterHealthCheck]
+class ClusterHealthValidatorEvent(SctEvent, abstract=True):
+    NodeStatus: Type[SctEventProtocol]
+    NodePeersNulls: Type[SctEventProtocol]
+    NodeSchemaVersion: Type[SctEventProtocol]
+    NodesNemesis: Type[SctEventProtocol]
+    Done: Type[SctEventProtocol]
+    Info: Type[SctEventProtocol]
 
     def __init__(self,
                  node=None,
@@ -45,27 +45,25 @@ class ClusterHealthValidatorEvent(ValidatorEvent, abstract=True):
     @property
     def msgfmt(self) -> str:
         if self.severity in (Severity.NORMAL, Severity.WARNING, ):
-            return super().msgfmt + ": type={0.type} subtype={0.subtype} node={0.node} message={0.message}"
+            return super().msgfmt + ": type={0.type} node={0.node} message={0.message}"
         elif self.severity in (Severity.ERROR, Severity.CRITICAL, ):
-            return super().msgfmt + ": type={0.type} subtype={0.subtype} node={0.node} error={0.error}"
+            return super().msgfmt + ": type={0.type} node={0.node} error={0.error}"
         return super().msgfmt
 
 
-ClusterHealthValidatorEvent.add_subevent_type_with_severity_levels("NodeStatus")
-ClusterHealthValidatorEvent.add_subevent_type_with_severity_levels("NodePeersNulls")
-ClusterHealthValidatorEvent.add_subevent_type_with_severity_levels("NodeSchemaVersion")
-ClusterHealthValidatorEvent.add_subevent_type_with_severity_levels("NodesNemesis")
-
-ClusterHealthValidatorEvent.add_subevent_type("ClusterHealthCheck", abstract=True)
-ClusterHealthValidatorEvent.ClusterHealthCheck.add_subevent_type("info", severity=Severity.NORMAL)
-ClusterHealthValidatorEvent.ClusterHealthCheck.add_subevent_type("done", severity=Severity.NORMAL)
+ClusterHealthValidatorEvent.add_subevent_type("NodeStatus")
+ClusterHealthValidatorEvent.add_subevent_type("NodePeersNulls")
+ClusterHealthValidatorEvent.add_subevent_type("NodeSchemaVersion")
+ClusterHealthValidatorEvent.add_subevent_type("NodesNemesis")
+ClusterHealthValidatorEvent.add_subevent_type("Done", severity=Severity.NORMAL)
+ClusterHealthValidatorEvent.add_subevent_type("Info", severity=Severity.NORMAL)
 
 
-class DataValidatorEvent(ValidatorEvent, abstract=True):
-    DataValidator: Type[SeverityLevelProtocol]
-    ImmutableRowsValidator: Type[SeverityLevelProtocol]
-    UpdatedRowsValidator: Type[SeverityLevelProtocol]
-    DeletedRowsValidator: Type[SeverityLevelProtocol]
+class DataValidatorEvent(SctEvent, abstract=True):
+    DataValidator: Type[SctEventProtocol]
+    ImmutableRowsValidator: Type[SctEventProtocol]
+    UpdatedRowsValidator: Type[SctEventProtocol]
+    DeletedRowsValidator: Type[SctEventProtocol]
 
     def __init__(self,
                  message: Optional[str] = None,
@@ -79,16 +77,16 @@ class DataValidatorEvent(ValidatorEvent, abstract=True):
     @property
     def msgfmt(self) -> str:
         if self.severity in (Severity.NORMAL, Severity.WARNING, ):
-            return super().msgfmt + ": type={0.type} subtype={0.subtype} message={0.message}"
+            return super().msgfmt + ": type={0.type} message={0.message}"
         elif self.severity in (Severity.ERROR, Severity.CRITICAL, ):
-            return super().msgfmt + ": type={0.type} subtype={0.subtype} error={0.error}"
+            return super().msgfmt + ": type={0.type} error={0.error}"
         return super().msgfmt
 
 
-DataValidatorEvent.add_subevent_type_with_severity_levels("DataValidator")
-DataValidatorEvent.add_subevent_type_with_severity_levels("ImmutableRowsValidator")
-DataValidatorEvent.add_subevent_type_with_severity_levels("UpdatedRowsValidator")
-DataValidatorEvent.add_subevent_type_with_severity_levels("DeletedRowsValidator")
+DataValidatorEvent.add_subevent_type("DataValidator")
+DataValidatorEvent.add_subevent_type("ImmutableRowsValidator")
+DataValidatorEvent.add_subevent_type("UpdatedRowsValidator")
+DataValidatorEvent.add_subevent_type("DeletedRowsValidator")
 
 
 __all__ = ("ClusterHealthValidatorEvent", "DataValidatorEvent", )

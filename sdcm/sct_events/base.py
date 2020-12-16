@@ -329,30 +329,6 @@ class LogEvent(Generic[T_log_event], SctEvent, abstract=True):
         return fmt
 
 
-@runtime_checkable
-class SeverityLevelProtocol(SctEventProtocol, Protocol):
-    INFO: Type[SctEventProtocol]
-    WARNING: Type[SctEventProtocol]
-    ERROR: Type[SctEventProtocol]
-    CRITICAL: Type[SctEventProtocol]
-
-
-class ValidatorEvent(SctEvent, abstract=True):
-    @classmethod
-    def add_subevent_type_with_severity_levels(cls,
-                                               name: str,
-                                               /, *,
-                                               abstract: bool = True,
-                                               mixin: Optional[Type] = None,
-                                               **kwargs) -> None:
-        cls.add_subevent_type(name, abstract=abstract, mixin=mixin, **kwargs)
-        subevent = cast(SctEvent, getattr(cls, name))
-        subevent.add_subevent_type("CRITICAL", severity=Severity.CRITICAL)
-        subevent.add_subevent_type("ERROR", severity=Severity.ERROR)
-        subevent.add_subevent_type("WARNING", severity=Severity.WARNING)
-        subevent.add_subevent_type("INFO", severity=Severity.NORMAL)
-
-
 class BaseStressEvent(SctEvent, abstract=True):
     @classmethod
     def add_stress_subevents(cls,
@@ -412,6 +388,5 @@ class StressEvent(BaseStressEvent, abstract=True):
 
 __all__ = ("SctEvent", "SctEventProtocol", "SystemEvent", "BaseFilter",
            "LogEvent", "LogEventProtocol", "T_log_event",
-           "ValidatorEvent", "SeverityLevelProtocol",
            "BaseStressEvent", "StressEvent", "StressEventProtocol",
            "add_severity_limit_rules", "max_severity", "print_critical_events", )

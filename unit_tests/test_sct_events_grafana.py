@@ -15,6 +15,7 @@ import time
 import unittest
 import unittest.mock
 
+from sdcm.sct_events import Severity
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
 from sdcm.sct_events.grafana import \
@@ -67,12 +68,14 @@ class TestFileLogger(unittest.TestCase, EventsUtilsMixin):
                 for runs in range(1, 4):
                     with self.wait_for_n_events(grafana_annotator, count=10, timeout=1):
                         for _ in range(10):
-                            self.events_main_device.publish_event(ClusterHealthValidatorEvent.NodeStatus.INFO())
+                            self.events_main_device.publish_event(
+                                ClusterHealthValidatorEvent.NodeStatus(severity=Severity.NORMAL))
                     time.sleep(1)
+
                 self.assertEqual(mock.call_count, runs * 5)
                 self.assertEqual(
                     mock.call_args.kwargs["json"]["tags"],
-                    ["ClusterHealthValidatorEvent", "NORMAL", "events", "NodeStatus", "INFO"],
+                    ["ClusterHealthValidatorEvent", "NORMAL", "events", "NodeStatus"],
                 )
 
             self.assertEqual(self.events_main_device.events_counter, grafana_annotator.events_counter)
