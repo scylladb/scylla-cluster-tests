@@ -127,9 +127,12 @@ class BaseEmailReporter:
         "backend",
         "build_id",
         "build_url",
+        "config_files",
         "end_time",
         "events_summary",
+        "job_name",
         "last_events",
+        "logs_links",
         "nodes",
         "number_of_db_nodes",
         "region_name",
@@ -137,13 +140,10 @@ class BaseEmailReporter:
         "scylla_version",
         "start_time",
         "subject",
-        "job_name",
-        "config_files",
         "test_id",
         "test_name",
         "test_status",
         "username",
-        "logs_links",
     )
     _fields = ()
     email_template_file = 'results_base.html'
@@ -504,11 +504,16 @@ class JepsenEmailReporter(BaseEmailReporter):
     _fields = (
         "grafana_screenshots",
         "grafana_snapshots",
+        "jepsen_report",
         "jepsen_scylla_repo",
         "jepsen_test_cmd",
         "scylla_repo",
     )
     email_template_file = "results_jepsen.html"
+
+    @staticmethod
+    def build_report_attachments(attachments_data, template_str=None):  # pylint: disable=unused-argument
+        return (attachments_data["jepsen_report"], )
 
 
 def build_reporter(name: str,
