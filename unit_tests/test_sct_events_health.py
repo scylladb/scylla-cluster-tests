@@ -13,6 +13,7 @@
 
 import pickle
 import unittest
+from sdcm.sct_events import Severity
 
 from sdcm.sct_events.health import ClusterHealthValidatorEvent, DataValidatorEvent
 
@@ -27,35 +28,52 @@ class TestValidators(unittest.TestCase):
         self.assertTrue(issubclass(ClusterHealthValidatorEvent.NodeSchemaVersion, ClusterHealthValidatorEvent))
         self.assertTrue(hasattr(ClusterHealthValidatorEvent, "NodesNemesis"))
         self.assertTrue(issubclass(ClusterHealthValidatorEvent.NodesNemesis, ClusterHealthValidatorEvent))
-        self.assertTrue(hasattr(ClusterHealthValidatorEvent, "ClusterHealthCheck"))
-        self.assertTrue(issubclass(ClusterHealthValidatorEvent.ClusterHealthCheck, ClusterHealthValidatorEvent))
+        self.assertTrue(hasattr(ClusterHealthValidatorEvent, "Info"))
+        self.assertTrue(issubclass(ClusterHealthValidatorEvent.Info, ClusterHealthValidatorEvent))
+        self.assertTrue(hasattr(ClusterHealthValidatorEvent, "Done"))
+        self.assertTrue(issubclass(ClusterHealthValidatorEvent.Done, ClusterHealthValidatorEvent))
 
     def test_cluster_health_validator_event_msgfmt(self):
-        critical_event = ClusterHealthValidatorEvent.NodeStatus.CRITICAL(node="n1", error="e1")
+        critical_event = ClusterHealthValidatorEvent.NodeStatus(severity=Severity.CRITICAL, node="n1", error="e1")
         self.assertEqual(
             str(critical_event),
-            "(ClusterHealthValidatorEvent Severity.CRITICAL): type=NodeStatus subtype=CRITICAL node=n1 error=e1"
+            "(ClusterHealthValidatorEvent Severity.CRITICAL): type=NodeStatus node=n1 error=e1"
         )
         self.assertEqual(critical_event, pickle.loads(pickle.dumps(critical_event)))
 
-        error_event = ClusterHealthValidatorEvent.NodePeersNulls.ERROR(node="n2", error="e2")
+        error_event = ClusterHealthValidatorEvent.NodePeersNulls(severity=Severity.ERROR, node="n2", error="e2")
         self.assertEqual(
             str(error_event),
-            "(ClusterHealthValidatorEvent Severity.ERROR): type=NodePeersNulls subtype=ERROR node=n2 error=e2"
+            "(ClusterHealthValidatorEvent Severity.ERROR): type=NodePeersNulls node=n2 error=e2"
         )
         self.assertEqual(error_event, pickle.loads(pickle.dumps(error_event)))
 
-        warning_event = ClusterHealthValidatorEvent.NodeSchemaVersion.WARNING(node="n3", message="m3")
+        warning_event = ClusterHealthValidatorEvent.NodeSchemaVersion(
+            severity=Severity.WARNING, node="n3", message="m3")
         self.assertEqual(
             str(warning_event),
-            "(ClusterHealthValidatorEvent Severity.WARNING): type=NodeSchemaVersion subtype=WARNING node=n3 message=m3"
+            "(ClusterHealthValidatorEvent Severity.WARNING): type=NodeSchemaVersion node=n3 message=m3"
         )
         self.assertEqual(warning_event, pickle.loads(pickle.dumps(warning_event)))
 
-        info_event = ClusterHealthValidatorEvent.NodesNemesis.INFO(node="n4", message="m4")
+        info_event = ClusterHealthValidatorEvent.NodesNemesis(severity=Severity.WARNING, node="n4", message="m4")
         self.assertEqual(
             str(info_event),
-            "(ClusterHealthValidatorEvent Severity.NORMAL): type=NodesNemesis subtype=INFO node=n4 message=m4"
+            "(ClusterHealthValidatorEvent Severity.WARNING): type=NodesNemesis node=n4 message=m4"
+        )
+        self.assertEqual(info_event, pickle.loads(pickle.dumps(info_event)))
+
+        info_event = ClusterHealthValidatorEvent.Info(node="n4", message="m4")
+        self.assertEqual(
+            str(info_event),
+            "(ClusterHealthValidatorEvent Severity.NORMAL): type=Info node=n4 message=m4"
+        )
+        self.assertEqual(info_event, pickle.loads(pickle.dumps(info_event)))
+
+        info_event = ClusterHealthValidatorEvent.Done(node="n4", message="m4")
+        self.assertEqual(
+            str(info_event),
+            "(ClusterHealthValidatorEvent Severity.NORMAL): type=Done node=n4 message=m4"
         )
         self.assertEqual(info_event, pickle.loads(pickle.dumps(info_event)))
 
@@ -70,30 +88,30 @@ class TestValidators(unittest.TestCase):
         self.assertTrue(issubclass(DataValidatorEvent.DeletedRowsValidator, DataValidatorEvent))
 
     def test_data_validator_event_msgfmt(self):
-        critical_event = DataValidatorEvent.DataValidator.CRITICAL(error="e1")
+        critical_event = DataValidatorEvent.DataValidator(severity=Severity.ERROR, error="e1")
         self.assertEqual(
             str(critical_event),
-            "(DataValidatorEvent Severity.CRITICAL): type=DataValidator subtype=CRITICAL error=e1"
+            "(DataValidatorEvent Severity.ERROR): type=DataValidator error=e1"
         )
         self.assertEqual(critical_event, pickle.loads(pickle.dumps(critical_event)))
 
-        error_event = DataValidatorEvent.ImmutableRowsValidator.ERROR(error="e2")
+        error_event = DataValidatorEvent.ImmutableRowsValidator(severity=Severity.ERROR, error="e2")
         self.assertEqual(
             str(error_event),
-            "(DataValidatorEvent Severity.ERROR): type=ImmutableRowsValidator subtype=ERROR error=e2"
+            "(DataValidatorEvent Severity.ERROR): type=ImmutableRowsValidator error=e2"
         )
         self.assertEqual(error_event, pickle.loads(pickle.dumps(error_event)))
 
-        warning_event = DataValidatorEvent.UpdatedRowsValidator.WARNING(message="m3")
+        warning_event = DataValidatorEvent.UpdatedRowsValidator(severity=Severity.WARNING, message="m3")
         self.assertEqual(
             str(warning_event),
-            "(DataValidatorEvent Severity.WARNING): type=UpdatedRowsValidator subtype=WARNING message=m3"
+            "(DataValidatorEvent Severity.WARNING): type=UpdatedRowsValidator message=m3"
         )
         self.assertEqual(warning_event, pickle.loads(pickle.dumps(warning_event)))
 
-        info_event = DataValidatorEvent.DeletedRowsValidator.INFO(message="m4")
+        info_event = DataValidatorEvent.DeletedRowsValidator(severity=Severity.NORMAL, message="m4")
         self.assertEqual(
             str(info_event),
-            "(DataValidatorEvent Severity.NORMAL): type=DeletedRowsValidator subtype=INFO message=m4"
+            "(DataValidatorEvent Severity.NORMAL): type=DeletedRowsValidator message=m4"
         )
         self.assertEqual(info_event, pickle.loads(pickle.dumps(info_event)))

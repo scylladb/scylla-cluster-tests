@@ -20,7 +20,7 @@ from unittest.mock import patch
 
 from sdcm.sct_events import Severity, SctEventProtocol
 from sdcm.sct_events.base import \
-    SctEvent, SctEventTypesRegistry, BaseFilter, LogEvent, LogEventProtocol, ValidatorEvent, SeverityLevelProtocol
+    SctEvent, SctEventTypesRegistry, BaseFilter, LogEvent, LogEventProtocol
 
 
 Y = None  # define a global name for pickle.
@@ -559,20 +559,3 @@ class TestLogEvent(SctEventTestCase):
 
         y.backtrace = "b1"
         self.assertEqual(str(y), "(Y Severity.ERROR): type=T regex=r1 line_number=1 node=n1\nl1\nb1")
-
-
-class TestValidatorEvent(SctEventTestCase):
-    severities_yaml = (b"Y.T.CRITICAL: CRITICAL\n"
-                       b"Y.T.ERROR: ERROR\n"
-                       b"Y.T.WARNING: WARNING\n"
-                       b"Y.T.INFO: NORMAL\n")
-
-    def test_add_subevent_type_with_severity_levels(self):
-        class Y(ValidatorEvent, abstract=True):
-            T: Type[SeverityLevelProtocol]
-
-        Y.add_subevent_type_with_severity_levels("T")
-        self.assertEqual(Y.T.CRITICAL().severity, Severity.CRITICAL)
-        self.assertEqual(Y.T.ERROR().severity, Severity.ERROR)
-        self.assertEqual(Y.T.WARNING().severity, Severity.WARNING)
-        self.assertEqual(Y.T.INFO().severity, Severity.NORMAL)
