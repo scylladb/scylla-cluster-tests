@@ -23,8 +23,8 @@ from pkg_resources import parse_version
 
 from sdcm import mgmt
 from sdcm.sct_events.group_common_events import ignore_no_space_errors
-from sdcm.mgmt import HostStatus, HostSsl, HostRestStatus, TaskStatus, ScyllaManagerError, ScyllaManagerTool, \
-    SCYLLA_MANAGER_AGENT_YAML_PATH
+from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
+from sdcm.mgmt.cli import ScyllaManagerTool, SCYLLA_MANAGER_AGENT_YAML_PATH, update_config_file
 from sdcm.nemesis import MgmtRepair
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.filters import DbEventsFilter
@@ -206,7 +206,7 @@ class BackupFunctionsMixIn:
             self.region = self.params.get('region_name').split()
             self.bucket_name = f"s3:{self.params.get('backup_bucket_location').split()[0]}"
             for node in self.db_cluster.nodes:
-                mgmt.update_config_file(node=node, region=self.region[0], config_file=SCYLLA_MANAGER_AGENT_YAML_PATH)
+                update_config_file(node=node, region=self.region[0], config_file=SCYLLA_MANAGER_AGENT_YAML_PATH)
         elif self.params.get('cluster_backend') == 'gce':
             self.region = self.params.get('gce_datacenter')
             self.bucket_name = f"gcs:{self.params.get('backup_bucket_location')}"
@@ -523,7 +523,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
             self.db_cluster.enable_client_encrypt()
 
-            repair_task.wait_for_status(list_status=[TaskStatus.ERROR], step=5, timeout=240)
+            repair_task.wait_for_status(list_status=[TaskStatus.ERROR, TaskStatus.ERROR_FINAL], step=5, timeout=240)
 
         mgr_cluster.update(client_encrypt=True)
         repair_task.start()
@@ -576,7 +576,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     def test_ssh_setup_script(self):
         self.log.info('starting test_ssh_setup_script')
         new_user = "qa_user"
-        new_user_identity_file = os.path.join(mgmt.MANAGER_IDENTITY_FILE_DIR, new_user)+".pem"
+        new_user_identity_file = os.path.join(mgmt.cli.MANAGER_IDENTITY_FILE_DIR, new_user)+".pem"
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         selected_host_ip = self.get_cluster_hosts_ip()[0]
         res_ssh_setup, _ssh = manager_tool.scylla_mgr_ssh_setup(

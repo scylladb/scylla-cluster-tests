@@ -49,7 +49,8 @@ from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
 from paramiko import SSHException
 
 from sdcm.collectd import ScyllaCollectdSetup
-from sdcm.mgmt import ScyllaManagerError, update_config_file, SCYLLA_MANAGER_YAML_PATH
+from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
+from sdcm.mgmt.cli import update_config_file, SCYLLA_MANAGER_YAML_PATH
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd
@@ -72,7 +73,6 @@ from sdcm.utils.version_utils import SCYLLA_VERSION_RE, BUILD_ID_RE, get_gemini_
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.sct_events.loaders import ScyllaBenchEvent
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, BACKTRACE_RE
 from sdcm.sct_events.grafana import set_grafana_url
 from sdcm.sct_events.decorators import raise_event_on_failure
@@ -634,6 +634,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 return node_seeds.split(',')
             else:
                 raise Exception('Seeds not found in the scylla.yaml')
+
+    def is_kubernetes(self) -> bool:
+        return False
 
     def is_centos7(self):
         deprecation("consider to use node.distro.is_centos7 property instead")
@@ -2866,6 +2869,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def __init__(self, cluster_uuid=None, cluster_prefix='cluster', node_prefix='node', n_nodes=3, params=None,
                  region_names=None, node_type=None, extra_network_interface=False):
         self.extra_network_interface = extra_network_interface
+        if params is None:
+            params = {}
         if cluster_uuid is None:
             self.uuid = Setup.test_id()
         else:
@@ -3323,6 +3328,10 @@ class ClusterNodesNotReady(Exception):
 
 class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-instance-attributes
     node_setup_requires_scylla_restart = True
+    name: str
+    nodes: List[BaseNode]
+    params: dict
+    log: logging.Logger
 
     def __init__(self, *args, **kwargs):
         self.nemesis_termination_event = threading.Event()
@@ -3908,19 +3917,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.remoter.sudo('cat /etc/scylla.d/io.conf')
 
             if self.params.get('use_mgmt'):
-                pkgs_url = self.params.get('scylla_mgmt_pkg')
-                pkg_path = None
-                if pkgs_url:
-                    pkg_path = download_dir_from_cloud(pkgs_url)
-                    node.remoter.run('mkdir -p {}'.format(pkg_path))
-                    node.remoter.send_files(src='{}*.rpm'.format(pkg_path), dst=pkg_path)
-                node.install_manager_agent(package_path=pkg_path)
-                cluster_backend = self.params.get("cluster_backend")
-                if cluster_backend == "aws":
-                    region = self.params.get('region_name').split()
-                    update_config_file(node=node, region=region[0])
-                else:
-                    self.log.warning("Backend '%s' not support. Won't configure manager backups!", cluster_backend)
+                self.install_scylla_manager(node)
         else:
             self._reuse_cluster_setup(node)
 
@@ -3929,6 +3926,21 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         check_nodes_status(nodes_status=nodes_status, current_node=node)
 
         self.clean_replacement_node_ip(node)
+
+    def install_scylla_manager(self, node):
+        pkgs_url = self.params.get('scylla_mgmt_pkg')
+        pkg_path = None
+        if pkgs_url:
+            pkg_path = download_dir_from_cloud(pkgs_url)
+            node.remoter.run('mkdir -p {}'.format(pkg_path))
+            node.remoter.send_files(src='{}*.rpm'.format(pkg_path), dst=pkg_path)
+        node.install_manager_agent(package_path=pkg_path)
+        cluster_backend = self.params.get("cluster_backend")
+        if cluster_backend == "aws":
+            region = self.params.get('region_name').split()
+            update_config_file(node=node, region=region[0])
+        else:
+            self.log.warning("Backend '%s' not support. Won't configure manager backups!", cluster_backend)
 
     def _scylla_install(self, node):
         node.update_repo_cache()
@@ -4106,20 +4118,36 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.terminate_node(node)  # pylint: disable=no-member
         Setup.tester_obj().monitors.reconfigure_scylla_monitoring()
 
-    def get_cluster_manager(self):
+    @property
+    def scylla_manager_node(self) -> BaseNode:
+        return Setup.tester_obj().monitors.nodes[0]
+
+    @property
+    def scylla_manager_auth_token(self) -> str:
+        return Setup.tester_obj().monitors.mgmt_auth_token
+
+    @property
+    def scylla_manager_cluster_name(self):
+        return self.name
+
+    def get_cluster_manager(self, create_cluster_if_not_exists: bool = True) -> AnyManagerCluster:
         if not self.params.get('use_mgmt'):
             raise ScyllaManagerError('Scylla-manager configuration is not defined!')
-        manager_node = Setup.tester_obj().monitors.nodes[0]
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.scylla_manager_node, scylla_cluster=self)
         LOGGER.debug("sctool version is : {}".format(manager_tool.version))
-        cluster_name = self.name  # pylint: disable=no-member
+        cluster_name = self.scylla_manager_cluster_name  # pylint: disable=no-member
         mgr_cluster = manager_tool.get_cluster(cluster_name)
-        if not mgr_cluster:
+        if not mgr_cluster and create_cluster_if_not_exists:
             self.log.debug("Could not find cluster : {} on Manager. Adding it to Manager".format(cluster_name))
-            target = self.nodes[0].ip_address
-            mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=target,
-                                                   auth_token=Setup.tester_obj().monitors.mgmt_auth_token)
+            return self.create_cluster_manager(cluster_name, manager_tool=manager_tool)
         return mgr_cluster
+
+    def create_cluster_manager(self, cluster_name: str, manager_tool=None, host_ip=None):
+        if manager_tool is None:
+            manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.scylla_manager_node, scylla_cluster=self)
+        if host_ip is None:
+            host_ip = self.nodes[0].ip_address
+        return manager_tool.add_cluster(name=cluster_name, host=host_ip, auth_token=self.scylla_manager_auth_token)
 
 
 class BaseLoaderSet():

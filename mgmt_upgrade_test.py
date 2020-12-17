@@ -2,8 +2,8 @@ import logging
 from time import sleep
 
 from sdcm.tester import ClusterTester
-from sdcm.mgmt import get_scylla_manager_tool, TaskStatus, update_config_file, RepairTask, \
-    SCYLLA_MANAGER_AGENT_YAML_PATH
+from sdcm.mgmt import get_scylla_manager_tool, TaskStatus
+from sdcm.mgmt.cli import update_config_file, SCYLLA_MANAGER_AGENT_YAML_PATH, RepairTask
 from mgmt_cli_test import BackupFunctionsMixIn
 
 

@@ -920,6 +920,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_cluster.wait_for_init()
         self.k8s_cluster.deploy_cert_manager()
         self.k8s_cluster.deploy_scylla_operator()
+        if self.params.get('use_mgmt'):
+            self.k8s_cluster.deploy_scylla_manager()
 
         # This should remove some of the unpredictability of pods startup time.
         self.k8s_cluster.docker_pull(f"{self.params.get('docker_image')}:{self.params.get('scylla_version')}")
@@ -950,20 +952,21 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                     params=self.params,
                                     gce_datacenter=gce_datacenter)
         if self.params.get("n_monitor_nodes") > 0:
-            self.monitors = MonitorSetGCE(gce_image=self.params.get("gce_image"),
-                                          gce_image_type=self.params.get("gce_root_disk_type_monitor"),
-                                          gce_image_size=self.params.get('gce_root_disk_size_monitor'),
-                                          gce_network=self.params.get("gce_network"),
-                                          service=services[:1],
-                                          credentials=self.credentials,
-                                          gce_instance_type=self.params.get("gce_instance_type_monitor"),
-                                          gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_monitor"),
-                                          gce_image_username=self.params.get("gce_image_username"),
-                                          user_prefix=self.params.get("user_prefix"),
-                                          n_nodes=self.params.get('n_monitor_nodes'),
-                                          targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
-                                          params=self.params,
-                                          gce_datacenter=gce_datacenter)
+            self.monitors = minikube.MonitorSetMinikube(
+                gce_image=self.params.get("gce_image"),
+                gce_image_type=self.params.get("gce_root_disk_type_monitor"),
+                gce_image_size=self.params.get('gce_root_disk_size_monitor'),
+                gce_network=self.params.get("gce_network"),
+                service=services[:1],
+                credentials=self.credentials,
+                gce_instance_type=self.params.get("gce_instance_type_monitor"),
+                gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_monitor"),
+                gce_image_username=self.params.get("gce_image_username"),
+                user_prefix=self.params.get("user_prefix"),
+                n_nodes=self.params.get('n_monitor_nodes'),
+                targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
+                params=self.params,
+                gce_datacenter=gce_datacenter)
         else:
             self.monitors = NoMonitorSet()
 
@@ -989,6 +992,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_cluster.wait_for_init()
         self.k8s_cluster.deploy_cert_manager()
         self.k8s_cluster.deploy_scylla_operator()
+        if self.params.get('use_mgmt'):
+            self.k8s_cluster.deploy_scylla_manager()
 
         self.db_cluster = gke.GkeScyllaPodCluster(k8s_cluster=self.k8s_cluster,
                                                   scylla_cluster_config=gke.SCYLLA_CLUSTER_CONFIG,
@@ -1013,20 +1018,21 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             startup_script = "\n".join((Setup.get_startup_script(), *self.db_cluster.nodes_iptables_redirect_rules(),))
             Setup.get_startup_script = lambda: startup_script
 
-            self.monitors = MonitorSetGCE(gce_image=self.params.get("gce_image_monitor"),
-                                          gce_image_type=self.params.get("gce_root_disk_type_monitor"),
-                                          gce_image_size=self.params.get('gce_root_disk_size_monitor'),
-                                          gce_network=self.params.get("gce_network"),
-                                          service=services[:1],
-                                          credentials=self.credentials,
-                                          gce_instance_type=self.params.get("gce_instance_type_monitor"),
-                                          gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_monitor"),
-                                          gce_image_username=self.params.get("gce_image_username"),
-                                          user_prefix=self.params.get("user_prefix"),
-                                          n_nodes=self.params.get('n_monitor_nodes'),
-                                          targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
-                                          params=self.params,
-                                          gce_datacenter=gce_datacenter)
+            self.monitors = gke.MonitorSetGKE(
+                gce_image=self.params.get("gce_image_monitor"),
+                gce_image_type=self.params.get("gce_root_disk_type_monitor"),
+                gce_image_size=self.params.get('gce_root_disk_size_monitor'),
+                gce_network=self.params.get("gce_network"),
+                service=services[:1],
+                credentials=self.credentials,
+                gce_instance_type=self.params.get("gce_instance_type_monitor"),
+                gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_monitor"),
+                gce_image_username=self.params.get("gce_image_username"),
+                user_prefix=self.params.get("user_prefix"),
+                n_nodes=self.params.get('n_monitor_nodes'),
+                targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
+                params=self.params,
+                gce_datacenter=gce_datacenter)
         else:
             self.monitors = NoMonitorSet()
 

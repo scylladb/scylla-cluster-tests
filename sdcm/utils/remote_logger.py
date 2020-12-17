@@ -272,6 +272,18 @@ class CertManagerLogger(CommandClusterLoggerBase):
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
+class ScyllaManagerLogger(CommandClusterLoggerBase):
+    restart_delay = 30
+
+    @property
+    def _logger_cmd(self) -> str:
+        cmd = self._cluster.kubectl_cmd(
+            f"logs --previous=false -f --since={int(self.time_delta)}s --all-containers=true "
+            "-l app=scylla-manager",
+            namespace="scylla-manager-system")
+        return f"{cmd} >> {self._target_log_file} 2>&1"
+
+
 class ScyllaOperatorLogger(CommandClusterLoggerBase):
     restart_delay = 30
 

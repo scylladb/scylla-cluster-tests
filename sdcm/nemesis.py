@@ -26,7 +26,7 @@ import os
 import re
 import traceback
 import json
-from typing import List, Optional, TypedDict, Type, Callable, Tuple, Dict, Set, Union
+from typing import List, Optional, Type, Callable, Tuple, Dict, Set, Union
 from functools import wraps, partial
 from collections import OrderedDict, defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
@@ -38,10 +38,8 @@ from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, Cl
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_string, \
     update_certificates, reach_enospc_on_node, clean_enospc_on_node, parse_nodetool_listsnapshots
-from sdcm.utils.decorators import retrying, timeout
 from sdcm.utils import cdc
-from sdcm.utils.decorators import retrying, latency_calculator_decorator
-from sdcm.wait import wait_for
+from sdcm.utils.decorators import retrying, latency_calculator_decorator, timeout
 from sdcm.log import SDCMAdapter
 from sdcm.keystore import KeyStore
 from sdcm.prometheus import nemesis_metrics_obj
@@ -1663,7 +1661,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         mgr_cluster = self.cluster.get_cluster_manager()
         cluster_backend = self.cluster.params.get('cluster_backend')
         backup_bucket_location = self.cluster.params.get('backup_bucket_location')
-        if cluster_backend == 'aws':
+        if self._is_it_on_kubernetes():
+            bucket_name = f"s3:{backup_bucket_location.split()[0]}"
+        elif cluster_backend == 'aws':
             bucket_name = f"s3:{backup_bucket_location.split()[0]}"
         elif cluster_backend == 'gce':
             bucket_name = f"gcs:{backup_bucket_location}"
@@ -1675,15 +1675,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         else:
             mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ])
 
-        succeeded, status = mgr_task.wait_for_task_done_status(timeout=54000)
-        if succeeded and status == TaskStatus.DONE:
+        status = mgr_task.wait_and_get_final_status(timeout=54000, step=5, only_final=True)
+        if status == TaskStatus.DONE:
             self.log.info('Task: {} is done.'.format(mgr_task.id))
-        if not succeeded:
-            if status == TaskStatus.ERROR:
-                assert succeeded, f'Backup task {mgr_task.id} failed'
-            else:
-                mgr_task.stop()
-                assert succeeded, f'Backup task {mgr_task.id} timed out - while on status {status}'
+        elif status == TaskStatus.ERROR:
+            assert False, f'Backup task {mgr_task.id} failed'
+        else:
+            mgr_task.stop()
+            assert False, f'Backup task {mgr_task.id} timed out - while on status {status}'
 
     @latency_calculator_decorator
     def disrupt_mgmt_repair_cli(self):
@@ -3434,6 +3433,7 @@ class MgmtBackupSpecificKeyspaces(Nemesis):
 
 class MgmtRepair(Nemesis):
     disruptive = False
+    kubernetes = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3725,6 +3725,7 @@ class ScyllaOperatorBasicOperationsMonkey(Nemesis):
             'disrupt_terminate_and_replace_node_kubernetes',
             'disrupt_terminate_and_recover_node_kubernetes',
             'disrupt_replace_node_kubernetes',
+            'disrupt_mgmt_repair_cli',
         ]
 
     @log_time_elapsed_and_status
