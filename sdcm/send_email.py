@@ -459,6 +459,10 @@ class GeminiEmailReporter(LongevityEmailReporter):
 
 class UpgradeEmailReporter(BaseEmailReporter):
     _fields = (
+        "grafana_screenshots",
+        "grafana_snapshots",
+        "new_scylla_repo",
+        "new_version",
         "scylla_ami_id",
     )
     email_template_file = "results_upgrade.html"

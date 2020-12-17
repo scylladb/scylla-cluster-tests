@@ -857,8 +857,12 @@ class UpgradeTest(FillDatabaseData):
 
         email_data = self._get_common_email_data()
         grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(self.start_time) if self.monitors else {}
-        email_data.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
-                           "grafana_snapshots": grafana_dataset.get("snapshots", []),
-                           "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-", })
+        email_data.update({
+            "grafana_screenshots": grafana_dataset.get("screenshots", []),
+            "grafana_snapshots": grafana_dataset.get("snapshots", []),
+            "new_scylla_repo": self.params.get("new_scylla_repo"),
+            "new_version": self.params.get("new_version"),
+            "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
+        })
 
         return email_data
