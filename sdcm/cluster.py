@@ -2608,6 +2608,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     event.publish()
                 break
 
+            event.dont_publish()
+
             LOGGER.debug("Wait for %d secs before next try to validate the health of the node `%s'",
                          CHECK_NODE_HEALTH_RETRY_DELAY, self.name)
             time.sleep(CHECK_NODE_HEALTH_RETRY_DELAY)
