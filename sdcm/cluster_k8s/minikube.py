@@ -21,8 +21,9 @@ from invoke.exceptions import UnexpectedExit
 from sdcm import sct_abs_path, cluster, cluster_gce
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
-from sdcm.cluster_k8s import KubernetesCluster, BasePodContainer, ScyllaPodCluster
+from sdcm.cluster_k8s import KubernetesCluster, BaseScyllaPodContainer, ScyllaPodCluster
 from sdcm.cluster_k8s.iptables import IptablesPodPortsRedirectMixin, IptablesClusterOpsMixin
+from sdcm.cluster_gce import MonitorSetGCE
 from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.common import get_free_port, wait_for_port
 from sdcm.utils.decorators import retrying
@@ -211,7 +212,7 @@ class GceMinikubeCluster(MinikubeCluster, cluster_gce.GCECluster):
         self.stop_k8s_task_threads()
 
 
-class MinikubeScyllaPodContainer(BasePodContainer, IptablesPodPortsRedirectMixin):
+class MinikubeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodPortsRedirectMixin):
     parent_cluster: 'MinikubeScyllaPodCluster'
 
     pod_readiness_delay = 30  # seconds
@@ -288,3 +289,8 @@ class MinikubeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
               message="Waiting for nodes to join the cluster")
     def wait_for_nodes_up_and_normal(self, nodes, verification_node=None):
         super().wait_for_nodes_up_and_normal(nodes, verification_node)
+
+
+class MonitorSetMinikube(MonitorSetGCE):
+    def install_scylla_manager(self, node, auth_token):
+        pass

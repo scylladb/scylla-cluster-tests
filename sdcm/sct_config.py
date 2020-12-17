@@ -676,6 +676,8 @@ class SCTConfiguration(dict):
              help=""),
 
         # docker config options
+        dict(name="mgmt_docker_image", env="SCT_MGMT_DOCKER_IMAGE", type=str,
+             help="Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1' "),
 
         dict(name="docker_image", env="SCT_DOCKER_IMAGE", type=str,
              help="Scylla docker image repo, i.e. 'scylladb/scylla', if omitted is calculated from scylla_version"),
@@ -1113,7 +1115,8 @@ class SCTConfiguration(dict):
                              'k8s_scylla_rack', 'k8s_scylla_cluster_name', 'k8s_scylla_cpu_n', 'k8s_scylla_mem_gi',
                              'k8s_scylla_disk_gi', 'gce_image', 'gce_instance_type_loader', 'gce_root_disk_type_loader',
                              'gce_n_local_ssd_disk_loader', 'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
-                             'gce_root_disk_size_monitor', 'gce_n_local_ssd_disk_monitor', 'minikube_version'],
+                             'gce_root_disk_size_monitor', 'gce_n_local_ssd_disk_monitor', 'minikube_version',
+                             'mgmt_docker_image'],
 
         'k8s-gke': ['gke_cluster_version', 'gke_cluster_n_nodes', 'gce_instance_type_db', 'gce_root_disk_type_db',
                     'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db', 'user_credentials_path', 'scylla_version',
@@ -1121,7 +1124,7 @@ class SCTConfiguration(dict):
                     'k8s_scylla_rack', 'k8s_scylla_cluster_name', 'k8s_scylla_cpu_n', 'k8s_scylla_mem_gi',
                     'k8s_loader_cluster_name', 'k8s_loader_cpu_n', 'k8s_loader_mem_gi', 'gce_instance_type_loader',
                     'gce_image_monitor', 'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
-                    'gce_root_disk_size_monitor', 'gce_n_local_ssd_disk_monitor'],
+                    'gce_root_disk_size_monitor', 'gce_n_local_ssd_disk_monitor', 'mgmt_docker_image'],
     }
 
     defaults_config_files = {

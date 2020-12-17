@@ -37,17 +37,20 @@ from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstanc
 from sdcm import sct_abs_path, cluster, cluster_docker
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.coredump import CoredumpExportFileThread
+from sdcm.mgmt import AnyManagerCluster
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.k8s import KubernetesOps, ApiCallRateLimiter, JSON_PATCH_TYPE, KUBECTL_TIMEOUT
 from sdcm.utils.decorators import log_run_info, timeout
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \
-    KubectlClusterEventsLogger
+    KubectlClusterEventsLogger, ScyllaManagerLogger
 from sdcm.wait import wait_for
 from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring, ScyllaOperatorStatusMonitoring
+
 
 ANY_KUBERNETES_RESOURCE = Union[Resource, ResourceField, ResourceInstance, ResourceList, Subresource]
 
 SCYLLA_OPERATOR_CONFIG = sct_abs_path("sdcm/k8s_configs/operator.yaml")
+SCYLLA_MANAGER_CONFIG = sct_abs_path("sdcm/k8s_configs/manager.yaml")
 SCYLLA_API_VERSION = "scylla.scylladb.com/v1"
 SCYLLA_CLUSTER_RESOURCE_KIND = "ScyllaCluster"
 DEPLOY_SCYLLA_CLUSTER_DELAY = 15  # seconds
@@ -61,6 +64,7 @@ class KubernetesCluster:
 
     datacenter = ()
     _cert_manager_journal_thread: Optional[CertManagerLogger] = None
+    _scylla_manager_journal_thread: Optional[ScyllaManagerLogger] = None
     _scylla_operator_journal_thread: Optional[ScyllaOperatorLogger] = None
     _scylla_cluster_events_thread: Optional[KubectlClusterEventsLogger] = None
 
@@ -77,10 +81,11 @@ class KubernetesCluster:
     def kubectl_no_wait(self, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None):
         return KubernetesOps.kubectl(self, *command, namespace=namespace, timeout=timeout, remoter=remoter)
 
-    def kubectl(self, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None):
+    def kubectl(self, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None, ignore_status=False):
         if self.api_call_rate_limiter:
             self.api_call_rate_limiter.wait()
-        return KubernetesOps.kubectl(self, *command, namespace=namespace, timeout=timeout, remoter=remoter)
+        return KubernetesOps.kubectl(
+            self, *command, namespace=namespace, timeout=timeout, remoter=remoter, ignore_status=ignore_status)
 
     def kubectl_multi_cmd(self, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None):
         if self.api_call_rate_limiter:
@@ -97,14 +102,22 @@ class KubernetesCluster:
     def cert_manager_log(self) -> str:
         return os.path.join(self.logdir, "cert_manager.log")
 
+    @property
+    def scylla_manager_log(self) -> str:
+        return os.path.join(self.logdir, "scylla_manager.log")
+
     def start_cert_manager_journal_thread(self) -> None:
         self._cert_manager_journal_thread = CertManagerLogger(self, self.cert_manager_log)
         self._cert_manager_journal_thread.start()
 
+    def start_scylla_manager_journal_thread(self):
+        self._scylla_manager_journal_thread = ScyllaManagerLogger(self, self.scylla_manager_log)
+        self._scylla_manager_journal_thread.start()
+
     @log_run_info
     def deploy_cert_manager(self) -> None:
         LOGGER.info("Deploy cert-manager")
-        self.kubectl("create namespace cert-manager")
+        self.kubectl("create namespace cert-manager", ignore_status=True)
         LOGGER.debug(self.helm("repo add jetstack https://charts.jetstack.io"))
         LOGGER.debug(self.helm(f"install cert-manager jetstack/cert-manager "
                                f"--version v{self.params.get('k8s_cert_manager_version')} --set installCRDs=true",
@@ -112,6 +125,14 @@ class KubernetesCluster:
         time.sleep(10)
         self.kubectl("wait --timeout=10m --all --for=condition=Ready pod", namespace="cert-manager")
         self.start_cert_manager_journal_thread()
+
+    @log_run_info
+    def deploy_scylla_manager(self) -> None:
+        LOGGER.info("Deploy scylla-manager")
+        self.apply_file(SCYLLA_MANAGER_CONFIG)
+        time.sleep(10)
+        self.kubectl("wait --timeout=10m --all --for=condition=Ready pod", namespace="scylla-manager-system")
+        self.start_scylla_manager_journal_thread()
 
     @property
     def scylla_operator_log(self) -> str:
@@ -166,6 +187,8 @@ class KubernetesCluster:
     @log_run_info
     def stop_k8s_task_threads(self, timeout=10):
         LOGGER.info("Stop k8s task threads")
+        if self._scylla_manager_journal_thread:
+            self._scylla_manager_journal_thread.stop(timeout)
         if self._cert_manager_journal_thread:
             self._cert_manager_journal_thread.stop(timeout)
         if self._scylla_operator_log_monitor_thread:
@@ -209,6 +232,17 @@ class KubernetesCluster:
     def dynamic_client(self) -> k8s.dynamic.DynamicClient:
         return KubernetesOps.dynamic_client(self.api_client)
 
+    @cached_property
+    def scylla_manager_cluster(self) -> 'PodCluster':
+        return PodCluster(
+            k8s_cluster=self,
+            namespace='scylla-manager-system',
+            container='scylla-manager',
+            cluster_prefix='mgr-',
+            node_prefix='mgr-node-',
+            n_nodes=1
+        )
+
 
 class BasePodContainer(cluster.BaseNode):
     parent_cluster: PodCluster
@@ -230,12 +264,6 @@ class BasePodContainer(cluster.BaseNode):
     @cached_property
     def pod_replace_timeout(self) -> int:
         return self.pod_terminate_timeout + self.pod_readiness_timeout
-
-    def init(self) -> None:
-        super().init()
-        if self.distro.is_rhel_like:
-            self.remoter.sudo("rpm -q iproute || yum install -y iproute")  # need this because of scylladb/scylla#7560
-        self.remoter.sudo('mkdir -p /var/lib/scylla/coredumps', ignore_status=True)
 
     @staticmethod
     def is_docker() -> bool:
@@ -276,17 +304,6 @@ class BasePodContainer(cluster.BaseNode):
 
     def check_spot_termination(self):
         pass
-
-    @property
-    def scylla_listen_address(self):
-        pod_status = self._pod_status
-        return pod_status and pod_status.pod_ip
-
-    @property
-    def _pod(self):
-        pods = KubernetesOps.list_pods(self.parent_cluster, namespace=self.parent_cluster.namespace,
-                                       field_selector=f"metadata.name={self.name}")
-        return pods[0] if pods else None
 
     @property
     def _pod(self):
@@ -338,39 +355,6 @@ class BasePodContainer(cluster.BaseNode):
             private_ips.append(pod_status.pod_ip)
         return (public_ips or [None, ], private_ips or [None, ])
 
-    def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=300):
-        if verify_down:
-            self.wait_db_down(timeout=timeout)
-        self.remoter.run("supervisorctl start scylla", timeout=timeout)
-        if verify_up:
-            self.wait_db_up(timeout=verify_up_timeout)
-
-    @cluster.log_run_info
-    def start_scylla(self, verify_up=True, verify_down=False, timeout=300):
-        self.start_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
-
-    def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
-        if verify_up:
-            self.wait_db_up(timeout=timeout)
-        self.remoter.run('supervisorctl stop scylla', timeout=timeout)
-        if verify_down:
-            self.wait_db_down(timeout=timeout)
-
-    @cluster.log_run_info
-    def stop_scylla(self, verify_up=False, verify_down=True, timeout=300):
-        self.stop_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
-
-    def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=300, ignore_status=False):
-        if verify_up_before:
-            self.wait_db_up(timeout=timeout)
-        self.remoter.run("supervisorctl restart scylla", timeout=timeout)
-        if verify_up_after:
-            self.wait_db_up(timeout=timeout)
-
-    @cluster.log_run_info
-    def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=300):
-        self.restart_scylla_server(verify_up_before=verify_up_before, verify_up_after=verify_up_after, timeout=timeout)
-
     @property
     def image(self) -> str:
         return self._container_status.image
@@ -402,6 +386,35 @@ class BasePodContainer(cluster.BaseNode):
         # update -s from inside of docker containers shows docker host uptime
         return datetime.fromtimestamp(int(self.remoter.run('stat -c %Y /proc/1', ignore_status=True).stdout.strip()))
 
+    def start_coredump_thread(self):
+        self._coredump_thread = CoredumpExportFileThread(
+            self, self._maximum_number_of_cores_to_publish, ['/var/lib/scylla/coredumps'])
+        self._coredump_thread.start()
+
+    @cached_property
+    def node_name(self) -> str:
+        return self._pod.spec.node_name
+
+    @property
+    def instance_name(self) -> str:
+        return self.node_name
+
+    def terminate_k8s_node(self):
+        self.parent_cluster.k8s_cluster.kubectl(
+            f'delete node {self.node_name} --now',
+            timeout=self.pod_terminate_timeout * 60 + 10)
+        self.destroy()
+
+    def terminate_k8s_host(self):
+        raise NotImplementedError("To be overridden in child class")
+
+    def is_kubernetes(self) -> bool:
+        return True
+
+
+class BaseScyllaPodContainer(BasePodContainer):
+    parent_cluster: ScyllaPodCluster
+
     @contextlib.contextmanager
     def remote_scylla_yaml(self, path: str = cluster.SCYLLA_YAML_PATH) -> ContextManager:
         """Update scylla.yaml, k8s way
@@ -425,18 +438,24 @@ class BasePodContainer(cluster.BaseNode):
             LOGGER.debug("%s: scylla.yaml requires to be updated with:\n%s", self, diff)
             self.parent_cluster.scylla_yaml_update_required = True
 
-    def start_coredump_thread(self):
-        self._coredump_thread = CoredumpExportFileThread(
-            self, self._maximum_number_of_cores_to_publish, ['/var/lib/scylla/coredumps'])
-        self._coredump_thread.start()
+    @cluster.log_run_info
+    def stop_scylla(self, verify_up=False, verify_down=True, timeout=300):
+        self.stop_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
 
     @property
     def node_name(self) -> str:
         return self._pod.spec.node_name
 
-    @property
-    def instance_name(self) -> str:
-        return self.node_name
+    def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=300, ignore_status=False):
+        if verify_up_before:
+            self.wait_db_up(timeout=timeout)
+        self.remoter.run("supervisorctl restart scylla", timeout=timeout)
+        if verify_up_after:
+            self.wait_db_up(timeout=timeout)
+
+    @cluster.log_run_info
+    def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=300):
+        self.restart_scylla_server(verify_up_before=verify_up_before, verify_up_after=verify_up_after, timeout=timeout)
 
     def terminate_k8s_node(self):
         """
@@ -457,6 +476,17 @@ class BasePodContainer(cluster.BaseNode):
         Terminate kubernetes node via GCE interface, which will terminate scylla node that is running on it
         """
         raise NotImplementedError("To be overridden in child class")
+
+    @property
+    def scylla_listen_address(self):
+        pod_status = self._pod_status
+        return pod_status and pod_status.pod_ip
+
+    def init(self) -> None:
+        super().init()
+        if self.distro.is_rhel_like:
+            self.remoter.sudo("rpm -q iproute || yum install -y iproute")  # need this because of scylladb/scylla#7560
+        self.remoter.sudo('mkdir -p /var/lib/scylla/coredumps', ignore_status=True)
 
     def drain_k8s_node(self):
         """
@@ -609,6 +639,8 @@ class PodCluster(cluster.BaseCluster):
         k8s_pods = KubernetesOps.list_pods(self, namespace=self.namespace)
         nodes = []
         for pod in k8s_pods:
+            if not any((x for x in pod.status.container_statuses if x.name == self.container)):
+                continue
             is_already_registered = False
             for node in self.nodes:
                 if node.name == pod.metadata.name:
@@ -726,7 +758,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
 
     def get_scylla_cluster_value(self, path: str) -> Optional[ANY_KUBERNETES_RESOURCE]:
         current = self._k8s_scylla_cluster_api.get(namespace=self.namespace, name=self.scylla_cluster_name)
-        current = current.to_dict()
         for name in path.split('/'):
             if current is None:
                 return None
@@ -769,10 +800,29 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
 
     @property
     def scylla_cluster_spec(self) -> ResourceField:
-        return self._k8s_scylla_cluster_api.get(namespace=self.namespace, name=self.scylla_cluster_name).spec
+        return self.get_scylla_cluster_value('/spec')
 
     def update_seed_provider(self):
         pass
+
+    def install_scylla_manager(self, node):
+        pass
+
+    @cached_property
+    def scylla_manager_cluster_name(self):
+        return f"{self.namespace}/{self.scylla_cluster_name}"
+
+    @property
+    def scylla_manager_node(self):
+        return self.k8s_cluster.scylla_manager_cluster.nodes[0]
+
+    def get_cluster_manager(self, create_cluster_if_not_exists: bool = False) -> AnyManagerCluster:
+        return super().get_cluster_manager(create_cluster_if_not_exists=create_cluster_if_not_exists)
+
+    def create_cluster_manager(self, cluster_name: str, manager_tool=None, host_ip=None):
+        self.log.info('Scylla manager should not be manipulated on kubernetes manually')
+        self.log.info('Instead of creating new cluster we will wait for 5 minutes till it get registered automatically')
+        raise NotImplementedError('Scylla manager should not be manipulated on kubernetes manually')
 
     def node_config_setup(self,
                           node,

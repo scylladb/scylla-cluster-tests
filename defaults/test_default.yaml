@@ -141,3 +141,4 @@ jepsen_scylla_repo: 'https://github.com/jepsen-io/scylla.git'
 jepsen_test_cmd: 'test-all'
 
 max_events_severities: ""
+mgmt_docker_image: ''

@@ -25,8 +25,9 @@ from sdcm.utils.k8s import ApiCallRateLimiter
 from sdcm.utils.common import shorten_cluster_name
 from sdcm.utils.gce_utils import GcloudContextManager, GcloudTokenUpdateThread
 from sdcm.wait import wait_for
-from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BasePodContainer
+from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BaseScyllaPodContainer
 from sdcm.cluster_k8s.iptables import IptablesPodIpRedirectMixin, IptablesClusterOpsMixin
+from sdcm.cluster_gce import MonitorSetGCE
 
 
 GKE_API_CALL_RATE_LIMIT = 0.5  # ops/s
@@ -228,18 +229,12 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
             self._gcloud_token_thread.stop()
 
 
-class GkeScyllaPodContainer(BasePodContainer, IptablesPodIpRedirectMixin):
+class GkeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
     parent_cluster: 'GkeScyllaPodCluster'
 
     pod_readiness_delay = 30  # seconds
     pod_readiness_timeout = 30  # minutes
     pod_terminate_timeout = 30  # minutes
-
-    def __init__(self, *args, **kwargs):
-        BasePodContainer.__init__(self, *args, **kwargs)
-
-    def init(self):
-        BasePodContainer.init(self)
 
     @cached_property
     def gce_node_ips(self):
@@ -325,3 +320,8 @@ class GkeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
         self.update_nodes_iptables_redirect_rules(nodes=new_nodes, loaders=False)
 
         return new_nodes
+
+
+class MonitorSetGKE(MonitorSetGCE):
+    def install_scylla_manager(self, node, auth_token):
+        pass

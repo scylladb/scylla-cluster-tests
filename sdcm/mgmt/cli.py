@@ -6,19 +6,20 @@ import logging
 import json
 import time
 import datetime
-from enum import Enum
-from textwrap import dedent
-from re import findall
-from statistics import mean
+import requests
 import yaml
 
 from invoke.exceptions import UnexpectedExit, Failure
-import requests
-
+from re import findall
+from statistics import mean
+from textwrap import dedent
 
 from sdcm import wait
-from sdcm.remote.remote_file import remote_file
 from sdcm.utils.distro import Distro
+
+from .common import TaskStatus, ScyllaManagerError, HostStatus, HostSsl, HostRestStatus, duration_to_timedelta, \
+    DEFAULT_TASK_TIMEOUT
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -33,76 +34,6 @@ SSL_CONF_DIR = '/tmp/ssl_conf'
 SSL_USER_CERT_FILE = SSL_CONF_DIR + '/db.crt'
 SSL_USER_KEY_FILE = SSL_CONF_DIR + '/db.key'
 REPAIR_TIMEOUT_SEC = 7200  # 2 hours
-
-
-class ScyllaManagerError(Exception):
-    """
-    A custom exception for Manager related errors
-    """
-
-
-class HostSsl(Enum):
-    ON = "ON"
-    OFF = "OFF"
-
-    @classmethod
-    def from_str(cls, output_str):
-        if "SSL" in output_str:
-            return HostSsl.ON
-        return HostSsl.OFF
-
-
-class HostStatus(Enum):
-    UP = "UP"
-    DOWN = "DOWN"
-    TIMEOUT = "TIMEOUT"
-
-    @classmethod
-    def from_str(cls, output_str):
-        try:
-            output_str = output_str.upper()
-            if output_str == "-":
-                return cls.DOWN
-            return getattr(cls, output_str)
-        except AttributeError:
-            raise ScyllaManagerError("Could not recognize returned host status: {}".format(output_str))
-
-
-class HostRestStatus(Enum):
-    UP = "UP"
-    DOWN = "DOWN"
-    TIMEOUT = "TIMEOUT"
-    UNAUTHORIZED = "UNAUTHORIZED"
-    HTTP = "HTTP"
-
-    @classmethod
-    def from_str(cls, output_str):
-        try:
-            output_str = output_str.upper()
-            if output_str == "-":
-                return cls.DOWN
-            return getattr(cls, output_str)
-        except AttributeError:
-            raise ScyllaManagerError("Could not recognize returned host rest status: {}".format(output_str))
-
-
-class TaskStatus:
-    NEW = "NEW"
-    RUNNING = "RUNNING"
-    DONE = "DONE"
-    UNKNOWN = "UNKNOWN"
-    ERROR = "ERROR"
-    STOPPED = "STOPPED"
-    STARTING = "STARTING"
-    ABORTED = "ABORTED"
-
-    @classmethod
-    def from_str(cls, output_str):
-        try:
-            output_str = output_str.upper()
-            return getattr(cls, output_str)
-        except AttributeError:
-            raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
 
 
 def update_config_file(node, region, config_file=SCYLLA_MANAGER_AGENT_YAML_PATH):
@@ -121,7 +52,7 @@ def update_config_file(node, region, config_file=SCYLLA_MANAGER_AGENT_YAML_PATH)
     node.wait_manager_agent_up()
 
 
-class ScyllaManagerBase():  # pylint: disable=too-few-public-methods
+class ScyllaManagerBase:  # pylint: disable=too-few-public-methods
 
     def __init__(self, id, manager_node):  # pylint: disable=redefined-builtin
         self.id = id  # pylint: disable=invalid-name
@@ -132,11 +63,16 @@ class ScyllaManagerBase():  # pylint: disable=too-few-public-methods
         return self.sctool.get_table_value(parsed_table=parsed_table, column_name=column_name, identifier=self.id)
 
 
-class ManagerTask(ScyllaManagerBase):
+class ManagerTask:
 
     def __init__(self, task_id, cluster_id, manager_node):
-        ScyllaManagerBase.__init__(self, id=task_id, manager_node=manager_node)
+        self.manager_node = manager_node
+        self.sctool = SCTool(manager_node=manager_node)
+        self.id = task_id
         self.cluster_id = cluster_id
+
+    def get_property(self, parsed_table, column_name):
+        return self.sctool.get_table_value(parsed_table=parsed_table, column_name=column_name, identifier=self.id)
 
     def stop(self):
         cmd = "task stop {} -c {}".format(self.id, self.cluster_id)
@@ -212,18 +148,11 @@ class ManagerTask(ScyllaManagerBase):
         return f"{datetime.datetime.strftime(converted_max_date, time_format)} {timezone}"
 
     @property
-    def status(self):
+    def status(self) -> str:
         """
         Gets the task's status
         """
         cmd = "task list -c {}".format(self.cluster_id)
-        res = self.sctool.run(cmd=cmd)
-        str_status = self.get_property(parsed_table=res, column_name='status')
-        str_accurate_status = str_status.split()[0]
-        # The manager will sometimes retry a task a few times if it's defined this way, and so in the case of
-        # a failure in the task the manager can present the task's status as 'ERROR (#/4)'
-        return TaskStatus.from_str(str_accurate_status)
-
         # expecting output of:
         # ╭─────────────────────────────────────────────┬───────────────────────────────┬──────┬────────────┬────────╮
         # │ task                                        │ next run                      │ ret. │ properties │ status │
@@ -231,21 +160,27 @@ class ManagerTask(ScyllaManagerBase):
         # │ repair/2a4125d6-5d5a-45b9-9d8d-dec038b3732d │ 05 Nov 18 00:00 UTC (+7 days) │ 3    │            │ DONE   │
         # │ repair/dd98f6ae-bcf4-4c98-8949-573d533bb789 │                               │ 3    │            │ DONE   │
         # ╰─────────────────────────────────────────────┴───────────────────────────────┴──────┴────────────┴────────╯
+        res = self.sctool.run(cmd=cmd)
+        str_status = self.get_property(parsed_table=res, column_name='status')
+        # The manager will sometimes retry a task a few times if it's defined this way, and so in the case of
+        # a failure in the task the manager can present the task's status as 'ERROR (#/4)'
+        tmp = str_status.split()
+        if 'ERROR (4/4)' == ' '.join(tmp[0:1]):
+            return TaskStatus.ERROR_FINAL
+        return TaskStatus.from_str(tmp[0])
 
     @property
-    def arguments(self):
+    def arguments(self) -> str:
         """
         Gets the task's arguments
         """
         cmd = "task list -c {}".format(self.cluster_id)
         res = self.sctool.run(cmd=cmd)
         arguments_string = self.get_property(parsed_table=res, column_name='arguments')
-        # The manager will sometimes retry a task a few times if it's defined this way, and so in the case of
-        # a failure in the task the manager can present the task's status as 'ERROR (#/4)'
         return arguments_string.strip()
 
     @property
-    def progress(self):
+    def progress(self) -> str:
         """
         Gets the repair task's progress
         """
@@ -304,7 +239,7 @@ class ManagerTask(ScyllaManagerBase):
         return parsed_progress_table[relevant_key]
 
     @property
-    def duration(self):
+    def duration(self) -> datetime.timedelta:
         if self.status in [TaskStatus.NEW, TaskStatus.STARTING]:
             return duration_to_timedelta(duration_string="0")
         cmd = "task progress {} -c {}".format(self.id, self.cluster_id)
@@ -317,31 +252,23 @@ class ManagerTask(ScyllaManagerBase):
         duration_timedelta = duration_to_timedelta(duration_string=duration_string)
         return duration_timedelta
 
-    def wait_for_task_done_status(self, timeout=10800):
-        start_time = time.time()
-        while start_time + timeout > time.time():
-            if 'ERROR (4/4)' in self.manager_node.remoter.run(f'sctool -c {self.cluster_id} task list | grep {self.id}').stdout.strip():
-                return False, TaskStatus.ERROR
-            if self.status == TaskStatus.DONE:
-                return True, self.status
-            time.sleep(5)
-        return False, self.status
-
     def is_status_in_list(self, list_status, check_task_progress=False):
         """
         Check if the status of a given task is in list
         :param list_status:
+        :param check_task_progress:
         :return:
         """
         status = self.status
-        if check_task_progress and status not in [TaskStatus.NEW,
-                                                  TaskStatus.STARTING]:  # check progress for all statuses except 'NEW' / 'STARTING'
-            ###
-            # The reasons for the below (un-used) assignment are:
-            # * check that progress command works on varios task statuses (that was how manager bug #856 found).
-            # * print the progress to log in cases needed for failures/performance analysis.
-            ###
-            progress = self.progress  # pylint: disable=unused-variable
+        if not check_task_progress or status in [TaskStatus.NEW, TaskStatus.STARTING]:
+            return status in list_status
+        # check progress for all statuses except 'NEW' / 'STARTING'
+        ###
+        # The reasons for the below (un-used) assignment are:
+        # * check that progress command works on various task statuses (that was how manager bug #856 found).
+        # * print the progress to log in cases needed for failures/performance analysis.
+        ###
+        progress = self.progress  # pylint: disable=unused-variable
         return self.status in list_status
 
     def wait_for_status(self, list_status, check_task_progress=True, timeout=3600, step=120):
@@ -370,13 +297,17 @@ class ManagerTask(ScyllaManagerBase):
         current_progress_percentage = float(progress_string.replace("%", ""))
         return current_progress_percentage >= minimum_percentage
 
-    def wait_and_get_final_status(self, timeout=REPAIR_TIMEOUT_SEC, step=120):
+    def wait_and_get_final_status(self, timeout=DEFAULT_TASK_TIMEOUT, step=60, only_final=False):
         """
         1) Wait for task to reach a 'final' status. meaning one of: done/error/stopped
         2) return the final status.
         :return:
         """
-        list_final_status = [TaskStatus.ERROR, TaskStatus.STOPPED, TaskStatus.DONE, TaskStatus.ABORTED]
+        if only_final:
+            list_final_status = [TaskStatus.ERROR_FINAL, TaskStatus.DONE]
+        else:
+            list_final_status = [
+                TaskStatus.ERROR, TaskStatus.ERROR_FINAL, TaskStatus.STOPPED, TaskStatus.DONE, TaskStatus.ABORTED]
         LOGGER.debug("Waiting for task: {} getting to a final status ({})..".format(self.id, str(list_final_status)))
         res = self.wait_for_status(list_status=list_final_status, timeout=timeout, step=step)
         if not res:
@@ -384,26 +315,7 @@ class ManagerTask(ScyllaManagerBase):
         return self.status
 
 
-def duration_to_timedelta(duration_string):
-    total_seconds = 0
-    if "d" in duration_string:
-        total_seconds += int(duration_string[:duration_string.find('d')]) * 86400
-        duration_string = duration_string[duration_string.find('d') + 1:]
-    if "h" in duration_string:
-        total_seconds += int(duration_string[:duration_string.find('h')]) * 3600
-        duration_string = duration_string[duration_string.find('h') + 1:]
-    if "m" in duration_string:
-        total_seconds += int(duration_string[:duration_string.find('m')]) * 60
-        duration_string = duration_string[duration_string.find('m') + 1:]
-    if "s" in duration_string:
-        total_seconds += int(duration_string[:duration_string.find('s')])
-    return datetime.timedelta(seconds=total_seconds)
-
-
 class RepairTask(ManagerTask):
-    def __init__(self, task_id, cluster_id, manager_node):
-        ManagerTask.__init__(self, task_id=task_id, cluster_id=cluster_id, manager_node=manager_node)
-
     @property
     def per_keyspace_progress(self):
         """
@@ -431,8 +343,8 @@ class HealthcheckTask(ManagerTask):
 
 
 class BackupTask(ManagerTask):
-    def __init__(self, task_id, cluster_id, scylla_manager):
-        ManagerTask.__init__(self, task_id=task_id, cluster_id=cluster_id, manager_node=scylla_manager)
+    def __init__(self, task_id, cluster_id, manager_node):
+        ManagerTask.__init__(self, task_id=task_id, cluster_id=cluster_id, manager_node=manager_node)
 
     def get_snapshot_tag(self, snapshot_index=0):
         command = f" -c {self.cluster_id} task progress {self.id}"
@@ -461,12 +373,29 @@ class BackupTask(ManagerTask):
 
 class ManagerCluster(ScyllaManagerBase):
 
-    def __init__(self, manager_node, cluster_id, ssh_identity_file=None, client_encrypt=False):
+    def __init__(self, manager_node, cluster_id=None, ssh_identity_file=None, client_encrypt=False):
         if not manager_node:
             raise ScyllaManagerError("Cannot create a Manager Cluster where no 'manager tool' parameter is given")
         ScyllaManagerBase.__init__(self, id=cluster_id, manager_node=manager_node)
         self.client_encrypt = client_encrypt
         self.ssh_identity_file = ssh_identity_file
+
+    def get_cluster_id_by_name(self, cluster_name: str):
+        try:
+            cluster_list = self.sctool.run(cmd="cluster list", is_verify_errorless_result=True)
+            column_to_search = "ID"
+            if cluster_list:
+                column_names = cluster_list[0]
+                if "cluster id" in column_names:
+                    column_to_search = "cluster id"
+            return self.sctool.get_table_value(
+                parsed_table=cluster_list, column_name=column_to_search, identifier=cluster_name)
+        except ScyllaManagerError as ex:
+            LOGGER.warning("Cluster name not found in Scylla-Manager: {}".format(ex))
+            return None
+
+    def set_cluster_id(self, value: str):
+        self.id = value
 
     def create_backup_task(self, dc_list=None,  # pylint: disable=too-many-arguments,too-many-locals,too-many-branches
                            dry_run=None, interval=None, keyspace_list=None,
@@ -521,7 +450,7 @@ class ManagerCluster(ScyllaManagerBase):
 
         task_id = res.stdout.strip()
         LOGGER.debug("Created task id is: {}".format(task_id))
-        return BackupTask(task_id=task_id, cluster_id=self.id, scylla_manager=self.manager_node)
+        return BackupTask(task_id=task_id, cluster_id=self.id, manager_node=self.manager_node)
 
     def create_repair_task(self, dc_list=None,  # pylint: disable=too-many-arguments
                            keyspace=None, interval=None, num_retries=None, fail_fast=None,
@@ -691,8 +620,7 @@ class ManagerCluster(ScyllaManagerBase):
         cmd = "task list -c {}".format(self.id)
         return self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
-    @property
-    def repair_task_list(self):
+    def _get_task_list_filtered(self, prefix, task_class):
         """
         Gets the Cluster's  Task list
         """
@@ -705,10 +633,18 @@ class ManagerCluster(ScyllaManagerBase):
         repair_task_list = []
         table_res = self._get_task_list()
         if len(table_res) > 1:  # if there are any tasks in list - add them as RepairTask generated objects.
-            repair_task_rows_list = [row for row in table_res[1:] if row[0].startswith("repair/")]
+            repair_task_rows_list = [row for row in table_res[1:] if row[0].startswith(f"{prefix}/")]
             for row in repair_task_rows_list:
-                repair_task_list.append(RepairTask(task_id=row[0], cluster_id=self.id, manager_node=self.manager_node))
+                repair_task_list.append(task_class(task_id=row[0], cluster_id=self.id, manager_node=self.manager_node))
         return repair_task_list
+
+    @property
+    def repair_task_list(self):
+        return self._get_task_list_filtered('repair', RepairTask)
+
+    @property
+    def backup_task_list(self):
+        return self._get_task_list_filtered('backup', BackupTask)
 
     def get_healthcheck_task(self):
         healthcheck_id = self.sctool.get_table_value(parsed_table=self._get_task_list(), column_name="task",
@@ -803,29 +739,26 @@ def verify_errorless_result(cmd, res):
         LOGGER.error("Encountered an error on '{}' stderr: {}".format(cmd, str(res.stderr)))  # TODO: just for checking
 
 
-def get_scylla_manager_tool(manager_node):
-    if manager_node.is_rhel_like():
-        return ScyllaManagerToolRedhatLike(manager_node=manager_node)
-    else:
-        return ScyllaManagerToolNonRedhat(manager_node=manager_node)
-
-
 class ScyllaManagerTool(ScyllaManagerBase):
+    clusterClass = ManagerCluster
+
     """
     Provides communication with scylla-manager, operating sctool commands and ssh-scripts.
     """
 
     def __init__(self, manager_node):
         ScyllaManagerBase.__init__(self, id="MANAGER", manager_node=manager_node)
-        sleep = 30
-        LOGGER.debug('Sleep {} seconds, waiting for manager service ready to respond'.format(sleep))
-        time.sleep(sleep)
+        self._initial_wait(20)
         LOGGER.info("Initiating Scylla-Manager, version: {}".format(self.version))
         list_supported_distros = [Distro.CENTOS7, Distro.DEBIAN8, Distro.DEBIAN9, Distro.UBUNTU16, Distro.UBUNTU18]
         self.default_user = "centos"
         if manager_node.distro not in list_supported_distros:
             raise ScyllaManagerError(
                 "Non-Manager-supported Distro found on Monitoring Node: {}".format(manager_node.distro))
+
+    def _initial_wait(self, seconds: int):
+        LOGGER.debug(f'Sleep {seconds} seconds, waiting for manager service ready to respond')
+        time.sleep(seconds)
 
     @property
     def version(self):
@@ -854,20 +787,12 @@ class ScyllaManagerTool(ScyllaManagerBase):
         # │ 1de39a6b-ce64-41be-a671-a7c621035c0f │ Dev_Test │
         # │ bf6571ef-21d9-4cf1-9f67-9d05bc07b32e │ Prod     │
         # ╰──────────────────────────────────────┴──────────╯
-        try:
-            cluster_list = self.cluster_list
-            column_to_search = "ID"
-            if cluster_list:
-                column_names = cluster_list[0]
-                if "cluster id" in column_names:
-                    column_to_search = "cluster id"
-            cluster_id = self.sctool.get_table_value(parsed_table=cluster_list, column_name=column_to_search,
-                                                     identifier=cluster_name)
-        except ScyllaManagerError as ex:
-            LOGGER.warning("Cluster name not found in Scylla-Manager: {}".format(ex))
+        cluster = self.clusterClass(manager_node=self.manager_node)
+        cluster_id = cluster.get_cluster_id_by_name(cluster_name)
+        if cluster_id is None:
             return None
-
-        return ManagerCluster(manager_node=self.manager_node, cluster_id=cluster_id)
+        cluster.set_cluster_id(cluster_id)
+        return cluster
 
     def scylla_mgr_ssh_setup(self, node_ip, user='centos', identity_file='/tmp/scylla-test',  # pylint: disable=too-many-arguments
                              create_user=None, single_node=False):
@@ -969,8 +894,8 @@ class ScyllaManagerTool(ScyllaManagerBase):
                 res_cluster_add))
         cluster_id = res_cluster_add.stdout.split('\n')[0]
         # return ManagerCluster instance with the manager's new cluster-id
-        manager_cluster = ManagerCluster(manager_node=self.manager_node, cluster_id=cluster_id,
-                                         client_encrypt=client_encrypt)
+        manager_cluster = self.clusterClass(manager_node=self.manager_node, cluster_id=cluster_id,
+                                            client_encrypt=client_encrypt)
         if disable_automatic_repair:
             manager_cluster.delete_automatic_repair_task()
         return manager_cluster
@@ -1061,8 +986,7 @@ class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
         # Rollback the Scylla Manager database???
 
 
-class SCTool():
-
+class SCTool:
     def __init__(self, manager_node):
         self.manager_node = manager_node
 
@@ -1234,7 +1158,7 @@ class SCTool():
         return identifier in full_rows_list
 
 
-class ScyllaMgmt():
+class ScyllaMgmt:
     """
     Provides communication with scylla-manager via REST API
     """
