@@ -2347,10 +2347,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         time.sleep(random.randint(10, 600))
 
         self.log.debug('Interrupt the task by hard reboot')
-        self.target_node.reboot(hard=True, verify_ssh=True)
-        streaming_thread.join(60)
+        try:
+            self.target_node.reboot(hard=True, verify_ssh=True)
+            streaming_thread.join(60)
+        except Exception as err:  # pylint: disable=broad-except
+            if task == 'decommission':
+                self.log.debug(f'Failed to reboot the target node, decommission might complete')
+            else:
+                raise
 
-        new_node = decommission_post_action()
+        new_node = None
+        if task == 'decommission':
+            new_node = decommission_post_action()
 
         if self.task_used_streaming:
             err = list(streaming_error_logs_stream)
