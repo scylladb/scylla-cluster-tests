@@ -2684,7 +2684,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self.log.info(f"Apply new cdc settigs for table {ks}.{table}: {cdc_settings}")
         self._alter_table_with_cdc_properties(ks, table, cdc_settings)
+        self.log.debug(f"Verify new cdc settings on table {ks}.{table}")
         self._verify_cdc_feature_status(ks, table, cdc_settings)
+        InfoEvent(f"{ks}.{table} have new cdc settings {cdc_settings}").publish()
 
     def disrupt_run_cdcstressor_tool(self):
         self._set_current_disruption(label="RunCDCStressorTool")
@@ -2733,19 +2735,22 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         with self.cluster.cql_connection_patient(self.target_node) as session:
             session.execute(cmd)
         # wait applying cdc configuration
-        time.sleep(15)
+        time.sleep(30)
 
     def _verify_cdc_feature_status(self, keyspace: str, table: str, cdc_settings: dict) -> None:
 
-        self.log.debug("Wait for cdc enabled and cdc log tables will be populated")
-        time.sleep(60)
         output = self.target_node.run_cqlsh(f"desc keyspace {keyspace}")
         self.log.debug(output.stdout)
 
         with self.cluster.cql_connection_patient(node=self.target_node) as session:
             actual_cdc_settings = cdc.options.get_table_cdc_properties(session, keyspace, table)
 
-        assert actual_cdc_settings == cdc_settings, f"CDC extension settings are differs"
+        if not cdc_settings["enabled"]:
+            assert (actual_cdc_settings["enabled"] is False,
+                    f"CDC options was not disabled. Current: {actual_cdc_settings} expected: {cdc_settings}")
+        else:
+            assert (actual_cdc_settings == cdc_settings,
+                    f"CDC extension settings are differs. Current: {actual_cdc_settings} expected: {cdc_settings}")
 
 
 def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
