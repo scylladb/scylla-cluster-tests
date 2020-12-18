@@ -19,6 +19,7 @@ import contextlib
 import logging
 import os
 import time
+import base64
 
 from copy import deepcopy
 from datetime import datetime
@@ -29,8 +30,10 @@ from textwrap import dedent
 from threading import RLock
 from typing import Optional, Union, List, Dict, Any, ContextManager, Type, Callable
 
+import json
 import yaml
 import kubernetes as k8s
+from boto3 import client as boto3_client
 from kubernetes.client import V1Container
 from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance, ResourceList, Subresource
 
@@ -163,8 +166,45 @@ class KubernetesCluster:
         self.start_scylla_operator_journal_thread()
 
     @log_run_info
-    def deploy_scylla_cluster(self, config: str) -> None:
+    def deploy_minio_s3_backend(self, minio_bucket_name):
+        LOGGER.info('Deploy minio s3-like backend server')
+        self.helm('repo add minio https://helm.min.io/')
+        self.kubectl("create namespace minio")
+        self.helm(
+            'install --set accessKey=minio_access_key,secretKey=minio_access_key --generate-name minio/minio',
+            namespace='minio')
+
+        minio_ip_address = wait_for(
+            lambda: self.minio_ip_address, text='Waiting for minio pod to popup', timeout=120, throw_exc=True)
+
+        self.kubectl("wait --timeout=10m --all --for=condition=Ready pod", namespace="minio")
+
+        LOGGER.info('Create bucket on minio to store scylla manager backups')
+        boto3_client(
+            service_name='s3',
+            aws_access_key_id='minio_access_key',
+            aws_secret_access_key='minio_access_key',
+            endpoint_url=f'http://{minio_ip_address}:9000'
+        ).create_bucket(Bucket=minio_bucket_name)
+
+    @log_run_info
+    def deploy_scylla_cluster(self, config: str, target_mgmt_agent_to_minio: bool = False) -> None:
         LOGGER.info("Create and initialize a Scylla cluster")
+        self.kubectl("create namespace scylla")
+        if target_mgmt_agent_to_minio:
+            # Create kubernetes secret that holds scylla manager agent configuration
+            self.update_secret_from_data('scylla-agent-config', 'scylla', {
+                'scylla-manager-agent.yaml': {
+                    's3': {
+                        'provider': 'Minio',
+                        'endpoint': f"http://{self.minio_ip_address}:9000",
+                        'access_key_id': 'minio_access_key',
+                        'secret_access_key': 'minio_access_key'
+                    }
+                }
+            })
+
+        # Deploy scylla cluster
         self.apply_file(config)
 
         LOGGER.debug("Check Scylla cluster")
@@ -199,6 +239,23 @@ class KubernetesCluster:
             self._scylla_operator_journal_thread.stop(timeout)
         if self._scylla_cluster_events_thread:
             self._scylla_cluster_events_thread.stop(timeout)
+
+    @property
+    def minio_pod(self) -> Resource:
+        for pod in KubernetesOps.list_pods(self, namespace='minio'):
+            found = False
+            for container in pod.spec.containers:
+                if any([portRec for portRec in container.ports
+                        if hasattr(portRec, 'container_port') and str(portRec.container_port) == '9000']):
+                    found = True
+                    break
+            if found:
+                return pod
+        raise RuntimeError("Can't find minio pod")
+
+    @property
+    def minio_ip_address(self) -> str:
+        return self.minio_pod.status.pod_ip
 
     @property
     def operator_pod_status(self):
@@ -242,6 +299,40 @@ class KubernetesCluster:
             node_prefix='mgr-node-',
             n_nodes=1
         )
+
+    def create_secret_from_data(self, secret_name: str, namespace: str, data: dict, secret_type: str = 'Opaque'):
+        prepared_data = {key: base64.b64encode(json.dumps(value).encode('utf-8')).decode('utf-8')
+                         for key, value in data.items()}
+        secret = k8s.client.V1Secret(
+            'v1',
+            prepared_data,
+            'Secret',
+            {'name': secret_name, 'namespace': namespace},
+            type=secret_type)
+        self.k8s_core_v1_api.create_namespaced_secret(namespace, secret)
+
+    def update_secret_from_data(self, secret_name: str, namespace: str, data: dict, secret_type: str = 'Opaque'):
+        existing = None
+        for secret in self.k8s_core_v1_api.list_namespaced_secret(namespace).items:
+            if secret.metadata.name == secret_name:
+                existing = secret
+                break
+        if not existing:
+            self.create_secret_from_data(
+                secret_name=secret_name, namespace=namespace, data=data, secret_type=secret_type)
+            return
+
+        for key, value in data.items():
+            existing.data[key] = base64.b64encode(json.dumps(value).encode('utf-8')).decode('utf-8')
+        self.k8s_core_v1_api.patch_namespaced_secret(secret_name, namespace, existing)
+
+    def create_secret_from_directory(self, secret_name: str, path: str, namespace: str, secret_type: str = 'generic',
+                                     only_files: List[str] = None):
+        files = [fname for fname in os.listdir(path) if os.path.isfile(os.path.join(path, fname)) and
+                 (not only_files or fname in only_files)]
+        cmd = f'create secret {secret_type} {secret_name} ' + \
+              ' '.join([f'--from-file={fname}={os.path.join(path, fname)}' for fname in files])
+        self.kubectl(cmd, namespace=namespace)
 
 
 class BasePodContainer(cluster.BaseNode):
@@ -715,7 +806,10 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                  user_prefix: Optional[str] = None,
                  n_nodes: Union[list, int] = 3,
                  params: Optional[dict] = None) -> None:
-        k8s_cluster.deploy_scylla_cluster(scylla_cluster_config)
+        k8s_cluster.deploy_scylla_cluster(
+            scylla_cluster_config,
+            target_mgmt_agent_to_minio=bool(params.get('use_mgmt'))
+        )
         self.scylla_yaml_lock = RLock()
         self.scylla_yaml = {}
         self.scylla_yaml_update_required = False

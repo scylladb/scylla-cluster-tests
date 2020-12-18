@@ -3726,6 +3726,8 @@ class ScyllaOperatorBasicOperationsMonkey(Nemesis):
             'disrupt_terminate_and_recover_node_kubernetes',
             'disrupt_replace_node_kubernetes',
             'disrupt_mgmt_repair_cli',
+            'disrupt_mgmt_backup_specific_keyspaces',
+            'disrupt_mgmt_backup',
         ]
 
     @log_time_elapsed_and_status
