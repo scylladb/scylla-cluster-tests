@@ -3197,9 +3197,9 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                                             filter_out_system=True,
                                             filter_out_mv=True)
         self.log.debug(all_ks_cf)
-        ks_tables_with_cdc = [ks_cf_cdc.strip(cdc.options.CDC_LOGTABLE_SUFFIX)
+        ks_tables_with_cdc = [ks_cf_cdc[:-len(cdc.options.CDC_LOGTABLE_SUFFIX)]
                               for ks_cf_cdc in all_ks_cf if ks_cf_cdc.endswith(cdc.options.CDC_LOGTABLE_SUFFIX)]
-        self.log.info(ks_tables_with_cdc)
+        self.log.debug(ks_tables_with_cdc)
 
         return ks_tables_with_cdc
 
