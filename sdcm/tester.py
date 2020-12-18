@@ -921,6 +921,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_cluster.deploy_cert_manager()
         self.k8s_cluster.deploy_scylla_operator()
         if self.params.get('use_mgmt'):
+            self.k8s_cluster.deploy_minio_s3_backend(minio_bucket_name=self.params.get('backup_bucket_location'))
             self.k8s_cluster.deploy_scylla_manager()
 
         # This should remove some of the unpredictability of pods startup time.
@@ -993,6 +994,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_cluster.deploy_cert_manager()
         self.k8s_cluster.deploy_scylla_operator()
         if self.params.get('use_mgmt'):
+            self.k8s_cluster.deploy_minio_s3_backend(minio_bucket_name=self.params.get('backup_bucket_location'))
             self.k8s_cluster.deploy_scylla_manager()
 
         self.db_cluster = gke.GkeScyllaPodCluster(k8s_cluster=self.k8s_cluster,

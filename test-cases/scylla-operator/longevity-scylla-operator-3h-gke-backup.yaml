@@ -1,4 +1,4 @@
-test_duration: 280
+test_duration: 240
 stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=100 throttle=1000/s -pop seq=1..10000000 -log interval=5"
              ]
 
@@ -10,7 +10,7 @@ n_db_nodes: 3
 n_loaders: 2
 n_monitor_nodes: 1
 
-nemesis_class_name: 'OperatorMgmtBackup'
+nemesis_class_name: 'MgmtBackup'
 nemesis_interval: 5
 use_mgmt: true
 
