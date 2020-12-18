@@ -687,7 +687,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # prepare test tables and fill test data
         for i in range(10):
             self.log.debug('Prepare test tables if they do not exist')
-            self._prepare_test_table(ks='drop_table_during_repair_ks', table=f'drop_table_during_repair_{i}')
+            self._prepare_test_table(ks=f'drop_table_during_repair_ks_{i}', table='standard1')
 
         self.log.debug("Start repair target_node in background")
         thread1 = threading.Thread(target=self.repair_nodetool_repair, name='NodeToolRepairThread', daemon=True)
@@ -697,7 +697,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for i in range(10):
             time.sleep(random.randint(0, 300))
             with self.cluster.cql_connection_patient(self.target_node) as session:
-                session.execute(f'DROP TABLE drop_table_during_repair_ks.drop_table_during_repair_{i}')
+                session.execute(f'DROP TABLE drop_table_during_repair_ks_{i}.standard1')
         thread1.join(timeout=120)
 
     def disrupt_major_compaction(self):
