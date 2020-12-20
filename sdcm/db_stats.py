@@ -1,3 +1,16 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 import re
 import datetime
 import time
@@ -8,6 +21,8 @@ import logging
 import json
 from textwrap import dedent
 from math import sqrt
+from typing import Optional
+from functools import cached_property
 from collections import defaultdict
 
 import yaml
@@ -16,6 +31,8 @@ import requests
 from sdcm.es import ES
 from sdcm.utils.common import get_job_name, normalize_ipv6_url
 from sdcm.utils.decorators import retrying
+from sdcm.sct_events.system import ElasticsearchEvent
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -323,50 +340,72 @@ class PrometheusDBStats():
         return result
 
 
-class Stats():
-    """
-    This class is responsible for creating and updating database entry(document in Elasticsearch DB)
-    There are two usage options:
-    1. without arguments - as a based class of TestStatsMixin - for saving test statistics
-    2. with arguments - as a separate object to update an existing document
-    """
+class Stats:
+    """Create and update a document in Elasticsearch."""
 
     def __init__(self, *args, **kwargs):
-        self._test_index = kwargs.get('test_index', None)
-        self._test_id = kwargs.get('test_id', None)
+        self._test_index = kwargs.get("test_index")
+        self._test_id = kwargs.get("test_id")
         self._es_doc_type = "test_stats"
-        self.elasticsearch = self._create_es_connection()
         self._stats = {}
+
+        # For using this class as a base for TestStatsMixin.
         if not self._test_id:
-            super(Stats, self).__init__(*args, **kwargs)
+            super().__init__(*args, **kwargs)
 
-    @staticmethod
-    def _create_es_connection():
-        return ES()
-
-    def get_doc_id(self):
-        return self._test_id
-
-    def get_stats(self):
-        return self._stats
-
-    def create(self):
-        self.elasticsearch.create_doc(index=self._test_index, doc_type=self._es_doc_type,
-                                      doc_id=self._test_id, body=self._stats)
-
-    def update(self, data):
-        """
-        Update document
-        :param data: data dictionary
-        """
+    @cached_property
+    def elasticsearch(self) -> Optional[ES]:
         try:
-            self.elasticsearch.update_doc(index=self._test_index, doc_type=self._es_doc_type,
-                                          doc_id=self._test_id, body=data)
-        except Exception as ex:  # pylint: disable=broad-except
-            LOGGER.error('Failed to update test stats: test_id: %s, error: %s', self._test_id, ex)
+            return ES()
+        except Exception as exc:
+            LOGGER.exception("Failed to create ES connection (doc_id=%s)", self._test_id)
+            ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
 
-    def exists(self):
-        return self.elasticsearch.exists(index=self._test_index, doc_type=self._es_doc_type, id=self._test_id)
+    def create(self) -> None:
+        if not self.elasticsearch:
+            LOGGER.error("Failed to create test stats: ES connection is not created (doc_id=%s)", self._test_id)
+            return
+        try:
+            self.elasticsearch.create_doc(
+                index=self._test_index,
+                doc_type=self._es_doc_type,
+                doc_id=self._test_id,
+                body=self._stats,
+            )
+        except Exception as exc:
+            LOGGER.exception("Failed to create test stats (doc_id=%s)", self._test_id)
+            ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
+
+    def update(self, data: dict) -> None:
+        if not self.elasticsearch:
+            LOGGER.error("Failed to update test stats: ES connection is not created (doc_id=%s)", self._test_id)
+            return
+        try:
+            self.elasticsearch.update_doc(
+                index=self._test_index,
+                doc_type=self._es_doc_type,
+                doc_id=self._test_id,
+                body=data,
+            )
+        except Exception as exc:
+            LOGGER.exception("Failed to update test stats (doc_id=%s)", self._test_id)
+            ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
+
+    def exists(self) -> Optional[bool]:
+        if not self.elasticsearch:
+            LOGGER.error("Failed to check for test stats existence: ES connection is not created (doc_id=%s)",
+                         self._test_id)
+            return None
+        try:
+            return self.elasticsearch.exists(
+                index=self._test_index,
+                doc_type=self._es_doc_type,
+                id=self._test_id,
+            )
+        except Exception as exc:
+            LOGGER.exception("Failed to check for test stats existence (doc_id=%s)", self._test_id)
+            ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
+        return None
 
 
 class TestStatsMixin(Stats):
@@ -679,11 +718,22 @@ class TestStatsMixin(Stats):
 
         self.update(update_data)
 
-    def get_doc_data(self, key):
-        if self.create_stats and self._test_index and self.get_doc_id():
-            result = self.elasticsearch.get_doc(self._test_index, self.get_doc_id(), doc_type=self._es_doc_type)
-
-            return result['_source'].get(key, None)
+    def get_doc_data(self, key) -> Optional[dict]:
+        if self.create_stats and self._test_index and self._test_id:
+            if not self.elasticsearch:
+                LOGGER.error("Failed to get test stats: ES connection is not created (doc_id=%s)", self._test_id)
+                return None
+            try:
+                result = self.elasticsearch.get_doc(
+                    index=self._test_index,
+                    doc_type=self._es_doc_type,
+                    doc_id=self._test_id,
+                )
+            except Exception as exc:
+                LOGGER.exception("Failed to get test stats (doc_id=%s)", self._test_id)
+                ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
+            else:
+                return result["_source"].get(key)
         return None
 
     def get_test_start_time(self):

@@ -83,6 +83,18 @@ class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attribu
         return fmt
 
 
+class ElasticsearchEvent(SctEvent):
+    def __init__(self, doc_id: str, error: str):
+        super().__init__(severity=Severity.ERROR)
+
+        self.doc_id = doc_id
+        self.error = error
+
+    @property
+    def msgfmt(self) -> str:
+        return super().msgfmt + ": doc_id={0.doc_id} error={0.error}"
+
+
 class SpotTerminationEvent(SctEvent):
     def __init__(self, node: Any, message: str):
         super().__init__(severity=Severity.CRITICAL)
