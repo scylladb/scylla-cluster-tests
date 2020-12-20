@@ -22,9 +22,9 @@ prepare_write_cmd:
 
 stress_cmd: [
   # with lwt table
-  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=6990500 -p fieldcount=10 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true",
+  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=6990500 -p fieldcount=10 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true -p maxexecutiontime=10800",
   # no lwt table
-  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=6990500 -p fieldcount=10 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true -p table=usertable_no_lwt",
+  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=6990500 -p fieldcount=10 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true -p table=usertable_no_lwt -p maxexecutiontime=10800",
 ]
 
 round_robin: true
