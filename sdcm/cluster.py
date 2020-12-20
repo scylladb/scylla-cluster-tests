@@ -2068,6 +2068,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.log.info("Found kernel version: {}".format(self._kernel_version))
         return self._kernel_version
 
+    def increase_jmx_heap_memory(self, jmx_memory):
+        jmx_file = '/opt/scylladb/jmx/scylla-jmx'
+        self.log.info('changing scylla-jmx heap memory to avoid 5k crashing jmx')
+        self.remoter.run(f"sudo sed -i 's/Xmx256m/Xmx{jmx_memory}m/' {jmx_file}")
+        self.log.info('changed scylla-jmx heap memory')
+        self.remoter.run(f"sudo grep Xmx {jmx_file}")
+        self.log.info('result after changing scylla-jmx heap above')
+
     @log_run_info
     def scylla_setup(self, disks):
         """
@@ -3754,6 +3762,12 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node.stop_scylla_server(verify_down=False)
                 node.clean_scylla_data()
                 node.start_scylla_server(verify_up=False)
+
+            # code to increase java heap memory to scylla-jmx (because of #7609)
+            jmx_memory = self.params.get("jmx_heap_memory")
+            if jmx_memory:
+                node.increase_jmx_heap_memory(jmx_memory)
+                node.restart_scylla_jmx()
 
             self.log.info('io.conf right after reboot')
             node.remoter.sudo('cat /etc/scylla.d/io.conf')
