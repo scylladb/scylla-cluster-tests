@@ -4737,7 +4737,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
 
             if not self.params.get('cluster_backend') == 'docker':
                 configure_self_node_exporter = dedent(f'''
-                    docker run --rm -v {self.monitoring_conf_dir}:/workdir mikefarah/yq yq w -i node_exporter_servers.yml '[0].targets[+]' ''[{node.private_ip_address}]:9100''
+                    docker run --rm -v {self.monitoring_conf_dir}:/workdir mikefarah/yq:3 yq w -i node_exporter_servers.yml '[0].targets[+]' ''[{node.private_ip_address}]:9100''
                 ''')
                 node.remoter.run("sudo bash -ce '%s'" % configure_self_node_exporter, verbose=True)
 
