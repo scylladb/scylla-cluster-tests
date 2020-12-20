@@ -1005,6 +1005,9 @@ class SCTConfiguration(dict):
         dict(name="internode_encryption", env="SCT_INTERNODE_ENCRYPTION", type=str,
              help="scylla sub option of server_encryption_options: internode_encryption"),
 
+        dict(name="jmx_heap_memory", env="SCT_JMX_HEAP_MEMORY", type=int,
+             help="The total size of the memory allocated to JMX. Values in MB, so for 1GB enter 1024(MB)"),
+
         dict(name="loader_swap_size", env="SCT_LOADER_SWAP_SIZE", type=int,
              help="The size of the swap file for the loaders. Its size in bytes calculated by x * 1MB"),
 
