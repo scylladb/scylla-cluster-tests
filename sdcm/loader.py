@@ -12,6 +12,7 @@
 # Copyright (c) 2016 ScyllaDB
 
 import os
+import re
 from abc import abstractmethod, ABCMeta
 import time
 import logging
@@ -50,6 +51,7 @@ class StressExporter(FileFollowerThread, metaclass=ABCMeta):
         self.loader_idx = loader_idx
         self.cpu_idx = cpu_idx
         self.metrics_positions = self.merics_position_in_log()
+        self.keyspace = ''
 
     @abstractmethod
     def merics_position_in_log(self) -> MetricsPosition:
@@ -60,7 +62,7 @@ class StressExporter(FileFollowerThread, metaclass=ABCMeta):
         ...
 
     def set_metric(self, name: str, value: float) -> None:
-        self.stress_metric.labels(0, self.instance_name, self.loader_idx, self.cpu_idx, name).set(value)
+        self.stress_metric.labels(0, self.instance_name, self.loader_idx, self.cpu_idx, name, self.keyspace).set(value)
 
     def clear_metrics(self) -> None:
         if self.stress_metric:
@@ -118,6 +120,7 @@ class CassandraStressExporter(StressExporter):
     def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str, stress_log_filename: str,
                  loader_idx: int, cpu_idx: int = 1):  # pylint: disable=too-many-arguments
 
+        self.keyspace_regex = re.compile(r'.*Keyspace:\s(.*?)$')
         super(CassandraStressExporter, self).__init__(instance_name, metrics, stress_operation, stress_log_filename, loader_idx,
                                                       cpu_idx)
 
@@ -127,15 +130,17 @@ class CassandraStressExporter(StressExporter):
             self.METRICS_GAUGES[gauge_name] = self.metrics.create_gauge(
                 gauge_name,
                 'Gauge for cassandra stress metrics',
-                [f'cassandra_stress_{self.stress_operation}', 'instance', 'loader_idx', 'cpu_idx', 'type'])
+                [f'cassandra_stress_{self.stress_operation}', 'instance', 'loader_idx', 'cpu_idx', 'type', 'keyspace'])
         return gauge_name
 
     def merics_position_in_log(self) -> MetricsPosition:
         return MetricsPosition(ops=2, lat_mean=5, lat_med=6, lat_perc_95=7, lat_perc_99=8, lat_perc_999=9,
                                lat_max=10, errors=13)
 
-    @staticmethod
-    def skip_line(line: str) -> bool:
+    def skip_line(self, line: str) -> bool:
+        if not self.keyspace:
+            if 'Keyspace:' in line:
+                self.keyspace = self.keyspace_regex.match(line).groups()[0]
         # If line starts with 'total,' - skip this line
         return not 'total,' in line
 
@@ -158,7 +163,7 @@ class ScyllaBenchStressExporter(StressExporter):
             self.METRICS_GAUGES[gauge_name] = self.metrics.create_gauge(
                 gauge_name,
                 'Gauge for scylla-bench stress metrics',
-                [f'scylla_bench_stress_{self.stress_operation}', 'instance', 'loader_idx', 'cpu_idx', 'type'])
+                [f'scylla_bench_stress_{self.stress_operation}', 'instance', 'loader_idx', 'cpu_idx', 'type', 'keyspace'])
         return gauge_name
 
     def merics_position_in_log(self) -> MetricsPosition:
