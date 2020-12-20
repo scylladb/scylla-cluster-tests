@@ -79,8 +79,8 @@ class ClusterTesterForTests(ClusterTester):
     def update_certificates():
         pass
 
-    @staticmethod
-    def _create_es_connection():
+    @property
+    def elasticsearch(self):
         return None
 
     @silence()

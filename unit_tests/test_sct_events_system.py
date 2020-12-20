@@ -16,7 +16,7 @@ import unittest
 from textwrap import dedent
 
 from sdcm.sct_events.system import \
-    StartupTestEvent, TestFrameworkEvent, SpotTerminationEvent, ScyllaRepoEvent, InfoEvent, \
+    StartupTestEvent, TestFrameworkEvent, ElasticsearchEvent, SpotTerminationEvent, ScyllaRepoEvent, InfoEvent, \
     ThreadFailedEvent, CoreDumpEvent, TestResultEvent
 
 
@@ -38,6 +38,11 @@ class TestSystemEvents(unittest.TestCase):
             "(TestFrameworkEvent Severity.ERROR), source=s1.m1(args=('a1', 'a2'), kwargs={'k1': 'v1', 'k2': 'v2'})"
             " message=msg1\nexception=e1",
         )
+        self.assertEqual(event, pickle.loads(pickle.dumps(event)))
+
+    def test_elasticsearch_event(self):
+        event = ElasticsearchEvent(doc_id="d1", error="e1")
+        self.assertEqual(str(event), "(ElasticsearchEvent Severity.ERROR): doc_id=d1 error=e1")
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
     def test_spot_termination_event(self):
