@@ -2276,6 +2276,31 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     "Waiting until all compactions settle down"
         is_compactions_done()
 
+    def metric_has_data(self, metric_query, n=80, sleep_time=60, ):
+        """
+        wait for any prometheus metric to have data in it
+
+        example: wait 5 mins for cassandra stress to start writing:
+
+            self.metric_has_data(metric_query='collectd_cassandra_stress_write_gauge{type="ops"}', n=5)
+
+        :param metric_query:
+        :param n: number of loop to try
+        :param sleep_time: sleep time between each loop
+        :return: None
+        """
+
+        @retrying(n=n, sleep_time=sleep_time, allowed_exceptions=(AssertionError,))
+        def is_metric_has_data():
+            now = time.time()
+            results = self.prometheus_db.query(query=metric_query, start=now - 60, end=now)
+            self.log.debug(f"metric_has_data: {results}")
+            assert results, "No results from Prometheus"
+            if results:
+                assert any([float(v[1]) for v in results[0]["values"]]) > 0, f"{metric_query} didn't has data in it"
+
+        is_metric_has_data()
+
     def run_fstrim_on_all_db_nodes(self):
         """
         This function will run fstrim command all db nodes in the cluster to clear any bad state of the disks.

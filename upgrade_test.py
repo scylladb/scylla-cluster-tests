@@ -453,12 +453,15 @@ class UpgradeTest(FillDatabaseData):
         entire_write_cs_thread_pool = self.run_stress_thread(stress_cmd=write_stress_during_entire_test)
 
         # Let to write_stress_during_entire_test complete the schema changes
-        time.sleep(300)
+        self.metric_has_data(
+            metric_query='collectd_cassandra_stress_write_gauge{type="ops", keyspace="keyspace_entire_test"}', n=10)
 
         # Prepare keyspace and tables for truncate test
         if self.truncate_entries_flag:
             self.insert_rows = 10
             self.fill_db_data_for_truncate_test(insert_rows=self.insert_rows)
+            # Let to ks_truncate complete the schema changes
+            time.sleep(120)
 
         # generate random order to upgrade
         nodes_num = len(self.db_cluster.nodes)
@@ -482,7 +485,8 @@ class UpgradeTest(FillDatabaseData):
         prepare_write_stress = self.params.get('prepare_write_stress')
         prepare_write_cs_thread_pool = self.run_stress_thread(stress_cmd=prepare_write_stress)
         self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
-        time.sleep(60)
+        self.metric_has_data(
+            metric_query='collectd_cassandra_stress_write_gauge{type="ops", keyspace="keyspace1"}', n=5)
 
         with ignore_upgrade_schema_errors():
 
