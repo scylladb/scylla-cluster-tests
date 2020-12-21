@@ -41,6 +41,7 @@ def ignore_upgrade_schema_errors():
         stack.enter_context(DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'))
         stack.enter_context(DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'))
         stack.enter_context(DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'))
+        stack.enter_context(DbEventsFilter(type='RUNTIME_ERROR', line='Could not retrieve CDC streams with timestamp'))
         yield
 
 
