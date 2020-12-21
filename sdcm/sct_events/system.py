@@ -95,6 +95,18 @@ class SpotTerminationEvent(SctEvent):
         return super().msgfmt + ": node={0.node} message={0.message}"
 
 
+class ScyllaRepoEvent(SctEvent):
+    def __init__(self, url: str, error: str):
+        super().__init__(severity=Severity.WARNING)
+
+        self.url = url
+        self.error = error
+
+    @property
+    def msgfmt(self) -> str:
+        return super().msgfmt + ": url={0.url} error={0.error}"
+
+
 class InfoEvent(SctEvent):
     def __init__(self, message: str):
         super().__init__(severity=Severity.NORMAL)

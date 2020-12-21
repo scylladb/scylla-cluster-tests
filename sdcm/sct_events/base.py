@@ -161,7 +161,12 @@ class SctEvent:
         if not self._ready_to_publish:
             LOGGER.warning("[SCT internal warning] %s is not ready to be published", self)
             return
-        if proc := get_events_main_device(_registry=self._events_processes_registry):
+        try:
+            proc = get_events_main_device(_registry=self._events_processes_registry)
+        except RuntimeError:
+            LOGGER.exception("Unable to get events main device")
+            proc = None
+        if proc:
             if proc.is_alive():
                 self.publish()
             else:

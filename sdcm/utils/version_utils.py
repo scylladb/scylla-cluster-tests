@@ -1,14 +1,36 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 import re
-from collections import namedtuple
+import logging
 from enum import Enum, auto
 from string import Template
-from typing import List
+from typing import List, Optional
+from collections import namedtuple
+from urllib.parse import urlparse
 
+import boto3
 import requests
+import dateutil.parser
+from mypy_boto3_s3 import S3Client
+from botocore import UNSIGNED
+from botocore.client import Config
 from pkg_resources import parse_version
 from repodataParser.RepoParser import Parser
 
-from sdcm.utils.common import ParallelObject
+from sdcm.utils.common import ParallelObject, DEFAULT_AWS_REGION
+from sdcm.sct_events.system import ScyllaRepoEvent
+
 
 # Examples of ScyllaDB version strings:
 #   - 666.development-0.20200205.2816404f575
@@ -37,6 +59,12 @@ SCYLLA_URL_RESPONSE_TIMEOUT = 30
 SUPPORTED_XML_EXTENSIONS = ("xml", "xml.gz")
 SUPPORTED_FILE_EXTENSIONS = ("list", "repo", "Packages", "gz") + SUPPORTED_XML_EXTENSIONS
 VERSION_NOT_FOUND_ERROR = "The URL not supported, only Debian and Yum are supported"
+
+SCYLLA_REPO_BUCKET = "downloads.scylladb.com"
+LATEST_SYMLINK_NAME = "latest"
+NO_TIMESTAMP = dateutil.parser.parse("1961-04-12T06:07:00Z", ignoretz=True)  # Poyekhali!
+
+LOGGER = logging.getLogger(__name__)
 
 
 class ScyllaFileType(Enum):
@@ -197,3 +225,90 @@ def get_scylla_docker_repo_from_version(version: str):
     if is_enterprise(version):
         return 'scylladb/scylla-enterprise'
     return 'scylladb/scylla'
+
+
+def _list_repo_file_etag(s3_client: S3Client, prefix: str) -> Optional[dict]:
+    repo_file = s3_client.list_objects_v2(Bucket=SCYLLA_REPO_BUCKET, Prefix=prefix)
+    if repo_file["KeyCount"] != 1:
+        LOGGER.debug("No such file `%s' in %s bucket", prefix, SCYLLA_REPO_BUCKET)
+        return None
+    return repo_file["Contents"][0]["ETag"]
+
+
+def resolve_latest_repo_symlink(url: str) -> str:
+    """Resolve `url' to the actual repo link if it contains `latest' substring, otherwise, return `url' as is.
+
+    If `url' doesn't point to the latest repo file then raise ScyllaRepoEvent (warning severity).
+
+    Can raise ValueError if `url' is not a valid URL that points to a repo file stored in S3.
+    """
+    base, sep, rest = url.partition(LATEST_SYMLINK_NAME)
+    if sep != LATEST_SYMLINK_NAME:
+        LOGGER.info("%s doesn't contain `%s' substring, use URL as is", url, LATEST_SYMLINK_NAME)
+        return url
+
+    parsed_base_url = urlparse(base)
+
+    # URL can be in 3 forms:
+    #  1. http://downloads.scylladb.com/...
+    #  2. http://downloads.scylladb.com.s3.amazonaws.com/...
+    #  3. http://s3.amazonaws.com/downloads.scylladb.com/...
+    # Plus same forms for HTTPS.
+    if parsed_base_url.netloc in (SCYLLA_REPO_BUCKET, f"{SCYLLA_REPO_BUCKET}.s3.amazonaws.com", ):
+        prefix = parsed_base_url.path.lstrip("/")
+    elif parsed_base_url.netloc == "s3.amazonaws.com" and parsed_base_url.path.startswith(f"/{SCYLLA_REPO_BUCKET}/"):
+        prefix = parsed_base_url.path.split("/", 2)[-1]
+    else:
+        raise ValueError(f"Unsupported URL: {url}")
+
+    s3_client: S3Client = boto3.client("s3", region_name=DEFAULT_AWS_REGION, config=Config(signature_version=UNSIGNED))
+
+    latest_etag = _list_repo_file_etag(s3_client=s3_client, prefix=f"{prefix}{LATEST_SYMLINK_NAME}{rest}")
+    if latest_etag is None:
+        raise ValueError(f"{url} doesn't point to a file stored in S3")
+
+    build_list = []
+    s3_objects = s3_client.list_objects_v2(Bucket=SCYLLA_REPO_BUCKET, Delimiter="/", Prefix=prefix)
+    continuation_token = "BEGIN"
+    while continuation_token:
+        for build in s3_objects.get("CommonPrefixes", []):
+            build = build.get("Prefix", "").rstrip("/").rsplit("/", 1)[-1]
+            if build == LATEST_SYMLINK_NAME:
+                continue
+            timestamp = NO_TIMESTAMP
+            if len(build) >= 12:  # `build' should be a string like `202001010000' or `2020-01-01T00:00:00Z'
+                try:
+                    timestamp = dateutil.parser.parse(build, ignoretz=True)
+                except ValueError:
+                    pass
+            build_list.append((timestamp, build, ))
+        if continuation_token := s3_objects.get("NextContinuationToken"):
+            s3_objects = s3_client.list_objects_v2(
+                Bucket=SCYLLA_REPO_BUCKET,
+                Delimiter="/",
+                Prefix=prefix,
+                ContinuationToken=continuation_token,
+            )
+    build_list.sort(reverse=True)
+
+    for timestamp, build in build_list:
+        if _list_repo_file_etag(s3_client=s3_client, prefix=f"{prefix}{build}{rest}") == latest_etag:
+            break
+    else:
+        ScyllaRepoEvent(
+            url=url,
+            error=f"There is no a sibling directory which contains same repo file (ETag={latest_etag})"
+        ).publish_or_dump(default_logger=LOGGER)
+        LOGGER.info("There is no a sibling directory which contains same repo file, use URL %s as is", url)
+        return url
+
+    if (timestamp, build) != build_list[0]:
+        ScyllaRepoEvent(
+            url=url,
+            error=f"{url} doesn't point to the latest repo ({base}{build_list[0][1]}{rest})"
+        ).publish_or_dump(default_logger=LOGGER)
+        LOGGER.info("Actual latest build is %s, not %s", build_list[0][1], build)
+
+    resolved_url = f"{base}{build}{rest}"
+    LOGGER.info("%s resolved to %s", url, resolved_url)
+    return resolved_url
