@@ -16,7 +16,7 @@ def call(Map pipelineParams) {
             SCT_CLUSTER_BACKEND   = "${pipelineParams.get('backend', params.backend)}"
 		}
         parameters {
-            choice(choices: ['k8s-gce-minikube', 'k8s-gke'],
+            choice(choices: ['k8s-gke', 'k8s-gce-minikube'],
                    description: '',
                    name: 'backend')
             string(defaultValue: '',
@@ -28,16 +28,16 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: '',
                    name: 'scylla_mgmt_agent_version')
-            string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'keep-on-failure')}",
+            string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_db_nodes')
             string(defaultValue: "${pipelineParams.get('post_behavior_loader_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_loader_nodes')
-            string(defaultValue: "${pipelineParams.get('post_behavior_monitor_nodes', 'keep-on-failure')}",
+            string(defaultValue: "${pipelineParams.get('post_behavior_monitor_nodes', 'destroy')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_monitor_nodes')
-            string(defaultValue: "qa@scylladb.com",
+            string(defaultValue: "qa@scylladb.com,scylla-operator@scylladb.com",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
         }
