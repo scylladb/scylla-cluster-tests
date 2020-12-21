@@ -493,7 +493,8 @@ class UpgradeTest(FillDatabaseData):
         with DbEventsFilter(type='DATABASE_ERROR', line='Failed to load schema'), \
                 DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
                 DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'), \
-                DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'):
+                DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'), \
+                DbEventsFilter(type='RUNTIME_ERROR', line='Could not retrieve CDC streams with timestamp'):
 
             step = 'Step1 - Upgrade First Node '
             self.log.info(step)
@@ -565,8 +566,8 @@ class UpgradeTest(FillDatabaseData):
         with DbEventsFilter(type='DATABASE_ERROR', line='Failed to load schema'), \
                 DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
                 DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'), \
-                DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'):
-
+                DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'), \
+                DbEventsFilter(type='RUNTIME_ERROR', line='Could not retrieve CDC streams with timestamp'):
             step = 'Step5 - Upgrade rest of the Nodes '
             self.log.info(step)
             for i in indexes[1:]:
