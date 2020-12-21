@@ -52,7 +52,7 @@ class JepsenTest(ClusterTester):
         tests = self.params.get('jepsen_test_cmd')
         nodes = " ".join(f"--node {node.ip_address}" for node in self.db_cluster.nodes)
         creds = f"--username {self.db_cluster.nodes[0].ssh_login_info['user']} --ssh-private-key ~/{DB_SSH_KEY}"
-        jepsen_cmd = f"cd ~/jepsen-scylla && ~/lein run {tests} {nodes} {creds}"
+        jepsen_cmd = f"cd ~/jepsen-scylla && ~/lein run {tests} {nodes} {creds} --no-install-scylla"
 
         self.log.info("Run Jepsen test: `%s'", jepsen_cmd)
         self.jepsen_node.remoter.run(jepsen_cmd)
