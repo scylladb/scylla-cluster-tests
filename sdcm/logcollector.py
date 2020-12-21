@@ -992,14 +992,15 @@ class JepsenLogCollector(LogCollector):
 
     def collect_logs(self, local_search_path: Optional[str] = None) -> Optional[str]:
         s3_link = None
-        jepsen_node = self.nodes[0]
-        if jepsen_archive := self.archive_log_remotely(jepsen_node, "./jepsen-scylla", "jepsen-data"):
-            self.receive_log(jepsen_node, jepsen_archive, self.local_dir)
-            s3_link = upload_archive_to_s3(
-                archive_path=os.path.join(self.local_dir, os.path.basename(jepsen_archive)),
-                storing_path=f"{self.test_id}/{self.current_run}",
-            )
-        remove_files(self.local_dir)
+        if self.nodes:
+            jepsen_node = self.nodes[0]
+            if jepsen_archive := self.archive_log_remotely(jepsen_node, "./jepsen-scylla", "jepsen-data"):
+                self.receive_log(jepsen_node, jepsen_archive, self.local_dir)
+                s3_link = upload_archive_to_s3(
+                    archive_path=os.path.join(self.local_dir, os.path.basename(jepsen_archive)),
+                    storing_path=f"{self.test_id}/{self.current_run}",
+                )
+            remove_files(self.local_dir)
         return s3_link
 
 
