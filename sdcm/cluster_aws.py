@@ -351,6 +351,21 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             IPv6_CIDR=`curl -s ${BASE_EC2_NETWORK_URL}${MAC}/subnet-ipv6-cidr-blocks`
 
             grep -qi "amazon linux" /etc/os-release || sudo ip route add $IPv6_CIDR dev eth0
+
+            grep -q IPV6_AUTOCONF /etc/sysconfig/network-scripts/ifcfg-eth0
+            if [[ $? -eq 0 ]]; then
+                sudo sed -i 's/^IPV6_AUTOCONF=[^ ]*/IPV6_AUTOCONF=yes/' /etc/sysconfig/network-scripts/ifcfg-eth0
+            else
+                sudo echo "IPV6_AUTOCONF=yes" >> /etc/sysconfig/network-scripts/ifcfg-eth0
+            fi
+
+            grep -q IPV6_DEFROUTE /etc/sysconfig/network-scripts/ifcfg-eth0
+            if [[ $? -eq 0 ]]; then
+                sudo sed -i 's/^IPV6_DEFROUTE=[^ ]*/IPV6_DEFROUTE=yes/' /etc/sysconfig/network-scripts/ifcfg-eth0
+            else
+                sudo echo "IPV6_DEFROUTE=yes" >> /etc/sysconfig/network-scripts/ifcfg-eth0
+            fi
+            sudo systemctl restart network
         """)
 
     @staticmethod
