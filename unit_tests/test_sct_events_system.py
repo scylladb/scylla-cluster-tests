@@ -16,7 +16,7 @@ import unittest
 from textwrap import dedent
 
 from sdcm.sct_events.system import \
-    StartupTestEvent, TestFrameworkEvent, SpotTerminationEvent, InfoEvent, \
+    StartupTestEvent, TestFrameworkEvent, SpotTerminationEvent, ScyllaRepoEvent, InfoEvent, \
     ThreadFailedEvent, CoreDumpEvent, TestResultEvent
 
 
@@ -43,6 +43,11 @@ class TestSystemEvents(unittest.TestCase):
     def test_spot_termination_event(self):
         event = SpotTerminationEvent(node="node1", message="m1")
         self.assertEqual(str(event), "(SpotTerminationEvent Severity.CRITICAL): node=node1 message=m1")
+        self.assertEqual(event, pickle.loads(pickle.dumps(event)))
+
+    def test_scylla_repo_event(self):
+        event = ScyllaRepoEvent(url="u1", error="e1")
+        self.assertEqual(str(event), "(ScyllaRepoEvent Severity.WARNING): url=u1 error=e1")
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
     def test_info_event(self):

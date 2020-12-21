@@ -70,6 +70,7 @@ StartupTestEvent: NORMAL
 TestTimeoutEvent: CRITICAL
 TestFrameworkEvent: ERROR
 SpotTerminationEvent: CRITICAL
+ScyllaRepoEvent: WARNING
 InfoEvent: NORMAL
 ThreadFailedEvent: ERROR
 CoreDumpEvent: ERROR

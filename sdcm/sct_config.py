@@ -32,7 +32,7 @@ from sdcm.utils import alternator
 from sdcm.utils.common import find_scylla_repo, get_scylla_ami_versions, get_branched_ami, get_ami_tags, \
     ami_built_by_scylla, MAX_SPOT_DURATION_TIME
 from sdcm.utils.version_utils import get_branch_version, get_branch_version_for_multiple_repositories, \
-    get_scylla_docker_repo_from_version
+    get_scylla_docker_repo_from_version, resolve_latest_repo_symlink
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 
 
@@ -1272,7 +1272,12 @@ class SCTConfiguration(dict):
             elif not self.get('new_scylla_repo'):
                 self['new_scylla_repo'] = find_scylla_repo(new_scylla_version, dist_type, dist_version)
 
-        # 8) append username or ami_id_db_scylla_desc to the user_prefix
+        # 8) resolve repo symlinks
+        for repo_key in ("scylla_repo", "scylla_repo_loader", "new_scylla_repo", ):
+            if self.get(repo_key):
+                self[repo_key] = resolve_latest_repo_symlink(self[repo_key])
+
+        # 9) append username or ami_id_db_scylla_desc to the user_prefix
         version_tag = self.get('ami_id_db_scylla_desc')
         user_prefix = self.get('user_prefix')
         if user_prefix:
@@ -1281,16 +1286,16 @@ class SCTConfiguration(dict):
 
             self['user_prefix'] = "{}-{}".format(user_prefix, version_tag)[:35]
 
-        # 9) update target_upgrade_version automatically
+        # 10) update target_upgrade_version automatically
         new_scylla_repo = self.get('new_scylla_repo')
         if new_scylla_repo and not self.get('target_upgrade_version'):
             self['target_upgrade_version'] = get_branch_version(new_scylla_repo)
 
-        # 10) validate that supported instance_provision selected
+        # 11) validate that supported instance_provision selected
         if self.get('instance_provision') not in ['spot', 'on_demand', 'spot_fleet', 'spot_low_price', 'spot_duration']:
             raise ValueError(f"Selected instance_provision type '{self.get('instance_provision')}' is not supported!")
 
-        # 11) spot_duration instance can be created for test duration
+        # 12) spot_duration instance can be created for test duration
         if self.get('instance_provision').lower() == "spot_duration":
             test_duration = self.get('test_duration')
             if test_duration:
@@ -1298,7 +1303,7 @@ class SCTConfiguration(dict):
                     f'Test duration too long for spot_duration instance type. ' \
                     f'Max possible test duration time for this instance type is {MAX_SPOT_DURATION_TIME} minutes'
 
-        # 12) validate authenticator parameters
+        # 13) validate authenticator parameters
         if self.get('authenticator') and self.get('authenticator') == "PasswordAuthenticator":
             authenticator_user = self.get("authenticator_user")
             authenticator_password = self.get("authenticator_password")

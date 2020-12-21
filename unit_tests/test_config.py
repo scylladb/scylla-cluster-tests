@@ -17,6 +17,7 @@ import itertools
 import unittest
 
 from sdcm.sct_config import SCTConfiguration
+from sdcm.utils.version_utils import resolve_latest_repo_symlink
 
 
 RPM_URL = 'https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/' \
@@ -359,8 +360,11 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
         conf = SCTConfiguration()
         conf.verify_configuration()
-        self.assertEqual(conf.get('scylla_repo'),
-                         "https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/branch-4.2/latest/scylla.repo")
+
+        resolved_repo_link = resolve_latest_repo_symlink(
+            "https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/branch-4.2/latest/scylla.repo"
+        )
+        self.assertEqual(conf.get('scylla_repo'), resolved_repo_link)
         target_upgrade_version = conf.get('target_upgrade_version')
         self.assertTrue(target_upgrade_version == '666.development' or target_upgrade_version.endswith(".dev"))
 
@@ -374,8 +378,11 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
         conf = SCTConfiguration()
         conf.verify_configuration()
-        self.assertEqual(conf.get('scylla_repo'),
-                         "https://s3.amazonaws.com/downloads.scylladb.com/deb/unstable/unified/master/latest/scylladb-master/scylla.list")
+
+        resovled_repo_link = resolve_latest_repo_symlink(
+            "https://s3.amazonaws.com/downloads.scylladb.com/deb/unstable/unified/master/latest/scylladb-master/scylla.list"
+        )
+        self.assertEqual(conf.get('scylla_repo'), resovled_repo_link)
         target_upgrade_version = conf.get('target_upgrade_version')
         self.assertTrue(target_upgrade_version == '666.development' or target_upgrade_version.endswith(".dev"))
 
