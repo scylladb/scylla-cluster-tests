@@ -88,6 +88,10 @@ def ignore_upgrade_schema_errors():
             db_event=DatabaseLogEvent.RUNTIME_ERROR,
             line="Failed to load schema",
         ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.RUNTIME_ERROR,
+            line="Could not retrieve CDC streams with timestamp",
+        ))
         yield
 
 
