@@ -13,9 +13,11 @@
 
 import time
 import logging
+import os
 from typing import Optional
 from functools import cached_property
 
+import paramiko
 from docker import DockerClient  # pylint: disable=wrong-import-order
 from selenium.webdriver import Remote, ChromeOptions
 
@@ -46,8 +48,16 @@ class WebDriverContainerMixin:
         SSHAgent.add_keys((self.ssh_login_info["key_file"], ))
         # since a bug in docker package https://github.com/docker-library/python/issues/517 that need to explicitly
         # pass down the port for supporting ipv6
-        return DockerClient(base_url=f"ssh://{self.ssh_login_info['user']}@{normalize_ipv6_url(self.ssh_login_info['hostname'])}:22",
-                            timeout=DOCKER_API_CALL_TIMEOUT)
+        user = self.ssh_login_info['user']
+        hostname = normalize_ipv6_url(self.ssh_login_info['hostname'])
+        try:
+            return DockerClient(base_url=f"ssh://{user}@{hostname}:22", timeout=DOCKER_API_CALL_TIMEOUT)
+        except paramiko.ssh_exception.BadHostKeyException as exc:
+            system_host_keys_path = os.path.expanduser("~/.ssh/known_hosts")
+            system_host_keys = paramiko.hostkeys.HostKeys(system_host_keys_path)
+            if system_host_keys.pop(exc.hostname, None):
+                system_host_keys.save(system_host_keys_path)
+            return DockerClient(base_url=f"ssh://{user}@{hostname}:22", timeout=DOCKER_API_CALL_TIMEOUT)
 
 
 class RemoteBrowser:
