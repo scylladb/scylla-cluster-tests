@@ -92,6 +92,12 @@ def ignore_upgrade_schema_errors():
             db_event=DatabaseLogEvent.RUNTIME_ERROR,
             line="Could not retrieve CDC streams with timestamp",
         ))
+        # This error message occurs during version rating only for the Drain operating system.
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.DATABASE_ERROR,
+            line="cql_server - exception while processing connection: seastar::nested_exception "
+                 "(seastar::nested_exception)",
+        ))
         yield
 
 
