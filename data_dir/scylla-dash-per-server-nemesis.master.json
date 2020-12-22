@@ -677,7 +677,7 @@
                 "panels": [
                     {
                         "class": "text_panel",
-                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">Cassandra Stress latency</h1>",
+                        "content": "<h1 style=\"color:#5881c2; border-bottom: 3px solid #5881c2;\">Stress tools latency</h1>",
                         "editable": true,
                         "error": false,
                         "id": 63,
@@ -694,7 +694,7 @@
                 "repeatIteration": null,
                 "repeatRowId": null,
                 "showTitle": false,
-                "title": "Cassandra stress latency",
+                "title": "Stress tools latency",
                 "titleSize": "h6"
             },
             {
@@ -821,7 +821,7 @@
                         "thresholds": [],
                         "timeFrom": null,
                         "timeShift": null,
-                        "title": "cassandra-stress latency 95%",
+                        "title": "Stress tools latency 95%",
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
@@ -973,7 +973,7 @@
                         "thresholds": [],
                         "timeFrom": null,
                         "timeShift": null,
-                        "title": "cassandra-stress latency 99%",
+                        "title": "Stress tools latency 99%",
                         "tooltip": {
                             "msResolution": false,
                             "shared": true,
