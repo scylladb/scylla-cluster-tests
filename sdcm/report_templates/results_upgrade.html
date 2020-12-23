@@ -8,10 +8,10 @@
             <li>ScyllaDB version: {{ scylla_version }} ({{ scylla_ami_id }})</li>
             {% if new_scylla_repo -%}
                 <li>Target ScyllaDB repo: {{ new_scylla_repo }}</li>
-            {%- endif}
+            {%- endif %}
             {% if new_version -%}
                 <li>Target ScyllaDB version: {{ new_version }}</li>
-            {%- endif}
+            {%- endif %}
             <li>Instance type: {{ scylla_instance_type }}</li>
             <li>Number of ScyllaDB nodes: {{ number_of_db_nodes }}</li>
         </ul>
