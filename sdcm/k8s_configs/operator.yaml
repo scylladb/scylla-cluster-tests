@@ -60,7 +60,7 @@ spec:
                   description: Port on which to bind the Alternator API
                   format: int32
                   type: integer
-                write_isolation:
+                writeIsolation:
                   type: string
               type: object
             automaticOrphanedNodeCleanup:
@@ -136,6 +136,28 @@ spec:
                   items:
                     description: RackSpec is the desired state for a Scylla Rack.
                     properties:
+                      agentResources:
+                        description: AgentResources which Agent container will use.
+                        properties:
+                          limits:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            description: 'Limits describes the maximum amount of compute resources allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                            type: object
+                          requests:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            description: 'Requests describes the minimum amount of compute resources required. If Requests is omitted for a container, it defaults to Limits if that is explicitly specified, otherwise to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                            type: object
+                        type: object
                       members:
                         description: Members is the number of Scylla instances in this rack.
                         format: int32
@@ -507,7 +529,7 @@ spec:
                             type: array
                         type: object
                       resources:
-                        description: Resources the Scylla Pods will use.
+                        description: Resources the Scylla container will use.
                         properties:
                           limits:
                             additionalProperties:
@@ -547,7 +569,7 @@ spec:
                         - capacity
                         type: object
                       volumeMounts:
-                        description: Volume mounts to be added to scylla nodes
+                        description: VolumeMounts to be added to Scylla container.
                         items:
                           description: VolumeMount describes a mounting of a Volume within a container.
                           properties:
@@ -575,6 +597,7 @@ spec:
                           type: object
                         type: array
                       volumes:
+                        description: Volumes added to Scylla container.
                         items:
                           description: Volume represents a named volume in a pod that may be accessed by any container in the pod.
                           properties:
@@ -1392,6 +1415,19 @@ spec:
             developerMode:
               description: DeveloperMode determines if the cluster runs in developer-mode.
               type: boolean
+            genericUpgrade:
+              description: GenericUpgrade allows to configure behavior of generic upgrade logic.
+              properties:
+                failureStrategy:
+                  description: FailureStrategy specifies which logic is executed when upgrade failure happens. Currently only Retry is supported.
+                  type: string
+                pollInterval:
+                  description: PollInterval specifies how often upgrade logic polls on state updates. Increasing this value should lower number of requests sent to apiserver, but it may affect overall time required spent during upgrade.
+                  type: string
+                validationTimeout:
+                  description: ValidationTimeout specifies how long it can take for Scylla to boot and enter ready state after upgrade until FailureStrategy is executed.
+                  type: string
+              type: object
             network:
               description: Networking config
               properties:
@@ -1413,10 +1449,12 @@ spec:
                   failFast:
                     description: FailFast stop repair on first error.
                     type: boolean
+                  host:
+                    description: Host to repair, by default all hosts are repaired
+                    type: string
                   intensity:
-                    description: Intensity integer >= 1 or a decimal between (0,1), higher values may result in higher speed and cluster load. 0 value means repair at maximum intensity.
-                    format: int64
-                    type: integer
+                    description: Intensity how many token ranges (per shard) to repair in a single Scylla repair job. By default this is 1. If you set it to 0 the number of token ranges is adjusted to the maximum supported by node (see max_repair_ranges_in_parallel in Scylla logs). Valid values are 0 and integers >= 1. Higher values will result in increased cluster load and slightly faster repairs. Changing the intensity impacts repair granularity if you need to resume it, the higher the value the more work on resume. For Scylla clusters that DO NOT SUPPORT ROW-LEVEL REPAIR, intensity can be a decimal between (0,1). In that case it specifies percent of shards that can be repaired in parallel on a repair master node. For Scylla clusters that are row-level repair enabled, setting intensity below 1 has the same effect as setting intensity 1.
+                    type: string
                   interval:
                     description: Interval task schedule interval e.g. 3d2h10m, valid units are d, h, m, s (default "0").
                     type: string
@@ -1433,7 +1471,7 @@ spec:
                     format: int64
                     type: integer
                   parallel:
-                    description: Parallel The maximum number of repair jobs to run in parallel, each node can participate in at most one repair at any given time. Default is means system will repair at maximum parallelism.
+                    description: 'Parallel the maximum number of Scylla repair jobs that can run at the same time (on different token ranges and replicas). Each node can take part in at most one repair at any given moment. By default the maximum possible parallelism is used. The effective parallelism depends on a keyspace replication factor (RF) and the number of nodes. The formula to calculate it is as follows: number of nodes / RF, ex. for 6 node cluster with RF=3 the maximum parallelism is 2.'
                     format: int64
                     type: integer
                   smallTableThreshold:
@@ -1451,19 +1489,6 @@ spec:
               type: string
             scyllaArgs:
               type: string
-            sidecarImage:
-              description: User-provided image for the sidecar that replaces default.
-              properties:
-                repository:
-                  description: Repository to pull the image from.
-                  type: string
-                version:
-                  description: Version of the image.
-                  type: string
-              required:
-              - repository
-              - version
-              type: object
             sysctls:
               description: 'Sysctl properties to be applied during initialization given as a list of key=value pairs. Example: fs.aio-max-nr=232323'
               items:
@@ -1481,6 +1506,7 @@ spec:
           description: ClusterStatus defines the observed state of ScyllaCluster
           properties:
             backups:
+              description: Backups reflects status of backup tasks.
               items:
                 properties:
                   dc:
@@ -1542,6 +1568,7 @@ spec:
                 type: object
               type: array
             managerId:
+              description: ManagerID contains ID under which cluster was registered in Scylla Manager.
               type: string
             racks:
               additionalProperties:
@@ -1582,8 +1609,10 @@ spec:
                 - readyMembers
                 - version
                 type: object
+              description: Racks reflect status of cluster racks.
               type: object
             repairs:
+              description: Repairs reflects status of repair tasks.
               items:
                 properties:
                   dc:
@@ -1596,12 +1625,14 @@ spec:
                   failFast:
                     description: FailFast stop repair on first error.
                     type: boolean
+                  host:
+                    description: Host to repair, by default all hosts are repaired
+                    type: string
                   id:
                     type: string
                   intensity:
-                    description: Intensity integer >= 1 or a decimal between (0,1), higher values may result in higher speed and cluster load. 0 value means repair at maximum intensity.
-                    format: int64
-                    type: integer
+                    description: Intensity how many token ranges (per shard) to repair in a single Scylla repair job. By default this is 1. If you set it to 0 the number of token ranges is adjusted to the maximum supported by node (see max_repair_ranges_in_parallel in Scylla logs). Valid values are 0 and integers >= 1. Higher values will result in increased cluster load and slightly faster repairs. Changing the intensity impacts repair granularity if you need to resume it, the higher the value the more work on resume. For Scylla clusters that DO NOT SUPPORT ROW-LEVEL REPAIR, intensity can be a decimal between (0,1). In that case it specifies percent of shards that can be repaired in parallel on a repair master node. For Scylla clusters that are row-level repair enabled, setting intensity below 1 has the same effect as setting intensity 1.
+                    type: string
                   interval:
                     description: Interval task schedule interval e.g. 3d2h10m, valid units are d, h, m, s (default "0").
                     type: string
@@ -1618,7 +1649,7 @@ spec:
                     format: int64
                     type: integer
                   parallel:
-                    description: Parallel The maximum number of repair jobs to run in parallel, each node can participate in at most one repair at any given time. Default is means system will repair at maximum parallelism.
+                    description: 'Parallel the maximum number of Scylla repair jobs that can run at the same time (on different token ranges and replicas). Each node can take part in at most one repair at any given moment. By default the maximum possible parallelism is used. The effective parallelism depends on a keyspace replication factor (RF) and the number of nodes. The formula to calculate it is as follows: number of nodes / RF, ex. for 6 node cluster with RF=3 the maximum parallelism is 2.'
                     format: int64
                     type: integer
                   smallTableThreshold:
@@ -1634,7 +1665,7 @@ spec:
                 type: object
               type: array
             upgrade:
-              description: UpgradeStatus contains state of ongoing upgrade procedure.
+              description: Upgrade reflects state of ongoing upgrade procedure.
               properties:
                 currentNode:
                   description: CurrentNode node under upgrade.
@@ -1643,13 +1674,13 @@ spec:
                   description: CurrentRack rack under upgrade.
                   type: string
                 dataSnapshotTag:
-                  description: SystemSnapshotTag snapshot tag of data keyspaces.
+                  description: DataSnapshotTag snapshot tag of data keyspaces.
                   type: string
                 fromVersion:
                   description: FromVersion reflects from which version ScyllaCluster is being upgraded.
                   type: string
                 state:
-                  description: State reflect current state machine state.
+                  description: State reflects current upgrade state.
                   type: string
                 systemSnapshotTag:
                   description: SystemSnapshotTag snapshot tag of system keyspaces.
@@ -1733,6 +1764,7 @@ rules:
   - delete
   - get
   - list
+  - update
   - watch
 - apiGroups:
   - ""
