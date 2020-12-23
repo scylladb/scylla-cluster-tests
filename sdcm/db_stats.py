@@ -347,6 +347,9 @@ class Stats():
     def get_doc_id(self):
         return self._test_id
 
+    def get_stats(self):
+        return self._stats
+
     def create(self):
         self.elasticsearch.create_doc(index=self._test_index, doc_type=self._es_doc_type,
                                       doc_id=self._test_id, body=self._stats)
