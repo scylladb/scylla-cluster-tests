@@ -60,6 +60,7 @@ from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2Unexp
 from sdcm.cluster_k8s import PodCluster
 from sdcm.cluster_k8s.minikube import MinikubeScyllaPodCluster
 from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
+from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
 
@@ -140,6 +141,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # TODO: issue https://github.com/scylladb/scylla/issues/6074. Waiting for dev conclusions
             'cqlstress_lwt_example': '*'  # Ignore LWT user-profile tables
         }
+        self.es_publisher = NemesisElasticSearchPublisher(self.tester)
 
     @classmethod
     def add_disrupt_method(cls, func=None):
@@ -178,9 +180,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.stats[disrupt] = {'runs': [], 'failures': [], 'cnt': 0}
         self.stats[disrupt][key[status]].append(data)
         self.stats[disrupt]['cnt'] += 1
-        self.log.info('Update nemesis info: %s', self.stats)
+        self.log.debug('Update nemesis info with: %s', data)
         if self.tester.create_stats:
             self.tester.update({'nemesis': self.stats})
+        if self.es_publisher:
+            self.es_publisher.publish(disrupt_name=disrupt, status=status, data=data)
 
     def publish_event(self, disrupt, status=True, data=None):
         if not data:
@@ -261,6 +265,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @raise_event_on_failure
     def run(self, interval=None):
+        self.es_publisher.create_es_connection()
         if interval:
             self.interval = interval * 60
         self.log.info('Interval: %s s', self.interval)
