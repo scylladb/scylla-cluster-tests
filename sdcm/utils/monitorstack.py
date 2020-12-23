@@ -198,12 +198,18 @@ def extract_file_from_zip_archive(pattern, archive, extract_dir):
 def get_monitoring_data_dir(base_dir):
     monitoring_data_dirs = [d for d in os.listdir(base_dir)
                             if os.path.isdir(os.path.join(base_dir, d))]
+    if not monitoring_data_dirs:
+        LOGGER.error("%s is empty. No data found", base_dir)
+        return False
     return os.path.join(base_dir, monitoring_data_dirs[0])
 
 
 def get_monitoring_stack_dir(base_dir):
-    monitoring_stack_dir = [d for d in os.listdir(base_dir) if 'scylla-monitoring' in d][0]
-    return os.path.join(base_dir, monitoring_stack_dir)
+    monitoring_stack_dir = [d for d in os.listdir(base_dir) if 'scylla-monitoring' in d]
+    if not monitoring_stack_dir:
+        LOGGER.error("%s is empty. No data found", base_dir)
+        return False
+    return os.path.join(base_dir, monitoring_stack_dir[0])
 
 
 def get_monitoring_stack_scylla_version(monitoring_stack_dir):
