@@ -53,10 +53,10 @@ class SctEventProtocol(Protocol):
     def formatted_timestamp(self) -> str:
         ...
 
-    def publish(self) -> None:
+    def publish(self, warn_not_ready: bool = True) -> None:
         ...
 
-    def publish_or_dump(self, default_logger: Optional[logging.Logger] = None) -> None:
+    def publish_or_dump(self, default_logger: Optional[logging.Logger] = None, warn_not_ready: bool = True) -> None:
         ...
 
     def to_json(self) -> str:
