@@ -157,15 +157,17 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
 
     def add_gke_pool(self, name: str, num_nodes: int, instance_type: str) -> None:
         LOGGER.info("Create sct-loaders pool with %d node(s) in GKE cluster `%s'", num_nodes, self.name)
-        self.gcloud.run(f"container --project {self.gce_project} node-pools create {name}"
-                        f" --zone {self.gce_zone}"
-                        f" --cluster {self.gke_cluster_name}"
-                        f" --num-nodes {num_nodes}"
-                        f" --machine-type {instance_type}"
-                        f" --image-type UBUNTU"
-                        f" --node-taints role=sct-loaders:NoSchedule"
-                        f" --no-enable-autoupgrade"
-                        f" --no-enable-autorepair")
+        with self.api_call_rate_limiter.pause:
+            self.gcloud.run(f"container --project {self.gce_project} node-pools create {name}"
+                            f" --zone {self.gce_zone}"
+                            f" --cluster {self.gke_cluster_name}"
+                            f" --num-nodes {num_nodes}"
+                            f" --machine-type {instance_type}"
+                            f" --image-type UBUNTU"
+                            f" --node-taints role=sct-loaders:NoSchedule"
+                            f" --no-enable-autoupgrade"
+                            f" --no-enable-autorepair")
+            self.kubectl('wait --timeout=15m --all --for=condition=Ready node')
 
     def get_kubectl_config_for_user(self, config, username):
         for user in config["users"]:

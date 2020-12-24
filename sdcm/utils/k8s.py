@@ -19,6 +19,7 @@ import queue
 import logging
 import threading
 import multiprocessing
+import contextlib
 from typing import Optional
 from functools import cached_property
 
@@ -85,12 +86,28 @@ class ApiCallRateLimiter(threading.Thread):
     def __init__(self, rate_limit: float, queue_size: int, urllib_retry: int):
         super().__init__(name=type(self).__name__, daemon=True)
         self._lock = multiprocessing.Semaphore(value=1)
+        self._requests_pause_event = multiprocessing.Event()
+        self.release_requests_pause()
         self.rate_limit = rate_limit  # ops/s
         self.queue_size = queue_size
         self.urllib_retry = urllib_retry
         self.running = threading.Event()
 
+    def put_requests_on_pause(self):
+        self._requests_pause_event.clear()
+
+    def release_requests_pause(self):
+        self._requests_pause_event.set()
+
+    @property
+    @contextlib.contextmanager
+    def pause(self):
+        self.put_requests_on_pause()
+        yield None
+        self.release_requests_pause()
+
     def wait(self):
+        self._requests_pause_event.wait(15 * 60)
         if not self._lock.acquire(timeout=self.queue_size / self.rate_limit):  # deepcode ignore E1123: deepcode error
             LOGGER.error("k8s API call rate limiter queue size limit has been reached")
             raise queue.Full
