@@ -73,7 +73,7 @@ columnspec:
     cluster: uniform(1..2000)         #under each domain we will have max 2000 posts
 
   - name: lwt_indicator
-    population: seq(1..1001000)
+    population: seq(1..100100)
 
   - name: url
     size: fixed(200)
