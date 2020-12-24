@@ -339,7 +339,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             return None
         stats_average = self._remove_non_stat_keys(test_doc['_source']['results']['stats_average'])
         stats_total = test_doc['_source']['results']['stats_total']
-        if not stats_average or not stats_total:
+        if not stats_average or not stats_total or any([stats_average[k] == '' for k in self.PARAMS]):
             self.log.error('Cannot find average/total results for test: {}!'.format(test_doc['_id']))
             return None
         # replace average by total value for op rate
