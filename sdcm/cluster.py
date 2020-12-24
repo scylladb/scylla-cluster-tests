@@ -3874,6 +3874,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
                 node.start_scylla_server(verify_up=False, verify_up_timeout=timeout)
                 node.wait_db_up(verbose=verbose, timeout=timeout)
+                node.wait_jmx_up(verbose=verbose, timeout=200)
                 return
 
             if Setup.BACKTRACE_DECODING:
