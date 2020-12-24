@@ -144,22 +144,24 @@ class SctEvent:
             LOGGER.exception("Failed to format a timestamp: %r", self.timestamp)
             return "0000-00-00 <UnknownTimestamp>"
 
-    def publish(self) -> None:
+    def publish(self, warn_not_ready: bool = True) -> None:
         # pylint: disable=import-outside-toplevel; to avoid cyclic imports
         from sdcm.sct_events.events_device import get_events_main_device
 
         if not self._ready_to_publish:
-            LOGGER.warning("[SCT internal warning] %s is not ready to be published", self)
+            if warn_not_ready:
+                LOGGER.warning("[SCT internal warning] %s is not ready to be published", self)
             return
         get_events_main_device(_registry=self._events_processes_registry).publish_event(self)
         self._ready_to_publish = False
 
-    def publish_or_dump(self, default_logger: Optional[logging.Logger] = None) -> None:
+    def publish_or_dump(self, default_logger: Optional[logging.Logger] = None, warn_not_ready: bool = True) -> None:
         # pylint: disable=import-outside-toplevel; to avoid cyclic imports
         from sdcm.sct_events.events_device import get_events_main_device
 
         if not self._ready_to_publish:
-            LOGGER.warning("[SCT internal warning] %s is not ready to be published", self)
+            if warn_not_ready:
+                LOGGER.warning("[SCT internal warning] %s is not ready to be published", self)
             return
         if proc := get_events_main_device(_registry=self._events_processes_registry):
             if proc.is_alive():

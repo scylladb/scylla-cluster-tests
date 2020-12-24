@@ -46,7 +46,11 @@ class GeminiEventsPublisher(FileFollowerThread):
                 time.sleep(0.5)
                 continue
             for line_number, line in enumerate(self.follow_file(self.gemini_log_filename), start=1):
-                GeminiLogEvent.geminievent(verbose=self.verbose).add_info(self.node, line, line_number).publish()
+                GeminiLogEvent.geminievent(verbose=self.verbose).add_info(
+                    node=self.node,
+                    line=line,
+                    line_number=line_number,
+                ).publish(warn_not_ready=False)
                 if self.stopped():
                     break
 
