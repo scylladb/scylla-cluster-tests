@@ -2,7 +2,7 @@ test_duration: 300
 n_db_nodes: 3
 n_loaders: 1
 n_monitor_nodes: 1
-instance_type_db: 'i3.large'
+instance_type_db: 'i3.4xlarge'
 
 store_results_in_elasticsearch: False
 user_prefix: "gemini-cdc-preimage-write"
@@ -19,7 +19,3 @@ gemini_table_options:
   - "cdc={'enabled': true, 'preimage': true}"
 
 db_type: scylla
-
-append_scylla_yaml: |
-  experimental_features:
-    - cdc
