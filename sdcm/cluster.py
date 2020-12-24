@@ -2028,17 +2028,22 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # Download unified package
         self.remoter.run(f'curl {unified_package} -o ./unified_package.tar.gz')
 
+        if nonroot:
+            additional_pkgs = ''
+        else:
+            additional_pkgs = 'xfsprogs mdadm'
+
         # Offline install does't provide openjdk-8, it has to be installed in advance
         # https://github.com/scylladb/scylla-jmx/issues/127
         if self.is_rhel_like():
             sysconfdir_option = ''
-            self.remoter.run('sudo yum install -y java-1.8.0-openjdk')
+            self.remoter.run(f'sudo yum install -y java-1.8.0-openjdk {additional_pkgs}')
         elif self.distro.is_debian10:
             sysconfdir_option = '--sysconfdir /etc/default'
-            self.remoter.run('sudo apt-get install -y openjdk-11-jre-headless')
+            self.remoter.run(f'sudo apt-get install -y openjdk-11-jre-headless {additional_pkgs}')
         else:
             sysconfdir_option = '--sysconfdir /etc/default'
-            self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless')
+            self.remoter.run(f'sudo apt-get install -y openjdk-8-jre-headless {additional_pkgs}')
             self.remoter.run('sudo update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64')
 
         if nonroot:
