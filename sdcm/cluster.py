@@ -2145,13 +2145,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.log.info('result after changing scylla-jmx heap above')
 
     @log_run_info
-    def scylla_setup(self, disks):
+    def scylla_setup(self, disks, devname: str):
         """
         Setup scylla
         :param disks: list of disk names
         """
-        result = self.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
-        devname = result.stdout.strip()
         extra_setup_args = self.parent_cluster.params.get('append_scylla_setup_args')
         result = self.remoter.run('sudo /usr/lib/scylla/scylla_setup --help')
         if '--swap-directory' in result.stdout:
@@ -3845,13 +3843,16 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 raise Exception("There is no pre-installed ScyllaDB")
 
         if not Setup.REUSE_CLUSTER:
+            result = node.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
+            devname = result.stdout.strip()
             if install_scylla:
                 self._scylla_install(node)
             else:
                 self._wait_for_preinstalled_scylla(node)
             if node.is_nonroot_install:
                 node.stop_scylla_server(verify_down=False)
-                node.remoter.run(f'{INSTALL_DIR}/sbin/scylla_setup --no-raid-setup --no-io-setup', ignore_status=True)
+                node.remoter.run(f'{INSTALL_DIR}/sbin/scylla_setup --nic {devname} --no-raid-setup --no-io-setup',
+                                 verbose=True, ignore_status=True)
                 node.remoter.send_files(src='./configurations/io.conf', dst=f'{INSTALL_DIR}/etc/scylla.d/')
                 node.remoter.send_files(src='./configurations/io_properties.yaml', dst=f'{INSTALL_DIR}/etc/scylla.d/')
                 node.remoter.run(
@@ -3881,7 +3882,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node.datacenter_setup(self.datacenter)  # pylint: disable=no-member
             self.node_config_setup(node, ','.join(self.seed_nodes_ips), self.get_endpoint_snitch())
 
-            self._scylla_post_install(node, install_scylla)
+            self._scylla_post_install(node, install_scylla, devname)
 
             if self.node_setup_requires_scylla_restart:
                 node.stop_scylla_server(verify_down=False)
@@ -3939,13 +3940,13 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         pass
 
     @staticmethod
-    def _scylla_post_install(node: BaseNode, new_scylla_installed: bool) -> None:
+    def _scylla_post_install(node: BaseNode, new_scylla_installed: bool, devname: str) -> None:
         if new_scylla_installed:
             try:
                 disks = node.detect_disks(nvme=True)
             except AssertionError:
                 disks = node.detect_disks(nvme=False)
-            node.scylla_setup(disks)
+            node.scylla_setup(disks, devname)
 
     def _reuse_cluster_setup(self, node):
         pass
