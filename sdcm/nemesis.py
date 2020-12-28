@@ -26,7 +26,7 @@ import os
 import re
 import traceback
 import json
-from typing import List, Optional, TypedDict, Type, Callable, Tuple, Dict, Set
+from typing import List, Optional, TypedDict, Type, Callable, Tuple, Dict, Set, Union
 from functools import wraps, partial
 from collections import OrderedDict, defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
@@ -86,6 +86,13 @@ class UnsupportedNemesis(Exception):
 
 class NoMandatoryParameter(Exception):
     """ raised from within a nemesis execution to skip this nemesis"""
+
+
+class DefaultValue:
+    """
+    This is class is intended to be used as default value for the cases when None is not applicable
+    """
+    pass
 
 
 class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
@@ -190,17 +197,22 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _get_target_nodes(
             self,
-            is_seed: Optional[bool] = None,
+            is_seed: Optional[Union[bool, DefaultValue]] = DefaultValue,
             dc_idx: Optional[int] = None,
             rack: Optional[int] = None) -> list:
         """
         Filters and return nodes in the cluster that has no running nemesis on them
         It can filter node by following criteria: is_seed, dc_idx, rack
-        If you want to get only seed nodes you pass is_seed = True, and is_seed = False if you want non-seed nodes.
-        If you don't care nodes seed status, you don't pass is_seed parameter to the function.
         Same mechanism works for other parameters, if multiple criteria provided it will return nodes
         that match all of them.
+        if is_seed is None - it will ignore seed status of the nodes
+        if is_seed is True - it will pick only seed nodes
+        if is_seed is False - it will pick only non-seed nodes
+        if is_seed is DefaultValue - if self.filter_seed is True it act as if is_seed=False,
+          otherwise it will act as if is_seed is None
         """
+        if is_seed is DefaultValue:
+            is_seed = False if self.filter_seed else None
         nodes = [node for node in self.cluster.nodes if not node.running_nemesis]
         if is_seed is not None:
             nodes = [node for node in nodes if node.is_seed == is_seed]
@@ -210,9 +222,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             nodes = [node for node in nodes if node.rack == rack]
         return nodes
 
-    def set_target_node(self, dc_idx: Optional[int] = None, rack: Optional[int] = None):
-        """Set node to run nemesis on"""
-        nodes = self._get_target_nodes(is_seed=False if self.filter_seed else None, dc_idx=dc_idx, rack=rack)
+    def set_target_node(self, dc_idx: Optional[int] = None, rack: Optional[int] = None,
+                        is_seed: Union[bool, DefaultValue, None] = DefaultValue):
+        """Randomly pick a  node from list of the nodes that fit the filter and set it as target node
+        if is_seed is None - it will ignore seed status of the nodes
+        if is_seed is True - it will pick only seed nodes
+        if is_seed is False - it will pick only non-seed nodes
+        if is_seed is DefaultValue - if self.filter_seed is True it act as if is_seed=False,
+          otherwise it will act as if is_seed is None
+        """
+        nodes = self._get_target_nodes(is_seed=is_seed, dc_idx=dc_idx, rack=rack)
         if not nodes:
             raise UnsupportedNemesis("Can't allocate node to run nemesis on")
         # Set name of nemesis, which is going to run on target node
@@ -221,8 +240,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.set_current_running_nemesis(node=self.target_node)
         self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
 
-    def set_last_node_as_target(self, dc_idx: Optional[int] = None, rack: Optional[int] = None):
-        target_nodes = self._get_target_nodes(is_seed=False if self.filter_seed else None, dc_idx=dc_idx, rack=rack)
+    def set_last_node_as_target(self, dc_idx: Optional[int] = None, rack: Optional[int] = None,
+                                is_seed: Union[bool, DefaultValue, None] = DefaultValue):
+        """Pick last node from list of the nodes that fit the filter and set it as target node
+        if is_seed is None - it will ignore seed status of the nodes
+        if is_seed is True - it will pick only seed nodes
+        if is_seed is False - it will pick only non-seed nodes
+        if is_seed is DefaultValue - if self.filter_seed is True it act as if is_seed=False,
+          otherwise it will act as if is_seed is None
+        """
+        target_nodes = self._get_target_nodes(is_seed=is_seed, dc_idx=dc_idx, rack=rack)
         if not target_nodes:
             dc_str = '' if dc_idx is None else f'dc {dc_idx} '
             rack_str = '' if rack is None else f'rack {rack} '
@@ -2509,12 +2536,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def decommission_node(self, node):
         self.cluster.decommission(node)
 
-    def decommission_nodes(self, add_nodes_number, rack):
+    def decommission_nodes(self, add_nodes_number, rack, is_seed: Optional[Union[bool, DefaultValue]] = DefaultValue):
         for _ in range(add_nodes_number):
             if self._is_it_on_kubernetes():
-                self.set_last_node_as_target(rack=rack)
+                self.set_last_node_as_target(rack=rack, is_seed=is_seed)
             else:
-                self.set_target_node()
+                self.set_target_node(is_seed=is_seed)
             self.log.info("Next node will be removed %s", self.target_node)
             try:
                 InfoEvent(message='StartEvent - ShrinkCluster started decommissioning a node').publish()
@@ -2549,7 +2576,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self._set_current_disruption("ShrinkCluster")
         self.log.info("Start shrink cluster on %s nodes", add_nodes_number)
-        self.decommission_nodes(add_nodes_number, rack)
+        # Currently on kubernetes first two nodes of each rack are getting seed status
+        # Because of such behavior only way to get them decommission is to enable decommissioning
+        # TBD: After https://github.com/scylladb/scylla-operator/issues/292 is fixed remove is_seed parameter
+        self.decommission_nodes(add_nodes_number, rack, is_seed=None if self._is_it_on_kubernetes() else DefaultValue)
         self.log.info("Finish cluster shrink. Current number of nodes %s", len(self.cluster.nodes))
 
     def disrupt_hot_reloading_internode_certificate(self):
