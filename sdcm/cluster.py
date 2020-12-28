@@ -2047,6 +2047,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run('sudo update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64')
 
         if nonroot:
+            # Make sure env variable (XDG_RUNTIME_DIR) is set, which is necessary for systemd user
+            if not 'XDG_RUNTIME_DIR=' in self.remoter.run('env').stdout:
+                # Reload the env variables by ssh reconnect
+                self.remoter.run('env', verbose=True, change_context=True)
+                assert 'XDG_RUNTIME_DIR' in self.remoter.run('env', verbose=True).stdout
             install_cmds = dedent(f"""
                 tar xvfz ./unified_package.tar.gz
                 ./install.sh --nonroot {sysconfdir_option}
