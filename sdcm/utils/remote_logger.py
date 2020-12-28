@@ -106,6 +106,17 @@ class SSHScyllaSystemdLogger(SSHLoggerBase):
                '-u scylla-jmx.service'
 
 
+class SSHNonRootScyllaSystemdLogger(SSHLoggerBase):
+    """
+    In NonRoot installation, scylla-server log is redirected a log file in install directory.
+    Related commit: https://github.com/scylladb/scylla/commit/0f786f05fed41be94b09e33aa34a767074a14ec1
+    """
+    @property
+    def _logger_cmd(self) -> str:
+        scylla_log_file = '~/scylladb/scylla-server.log'
+        return f'test -e {scylla_log_file} && tail -f {scylla_log_file}'
+
+
 class SSHGeneralSystemdLogger(SSHLoggerBase):
     @property
     def _logger_cmd(self) -> str:
@@ -228,6 +239,9 @@ def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint:
         return KubectlGeneralLogger(node, target_log_file)
     if logs_transport == 'ssh':
         if node.init_system == 'systemd':
+            if 'db-node' in node.name and node.is_nonroot_install and node.remoter.run(
+                    'sudo test -e /var/log/journal', ignore_status=True).exit_status != 0:
+                return SSHNonRootScyllaSystemdLogger(node, target_log_file)
             if 'db-node' in node.name:
                 return SSHScyllaSystemdLogger(node, target_log_file)
             return SSHGeneralSystemdLogger(node, target_log_file)
