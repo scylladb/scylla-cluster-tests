@@ -133,7 +133,7 @@ class SSHNonRootScyllaSystemdLogger(SSHLoggerBase):
     @property
     def _logger_cmd(self) -> str:
         scylla_log_file = '~/scylladb/scylla-server.log'
-        return f'test -e {scylla_log_file} && tail -f {scylla_log_file}'
+        return f'mkdir -p ~/scylladb && touch {scylla_log_file} && tail -f {scylla_log_file}'
 
 
 class SSHGeneralSystemdLogger(SSHLoggerBase):
