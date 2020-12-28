@@ -2036,13 +2036,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # Offline install does't provide openjdk-8, it has to be installed in advance
         # https://github.com/scylladb/scylla-jmx/issues/127
         if self.is_rhel_like():
-            sysconfdir_option = ''
             self.remoter.run(f'sudo yum install -y java-1.8.0-openjdk {additional_pkgs}')
         elif self.distro.is_debian10:
-            sysconfdir_option = '--sysconfdir /etc/default'
             self.remoter.run(f'sudo apt-get install -y openjdk-11-jre-headless {additional_pkgs}')
         else:
-            sysconfdir_option = '--sysconfdir /etc/default'
             self.remoter.run(f'sudo apt-get install -y openjdk-8-jre-headless {additional_pkgs}')
             self.remoter.run('sudo update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64')
 
@@ -2054,7 +2051,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 assert 'XDG_RUNTIME_DIR' in self.remoter.run('env', verbose=True).stdout
             install_cmds = dedent(f"""
                 tar xvfz ./unified_package.tar.gz
-                ./install.sh --nonroot {sysconfdir_option}
+                ./install.sh --nonroot
                 sudo rm -f /tmp/scylla.yaml
             """)
             # Known issue: https://github.com/scylladb/scylla/issues/7071
@@ -2062,7 +2059,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         else:
             install_cmds = dedent(f"""
                 tar xvfz ./unified_package.tar.gz
-                ./install.sh --housekeeping {sysconfdir_option}
+                ./install.sh --housekeeping
                 rm -f /tmp/scylla.yaml
             """)
             self.remoter.run('sudo bash -cxe "%s"' % install_cmds)
