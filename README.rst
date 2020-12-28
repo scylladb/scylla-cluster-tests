@@ -115,7 +115,8 @@ To run SCT tests locally run following::
     # create a virtualenv for SCT
     pyenv virtualenv 3.8.3 sct38
     pyenv activate sct38
-    pip install -r requirements-python.txt
+    pip install -r requirements.txt
+
 
 Preparing AWS Cloud environment
 -------------------------------
@@ -410,7 +411,7 @@ For examples see utilities documentation
 Building Hydra Docker image
 ===========================
 
-Once you have changes in the requirements-python.txt or in Hydra Dockerfile
+Once you have changes in the requirements.in or in Hydra Dockerfile
 
 - change the version in docker/env/version
 - run ``./docker/env/build_n_push.sh`` to build and push to Docker Hub

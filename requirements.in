@@ -26,7 +26,7 @@ https://github.com/fruch/repodataParser/archive/py3.zip ; python_version > '3'
 pytest==4.6.4
 tcconfig==0.26.0
 selenium==3.141.0
-mysql-connector-python==8.0.19
+mysql-connector-python==8.0.20
 docker==4.2.0
 python-jenkins==1.4.0
 # ssh2-python==0.22.0
@@ -37,3 +37,5 @@ pylint==2.5.3  # Needed for pre-commit hooks
 autopep8==1.5.3  # Needed for pre-commit hooks
 kubernetes==12.0.1
 ldap3==2.7
+google-api-python-client==1.12.8
+pip-tools==5.4.0

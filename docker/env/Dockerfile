@@ -14,9 +14,9 @@ RUN add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debia
 FROM apt_base as python_packages
 ENV PIP_NO_CACHE_DIR=1
 RUN apt-get install -y --no-install-recommends build-essential cmake libssl-dev zlib1g-dev
-ADD requirements-python.txt .
+ADD requirements.txt .
 RUN mkdir /build && \
-    pip3 install -r requirements-python.txt --root=/build --prefix=./ --ignore-installed --no-warn-script-location --use-feature=2020-resolver
+    pip3 install -r requirements.txt --root=/build --prefix=./ --ignore-installed --no-warn-script-location
 
 FROM python:$PYTHON_IMAGE_TAG
 ARG KUBECTL_VERSION=1.18.5
