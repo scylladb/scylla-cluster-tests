@@ -5,7 +5,7 @@ DOCKER_ENV_DIR=$(dirname $(readlink -f $0 ))
 VERSION=v$(cat ${DOCKER_ENV_DIR}/version)
 
 SCT_DIR=$(dirname $(dirname ${DOCKER_ENV_DIR}))
-PY_PREREQS_FILE=requirements-python.txt
+PY_PREREQS_FILE=requirements.txt
 
 function docker_tag_exists() {
     echo "Contacting Docker Hub to check if Hydra image ${VERSION} already exists..."
@@ -24,6 +24,7 @@ if [[ -n "$(docker images scylladb/hydra:${VERSION} -q)" ]]; then
 else
     echo "Hydra image with version $VERSION not found locally. Building..."
     cd "${DOCKER_ENV_DIR}"
+    pip-compile ${SCT_DIR}/requirements.in --allow-unsafe --generate-hashes > ${SCT_DIR}/${PY_PREREQS_FILE}
     cp -f ${SCT_DIR}/${PY_PREREQS_FILE} .
     docker build --network=host -t scylladb/hydra:${VERSION} .
     rm -f ${PY_PREREQS_FILE}
