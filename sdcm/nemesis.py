@@ -578,9 +578,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_destroy_data_then_rebuild(self):  # pylint: disable=invalid-name
         self._set_current_disruption('CorruptThenRebuild %s' % self.target_node)
-        self._destroy_data_and_restart_scylla()
-        # try to save the node
-        self.repair_nodetool_rebuild()
+        with DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,
+                            line="std::system_error (error system:104, sendmsg: Connection reset by peer)",
+                            node=self.target_node):
+            self._destroy_data_and_restart_scylla()
+            # try to save the node
+            self.repair_nodetool_rebuild()
 
     def disrupt_nodetool_drain(self):
         self._set_current_disruption('Drainer %s' % self.target_node)
@@ -1444,7 +1447,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if self._add_drop_column_target_table is None:
             raise UnsupportedNemesis("AddDropColumnMonkey: can't find table to run on")
         self._set_current_disruption(f'AddDropColumnMonkey table {".".join(self._add_drop_column_target_table)}')
-        self._add_drop_column_run_in_cycle()
+        with DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,
+                            line="std::system_error (error system:104, sendmsg: Connection reset by peer)"):
+            self._add_drop_column_run_in_cycle()
 
     def modify_table_comment(self):
         # default: comment = ''
@@ -3482,6 +3487,7 @@ class ValidateHintedHandoffShortDowntime(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
+        self.disable_disrupt
         self.disrupt_validate_hh_short_downtime()
 
 
