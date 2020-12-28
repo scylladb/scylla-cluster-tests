@@ -616,9 +616,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message="FinishEvent - New Node is up and normal").publish()
         return new_node
 
-    def _get_kubernetes_node_break_methods(self, node):
+    def _get_kubernetes_node_break_methods(self):
         if isinstance(self.cluster, GkeScyllaPodCluster):
-            return [node.drain_k8s_node, node.terminate_k8s_host, node.terminate_k8s_node]
+            return ['drain_k8s_node', 'terminate_k8s_host', 'terminate_k8s_node']
         raise UnsupportedNemesis("Only GkeScyllaPodCluster is supported")
 
     def _terminate_cluster_node(self, node):
@@ -677,42 +677,29 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_terminate_and_recover_node_kubernetes(self):  # pylint: disable=invalid-name
         if not self._is_it_on_kubernetes():
             raise UnsupportedNemesis('OperatorNodeTerminateAndRecover is supported only on kubernetes')
-        self.unset_current_running_nemesis(self.target_node)
-        for node_terminate_method in self._get_kubernetes_node_break_methods(self.target_node):
+        for node_terminate_method_name in self._get_kubernetes_node_break_methods():
             self.set_target_node()
             self._set_current_disruption(
-                f'OperatorNodeTerminateAndRecover ({node_terminate_method.__name__}) {self.target_node}')
-            try:
-                self._disrupt_terminate_and_recover_node_kubernetes(self.target_node, node_terminate_method)
-            finally:
-                self.unset_current_running_nemesis(self.target_node)
+                f'OperatorNodeTerminateAndRecover ({node_terminate_method_name}) {self.target_node}')
+            self._disrupt_terminate_and_recover_node_kubernetes(self.target_node, node_terminate_method_name)
 
     def disrupt_terminate_and_replace_node_kubernetes(self):  # pylint: disable=invalid-name
         if not self._is_it_on_kubernetes():
             raise UnsupportedNemesis('OperatorNodeTerminateAndReplace is supported only on kubernetes')
-        self.unset_current_running_nemesis(self.target_node)
-        for node_terminate_method in self._get_kubernetes_node_break_methods(self.target_node):
+        for node_terminate_method_name in self._get_kubernetes_node_break_methods():
             self.set_target_node()
             self._set_current_disruption(
-                f'OperatorNodeTerminateAndReplace ({node_terminate_method.__name__}) {self.target_node}')
-            try:
-                self._disrupt_terminate_and_replace_node_kubernetes(self.target_node, node_terminate_method)
-            finally:
-                self.unset_current_running_nemesis(self.target_node)
+                f'OperatorNodeTerminateAndReplace ({node_terminate_method_name}) {self.target_node}')
+            self._disrupt_terminate_and_replace_node_kubernetes(self.target_node, node_terminate_method_name)
 
     def disrupt_terminate_decommission_add_node_kubernetes(self):  # pylint: disable=invalid-name
         if not self._is_it_on_kubernetes():
             raise UnsupportedNemesis('OperatorNodeTerminateDecommissionAdd is supported only on kubernetes')
-        self.set_last_node_as_target(rack=random.choice(self.cluster.racks))
-        self.unset_current_running_nemesis(self.target_node)
-        for node_terminate_method in self._get_kubernetes_node_break_methods(self.target_node):
-            self.set_target_node()
+        for node_terminate_method_name in self._get_kubernetes_node_break_methods():
+            self.set_last_node_as_target(rack=random.choice(list(self.cluster.racks)))
             self._set_current_disruption(
-                f'OperatorNodeTerminateDecommissionAdd ({node_terminate_method.__name__}) {self.target_node}')
-            try:
-                self._disrupt_terminate_decommission_add_node_kubernetes(self.target_node, node_terminate_method)
-            finally:
-                self.unset_current_running_nemesis(self.target_node)
+                f'OperatorNodeTerminateDecommissionAdd ({node_terminate_method_name}) {self.target_node}')
+            self._disrupt_terminate_decommission_add_node_kubernetes(self.target_node, node_terminate_method_name)
 
     def disrupt_replace_node_kubernetes(self):
         self._set_current_disruption('OperatorNodeReplace %s' % self.target_node)
@@ -724,21 +711,24 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.mark_to_be_replaced()
         self._kubernetes_wait_till_node_up_after_been_recreated(self.target_node, old_uid=old_uid)
 
-    def _disrupt_terminate_and_recover_node_kubernetes(self, node, node_terminate_method):  # pylint: disable=invalid-name
+    def _disrupt_terminate_and_recover_node_kubernetes(self, node, node_terminate_method_name):  # pylint: disable=invalid-name
         old_uid = node.k8s_pod_uid
+        node_terminate_method = getattr(node, node_terminate_method_name)
         node_terminate_method()
         self._kubernetes_wait_till_node_up_after_been_recreated(node, old_uid=old_uid)
 
-    def _disrupt_terminate_decommission_add_node_kubernetes(self, node, node_terminate_method):  # pylint: disable=invalid-name
+    def _disrupt_terminate_decommission_add_node_kubernetes(self, node, node_terminate_method_name):  # pylint: disable=invalid-name
         self.log.info(f'Terminate {node}')
+        node_terminate_method = getattr(node, node_terminate_method_name)
         node_terminate_method()
         self.log.info(f'Decommission {node}')
         self.cluster.decommission(node)
         self.add_new_node(rack=node.rack)
 
-    def _disrupt_terminate_and_replace_node_kubernetes(self, node, node_terminate_method):  # pylint: disable=invalid-name
+    def _disrupt_terminate_and_replace_node_kubernetes(self, node, node_terminate_method_name):  # pylint: disable=invalid-name
         old_uid = node.k8s_pod_uid
         self.log.info(f'TerminateNode {node}')
+        node_terminate_method = getattr(node, node_terminate_method_name)
         node_terminate_method()
         self.log.info(f'Mark {node} to be removed')
         node.mark_to_be_replaced()
