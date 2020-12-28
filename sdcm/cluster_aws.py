@@ -929,8 +929,8 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
     def _wait_for_preinstalled_scylla(node):
         node.wait_for_machine_image_configured()
 
-    def _scylla_post_install(self, node: AWSNode, new_scylla_installed: bool) -> None:
-        super()._scylla_post_install(node, new_scylla_installed)
+    def _scylla_post_install(self, node: AWSNode, new_scylla_installed: bool, devname: str) -> None:
+        super()._scylla_post_install(node, new_scylla_installed, devname)
         if self.params.get('ip_ssh_connections') == 'ipv6':
             node.set_web_listen_address()
 
