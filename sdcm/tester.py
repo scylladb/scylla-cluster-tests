@@ -1300,7 +1300,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def verify_gemini_results(self, queue):
         results = queue.get_gemini_results()
 
-        stats = {'status': None, 'results': [], 'errors': {}, 'cmd': queue.gemini_commands}
+        stats = {'results': [], 'errors': {}}
         if not results:
             self.log.error('Gemini results are not found')
             stats['status'] = 'FAILED'
