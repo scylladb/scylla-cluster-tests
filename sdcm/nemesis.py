@@ -3548,7 +3548,7 @@ class RejectInterNodeNetworkMonkey(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self.disrupt_network_reject_inter_node_communication()
+        self._disrupt_network_reject_inter_node_communication()
 
 
 class RejectNodeExporterNetworkMonkey(Nemesis):
