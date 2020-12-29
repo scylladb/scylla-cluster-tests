@@ -34,7 +34,7 @@ from concurrent.futures import ThreadPoolExecutor
 from invoke import UnexpectedExit
 from cassandra import ConsistencyLevel
 
-from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed
+from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_string, \
     update_certificates, reach_enospc_on_node, clean_enospc_on_node, parse_nodetool_listsnapshots
@@ -2123,6 +2123,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             time.sleep(wait_time)
         finally:
             self.target_node.traffic_control(None)
+            self._wait_all_nodes_un()
+
+    @retrying(n=15, sleep_time=10, allowed_exceptions=ClusterNodesNotReady)
+    def _wait_all_nodes_un(self):
+        self.cluster.check_nodes_up_and_normal()
 
     def disrupt_remove_node_then_add_node(self):
         """
