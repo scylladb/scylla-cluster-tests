@@ -59,7 +59,7 @@ class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
         self.test_cluster = test_cluster
         self.oracle_cluster = oracle_cluster
         self.timeout = timeout
-        self.result_futures = []
+        self.futures = []
         self.outputdir = outputdir
         self.gemini_commands = []
         self._gemini_result_file = None
@@ -77,15 +77,16 @@ class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
         table_options = self.params.get('gemini_table_options')
         if not seed:
             seed = random.randint(1, 100)
-        test_node = random.choice(self.test_cluster.nodes)
-        oracle_node = random.choice(self.oracle_cluster.nodes) if self.oracle_cluster else None
+        test_nodes = ",".join([node.ip_address for node in self.test_cluster.nodes])
+        oracle_nodes = ",".join([node.ip_address for node in self.oracle_cluster.nodes]
+                                ) if self.oracle_cluster else None
 
         cmd = "/$HOME/{} --test-cluster={} --outfile {} --seed {} ".format(self.gemini_cmd.strip(),
-                                                                           test_node.ip_address,
+                                                                           test_nodes,
                                                                            self.gemini_result_file,
                                                                            seed)
-        if oracle_node:
-            cmd += "--oracle-cluster={} ".format(oracle_node.ip_address)
+        if oracle_nodes:
+            cmd += "--oracle-cluster={} ".format(oracle_nodes)
         if table_options:
             cmd += " ".join([f"--table-options \"{table_opt}\"" for table_opt in table_options])
         self.gemini_commands.append(cmd)
@@ -95,7 +96,7 @@ class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
 
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(self.loaders.nodes))
         for loader_idx, loader in enumerate(self.loaders.nodes):
-            self.result_futures.append(executor.submit(self._run_gemini, loader, loader_idx))
+            self.futures.append(executor.submit(self._run_gemini, loader, loader_idx))
 
         return self
 
@@ -130,14 +131,14 @@ class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
         return node, result, self.gemini_result_file
 
     def get_gemini_results(self):
-        results = []
-        command_result = []
+        raw_results = []
+        parsed_results = []
 
         LOGGER.debug('Wait for %s gemini threads results', len(self.loaders.nodes))
-        for future in concurrent.futures.as_completed(self.result_futures, timeout=self.timeout):
-            results.append(future.result())
+        for future in concurrent.futures.as_completed(self.futures, timeout=self.timeout):
+            raw_results.append(future.result())
 
-        for node, _, result_file in results:
+        for node, _, result_file in raw_results:
 
             local_gemini_result_file = os.path.join(node.logdir, os.path.basename(result_file))
             node.remoter.receive_files(src=result_file, dst=local_gemini_result_file)
@@ -145,14 +146,14 @@ class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
                 content = local_file.read()
                 res = self._parse_gemini_summary_json(content)
                 if res:
-                    command_result.append(res)
+                    parsed_results.append(res)
 
-        return command_result
+        return parsed_results
 
     @staticmethod
     def verify_gemini_results(results):
 
-        stats = {'status': None, 'results': [], 'errors': {}}
+        stats = {'results': [], 'errors': {}}
         if not results:
             LOGGER.error('Gemini results are not found')
             stats['status'] = 'FAILED'
@@ -164,7 +165,7 @@ class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
                         LOGGER.error("Gemini {} errors: {}".format(err_type, res[err_type]))
                         stats['status'] = 'FAILED'
                         stats['errors'][err_type] = res[err_type]
-        if not stats['status']:
+        if not stats.get('status'):
             stats['status'] = "PASSED"
 
         return stats

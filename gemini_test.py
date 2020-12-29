@@ -38,9 +38,9 @@ class GeminiTest(ClusterTester):
         cmd = self.params.get('gemini_cmd')
 
         self.log.debug('Start gemini benchmark')
-        test_queue = self.run_gemini(cmd=cmd)
-
-        self.gemini_results = self.verify_gemini_results(queue=test_queue)
+        gemini_thread = self.run_gemini(cmd=cmd)
+        self.gemini_results["cmd"] = gemini_thread.gemini_commands
+        self.gemini_results = self.verify_gemini_results(queue=gemini_thread)
 
         self.verify_results()
 
@@ -52,8 +52,8 @@ class GeminiTest(ClusterTester):
                                     tester_obj=self)
 
         self.log.debug('Start gemini benchmark')
-        test_queue = self.run_gemini(cmd=cmd)
-
+        gemini_thread = self.run_gemini(cmd=cmd)
+        self.gemini_results["cmd"] = gemini_thread.gemini_commands
         # sleep before run nemesis test_duration * .25
         sleep_before_start = float(self.params.get('test_duration')) * 60 * .1
         self.log.info('Sleep interval {}'.format(sleep_before_start))
@@ -61,7 +61,7 @@ class GeminiTest(ClusterTester):
 
         self.db_cluster.start_nemesis()
 
-        self.gemini_results = self.verify_gemini_results(queue=test_queue)
+        self.gemini_results.update(self.verify_gemini_results(queue=gemini_thread))
 
         self.db_cluster.stop_nemesis(timeout=1600)
 
@@ -72,7 +72,8 @@ class GeminiTest(ClusterTester):
         cdc_stress = self.params.get('stress_cdclog_reader_cmd')
         update_es = self.params.get('store_cdclog_reader_stats_in_es')
 
-        gemini_queue = self.run_gemini(cmd=gemini_cmd)
+        gemini_thread = self.run_gemini(cmd=gemini_cmd)
+        self.gemini_results["cmd"] = gemini_thread.gemini_commands
 
         # waite gemini create schema
         time.sleep(10)
@@ -81,7 +82,7 @@ class GeminiTest(ClusterTester):
                                                          keyspace_name="ks1",
                                                          base_table_name="table1")
 
-        self.gemini_results = self.verify_gemini_results(queue=gemini_queue)
+        self.gemini_results = self.verify_gemini_results(queue=gemini_thread)
 
         cdc_stress_results = self.verify_cdclog_reader_results(cdc_stress_queue, update_es)
 
@@ -97,6 +98,7 @@ class GeminiTest(ClusterTester):
         self.log.info('Prepare data for email')
 
         email_data = self._get_common_email_data()
+        grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(self.start_time) if self.monitors else {}
 
         if self.loaders:
             gemini_version = self.loaders.gemini_version
@@ -115,6 +117,8 @@ class GeminiTest(ClusterTester):
                            "oracle_instance_type": self.params.get("instance_type_db_oracle"),
                            "results": self.gemini_results["results"],
                            "scylla_ami_id": self.params.get("ami_id_db_scylla"),
-                           "status": self.gemini_results["status"], })
+                           "status": self.gemini_results["status"],
+                           "grafana_screenshots": grafana_dataset.get("screenshots", []),
+                           "grafana_snapshots": grafana_dataset.get("snapshots", [])})
 
         return email_data
