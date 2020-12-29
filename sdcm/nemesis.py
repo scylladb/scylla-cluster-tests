@@ -36,7 +36,7 @@ from invoke import UnexpectedExit
 from cassandra import ConsistencyLevel  # pylint: disable=ungrouped-imports
 
 from sdcm.cluster_aws import ScyllaAWSCluster
-from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed
+from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady
 from sdcm.group_common_events import ignore_alternator_client_errors, ignore_no_space_errors
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_string, \
@@ -1912,6 +1912,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             time.sleep(wait_time)
         finally:
             self.target_node.traffic_control(None)
+            self._wait_all_nodes_un()
+
+    @retrying(n=15, sleep_time=10, allowed_exceptions=ClusterNodesNotReady)
+    def _wait_all_nodes_un(self):
+        self.cluster.check_nodes_up_and_normal()
 
     def disrupt_remove_node_then_add_node(self):
         """
