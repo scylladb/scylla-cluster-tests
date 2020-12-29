@@ -60,7 +60,7 @@ prepare_write_cmd:
 # or at least
 #   -p scylla.readconsistencylevel=QUORUM -p scylla.writeconsistencylevel=ONE
 #
-# $ bin/ycsb run scylla -s -t -P workloads/workloada -target 120000 -threads 840 -p recordcount=10000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000 -p scylla.coreconnections=280 -p scylla.maxconnections=280 -p scylla.username=cassandra -p scylla.password=cassandra -p scylla.hosts=10.0.2.51,10.0.3.133,10.0.3.67 -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE -p scylla.tokenaware=true 
+# $ bin/ycsb run scylla -s -t -P workloads/workloada -target 120000 -threads 840 -p recordcount=10000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000 -p scylla.coreconnections=280 -p scylla.maxconnections=280 -p scylla.username=cassandra -p scylla.password=cassandra -p scylla.hosts=10.0.2.51,10.0.3.133,10.0.3.67 -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE -p scylla.tokenaware=true
 stress_cmd: [
 ]
 
