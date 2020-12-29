@@ -44,6 +44,14 @@ def call(Map params, String region){
         exit 1
     fi
 
+    if [[ -n "${params.oracle_scylla_version ? params.oracle_scylla_version : ''}" ]] ; then
+        export SCT_ORACLE_SCYLLA_VERSION="${params.oracle_scylla_version}"
+    fi
+
+    if [[ -n "${params.gemini_seed ? params.genini_seed : ''}" ]] ; then
+        export SCT_GEMINI_SEED="${params.gemini_seed}"
+    fi
+
     export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
     export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
     export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
