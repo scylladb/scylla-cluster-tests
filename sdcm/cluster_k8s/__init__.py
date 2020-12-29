@@ -54,6 +54,7 @@ ANY_KUBERNETES_RESOURCE = Union[Resource, ResourceField, ResourceInstance, Resou
 
 SCYLLA_OPERATOR_CONFIG = sct_abs_path("sdcm/k8s_configs/operator.yaml")
 SCYLLA_MANAGER_CONFIG = sct_abs_path("sdcm/k8s_configs/manager.yaml")
+CERT_MANAGER_TEST_CONFIG = sct_abs_path("sdcm/k8s_configs/cert-manager-test.yaml")
 SCYLLA_API_VERSION = "scylla.scylladb.com/v1"
 SCYLLA_CLUSTER_RESOURCE_KIND = "ScyllaCluster"
 DEPLOY_SCYLLA_CLUSTER_DELAY = 15  # seconds
@@ -127,6 +128,12 @@ class KubernetesCluster:
                                namespace="cert-manager"))
         time.sleep(10)
         self.kubectl("wait --timeout=10m --all --for=condition=Ready pod", namespace="cert-manager")
+        wait_for(
+            self.check_if_cert_manager_fully_functional,
+            text='Waiting for cert-manager to become fully operational',
+            timeout=10 * 60,
+            step=10,
+            throw_exc=True)
         self.start_cert_manager_journal_thread()
 
     @log_run_info
@@ -136,6 +143,15 @@ class KubernetesCluster:
         time.sleep(10)
         self.kubectl("wait --timeout=10m --all --for=condition=Ready pod", namespace="scylla-manager-system")
         self.start_scylla_manager_journal_thread()
+
+    def check_if_cert_manager_fully_functional(self) -> bool:
+        # Cert-manager readiness status does not guarantee that it is fully operational
+        # This function checks it if is operational via deploying ca and issuing certificate
+        try:
+            self.apply_file(CERT_MANAGER_TEST_CONFIG)
+            return True
+        finally:
+            self.kubectl(f'delete -f {CERT_MANAGER_TEST_CONFIG}', ignore_status=True)
 
     @property
     def scylla_operator_log(self) -> str:
