@@ -51,6 +51,13 @@ def call() {
             string(defaultValue: '', description: '', name: 'scylla_repo')
 
             string(defaultValue: '',
+                   description: "Which version to use for oracle cluster during gemini test",
+                   name: "oracle_scylla_version")
+
+            string(defaultValue: '', description: 'run gemini with specific seed number',
+                   name: "gemini_seed")
+
+            string(defaultValue: '',
                    description: 'If empty - the default manager version will be taken',
                    name: 'scylla_mgmt_repo')
 
