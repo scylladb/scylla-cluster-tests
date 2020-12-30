@@ -27,7 +27,7 @@ LOGGER = logging.getLogger(__name__)
 class DatabaseLogEvent(LogEvent, abstract=True):
     NO_SPACE_ERROR: Type[LogEventProtocol]
     UNKNOWN_VERB: Type[LogEventProtocol]
-    BROKEN_PIPE: Type[LogEventProtocol]
+    CLIENT_DISCONNECT: Type[LogEventProtocol]
     SEMAPHORE_TIME_OUT: Type[LogEventProtocol]
     EMPTY_NESTED_EXCEPTION: Type[LogEventProtocol]
     DATABASE_ERROR: Type[LogEventProtocol]
@@ -66,8 +66,8 @@ DatabaseLogEvent.add_subevent_type("NO_SPACE_ERROR", severity=Severity.ERROR,
                                    regex="No space left on device")
 DatabaseLogEvent.add_subevent_type("UNKNOWN_VERB", severity=Severity.WARNING,
                                    regex="unknown verb exception")
-DatabaseLogEvent.add_subevent_type("BROKEN_PIPE", severity=Severity.WARNING,
-                                   regex="cql_server - exception while processing connection:.*Broken pipe")
+DatabaseLogEvent.add_subevent_type("CLIENT_DISCONNECT", severity=Severity.WARNING,
+                                   regex=r"\!INFO.*cql_server - exception while processing connection:.*")
 DatabaseLogEvent.add_subevent_type("SEMAPHORE_TIME_OUT", severity=Severity.WARNING,
                                    regex="semaphore_timed_out")
 DatabaseLogEvent.add_subevent_type("EMPTY_NESTED_EXCEPTION", severity=Severity.WARNING,
@@ -106,7 +106,7 @@ DatabaseLogEvent.add_subevent_type("stream_exception", severity=Severity.ERROR,
 SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.NO_SPACE_ERROR(),
     DatabaseLogEvent.UNKNOWN_VERB(),
-    DatabaseLogEvent.BROKEN_PIPE(),
+    DatabaseLogEvent.CLIENT_DISCONNECT(),
     DatabaseLogEvent.SEMAPHORE_TIME_OUT(),
     DatabaseLogEvent.EMPTY_NESTED_EXCEPTION(),
     DatabaseLogEvent.DATABASE_ERROR(),
