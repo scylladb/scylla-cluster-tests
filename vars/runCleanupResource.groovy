@@ -5,6 +5,13 @@ def call(Map params, String region){
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = params.backend.trim().toLowerCase()
 
+    def test_id
+    if (params.test_id) {
+        test_id = params.test_id
+    } else {
+        test_id = env.SCT_TEST_ID
+    }
+
     sh """
     #!/bin/bash
 
@@ -26,7 +33,7 @@ def call(Map params, String region){
     if [[ "$cloud_provider" == "aws" ]]; then
         SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
         if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
-            ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} clean-resources --post-behavior --test-id \$SCT_TEST_ID
+            ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} clean-resources --post-behavior --test-id ${test_id}
         else
             echo "SCT runner IP file is empty. Probably SCT Runner was not created."
             exit 1
