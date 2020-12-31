@@ -2,7 +2,7 @@
 
 ## Key goals
 1) Trying to flatten the config files, i.e. no nested data structures in the config
-2) multiple test configs files can passed via environment variables (to bypass avocado command line for now) `SCT_CONFIG_FILES='["tests/longevity-50GB-4days.yaml","overwrites.yaml"]'`
+2) multiple test configs files can passed via environment variables `SCT_CONFIG_FILES='["tests/longevity-50GB-4days.yaml","overwrites.yaml"]'`
 3) using [python-anyconfig](https://github.com/ssato/python-anyconfig) - That would enable us to support toml/yaml/json and also have a builtin to merge multiple configuration files
 
 ## Directory structure
@@ -23,16 +23,6 @@
 
 ## Example of usage
 
-### with Avocado
-```bash
-# with avocado directly
-
-export SCT_CLUSTER_BACKEND=aws
-export SCT_CONFIG_FILES='test-cases/longevity/longevity-10gb-3h.yaml'
-export SCT_NGROK_NAME=`whoami` # if using ngrok
-avocado --show test run longevity_test.py:LongevityTest.test_custom_time
-```
-
 ### with hydra
 ```bash
 # with hydra
@@ -45,7 +35,6 @@ hydra run longevity_test.py:LongevityTest.test_custom_time
 
 ### with unittest
 ```bash
-# Future: once avocado would be removed:
 # with hydra
 hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/longevity/longevity-10gb-3h.yaml
 

@@ -19,7 +19,7 @@ from sdcm import nemesis
 
 class CorruptThenRebuildTest(ClusterTester):
     """
-    :avocado: enable
+    Corrupt the data file and rebuild
     """
 
     def test_corrupt_then_rebuild_nodes(self):

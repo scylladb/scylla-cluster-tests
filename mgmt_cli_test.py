@@ -249,7 +249,6 @@ class FilesNotCorrupted(Exception):
 class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     """
     Test Scylla Manager operations on Scylla cluster.
-    :avocado: enable
     """
     CLUSTER_NAME = "mgr_cluster1"
     LOCALSTRATEGY_KEYSPACE_NAME = "localstrategy_keyspace"

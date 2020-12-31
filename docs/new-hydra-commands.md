@@ -1,7 +1,7 @@
 
 ```bash
-# run a test will all the regular avocado params
-hydra run longevity_test.py:LongevityTest.test_custom_time --multiplex tests/sample.yaml --filter-only /run/backends/aws/us_east_1 --filter-out /run/backends/gce
+# run a test
+hydra run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/sample.yaml
 
 # show test configuration in yaml format:
 hydra output-conf internal_test_data/minimal_test_case.yaml -b gce

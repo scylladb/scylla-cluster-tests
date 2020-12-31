@@ -43,7 +43,7 @@ gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cl
 EOF
 yum install -y kubectl gettext
 
-# Make sdcm available in python path due to avocado runner bug
+# Make sdcm available in python path
 if [ "$1" == "docker" ]; then
     ln -s /sct/sdcm /usr/lib/python2.7/site-packages/sdcm
 else
