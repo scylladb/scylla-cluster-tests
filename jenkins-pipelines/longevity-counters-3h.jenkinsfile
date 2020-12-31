@@ -7,7 +7,7 @@ longevityPipeline(
     backend: 'aws',
     aws_region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-counters-3h.yaml',
+    test_config: '''["test-cases/longevity/longevity-counters-3h.yaml", "configurations/audit.yaml"]''',
 
     timeout: [time: 400, unit: 'MINUTES']
 )
