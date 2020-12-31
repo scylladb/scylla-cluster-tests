@@ -805,7 +805,9 @@ class ScyllaLogCollector(LogCollector):
                                # Fixme: command=f'cat {self.add_install_prefix(SCYLLA_YAML_PATH)}'),
                                command=f'cat {SCYLLA_YAML_PATH}'),
                     CommandLog(name='coredumps.info',
-                               command='sudo coredumpctl info')
+                               command='sudo coredumpctl info'),
+                    CommandLog(name='io-properties.yaml',
+                               command='cat /etc/scylla.d/io_properties.yaml')
                     ]
     cluster_log_type = "db-cluster"
     cluster_dir_prefix = "db-cluster"
