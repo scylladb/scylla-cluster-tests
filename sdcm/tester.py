@@ -1242,15 +1242,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             errors = []
         else:
             results, errors = cs_thread_pool.verify_results()
-        # Sometimes, we might have an epic error messages list
-        # that will make small machines driving the avocado test
-        # to run out of memory when writing the XML report. Since
-        # the error message is merely informational, let's simply
-        # use the last 5 lines for the final error message.
         if results and self.create_stats:
             self.update_stress_results(results)
         if not results:
             self.log.warning('There is no stress results, probably stress thread has failed.')
+        # Sometimes, we might have an epic error messages list
+        # that will make small machines driving the test
+        # to run out of memory when writing the XML report. Since
+        # the error message is merely informational, let's simply
+        # use the last 5 lines for the final error message.
         errors = errors[-5:]
         if errors:
             self.log.warning("cassandra-stress errors on "

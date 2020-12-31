@@ -23,8 +23,6 @@ from test_lib.sla import ServiceLevel, Role, User
 class SlaPerUserTest(LongevityTest):
     """
     Test SLA per user feature using cassandra-stress.
-
-    :avocado: enable
     """
 
     STRESS_WRITE_CMD = 'cassandra-stress write cl=QUORUM n={n} -schema \'replication(factor=3)\' -port jmx=6868 ' \

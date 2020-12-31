@@ -21,8 +21,6 @@ from sdcm.tester import ClusterTester
 class PerformanceRegressionUserProfilesTest(ClusterTester):
     """
     Test Scylla performance regression with cassandra-stress using custom user profiles.
-
-    :avocado: enable
     """
 
     def __init__(self, *args, **kwargs):

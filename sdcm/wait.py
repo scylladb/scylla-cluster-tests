@@ -27,8 +27,6 @@ LOGGER = logging.getLogger('sdcm.wait')
 def wait_for(func, step=1, text=None, timeout=None, throw_exc=False, **kwargs):
     """
     Wrapper function to wait with timeout option.
-    If timeout received, avocado 'wait_for' method will be used.
-    Otherwise the below function will be called.
 
     :param func: Function to evaluate.
     :param step: Time to sleep between attempts in seconds

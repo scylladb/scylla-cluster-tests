@@ -28,7 +28,7 @@ class ServiceLevel():  # pylint: disable=too-many-instance-attributes
         self._service_shares = service_shares
         self.verbose = verbose
         self._is_created = False
-        self.log = logging.getLogger("avocado.test")
+        self.log = logging.getLogger("test")
 
     @property
     def name(self):
@@ -114,7 +114,7 @@ class UserRoleBase():  # pylint: disable=too-many-instance-attributes
         self.verbose = verbose
         self._attached_service_level_name = ''
         self._attached_service_level_shares = None
-        self.log = logging.getLogger("avocado.test")
+        self.log = logging.getLogger("test")
 
     @property
     def name(self):

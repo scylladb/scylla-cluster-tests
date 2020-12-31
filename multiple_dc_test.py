@@ -21,8 +21,7 @@ from sdcm.tester import ClusterTester
 
 class MultipleDcTest(ClusterTester):
     """
-
-    :avocado: enable
+    Test with multiple DataCenters
     """
 
     def stop_scylla(self, node):

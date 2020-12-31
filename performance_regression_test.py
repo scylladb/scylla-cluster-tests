@@ -595,7 +595,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
         # Run WRITE workload with materialized view
         mv_commands = self.params.get("stress_cmd_mv")
-        # mv_commands structure (created by avocado in correctly parses yaml):
+        # mv_commands structure (created in correctly parses yaml):
         #   [
         #    [('cmd', <cassandra-stress command line>), ('profile', <profile file name with path>)],
         #    [('cmd', <cassandra-stress command line>), ('profile', <profile file name with path>)]
