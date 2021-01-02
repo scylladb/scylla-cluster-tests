@@ -231,11 +231,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if is_seed is DefaultValue - if self.filter_seed is True it act as if is_seed=False,
           otherwise it will act as if is_seed is None
         """
+        self.unset_current_running_nemesis(self.target_node)
         nodes = self._get_target_nodes(is_seed=is_seed, dc_idx=dc_idx, rack=rack)
         if not nodes:
             raise UnsupportedNemesis("Can't allocate node to run nemesis on")
         # Set name of nemesis, which is going to run on target node
-        self.unset_current_running_nemesis(self.target_node)
         self.target_node = random.choice(nodes)
         self.set_current_running_nemesis(node=self.target_node)
         self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
@@ -249,12 +249,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if is_seed is DefaultValue - if self.filter_seed is True it act as if is_seed=False,
           otherwise it will act as if is_seed is None
         """
+        self.unset_current_running_nemesis(self.target_node)
         target_nodes = self._get_target_nodes(is_seed=is_seed, dc_idx=dc_idx, rack=rack)
         if not target_nodes:
             dc_str = '' if dc_idx is None else f'dc {dc_idx} '
             rack_str = '' if rack is None else f'rack {rack} '
             raise UnsupportedNemesis(f"Can't allocate node from {dc_str}{rack_str}to run nemesis on")
-        self.unset_current_running_nemesis(self.target_node)
         self.target_node = target_nodes[-1]
         self.set_current_running_nemesis(node=self.target_node)
         self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
