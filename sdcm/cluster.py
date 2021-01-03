@@ -1798,7 +1798,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 if 'auto_bootstrap' in scylla_yml:
                     scylla_yml['auto_bootstrap'] = False
 
-            if authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator']:
+            if authenticator in ['AllowAllAuthenticator', 'PasswordAuthenticator', 'com.scylladb.auth.SaslauthdAuthenticator']:
                 scylla_yml['authenticator'] = authenticator
 
             if authorizer in ['AllowAllAuthorizer', 'CassandraAuthorizer']:
@@ -3027,6 +3027,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.params = params
         self.datacenter = region_names or []
         self.dead_nodes_list = []
+        self.use_saslauthd_authenticator = self.params.get('use_saslauthd_authenticator')
 
         if Setup.REUSE_CLUSTER:
             # get_node_ips_param should be defined in child
@@ -3159,7 +3160,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         node.destroy()
 
     def get_db_auth(self):
-        if self.params.get('use_ldap_authorization') and self.params.get('are_ldap_users_on_scylla'):
+        if (self.params.get('use_ldap_authorization') or self.use_saslauthd_authenticator) and self.params.get('are_ldap_users_on_scylla'):
             user = LDAP_USERS[0]
             password = LDAP_PASSWORD
         else:

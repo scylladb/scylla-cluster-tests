@@ -472,7 +472,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             # running `set_system_auth_rf()` before changing authorization/authentication protocols
             self.set_system_auth_rf()
 
-            if self.params.get('use_ldap_authorization') and not self.params.get('are_ldap_users_on_scylla'):
+            if (self.params.get('use_ldap_authorization') and not self.params.get('are_ldap_users_on_scylla')) or self.params.get('prepare_saslauthd'):
                 self.db_cluster.nodes[0].create_ldap_users_on_scylla()
                 self.params['are_ldap_users_on_scylla'] = True
 
