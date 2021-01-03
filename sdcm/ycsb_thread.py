@@ -119,7 +119,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         if self.params.get('alternator_use_dns_routing'):
             target_address = 'alternator'
         else:
-            if getattr(self.node_list[0], 'parent_cluster'):
+            if hasattr(self.node_list[0], 'parent_cluster'):
                 target_address = self.node_list[0].parent_cluster.get_node().ip_address
             else:
                 target_address = self.node_list[0].ip_address

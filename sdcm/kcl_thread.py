@@ -20,7 +20,6 @@ import threading
 
 from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.sct_events import Severity
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.loaders import KclStressEvent
 from sdcm.cluster import BaseNode
@@ -38,26 +37,16 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
         return _self
 
     def build_stress_cmd(self):
-        if self.params.get('alternator_use_dns_routing'):
-            target_address = 'alternator'
+        if hasattr(self.node_list[0], 'parent_cluster'):
+            target_address = self.node_list[0].parent_cluster.get_node().ip_address
         else:
-            if getattr(self.node_list[0], 'parent_cluster'):
-                target_address = self.node_list[0].parent_cluster.get_node().ip_address
-            else:
-                target_address = self.node_list[0].ip_address
+            target_address = self.node_list[0].ip_address
         stress_cmd = f"./gradlew run --args=\' {self.stress_cmd.replace('hydra-kcl', '')} -e http://{target_address}:{self.params.get('alternator_port')} \'"
         return stress_cmd
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
-        dns_options = ""
-        if self.params.get('alternator_use_dns_routing'):
-            dns = RemoteDocker(loader, "scylladb/hydra-loaders:alternator-dns-0.2",
-                               command_line=f'python3 /dns_server.py {self.db_node_to_query(loader)} '
-                                            f'{self.params.get("alternator_port")}',
-                               extra_docker_opts=f'--label shell_marker={self.shell_marker}')
-            dns_options += f'--dns {dns.internal_ip_address} --dns-option use-vc'
-        docker = RemoteDocker(loader, "scylladb/hydra-loaders:kcl-jdk8-20201104",
-                              extra_docker_opts=f'{dns_options} --label shell_marker={self.shell_marker}')
+        docker = RemoteDocker(loader, "scylladb/hydra-loaders:kcl-jdk8-20201229",
+                              extra_docker_opts=f'--label shell_marker={self.shell_marker}')
         stress_cmd = self.build_stress_cmd()
 
         if not os.path.exists(loader.logdir):
