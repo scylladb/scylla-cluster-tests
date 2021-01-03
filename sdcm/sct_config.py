@@ -354,7 +354,7 @@ class SCTConfiguration(dict):
 
         dict(name="authenticator", env="SCT_AUTHENTICATOR", type=str,
              help="which authenticator scylla will use AllowAllAuthenticator/PasswordAuthenticator",
-             choices=("PasswordAuthenticator", "AllowAllAuthenticator"),
+             choices=("PasswordAuthenticator", "AllowAllAuthenticator", "com.scylladb.auth.SaslauthdAuthenticator"),
              ),
 
         dict(name="authenticator_user", env="SCT_AUTHENTICATOR_USER", type=str,
