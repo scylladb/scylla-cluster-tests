@@ -1873,3 +1873,15 @@ def clean_enospc_on_node(target_node, sleep_time):
     time.sleep(sleep_time / 2)
     target_node.remoter.run('sudo systemctl restart scylla-server.service')
     target_node.wait_db_up()
+
+
+def update_authenticator(nodes, authenticator='AllowAllAuthenticator', restart=True):
+    """
+    Update the authenticator of nodes, restart the nodes to make the change effective
+    """
+    for node in nodes:
+        node.remoter.run(
+            f"sed -ie 's/^authenticator:.*/authenticator: {authenticator}/g' /etc/scylla/scylla.yaml")
+        if restart:
+            node.restart_scylla_server()
+            node.wait_db_up()
