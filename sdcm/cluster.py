@@ -1762,6 +1762,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def create_ldap_users_on_scylla(self):
         self.run_cqlsh(f'CREATE ROLE \'{LDAP_ROLE}\' WITH SUPERUSER=true')
         for user in LDAP_USERS:
+            if user == 'cassandra':
+                # User `cassandra' has been created by default
+                continue
+        for user in LDAP_USERS:
             self.run_cqlsh(f'CREATE ROLE \'{user}\' WITH login=true AND password=\'{LDAP_PASSWORD}\'')
 
     # pylint: disable=invalid-name,too-many-arguments,too-many-locals,too-many-branches,too-many-statements
