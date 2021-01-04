@@ -1,5 +1,7 @@
 import logging
 
+from datetime import datetime, timedelta
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -35,12 +37,16 @@ class QueryFilter():
         test_details += ' AND test_details.test_name: {}'.format(self.test_name.replace(":", r"\:"))
         return test_details
 
+    def filter_test_for_lastyear(self):
+        year_ago = (datetime.today() - timedelta(days=365)).date().strftime("%Y%m%d")
+        return f"versions.scylla-server.date:{{{year_ago} TO *}}"
+
     def test_cmd_details(self):
         raise NotImplementedError('Derived classes must implement this method.')
 
     def __call__(self, *args, **kwargs):
         try:
-            return '{} AND {}'.format(self.filter_test_details(), self.filter_setup_details())
+            return '{} AND {} AND {}'.format(self.filter_test_details(), self.filter_setup_details(), self.filter_test_for_lastyear())
         except KeyError:
             LOGGER.exception('Expected parameters for filtering are not found , test {}'.format(self.test_doc['_id']))
         return None
