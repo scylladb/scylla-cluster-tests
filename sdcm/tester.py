@@ -602,6 +602,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                     'pd-standard': self.params.get('gce_pd_standard_disk_size_db')}
 
         service_accounts = KeyStore().get_gcp_service_accounts()
+        db_type = self.params.get('db_type')
         common_params = dict(gce_image_username=self.params.get('gce_image_username'),
                              gce_network=self.params.get('gce_network'),
                              credentials=self.credentials,
@@ -609,16 +610,30 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                              params=self.params,
                              gce_datacenter=gce_datacenter,
                              )
-        self.db_cluster = ScyllaGCECluster(gce_image=gce_image_db,
-                                           gce_image_type=db_info['disk_type'],
-                                           gce_image_size=db_info['disk_size'],
-                                           gce_n_local_ssd=db_info['n_local_ssd'],
-                                           gce_instance_type=db_info['type'],
-                                           services=services,
-                                           n_nodes=db_info['n_nodes'],
-                                           add_disks=cluster_additional_disks,
-                                           service_accounts=service_accounts,
-                                           **common_params)
+        if db_type == 'cloud_scylla':
+            cloud_credentials = self.params.get('cloud_credentials_path')
+
+            credentials = [UserRemoteCredentials(key_file=cloud_credentials)]
+            params = dict(
+                n_nodes=[0],
+                user_prefix=self.params.get('user_prefix'),
+                credentials=credentials,
+                params=self.params,
+            )
+            if not cluster_cloud:
+                raise ImportError("cluster_cloud isn't installed")
+            self.db_cluster = cluster_cloud.ScyllaCloudCluster(**params)
+        else:
+            self.db_cluster = ScyllaGCECluster(gce_image=gce_image_db,
+                                               gce_image_type=db_info['disk_type'],
+                                               gce_image_size=db_info['disk_size'],
+                                               gce_n_local_ssd=db_info['n_local_ssd'],
+                                               gce_instance_type=db_info['type'],
+                                               services=services,
+                                               n_nodes=db_info['n_nodes'],
+                                               add_disks=cluster_additional_disks,
+                                               service_accounts=service_accounts,
+                                               **common_params)
 
         loader_additional_disks = {'pd-ssd': self.params.get('gce_pd_ssd_disk_size_loader')}
         self.loaders = LoaderSetGCE(gce_image=self.params.get('gce_image_loader'),
@@ -1036,7 +1051,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if cluster_backend in ('aws', 'aws-siren'):
             self.get_cluster_aws(loader_info=loader_info, db_info=db_info,
                                  monitor_info=monitor_info)
-        elif cluster_backend == 'gce':
+        elif cluster_backend in ('gce', 'gce-siren'):
             self.get_cluster_gce(loader_info=loader_info, db_info=db_info,
                                  monitor_info=monitor_info)
         elif cluster_backend == 'docker':
