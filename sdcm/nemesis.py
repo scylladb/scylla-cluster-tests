@@ -2621,7 +2621,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def steady_state_latency(self, sleep_time=None):
         if not sleep_time:
             sleep_time = self.cluster.params.get('nemesis_interval') * 60
+        InfoEvent(message=f'StartEvent - start a sleep of {sleep_time} as Steady State').publish()
         time.sleep(sleep_time)
+        InfoEvent(message='FinishEvent - Steady State sleep has been finished').publish()
 
     def disrupt_run_unique_sequence(self):
         sleep_time_between_ops = self.cluster.params.get('nemesis_sequence_sleep_between_ops')
