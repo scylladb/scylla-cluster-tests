@@ -167,27 +167,25 @@ def latency_calculator_decorator(func):
         test_name = args[0].tester.__repr__().split('testMethod=')[-1].split('>')[0]
         monitor = args[0].monitoring_set.nodes[0]
         if 'read' in test_name:
-            workload = ['read']
+            workload = 'read'
         elif 'write' in test_name:
-            workload = ['write']
+            workload = 'write'
         elif 'mixed' in test_name:
-            workload = ['read', 'write']
+            workload = 'mixed'
         else:
             return res
-        for workload_type in workload:
-            if workload_type not in args[0].cluster.latency_results:
-                args[0].cluster.latency_results[workload_type] = dict()
-            if "steady" not in func.__name__.lower():
-                if func.__name__ not in args[0].cluster.latency_results[workload_type]:
-                    args[0].cluster.latency_results[workload_type][func.__name__] = dict()
-                if 'cycles' not in args[0].cluster.latency_results[workload_type][func.__name__]:
-                    args[0].cluster.latency_results[workload_type][func.__name__]['cycles'] = list()
-            result = latency.collect_latency(monitor, start, end, workload_type, args[0].cluster, all_nodes_list)
-            if "steady" in func.__name__.lower() and \
-                    'Steady State' not in args[0].cluster.latency_results[workload_type]:
-                args[0].cluster.latency_results[workload_type]['Steady State'] = result
-            else:
-                args[0].cluster.latency_results[workload_type][func.__name__]['cycles'].append(result)
+
+        if "steady" not in func.__name__.lower():
+            if func.__name__ not in args[0].cluster.latency_results:
+                args[0].cluster.latency_results[func.__name__] = dict()
+            if 'cycles' not in args[0].cluster.latency_results[func.__name__]:
+                args[0].cluster.latency_results[func.__name__]['cycles'] = list()
+        result = latency.collect_latency(monitor, start, end, workload, args[0].cluster, all_nodes_list)
+        if "steady" in func.__name__.lower() and \
+                'Steady State' not in args[0].cluster.latency_results:
+            args[0].cluster.latency_results['Steady State'] = result
+        else:
+            args[0].cluster.latency_results[func.__name__]['cycles'].append(result)
         return res
 
     return wrapped

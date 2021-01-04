@@ -52,66 +52,68 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
             res[metric] = format(float(max([float(val) for val in latency_values_lst])), '.2f') if precision == 'max' \
                 else format(float(avg(latency_values_lst)), '.2f')
 
-    for precision in scylla_precision:
-        query = f'histogram_quantile(0.{precision},sum(rate(scylla_storage_proxy_coordinator_{load_type}_' \
-                f'latency_bucket{{}}[{duration}s])) by (instance, le))'
-        query_res = prometheus.query(query, start, end)
-        for entry in query_res:
-            node_ip = entry['metric']['instance'].replace('[', '').replace(']', '')
-            node = cluster.get_node_by_ip(node_ip)
-            if not node:
-                for db_node in nodes_list:
-                    if db_node.ip_address == node_ip:
-                        node = db_node
-            if node:
-                node_idx = node.name.split('-')[-1]
-            else:
-                continue
-            node_name = f'node-{node_idx}'
-            metric = f"Scylla P{precision} - {node_name}"
-            if not entry['values']:
-                continue
-            sequence = [val[-1] for val in entry['values'] if not val[-1].lower() == 'nan']
-            if sequence:
-                res[metric] = format(float(avg(sequence) / 1000), '.2f')
+    if load_type == 'mixed':
+        load_type = ['read', 'write']
+    else:
+        load_type = [load_type]
+
+    for load in load_type:
+        for precision in scylla_precision:
+            query = f'histogram_quantile(0.{precision},sum(rate(scylla_storage_proxy_coordinator_{load}_' \
+                    f'latency_bucket{{}}[{duration}s])) by (instance, le))'
+            query_res = prometheus.query(query, start, end)
+            for entry in query_res:
+                node_ip = entry['metric']['instance'].replace('[', '').replace(']', '')
+                node = cluster.get_node_by_ip(node_ip)
+                if not node:
+                    for db_node in nodes_list:
+                        if db_node.ip_address == node_ip:
+                            node = db_node
+                if node:
+                    node_idx = node.name.split('-')[-1]
+                else:
+                    continue
+                node_name = f'node-{node_idx}'
+                metric = f"Scylla P{precision}_{load} - {node_name}"
+                if not entry['values']:
+                    continue
+                sequence = [val[-1] for val in entry['values'] if not val[-1].lower() == 'nan']
+                if sequence:
+                    res[metric] = format(float(avg(sequence) / 1000), '.2f')
 
     return res
 
 
 def calculate_latency(latency_results):
     result_dict = dict()
-    for workload in latency_results.keys():
-        if workload not in result_dict:
-            result_dict[workload] = dict()
-        all_keys = list(latency_results[workload].keys())
-        steady_key = ''
-        if all_keys:
-            steady_key = [key for key in all_keys if 'steady' in key.lower()]
-        if not steady_key or not all_keys:
-            result_dict[workload] = latency_results[workload]
-            continue
-        else:
-            steady_key = all_keys.pop(all_keys.index(steady_key[0]))
-        result_dict[workload][steady_key] = latency_results[workload][steady_key].copy()
-        for key in all_keys:
-            result_dict[workload][key] = latency_results[workload][key].copy()
-            temp_dict = dict()
-            for cycle in latency_results[workload][key]['cycles']:
-                for metric, value in cycle.items():
-                    if metric not in temp_dict:
-                        temp_dict[metric] = list()
-                    temp_dict[metric].append(value)
-            for temp_key, temp_val in temp_dict.items():
-                if 'Cycles Average' not in result_dict[workload][key]:
-                    result_dict[workload][key]['Cycles Average'] = dict()
-                average = format(float(avg(temp_val)), '.2f')
-                result_dict[workload][key]['Cycles Average'][temp_key] = float(f'{average}')
-                if 'Relative to Steady' not in result_dict[workload][key]:
-                    result_dict[workload][key]['Relative to Steady'] = dict()
-                if temp_key in latency_results[workload][steady_key]:
-                    steady_val = float(latency_results[workload][steady_key][temp_key])
-                    if steady_val != 0:
-                        result_dict[workload][key]['Relative to Steady'][temp_key] = \
-                            format((float(average) - steady_val), '.2f')
+    all_keys = list(latency_results.keys())
+    steady_key = ''
+    if all_keys:
+        steady_key = [key for key in all_keys if 'steady' in key.lower()]
+    if not steady_key or not all_keys:
+        return latency_results
+    else:
+        steady_key = all_keys.pop(all_keys.index(steady_key[0]))
+    result_dict[steady_key] = latency_results[steady_key].copy()
+    for key in all_keys:
+        result_dict[key] = latency_results[key].copy()
+        temp_dict = dict()
+        for cycle in latency_results[key]['cycles']:
+            for metric, value in cycle.items():
+                if metric not in temp_dict:
+                    temp_dict[metric] = list()
+                temp_dict[metric].append(value)
+        for temp_key, temp_val in temp_dict.items():
+            if 'Cycles Average' not in result_dict[key]:
+                result_dict[key]['Cycles Average'] = dict()
+            average = format(float(avg(temp_val)), '.2f')
+            result_dict[key]['Cycles Average'][temp_key] = float(f'{average}')
+            if 'Relative to Steady' not in result_dict[key]:
+                result_dict[key]['Relative to Steady'] = dict()
+            if temp_key in latency_results[steady_key]:
+                steady_val = float(latency_results[steady_key][temp_key])
+                if steady_val != 0:
+                    result_dict[key]['Relative to Steady'][temp_key] = \
+                        format((float(average) - steady_val), '.2f')
 
     return result_dict
