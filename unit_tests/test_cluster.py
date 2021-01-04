@@ -24,6 +24,8 @@ from weakref import proxy as weakproxy
 from invoke import Result
 
 from sdcm.cluster import BaseNode, BaseCluster, BaseMonitorSet
+from sdcm.sct_events import Severity
+from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
 from sdcm.utils.distro import Distro
 
 from unit_tests.dummy_remote import DummyRemote
@@ -114,6 +116,15 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             assert event_a["line_number"] == 0
             assert event_b["type"] == "REACTOR_STALLED"
             assert event_b["line_number"] == 3
+
+    def test_search_cdc_invalid_request(self):
+        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_cdc_invalid_request.log')
+        with ignore_upgrade_schema_errors():
+            self.node._read_system_log_and_publish_events(start_from_beginning=True)
+
+        with self.get_events_logger().events_logs_by_severity[Severity.ERROR].open() as events_file:
+            events = [json.loads(line) for line in events_file]
+            assert events == []
 
     def test_search_system_suppressed_messages(self):
         self.node.system_log = os.path.join(os.path.dirname(
