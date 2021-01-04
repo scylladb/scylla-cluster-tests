@@ -24,11 +24,8 @@
         {% endfor %}
         </ul>
     </div>
-
-    {% for workload_type, operations in stats.items() %}
-        <h1>Test {{ workload_type }}</h1>
         <div>
-            {% for operation, results in operations.items() %}
+            {% for operation, results in stats.items() %}
                 {% if operation != 'Steady State' %}
                     <h2>{{ operation }}</h2>
                     <table id="results_table">
@@ -55,7 +52,7 @@
                                     <td>{{ cycle[lat_type] }}</td>
                                 {% endfor %}
                                 <td>{{ results['Cycles Average'][lat_type] }}</td>
-                                <td>{{ operations['Steady State'][lat_type] }}</td>
+                                <td>{{ stats['Steady State'][lat_type] }}</td>
                                 <td>{{ results['Relative to Steady'][lat_type] }}</td>
                             </tr>
                         {% endfor %}
@@ -63,7 +60,6 @@
                 {% endif %}
             {% endfor %}
         </div>
-    {% endfor %}
 
     <h3>Links:</h3>
     <ul>
