@@ -89,7 +89,7 @@ def ignore_upgrade_schema_errors():
             line="Failed to load schema",
         ))
         stack.enter_context(DbEventsFilter(
-            db_event=DatabaseLogEvent.RUNTIME_ERROR,
+            db_event=DatabaseLogEvent.DATABASE_ERROR,
             line="Could not retrieve CDC streams with timestamp",
         ))
         # This error message occurs during version rating only for the Drain operating system.
