@@ -87,7 +87,7 @@ class SCTConfiguration(dict):
     """
     Class the hold the SCT configuration
     """
-    available_backends = ['aws', 'gce', 'docker', 'baremetal', 'aws-siren', 'k8s-gce-minikube', 'k8s-gke']
+    available_backends = ['aws', 'gce', 'docker', 'baremetal', 'aws-siren', 'k8s-gce-minikube', 'k8s-gke', 'gce-siren']
 
     config_options = [
         dict(name="config_files", env="SCT_CONFIG_FILES", type=str_or_list,
@@ -1101,6 +1101,12 @@ class SCTConfiguration(dict):
         'aws-siren': ["user_prefix", "instance_type_loader", "region_name", "cloud_credentials_path",
                       "cloud_cluster_id", "nemesis_filter_seeds"],
 
+        'gce-siren': ['user_prefix', 'gce_network', 'gce_image_username', 'gce_instance_type_db',
+                      'gce_root_disk_type_db', 'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db',
+                      'gce_instance_type_loader', 'gce_root_disk_type_loader', 'gce_n_local_ssd_disk_loader',
+                      'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'gce_root_disk_size_monitor',
+                      'gce_n_local_ssd_disk_monitor', 'gce_datacenter'],
+
         'k8s-gce-minikube': ['gce_image_minikube', 'gce_instance_type_minikube', 'gce_root_disk_type_minikube',
                              'gce_root_disk_size_minikube', 'user_credentials_path', 'scylla_version',
                              'scylla_mgmt_agent_version', 'k8s_scylla_operator_docker_image', 'k8s_scylla_datacenter',
@@ -1124,6 +1130,7 @@ class SCTConfiguration(dict):
         "docker": [sct_abs_path('defaults/docker_config.yaml')],
         "baremetal": [sct_abs_path('defaults/baremetal_config.yaml')],
         "aws-siren": [sct_abs_path('defaults/aws_config.yaml')],
+        "gce-siren": [sct_abs_path('defaults/gce_config.yaml')],
         "k8s-gce-minikube": [sct_abs_path('defaults/k8s_gce_minikube_config.yaml')],
         "k8s-gke": [sct_abs_path('defaults/k8s_gke_config.yaml')],
     }

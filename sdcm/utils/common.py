@@ -150,7 +150,7 @@ def get_test_name():
     if config_files := os.environ.get("SCT_CONFIG_FILES"):
         # Example: 'test-cases/gemini/gemini-1tb-10h.yaml,test-cases/gemini/gemini-10tb-10h.yaml'
         config_file = config_files[0] if isinstance(config_files, list) else config_files.split(",")[0].strip()
-        return config_file.split("/")[-1].replace('.yaml', '')
+        return config_file.split("/")[-1].replace('.yaml', '').replace('"', '').replace("'", "")
 
     return ""
 
