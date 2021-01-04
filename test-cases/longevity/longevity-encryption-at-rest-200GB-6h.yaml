@@ -37,11 +37,3 @@ append_scylla_yaml: |
       enabled: True  # system_info_encryption
       key_provider: LocalFileSystemKeyProviderFactory  # system_info_encryption
       secret_key_file: '/etc/scylla/encrypt_conf/system_info_encryption_keyfile'
-
-  kmip_hosts:
-       kmip_test:
-           hosts: kmip-interop1.cryptsoft.com
-           certificate: /etc/encrypt_conf/SCYLLADB.pem
-           keyfile: /etc/encrypt_conf/SCYLLADB.pem
-           truststore: /etc/encrypt_conf/CA.pem
-           priority_string: 'SECURE128:+RSA:-VERS-TLS1.0:-ECDHE-ECDSA'
