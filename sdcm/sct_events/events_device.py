@@ -157,8 +157,6 @@ class EventsDevice(multiprocessing.Process):
                             LOGGER.debug("%s: delete filter with uuid=%s", self, filter_key)
                             del filters[filter_key]
 
-                obj_filtered = any([f.eval_filter(obj) for f in filters.values()])
-
                 if isinstance(obj, BaseFilter):
                     if obj.clear_filter and not obj.expire_time:
                         LOGGER.debug("%s: delete filter with uuid=%s", self, obj.uuid)
@@ -171,7 +169,12 @@ class EventsDevice(multiprocessing.Process):
                         LOGGER.debug("%s: add filter %s with uuid=%s", self, obj, obj.uuid)
                         filters[obj.uuid] = obj
 
-                if obj_filtered or isinstance(obj, SystemEvent):
+                if isinstance(obj, SystemEvent):
+                    continue
+
+                obj_filtered = any([f.eval_filter(obj) for f in filters.values()])
+
+                if obj_filtered:
                     continue
 
                 if (obj_max_severity := max_severity(obj)).value < obj.severity.value:
