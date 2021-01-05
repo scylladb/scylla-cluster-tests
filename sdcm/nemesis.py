@@ -2620,7 +2620,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     @latency_calculator_decorator
     def steady_state_latency(self, sleep_time=None):
         if not sleep_time:
-            sleep_time = self.cluster.params.get('nemesis_interval') * 60
+            sleep_time = self.cluster.params.get('nemesis_interval') * 2 * 60  # wait twice the default nemesis_interval
         InfoEvent(message=f'StartEvent - start a sleep of {sleep_time} as Steady State').publish()
         time.sleep(sleep_time)
         InfoEvent(message='FinishEvent - Steady State sleep has been finished').publish()
