@@ -97,7 +97,7 @@ class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-
 
     def db_node_to_query(self, loader):
         """Select DB node in the same region as loader node to query"""
-        db_nodes = [db_node for db_node in self.node_list]  # if not db_node.running_nemesis]
+        db_nodes = [db_node for db_node in self.node_list if not db_node.running_nemesis]
         assert db_nodes, "No node to query, nemesis runs on all DB nodes!"
         node_to_query = random.choice(db_nodes)
         LOGGER.debug(f"Selected '{node_to_query}' to query for local nodes")
@@ -109,26 +109,30 @@ class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-
             options_str = self.stress_cmd.replace('table_compare', '').strip()
             options = dict(item.strip().split("=") for item in options_str.split(";"))
             interval = int(options.get('interval', 20))
+            timeout = int(options.get('timeout', 32400))
             src_table = options.get('src_table')
             dst_table = options.get('dst_table')
+            start_time = time.time()
 
             while not self._stop_event.is_set():
                 node: BaseNode = self.db_node_to_query(loader)
                 node.running_nemesis = "Compare tables size by cf-stats"
                 node.run_nodetool('flush')
 
-                src_size = node.get_cfstats(src_table)['Number of partitions (estimate)']
                 dst_size = node.get_cfstats(dst_table)['Number of partitions (estimate)']
+                src_size = node.get_cfstats(src_table)['Number of partitions (estimate)']
 
                 node.running_nemesis = None
+                elapsed_time = time.time() - start_time
                 status = f"== CompareTablesSizesThread: dst table/src table number of partitions: {dst_size}/{src_size} =="
                 LOGGER.info(status)
-                InfoEvent(status)
+                status_msg = f'[{elapsed_time}/{timeout}] {status}'
+                InfoEvent(status_msg)
 
                 if src_size == 0:
                     continue
-                if dst_size >= src_size:
-                    InfoEvent("== CompareTablesSizesThread: Done ==")
+                if elapsed_time > timeout:
+                    InfoEvent(f"== CompareTablesSizesThread: exiting on timeout of {timeout}")
                     break
                 time.sleep(interval)
             return None

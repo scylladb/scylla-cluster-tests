@@ -1,4 +1,4 @@
-test_duration: 650
+test_duration: 750
 
 prepare_write_cmd:
   - >-
@@ -15,7 +15,7 @@ prepare_write_cmd:
     -p insertstart=39062500 -p insertcount=39062500 -p table=usertable_streams
 
   - >-
-    table_compare interval=120 ; src_table="alternator_usertable_streams".usertable_streams ; dst_table="alternator_usertable_streams-dest"."usertable_streams-dest"
+    table_compare interval=120 ; timeout=32400 ; src_table="alternator_usertable_streams".usertable_streams ; dst_table="alternator_usertable_streams-dest"."usertable_streams-dest"
 
 stress_cmd:
   >-
