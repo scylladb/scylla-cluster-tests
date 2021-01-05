@@ -114,11 +114,13 @@ class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-
 
             while not self._stop_event.is_set():
                 node: BaseNode = self.db_node_to_query(loader)
+                node.running_nemesis = "Compare tables size by cf-stats"
                 node.run_nodetool('flush')
 
                 src_size = node.get_cfstats(src_table)['Number of partitions (estimate)']
                 dst_size = node.get_cfstats(dst_table)['Number of partitions (estimate)']
 
+                node.running_nemesis = None
                 status = f"== CompareTablesSizesThread: dst table/src table number of partitions: {dst_size}/{src_size} =="
                 LOGGER.info(status)
                 InfoEvent(status)
