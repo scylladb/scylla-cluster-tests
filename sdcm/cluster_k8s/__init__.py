@@ -48,7 +48,7 @@ from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring, Sc
 ANY_KUBERNETES_RESOURCE = Union[Resource, ResourceField, ResourceInstance, ResourceList, Subresource]
 
 SCYLLA_OPERATOR_CONFIG = sct_abs_path("sdcm/k8s_configs/operator.yaml")
-SCYLLA_API_VERSION = "scylla.scylladb.com/v1alpha1"
+SCYLLA_API_VERSION = "scylla.scylladb.com/v1"
 SCYLLA_CLUSTER_RESOURCE_KIND = "ScyllaCluster"
 DEPLOY_SCYLLA_CLUSTER_DELAY = 15  # seconds
 
