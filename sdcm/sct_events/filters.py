@@ -75,7 +75,10 @@ class EventsFilter(BaseFilter):
 
     @cached_property
     def _regex(self):
-        return self.regex and re.compile(self.regex, self.regex_flags)
+        try:
+            return self.regex and re.compile(self.regex, self.regex_flags)
+        except Exception as exc:
+            raise ValueError(f'Compilation of the regexp "{self.regex}" failed with error: {exc}') from None
 
     def cancel_filter(self) -> None:
         if self.extra_time_to_expiration:
