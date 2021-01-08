@@ -152,5 +152,5 @@ def ignore_mutation_write_errors():
 
 @contextmanager
 def ignore_ycsb_connection_refused():
-    with EventsFilter(event_class=YcsbStressEvent, regex='*Unable to execute HTTP request: Connection refused.*'):
+    with EventsFilter(event_class=YcsbStressEvent, regex='.*Unable to execute HTTP request: Connection refused.*'):
         yield
