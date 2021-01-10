@@ -43,6 +43,9 @@ from sdcm.utils.remotewebbrowser import RemoteBrowser, WebDriverContainerMixin
 from sdcm.utils.docker_utils import get_docker_bridge_gateway
 
 
+import cluster_cloud
+
+
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)
 
@@ -916,6 +919,20 @@ class MonitorLogCollector(LogCollector):
     collect_timeout = 3600
 
 
+class CloudManagerLogCollector(LogCollector):
+    log_entities = [
+        FileLog(name='system.log',
+                command="sudo journalctl --no-tail --no-pager",
+                search_locally=True),
+        FileLog(name='scylla_manager.log',
+                command='sudo journalctl -u scylla-manager.service --no-tail',
+                search_locally=True)
+    ]
+    cluster_log_type = "manager-set"
+    cluster_dir_prefix = "manager-set"
+    collect_timeout = 3600
+
+
 class SCTLogCollector(LogCollector):
     """logs for hydra test run
 
@@ -1006,7 +1023,7 @@ class JepsenLogCollector(LogCollector):
         return s3_link
 
 
-class Collector():  # pylint: disable=too-many-instance-attributes,
+class Collector:  # pylint: disable=too-many-instance-attributes,
     """Collector instance
 
     Collector instance which should be run to collect logs and additional info
@@ -1034,6 +1051,7 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
         self._test_dir = test_dir
         self.db_cluster = []
         self.monitor_set = []
+        self.siren_manager_set = []
         self.loader_set = []
         self.kubernetes_set = []
         self.sct_set = []
@@ -1044,6 +1062,7 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
             KubernetesLogCollector: self.kubernetes_set,
             SCTLogCollector: self.sct_set,
             JepsenLogCollector: self.loader_set,
+            CloudManagerLogCollector: self.siren_manager_set
         }
 
     @property
@@ -1067,6 +1086,12 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
     def get_aws_instances_by_testid(self):
         instances = list_instances_aws({"TestId": self.test_id}, running=True)
         filtered_instances = filter_aws_instances_by_type(instances)
+        if self.params["use_cloud_manager"]:
+            if not cluster_cloud:
+                print("Could not collect siren manager logs, cluster_cloud isn't installed")
+            else:
+                filtered_instances['siren_manager_nodes'] = [cluster_cloud.get_manager_instance_by_cluster_id(
+                    cluster_id=self.params['cloud_cluster_id'])]
         for instance in filtered_instances['db_nodes']:
             name = [tag['Value']
                     for tag in instance['Tags'] if tag['Key'] == 'Name']
@@ -1111,6 +1136,18 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                 instance=instance,
                 global_ip=instance['PublicIpAddress'],
                 tags={**self.tags, "NodeType": "loader", }))
+        if self.params["use_cloud_manager"]:
+            for instance in filtered_instances['siren_manager_nodes']:
+                name = [tag['Value']
+                        for tag in instance['Tags'] if tag['Key'] == 'Name']
+                self.siren_manager_set.append(CollectingNode(name=name[0],
+                                                             ssh_login_info={
+                                                                 "hostname": instance['PublicIpAddress'],
+                                                                 "user": 'centos',
+                                                                 "key_file": self.params['cloud_credentials_path']},
+                                                             instance=instance,
+                                                             global_ip=instance['PublicIpAddress'],
+                                                             tags={**self.tags, "NodeType": "siren-manager"}))
 
     def get_gce_instances_by_testid(self):
         instances = list_instances_gce({"TestId": self.test_id}, running=True)
@@ -1179,7 +1216,7 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                   tags={**self.tags, "NodeType": "loader", }))
 
     def get_running_cluster_sets(self, backend):
-        if backend == 'aws':
+        if backend == 'aws' or backend == 'aws-siren':
             self.get_aws_instances_by_testid()
         elif backend == 'gce':
             self.get_gce_instances_by_testid()
