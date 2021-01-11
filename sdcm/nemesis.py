@@ -2463,7 +2463,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
                             line="This node was decommissioned and will not rejoin",
-                            node=self.target_node):
+                            node=self.target_node), \
+            DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                           line="Fail to send STREAM_MUTATION_DONE",
+                           node=self.target_node):
             self.target_node.reboot(hard=True, verify_ssh=True)
             streaming_thread.join(60)
 
