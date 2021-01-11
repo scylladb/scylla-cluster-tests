@@ -466,9 +466,13 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         with DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR, line="failed to do checksum for"), \
                 DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="failed to do checksum for"), \
                 DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR, line="Reactor stalled"), \
+                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="failed to repair"), \
+                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="repair id "), \
                 DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="get_repair_meta: repair_meta_id"):
 
             self.db_cluster.enable_client_encrypt()
+
+            repair_task.wait_for_status(list_status=[TaskStatus.ERROR], step=5, timeout=240)
 
         mgr_cluster.update(client_encrypt=True)
         repair_task.start()
