@@ -414,7 +414,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('RestartThenRepairNode %s' % self.target_node)
         # Task https://trello.com/c/llRuLIOJ/2110-add-dbeventfilter-for-nosuchcolumnfamily-error
         # If this error happens during the first boot with the missing disk this issue is expected and it's not an issue
-        with DbEventsFilter(db_event=LogEvent, line="Can't find a column family with UUID", node=self.target_node):
+        with DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,
+                            line="Can't find a column family with UUID", node=self.target_node):
             self.target_node.restart()
 
         self.log.info('Waiting scylla services to start after node restart')
