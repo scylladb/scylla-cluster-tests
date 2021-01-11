@@ -284,7 +284,10 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         mgr_cluster.update(name="{}_renamed".format(cluster_orig_name))
         assert mgr_cluster.name == cluster_orig_name+"_renamed", "Cluster name wasn't changed after update command"
         mgr_cluster.delete()
-        manager_tool.add_cluster(name=cluster_name, host=selected_host, auth_token=self.monitors.mgmt_auth_token)
+        mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=selected_host,
+                                               auth_token=self.monitors.mgmt_auth_token)
+
+        mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info('finishing test_mgmt_cluster_crud')
 
     def get_cluster_hosts_ip(self):
@@ -445,6 +448,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         backup_task = mgr_cluster.create_backup_task(location_list=location_list)
         backup_task.wait_for_status(list_status=[TaskStatus.DONE])
         self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
+
+        mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info('finishing test_basic_backup')
 
     def test_backup_multiple_ks_tables(self):
@@ -527,6 +532,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         for host_health in dict_host_health.values():
             assert host_health.ssl == HostSsl.ON, "Not all hosts ssl is 'ON'"
             assert host_health.status == HostStatus.UP, "Not all hosts status is 'UP'"
+
+        mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info('finishing test_client_encryption')
 
     def test_mgmt_cluster_healthcheck(self):
@@ -558,6 +565,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         assert dict_host_health[other_host_ip].rest_status == HostRestStatus.DOWN, "Host: {} REST status is not 'DOWN'".format(
             other_host_ip)
         other_host.start_scylla_server()
+
+        mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info('finishing test_mgmt_cluster_healthcheck')
 
     def test_ssh_setup_script(self):
@@ -672,6 +681,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         assert localstrategy_keyspace_percentage is None, \
             "The keyspace with the replication strategy of localstrategy was included in repair, when it shouldn't"
         self.log.info("the sctool repair command was completed successfully")
+
+        mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info('finishing test_repair_multiple_keyspace_types')
 
     def test_enospc_during_backup(self):
