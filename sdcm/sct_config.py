@@ -639,6 +639,9 @@ class SCTConfiguration(dict):
              help=""),
 
         # k8s options
+        dict(name="k8s_deploy_monitoring", env="SCT_K8S_DEPLOY_MONITORING", type=str,
+             help=""),
+
         dict(name="k8s_scylla_operator_docker_image", env="SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE", type=str,
              help=""),
 

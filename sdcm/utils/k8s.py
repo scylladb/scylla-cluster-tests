@@ -304,7 +304,9 @@ class HelmContainerMixin:
         volumes = {
             os.path.dirname(kube_config_path): {"bind": "/root/.kube", "mode": "rw"},
             helm_config_path: {"bind": "/root/.helm", "mode": "rw"},
-            K8S_CONFIGS: {"bind": "/apps", "mode": "rw"}, }
+            K8S_CONFIGS: {"bind": "/apps", "mode": "rw"},
+            '/tmp': {"bind": "/tmp", "mode": "rw"},
+        }
         return dict(image=HELM_IMAGE,
                     entrypoint="/bin/cat",
                     tty=True,
