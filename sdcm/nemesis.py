@@ -1954,7 +1954,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._terminate_cluster_node(node_to_remove)
 
         # full cluster repair
-        for node in up_normal_nodes:
+        up_normal_nodes.remove(node_to_remove)
+        # Repairing the first node will result in a best effort repair due to the terminated node,
+        # and as a result requires ignoring repair errors
+        first_node_to_repair = up_normal_nodes[0]
+        with DbEventsFilter(type='RUNTIME_ERROR', line="failed to repair", node=first_node_to_repair):
+            try:
+                self.repair_nodetool_repair(node=first_node_to_repair)
+            except Exception as details:  # pylint: disable=broad-except
+                self.log.error(f"failed to execute repair command "
+                               f"on node {first_node_to_repair} due to the following error: {str(details)}")
+
+        for node in up_normal_nodes[1:]:
             if node is not node_to_remove:
                 try:
                     self.repair_nodetool_repair(node=node)
