@@ -1,7 +1,19 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 import smtplib
 import os.path
 import subprocess
-
 import logging
 import tempfile
 import json
@@ -114,10 +126,13 @@ class BaseEmailReporter:
     COMMON_EMAIL_FIELDS = (
         "backend",
         "build_id",
-        "build_url",
+        "job_url",
+        "config_files",
         "end_time",
         "events_summary",
+        "job_name",
         "last_events",
+        "logs_links",
         "nodes",
         "number_of_db_nodes",
         "region_name",
@@ -125,13 +140,10 @@ class BaseEmailReporter:
         "scylla_version",
         "start_time",
         "subject",
-        "job_name",
-        "config_files",
         "test_id",
         "test_name",
         "test_status",
         "username",
-        "logs_links",
     )
     _fields = ()
     email_template_file = 'results_base.html'
@@ -404,12 +416,25 @@ class LongevityEmailReporter(BaseEmailReporter):
 
     def get_config_file_link(self, attachments_data):
         config_files = []
-        for config_file in attachments_data["config_files"]:
 
-            last_commit = subprocess.run(['git', 'rev-list', 'HEAD', '-1', config_file], capture_output=True, text=True)
-            config_files.append({"file": config_file.split("/")[-1],
+        if "N/A" in attachments_data["config_files"]:
+            return config_files
+
+        for config_file in attachments_data["config_files"]:
+            if not config_file:
+                continue
+
+            if 'cloud' in config_file or 'cloud' in attachments_data["job_name"]:
+                config_files.append({"file": f"{config_file.split('/')[-1]} ",
+                                     "link": "Siren repo"})
+                continue
+
+            last_commit = subprocess.run(['git', 'rev-list', 'HEAD', '-1', config_file], capture_output=True,
+                                         text=True)
+            config_files.append({"file": f"[{config_file.split('/')[-1]}]",
                                  "link": f"https://github.com/scylladb/scylla-cluster-tests/blob"
                                  f"/{last_commit.stdout.strip()}/{config_file}"})
+
         return config_files
 
 
@@ -434,6 +459,10 @@ class GeminiEmailReporter(LongevityEmailReporter):
 
 class UpgradeEmailReporter(BaseEmailReporter):
     _fields = (
+        "grafana_screenshots",
+        "grafana_snapshots",
+        "new_scylla_repo",
+        "new_version",
         "scylla_ami_id",
     )
     email_template_file = "results_upgrade.html"
@@ -475,6 +504,22 @@ class CDCReplicationReporter(LongevityEmailReporter):
     email_template_file = "results_cdcreplication.html"
 
 
+class JepsenEmailReporter(BaseEmailReporter):
+    _fields = (
+        "grafana_screenshots",
+        "grafana_snapshots",
+        "jepsen_report",
+        "jepsen_scylla_repo",
+        "jepsen_test_cmd",
+        "scylla_repo",
+    )
+    email_template_file = "results_jepsen.html"
+
+    @staticmethod
+    def build_report_attachments(attachments_data, template_str=None):  # pylint: disable=unused-argument
+        return (attachments_data["jepsen_report"], )
+
+
 def build_reporter(name: str,
                    email_recipients: Sequence[str] = (),
                    logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
@@ -497,6 +542,8 @@ def build_reporter(name: str,
         return TestAbortedEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "CDCReplication" in name:
         return CDCReplicationReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "Jepsen" in name:
+        return JepsenEmailReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
 
