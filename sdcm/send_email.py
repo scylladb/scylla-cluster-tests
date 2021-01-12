@@ -126,7 +126,7 @@ class BaseEmailReporter:
     COMMON_EMAIL_FIELDS = (
         "backend",
         "build_id",
-        "build_url",
+        "job_url",
         "config_files",
         "end_time",
         "events_summary",

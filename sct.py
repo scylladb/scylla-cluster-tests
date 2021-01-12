@@ -711,7 +711,7 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
         if not test_status:
             test_status = 'ABORTED'
         test_results = {
-            "build_url": os.environ.get("BUILD_URL"),
+            "job_url": os.environ.get("BUILD_URL"),
             "subject": f"{test_status}: {os.environ.get('JOB_NAME')}: {start_time}",
             "start_time": start_time,
             "end_time": format_timestamp(time.time()),
@@ -739,7 +739,7 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
     except Exception:  # pylint: disable=broad-except
         LOGGER.error("Failed to create email due to the following error:\n%s", traceback.format_exc())
         build_reporter("TestAborted", email_recipients, testrun_dir).send_report({
-            "build_url": os.environ.get("BUILD_URL"),
+            "job_url": os.environ.get("BUILD_URL"),
             "subject": f"FAILED: {os.environ.get('JOB_NAME')}: {start_time}",
         })
 

@@ -9,10 +9,9 @@
         <br>
         <span>Test test id: </span>
         <span class="blue">{{ test_id }}</span>
-    </h3>
-    <h3>
-        <span>Version: </span>
-        <span class="blue">{{ test_version.version }} </span>
+        <br>
+        <span>Scylla Server Version: </span>
+        <span class="blue">{{ test_version }} </span>
     </h3>
     <div>
         <span> Setup Details: </span>
@@ -61,30 +60,21 @@
             {% endfor %}
         </div>
 
-    <h3>Links:</h3>
-    <ul>
-        <li><a href="{{ job_url }}">Jenkins job</a></li>
-        {% if grafana_screenshots %}
-            {% if grafana_screenshots[0] %}
-                <li><a href={{ grafana_screenshots[0] }}>Download "Per server metrics nemesis" Grafana Screenshot</a></li>
-            {% endif %}
-            {% if grafana_snapshots[1] %}
-                <li><a href={{ grafana_screenshots[1] }}>Download "Overview metrics" Grafana Screenshot</a></li>
-            {% endif %}
+    <div>
+        {% if last_events %}
+            <h3>
+                <span>Last events by severity</span>
+            </h3>
+            {% for severity, events in last_events.items() %}
+                <h4>
+                {{ severity }} - [{{ events_summary.get(severity, 0) }}]
+                </h4>
+                {% for event in events %}
+                    <pre>{{event}}</pre>
+                    <hr>
+                {% endfor %}
+            {% endfor %}
         {% endif %}
-        {% if grafana_snapshots %}
-            {% if grafana_snapshots[0] %}
-                <li><a href={{ grafana_snapshots[0] }}>Shared "Per server metrics nemesis" Grafana Snapshot</a></li>
-            {% endif %}
-            {% if grafana_snapshots[1] %}
-                <li><a href={{ grafana_snapshots[1] }}>Shared "Overview metrics" Grafana Snapshot</a></li>
-            {% endif %}
-        {% endif %}
-    </ul>
-    {% if grafana_screenshots %}
-        <h3>Grafana Screenshot:</h3>
-        {% for screenshot in grafana_screenshots %}
-            <img src="{{ screenshot }}"  height="50%" width="50%">
-        {% endfor %}
-    {% endif %}
+    </div>
+
 {% endblock %}
