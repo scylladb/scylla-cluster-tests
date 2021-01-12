@@ -18,14 +18,16 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
+import requests
 import time
 import base64
+import zipfile
 
 from copy import deepcopy
 from datetime import datetime
 from difflib import unified_diff
 from functools import cached_property, partialmethod, partial
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 from textwrap import dedent
 from threading import RLock
 from typing import Optional, Union, List, Dict, Any, ContextManager, Type, Callable
@@ -38,9 +40,12 @@ from kubernetes.client import V1Container
 from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance, ResourceList, Subresource
 
 from sdcm import sct_abs_path, cluster, cluster_docker
+from sdcm.db_stats import PrometheusDBStats
+from sdcm.remote import LOCALRUNNER
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.coredump import CoredumpExportFileThread
 from sdcm.mgmt import AnyManagerCluster
+from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.k8s import KubernetesOps, ApiCallRateLimiter, JSON_PATCH_TYPE, KUBECTL_TIMEOUT
 from sdcm.utils.decorators import log_run_info, timeout
@@ -241,6 +246,44 @@ class KubernetesCluster:
         self.kubectl("get pods", namespace="sct-loaders")
 
     @log_run_info
+    def deploy_monitoring_cluster(self, tag: str, namespace: str = "monitoring") -> None:
+        """
+        This procedure comes from scylla-operator repo:
+        https://github.com/scylladb/scylla-operator/blob/master/docs/source/generic.md#setting-up-monitoring
+
+        If it fails please consider reporting and fixing issue in scylla-operator repo too
+        """
+        LOGGER.info("Create and initialize a monitoring cluster")
+        if tag == 'nightly':
+            tag = 'master'
+        zip_file_response = requests.get(
+            f'https://github.com/scylladb/scylla-operator/archive/{tag}.zip', allow_redirects=True)
+        with TemporaryDirectory() as tmp_dir_name:
+            zip_file = os.path.join(tmp_dir_name, 'scylla-operator.zip')
+            scylla_operator_base_dir = os.path.join(tmp_dir_name, 'scylla-operator')
+            with open(zip_file, 'wb') as f:
+                f.write(zip_file_response.content)
+                f.flush()
+            with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+                zip_ref.extractall(scylla_operator_base_dir)
+            scylla_operator_dir = os.path.join(scylla_operator_base_dir, os.listdir(scylla_operator_base_dir)[0])
+            self.kubectl(f'create namespace {namespace}')
+            self.helm('repo add stable  https://charts.helm.sh/stable')
+            self.helm('repo update')
+            self.helm(f'upgrade --install scylla-prom --namespace {namespace} stable/prometheus '
+                      '--set server.resources.limits.cpu=2 --set server.resources.limits.memory=4Gi '
+                      f'-f {os.path.join(scylla_operator_dir, "examples", "common", "prometheus", "values.yaml")}')
+            LOCALRUNNER.run(f'cd "{os.path.join(scylla_operator_dir, "examples")}"; '
+                            'chmod +x ./dashboards.sh; ./dashboards.sh')
+            self.helm(f'upgrade --install scylla-graf --namespace {namespace} stable/grafana -f '
+                      f'{os.path.join(scylla_operator_dir, "examples", "common", "grafana", "values.yaml")}')
+        time.sleep(10)
+        self.kubectl("wait --timeout=15m --all --for=condition=Ready pod", timeout=1000, namespace=namespace)
+        LOGGER.debug("Check the monitoring cluster")
+        self.kubectl("get statefulset", namespace=namespace)
+        self.kubectl("get pods", namespace=namespace)
+
+    @log_run_info
     def stop_k8s_task_threads(self, timeout=10):
         LOGGER.info("Stop k8s task threads")
         if self._scylla_manager_journal_thread:
@@ -349,6 +392,14 @@ class KubernetesCluster:
         cmd = f'create secret {secret_type} {secret_name} ' + \
               ' '.join([f'--from-file={fname}={os.path.join(path, fname)}' for fname in files])
         self.kubectl(cmd, namespace=namespace)
+
+    @property
+    def monitoring_prometheus_pod(self):
+        for pod in KubernetesOps.list_pods(self, namespace='monitoring'):
+            for container in pod.spec.containers:
+                if 'prometheus' in container.image:
+                    return pod
+        return None
 
 
 class BasePodContainer(cluster.BaseNode):
@@ -1112,6 +1163,66 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
             )
             self.log.info(f"add_sidecar_injection: statefulset {statefulset.metadata.name} sidecar has been injected")
         return result
+
+    def check_cluster_health(self):
+        if self.params.get('k8s_deploy_monitoring'):
+            self._check_kubernetes_monitoring_health()
+        super().check_cluster_health()
+
+    def _check_kubernetes_monitoring_health(self, max_diff=0.1):
+        from sdcm.cluster import Setup
+
+        self.log.debug('Check kubernetes monitoring health')
+
+        kubernetes_prometheus = PrometheusDBStats(host=self.k8s_cluster.monitoring_prometheus_pod.status.pod_ip)
+        monitoring_prometheus = PrometheusDBStats(host=Setup.tester_obj().monitors.nodes[0].external_address)
+
+        end_time = time.time()
+        start_time = end_time - 60 * 30
+
+        @timeout(timeout=10, message='Getting stats from prometheus')
+        def average(stat_method, params):
+            data = stat_method(*params)
+            if not data:
+                return 0
+            return sum([int(val) for _, val in data if val.isdigit()]) / len(data)
+
+        def get_stat(name, source, method_name, params):
+            try:
+                return average(getattr(source, method_name), params)
+            except Exception as exc:
+                ClusterHealthValidatorEvent.MonitoringStatus(
+                    message=f'Failed to get data from {name}: {exc}').publish()
+                ClusterHealthValidatorEvent.Done(message="Kubernetes monitoring health check finished").publish()
+                return
+
+        errors = []
+        for method_name, metric_params in {
+            'get_latency': [start_time, end_time, "read"],
+            'get_throughput': [start_time, end_time],
+        }.items():
+            val1 = kubernetes_data = get_stat(
+                'kubernetes monitoring', kubernetes_prometheus, method_name, metric_params)
+            val2 = monitoring_data = get_stat('sct monitoring', monitoring_prometheus, method_name, metric_params)
+
+            if val2 is None or val1 is None:
+                return
+
+            if val2 == 0:
+                if val1 == 0:
+                    continue
+                else:
+                    val2, val1 = val1, val2
+
+            if (val2 - val1) / val2 > val2 * max_diff:
+                errors.append(
+                    f'Metric {method_name} on sct monitoring {monitoring_data}, '
+                    f'which is more than 1% different from kubernetes monitoring result {kubernetes_data}')
+
+        for error in errors:
+            ClusterHealthValidatorEvent.MonitoringStatus(message=error).publish()
+
+        ClusterHealthValidatorEvent.Done(message="Kubernetes monitoring health check finished").publish()
 
 
 class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):

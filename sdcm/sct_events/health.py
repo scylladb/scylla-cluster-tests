@@ -24,6 +24,7 @@ class ClusterHealthValidatorEventClusterHealthCheck(SctEventProtocol, Protocol):
 
 
 class ClusterHealthValidatorEvent(SctEvent, abstract=True):
+    MonitoringStatus: Type[SctEventProtocol]
     NodeStatus: Type[SctEventProtocol]
     NodePeersNulls: Type[SctEventProtocol]
     NodeSchemaVersion: Type[SctEventProtocol]
@@ -55,6 +56,7 @@ ClusterHealthValidatorEvent.add_subevent_type("NodeStatus")
 ClusterHealthValidatorEvent.add_subevent_type("NodePeersNulls")
 ClusterHealthValidatorEvent.add_subevent_type("NodeSchemaVersion")
 ClusterHealthValidatorEvent.add_subevent_type("NodesNemesis")
+ClusterHealthValidatorEvent.add_subevent_type("MonitoringStatus")
 ClusterHealthValidatorEvent.add_subevent_type("Done", severity=Severity.NORMAL)
 ClusterHealthValidatorEvent.add_subevent_type("Info", severity=Severity.NORMAL)
 

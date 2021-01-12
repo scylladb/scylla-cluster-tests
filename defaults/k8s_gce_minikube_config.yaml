@@ -39,6 +39,7 @@ n_monitor_nodes: 1
 user_credentials_path: '~/.ssh/scylla-test'
 use_preinstalled_scylla: true
 backtrace_decoding: false
+k8s_deploy_monitoring: true
 
 append_scylla_args: ''
 docker_image: ''

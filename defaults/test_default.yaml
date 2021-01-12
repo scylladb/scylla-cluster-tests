@@ -142,3 +142,4 @@ jepsen_test_cmd: 'test-all'
 
 max_events_severities: ""
 mgmt_docker_image: ''
+k8s_deploy_monitoring: false

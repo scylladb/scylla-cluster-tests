@@ -148,6 +148,7 @@
 | **<a href="#user-content-gce_root_disk_size_minikube" name="gce_root_disk_size_minikube">gce_root_disk_size_minikube</a>**  |  | N/A | SCT_GCE_ROOT_DISK_SIZE_MINIKUBE
 | **<a href="#user-content-gke_cluster_version" name="gke_cluster_version">gke_cluster_version</a>**  |  | N/A | SCT_GKE_CLUSTER_VERSION
 | **<a href="#user-content-gke_cluster_n_nodes" name="gke_cluster_n_nodes">gke_cluster_n_nodes</a>**  |  | N/A | SCT_GKE_CLUSTER_N_NODES
+| **<a href="#user-content-k8s_deploy_monitoring" name="k8s_deploy_monitoring">k8s_deploy_monitoring</a>**  |  | N/A | SCT_K8S_DEPLOY_MONITORING
 | **<a href="#user-content-k8s_scylla_operator_docker_image" name="k8s_scylla_operator_docker_image">k8s_scylla_operator_docker_image</a>**  |  | N/A | SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE
 | **<a href="#user-content-k8s_scylla_datacenter" name="k8s_scylla_datacenter">k8s_scylla_datacenter</a>**  |  | N/A | SCT_K8S_SCYLLA_DATACENTER
 | **<a href="#user-content-k8s_scylla_rack" name="k8s_scylla_rack">k8s_scylla_rack</a>**  |  | N/A | SCT_K8S_SCYLLA_RACK

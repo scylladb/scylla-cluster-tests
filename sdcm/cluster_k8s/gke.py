@@ -158,7 +158,7 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
         self.helm(f"install local-provisioner provisioner")
 
     def add_gke_pool(self, name: str, num_nodes: int, instance_type: str) -> None:
-        LOGGER.info("Create sct-loaders pool with %d node(s) in GKE cluster `%s'", num_nodes, self.name)
+        LOGGER.info("Create %s pool with %d node(s) in GKE cluster `%s'", name, num_nodes, self.name)
         with self.api_call_rate_limiter.pause:
             self.gcloud.run(f"container --project {self.gce_project} node-pools create {name}"
                             f" --zone {self.gce_zone}"
