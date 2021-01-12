@@ -287,7 +287,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
             "stats_names": self.allowed_stats,
             "metrics": self.metrics,
             "kibana_url": self.gen_kibana_dashboard_url(dashboard_path),
-            "build_url": self.build_url,
+            "job_url": self.build_url,
             "full_report": True,
             "hostname": self.hostname,
             "test_version": self.cur_version_info

@@ -252,7 +252,7 @@
 {%- endblock -%}
 
 {%- block links -%}
-    {%- if current_main_test.gen_kibana_dashboard_url() or current_main_test.kibana_url or current_main_test.build_url or current_main_test.grafana_screenshots or current_main_test.grafana_snapshots -%}
+    {%- if current_main_test.gen_kibana_dashboard_url() or current_main_test.kibana_url or current_main_test.job_url or current_main_test.grafana_screenshots or current_main_test.grafana_snapshots -%}
     <h3>Links:</h3>
     <ul>
         <li><a href={{ current_main_test.gen_kibana_dashboard_url() }}>Kibana</a></li>

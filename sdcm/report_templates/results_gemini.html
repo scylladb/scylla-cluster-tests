@@ -52,7 +52,7 @@
                         {% for error in value %}
                             <li>{{ error.message }} </li>
                             {% if loop.index > 10 %}
-                                <div>... {{ loop.length - loop.index }} more error messages. For more details see <a href="{{ build_url }}">Job log</a></div>
+                                <div>... {{ loop.length - loop.index }} more error messages. For more details see <a href="{{ job_url }}">Job log</a></div>
                                 {% break %}
                             {% endif %}
                         {% endfor%}

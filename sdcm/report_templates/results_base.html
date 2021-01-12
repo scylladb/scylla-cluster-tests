@@ -281,14 +281,14 @@
 {% endblock %}
 
 {% block links %}
-    {% if kibana_url or build_url or grafana_screenshots or grafana_snapshots %}
+    {% if kibana_url or job_url or grafana_screenshots or grafana_snapshots %}
     <h3>Links:</h3>
     <ul>
         {% if kibana_url %}
             <li><a href={{ kibana_url }}>Kibana dashboard</a></li>
         {% endif %}
-        {% if build_url %}
-            <li><a href={{ build_url }}>Build URL</a></li>
+        {% if job_url %}
+            <li><a href={{ job_url }}>Build URL</a></li>
         {% endif %}
         {% if grafana_screenshots %}
             {% if grafana_screenshots[0] %}

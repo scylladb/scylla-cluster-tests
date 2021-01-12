@@ -2262,6 +2262,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.db_cluster.latency_results = calculate_latency(self.db_cluster.latency_results)
             self.log.debug(f'collected latency are: {self.db_cluster.latency_results}')
             self.update({"latency_during_ops": self.db_cluster.latency_results})
+            self.update({"events": get_events_grouped_by_category(_registry=self.events_processes_registry)})
+
             self.update_test_details()
             results_analyzer.check_regression(test_id=self._test_id, data=self.db_cluster.latency_results)
 
@@ -2609,7 +2611,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         job_name = os.environ.get('JOB_NAME').split("/")[-1] if os.environ.get('JOB_NAME') else config_file_name
         return {"backend": backend,
                 "build_id": os.environ.get('BUILD_NUMBER', ''),
-                "build_url": os.environ.get("BUILD_URL"),
+                "job_url": os.environ.get("BUILD_URL"),
                 "end_time": format_timestamp(time.time()),
                 "events_summary": self.get_event_summary(),
                 "last_events": get_events_grouped_by_category(limit=100, _registry=self.events_processes_registry),

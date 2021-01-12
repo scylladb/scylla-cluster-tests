@@ -141,6 +141,45 @@
 {% endblock %}
 
 {% block links %}
+    {% if kibana_url or job_url or grafana_screenshots or grafana_snapshots %}
+    <h3>Links:</h3>
+    <ul>
+        {% if kibana_url %}
+            <li><a href={{ kibana_url }}>Kibana dashboard</a></li>
+        {% endif %}
+        {% if job_url %}
+            <li><a href={{ job_url }}>Build URL</a></li>
+        {% endif %}
+        {% if grafana_screenshots %}
+            {% if grafana_screenshots[0] %}
+                <li><a href={{ grafana_screenshots[0] }}>Download "Per server metrics nemesis" Grafana Screenshot</a></li>
+            {% endif %}
+            {% if grafana_screenshots[1] %}
+                <li><a href={{ grafana_screenshots[1] }}>Download "Overview metrics" Grafana Screenshot</a></li>
+            {% endif %}
+            {% if grafana_screenshots[2] %}
+                <li><a href={{ grafana_screenshots[2] }}>Download "Alternator metrics" Grafana Screenshot</a></li>
+            {% endif %}
+        {% endif %}
+        {% if grafana_snapshots %}
+            {% if grafana_snapshots[0] %}
+                <li><a href={{ grafana_snapshots[0] }}>Shared "Per server metrics nemesis" Grafana Snapshot</a></li>
+            {% endif %}
+            {% if grafana_snapshots[1] %}
+                <li><a href={{ grafana_snapshots[1] }}>Shared "Overview metrics" Grafana Snapshot</a></li>
+            {% endif %}
+            {% if grafana_snapshots[2] %}
+                <li><a href={{  grafana_snapshots[2] }}>Shared "Alternator metrics" Grafana Snapshot</a></li>
+            {% endif %}
+        {% endif %}
+    </ul>
+        {% if grafana_screenshots %}
+            <h3>Grafana Screenshots:</h3>
+            {% for screenshot in grafana_screenshots %}
+                <img src="{{ screenshot }}"  height="50%" width="50%">
+            {% endfor %}
+        {% endif %}
+    {% endif %}
 {% endblock %}
 
 </body>
