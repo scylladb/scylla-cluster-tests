@@ -1751,7 +1751,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self.log.debug("Execute a complete repair for target node")
         self.repair_nodetool_repair()
-    #  Temporary disable due to https://trello.com/c/Ru0T9Nmu/1239-fix-validatehintedhandoff-nemesis
+    # Temporary disable due to https://trello.com/c/Ru0T9Nmu/1239-fix-validatehintedhandoff-nemesis
+    # TODO: Bentsi to fix this nemesis or investigate if it's a real scylla issue.
     # TODO: Bentsi to fix this nemesis or investigate if it's a real scylla issue.
     def disable_disrupt_validate_hh_short_downtime(self):  # pylint: disable=invalid-name
         """
