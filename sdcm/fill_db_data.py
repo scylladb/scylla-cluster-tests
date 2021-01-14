@@ -755,7 +755,7 @@ class FillDatabaseData(ClusterTester):
                         "INSERT INTO null_support_test (k, c, v1) VALUES (0, 1, null)",
                         "INSERT INTO null_support_test (k, c, v2) VALUES(0, 0, null)",
                         "SELECT * FROM null_support_test",
-                        "SELECT * FROM null_support_test WHERE k = null"],
+                        "SELECT * FROM null_support_test WHERE k = 0 and c = 1 and v1 = null ALLOW FILTERING"],
             'results': [
                 [[0, 0, None, set(['1', '2'])], [0, 1, 1, None]],
                 [],
