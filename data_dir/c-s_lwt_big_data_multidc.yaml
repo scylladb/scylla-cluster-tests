@@ -58,7 +58,7 @@ table_definition: |
 extra_definitions:
   - create MATERIALIZED VIEW blogposts_update_one_column_lwt_indicator as select domain, lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator >=-2000 and lwt_indicator < 0 PRIMARY KEY(lwt_indicator, domain, published_date);
   - create MATERIALIZED VIEW blogposts_update_one_column_lwt_indicator_after_update as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator = 30000000 PRIMARY KEY(lwt_indicator, domain, published_date);
-  - create MATERIALIZED VIEW blogposts_update_2_columns_lwt_indicator as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator > 0 and lwt_indicator <= 2000 PRIMARY KEY(lwt_indicator, domain, published_date);
+  - create MATERIALIZED VIEW blogposts_update_2_columns_lwt_indicator as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator > 0 and lwt_indicator <= 9000 PRIMARY KEY(lwt_indicator, domain, published_date);
   - create MATERIALIZED VIEW blogposts_update_2_columns_lwt_indicator_after_update as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator = 20000000 PRIMARY KEY(lwt_indicator, domain, published_date);
   - create MATERIALIZED VIEW blogposts_not_updated_lwt_indicator as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator > 1000000 and lwt_indicator < 20000000 PRIMARY KEY(lwt_indicator, domain, published_date);
   - create MATERIALIZED VIEW blogposts_deletions as select lwt_indicator, author from blogposts where domain is not null and published_date is not null and lwt_indicator > 10000 and lwt_indicator < 100000 PRIMARY KEY(lwt_indicator, domain, published_date);
@@ -67,7 +67,7 @@ extra_definitions:
 
 columnspec:
   - name: domain
-    population: seq(1..500000000)  #500M possible domains to pick from
+    population: seq(1..10000000)  #10M possible domains to pick from
 
   - name: published_date
     cluster: uniform(1..2000)         #under each domain we will have max 2000 posts
