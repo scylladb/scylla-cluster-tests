@@ -1541,8 +1541,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self.log.debug("Execute a complete repair for target node")
         self.repair_nodetool_repair()
+    # Temporary disable due to https://trello.com/c/Ru0T9Nmu/1239-fix-validatehintedhandoff-nemesis
+    # TODO: Bentsi to fix this nemesis or investigate if it's a real scylla issue.
+    # TODO: Bentsi to fix this nemesis or investigate if it's a real scylla issue.
 
-    def disrupt_validate_hh_short_downtime(self):  # pylint: disable=invalid-name
+    def disable_disrupt_validate_hh_short_downtime(self):  # pylint: disable=invalid-name
         """
             Validates that hinted handoff mechanism works: there were no drops and errors
             during short stop of one of the nodes in cluster
@@ -1829,7 +1832,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         # get the last 10min avg network bandwidth used, and limit  30% to 70% of it
         prometheus_stats = PrometheusDBStats(host=self.monitoring_set.nodes[0].external_address)
-        query = 'avg(irate(node_network_receive_bytes_total{instance=~".*?%s.*?", device="eth0"}[60s]))' % \
+        query = 'avg(node_network_receive_bytes_total{instance=~".*?%s.*?", device="eth0"})' % \
                 self.target_node.ip_address
         now = time.time()
         results = prometheus_stats.query(query=query, start=now - 600, end=now)
@@ -1860,7 +1863,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         rate_limit: Optional[str] = self.get_rate_limit_for_network_disruption()
         if not rate_limit:
-            self.log.warn("NetworkRandomInterruption won't limit network bandwith due to lack of monitoring nodes.")
+            self.log.warning("NetworkRandomInterruption won't limit network bandwidth due to lack of monitoring nodes.")
 
         # random packet loss - between 1% - 15%
         loss_percentage = random.randrange(1, 15)
@@ -1893,6 +1896,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             time.sleep(wait_time)
         finally:
             self.target_node.traffic_control(None)
+            self._wait_all_nodes_un()
 
     def disrupt_network_block(self):
         self._set_current_disruption('BlockNetwork')
@@ -2175,6 +2179,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             time.sleep(wait_time)
         finally:
             self.target_node.remoter.run("sudo /sbin/ifup eth1")
+            self._wait_all_nodes_un()
 
     def break_streaming_task_and_rebuild(self, task='decommission'):  # pylint: disable=too-many-statements
         """
