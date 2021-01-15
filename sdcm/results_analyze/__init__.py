@@ -415,7 +415,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                     param, src[param], dst[param], version_dst))
         return cmp_res
 
-    def check_regression(self, test_id, is_gce=False, email_subject_postfix=None):
+    def check_regression(self, test_id, is_gce=False, email_subject_postfix=None, use_wide_query=False, lastyear=False):
         """
         Get test results by id, filter similar results and calculate max values for each version,
         then compare with max in the test version and all the found versions.
@@ -438,7 +438,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             return False
 
         # filter tests
-        query = query_filter(doc, is_gce)
+        query = query_filter(doc, is_gce, use_wide_query, lastyear)
         if not query:
             return False
         self.log.debug("Query to ES: %s", query)
@@ -485,9 +485,9 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                 self.log.error('Skip non-valid test: %s', row['_id'])
                 continue
             version_info = self._test_version(row)
-            version = version_info['version']
-            if not version:
+            if not version_info:
                 continue
+            version = version_info['version']
             curr_test_stats = self._test_stats(row)
             if not curr_test_stats:
                 continue
