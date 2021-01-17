@@ -755,13 +755,17 @@ class FillDatabaseData(ClusterTester):
                         "INSERT INTO null_support_test (k, c, v1) VALUES (0, 1, null)",
                         "INSERT INTO null_support_test (k, c, v2) VALUES(0, 0, null)",
                         "SELECT * FROM null_support_test",
-                        "SELECT * FROM null_support_test WHERE k = null"],
+                        # TODO: uncomment when run tests on 4.5
+                        # "SELECT * FROM null_support_test WHERE k = null"
+                        ],
             'results': [
                 [[0, 0, None, set(['1', '2'])], [0, 1, 1, None]],
                 [],
                 [],
                 [[0, 0, None, None], [0, 1, None, None]],
-                []],
+                # TODO: uncomment when run tests on 4.5
+                # []
+            ],
             'invalid_queries': [
                 "INSERT INTO null_support_test (k, c, v2) VALUES (0, 2, {1, null})",
                 "INSERT INTO null_support_test (k, c, v2) VALUES (0, 0, { 'foo', 'bar', null })"],
