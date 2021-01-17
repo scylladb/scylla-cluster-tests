@@ -2135,9 +2135,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.traffic_control(None)
             self._wait_all_nodes_un()
 
-    @retrying(n=15, sleep_time=10, allowed_exceptions=ClusterNodesNotReady)
+    @retrying(n=15, sleep_time=5, allowed_exceptions=ClusterNodesNotReady)
     def _wait_all_nodes_un(self):
-        self.cluster.check_nodes_up_and_normal()
+        for node in self.cluster.nodes:
+            self.cluster.check_nodes_up_and_normal(verification_node=node)
 
     def disrupt_remove_node_then_add_node(self):
         """
