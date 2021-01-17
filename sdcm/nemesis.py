@@ -141,7 +141,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # TODO: issue https://github.com/scylladb/scylla/issues/6074. Waiting for dev conclusions
             'cqlstress_lwt_example': '*'  # Ignore LWT user-profile tables
         }
-        self.es_publisher = NemesisElasticSearchPublisher(self.tester)
+        self.es_publisher = NemesisElasticSearchPublisher(self.tester) if self.tester.create_stats else None
 
     @classmethod
     def add_disrupt_method(cls, func=None):
@@ -265,7 +265,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     @raise_event_on_failure
     def run(self, interval=None):
-        self.es_publisher.create_es_connection()
+        if self.es_publisher:
+            self.es_publisher.create_es_connection()
         if interval:
             self.interval = interval * 60
         self.log.info('Interval: %s s', self.interval)
@@ -1760,6 +1761,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     # Temporary disable due to https://trello.com/c/Ru0T9Nmu/1239-fix-validatehintedhandoff-nemesis
     # TODO: Bentsi to fix this nemesis or investigate if it's a real scylla issue.
     # TODO: Bentsi to fix this nemesis or investigate if it's a real scylla issue.
+
     def disable_disrupt_validate_hh_short_downtime(self):  # pylint: disable=invalid-name
         """
             Validates that hinted handoff mechanism works: there were no drops and errors
