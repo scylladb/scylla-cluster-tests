@@ -13,6 +13,7 @@
 
 import logging
 from datetime import datetime
+from functools import cached_property
 
 from elasticsearch import Elasticsearch
 
@@ -34,9 +35,17 @@ class NemesisElasticSearchPublisher:
         self.es = Elasticsearch(hosts=[es_conf["es_url"]], verify_certs=False,
                                 http_auth=(es_conf["es_user"], es_conf["es_password"]))
 
+    @cached_property
+    def stats(self):
+        _stats = dict()
+        _stats['versions'] = self.tester.get_scylla_versions()
+        _stats['test_details'] = self.tester.get_test_details()
+        _stats['test_details']['test_name'] = self.tester.id()
+        return _stats
+
     def publish(self, disrupt_name, status=True, data=None):
-        test_data = self.tester.get_stats()
-        assert test_data, "without _stats data we can't publish nemesis ES"
+        test_data = self.stats
+        assert test_data, "without self.stats data we can't publish nemesis ES"
 
         new_nemesis_data = dict(
             test_id=test_data['test_details']['test_id'],
