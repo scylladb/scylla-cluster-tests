@@ -20,8 +20,8 @@ class JenkinsPipelines:
         except jenkins.JenkinsException as ex:
             print(ex)
 
-    def create_pipeline_job(self, jenkins_file, group_name):
-        base_name = Path(jenkins_file).stem
+    def create_pipeline_job(self, jenkins_file, group_name, job_name=None):
+        base_name = job_name or Path(jenkins_file).stem
         sct_jenkinsfile = 'jenkins-pipelines/{}'.format(Path(jenkins_file).name)
         print(sct_jenkinsfile)
         xml_data = JOB_TEMPLATE % dict(sct_display_name=f"{base_name}-test",
