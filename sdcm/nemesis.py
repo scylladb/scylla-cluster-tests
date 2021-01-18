@@ -2381,18 +2381,22 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                                                     ignore_status=True).stdout
         update_certificates()
         node_system_logs = {}
-        for node in self.cluster.nodes:
-            node_system_logs[node] = node.follow_system_log(
-                patterns=f'messaging_service - Reloaded {{{ssl_files_location}}}')
-            node.remoter.send_files(src='data_dir/ssl_conf/db.crt', dst='/tmp')
-            node.remoter.run(f"sudo cp -f /tmp/db.crt {ssl_files_location}")
-            new_crt = node.remoter.run(f"cat {ssl_files_location}").stdout
-            if in_place_crt == new_crt:
-                raise Exception('The CRT file was not replaced')
+        with DbEventsFilter(
+                db_event=DatabaseLogEvent.DATABASE_ERROR,
+                line="error GnuTLS:-34, Base64 decoding error"):
+            # TBD: To be removed after https://github.com/scylladb/scylla/issues/7909#issuecomment-758062545 is resolved
+            for node in self.cluster.nodes:
+                node_system_logs[node] = node.follow_system_log(
+                    patterns=f'messaging_service - Reloaded {{{ssl_files_location}}}')
+                node.remoter.send_files(src='data_dir/ssl_conf/db.crt', dst='/tmp')
+                node.remoter.run(f"sudo cp -f /tmp/db.crt {ssl_files_location}")
+                new_crt = node.remoter.run(f"cat {ssl_files_location}").stdout
+                if in_place_crt == new_crt:
+                    raise Exception('The CRT file was not replaced')
 
-        for node in self.cluster.nodes:
-            if not check_ssl_reload_log(node_system_logs[node]):
-                raise Exception('SSL auto Reload did not happen')
+            for node in self.cluster.nodes:
+                if not check_ssl_reload_log(node_system_logs[node]):
+                    raise Exception('SSL auto Reload did not happen')
 
     def disrupt_run_unique_sequence(self):
         InfoEvent(message='StarEvent - start a repair by ScyllaManager')
