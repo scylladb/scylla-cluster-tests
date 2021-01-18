@@ -29,7 +29,7 @@ import atexit
 import boto3.session
 from invoke.exceptions import UnexpectedExit, Failure
 
-from cassandra.concurrent import execute_concurrent_with_args
+from cassandra.concurrent import execute_concurrent_with_args  # pylint: disable=no-name-in-module
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 from cassandra.auth import PlainTextAuthProvider
@@ -315,6 +315,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             ldap_entry = [f'cn={ldap_role},{LDAP_BASE_OBJECT}',
                           ['groupOfUniqueNames', 'simpleSecurityObject', 'top'],
                           {'uniqueMember': unique_members_list, 'userPassword': user_password}]
+            self.log.info('LDAP info {}'.format(ldap_address))
             self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
                                           user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
         start_events_device(self.logdir)
