@@ -757,7 +757,8 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
                                    ('features-', 'SCT Feature Tests'),
                                    ('artifacts', 'SCT Artifacts Tests'),
                                    ('load-test', 'SCT Load Tests'),
-                                   ('k8s', 'SCT Kubernetes Tests'), ]:
+                                   ('k8s', 'SCT Kubernetes Tests'),
+                                   ]:
         server.create_directory(name=group_name, display_name=group_desc)
 
         for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/{group_name}*.jenkinsfile'):
@@ -766,6 +767,12 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
         if group_name == 'load-test':
             for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/admission_control_overload*'):
                 server.create_pipeline_job(jenkins_file, group_name)
+
+    server.create_directory(name='artifacts-offline-install', display_name='SCT Artifacts Offline Install Tests')
+    for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/nonroot-offline-install/*.jenkinsfile'):
+        server.create_pipeline_job(jenkins_file, 'artifacts-offline-install')
+        server.create_pipeline_job(jenkins_file, 'artifacts-offline-install',
+                                   job_name=str(Path(jenkins_file).stem) + '-nonroot')
 
 
 @cli.command('create-test-release-jobs-enterprise', help="Create pipeline jobs for a new branch")
