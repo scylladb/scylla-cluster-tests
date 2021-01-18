@@ -11,9 +11,13 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import logging
+
 from time import sleep
 from ldap3 import Server, Connection, ALL, ALL_ATTRIBUTES
 
+
+LOGGER = logging.getLogger(__name__)
 
 LDAP_IMAGE = "osixia/openldap:1.4.0"
 LDAP_PORT = 389
@@ -58,6 +62,8 @@ class LdapContainerMixin:  # pylint: disable=too-few-public-methods
     @staticmethod
     def add_ldap_entry(ip, ldap_port, user, password, ldap_entry):
         if not LdapContainerMixin.is_ldap_connection_bound():
+            sleep(5)
+            LOGGER.info('this is creating a ldap_connection with values {}'.format([ip, ldap_port, user, password]))
             LdapContainerMixin.create_ldap_connection(ip, ldap_port, user, password)
         LdapContainerMixin.ldap_conn.add(*ldap_entry)
 

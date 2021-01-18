@@ -70,6 +70,7 @@ def call(Map pipelineParams) {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {
                                                         checkout scm
+                                                        def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
                                                         sh """
                                                         #!/bin/bash
                                                         set -xe
@@ -79,9 +80,9 @@ def call(Map pipelineParams) {
 
                                                         export SCT_CLUSTER_BACKEND=${params.backend}
 
-                                                        export SCT_CONFIG_FILES=${pipelineParams.test_config}
+                                                        export SCT_CONFIG_FILES=${test_config}
                                                         export SCT_SCYLLA_VERSION=${base_version}
-                                                        export SCT_NEW_SCYLLA_REPO=${pipelineParams.params.new_scylla_repo}
+                                                        export SCT_NEW_SCYLLA_REPO=${params.new_scylla_repo}
 
                                                         export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                                         export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
@@ -116,7 +117,7 @@ def call(Map pipelineParams) {
                                                         env
 
                                                         export SCT_CLUSTER_BACKEND=${params.backend}
-                                                        export SCT_CONFIG_FILES=${pipelineParams.test_config}
+                                                        export SCT_CONFIG_FILES=${test_config}
 
                                                         echo "start collect logs ..."
                                                         ./docker/env/hydra.sh collect-logs --logdir "`pwd`" --backend ${params.backend}
@@ -130,7 +131,6 @@ def call(Map pipelineParams) {
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {
-                                                        def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
                                                         sh """
                                                         #!/bin/bash
 
