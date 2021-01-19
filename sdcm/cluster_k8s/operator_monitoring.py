@@ -20,21 +20,13 @@ from datetime import datetime
 
 from sdcm.utils.file import File
 from sdcm.utils.decorators import timeout
-from sdcm.sct_events.operator import ScyllaOperatorLogEvent, ScyllaOperatorRestartEvent
+from sdcm.sct_events.operator import ScyllaOperatorLogEvent, ScyllaOperatorRestartEvent, SCYLLA_OPERATOR_EVENT_PATTERNS
 
 
 class ScyllaOperatorLogMonitoring(threading.Thread):
     lookup_time = 0.1
     log = logging.getLogger('ScyllaOperatorLogMonitoring')
     patterns = [re.compile('^\s*{\s*"L"\s*:\s*"ERROR"')]
-    event_data_mapping = {
-        'T': 'timestamp',
-        'N': 'namespace',
-        'M': 'message',
-        'cluster': 'cluster',
-        'error': 'error',
-        '_trace_id': 'trace_id'
-    }
 
     def __init__(self, kluster):
         self.termination_event = threading.Event()
@@ -54,25 +46,15 @@ class ScyllaOperatorLogMonitoring(threading.Thread):
 
     def check_logs(self, file_follower: Iterable[str]):
         for log_record in file_follower:
-            try:
-                log_data = json.loads(log_record)
-            except Exception as exc:
-                self.log.error(f'Failed to interpret following log line:\n{log_record}\n, due to the: {str(exc)}')
-                continue
-            event_data = {}
-            for log_en_name, attr_name in self.event_data_mapping.items():
-                log_en_data = log_data.get(log_en_name, None)
-                if log_en_data is None:
-                    continue
-                if attr_name == 'timestamp':
-                    log_en_data = datetime.strptime(log_en_data, "%Y-%m-%dT%H:%M:%S.%fZ").timestamp()
-                event_data[attr_name] = log_en_data
-            evt = 'Event generation failed'
-            try:
-                evt = ScyllaOperatorLogEvent(**event_data)
-                evt.publish()
-            except Exception as exc:
-                self.log.error(f'Failed to publish event {str(evt)}\n, due to the: {str(exc)}')
+            event_to_log = None
+            for pattern, event in SCYLLA_OPERATOR_EVENT_PATTERNS:
+                if pattern.search(log_record):
+                    event_to_log = event.clone()
+                    break
+            if event_to_log is None:
+                event_to_log = ScyllaOperatorLogEvent()
+            if event_to_log := event_to_log.load_from_json_string(log_record):
+                event_to_log.publish()
 
     def stop(self):
         self.termination_event.set()

@@ -549,7 +549,7 @@ class TestLogEvent(SctEventTestCase):
         Y.add_subevent_type("T", regex="r1")
 
         y = Y.T()
-        self.assertEqual(str(y), "(Y Severity.ERROR): type=T regex=r1 line_number=0 node=None\nNone")
+        self.assertEqual(str(y), "(Y Severity.ERROR): type=T regex=r1 line_number=0")
 
         y.add_info(node="n1", line="l1", line_number=1)
         self.assertEqual(str(y), "(Y Severity.ERROR): type=T regex=r1 line_number=1 node=n1\nl1")
