@@ -65,6 +65,7 @@ GeminiLogEvent.geminievent: CRITICAL
 PrometheusAlertManagerEvent.start: WARNING
 PrometheusAlertManagerEvent.end: WARNING
 ScyllaOperatorLogEvent: ERROR
+ScyllaOperatorLogEvent.REAPPLY: WARNING
 ScyllaOperatorRestartEvent: ERROR
 StartupTestEvent: NORMAL
 TestTimeoutEvent: CRITICAL

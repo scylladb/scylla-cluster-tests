@@ -325,8 +325,17 @@ class LogEvent(Generic[T_log_event], SctEvent, abstract=True):
 
     @property
     def msgfmt(self):
-        fmt = super().msgfmt + ": " + "type={0.type} regex={0.regex} line_number={0.line_number} node={0.node}\n" \
-                                      "{0.line}"
+        fmt = super().msgfmt + ":"
+        if self.type is not None:
+            fmt += " type={0.type}"
+        if self.regex is not None:
+            fmt += " regex={0.regex}"
+        if self.line_number is not None:
+            fmt += " line_number={0.line_number}"
+        if self.node is not None:
+            fmt += " node={0.node}"
+        if self.line is not None:
+            fmt += "\n{0.line}"
         if self.backtrace:
             fmt += "\n{0.backtrace}"
         elif self.raw_backtrace:

@@ -22,7 +22,7 @@ class TestOperatorEvents(unittest.TestCase):
         event = ScyllaOperatorLogEvent(namespace="scylla", cluster="c1", message="m1", error="e1", trace_id="tid1")
         self.assertEqual(
             str(event),
-            "(ScyllaOperatorLogEvent Severity.ERROR) tid1 scylla/c1: m1, e1",
+            "(ScyllaOperatorLogEvent Severity.ERROR): line_number=0 tid1 scylla/c1: m1, e1",
         )
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
