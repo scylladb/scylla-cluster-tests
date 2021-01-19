@@ -161,6 +161,7 @@ class ScyllaBenchStressExporter(StressExporter):
                 [f'scylla_bench_stress_{self.stress_operation}', 'instance', 'loader_idx', 'cpu_idx', 'type', 'keyspace'])
         return gauge_name
 
+    # pylint: disable=line-too-long
     def merics_position_in_log(self) -> MetricsPosition:
         # Enumerate stress metric position in the log. Example:
         # time  operations/s    rows/s   errors  max   99.9th   99th      95th     90th       median        mean
@@ -169,6 +170,7 @@ class ScyllaBenchStressExporter(StressExporter):
         return MetricsPosition(ops=1, lat_mean=10, lat_med=9, lat_perc_95=7, lat_perc_99=6, lat_perc_999=5,
                                lat_max=4, errors=3)
 
+    # pylint: disable=line-too-long
     def skip_line(self, line) -> bool:
         # If line is not starts with numeric ended by "s" - skip this line.
         # Example:
@@ -188,3 +190,32 @@ class ScyllaBenchStressExporter(StressExporter):
     @staticmethod
     def split_line(line: str) -> list:
         return [element.strip() for element in line.split()]
+
+
+class CassandraHarryStressExporter(StressExporter):
+
+    # pylint: disable=too-many-arguments,useless-super-delegation
+    def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str, stress_log_filename: str,
+                 loader_idx: int, cpu_idx: int = 1):
+
+        super().__init__(instance_name, metrics, stress_operation, stress_log_filename,
+                         loader_idx, cpu_idx)
+
+    def create_metrix_gauge(self) -> str:
+        gauge_name = f'collectd_cassandra_harry_stress_{self.stress_operation}_gauge'
+        if gauge_name not in self.METRICS_GAUGES:
+            self.METRICS_GAUGES[gauge_name] = self.metrics.create_gauge(
+                gauge_name,
+                'Gauge for scylla-bench stress metrics',
+                [f'scylla_bench_stress_{self.stress_operation}', 'instance', 'loader_idx', 'cpu_idx', 'type', 'keyspace'])
+        return gauge_name
+
+    def merics_position_in_log(self) -> MetricsPosition:
+        pass
+
+    def skip_line(self, line) -> bool:
+        return not 'Reorder buffer size has grown up to' in line
+
+    @staticmethod
+    def split_line(line: str) -> list:
+        return line.split()

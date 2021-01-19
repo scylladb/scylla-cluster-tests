@@ -138,6 +138,21 @@ def get_stress_bench_cmd_params(cmd):
     return cmd_params
 
 
+def get_stress_harry_cmd_params(cmd):
+    """
+    Parsing cassandra-harry stress command
+    :param cmd: stress cmd
+    :return: dict with params
+    """
+    cmd = cmd.split('cassandra-harry')[1].strip()
+    cmd_params = {}
+    for key in ['run-time', 'run-time-unit']:
+        match = re.search(fr'(-{key}\s+([^-| ]+))', cmd)
+        if match:
+            cmd_params[key] = match.group(2).strip()
+    return cmd_params
+
+
 def get_ycsb_cmd_params(cmd):
     """
     Parsing ycsb command
@@ -571,6 +586,8 @@ class TestStatsMixin(Stats):
             cmd_params = get_stress_cmd_params(cmd)
         elif stresser == "scylla-bench":
             cmd_params = get_stress_bench_cmd_params(cmd)
+        elif stresser == "cassandra-harry":
+            cmd_params = get_stress_harry_cmd_params(cmd)
         elif stresser == 'ycsb':
             cmd_params = get_ycsb_cmd_params(cmd)
         elif stresser in ['gemini', 'ndbench']:

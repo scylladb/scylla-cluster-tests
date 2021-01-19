@@ -216,6 +216,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         self.remoter = None
         self.is_scylla_bench_installed = False
+        self.is_cassandra_harry_installed = False
 
         self._spot_monitoring_thread = None
         self._journal_thread = None
@@ -414,6 +415,25 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             GO111MODULE=on go get -v github.com/scylladb/scylla-bench@{self.parent_cluster.params.get('scylla_bench_version')}
         """))
         self.is_scylla_bench_installed = True
+
+    @retrying(n=3)
+    def install_cassandra_harry(self):
+        if self.distro.is_rhel_like:
+            self.remoter.sudo("yum install -y git make maven")
+        else:
+            self.remoter.sudo(shell_script_cmd("""\
+                apt-get update
+                apt-get install -y git make maven
+            """))
+        self.remoter.run(shell_script_cmd("""\
+            rm -rf cassandra-harry
+            git clone -b scylla-branch https://github.com/amoskong/cassandra-harry
+            cd cassandra-harry
+            make mvn
+        """))
+        result = self.remoter.run('realpath ~/cassandra-harry/scripts/cassandra-harry')
+        self.remoter.sudo(f"ln -s {result.stdout.strip()} /usr/bin/cassandra-harry", ignore_status=True)
+        self.is_cassandra_harry_installed = True
 
     @property
     def cassandra_stress_version(self):
@@ -4527,6 +4547,9 @@ class BaseLoaderSet():
             # Update existing scylla-bench to latest
             if not node.is_scylla_bench_installed:
                 node.install_scylla_bench()
+        if 'cassandra-harry' in self.params.list_of_stress_tools:
+            if not node.is_cassandra_harry_installed:
+                node.install_cassandra_harry()
 
         result = node.remoter.run('test -e ~/PREPARED-LOADER', ignore_status=True)
         node.remoter.sudo("bash -cxe \"echo '*\t\thard\tcore\t\tunlimited\n*\t\tsoft\tcore\t\tunlimited' "
@@ -4588,6 +4611,9 @@ class BaseLoaderSet():
         if 'scylla-bench' in self.params.list_of_stress_tools:
             if not node.is_scylla_bench_installed:
                 node.install_scylla_bench()
+        if 'cassandra-harry' in self.params.list_of_stress_tools:
+            if not node.is_cassandra_harry_installed:
+                node.install_cassandra_harry(node)
 
         # install docker
         docker_install = dedent("""

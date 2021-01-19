@@ -20,7 +20,7 @@ from typing import Type, Optional, List, Tuple, Any
 import dateutil.parser
 from invoke.runners import Result
 
-from sdcm.sct_events import Severity
+from sdcm.sct_events import Severity, SctEventProtocol
 from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event
 from sdcm.sct_events.stress_events import BaseStressEvent, StressEvent, StressEventProtocol
 
@@ -73,6 +73,24 @@ class CassandraStressEvent(StressEvent):
 
 class ScyllaBenchEvent(StressEvent):
     ...
+
+
+class CassandraHarryEvent(StressEvent, abstract=True):
+    failure: Type[StressEventProtocol]
+    error: Type[SctEventProtocol]
+    timeout: Type[StressEventProtocol]
+    start: Type[StressEventProtocol]
+    finish: Type[StressEventProtocol]
+
+    @property
+    def msgfmt(self):
+        fmt = super(StressEvent, self).msgfmt + ": type={0.type} node={0.node} stress_cmd={0.stress_cmd}"
+        if self.errors:
+            return fmt + " error={0.errors_formatted}"
+        return fmt
+
+
+CassandraHarryEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR, timeout=Severity.ERROR)
 
 
 class BaseYcsbStressEvent(StressEvent, abstract=True):
@@ -192,6 +210,11 @@ SCYLLA_BENCH_ERROR_EVENTS = (
 )
 SCYLLA_BENCH_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex), event) for event in SCYLLA_BENCH_ERROR_EVENTS]
+
+CASSANDRA_HARRY_ERROR_EVENTS = (
+)
+CASSANDRA_HARRY_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
+    [(re.compile(event.regex), event) for event in CASSANDRA_HARRY_ERROR_EVENTS]
 
 
 class GeminiStressLogEvent(LogEvent[T_log_event], abstract=True):  # pylint: disable=too-many-instance-attributes
