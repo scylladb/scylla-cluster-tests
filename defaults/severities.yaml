@@ -37,6 +37,11 @@ DatabaseLogEvent.SUPPRESSED_MESSAGES: WARNING
 DatabaseLogEvent.stream_exception: ERROR
 DatabaseLogEvent.POWER_OFF: CRITICAL
 IndexSpecialColumnErrorEvent: ERROR
+CassandraHarryEvent.failure: CRITICAL
+CassandraHarryEvent.error: ERROR
+CassandraHarryEvent.timeout: ERROR
+CassandraHarryEvent.start: NORMAL
+CassandraHarryEvent.finish: NORMAL
 YcsbStressEvent.failure: CRITICAL
 YcsbStressEvent.error: ERROR
 YcsbStressEvent.start: NORMAL

@@ -48,6 +48,7 @@ from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.full_scan_thread import FullScanThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
 from sdcm.scylla_bench_thread import ScyllaBenchThread
+from sdcm.cassandra_harry_thread import CassandraHarryThread
 from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_network_configuration, get_ec2_services, \
     get_common_params, init_db_info_from_params, ec2_ami_get_root_device_name
 from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, update_certificates, \
@@ -1386,6 +1387,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         elif stress_cmd.startswith('scylla-bench'):
             params['stop_test_on_failure'] = stop_test_on_failure
             return self.run_stress_thread_bench(**params)
+        elif 'cassandra-harry' in stress_cmd:
+            params['stop_test_on_failure'] = stop_test_on_failure
+            return self.run_stress_thread_harry(**params)
         elif stress_cmd.startswith('bin/ycsb'):
             return self.run_ycsb_thread(**params)
         elif stress_cmd.startswith('ndbench'):
@@ -1456,6 +1460,32 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             time.sleep(60)
             self.alter_test_tables_encryption(scylla_encryption_options=scylla_encryption_options)
         return bench_thread
+
+    def run_stress_thread_harry(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',
+                                # pylint: disable=too-many-arguments,unused-argument
+                                round_robin=False, stats_aggregate_cmds=True, keyspace_name=None,
+                                use_single_loader=False,
+                                stop_test_on_failure=True):  # pylint: disable=too-many-arguments,unused-argument
+
+        timeout = self.get_duration(duration)
+
+        if not self.params.get("stop_test_on_stress_failure"):
+            stop_test_on_failure = False
+
+        if self.create_stats:
+            self.update_stress_cmd_details(stress_cmd, stresser="cassandra-harry", aggregate=stats_aggregate_cmds)
+        harry_thread = CassandraHarryThread(
+            stress_cmd,
+            loader_set=self.loaders,
+            timeout=timeout,
+            node_list=self.db_cluster.nodes,
+            round_robin=round_robin,
+            use_single_loader=use_single_loader,
+            stop_test_on_failure=stop_test_on_failure,
+            credentials=self.db_cluster.get_db_auth()
+        )
+        harry_thread.run()
+        return harry_thread
 
     # pylint: disable=too-many-arguments
     def run_ycsb_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',

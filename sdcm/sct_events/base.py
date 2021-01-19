@@ -59,6 +59,7 @@ class SctEventTypesRegistry(Dict[str, Type["SctEvent"]]):  # pylint: disable=too
         self[owner.__name__] = owner  # add owner class to the registry.
 
 
+# pylint: disable=invalid-name
 class EventPeriod(Enum):
     BEGIN = "begin"
     END = "end"
