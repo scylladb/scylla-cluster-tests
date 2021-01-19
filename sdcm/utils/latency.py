@@ -23,7 +23,7 @@ def avg(values):
 
 def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
     res = dict()
-    prometheus = PrometheusDBStats(host=monitor_node.ip_address)
+    prometheus = PrometheusDBStats(host=monitor_node.external_address)
     duration = int(end - start)
     cassandra_stress_precision = ['99', '95']  # in the future should include also 'max'
     scylla_precision = ['99']  # in the future should include also '95', '5'
