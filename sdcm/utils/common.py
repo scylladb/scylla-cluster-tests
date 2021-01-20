@@ -1308,10 +1308,10 @@ def get_branched_repo(scylla_version: str,
         raise ValueError(f"{scylla_version=} should be in `branch-x.y:<date>' or `branch-x.y:latest' format") from None
 
     if dist_type == "centos":
-        prefix = f"rpm/unstable/centos/{branch}/{branch_version}/"
+        prefix = f"unstable/scylla/{branch}/rpm/centos/{branch_version}/"
         filename = "scylla.repo"
     elif dist_type in ("ubuntu", "debian", ):
-        prefix = f"deb/unstable/unified/{branch}/{branch_version}/scylladb-master/"
+        prefix = f"unstable/scylla/{branch}/deb/unified/{branch_version}/scylladb-master/"
         filename = "scylla.list"
     else:
         raise ValueError(f"Unsupported {dist_type=}")

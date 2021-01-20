@@ -354,7 +354,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     def test_15a_new_scylla_repo_by_scylla_version(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
-        os.environ['SCT_SCYLLA_VERSION'] = 'branch-4.2:latest'
+        os.environ['SCT_SCYLLA_VERSION'] = 'master:latest'
         os.environ['SCT_NEW_VERSION'] = 'master:latest'
         os.environ['SCT_USER_PREFIX'] = 'testing'
 
@@ -362,7 +362,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.verify_configuration()
 
         resolved_repo_link = resolve_latest_repo_symlink(
-            "https://s3.amazonaws.com/downloads.scylladb.com/rpm/unstable/centos/branch-4.2/latest/scylla.repo"
+            "https://s3.amazonaws.com/downloads.scylladb.com/unstable/scylla/master/rpm/centos/latest/scylla.repo"
         )
         self.assertEqual(conf.get('scylla_repo'), resolved_repo_link)
         target_upgrade_version = conf.get('target_upgrade_version')
@@ -380,7 +380,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf.verify_configuration()
 
         resovled_repo_link = resolve_latest_repo_symlink(
-            "https://s3.amazonaws.com/downloads.scylladb.com/deb/unstable/unified/master/latest/scylladb-master/scylla.list"
+            "https://s3.amazonaws.com/downloads.scylladb.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list"
         )
         self.assertEqual(conf.get('scylla_repo'), resovled_repo_link)
         target_upgrade_version = conf.get('target_upgrade_version')
