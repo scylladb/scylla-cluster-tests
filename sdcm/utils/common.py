@@ -1880,7 +1880,7 @@ def update_authenticator(nodes, authenticator='AllowAllAuthenticator', restart=T
     Update the authenticator of nodes, restart the nodes to make the change effective
     """
     for node in nodes:
-        node.remoter.run(
+        node.remoter.sudo(
             f"sed -ie 's/^authenticator:.*/authenticator: {authenticator}/g' /etc/scylla/scylla.yaml")
         if restart:
             node.use_saslauthd_authenticator = authenticator == 'com.scylladb.auth.SaslauthdAuthenticator'
