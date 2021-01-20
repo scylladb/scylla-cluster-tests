@@ -168,7 +168,9 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
                             f" --node-taints role=sct-loaders:NoSchedule"
                             f" --no-enable-autoupgrade"
                             f" --no-enable-autorepair")
-            self.kubectl('wait --timeout=15m --all --for=condition=Ready node')
+            self.api_call_rate_limiter.wait_till_api_become_not_operational(self)
+            self.api_call_rate_limiter.wait_till_api_become_stable(self)
+            self.kubectl_no_wait('wait --timeout=15m --all --for=condition=Ready node')
 
     def get_kubectl_config_for_user(self, config, username):
         for user in config["users"]:
