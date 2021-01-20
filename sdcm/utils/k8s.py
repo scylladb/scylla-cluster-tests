@@ -30,6 +30,7 @@ from sdcm import sct_abs_path
 from sdcm.remote import LOCALRUNNER
 from sdcm.utils.decorators import timeout as timeout_decor
 from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
+from sdcm.wait import wait_for
 
 
 KUBECTL_BIN = "kubectl"
@@ -111,6 +112,47 @@ class ApiCallRateLimiter(threading.Thread):
         if not self._lock.acquire(timeout=self.queue_size / self.rate_limit):  # deepcode ignore E1123: deepcode error
             LOGGER.error("k8s API call rate limiter queue size limit has been reached")
             raise queue.Full
+
+    def _api_test(self, kluster):
+        logging.getLogger('urllib3.connectionpool').disabled = True
+        try:
+            KubernetesOps.core_v1_api(
+                KubernetesOps.api_client(KubernetesOps.create_k8s_configuration(kluster))
+            ).list_pod_for_all_namespaces(watch=False)
+        finally:
+            logging.getLogger('urllib3.connectionpool').disabled = False
+
+    def wait_till_api_become_not_operational(self, kluster, num_requests=10, max_waiting_time=360):
+        wait_for(
+            self.check_if_api_not_operational,
+            timeout=max_waiting_time,
+            kluster=kluster,
+            num_requests=num_requests
+        )
+
+    def wait_till_api_become_stable(self, kluster, num_requests=20, max_waiting_time=1200):
+        wait_for(
+            self.check_if_api_stable,
+            timeout=max_waiting_time,
+            kluster=kluster,
+            num_requests=num_requests,
+            throw_exc=True
+        )
+
+    def check_if_api_stable(self, kluster, num_requests=20):
+        for n in range(num_requests):
+            self._api_test(kluster)
+        return True
+
+    def check_if_api_not_operational(self, kluster, num_requests=20):
+        passed = 0
+        for n in range(num_requests):
+            try:
+                self._api_test(kluster)
+                passed += 1
+            except Exception:  # pylint: disable=broad-except
+                time.sleep(1 / self.rate_limit)
+        return passed > num_requests / 0.8
 
     def stop(self):
         self.running.clear()
