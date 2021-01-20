@@ -65,7 +65,7 @@ table_definition: |
     //PRIMARY KEY (key, md5, upload_time)
     PRIMARY KEY (key, md5)
     //PRIMARY KEY (key)
-  );
+  ) WITH compaction = { 'class':'SizeTieredCompactionStrategy' };
 
 extra_definitions:
   - CREATE TYPE IF NOT EXISTS hash_and_basename (md5 text, basename text);
