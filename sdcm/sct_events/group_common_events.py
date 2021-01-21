@@ -154,3 +154,17 @@ def ignore_mutation_write_errors():
 def ignore_ycsb_connection_refused():
     with EventsFilter(event_class=YcsbStressEvent, regex='.*Unable to execute HTTP request: Connection refused.*'):
         yield
+
+
+@contextmanager
+def ignore_scrub_invalid_errors():
+    with ExitStack() as stack:
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.DATABASE_ERROR,
+            line="Skipping invalid clustering row fragment",
+        ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.DATABASE_ERROR,
+            line="Skipping invalid partition",
+        ))
+        yield
