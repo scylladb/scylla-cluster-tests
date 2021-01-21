@@ -52,7 +52,7 @@ from sdcm.sct_events.loaders import CassandraStressLogEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
-from sdcm.sct_events.group_common_events import ignore_alternator_client_errors, ignore_no_space_errors
+from sdcm.sct_events.group_common_events import ignore_alternator_client_errors, ignore_no_space_errors, ignore_scrub_invalid_errors
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.cluster_k8s import PodCluster
@@ -2524,22 +2524,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 'sudo dd if=/dev/urandom of={} count=1024'.format(sstable_file))
             self.log.debug('File {} was corrupted by dd'.format(sstable_file))
 
-    def disable_disrupt_corrupt_then_scrub(self):
-
-        # Flush data to sstable
-        self.target_node.run_nodetool("flush")
-
-        self.log.debug("Randomly corrupt sstable file")
-        self._corrupt_data_file()
-
-        self.log.debug("Rebuild sstable file by scrub, corrupted data file will be skipped.")
-        for ks_cf in self.cluster.get_non_system_ks_cf_list(self.target_node):
-            self.target_node.run_nodetool("scrub", args=f"{ks_cf.split('.')[0]}")
-
-        self.log.debug(
-            'Refreshing the cache by restart the node, and verify the rebuild sstable can be loaded successfully.')
-        self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
-        self.target_node.start_scylla_server(verify_up=True, verify_down=False)
+    def disrupt_corrupt_then_scrub(self):
+        """
+        Try to rebuild the sstables of all test keyspaces by scrub, the corrupted partitions
+        will be skipped.
+        """
+        self.log.debug("Rebuild sstables by scrub with `--skip-corrupted`, corrupted partitions will be skipped.")
+        with ignore_scrub_invalid_errors():
+            for ks in self.cluster.get_test_keyspaces():
+                self.target_node.run_nodetool("scrub", args=f"--skip-corrupted {ks}")
 
     @latency_calculator_decorator
     def add_new_node(self, rack=0):
@@ -3814,13 +3807,12 @@ COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,
                    CategoricalMonkey]
 
 
-# TODO: https://trello.com/c/vwedwZK2/1881-corrupt-the-scrub-fails
-# class CorruptThenScrubMonkey(Nemesis):
-#     disruptive = False
-#
-#     @log_time_elapsed_and_status
-#     def disrupt(self):
-#         self.disable_disrupt_corrupt_then_scrub()
+class CorruptThenScrubMonkey(Nemesis):
+    disruptive = False
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_corrupt_then_scrub()
 
 
 class MemoryStressMonkey(Nemesis):
