@@ -1181,8 +1181,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def get_cfstats(self, keyspace, tcpdump=False):
         def keyspace_available():
-            self.run_nodetool("flush", ignore_status=True)
-            res = self.run_nodetool(sub_cmd='cfstats', args=keyspace, ignore_status=True)
+            self.run_nodetool("flush", ignore_status=True, timeout=60)
+            res = self.run_nodetool(sub_cmd='cfstats', args=keyspace, ignore_status=True, timeout=60)
             return res.exit_status == 0
         tcpdump_id = uuid.uuid4()
         if tcpdump:
@@ -1190,9 +1190,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             tcpdump_thread = threading.Thread(target=self._get_tcpdump_logs, name='TcpDumpUploadingThread',
                                               kwargs={'tcpdump_id': tcpdump_id}, daemon=True)
             tcpdump_thread.start()
-        wait.wait_for(keyspace_available, step=60, text='Waiting until keyspace {} is available'.format(keyspace))
+        wait.wait_for(keyspace_available, timeout=120, step=60,
+                      text='Waiting until keyspace {} is available'.format(keyspace))
         try:
-            result = self.run_nodetool(sub_cmd='cfstats', args=keyspace)
+            result = self.run_nodetool(sub_cmd='cfstats', args=keyspace, timeout=60)
         except (Failure, UnexpectedExit):
             self.log.error('nodetool error - see tcpdump thread uuid %s for '
                            'debugging info', tcpdump_id)
