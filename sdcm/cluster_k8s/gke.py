@@ -15,7 +15,7 @@ import os
 import logging
 import time
 from textwrap import dedent
-from typing import List
+from typing import List, Dict
 from functools import cached_property
 
 import yaml
@@ -39,6 +39,9 @@ LOADER_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/gke-loaders.yaml")
 CPU_POLICY_DAEMONSET = sct_abs_path("sdcm/k8s_configs/cpu-policy-daemonset.yaml")
 RAID_DAEMONSET = sct_abs_path("sdcm/k8s_configs/raid-daemonset.yaml")
 
+SCYLLA_POD_POOL_NAME = 'default-pool'
+OPERATOR_POD_POOL_NAME = 'operator-pool'
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -59,6 +62,7 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
                  gce_datacenter=None):
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, "k8s-gke")
         node_prefix = cluster.prepend_user_prefix(user_prefix, "node")
+        self._pools_info: Dict[str: int] = {}
         self._gcloud_token_thread = None
         self.gke_cluster_version = gke_cluster_version
         self.gce_image_type = gce_image_type
@@ -107,8 +111,8 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
         return cluster.Setup.tester_obj().localhost.gcloud
 
     def setup_gke_cluster(self, num_nodes: int) -> None:
-        LOGGER.info("Create GKE cluster `%s' with %d node(s) in default-pool and 1 node in operator-pool",
-                    self.gke_cluster_name, num_nodes)
+        LOGGER.info("Create GKE cluster `%s' with %d node(s) in %s and 1 node in %s",
+                    self.gke_cluster_name, num_nodes, SCYLLA_POD_POOL_NAME, OPERATOR_POD_POOL_NAME)
         tags = ",".join(f"{key}={value}" for key, value in self.tags.items())
         with self.gcloud as gcloud:
             gcloud.run(f"container --project {self.gce_project} clusters create {self.gke_cluster_name}"
@@ -127,7 +131,8 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
                        f" --no-enable-autoupgrade"
                        f" --no-enable-autorepair"
                        f" --metadata {tags}")
-            gcloud.run(f"container --project {self.gce_project} node-pools create operator-pool"
+            self.set_nodes_in_pool(SCYLLA_POD_POOL_NAME, num_nodes)
+            gcloud.run(f"container --project {self.gce_project} node-pools create {OPERATOR_POD_POOL_NAME}"
                        f" --zone {self.gce_zone}"
                        f" --cluster {self.gke_cluster_name}"
                        f" --num-nodes 1"
@@ -137,6 +142,7 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
                        f" --disk-size 20"
                        f" --no-enable-autoupgrade"
                        f" --no-enable-autorepair")
+            self.set_nodes_in_pool(OPERATOR_POD_POOL_NAME, 1)
 
             LOGGER.info("Get credentials for GKE cluster `%s'", self.name)
             gcloud.run(f"container clusters get-credentials {self.gke_cluster_name} --zone {self.gce_zone}")
@@ -157,6 +163,12 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
         LOGGER.info("Install local volume provisioner to GKE cluster `%s'", self.name)
         self.helm(f"install local-provisioner provisioner")
 
+    def get_nodes_in_pool(self, pool_name: str) -> int:
+        return self._pools_info.get(pool_name, 0)
+
+    def set_nodes_in_pool(self, pool_name: str, num: int):
+        self._pools_info[pool_name] = num
+
     def add_gke_pool(self, name: str, num_nodes: int, instance_type: str) -> None:
         LOGGER.info("Create sct-loaders pool with %d node(s) in GKE cluster `%s'", num_nodes, self.name)
         with self.api_call_rate_limiter.pause:
@@ -172,6 +184,35 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
             self.api_call_rate_limiter.wait_till_api_become_not_operational(self)
             self.api_call_rate_limiter.wait_till_api_become_stable(self)
             self.kubectl_no_wait('wait --timeout=15m --all --for=condition=Ready node')
+            self.set_nodes_in_pool(name, num_nodes)
+
+    def resize_gke_pool(self, name: str, num_nodes: int) -> None:
+        LOGGER.info("Resize %s pool with %d node(s) in GKE cluster `%s'", name, num_nodes, self.name)
+        with self.api_call_rate_limiter.pause:
+            self.gcloud.run(f"container clusters resize {self.gke_cluster_name} --project {self.gce_project} "
+                            f"--zone {self.gce_zone} --node-pool {name} --num-nodes {num_nodes} --quiet")
+            self.api_call_rate_limiter.wait_till_api_become_not_operational(self)
+            self.api_call_rate_limiter.wait_till_api_become_stable(self)
+            self.kubectl_no_wait('wait --timeout=15m --all --for=condition=Ready node')
+            self.set_nodes_in_pool(name, num_nodes)
+
+    def get_instance_group_name_for_pool(self, pool_name: str, default=None) -> str:
+        try:
+            group_link = yaml.load(
+                self.gcloud.run(
+                    f'container node-pools describe {pool_name} '
+                    f'--zone {self.gce_zone} --project {self.gce_project} '
+                    f'--cluster {self.gke_cluster_name}')
+            ).get('instanceGroupUrls')[0]
+            return group_link.split('/')[-1]
+        except Exception as exc:
+            if default is not None:
+                return default
+            raise RuntimeError(f"Can't get instance group name due to the: {exc}")
+
+    def delete_instance_that_belong_to_instance_group(self, group_name: str, instance_name: str):
+        self.gcloud.run(f'compute instance-groups managed delete-instances {group_name} '
+                        f'--zone={self.gce_zone} --instances={instance_name}')
 
     def get_kubectl_config_for_user(self, config, username):
         for user in config["users"]:
@@ -266,7 +307,7 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
             Scylla node   X
             '''))
         self._instance_wait_safe(self._destroy)
-        self.destroy()
+        self.wait_for_k8s_node_readiness()
 
     def _destroy(self):
         if self.k8s_node:
@@ -298,6 +339,33 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
         if not ok:
             raise cluster.NodeError('GCE instance %s method call error after '
                                     'exponential backoff wait' % self.k8s_node.id)
+
+    def terminate_k8s_node(self):
+        """
+        Delete kubernetes node, which will terminate scylla node that is running on it
+        """
+
+        # There is a bug in GCE, it keeps instance running when kubernetes node is deleted via kubectl
+        # As result GKE infrastructure does not allow you to add a node to the cluster
+        # In order to fix that we have to delete instance manually and add a node to the cluster
+
+        self.log.info('terminate_k8s_node: kubernetes node will be deleted, the following is affected :\n' + dedent('''
+            GKE instance    X  <-
+            K8s node        X  <-
+            Scylla Pod      X
+            Scylla node     X
+            '''))
+        group_name = self.parent_cluster.k8s_cluster.get_instance_group_name_for_pool(SCYLLA_POD_POOL_NAME)
+        super().terminate_k8s_node()
+
+        # Removing GKE instance and adding one node back to the cluster
+        # TBD: Remove below lines when https://issuetracker.google.com/issues/178302655 is fixed
+
+        self.parent_cluster.k8s_cluster.delete_instance_that_belong_to_instance_group(group_name, self.node_name)
+        self.parent_cluster.k8s_cluster.resize_gke_pool(
+            SCYLLA_POD_POOL_NAME,
+            self.parent_cluster.k8s_cluster.get_nodes_in_pool(SCYLLA_POD_POOL_NAME)
+        )
 
 
 class GkeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
