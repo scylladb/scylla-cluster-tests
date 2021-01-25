@@ -711,7 +711,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise UnsupportedNemesis('OperatorNodeReplace is supported only on kubernetes')
         old_uid = self.target_node.k8s_pod_uid
         self.log.info(f'TerminateNode {self.target_node}')
-        self.log.info(f'Mark {self.target_node} to be removed')
+        self.log.info(f'Mark {self.target_node} to be replaced')
+        self.target_node.wait_for_svc()
         self.target_node.mark_to_be_replaced()
         self._kubernetes_wait_till_node_up_after_been_recreated(self.target_node, old_uid=old_uid)
 
@@ -722,24 +723,27 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._kubernetes_wait_till_node_up_after_been_recreated(node, old_uid=old_uid)
 
     def _disrupt_terminate_decommission_add_node_kubernetes(self, node, node_terminate_method_name):  # pylint: disable=invalid-name
-        self.log.info(f'Terminate {node}')
+        self.log.info(f'Terminate %s', node)
         node_terminate_method = getattr(node, node_terminate_method_name)
         node_terminate_method()
-        self.log.info(f'Decommission {node}')
+        self.log.info(f'Decommission %s', node)
         self.cluster.decommission(node)
         self.add_new_node(rack=node.rack)
 
     def _disrupt_terminate_and_replace_node_kubernetes(self, node, node_terminate_method_name):  # pylint: disable=invalid-name
         old_uid = node.k8s_pod_uid
-        self.log.info(f'TerminateNode {node}')
+        self.log.info(f'TerminateNode %s (uid=%s)', node, old_uid)
         node_terminate_method = getattr(node, node_terminate_method_name)
         node_terminate_method()
-        self.log.info(f'Mark {node} to be removed')
+        node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
+        old_uid = node.k8s_pod_uid
+        self.log.info(f'Mark %s (uid=%s) to be replaced', node, old_uid)
+        node.wait_for_svc()
         node.mark_to_be_replaced()
         self._kubernetes_wait_till_node_up_after_been_recreated(node, old_uid=old_uid)
 
     def _kubernetes_wait_till_node_up_after_been_recreated(self, node, old_uid=None):
-        node.wait_k8s_pod_uid(old_uid=old_uid)
+        node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
         self.log.info(f'Wait till {node} is ready')
         node.wait_for_pod_readiness()
         self.log.info(f'{node} is ready, updating ip address and monitoring')

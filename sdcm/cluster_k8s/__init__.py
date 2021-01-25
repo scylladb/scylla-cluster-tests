@@ -87,19 +87,24 @@ class KubernetesCluster:
     kubectl_cmd = partialmethod(KubernetesOps.kubectl_cmd)
     apply_file = partialmethod(KubernetesOps.apply_file)
 
-    def kubectl_no_wait(self, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None):
-        return KubernetesOps.kubectl(self, *command, namespace=namespace, timeout=timeout, remoter=remoter)
+    def kubectl_no_wait(self, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None, ignore_status=False,
+                        verbose=True):
+        return KubernetesOps.kubectl(self, *command, namespace=namespace, timeout=timeout, remoter=remoter,
+                                     ignore_status=ignore_status, verbose=verbose)
 
-    def kubectl(self, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None, ignore_status=False):
+    def kubectl(self, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None, ignore_status=False,
+                verbose=True):
         if self.api_call_rate_limiter:
             self.api_call_rate_limiter.wait()
-        return KubernetesOps.kubectl(
-            self, *command, namespace=namespace, timeout=timeout, remoter=remoter, ignore_status=ignore_status)
+        return KubernetesOps.kubectl(self, *command, namespace=namespace, timeout=timeout, remoter=remoter,
+                                     ignore_status=ignore_status, verbose=verbose)
 
-    def kubectl_multi_cmd(self, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None):
+    def kubectl_multi_cmd(self, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None, ignore_status=False,
+                          verbose=True):
         if self.api_call_rate_limiter:
             self.api_call_rate_limiter.wait()
-        return KubernetesOps.kubectl_multi_cmd(self, *command, namespace=namespace, timeout=timeout, remoter=remoter)
+        return KubernetesOps.kubectl_multi_cmd(self, *command, namespace=namespace, timeout=timeout, remoter=remoter,
+                                               ignore_status=ignore_status, verbose=verbose)
 
     @cached_property
     def helm(self):
@@ -558,12 +563,17 @@ class BasePodContainer(cluster.BaseNode):
         return self.node_name
 
     def terminate_k8s_node(self):
+        """
+        Delete kubernetes node, which will terminate scylla node that is running on it
+        """
         self.parent_cluster.k8s_cluster.kubectl(
             f'delete node {self.node_name} --now',
             timeout=self.pod_terminate_timeout * 60 + 10)
-        self.destroy()
 
     def terminate_k8s_host(self):
+        """
+        Terminate kubernetes node via cloud API (like GCE/EC2), which will terminate scylla node that is running on it
+        """
         raise NotImplementedError("To be overridden in child class")
 
     def is_kubernetes(self) -> bool:
@@ -614,26 +624,6 @@ class BaseScyllaPodContainer(BasePodContainer):
     @cluster.log_run_info
     def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=300):
         self.restart_scylla_server(verify_up_before=verify_up_before, verify_up_after=verify_up_after, timeout=timeout)
-
-    def terminate_k8s_node(self):
-        """
-        Delete kubernetes node, which will terminate scylla node that is running on it
-        """
-        self.log.info('terminate_k8s_node: kubernetes node will be deleted, the following is affected :\n' + dedent('''
-            GCE instance  -
-            K8s node      X  <-
-            Scylla Pod    X
-            Scylla node   X
-            '''))
-        self.parent_cluster.k8s_cluster.kubectl(
-            f'delete node {self.node_name} --now',
-            timeout=self.pod_terminate_timeout * 60 + 10)
-
-    def terminate_k8s_host(self):
-        """
-        Terminate kubernetes node via GCE interface, which will terminate scylla node that is running on it
-        """
-        raise NotImplementedError("To be overridden in child class")
 
     @property
     def scylla_listen_address(self):
@@ -692,24 +682,65 @@ class BaseScyllaPodContainer(BasePodContainer):
         except Exception:
             return ''
 
-    def wait_k8s_pod_uid(self, timeout: int = None, old_uid=None) -> str:
+    def wait_till_k8s_pod_get_uid(self, timeout: int = None, ignore_uid=None) -> str:
         """
         Wait till pod get any valid uid.
-        If old_uid is provided it wait till any valid uid different from old_uid
+        If ignore_uid is provided it wait till any valid uid different from ignore_uid
         """
         if timeout is None:
             timeout = self.pod_replace_timeout
-        wait_for(lambda: self.k8s_pod_uid and self.k8s_pod_uid != old_uid, timeout=timeout,
+        wait_for(lambda: self.k8s_pod_uid and self.k8s_pod_uid != ignore_uid, timeout=timeout,
                  text=f"Wait till host {self} get uid")
         return self.k8s_pod_uid
 
-    def mark_to_be_replaced(self):
+    def mark_to_be_replaced(self, overwrite: bool = False):
         if self.is_seed:
             raise RuntimeError("Scylla-operator does not support seed nodes replacement")
         # Mark pod with label that is going to be picked up by scylla-operator, pod to be removed and reconstructed
+        cmd = f'label svc {self.name} scylla/replace=""'
+        if overwrite:
+            cmd += ' --overwrite'
+        self.parent_cluster.k8s_cluster.kubectl(cmd, namespace=self.parent_cluster.namespace, ignore_status=True)
+
+    def wait_for_svc(self):
+        wait_for(self._wait_for_svc,
+                 text=f"Wait for k8s service {self.name} to be ready...",
+                 timeout=self.pod_readiness_timeout * 60,
+                 throw_exc=True)
+
+    def _wait_for_svc(self):
         self.parent_cluster.k8s_cluster.kubectl(
-            f'label svc {self.name} scylla/replace="" --overwrite',
-            namespace=self.parent_cluster.namespace)
+            f"get svc {self.name}", namespace=self.parent_cluster.namespace, verbose=False)
+        return True
+
+    def wait_for_k8s_node_readiness(self):
+        wait_for(self._wait_for_k8s_node_readiness,
+                 text=f"Wait for k8s host {self.node_name} to be ready...",
+                 timeout=self.pod_readiness_timeout * 60,
+                 throw_exc=True)
+
+    def _wait_for_k8s_node_readiness(self):
+        if self.node_name is None:
+            raise RuntimeError(f"Can't find node for pod {self.name}")
+        result = self.parent_cluster.k8s_cluster.kubectl(
+            f"wait node --timeout={self.pod_readiness_timeout // 3}m --for=condition=Ready {self.node_name}",
+            namespace=self.parent_cluster.namespace,
+            timeout=self.pod_readiness_timeout // 3 * 60 + 10
+        )
+        if result.stdout.count('condition met') != 1:
+            raise RuntimeError('Node is not reported as ready')
+        return True
+
+    def wait_for_pod_to_appear(self):
+        wait_for(self._wait_for_pod_to_appear,
+                 text="Wait for pod(s) to apear...",
+                 timeout=self.pod_readiness_timeout * 60,
+                 throw_exc=True)
+
+    def _wait_for_pod_to_appear(self):
+        if self._pod is None:
+            raise RuntimeError('Pod is not reported as ready')
+        return True
 
     def wait_for_pod_readiness(self):
         time.sleep(self.pod_readiness_delay)
