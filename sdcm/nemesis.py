@@ -2180,8 +2180,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # and as a result requires ignoring repair errors
         first_node_to_repair = up_normal_nodes[0]
         with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                            line="failed to repair",
-                            node=first_node_to_repair):
+                            line="failed to repair"):
             try:
                 self.repair_nodetool_repair(node=first_node_to_repair)
             except Exception as details:  # pylint: disable=broad-except
