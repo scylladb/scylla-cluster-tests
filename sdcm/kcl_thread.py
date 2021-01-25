@@ -109,7 +109,7 @@ class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-
             options_str = self.stress_cmd.replace('table_compare', '').strip()
             options = dict(item.strip().split("=") for item in options_str.split(";"))
             interval = int(options.get('interval', 20))
-            timeout = int(options.get('timeout', 32400))
+            timeout = int(options.get('timeout', 28800))
             src_table = options.get('src_table')
             dst_table = options.get('dst_table')
             start_time = time.time()
