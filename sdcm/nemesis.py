@@ -1963,7 +1963,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # Repairing the first node will result in a best effort repair due to the terminated node,
         # and as a result requires ignoring repair errors
         first_node_to_repair = up_normal_nodes[0]
-        with DbEventsFilter(type='RUNTIME_ERROR', line="failed to repair", node=first_node_to_repair):
+        with DbEventsFilter(type='RUNTIME_ERROR', line="failed to repair"):
             try:
                 self.repair_nodetool_repair(node=first_node_to_repair)
             except Exception as details:  # pylint: disable=broad-except
@@ -2382,7 +2382,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         update_certificates()
         node_system_logs = {}
         with DbEventsFilter(
-                db_event=DatabaseLogEvent.DATABASE_ERROR,
+                type='DATABASE_ERROR',
                 line="error GnuTLS:-34, Base64 decoding error"):
             # TBD: To be removed after https://github.com/scylladb/scylla/issues/7909#issuecomment-758062545 is resolved
             for node in self.cluster.nodes:
@@ -3009,7 +3009,7 @@ class ValidateHintedHandoffShortDowntime(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self.disrupt_validate_hh_short_downtime()
+        self.disable_disrupt_validate_hh_short_downtime()
 
 
 class SnapshotOperations(Nemesis):
