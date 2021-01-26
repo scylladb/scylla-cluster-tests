@@ -4025,7 +4025,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         wait.wait_for(self.verify_logging_from_nodes, nodes_list=node_list,
                       text="wait for db logs", step=20, timeout=300, throw_exc=True)
 
-        self.log.info("{} nodes configured and stated.".format(node_list))
+        self.log.info("{} nodes configured and started.".format(node_list))
 
         # If wait_for_init is called during cluster initialization we may want this validation will be performed,
         # but if it was called from nemesis, we don't need it in the middle of nemesis. It may cause to not relevant
