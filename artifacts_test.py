@@ -11,14 +11,36 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import datetime
 import re
+import json
+import datetime
 
-from sdcm.cluster import SCYLLA_YAML_PATH
+import requests
+
 from sdcm.tester import ClusterTester
-
+from sdcm.cluster import SCYLLA_YAML_PATH
+from sdcm.utils.housekeeping import HousekeepingDB
 
 STRESS_CMD: str = "/usr/bin/cassandra-stress"
+
+
+# class ArtifactTester(ClusterTester):
+#     REPO_TABLE = "housekeeping.repo"
+#
+#     def get_last_id(self, table: str, uuid: str) -> int:
+#         row = self.housekeeping.get_most_recent_record(f"SELECT * FROM {table} WHERE uuid = %s", (self.uuid, ))
+#         return row[0] if row else 0
+#
+#     def setUp(self) -> None:
+#         super().setUp()
+#
+#         self.housekeeping = HousekeepingDB.from_keystore_creds()
+#         self.housekeeping.connect()
+#
+#     def tearDown(self) -> None:
+#         self.housekeeping.close()
+#
+#         super().tearDown()
 
 
 class ArtifactsTest(ClusterTester):
@@ -115,6 +137,154 @@ class ArtifactsTest(ClusterTester):
                            "scylla_packages_installed": scylla_packages,
                            "unified_package": self.params.get("unified_package"),
                            "nonroot_offline_install": self.params.get("nonroot_offline_install"),
+                           "scylla_repo": self.params.get("scylla_repo"), })
+
+        return email_data
+
+
+class PrivateRepoTest(ClusterTester):
+    REPO_TABLE = "housekeeping.repo"
+    REPODOWNLOAD_TABLE = "housekeeping.repodownload"
+    PRIVATE_REPO_BASEURL = "https://repositories.scylladb.com/scylla/"
+    SW_REPO_RE = re.compile(PRIVATE_REPO_BASEURL + r"repo/(?P<uuid>[\w-]+)/(?P<ostype>[\w]+)")
+
+    BODY_PREFIXES = {
+        "centos": ("[scylla",
+                   "name=",
+                   "baseurl=",
+                   "type=",
+                   "skip_if_unavailable=",
+                   "enabled=",
+                   "enabled_metadata=",
+                   "repo_gpgcheck=",
+                   "gpgcheck=",
+                   "gpgkey=",),
+        "ubuntu": ("deb ",),
+    }
+
+    @staticmethod
+    def extract_pkginfo_urls_from_yum_repo(repofile):
+        urls = []
+        for line in repofile.splitlines():
+            if line.startswith("baseurl="):
+                # Convert string like
+                #   `baseurl=https://.../scylla/centos/scylladb-1.7/$releasever/$basearch/'
+                # to
+                #   `https://.../scylla/centos/scylladb-1.7/7Server/x86_64/repodata/repomd.xml'
+                urls.append(
+                    line[8:].replace("$releasever", "7Server").replace("$basearch", "x86_64") + "repodata/repomd.xml")
+        return urls
+
+    @staticmethod
+    def extract_pkginfo_urls_from_apt_repo(repofile):
+        urls = []
+        for line in repofile.splitlines():
+            if line.startswith("deb"):
+                # Convert string like:
+                #   `deb  [arch=amd64] https://.../deb/ubuntu xenial scylladb-1.7/multiverse'
+                # to
+                #   `https://.../deb/ubuntu/dists/xenial/scylladb-1.7/multiverse/binary-amd64/Packages.gz'
+                _, arch, baseurl, distribution, component = line.split()
+                arch = arch.strip("[]").split("=")[1]
+                urls.append(f"{baseurl}/dists/{distribution}/{component}/binary-{arch}/Packages.gz")
+        return urls
+
+    PKGINFO_URL_PARSERS = {
+        "centos": extract_pkginfo_urls_from_yum_repo,
+        "ubuntu": extract_pkginfo_urls_from_apt_repo,
+    }
+
+    def get_last_id(self, table: str) -> int:
+        row = self.housekeeping.get_most_recent_record(f"SELECT * FROM {table} WHERE uuid = %s", (self.uuid,))
+        return row[0] if row else 0
+
+    def setUp(self) -> None:
+        super().setUp()
+
+        self.sw_repo = self.params["scylla_repo"]
+
+        match = self.SW_REPO_RE.match(self.sw_repo)
+        self.assertTrue(match, f"Unable to parse URL: {self.sw_repo}")
+
+        self.uuid, self.ostype = match.group("uuid"), match.group("ostype")
+        self.body_prefixes = self.BODY_PREFIXES[self.ostype]
+        self.pkginfo_url_parser = self.PKGINFO_URL_PARSERS[self.ostype]
+
+        #  Strings `rpm/scylla'
+        #          `deb/ubuntu'
+        #          `deb/debian' have same length.
+        self.pkginfo_url_prefix_len = len(f"{self.PRIVATE_REPO_BASEURL}/scylladb/{self.uuid}/rpm/scylla")
+
+        self.housekeeping = HousekeepingDB.from_keystore_creds()
+        self.housekeeping.connect()
+
+    def tearDown(self) -> None:
+        self.housekeeping.close()
+
+        super().tearDown()
+
+    def test_private_repo(self) -> None:
+        with self.subTest("Verify repo file syntax and housekeeping stats."):
+            last_id = self.get_last_id(self.REPO_TABLE)
+
+            self.log.info("Get %s", self.sw_repo)
+            repofile = requests.get(self.sw_repo).text
+            self.log.info(">>> Downloaded repo file: >>>\n\n%s\n<<<", repofile)
+
+            self.assertGreater(self.get_last_id(self.REPO_TABLE), last_id,
+                               "Our download is not collected to repo table")
+
+            for line in repofile.splitlines():
+                if not line.strip():  # Skip empty lines.
+                    continue
+                if not any(line.startswith(prefix) for prefix in self.body_prefixes):
+                    self.fail(f"Repo content has invalid line: {line}")
+
+        with self.subTest("Verify that redirection works well."):
+            last_id = self.get_last_id(self.REPODOWNLOAD_TABLE)
+
+            pkginfo_url_list = self.pkginfo_url_parser(repofile)
+            self.assertTrue(pkginfo_url_list, "There is should be at lease one pkginfo URL")
+            self.log.info(">>> List of pkginfo URLs: >>>\n\t%s\n<<<", "\n\t".join(pkginfo_url_list))
+
+            for pkginfo_url in pkginfo_url_list:
+                self.assertTrue(pkginfo_url.startswith(self.PRIVATE_REPO_BASEURL),
+                                f"pkginfo URL should start with {self.PRIVATE_REPO_BASEURL}")
+
+                self.log.info("Get %s", pkginfo_url)
+                response = requests.get(pkginfo_url)
+                self.log.info("Landed at %s", response.url)
+                self.assertIn("/downloads.scylladb.com/", response.url,
+                              "We're not redirected to downloads.scylladb.com")
+                self.assertTrue(response.url.endswith(pkginfo_url[self.pkginfo_url_prefix_len:]),
+                                f"Looks like we're redirected to wrong resource: {response.url}")
+                self.assertEqual(len(response.history), 1, "There is more than 1 redirection")
+
+                first_response = response.history[-1].text
+                self.log.info(first_response)
+                try:
+                    parsed_first_response = json.loads(first_response)
+                except json.JSONDecodeError:
+                    self.fail("Document downloaded is not a JSON")
+                self.log.info(parsed_first_response)
+                self.assertEqual(parsed_first_response["errorMessage"],
+                                 "HandlerDemo.ResponseFound Redirection: Resource found elsewhere")
+                self.assertEqual(parsed_first_response["errorType"], response.url)
+
+                new_last_id = self.get_last_id(self.REPODOWNLOAD_TABLE)
+                self.assertGreater(new_last_id, last_id, "Our download is not collected to repo table")
+
+                last_id = new_last_id
+
+        # with self.subTest("Test after restart."):
+        #     self.db_cluster.nodes[1]
+
+    def get_email_data(self):
+        self.log.info("Prepare data for email")
+
+        email_data = self._get_common_email_data()
+        email_data.update({"repo_ostype": self.ostype,
+                           "repo_uuid": self.uuid,
                            "scylla_repo": self.params.get("scylla_repo"), })
 
         return email_data

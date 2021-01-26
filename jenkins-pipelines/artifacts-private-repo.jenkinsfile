@@ -14,7 +14,7 @@ pipeline {
         string(defaultValue: '',
                description: 'a private Scylla repo to run against',
                name: 'scylla_repo')
-        string(defaultValue: 'test-cases/private-repo/private-repo.yaml',
+        string(defaultValue: 'test-cases/artifacts/private-repo.yaml',
                description: 'a config file for the private repo test',
                name: 'test_config')
         string(defaultValue: 'qa@scylladb.com',
@@ -51,7 +51,7 @@ pipeline {
                                 export SCT_CONFIG_FILES=${params.test_config}
 
                                 echo "start test ......."
-                                ./docker/env/hydra.sh run-test private_repo_test --backend gce --logdir "`pwd`"
+                                ./docker/env/hydra.sh run-test artifacts_test.PrivateRepoTest.test_private_repo --backend gce --logdir "`pwd`"
                                 echo "end test ....."
                                 """
                             }
