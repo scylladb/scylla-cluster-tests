@@ -1161,6 +1161,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         timeout = self.get_duration(duration)
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
 
+        if self.params.get("client_encrypt") and ' -tls' not in stress_cmd:
+            stress_cmd += ' -tls '
+
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, stresser="scylla-bench", aggregate=stats_aggregate_cmds)
         bench_thread = ScyllaBenchThread(
