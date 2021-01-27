@@ -751,7 +751,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('TerminateAndReplaceNode %s' % self.target_node)
         old_node_ip = self.target_node.ip_address
         InfoEvent(message='StartEvent - Terminate node and wait 5 minutes').publish()
-        self._terminate_and_wait(target_node=self.target_node)
+
+        with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                            line="failed to repair"):
+            self._terminate_and_wait(target_node=self.target_node)
+
         InfoEvent(message='FinishEvent - target_node was terminated').publish()
         new_node = self._add_and_init_new_cluster_node(old_node_ip, rack=self.target_node.rack)
         try:
