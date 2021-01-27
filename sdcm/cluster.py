@@ -4372,8 +4372,8 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                 apt-get install -y python3.6 python3.6-dev
                 apt-get install -y python-setuptools unzip wget
                 apt install -y python3-pip
-                python3 -m pip install --upgrade pip
-                python3 -m pip install pyyaml
+                python3.6 -m pip install --upgrade pip
+                python3.6 -m pip install pyyaml
                 pip3 install -I -U psutil
                 systemctl start docker
             """)
