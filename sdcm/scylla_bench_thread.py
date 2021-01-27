@@ -130,7 +130,7 @@ class ScyllaBenchThread:
 
         log_file_name = os.path.join(node.logdir, f'scylla-bench-l{loader_idx}-{uuid.uuid4()}.log')
         # Select first seed node to send the scylla-bench cmds
-        ips = node_list[0].private_ip_address
+        ips = node_list[0].ip_address
 
         # Find stress mode:
         #    "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100"
