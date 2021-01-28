@@ -3746,7 +3746,7 @@ class NemesisSequence(Nemesis):
 
 class TerminateAndRemoveNodeMonkey(Nemesis):
     """Remove a Node from a Scylla Cluster (Down Scale)"""
-    disruptive = False
+    disruptive = True
     # It should not be run on kubernetes, since it is a manual procedure
     # While on kubernetes we put it all on scylla-operator
     kubernetes = False
