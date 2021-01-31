@@ -2720,14 +2720,22 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                                                                      port=port)
 
     def run_cqlsh(self, cmd, keyspace=None, port=None, timeout=120, verbose=True, split=False, target_db_node=None,
-                  connect_timeout=60):
+                  connect_timeout=60, num_retry_on_failure=1):
         """Runs CQL command using cqlsh utility"""
         cmd = self._gen_cqlsh_cmd(command=cmd, keyspace=keyspace, timeout=timeout,
                                   host=self.scylla_listen_address if not target_db_node else target_db_node.ip_address,
                                   port=port if port else self.CQL_PORT,
                                   connect_timeout=connect_timeout)
-        cqlsh_out = self.remoter.run(cmd, timeout=timeout + 30,  # we give 30 seconds to cqlsh timeout mechanism to work
-                                     verbose=verbose)
+        while num_retry_on_failure:
+            try:
+                cqlsh_out = self.remoter.run(cmd, timeout=timeout + 30,  # we give 30 seconds to cqlsh timeout mechanism to work
+                                             verbose=verbose)
+                break
+            except Exception:
+                num_retry_on_failure -= 1
+                if not num_retry_on_failure:
+                    raise
+
         # stdout of cqlsh example:
         #      pk
         #      ----
