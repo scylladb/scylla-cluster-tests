@@ -198,10 +198,12 @@ class LongevityTest(ClusterTester):
         if validate_partitions:
             table_name = self.params.get('table_name')
             primary_key_column = self.params.get('primary_key_column')
-            self.log.debug('Save partitons info before reads')
+            self.log.debug('Save partitions info before reads')
             partitions_dict_before = self.collect_partitions_info(table_name=table_name,
                                                                   primary_key_column=primary_key_column,
                                                                   save_into_file_name='partitions_rows_before.log')
+            if partitions_dict_before is None:
+                validate_partitions = False
 
         stress_cmd = self.params.get('stress_cmd')
         if stress_cmd:
@@ -258,12 +260,13 @@ class LongevityTest(ClusterTester):
             self.verify_stress_thread(cs_thread_pool=stress)
 
         if (stress_read_cmd or stress_cmd) and validate_partitions:
-            self.log.debug('Save partitons info after reads')
+            self.log.debug('Save partitions info after reads')
             partitions_dict_after = self.collect_partitions_info(table_name=table_name,
                                                                  primary_key_column=primary_key_column,
                                                                  save_into_file_name='partitions_rows_after.log')
-            self.assertEqual(partitions_dict_before, partitions_dict_after,
-                             msg='Row amount in partitions is not same before and after running of nemesis')
+            if partitions_dict_after is not None:
+                self.assertEqual(partitions_dict_before, partitions_dict_after,
+                                 msg='Row amount in partitions is not same before and after running of nemesis')
 
     def test_batch_custom_time(self):
         """

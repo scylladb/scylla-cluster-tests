@@ -1800,7 +1800,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         get_distinct_partition_keys_cmd = 'select distinct {pk} from {table}'.format(pk=primary_key_column,
                                                                                      table=table_name)
-        out = self.db_cluster.nodes[0].run_cqlsh(cmd=get_distinct_partition_keys_cmd, timeout=600, split=True)
+        try:
+            out = self.db_cluster.nodes[0].run_cqlsh(cmd=get_distinct_partition_keys_cmd, timeout=600, split=True,
+                                                     num_retry_on_failure=5)
+        except Exception as exc:
+            self.log.error(f"Failed to collect partition info. Error details: {str(exc)}")
+            return None
+
         pk_list = sorted([int(pk) for pk in out[3:-3]])
 
         # Collect data about partitions' rows amount.
@@ -1810,7 +1816,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             for i in pk_list:
                 self.log.debug("Next PK: {}".format(i))
                 count_partition_keys_cmd = f'select count(*) from {table_name} where {primary_key_column} = {i}'
-                out = self.db_cluster.nodes[0].run_cqlsh(cmd=count_partition_keys_cmd, timeout=600, split=True)
+                try:
+                    out = self.db_cluster.nodes[0].run_cqlsh(cmd=count_partition_keys_cmd, timeout=600, split=True,
+                                                             num_retry_on_failure=5)
+                except Exception as exc:
+                    self.log.error(f"Failed to collect partition info. Error details: {str(exc)}")
+                    return None
+
                 self.log.debug('Count result: {}'.format(out))
                 partitions[i] = out[3] if len(out) > 3 else None
                 stats_file.write('{i}:{rows}, '.format(i=i, rows=partitions[i]))
