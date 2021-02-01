@@ -104,8 +104,9 @@ def cli():
 @sct_option('--test-id', 'test_id', help='test id to filter by. Could be used multiple times', multiple=True)
 @click.option('--logdir', type=str, help='directory with test run')
 @click.option('--dry-run', is_flag=True, default=False, help='dry run')
+@click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
 @click.pass_context
-def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run):
+def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend):
     """Clean cloud resources.
 
     There are different options how to run clean up:
@@ -154,9 +155,14 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run):
 
         params = ({"TestId": tid, **user_param} for tid in test_id)
 
+    if backend is None:
+        if os.environ.get('SCT_CLUSTER_BACKEND', None) is None:
+            os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+    else:
+        os.environ['SCT_CLUSTER_BACKEND'] = backend
+
     if post_behavior:
         click.echo(f"Use {logdir} as a logdir")
-        os.environ["SCT_CLUSTER_BACKEND"] = "aws"  # just to pass SCTConfiguration() verification.
         clean_func = partial(clean_resources_according_post_behavior, config=SCTConfiguration(), logdir=logdir)
     else:
         clean_func = clean_cloud_resources

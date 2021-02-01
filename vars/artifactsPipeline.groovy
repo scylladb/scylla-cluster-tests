@@ -157,6 +157,7 @@ def call(Map pipelineParams) {
                                                 sctScript """
                                                     export SCT_CONFIG_FILES=${params.test_config}
                                                     export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                                    export SCT_CLUSTER_BACKEND="${params.backend}"
 
                                                     echo "start clean resources ..."
                                                     ./docker/env/hydra.sh clean-resources --post-behavior --logdir "`pwd`"
