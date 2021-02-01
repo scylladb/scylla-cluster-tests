@@ -100,11 +100,9 @@ def test_01_dynamodb_api(request, docker_scylla, prom_address):
 def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, events):
     loader_set = LocalLoaderSetDummy()
 
-    error_log_content_before = events.get_event_log_file('error.log')
-
     # 2. do write without dataintegrity=true
-    cmd = 'bin/ycsb load dynamodb -P workloads/workloada -threads 5 -p recordcount=10000 -p fieldcount=10 -p fieldlength=512'
-    ycsb_thread1 = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=TEST_PARAMS)
+    cmd = 'bin/ycsb load dynamodb -P workloads/workloada -threads 5 -p recordcount=50 -p fieldcount=1 -p fieldlength=100'
+    ycsb_thread1 = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=30, params=TEST_PARAMS)
 
     def cleanup_thread1():
         ycsb_thread1.kill()
@@ -116,8 +114,8 @@ def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, eve
     ycsb_thread1.kill()
 
     # 3. do read with dataintegrity=true
-    cmd = 'bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=10000 -p fieldcount=10 -p fieldlength=512 -p dataintegrity=true -p operationcount=100000000'
-    ycsb_thread2 = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=20, params=TEST_PARAMS)
+    cmd = 'bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=100 -p fieldcount=10 -p fieldlength=512 -p dataintegrity=true -p operationcount=100000000'
+    ycsb_thread2 = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=30, params=TEST_PARAMS)
 
     def cleanup_thread2():
         ycsb_thread2.kill()
@@ -133,16 +131,21 @@ def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, eve
         regex = re.compile(r'^collectd_ycsb_verify_gauge.*?([0-9\.]*?)$', re.MULTILINE)
 
         assert 'collectd_ycsb_verify_gauge' in output
-        assert 'UNEXPECTED_STATE' in output
+        assert 'type="UNEXPECTED_STATE"' in output
+        assert 'type="ERROR"' in output
         matches = regex.findall(output)
         assert all(float(i) >= 0 for i in matches), output
 
     check_metrics()
-    ycsb_thread2.get_results()
+    file_logger = events.get_events_logger()
+    with events.wait_for_n_events(file_logger, count=7, timeout=60):
+        ycsb_thread2.get_results()
 
     # 5. check that events with the expected error were raised
-    error_log_content_after = events.wait_for_event_log_change('error.log', error_log_content_before)
-    assert 'UNEXPECTED_STATE' in error_log_content_after
+    cat = file_logger.get_events_by_category()
+    assert len(cat['ERROR']) == 2
+    assert '=UNEXPECTED_STATE' in cat['ERROR'][0]
+    assert '=ERROR' in cat['ERROR'][1]
 
 
 def test_03_cql(request, docker_scylla, prom_address):
