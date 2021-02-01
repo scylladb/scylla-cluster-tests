@@ -254,7 +254,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                     log_file=log_file_name,
                     watchers=[
                         FailuresWatcher(
-                            r'\sERROR|=UNEXPECTED_STATE',
+                            r'\sERROR|=UNEXPECTED_STATE|=ERROR',
                             callback=raise_event_callback,
                             raise_exception=False
                         )
