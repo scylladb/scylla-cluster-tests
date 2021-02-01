@@ -135,7 +135,7 @@ class SctRunner:
     def image(self):
         return self._image(image_type=ImageType.general)
 
-    def _create_instance(self, instance_type, image_id, tags_list, region_az=""):
+    def _create_instance(self, instance_type, image_id, tags_list, region_az="", test_duration=None):
         region = region_az[:-1]
         aws_region = AwsRegion(region_name=region)
         region_az = region_az if region_az else random.choice(aws_region.availability_zones)
@@ -144,6 +144,10 @@ class SctRunner:
                        f"Use hydra prepare-region --region-name '{self.region_name}' to create cloud env!"
         LOGGER.info("Creating instance...")
         ec2_resource = boto3.resource("ec2", region_name=region)
+        instance_root_disk_size = self.INSTANCE_ROOT_DISK_SIZE
+        if test_duration and test_duration > 4320:  # 3 days
+            # add 20G more space for jobs which test_duration is longer than 3 days
+            instance_root_disk_size = self.INSTANCE_ROOT_DISK_SIZE + 20
         result = ec2_resource.create_instances(
             ImageId=image_id,
             InstanceType=instance_type,
@@ -161,7 +165,7 @@ class SctRunner:
             BlockDeviceMappings=[{
                 "DeviceName": ec2_ami_get_root_device_name(image_id=image_id, region=region),
                 "Ebs": {
-                    "VolumeSize": self.INSTANCE_ROOT_DISK_SIZE,
+                    "VolumeSize": instance_root_disk_size,
                     "VolumeType": "gp2"
                 }
             }]
@@ -269,6 +273,7 @@ class SctRunner:
                 {"Key": "keep_action", "Value": "terminate"},
             ],
             region_az=region_az,
+            test_duration=test_duration,
         )
 
 
