@@ -254,19 +254,18 @@ class FailuresWatcher(Responder):
         self.callback = callback
         self.raise_exception = raise_exception
 
-    def first_matching_line(self, stream, index):
+    def process_all_matching_lines(self, stream, index):
         new_ = stream[index:]
         for line in new_.splitlines():
             if re.findall(self.sentinel, line, re.S):
-                return line
-        return None
+                self._process_line(line)
 
     def submit(self, stream):
         index = getattr(self, "failure_index")
         # Also check stream for our failure sentinel
         # Error out if we seem to have failed after a previous response.
         if self.pattern_matches(stream, self.sentinel, "failure_index"):
-            self._process_line(self.first_matching_line(stream, index))
+            self.process_all_matching_lines(stream, index)
         return []
 
     def submit_line(self, line: str):
