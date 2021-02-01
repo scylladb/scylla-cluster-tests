@@ -13,7 +13,6 @@
 
 import os
 import logging
-import tempfile
 import collections
 from pathlib import Path
 
@@ -22,48 +21,20 @@ import pytest
 from sdcm import wait
 from sdcm.cluster import BaseNode
 from sdcm.prometheus import start_metrics_server
-from sdcm.utils.decorators import timeout
 from sdcm.utils.docker_remote import RemoteDocker
-from sdcm.sct_events.setup import start_events_device, stop_events_device
 
 from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
 
-
-class EventsLogUtils:
-    """
-    those test function are borrowed/copied from SctEventsTests,
-    once SctEventsTests will changed to be pytest it would be able to use this as part of `events` fixture
-    """
-
-    def __init__(self, temp_dir):
-        self.temp_dir = temp_dir
-
-    def get_event_log_file(self, name):
-        log_file = Path(self.temp_dir, 'events_log', name)
-        data = ""
-        if log_file.exists():
-            with open(log_file, 'r') as file:
-                data = file.read()
-        return data
-
-    def get_event_logs(self):
-        return self.get_event_log_file('events.log')
-
-    @timeout(timeout=20, sleep_time=0.05)
-    def wait_for_event_log_change(self, file_name, log_content_before):
-        log_content_after = self.get_event_log_file(file_name)
-        if log_content_before == log_content_after:
-            raise AssertionError("log file wasn't update with new events")
-        return log_content_after
+from unit_tests.lib.events_utils import EventsUtilsMixin
 
 
 @pytest.fixture(scope='session')
 def events():
-    temp_dir = tempfile.mkdtemp()
-    start_events_device(temp_dir)
-    yield EventsLogUtils(temp_dir=temp_dir)
+    mixing = EventsUtilsMixin()
+    mixing.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
+    yield mixing
 
-    stop_events_device()
+    mixing.teardown_events_processes()
 
 
 @pytest.fixture(scope='session')

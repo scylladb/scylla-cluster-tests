@@ -63,8 +63,8 @@ class EventsUtilsMixin:
 
         while time.perf_counter() < end_time and subscriber.events_counter < last_event_n:
             time.sleep(0.1)
-        self.assertLessEqual(last_event_n, subscriber.events_counter,
-                             f"Subscriber {subscriber} didn't receive {count} events in {timeout} seconds")
+        assert last_event_n <= subscriber.events_counter, \
+            f"Subscriber {subscriber} didn't receive {count} events in {timeout} seconds"
 
         # Give a chance to the subscriber to handle last event received.
         time.sleep(last_event_processing_delay)
