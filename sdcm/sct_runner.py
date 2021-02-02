@@ -35,7 +35,6 @@ class SctRunner:
     SOURCE_IMAGE_REGION = "eu-west-2"  # where the source Runner image will be created and copied to other regions
     LOGIN_USER = "ubuntu"
     IMAGE_DESCRIPTION = "SCT runner image"
-    INSTANCE_ROOT_DISK_SIZE = 35  # GB
 
     def __init__(self, region_name: str):
         self.region_name = region_name
@@ -50,6 +49,14 @@ class SctRunner:
         if test_duration > 7 * 60:
             return "r5.large"
         return "t3.large"  # has 7h 12m CPU burst
+
+    @staticmethod
+    def instance_root_disk_size(test_duration):
+        INSTANCE_ROOT_DISK_SIZE = 35  # GB
+        if test_duration and test_duration > 3 * 24 * 60:  # 3 days
+            # add 20G more space for jobs which test_duration is longer than 3 days
+            return INSTANCE_ROOT_DISK_SIZE + 20
+        return INSTANCE_ROOT_DISK_SIZE
 
     @staticmethod
     @lru_cache(maxsize=None)
@@ -144,10 +151,6 @@ class SctRunner:
                        f"Use hydra prepare-region --region-name '{self.region_name}' to create cloud env!"
         LOGGER.info("Creating instance...")
         ec2_resource = boto3.resource("ec2", region_name=region)
-        instance_root_disk_size = self.INSTANCE_ROOT_DISK_SIZE
-        if test_duration and test_duration > 4320:  # 3 days
-            # add 20G more space for jobs which test_duration is longer than 3 days
-            instance_root_disk_size = self.INSTANCE_ROOT_DISK_SIZE + 20
         result = ec2_resource.create_instances(
             ImageId=image_id,
             InstanceType=instance_type,
@@ -165,7 +168,7 @@ class SctRunner:
             BlockDeviceMappings=[{
                 "DeviceName": ec2_ami_get_root_device_name(image_id=image_id, region=region),
                 "Ebs": {
-                    "VolumeSize": instance_root_disk_size,
+                    "VolumeSize": self.instance_root_disk_size(test_duration),
                     "VolumeType": "gp2"
                 }
             }]
