@@ -492,22 +492,33 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         using SaslauthdAuthenticator. We have same account (cassandra) for SaslauthdAuthenticator
         and PasswordAuthenticator, so it can be toggled smoothly without effect to c-s workloads.
 
-        It's only support to switch from PasswordAuthenticator, the authenticator will be reset
-        back in the end of nemesis.
+        It's only support to switch between PasswordAuthenticator and SaslauthdAuthenticator,
+        the authenticator will be reset back in the end of nemesis.
         """
         self._set_current_disruption('ToggleAuthenticatorType %s' % self.target_node)
-        # Switch to com.scylladb.auth.SaslauthdAuthenticator
-        if self.cluster.params.get('prepare_saslauthd') and 'PasswordAuthenticator' in self.cluster.params.get('authenticator'):
-            update_authenticator(self.cluster.nodes, 'com.scylladb.auth.SaslauthdAuthenticator')
+        result = self.target_node.remoter.run("grep -o '^authenticator: .*' /etc/scylla/scylla.yaml")
+        if 'com.scylladb.auth.SaslauthdAuthenticator' in result.stdout:
+            orig_auth = 'com.scylladb.auth.SaslauthdAuthenticator'
+            opposite_auth = 'PasswordAuthenticator'
+        elif 'PasswordAuthenticator' in result.stdout:
+            orig_auth = 'PasswordAuthenticator'
+            opposite_auth = 'com.scylladb.auth.SaslauthdAuthenticator'
+        else:
+            raise UnsupportedNemesis(
+                'This nemesis only supports to switch between SaslauthdAuthenticator and PasswordAuthenticator')
+        if self.cluster.params.get('prepare_saslauthd'):
+            update_authenticator(self.cluster.nodes, opposite_auth)
             try:
                 # Run connect a new session after authenticator switch, and run a short workload
                 self._prepare_test_table(ks='keyspace_for_authenticator_switch', table='standard1')
             finally:
-                update_authenticator(self.cluster.nodes, 'PasswordAuthenticator')
+                update_authenticator(self.cluster.nodes, orig_auth)
 
             # Run connect a new session after authenticator switch, drop the test keyspace
             with self.cluster.cql_connection_patient(self.target_node) as session:
                 session.execute(f'DROP KEYSPACE keyspace_for_authenticator_switch')
+        else:
+            raise UnsupportedNemesis("SaslauthdAuthenticator can't work without saslauthd environment")
 
     def disrupt_restart_with_resharding(self):
         self._set_current_disruption('RestartNodeWithResharding %s' % self.target_node)
