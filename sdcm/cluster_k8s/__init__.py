@@ -47,6 +47,7 @@ from sdcm.coredump import CoredumpExportFileThread
 from sdcm.mgmt import AnyManagerCluster
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.utils.common import download_from_github
 from sdcm.utils.k8s import KubernetesOps, ApiCallRateLimiter, JSON_PATCH_TYPE, KUBECTL_TIMEOUT
 from sdcm.utils.decorators import log_run_info, timeout
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \
@@ -251,7 +252,8 @@ class KubernetesCluster:
         self.kubectl("get pods", namespace="sct-loaders")
 
     @log_run_info
-    def deploy_monitoring_cluster(self, tag: str, namespace: str = "monitoring") -> None:
+    def deploy_monitoring_cluster(
+            self, scylla_operator_tag: str, namespace: str = "monitoring", is_manager_deployed: bool = False) -> None:
         """
         This procedure comes from scylla-operator repo:
         https://github.com/scylladb/scylla-operator/blob/master/docs/source/generic.md#setting-up-monitoring
@@ -259,29 +261,49 @@ class KubernetesCluster:
         If it fails please consider reporting and fixing issue in scylla-operator repo too
         """
         LOGGER.info("Create and initialize a monitoring cluster")
-        if tag == 'nightly':
-            tag = 'master'
-        zip_file_response = requests.get(
-            f'https://github.com/scylladb/scylla-operator/archive/{tag}.zip', allow_redirects=True)
+        if scylla_operator_tag == 'nightly':
+            scylla_operator_tag = 'master'
         with TemporaryDirectory() as tmp_dir_name:
-            zip_file = os.path.join(tmp_dir_name, 'scylla-operator.zip')
-            scylla_operator_base_dir = os.path.join(tmp_dir_name, 'scylla-operator')
-            with open(zip_file, 'wb') as f:
-                f.write(zip_file_response.content)
-                f.flush()
-            with zipfile.ZipFile(zip_file, 'r') as zip_ref:
-                zip_ref.extractall(scylla_operator_base_dir)
-            scylla_operator_dir = os.path.join(scylla_operator_base_dir, os.listdir(scylla_operator_base_dir)[0])
+            scylla_operator_dir = os.path.join(tmp_dir_name, 'scylla-operator')
+            scylla_monitoring_dir = os.path.join(tmp_dir_name, 'scylla-monitoring')
+            download_from_github(
+                repo='scylladb/scylla-operator',
+                tag=scylla_operator_tag,
+                dst_dir=scylla_operator_dir)
+            download_from_github(
+                repo='scylladb/scylla-monitoring',
+                tag='scylla-monitoring-3.6.0',
+                dst_dir=scylla_monitoring_dir)
             self.kubectl(f'create namespace {namespace}')
-            self.helm('repo add stable  https://charts.helm.sh/stable')
+            self.helm('repo add prometheus-community https://prometheus-community.github.io/helm-charts')
             self.helm('repo update')
-            self.helm(f'upgrade --install scylla-prom --namespace {namespace} stable/prometheus '
-                      '--set server.resources.limits.cpu=2 --set server.resources.limits.memory=4Gi '
-                      f'-f {os.path.join(scylla_operator_dir, "examples", "common", "prometheus", "values.yaml")}')
-            LOCALRUNNER.run(f'cd "{os.path.join(scylla_operator_dir, "examples")}"; '
-                            'chmod +x ./dashboards.sh; ./dashboards.sh')
-            self.helm(f'upgrade --install scylla-graf --namespace {namespace} stable/grafana -f '
-                      f'{os.path.join(scylla_operator_dir, "examples", "common", "grafana", "values.yaml")}')
+            self.helm(
+                f'install monitoring prometheus-community/kube-prometheus-stack '
+                f'--values {os.path.join(scylla_operator_dir, "examples", "common", "monitoring", "values.yaml")} '
+                '--set server.resources.limits.cpu=2 --set server.resources.limits.memory=4Gi'
+                f'--create-namespace --namespace {namespace}')
+
+            self.apply_file(os.path.join(scylla_operator_dir, "examples", "common", "monitoring",
+                                         "scylla-service-monitor.yaml"))
+            self.kubectl(
+                f'create configmap scylla-dashboards --from-file={scylla_monitoring_dir}/grafana/build/ver_4.3',
+                namespace=namespace)
+            self.kubectl(
+                "patch configmap scylla-dashboards -p '{\"metadata\":{\"labels\":{\"grafana_dashboard\": \"1\"}}}'",
+                namespace=namespace)
+
+            if is_manager_deployed:
+                self.apply_file(os.path.join(scylla_operator_dir, "examples", "common", "monitoring",
+                                             "scylla-manager-service-monitor.yaml"))
+                self.kubectl(
+                    f'create configmap scylla-manager-dashboards '
+                    f'--from-file={scylla_monitoring_dir}/grafana/build/manager_2.2',
+                    namespace=namespace)
+                self.kubectl(
+                    "patch configmap scylla-manager-dashboards "
+                    "-p '{\"metadata\":{\"labels\":{\"grafana_dashboard\": \"1\"}}}'",
+                    namespace=namespace)
+
         time.sleep(10)
         self.kubectl("wait --timeout=15m --all --for=condition=Ready pod", timeout=1000, namespace=namespace)
         LOGGER.debug("Check the monitoring cluster")

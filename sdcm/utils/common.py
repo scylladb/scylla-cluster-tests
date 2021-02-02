@@ -33,8 +33,11 @@ import string
 import warnings
 import getpass
 import json
+import re
+import requests
 import uuid
-from typing import Iterable, List, Callable, Optional, Dict, Union, Literal
+import zipfile
+from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Tuple
 from urllib.parse import urlparse
 from unittest.mock import Mock
 
@@ -2151,3 +2154,22 @@ def shorten_cluster_name(name: str, max_string_len: int):
     if max_alpha_chunk_size == 0:
         return name
     return '-'.join([current, last_chunk])
+
+
+def download_from_github(repo: str, tag: str, dst_dir: str):
+    """
+    Downloads files from github via http to the dst_dir directory
+    """
+    url = f'https://github.com/{repo}/archive/{tag}.zip'
+    resp = requests.get(url, allow_redirects=True)
+    if not resp.ok:
+        raise RuntimeError(f"Failed to download {url}, result: {resp.content}")
+    import io
+    import tempfile
+    os.makedirs(dst_dir, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with zipfile.ZipFile(io.BytesIO(resp.content), 'r') as zip_ref:
+            zip_ref.extractall(tmpdir)
+        base_dir = os.path.join(tmpdir, os.listdir(tmpdir)[0])
+        for file in os.listdir(base_dir):
+            os.rename(os.path.join(base_dir, file), os.path.join(dst_dir, file))
