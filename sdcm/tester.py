@@ -319,6 +319,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.info('LDAP info {}'.format(ldap_address))
             self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
                                           user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
+        if self.params.get("prepare_saslauthd"):
+            ldap_entry = [f'uid=cassandra,ou=Person,{self.test_ldap_docker.ldap_base_object}',
+                ['uidObject', 'organizationalPerson', 'top'],
+                {'userPassword': LDAP_PASSWORD, 'sn': 'PersonSn', 'cn': 'PersonCn'}]
+            self.localhost.add_ldap_entry(ldap_entry)
+
         start_events_device(log_dir=self.logdir)
         time.sleep(0.5)
         InfoEvent('TEST_START test_id=%s' % Setup.test_id())
