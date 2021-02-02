@@ -305,6 +305,11 @@ class ClusterTester(db_stats.TestStatsMixin,
                           {'uniqueMember': unique_members_list, 'userPassword': user_password}]
             self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
                                           user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
+        if self.params.get("prepare_saslauthd"):
+            ldap_entry = [f'uid=cassandra,ou=Person,{self.test_ldap_docker.ldap_base_object}',
+                ['uidObject', 'organizationalPerson', 'top'],
+                {'userPassword': LDAP_PASSWORD, 'sn': 'PersonSn', 'cn': 'PersonCn'}]
+            self.localhost.add_ldap_entry(ldap_entry)
         self.alternator = alternator.api.Alternator(sct_params=self.params)
         start_events_device(log_dir=self.logdir, _registry=self.events_processes_registry)
         time.sleep(0.5)
