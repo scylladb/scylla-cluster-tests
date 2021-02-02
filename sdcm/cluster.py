@@ -1708,6 +1708,18 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 'ldap_bind_dn': f'cn=admin,{LDAP_BASE_OBJECT}',
                 'ldap_bind_passwd': LDAP_PASSWORD}
 
+    @staticmethod
+    def get_saslauthd_config():
+        if Setup.LDAP_ADDRESS is None:
+            return {}
+        ldap_server_ip = '127.0.0.1' if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION else Setup.LDAP_ADDRESS[0]
+        ldap_port = LDAP_SSH_TUNNEL_LOCAL_PORT if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION else \
+            Setup.LDAP_ADDRESS[1]
+        return {'ldap_servers': f'ldap://{ldap_server_ip}:{ldap_port}/',
+                'ldap_search_base': f'ou=Person,{LDAP_BASE_OBJECT}',
+                'ldap_bind_dn': f'cn=admin,{LDAP_BASE_OBJECT}',
+                'ldap_bind_pw': LDAP_PASSWORD}
+
     def create_ldap_users_on_scylla(self):
         self.run_cqlsh(f'CREATE ROLE \'{LDAP_ROLE}\' WITH SUPERUSER=true')
         for user in LDAP_USERS:
@@ -4044,6 +4056,20 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 raise Exception("There is no pre-installed ScyllaDB")
 
         if not Setup.REUSE_CLUSTER:
+            # prepare and start saslauthd service
+            setup_script = dedent(f"""
+                sudo yum install -y cyrus-sasl
+                sudo systemctl enable saslauthd
+                echo 'MECH=ldap' | sudo tee -a /etc/sysconfig/saslauthd
+                sudo touch /etc/saslauthd.conf
+                echo 'saslauthd_socket_path: /run/saslauthd/mux' | sudo tee -a /etc/scylla/scylla.yaml
+            """)
+            node.remoter.run('bash -cxe "%s"' % setup_script)
+            conf = node.get_saslauthd_config()
+            for key in conf.keys():
+                node.remoter.run(f'echo "{key}: {conf[key]}" | sudo tee -a /etc/saslauthd.conf')
+            node.remoter.sudo('systemctl restart saslauthd')
+
             result = node.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
             devname = result.stdout.strip()
             if install_scylla:
