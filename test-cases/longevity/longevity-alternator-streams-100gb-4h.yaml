@@ -18,19 +18,19 @@ prepare_write_cmd:
     table_compare interval=120 ; timeout=32400 ; src_table="alternator_usertable_streams".usertable_streams ; dst_table="alternator_usertable_streams-dest"."usertable_streams-dest"
 
 stress_cmd:
-  >-
-  bin/ycsb run dynamodb -P workloads/workloadc -threads 80
-  -p readproportion=1.0 -p updateproportion=0.0 -p recordcount=78125000
-  -p fieldcount=1 -p fieldlength=128 -p operationcount=39062500
-  -p insertstart=0 -p insertcount=39062500
-  -p dataintegrity=true -p table=usertable_streams-dest
+  - >-
+    bin/ycsb run dynamodb -P workloads/workloadc -threads 80
+    -p readproportion=1.0 -p updateproportion=0.0 -p recordcount=78125000
+    -p fieldcount=1 -p fieldlength=128 -p operationcount=78125000
+    -p insertstart=0 -p insertcount=78125000
+    -p dataintegrity=true -p table=usertable_streams
 
-  >-
-  bin/ycsb run dynamodb -P workloads/workloadc -threads 80
-  -p readproportion=1.0 -p updateproportion=0.0 -p recordcount=78125000
-  -p fieldcount=1 -p fieldlength=128 -p operationcount=39062500
-  -p insertstart=39062500 -p insertcount=39062500
-  -p dataintegrity=true -p table=usertable_streams-dest
+  - >-
+    bin/ycsb run dynamodb -P workloads/workloadc -threads 80
+    -p readproportion=1.0 -p updateproportion=0.0 -p recordcount=78125000
+    -p fieldcount=1 -p fieldlength=128 -p operationcount=78125000
+    -p insertstart=0 -p insertcount=78125000
+    -p dataintegrity=true -p table=usertable_streams-dest
 
 round_robin: true
 
