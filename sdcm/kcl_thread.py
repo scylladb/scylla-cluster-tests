@@ -127,12 +127,12 @@ class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-
                 status = f"== CompareTablesSizesThread: dst table/src table number of partitions: {dst_size}/{src_size} =="
                 LOGGER.info(status)
                 status_msg = f'[{elapsed_time}/{timeout}] {status}'
-                InfoEvent(status_msg)
+                InfoEvent(status_msg).publish()
 
                 if src_size == 0:
                     continue
                 if elapsed_time > timeout:
-                    InfoEvent(f"== CompareTablesSizesThread: exiting on timeout of {timeout}")
+                    InfoEvent(f"== CompareTablesSizesThread: exiting on timeout of {timeout}").publish()
                     break
                 time.sleep(interval)
             return None
