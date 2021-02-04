@@ -424,7 +424,7 @@ class KubernetesCluster:
     def monitoring_prometheus_pod(self):
         for pod in KubernetesOps.list_pods(self, namespace='monitoring'):
             for container in pod.spec.containers:
-                if 'prometheus' in container.image:
+                if container.name == 'prometheus':
                     return pod
         return None
 
@@ -1227,8 +1227,29 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
 
         self.log.debug('Check kubernetes monitoring health')
 
-        kubernetes_prometheus = PrometheusDBStats(host=self.k8s_cluster.monitoring_prometheus_pod.status.pod_ip)
-        monitoring_prometheus = PrometheusDBStats(host=Setup.tester_obj().monitors.nodes[0].external_address)
+        kubernetes_prometheus_host = None
+        try:
+            kubernetes_prometheus_host = self.k8s_cluster.monitoring_prometheus_pod.status.pod_ip
+            kubernetes_prometheus = PrometheusDBStats(host=kubernetes_prometheus_host)
+        except Exception as exc:
+            ClusterHealthValidatorEvent.MonitoringStatus(
+                message=f'Failed to connect to kubernetes prometheus server at {kubernetes_prometheus_host},'
+                        f' due to the: {exc}').publish()
+
+            ClusterHealthValidatorEvent.Done(message="Kubernetes monitoring health check finished").publish()
+            return
+
+        monitoring_prometheus_host = None
+        try:
+            monitoring_prometheus_host = Setup.tester_obj().monitors.nodes[0].external_address
+            monitoring_prometheus = PrometheusDBStats(host=monitoring_prometheus_host)
+        except Exception as exc:
+            ClusterHealthValidatorEvent.MonitoringStatus(
+                message=f'Failed to connect to monitoring prometheus server at {monitoring_prometheus_host},'
+                        f' due to the: {exc}').publish()
+
+            ClusterHealthValidatorEvent.Done(message="Kubernetes monitoring health check finished").publish()
+            return
 
         end_time = time.time()
         start_time = end_time - 60 * 30
