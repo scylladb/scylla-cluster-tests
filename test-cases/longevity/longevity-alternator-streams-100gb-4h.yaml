@@ -52,5 +52,4 @@ alternator_port: 8080
 dynamodb_primarykey_type: HASH
 alternator_use_dns_routing: true
 
-store_results_in_elasticsearch: false
 use_mgmt: false # just to make setup quicker for now

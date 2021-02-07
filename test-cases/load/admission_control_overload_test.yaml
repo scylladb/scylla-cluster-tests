@@ -12,4 +12,3 @@ instance_type_loader: 'c5.4xlarge'
 instance_type_monitor: 't3.small'
 user_prefix: 'overload_admission_control'
 system_auth_rf: 1
-store_results_in_elasticsearch: False

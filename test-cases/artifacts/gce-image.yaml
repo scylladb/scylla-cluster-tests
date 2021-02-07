@@ -13,7 +13,6 @@ n_loaders: 0
 n_monitor_nodes: 0
 nemesis_class_name: 'NoOpMonkey'
 scylla_linux_distro: 'centos'
-store_results_in_elasticsearch: false
 test_duration: 60
 user_prefix: 'artifacts-gce-image'
 system_auth_rf: 1

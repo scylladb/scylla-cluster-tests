@@ -4,7 +4,6 @@ n_loaders: 1
 n_monitor_nodes: 1
 instance_type_db: 'i3.4xlarge'
 
-store_results_in_elasticsearch: False
 user_prefix: "gemini-cdc-write"
 
 gemini_cmd: "gemini -d --duration 3h \

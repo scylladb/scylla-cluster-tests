@@ -49,7 +49,6 @@ alternator_enforce_authorization: true
 alternator_access_key_id: 'alternator'
 alternator_secret_access_key: 'password'
 
-store_results_in_elasticsearch: false
 use_mgmt: true
 
 server_encrypt: true

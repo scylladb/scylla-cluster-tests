@@ -310,11 +310,11 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
     def test_13_bool(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_STORE_RESULTS_IN_ELASTICSEARCH'] = 'False'
+        os.environ['SCT_STORE_PERF_RESULTS'] = 'False'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
         conf = SCTConfiguration()
 
-        self.assertEqual(conf['store_results_in_elasticsearch'], False)
+        self.assertEqual(conf['store_perf_results'], False)
 
     def test_14_aws_siren_from_env(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws-siren'

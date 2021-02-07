@@ -3,9 +3,9 @@
 | :-------  | :----------  | :------ | :-------------------------------
 | **<a href="#user-content-config_files" name="config_files">config_files</a>**  | a list of config files that would be used | N/A | SCT_CONFIG_FILES
 | **<a href="#user-content-cluster_backend" name="cluster_backend">cluster_backend</a>**  | backend that will be used, aws/gce/docker | N/A | SCT_CLUSTER_BACKEND
-| **<a href="#user-content-test_duration" name="test_duration">test_duration</a>**  | Test duration (min). Parameter used to keep instances produced by tests<br>and for jenkins pipeline timeout and TimoutThread. | N/A | SCT_TEST_DURATION
+| **<a href="#user-content-test_duration" name="test_duration">test_duration</a>**  | Test duration (min). Parameter used to keep instances produced by tests<br>and for jenkins pipeline timeout and TimoutThread. | 60 | SCT_TEST_DURATION
 | **<a href="#user-content-n_db_nodes" name="n_db_nodes">n_db_nodes</a>**  | Number list of database nodes in multiple data centers. | N/A | SCT_N_DB_NODES
-| **<a href="#user-content-n_test_oracle_db_nodes" name="n_test_oracle_db_nodes">n_test_oracle_db_nodes</a>**  | Number list of oracle test nodes in multiple data centers. | N/A | SCT_N_TEST_ORACLE_DB_NODES
+| **<a href="#user-content-n_test_oracle_db_nodes" name="n_test_oracle_db_nodes">n_test_oracle_db_nodes</a>**  | Number list of oracle test nodes in multiple data centers. | 1 | SCT_N_TEST_ORACLE_DB_NODES
 | **<a href="#user-content-n_loaders" name="n_loaders">n_loaders</a>**  | Number list of loader nodes in multiple data centers | N/A | SCT_N_LOADERS
 | **<a href="#user-content-n_monitor_nodes" name="n_monitor_nodes">n_monitor_nodes</a>**  | Number list of monitor nodes in multiple data centers | N/A | SCT_N_MONITORS_NODES
 | **<a href="#user-content-intra_node_comm_public" name="intra_node_comm_public">intra_node_comm_public</a>**  | If True, all communication between nodes are via public addresses | N/A | SCT_INTRA_NODE_COMM_PUBLIC
@@ -18,13 +18,15 @@
 | **<a href="#user-content-cloud_prom_host" name="cloud_prom_host">cloud_prom_host</a>**  | scylla cloud promproxy hostname to federate monitoring data into our monitoring instance | N/A | SCT_CLOUD_PROM_HOST
 | **<a href="#user-content-ip_ssh_connections" name="ip_ssh_connections">ip_ssh_connections</a>**  | Type of IP used to connect to machine instances.<br>This depends on whether you are running your tests from a machine inside<br>your cloud provider, where it makes sense to use 'private', or outside (use 'public')<br><br>Default: Use public IPs to connect to instances (public)<br>Use private IPs to connect to instances (private)<br>Use IPv6 IPs to connect to instances (ipv6) | private | SCT_IP_SSH_CONNECTIONS
 | **<a href="#user-content-scylla_repo" name="scylla_repo">scylla_repo</a>**  | Url to the repo of scylla version to install scylla | N/A | SCT_SCYLLA_REPO
+| **<a href="#user-content-unified_package" name="unified_package">unified_package</a>**  | Url to the unified package of scylla version to install scylla | N/A | SCT_UNIFIED_PACKAGE
+| **<a href="#user-content-nonroot_offline_install" name="nonroot_offline_install">nonroot_offline_install</a>**  | Install Scylla without required root priviledge | N/A | SCT_NONROOT_OFFLINE_INSTALL
 | **<a href="#user-content-scylla_version" name="scylla_version">scylla_version</a>**  | Version of scylla to install, ex. '2.3.1'<br>Automatically lookup AMIs and repo links for formal versions.<br>WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla' | N/A | SCT_SCYLLA_VERSION
 | **<a href="#user-content-oracle_scylla_version" name="oracle_scylla_version">oracle_scylla_version</a>**  | Version of scylla to use as oracle cluster with gemini tests, ex. '3.0.11'<br>Automatically lookup AMIs for formal versions.<br>WARNING: can't be used together with 'ami_id_db_oracle' | N/A | SCT_ORACLE_SCYLLA_VERSION
 | **<a href="#user-content-scylla_linux_distro" name="scylla_linux_distro">scylla_linux_distro</a>**  | The distro name and family name to use [centos/ubuntu-xenial/debian-jessie] | centos | SCT_SCYLLA_LINUX_DISTRO
 | **<a href="#user-content-scylla_linux_distro_loader" name="scylla_linux_distro_loader">scylla_linux_distro_loader</a>**  | The distro name and family name to use [centos/ubuntu-xenial/debian-jessie] | centos | SCT_SCYLLA_LINUX_DISTRO_LOADER
-| **<a href="#user-content-scylla_repo_m" name="scylla_repo_m">scylla_repo_m</a>**  | Url to the repo of scylla version to install scylla from for managment tests | http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylla-2019.1.repo | SCT_SCYLLA_REPO_M
+| **<a href="#user-content-scylla_repo_m" name="scylla_repo_m">scylla_repo_m</a>**  | Url to the repo of scylla version to install scylla from for managment tests | http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylla-2020.1.repo | SCT_SCYLLA_REPO_M
 | **<a href="#user-content-scylla_repo_loader" name="scylla_repo_loader">scylla_repo_loader</a>**  | Url to the repo of scylla version to install c-s for loader | N/A | SCT_SCYLLA_REPO_LOADER
-| **<a href="#user-content-scylla_mgmt_repo" name="scylla_mgmt_repo">scylla_mgmt_repo</a>**  | Url to the repo of scylla manager version to install for management tests | http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylladb-manager-2.1.repo | SCT_SCYLLA_MGMT_REPO
+| **<a href="#user-content-scylla_mgmt_repo" name="scylla_mgmt_repo">scylla_mgmt_repo</a>**  | Url to the repo of scylla manager version to install for management tests | http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylladb-manager-2.2.repo | SCT_SCYLLA_MGMT_REPO
 | **<a href="#user-content-scylla_mgmt_agent_repo" name="scylla_mgmt_agent_repo">scylla_mgmt_agent_repo</a>**  | Url to the repo of scylla manager agent version to install for management tests | N/A | SCT_SCYLLA_MGMT_AGENT_REPO
 | **<a href="#user-content-scylla_mgmt_agent_version" name="scylla_mgmt_agent_version">scylla_mgmt_agent_version</a>**  |  | N/A | SCT_SCYLLA_MGMT_AGENT_VERSION
 | **<a href="#user-content-scylla_mgmt_pkg" name="scylla_mgmt_pkg">scylla_mgmt_pkg</a>**  | Url to the scylla manager packages to install for management tests | N/A | SCT_SCYLLA_MGMT_PKG
@@ -39,17 +41,17 @@
 | **<a href="#user-content-stress_cmd_lwt_mixed" name="stress_cmd_lwt_mixed">stress_cmd_lwt_mixed</a>**  | Stress command for LWT performance test for mixed lwt load | N/A | SCT_STRESS_CMD_LWT_MIXED
 | **<a href="#user-content-stress_cmd_lwt_mixed_baseline" name="stress_cmd_lwt_mixed_baseline">stress_cmd_lwt_mixed_baseline</a>**  | Stress command for LWT performance test for mixed lwt load baseline | N/A | SCT_STRESS_CMD_LWT_MIXED_BASELINE
 | **<a href="#user-content-use_cloud_manager" name="use_cloud_manager">use_cloud_manager</a>**  | When define true, will install scylla cloud manager | N/A | SCT_USE_CLOUD_MANAGER
+| **<a href="#user-content-use_ldap_authorization" name="use_ldap_authorization">use_ldap_authorization</a>**  | When defined true, will create a docker container with LDAP and configure scylla.yaml to use it | N/A | SCT_USE_LDAP_AUTHORIZATION
 | **<a href="#user-content-use_mgmt" name="use_mgmt">use_mgmt</a>**  | When define true, will install scylla management | N/A | SCT_USE_MGMT
 | **<a href="#user-content-mgmt_port" name="mgmt_port">mgmt_port</a>**  | The port of scylla management | 10090 | SCT_MGMT_PORT
-| **<a href="#user-content-manager_prometheus_port" name="manager_prometheus_port">manager_prometheus_port</a>**  | Port to be used by the manager to contact Prometheus | N/A | SCT_MANAGER_PROMETHEUS_PORT
+| **<a href="#user-content-manager_prometheus_port" name="manager_prometheus_port">manager_prometheus_port</a>**  | Port to be used by the manager to contact Prometheus | 5090 | SCT_MANAGER_PROMETHEUS_PORT
 | **<a href="#user-content-target_scylla_mgmt_server_repo" name="target_scylla_mgmt_server_repo">target_scylla_mgmt_server_repo</a>**  | Url to the repo of scylla manager version used to upgrade the manager server | N/A | SCT_TARGET_SCYLLA_MGMT_SERVER_REPO
 | **<a href="#user-content-target_scylla_mgmt_agent_repo" name="target_scylla_mgmt_agent_repo">target_scylla_mgmt_agent_repo</a>**  | Url to the repo of scylla manager version used to upgrade the manager agents | N/A | SCT_TARGET_SCYLLA_MGMT_AGENT_REPO
 | **<a href="#user-content-update_db_packages" name="update_db_packages">update_db_packages</a>**  | A local directory of rpms to install a custom version on top of<br>the scylla installed (or from repo or from ami) | N/A | SCT_UPDATE_DB_PACKAGES
-| **<a href="#user-content-monitor_branch" name="monitor_branch">monitor_branch</a>**  | The port of scylla management | branch-3.5 | SCT_MONITOR_BRANCH
+| **<a href="#user-content-monitor_branch" name="monitor_branch">monitor_branch</a>**  | The port of scylla management | branch-3.6 | SCT_MONITOR_BRANCH
 | **<a href="#user-content-db_type" name="db_type">db_type</a>**  | Db type to install into db nodes, scylla/cassandra | scylla | SCT_DB_TYPE
 | **<a href="#user-content-user_prefix" name="user_prefix">user_prefix</a>**  | the prefix of the name of the cloud instances, defaults to username | N/A | SCT_USER_PREFIX
 | **<a href="#user-content-ami_id_db_scylla_desc" name="ami_id_db_scylla_desc">ami_id_db_scylla_desc</a>**  | version name to report stats to Elasticsearch and tagged on cloud instances | N/A | SCT_AMI_ID_DB_SCYLLA_DESC
-| **<a href="#user-content-store_results_in_elasticsearch" name="store_results_in_elasticsearch">store_results_in_elasticsearch</a>**  | save the results in elasticsearch | True | SCT_STORE_RESULTS_IN_ELASTICSEARCH
 | **<a href="#user-content-sct_public_ip" name="sct_public_ip">sct_public_ip</a>**  | Override the default hostname address of the sct test runner,<br>for the monitoring of the Nemesis.<br>can only work out of the box in AWS | N/A | SCT_SCT_PUBLIC_IP
 | **<a href="#user-content-sct_ngrok_name" name="sct_ngrok_name">sct_ngrok_name</a>**  | Override the default hostname address of the sct test runner,<br>using ngrok server, see readme for more instructions | N/A | SCT_NGROK_NAME
 | **<a href="#user-content-backtrace_decoding" name="backtrace_decoding">backtrace_decoding</a>**  | If True, all backtraces found in db nodes would be decoded automatically | True | SCT_BACKTRACE_DECODING
@@ -69,14 +71,14 @@
 | **<a href="#user-content-experimental" name="experimental">experimental</a>**  | when enabled scylla will use it's experimental features | True | SCT_EXPERIMENTAL
 | **<a href="#user-content-server_encrypt" name="server_encrypt">server_encrypt</a>**  | when enable scylla will use encryption on the server side | N/A | SCT_SERVER_ENCRYPT
 | **<a href="#user-content-client_encrypt" name="client_encrypt">client_encrypt</a>**  | when enable scylla will use encryption on the client side | N/A | SCT_CLIENT_ENCRYPT
-| **<a href="#user-content-hinted_handoff" name="hinted_handoff">hinted_handoff</a>**  | when enable or disable scylla hinted handoff (enabled/disabled) | N/A | SCT_HINTED_HANDOFF
+| **<a href="#user-content-hinted_handoff" name="hinted_handoff">hinted_handoff</a>**  | when enable or disable scylla hinted handoff (enabled/disabled) | enabled | SCT_HINTED_HANDOFF
 | **<a href="#user-content-authenticator" name="authenticator">authenticator</a>**  | which authenticator scylla will use AllowAllAuthenticator/PasswordAuthenticator | N/A | SCT_AUTHENTICATOR
 | **<a href="#user-content-authenticator_user" name="authenticator_user">authenticator_user</a>**  | the username if PasswordAuthenticator is used | N/A | SCT_AUTHENTICATOR_USER
 | **<a href="#user-content-authenticator_password" name="authenticator_password">authenticator_password</a>**  | the password if PasswordAuthenticator is used | N/A | SCT_AUTHENTICATOR_PASSWORD
 | **<a href="#user-content-authorizer" name="authorizer">authorizer</a>**  | which authorizer scylla will use AllowAllAuthorizer/CassandraAuthorizer | N/A | SCT_AUTHORIZER
 | **<a href="#user-content-system_auth_rf" name="system_auth_rf">system_auth_rf</a>**  | Replication factor will be set to system_auth | 3 | SCT_SYSTEM_AUTH_RF
 | **<a href="#user-content-alternator_port" name="alternator_port">alternator_port</a>**  | Port to configure for alternator in scylla.yaml | N/A | SCT_ALTERNATOR_PORT
-| **<a href="#user-content-dynamodb_primarykey_type" name="dynamodb_primarykey_type">dynamodb_primarykey_type</a>**  | Type of dynamodb table to create with range key or not, can be HASH or HASH_AND_RANGE | HASH | SCT_DYNAMODB_PRIMARYKEY_TYPE
+| **<a href="#user-content-dynamodb_primarykey_type" name="dynamodb_primarykey_type">dynamodb_primarykey_type</a>**  | Type of dynamodb table to create with range key or not, can be:<br>HASH,HASH_AND_RANGE | HASH | SCT_DYNAMODB_PRIMARYKEY_TYPE
 | **<a href="#user-content-alternator_write_isolation" name="alternator_write_isolation">alternator_write_isolation</a>**  | Set the write isolation for the alternator table, see https://github.com/scylladb/scylla/blob/master/docs/alternator/alternator.md#write-isolation-policies for more details | N/A | SCT_ALTERNATOR_WRITE_ISOLATION
 | **<a href="#user-content-alternator_use_dns_routing" name="alternator_use_dns_routing">alternator_use_dns_routing</a>**  | If true, spawn a docker with a dns server for the ycsb loader to point to | N/A | SCT_ALTERNATOR_USE_DNS_ROUTING
 | **<a href="#user-content-alternator_enforce_authorization" name="alternator_enforce_authorization">alternator_enforce_authorization</a>**  | If true, enable the authorization check in dynamodb api (alternator) | N/A | SCT_ALTERNATOR_ENFORCE_AUTHORIZATION
@@ -88,6 +90,7 @@
 | **<a href="#user-content-append_scylla_yaml" name="append_scylla_yaml">append_scylla_yaml</a>**  | More configuration to append to /etc/scylla/scylla.yaml | N/A | SCT_APPEND_SCYLLA_YAML
 | **<a href="#user-content-nemesis_class_name" name="nemesis_class_name">nemesis_class_name</a>**  | Nemesis class to use (possible types in sdcm.nemesis).<br>Next syntax supporting:<br>- nemesis_class_name: "NemesisName"  Run one nemesis in single thread<br>- nemesis_class_name: "<NemesisName>:<num>" Run <NemesisName> in <num><br>parallel threads on different nodes. Ex.: "ChaosMonkey:2"<br>- nemesis_class_name: "<NemesisName1>:<num1> <NemesisName2>:<num2>" Run<br><NemesisName1> in <num1> parallel threads and <NemesisName2> in <num2><br>parallel threads. Ex.: "DisruptiveMonkey:1 NonDisruptiveMonkey:2" | NoOpMonkey | SCT_NEMESIS_CLASS_NAME
 | **<a href="#user-content-nemesis_interval" name="nemesis_interval">nemesis_interval</a>**  | Nemesis sleep interval to use if None provided specifically in the test | 5 | SCT_NEMESIS_INTERVAL
+| **<a href="#user-content-nemesis_sequence_sleep_between_ops" name="nemesis_sequence_sleep_between_ops">nemesis_sequence_sleep_between_ops</a>**  | Sleep interval between nemesis operations for use in unique_sequence nemesis kind of tests | N/A | SCT_NEMESIS_SEQUENCE_SLEEP_BETWEEN_OPS
 | **<a href="#user-content-nemesis_during_prepare" name="nemesis_during_prepare">nemesis_during_prepare</a>**  | Run nemesis during prepare stage of the test | True | SCT_NEMESIS_DURING_PREPARE
 | **<a href="#user-content-nemesis_seed" name="nemesis_seed">nemesis_seed</a>**  | A seed number in order to repeat nemesis sequence as part of SisyphusMonkey | N/A | SCT_NEMESIS_SEED
 | **<a href="#user-content-nemesis_add_node_cnt" name="nemesis_add_node_cnt">nemesis_add_node_cnt</a>**  | Add/remove nodes during GrowShrinkCluster nemesis | 1 | SCT_NEMESIS_ADD_NODE_CNT
@@ -95,7 +98,7 @@
 | **<a href="#user-content-space_node_threshold" name="space_node_threshold">space_node_threshold</a>**  | Space node threshold before starting nemesis (bytes)<br>The default value is 6GB (6x1024^3 bytes)<br>This value is supposed to reproduce<br>https://github.com/scylladb/scylla/issues/1140 | N/A | SCT_SPACE_NODE_THRESHOLD
 | **<a href="#user-content-nemesis_filter_seeds" name="nemesis_filter_seeds">nemesis_filter_seeds</a>**  | If true runs the nemesis only on non seed nodes | True | SCT_NEMESIS_FILTER_SEEDS
 | **<a href="#user-content-stress_cmd" name="stress_cmd">stress_cmd</a>**  | cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_STRESS_CMD
-| **<a href="#user-content-gemini_version" name="gemini_version">gemini_version</a>**  | Version of download of the binaries of gemini tool | N/A | SCT_GEMINI_VERSION
+| **<a href="#user-content-gemini_version" name="gemini_version">gemini_version</a>**  | Version of download of the binaries of gemini tool | 0.9.2 | SCT_GEMINI_VERSION
 | **<a href="#user-content-gemini_schema_url" name="gemini_schema_url">gemini_schema_url</a>**  | Url of the schema/configuration the gemini tool would use | N/A | SCT_GEMINI_SCHEMA_URL
 | **<a href="#user-content-gemini_cmd" name="gemini_cmd">gemini_cmd</a>**  | gemini command to run (for now used only in GeminiTest) | N/A | SCT_GEMINI_CMD
 | **<a href="#user-content-gemini_seed" name="gemini_seed">gemini_seed</a>**  | Seed number for gemini command | N/A | SCT_GEMINI_SEED
@@ -119,7 +122,7 @@
 | **<a href="#user-content-ami_monitor_user" name="ami_monitor_user">ami_monitor_user</a>**  |  | N/A | SCT_AMI_MONITOR_USER
 | **<a href="#user-content-ami_loader_user" name="ami_loader_user">ami_loader_user</a>**  |  | N/A | SCT_AMI_LOADER_USER
 | **<a href="#user-content-ami_db_cassandra_user" name="ami_db_cassandra_user">ami_db_cassandra_user</a>**  |  | N/A | SCT_AMI_DB_CASSANDRA_USER
-| **<a href="#user-content-spot_max_price" name="spot_max_price">spot_max_price</a>**  | The max percentage of the on demand price we set for spot/fleet instances | 0.6 | SCT_SPOT_MAX_PRICE
+| **<a href="#user-content-spot_max_price" name="spot_max_price">spot_max_price</a>**  | The max percentage of the on demand price we set for spot/fleet instances | N/A | SCT_SPOT_MAX_PRICE
 | **<a href="#user-content-extra_network_interface" name="extra_network_interface">extra_network_interface</a>**  | if true, create extra network interface on each node | N/A | SCT_EXTRA_NETWORK_INTERFACE
 | **<a href="#user-content-aws_instance_profile_name" name="aws_instance_profile_name">aws_instance_profile_name</a>**  | This is the name of the instance profile to set on all instances | N/A | SCT_AWS_INSTANCE_PROFILE_NAME
 | **<a href="#user-content-backup_bucket_location" name="backup_bucket_location">backup_bucket_location</a>**  | This is the bucket name to be used for backup with its region<br>(e.g. backup_bucket_location: 'manager-backup-tests') | N/A | SCT_BACKUP_BUCKET_LOCATION
@@ -142,6 +145,10 @@
 | **<a href="#user-content-gce_root_disk_type_db" name="gce_root_disk_type_db">gce_root_disk_type_db</a>**  |  | N/A | SCT_GCE_ROOT_DISK_TYPE_DB
 | **<a href="#user-content-gce_root_disk_size_db" name="gce_root_disk_size_db">gce_root_disk_size_db</a>**  |  | N/A | SCT_GCE_ROOT_DISK_SIZE_DB
 | **<a href="#user-content-gce_n_local_ssd_disk_db" name="gce_n_local_ssd_disk_db">gce_n_local_ssd_disk_db</a>**  |  | N/A | SCT_GCE_N_LOCAL_SSD_DISK_DB
+| **<a href="#user-content-gce_pd_standard_disk_size_db" name="gce_pd_standard_disk_size_db">gce_pd_standard_disk_size_db</a>**  |  | N/A | SCT_GCE_PD_STANDARD_DISK_SIZE_DB
+| **<a href="#user-content-gce_pd_ssd_disk_size_db" name="gce_pd_ssd_disk_size_db">gce_pd_ssd_disk_size_db</a>**  |  | N/A | SCT_GCE_PD_SSD_DISK_SIZE_DB
+| **<a href="#user-content-gce_pd_ssd_disk_size_loader" name="gce_pd_ssd_disk_size_loader">gce_pd_ssd_disk_size_loader</a>**  |  | N/A | SCT_GCE_PD_SSD_DISK_SIZE_LOADER
+| **<a href="#user-content-gce_pd_ssd_disk_size_monitor" name="gce_pd_ssd_disk_size_monitor">gce_pd_ssd_disk_size_monitor</a>**  |  | N/A | SCT_GCE_SSD_DISK_SIZE_MONITOR
 | **<a href="#user-content-gce_image_minikube" name="gce_image_minikube">gce_image_minikube</a>**  |  | N/A | SCT_GCE_IMAGE_MINIKUBE
 | **<a href="#user-content-gce_instance_type_minikube" name="gce_instance_type_minikube">gce_instance_type_minikube</a>**  |  | N/A | SCT_GCE_INSTANCE_TYPE_MINIKUBE
 | **<a href="#user-content-gce_root_disk_type_minikube" name="gce_root_disk_type_minikube">gce_root_disk_type_minikube</a>**  |  | N/A | SCT_GCE_ROOT_DISK_TYPE_MINIKUBE
@@ -161,21 +168,22 @@
 | **<a href="#user-content-k8s_loader_mem_gi" name="k8s_loader_mem_gi">k8s_loader_mem_gi</a>**  |  | N/A | SCT_K8S_LOADER_MEM_GI
 | **<a href="#user-content-minikube_version" name="minikube_version">minikube_version</a>**  |  | N/A | SCT_MINIKUBE_VERSION
 | **<a href="#user-content-k8s_cert_manager_version" name="k8s_cert_manager_version">k8s_cert_manager_version</a>**  |  | N/A | SCT_K8S_CERT_MANAGER_VERSION
-| **<a href="#user-content-docker_image" name="docker_image">docker_image</a>**  |  | N/A | SCT_DOCKER_IMAGE
+| **<a href="#user-content-mgmt_docker_image" name="mgmt_docker_image">mgmt_docker_image</a>**  | Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1' | N/A | SCT_MGMT_DOCKER_IMAGE
+| **<a href="#user-content-docker_image" name="docker_image">docker_image</a>**  | Scylla docker image repo, i.e. 'scylladb/scylla', if omitted is calculated from scylla_version | N/A | SCT_DOCKER_IMAGE
 | **<a href="#user-content-db_nodes_private_ip" name="db_nodes_private_ip">db_nodes_private_ip</a>**  |  | N/A | SCT_DB_NODES_PRIVATE_IP
 | **<a href="#user-content-db_nodes_public_ip" name="db_nodes_public_ip">db_nodes_public_ip</a>**  |  | N/A | SCT_DB_NODES_PUBLIC_IP
 | **<a href="#user-content-loaders_private_ip" name="loaders_private_ip">loaders_private_ip</a>**  |  | N/A | SCT_LOADERS_PRIVATE_IP
 | **<a href="#user-content-loaders_public_ip" name="loaders_public_ip">loaders_public_ip</a>**  |  | N/A | SCT_LOADERS_PUBLIC_IP
 | **<a href="#user-content-monitor_nodes_private_ip" name="monitor_nodes_private_ip">monitor_nodes_private_ip</a>**  |  | N/A | SCT_MONITOR_NODES_PRIVATE_IP
 | **<a href="#user-content-monitor_nodes_public_ip" name="monitor_nodes_public_ip">monitor_nodes_public_ip</a>**  |  | N/A | SCT_MONITOR_NODES_PUBLIC_IP
-| **<a href="#user-content-cassandra_stress_population_size" name="cassandra_stress_population_size">cassandra_stress_population_size</a>**  |  | N/A | SCT_CASSANDRA_STRESS_POPULATION_SIZE
-| **<a href="#user-content-cassandra_stress_threads" name="cassandra_stress_threads">cassandra_stress_threads</a>**  |  | N/A | SCT_CASSANDRA_STRESS_THREADS
-| **<a href="#user-content-add_node_cnt" name="add_node_cnt">add_node_cnt</a>**  |  | N/A | SCT_ADD_NODE_CNT
-| **<a href="#user-content-stress_multiplier" name="stress_multiplier">stress_multiplier</a>**  |  | N/A | SCT_STRESS_MULTIPLIER
+| **<a href="#user-content-cassandra_stress_population_size" name="cassandra_stress_population_size">cassandra_stress_population_size</a>**  |  | 1000000 | SCT_CASSANDRA_STRESS_POPULATION_SIZE
+| **<a href="#user-content-cassandra_stress_threads" name="cassandra_stress_threads">cassandra_stress_threads</a>**  |  | 1000 | SCT_CASSANDRA_STRESS_THREADS
+| **<a href="#user-content-add_node_cnt" name="add_node_cnt">add_node_cnt</a>**  |  | 1 | SCT_ADD_NODE_CNT
+| **<a href="#user-content-stress_multiplier" name="stress_multiplier">stress_multiplier</a>**  |  | 1 | SCT_STRESS_MULTIPLIER
 | **<a href="#user-content-run_fullscan" name="run_fullscan">run_fullscan</a>**  |  | N/A | SCT_RUN_FULLSCAN
-| **<a href="#user-content-keyspace_num" name="keyspace_num">keyspace_num</a>**  |  | N/A | SCT_KEYSPACE_NUM
+| **<a href="#user-content-keyspace_num" name="keyspace_num">keyspace_num</a>**  |  | 1 | SCT_KEYSPACE_NUM
 | **<a href="#user-content-round_robin" name="round_robin">round_robin</a>**  |  | N/A | SCT_ROUND_ROBIN
-| **<a href="#user-content-batch_size" name="batch_size">batch_size</a>**  |  | N/A | SCT_BATCH_SIZE
+| **<a href="#user-content-batch_size" name="batch_size">batch_size</a>**  |  | 1 | SCT_BATCH_SIZE
 | **<a href="#user-content-pre_create_schema" name="pre_create_schema">pre_create_schema</a>**  |  | N/A | SCT_PRE_CREATE_SCHEMA
 | **<a href="#user-content-pre_create_keyspace" name="pre_create_keyspace">pre_create_keyspace</a>**  | Command to create keysapce to be pre-create before running workload | N/A | SCT_PRE_CREATE_KEYSPACE
 | **<a href="#user-content-post_prepare_cql_cmds" name="post_prepare_cql_cmds">post_prepare_cql_cmds</a>**  | CQL Commands to run after prepare stage finished (relevant only to longevity_test.py) | N/A | SCT_POST_PREPARE_CQL_CMDS
@@ -188,7 +196,7 @@
 | **<a href="#user-content-primary_key_column" name="primary_key_column">primary_key_column</a>**  | primary key of the table to check for the validate_partitions check | N/A | SCT_PRIMARY_KEY_COLUMN
 | **<a href="#user-content-stress_read_cmd" name="stress_read_cmd">stress_read_cmd</a>**  | cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_STRESS_READ_CMD
 | **<a href="#user-content-prepare_verify_cmd" name="prepare_verify_cmd">prepare_verify_cmd</a>**  | cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_PREPARE_VERIFY_CMD
-| **<a href="#user-content-user_profile_table_count" name="user_profile_table_count">user_profile_table_count</a>**  | number of tables to create for template user c-s | N/A | SCT_USER_PROFILE_TABLE_COUNT
+| **<a href="#user-content-user_profile_table_count" name="user_profile_table_count">user_profile_table_count</a>**  | number of tables to create for template user c-s | 1 | SCT_USER_PROFILE_TABLE_COUNT
 | **<a href="#user-content-scylla_mgmt_upgrade_to_repo" name="scylla_mgmt_upgrade_to_repo">scylla_mgmt_upgrade_to_repo</a>**  | Url to the repo of scylla manager version to upgrade to for management tests | N/A | SCT_SCYLLA_MGMT_UPGRADE_TO_REPO
 | **<a href="#user-content-partition_range_with_data_validation" name="partition_range_with_data_validation">partition_range_with_data_validation</a>**  | Relevant for scylla-bench. Hold range (min - max) of PKs values for partitions that data was<br>written with validate data and will be validate during the read.<br>Example: 0-250.<br>Optional parameter for DeleteByPartitionsMonkey and DeleteByRowsRangeMonkey | N/A | SCT_PARTITION_RANGE_WITH_DATA_VALIDATION
 | **<a href="#user-content-max_partitions_in_test_table" name="max_partitions_in_test_table">max_partitions_in_test_table</a>**  | Relevant for scylla-bench. MAX partition keys (partition-count) in the scylla_bench.test table.<br>Mandatory parameter for DeleteByPartitionsMonkey and DeleteByRowsRangeMonkey | N/A | SCT_MAX_PARTITIONS_IN_TEST_TABLE
@@ -199,7 +207,7 @@
 | **<a href="#user-content-stress_cmd_no_mv" name="stress_cmd_no_mv">stress_cmd_no_mv</a>**  | cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_STRESS_CMD_NO_MV
 | **<a href="#user-content-stress_cmd_no_mv_profile" name="stress_cmd_no_mv_profile">stress_cmd_no_mv_profile</a>**  |  | N/A | SCT_STRESS_CMD_NO_MV_PROFILE
 | **<a href="#user-content-cs_user_profiles" name="cs_user_profiles">cs_user_profiles</a>**  |  | N/A | SCT_CS_USER_PROFILES
-| **<a href="#user-content-cs_duration" name="cs_duration">cs_duration</a>**  |  | N/A | SCT_CS_DURATION
+| **<a href="#user-content-cs_duration" name="cs_duration">cs_duration</a>**  |  | 50m | SCT_CS_DURATION
 | **<a href="#user-content-stress_cmd_mv" name="stress_cmd_mv">stress_cmd_mv</a>**  | cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_STRESS_CMD_MV
 | **<a href="#user-content-prepare_stress_cmd" name="prepare_stress_cmd">prepare_stress_cmd</a>**  | cassandra-stress commands.<br>You can specify everything but the -node parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_PREPARE_STRESS_CMD
 | **<a href="#user-content-skip_download" name="skip_download">skip_download</a>**  |  | N/A | SCT_SKIP_DOWNLOAD
@@ -241,12 +249,13 @@
 | **<a href="#user-content-workaround_kernel_bug_for_iotune" name="workaround_kernel_bug_for_iotune">workaround_kernel_bug_for_iotune</a>**  | Workaround a known kernel bug which causes iotune to fail in scylla_io_setup, only effect GCE backend | N/A | SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE
 | **<a href="#user-content-internode_compression" name="internode_compression">internode_compression</a>**  | scylla option: internode_compression | N/A | SCT_INTERNODE_COMPRESSION
 | **<a href="#user-content-internode_encryption" name="internode_encryption">internode_encryption</a>**  | scylla sub option of server_encryption_options: internode_encryption | all | SCT_INTERNODE_ENCRYPTION
+| **<a href="#user-content-jmx_heap_memory" name="jmx_heap_memory">jmx_heap_memory</a>**  | The total size of the memory allocated to JMX. Values in MB, so for 1GB enter 1024(MB) | N/A | SCT_JMX_HEAP_MEMORY
 | **<a href="#user-content-loader_swap_size" name="loader_swap_size">loader_swap_size</a>**  | The size of the swap file for the loaders. Its size in bytes calculated by x * 1MB | 1024 | SCT_LOADER_SWAP_SIZE
 | **<a href="#user-content-monitor_swap_size" name="monitor_swap_size">monitor_swap_size</a>**  | The size of the swap file for the monitors. Its size in bytes calculated by x * 1MB | 8192 | SCT_MONITOR_SWAP_SIZE
 | **<a href="#user-content-store_perf_results" name="store_perf_results">store_perf_results</a>**  | A flag that indicates whether or not to gather the prometheus stats at the end of the run.<br>Intended to be used in performance testing | N/A | SCT_STORE_PERF_RESULTS
 | **<a href="#user-content-append_scylla_setup_args" name="append_scylla_setup_args">append_scylla_setup_args</a>**  | More arguments to append to scylla_setup command line | N/A | SCT_APPEND_SCYLLA_SETUP_ARGS
 | **<a href="#user-content-use_preinstalled_scylla" name="use_preinstalled_scylla">use_preinstalled_scylla</a>**  | Don't install/update ScyllaDB on DB nodes | N/A | SCT_USE_PREINSTALLED_SCYLLA
-| **<a href="#user-content-stress_cdclog_reader_cmd" name="stress_cdclog_reader_cmd">stress_cdclog_reader_cmd</a>**  | cdc-stressor command to read cdc_log table.<br>You can specify everything but the -node , -keyspace, -table, parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | N/A | SCT_STRESS_CDCLOG_READER_CMD
+| **<a href="#user-content-stress_cdclog_reader_cmd" name="stress_cdclog_reader_cmd">stress_cdclog_reader_cmd</a>**  | cdc-stressor command to read cdc_log table.<br>You can specify everything but the -node , -keyspace, -table, parameter, which is going to<br>be provided by the test suite infrastructure.<br>multiple commands can passed as a list | cdc-stressor -stream-query-round-duration 30s | SCT_STRESS_CDCLOG_READER_CMD
 | **<a href="#user-content-store_cdclog_reader_stats_in_es" name="store_cdclog_reader_stats_in_es">store_cdclog_reader_stats_in_es</a>**  | Add cdclog reader stats to ES for future performance result calculating | N/A | SCT_STORE_CDCLOG_READER_STATS_IN_ES
 | **<a href="#user-content-stop_test_on_stress_failure" name="stop_test_on_stress_failure">stop_test_on_stress_failure</a>**  | If set to True the test will be stopped immediately when stress command failed.<br>When set to False the test will continue to run even when there are errors in the<br>stress process | True | SCT_STOP_TEST_ON_STRESS_FAILURE
 | **<a href="#user-content-stress_cdc_log_reader_batching_enable" name="stress_cdc_log_reader_batching_enable">stress_cdc_log_reader_batching_enable</a>**  | retrieving data from multiple streams in one poll | True | SCT_STRESS_CDC_LOG_READER_BATCHING_ENABLE
@@ -259,3 +268,4 @@
 | **<a href="#user-content-stress_after_cluster_upgrade" name="stress_after_cluster_upgrade">stress_after_cluster_upgrade</a>**  | Stress command to be run after full upgrade - usually used to read the dataset for verification | N/A | SCT_STRESS_AFTER_CLUSTER_UPGRADE
 | **<a href="#user-content-jepsen_scylla_repo" name="jepsen_scylla_repo">jepsen_scylla_repo</a>**  | Link to the git repository with Jepsen Scylla tests | https://github.com/jepsen-io/scylla.git | SCT_JEPSEN_SCYLLA_REPO
 | **<a href="#user-content-jepsen_test_cmd" name="jepsen_test_cmd">jepsen_test_cmd</a>**  | Jepsen test command (e.g., 'test-all') | test-all | SCT_JEPSEN_TEST_CMD
+| **<a href="#user-content-max_events_severities" name="max_events_severities">max_events_severities</a>**  | Limit severity level for event types | N/A | SCT_MAX_EVENTS_SEVERITIES
