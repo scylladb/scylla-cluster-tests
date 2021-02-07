@@ -283,9 +283,6 @@ class SCTConfiguration(dict):
         dict(name="ami_id_db_scylla_desc", env="SCT_AMI_ID_DB_SCYLLA_DESC", type=str,
              help="version name to report stats to Elasticsearch and tagged on cloud instances"),
 
-        dict(name="store_results_in_elasticsearch", env="SCT_STORE_RESULTS_IN_ELASTICSEARCH", type=boolean,
-             help="save the results in elasticsearch"),
-
         dict(name="sct_public_ip", env="SCT_SCT_PUBLIC_IP", type=str,
              help="""
                 Override the default hostname address of the sct test runner,
@@ -1019,7 +1016,7 @@ class SCTConfiguration(dict):
         dict(name="monitor_swap_size", env="SCT_MONITOR_SWAP_SIZE", type=int,
              help="The size of the swap file for the monitors. Its size in bytes calculated by x * 1MB"),
 
-        dict(name="store_perf_results", env="SCT_STORE_PERF_RESULTS", type=bool,
+        dict(name="store_perf_results", env="SCT_STORE_PERF_RESULTS", type=boolean,
              help="""A flag that indicates whether or not to gather the prometheus stats at the end of the run.
                 Intended to be used in performance testing"""),
 

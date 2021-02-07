@@ -46,7 +46,6 @@ alternator_port: 8080
 dynamodb_primarykey_type: HASH_AND_RANGE
 alternator_use_dns_routing: true
 
-store_results_in_elasticsearch: false
 use_mgmt: true
 
 ip_ssh_connections: 'public'

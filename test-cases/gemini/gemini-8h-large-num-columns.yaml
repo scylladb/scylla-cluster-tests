@@ -7,7 +7,6 @@ instance_type_db: 'i3en.3xlarge'
 instance_type_loader: 'c5.4xlarge'
 
 user_prefix: 'gemini-8h-large-num-columns'
-store_results_in_elasticsearch: False
 
 nemesis_class_name: 'GeminiChaosMonkey'
 nemesis_interval: 5

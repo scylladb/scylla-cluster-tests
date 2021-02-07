@@ -24,7 +24,6 @@ ssh_transport: 'fabric'
 system_auth_rf: 3
 
 monitor_branch: 'branch-3.6'
-store_results_in_elasticsearch: true
 
 space_node_threshold: 0
 

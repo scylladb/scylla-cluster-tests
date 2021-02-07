@@ -269,7 +269,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             Setup.AUTO_BOOTSTRAP = False
 
         # for saving test details in DB
-        self.create_stats = self.params.get(key='store_results_in_elasticsearch')
+        self.create_stats = self.params.get(key='store_perf_results')
         self.scylla_dir = SCYLLA_DIR
         self.left_processes_log = os.path.join(self.logdir, 'left_processes.log')
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")

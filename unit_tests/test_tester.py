@@ -30,8 +30,7 @@ class FakeSCTConfiguration(SCTConfiguration):
     def _load_environment_variables(self):
         return {
             'config_files': ['test-cases/PR-provision-test-docker.yaml'],
-            'cluster_backend': 'docker',
-            'store_results_in_elasticsearch': False
+            'cluster_backend': 'docker'
         }
 
 

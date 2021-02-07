@@ -93,4 +93,3 @@ authorizer: 'CassandraAuthorizer'
 
 user_prefix: 'longevity-ycsb-a-1M-4h'
 space_node_threshold: 64424
-store_results_in_elasticsearch: false

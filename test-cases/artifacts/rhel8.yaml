@@ -13,7 +13,6 @@ n_monitor_nodes: 0
 nemesis_class_name: 'NoOpMonkey'
 scylla_linux_distro: 'centos'
 scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-3.3.repo'
-store_results_in_elasticsearch: False
 test_duration: 60
 user_prefix: 'artifacts-rhel8'
 system_auth_rf: 1
