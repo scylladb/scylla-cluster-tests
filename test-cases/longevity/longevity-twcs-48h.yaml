@@ -1,0 +1,18 @@
+test_duration: 3000
+bench_run: true
+
+stress_cmd: ["scylla-bench -workload=timeseries -mode=write -replication-factor=3 -partition-count=20000 -clustering-row-count=9999999000000 -clustering-row-size=200 -concurrency=30 -max-rate=60000 -rows-per-request=5000 -duration=2880m"]
+stress_read_cmd: ["scylla-bench -workload=timeseries -mode=read -partition-count=20000 -concurrency=48 -replication-factor=3 -write-rate=3 -clustering-row-count=9999999000000 -clustering-row-size=200  -rows-per-request=300 -provide-upper-bound -start-timestamp=SCT_TIME -duration=2880m"]
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.2xlarge'
+
+nemesis_class_name: 'ChaosMonkey'
+nemesis_interval: 15
+nemesis_during_prepare: false
+space_node_threshold: 64424
+
+user_prefix: 'longevity-twcs-48h'
