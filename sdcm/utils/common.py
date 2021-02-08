@@ -37,7 +37,7 @@ import re
 import requests
 import uuid
 import zipfile
-from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Tuple
+from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Tuple, Any
 from urllib.parse import urlparse
 from unittest.mock import Mock
 
@@ -2173,3 +2173,20 @@ def download_from_github(repo: str, tag: str, dst_dir: str):
         base_dir = os.path.join(tmpdir, os.listdir(tmpdir)[0])
         for file in os.listdir(base_dir):
             os.rename(os.path.join(base_dir, file), os.path.join(dst_dir, file))
+
+
+def walk_thru_data(data, path: str) -> Any:
+    current = data
+    for name in path.split('/'):
+        if current is None:
+            return None
+        if not name:
+            continue
+        if name.isalnum() and isinstance(current, (list, tuple, set)):
+            try:
+                current = current[int(name)]
+            except Exception:
+                current = None
+            continue
+        current = current.get(name, None)
+    return current

@@ -49,7 +49,7 @@ from sdcm.coredump import CoredumpExportFileThread
 from sdcm.mgmt import AnyManagerCluster
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.utils.common import download_from_github
+from sdcm.utils.common import download_from_github, walk_thru_data
 from sdcm.utils.k8s import KubernetesOps, ApiCallRateLimiter, JSON_PATCH_TYPE, KUBECTL_TIMEOUT
 from sdcm.utils.decorators import log_run_info, retrying, timeout
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \
@@ -994,20 +994,20 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                                                   content_type=JSON_PATCH_TYPE)
 
     def get_scylla_cluster_value(self, path: str) -> Optional[ANY_KUBERNETES_RESOURCE]:
-        current = self._k8s_scylla_cluster_api.get(namespace=self.namespace, name=self.scylla_cluster_name)
-        for name in path.split('/'):
-            if current is None:
-                return None
-            if not name:
-                continue
-            if name.isalnum() and isinstance(current, (list, tuple, set)):
-                try:
-                    current = current[int(name)]
-                except Exception:
-                    current = None
-                continue
-            current = current.get(name, None)
-        return current
+        """
+        Get scylla cluster value from kubernetes API.
+        """
+        cluster_data = self._k8s_scylla_cluster_api.get(namespace=self.namespace, name=self.scylla_cluster_name)
+        return walk_thru_data(cluster_data, path)
+
+    def get_scylla_cluster_plain_value(self, path: str) -> Union[Dict, List, str, None]:
+        """
+        Get scylla cluster value from kubernetes API and converts result to basic python data types.
+        Use it if you are going to modify the data.
+        """
+        cluster_data = self._k8s_scylla_cluster_api.get(
+            namespace=self.namespace, name=self.scylla_cluster_name).to_dict()
+        return walk_thru_data(cluster_data, path)
 
     def add_scylla_cluster_value(self, path: str, element: Any):
         init = self.get_scylla_cluster_value(path) is None
@@ -1129,13 +1129,13 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         if self.get_scylla_cluster_value(f'/spec/datacenter/racks/{rack}') is not None:
             return
         # Create new rack of very first rack of the cluster
-        new_rack = self.get_scylla_cluster_value('/spec/datacenter/racks/0')
+        new_rack = self.get_scylla_cluster_plain_value('/spec/datacenter/racks/0')
         new_rack['members'] = 0
         new_rack['name'] = f'{new_rack["name"]}-{rack}'
         self.add_scylla_cluster_value('/spec/datacenter/racks', new_rack)
 
     def _delete_k8s_rack(self, rack: int):
-        racks = self.get_scylla_cluster_value(f'/spec/datacenter/racks/')
+        racks = self.get_scylla_cluster_plain_value(f'/spec/datacenter/racks/')
         if len(racks) == 1:
             return
         racks.pop(rack)
