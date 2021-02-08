@@ -266,7 +266,7 @@ def get_latest_gemini_version():
 
 
 def list_logs_by_test_id(test_id):
-    log_types = ['db-cluster', 'monitor-set', 'loader-set', 'sct-runner', 'jepsen-data',
+    log_types = ['db-cluster', 'monitor-set', 'loader-set', 'sct-runner', 'jepsen-data', 'siren-manager-set',
                  'prometheus', 'grafana',
                  'job', 'monitoring_data_stack', 'events']
     results = []
