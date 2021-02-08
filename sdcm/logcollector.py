@@ -916,6 +916,20 @@ class MonitorLogCollector(LogCollector):
     collect_timeout = 3600
 
 
+class SirenManagerLogCollector(LogCollector):
+    log_entities = [
+        FileLog(name="system.log",
+                command="sudo journalctl --no-tail --no-pager",
+                search_locally=True),
+        FileLog(name="scylla_manager.log",
+                command="sudo journalctl -u scylla-manager.service --no-tail",
+                search_locally=True),
+    ]
+    cluster_log_type = "siren-manager-set"
+    cluster_dir_prefix = "siren-manager-set"
+    collect_timeout = 3600
+
+
 class SCTLogCollector(LogCollector):
     """logs for hydra test run
 
@@ -1006,7 +1020,7 @@ class JepsenLogCollector(LogCollector):
         return s3_link
 
 
-class Collector():  # pylint: disable=too-many-instance-attributes,
+class Collector:  # pylint: disable=too-many-instance-attributes,
     """Collector instance
 
     Collector instance which should be run to collect logs and additional info
@@ -1034,12 +1048,14 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
         self._test_dir = test_dir
         self.db_cluster = []
         self.monitor_set = []
+        self.siren_manager_set = []
         self.loader_set = []
         self.kubernetes_set = []
         self.sct_set = []
         self.cluster_log_collectors = {
             ScyllaLogCollector: self.db_cluster,
             MonitorLogCollector: self.monitor_set,
+            SirenManagerLogCollector: self.siren_manager_set,
             LoaderLogCollector: self.loader_set,
             KubernetesLogCollector: self.kubernetes_set,
             SCTLogCollector: self.sct_set,
@@ -1089,6 +1105,24 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
                                                    instance=instance,
                                                    global_ip=instance['PublicIpAddress'],
                                                    tags={**self.tags, "NodeType": "monitor", }))
+        if self.params["use_cloud_manager"]:
+            try:
+                from cluster_cloud import get_manager_instance_by_cluster_id
+            except ImportError:
+                LOGGER.error("Couldn't collect Siren manager logs, cluster_cloud module isn't installed")
+            else:
+                instance = get_manager_instance_by_cluster_id(cluster_id=self.params["cloud_cluster_id"],
+                                                              region_name=self.params["region_name"][0])
+                name = [tag["Value"]
+                        for tag in instance["Tags"] if tag["Key"] == "Name"]
+                self.siren_manager_set.append(CollectingNode(name=name[0],
+                                                             ssh_login_info={
+                                                                 "hostname": instance["PublicIpAddress"],
+                                                                 "user": "support",
+                                                                 "key_file": self.params["cloud_credentials_path"]},
+                                                             instance=instance,
+                                                             global_ip=instance["PublicIpAddress"],
+                                                             tags={**self.tags, "NodeType": "siren-manager", }))
         for instance in filtered_instances['loader_nodes']:
             name = [tag['Value']
                     for tag in instance['Tags'] if tag['Key'] == 'Name']
@@ -1180,6 +1214,8 @@ class Collector():  # pylint: disable=too-many-instance-attributes,
 
     def get_running_cluster_sets(self, backend):
         if backend == 'aws':
+            self.get_aws_instances_by_testid()
+        elif backend == 'aws-siren':
             self.get_aws_instances_by_testid()
         elif backend == 'gce':
             self.get_gce_instances_by_testid()
