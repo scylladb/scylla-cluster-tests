@@ -241,7 +241,7 @@ of 3 nodes of i3.4xlarge (16 vCPU per node) and target of 120000 is:
 * `scylla.writeconsistencylevel`
 
   * Default value is `QUORUM`
-  - Consistency level for reads and writes, respectively. 
+  - Consistency level for reads and writes, respectively.
     See the [Scylla documentation](https://docs.scylladb.com/glossary/#term-consistency-level-any) for details.
 
 * `scylla.maxconnections`
