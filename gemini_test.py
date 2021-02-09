@@ -40,7 +40,7 @@ class GeminiTest(ClusterTester):
         self.log.debug('Start gemini benchmark')
         gemini_thread = self.run_gemini(cmd=cmd)
         self.gemini_results["cmd"] = gemini_thread.gemini_commands
-        self.gemini_results = self.verify_gemini_results(queue=gemini_thread)
+        self.gemini_results.update(self.verify_gemini_results(queue=gemini_thread))
 
         self.verify_results()
 
@@ -82,7 +82,7 @@ class GeminiTest(ClusterTester):
                                                          keyspace_name="ks1",
                                                          base_table_name="table1")
 
-        self.gemini_results = self.verify_gemini_results(queue=gemini_thread)
+        self.gemini_results.update(self.verify_gemini_results(queue=gemini_thread))
 
         cdc_stress_results = self.verify_cdclog_reader_results(cdc_stress_queue, update_es)
 
