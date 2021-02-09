@@ -2843,6 +2843,23 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.log.info("Waiting for Scylla Machine Image setup to finish...")
         wait.wait_for(self.is_machine_image_configured, step=10, timeout=300)
 
+    def get_sysctl_output(self) -> dict[str, str]:
+        properties = {}
+        result = self.remoter.sudo("sysctl -a", ignore_status=True)
+
+        if not result.ok:
+            self.log.error(f"sysctl command failed: {result}")
+            return properties
+
+        for line in result.stdout.strip().split("\n"):
+            try:
+                name, value = line.strip().split("=", 1)
+                properties.update({name.strip(): value.strip()})
+            except ValueError:
+                self.log.error(f"Could not parse sysctl line: {line}")
+
+        return properties
+
 
 class FlakyRetryPolicy(RetryPolicy):
 
