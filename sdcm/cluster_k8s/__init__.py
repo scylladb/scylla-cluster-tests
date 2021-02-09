@@ -39,9 +39,11 @@ from boto3 import client as boto3_client
 from kubernetes.client import V1Container
 from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance, ResourceList, Subresource
 
+from invoke.exceptions import CommandTimedOut
+
 from sdcm import sct_abs_path, cluster, cluster_docker
 from sdcm.db_stats import PrometheusDBStats
-from sdcm.remote import LOCALRUNNER
+from sdcm.remote import LOCALRUNNER, NETWORK_EXCEPTIONS
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.coredump import CoredumpExportFileThread
 from sdcm.mgmt import AnyManagerCluster
@@ -49,7 +51,7 @@ from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import download_from_github
 from sdcm.utils.k8s import KubernetesOps, ApiCallRateLimiter, JSON_PATCH_TYPE, KUBECTL_TIMEOUT
-from sdcm.utils.decorators import log_run_info, timeout
+from sdcm.utils.decorators import log_run_info, retrying, timeout
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \
     KubectlClusterEventsLogger, ScyllaManagerLogger
 from sdcm.wait import wait_for
@@ -627,6 +629,27 @@ class BaseScyllaPodContainer(BasePodContainer):
             diff = "".join(unified_diff(original, changed))
             LOGGER.debug("%s: scylla.yaml requires to be updated with:\n%s", self, diff)
             self.parent_cluster.scylla_yaml_update_required = True
+
+    @cluster.log_run_info
+    def start_scylla_server(self, verify_up=True, verify_down=False,
+                            timeout=500, verify_up_timeout=300):
+        if verify_down:
+            self.wait_db_down(timeout=timeout)
+        self.remoter.run('supervisorctl start scylla', timeout=timeout)
+        if verify_up:
+            self.wait_db_up(timeout=verify_up_timeout)
+
+    @cluster.log_run_info
+    @retrying(n=3, sleep_time=5, allowed_exceptions=NETWORK_EXCEPTIONS + (CommandTimedOut, ),
+              message="Failed to stop scylla.server, retrying...")
+    def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300,
+                           ignore_status=False):
+        if verify_up:
+            self.wait_db_up(timeout=timeout)
+        self.remoter.run('supervisorctl stop scylla',
+                         timeout=timeout, ignore_status=ignore_status)
+        if verify_down:
+            self.wait_db_down(timeout=timeout)
 
     @cluster.log_run_info
     def stop_scylla(self, verify_up=False, verify_down=True, timeout=300):
