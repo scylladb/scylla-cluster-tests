@@ -413,8 +413,8 @@ class LongevityDataValidator:
                     'Actual dataset length: {}, Expected dataset length: {}'.format(len(actual_result),
                                                                                     len(expected_result))
 
-                assert (actual_result, expected_result,
-                        'One or more rows are not as expected, suspected LWT wrong update')
+                assert actual_result == expected_result, \
+                    'One or more rows are not as expected, suspected LWT wrong update'
 
                 # raise info event in the end of test only
                 DataValidatorEvent(type='info', name='ImmutableRowsValidator', status=Severity.NORMAL,
