@@ -330,6 +330,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self.test_mgmt_cluster_healthcheck()
         with self.subTest('STEP 5: Client Encryption'):
             self.test_client_encryption()
+        self.test_suspend_and_resume()
 
     def test_repair_intensity_feature_on_multiple_node(self):
         self._repair_intensity_feature(fault_multiple_nodes=True)
@@ -837,3 +838,35 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
                 session.execute(f"DROP KEYSPACE IF EXISTS {keyspace_to_be_repaired}")
         InfoEvent(message='finishing test_intensity_and_parallel').publish()
+
+    def test_suspend_and_resume(self):
+        self.generate_load_and_wait_for_results()
+        with self.subTest('Suspend and resume backup task'):
+            self._suspend_and_resume_task_template(task_type="backup")
+        with self.subTest('Suspend and resume repair task'):
+            self._suspend_and_resume_task_template(task_type="repair")
+
+    def _suspend_and_resume_task_template(self, task_type):
+        # task types: backup/repair
+        self.log.info(f'starting test_suspend_and_resume_{task_type}')
+        if not self.is_cred_file_configured:
+            self.update_config_file()
+        location_list = [self.bucket_name, ]
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + f'_suspend_{task_type}',
+                                               db_cluster=self.db_cluster, auth_token=self.monitors.mgmt_auth_token)
+        if task_type == "backup":
+            suspendable_task = mgr_cluster.create_backup_task(location_list=location_list)
+        elif task_type == "repair":
+            suspendable_task = mgr_cluster.create_repair_task()
+        else:
+            raise ValueError(f"Not familiar with task type: {task_type}")
+        assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), \
+            f"task {suspendable_task.id} failed to reach status {TaskStatus.RUNNING}"
+        mgr_cluster.suspend()
+        assert suspendable_task.wait_for_status(list_status=[TaskStatus.STOPPED], timeout=300, step=10), \
+            f"task {suspendable_task.id} failed to reach status {TaskStatus.STOPPED}"
+        mgr_cluster.resume(start_tasks=True)
+        assert suspendable_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=1200, step=10), \
+            f"task {suspendable_task.id} failed to reach status {TaskStatus.DONE}"
+        self.log.info(f'finishing test_suspend_and_resume_{task_type}')

@@ -730,6 +730,16 @@ class ManagerCluster(ScyllaManagerBase):
             return value_list[0]
         return default_value
 
+    def suspend(self):
+        cmd = f"suspend -c {self.id}"
+        self.sctool.run(cmd=cmd)
+
+    def resume(self, start_tasks=True):
+        cmd = f"resume -c {self.id}"
+        if start_tasks:
+            cmd += " --start-tasks"
+        self.sctool.run(cmd=cmd)
+
 
 def verify_errorless_result(cmd, res):
     if res.exited != 0:
