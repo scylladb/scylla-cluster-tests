@@ -2779,11 +2779,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             actual_cdc_settings = cdc.options.get_table_cdc_properties(session, keyspace, table)
 
         if not cdc_settings["enabled"]:
-            assert (actual_cdc_settings["enabled"] is False,
-                    f"CDC options was not disabled. Current: {actual_cdc_settings} expected: {cdc_settings}")
+            assert actual_cdc_settings["enabled"] is False, \
+                f"CDC options was not disabled. Current: {actual_cdc_settings} expected: {cdc_settings}"
         else:
-            assert (actual_cdc_settings == cdc_settings,
-                    f"CDC extension settings are differs. Current: {actual_cdc_settings} expected: {cdc_settings}")
+            assert actual_cdc_settings == cdc_settings, \
+                f"CDC extension settings are differs. Current: {actual_cdc_settings} expected: {cdc_settings}"
 
 
 def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
