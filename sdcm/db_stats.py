@@ -459,6 +459,7 @@ class TestStatsMixin(Stats):
                 'cpuPlatform', 'UNKNOWN')
 
         setup_details['db_cluster_node_details'] = {}
+        setup_details['sysctl_output'] = []
         return setup_details
 
     def get_test_details(self):
@@ -673,6 +674,10 @@ class TestStatsMixin(Stats):
                 setup_details.update({"scylla_args": output(f"grep ^SCYLLA_ARGS {scylla_server_conf}"),
                                       "io_conf": output("grep -v ^# /etc/scylla.d/io.conf"),
                                       "cpuset_conf": output("grep -v ^# /etc/scylla.d/cpuset.conf"), })
+            for node in self.db_cluster.nodes:
+                result = node.get_sysctl_output()
+                if result:
+                    setup_details["sysctl_output"].append(result)
 
         self.update(update_data)
 
