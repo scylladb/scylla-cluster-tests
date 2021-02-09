@@ -845,6 +845,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self._suspend_and_resume_task_template(task_type="backup")
         with self.subTest('Suspend and resume repair task'):
             self._suspend_and_resume_task_template(task_type="repair")
+        with self.subTest('Suspend and resume without starting task'):
+            self.test_suspend_and_resume_without_starting_tasks()
 
     def _suspend_and_resume_task_template(self, task_type):
         # task types: backup/repair
@@ -870,3 +872,26 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         assert suspendable_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=1200, step=10), \
             f"task {suspendable_task.id} failed to reach status {TaskStatus.DONE}"
         self.log.info(f'finishing test_suspend_and_resume_{task_type}')
+
+    def test_suspend_and_resume_without_starting_tasks(self):
+        self.log.info(f'starting test_suspend_and_resume_without_starting_tasks')
+        if not self.is_cred_file_configured:
+            self.update_config_file()
+        location_list = [self.bucket_name, ]
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_suspend_and_not_starting',
+                                               db_cluster=self.db_cluster, auth_token=self.monitors.mgmt_auth_token)
+        suspendable_task = mgr_cluster.create_backup_task(location_list=location_list)
+        assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), \
+            f"task {suspendable_task.id} failed to reach status {TaskStatus.RUNNING}"
+        mgr_cluster.suspend()
+        assert suspendable_task.wait_for_status(list_status=[TaskStatus.STOPPED], timeout=300, step=10), \
+            f"task {suspendable_task.id} failed to reach status {TaskStatus.STOPPED}"
+        mgr_cluster.resume(start_tasks=False)
+        self.log.info("Waiting a little time to make sure the task isn't started")
+        time.sleep(60)
+        current_task_status = suspendable_task.status
+        assert current_task_status == TaskStatus.STOPPED, \
+            f'Task {current_task_status} did not remain in "{TaskStatus.STOPPED}" status, but instead ' \
+            f'reached "{current_task_status}" status'
+        self.log.info(f'finishing test_suspend_and_resume_without_starting_tasks')
