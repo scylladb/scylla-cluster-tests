@@ -3399,7 +3399,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if first_only:
             node = self.nodes[0]
             node.wait_ssh_up()
-            node.is_seed = True
             seed_nodes_ips = [node.ip_address]
 
         elif seeds_selector == 'reflector' or Setup.REUSE_CLUSTER or cluster_backend == 'aws-siren':
