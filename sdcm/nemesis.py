@@ -657,12 +657,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         if not self.target_node.is_seed:
             self.target_node = random.choice(self.cluster.seed_nodes)
-        self.target_node.is_seed = False
+        self.target_node.set_seed_flag(False)
         self.cluster.update_seed_provider()
 
         new_seed_node = self.disrupt_nodetool_decommission(add_node=add_node, disruption_name="SeedDecommission")
         if new_seed_node and not new_seed_node.is_seed:
-            new_seed_node.is_seed = True
+            new_seed_node.set_seed_flag(True)
             self.cluster.update_seed_provider()
 
     @latency_calculator_decorator
@@ -2211,7 +2211,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         new_node = self._add_and_init_new_cluster_node(rack=self.target_node.rack)
         # in case the removed node was a seed
         if node_to_remove.is_seed:
-            new_node.is_seed = True
+            new_node.set_seed_flag(True)
             self.cluster.update_seed_provider()
         # after add_node, the left nodes have data that isn't part of their tokens anymore.
         # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
