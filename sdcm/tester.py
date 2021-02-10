@@ -1369,7 +1369,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         cmd_bypass_cache = 'select * from {} bypass cache'
         cmd = random.choice([cmd_select_all, cmd_bypass_cache]).format(ks_cf)
         try:
-            with self.db_cluster.cql_connection_patient(db_node) as session:
+            credentials = self.db_cluster.get_db_auth()
+            username, password = credentials if credentials else (None, None)
+            with self.db_cluster.cql_connection_patient(db_node, user=username, password=password) as session:
                 self.log.info('Will run command "{}"'.format(cmd))
                 result = session.execute(SimpleStatement(cmd, fetch_size=page_size,
                                                          consistency_level=ConsistencyLevel.ONE))
