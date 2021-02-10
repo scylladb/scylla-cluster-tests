@@ -2861,6 +2861,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         return properties
 
+    def set_seed_flag(self, is_seed):
+        self.is_seed = is_seed
+        if hasattr(self.log, 'extra'):
+            self.log.extra['prefix'] = str(self)
+
 
 class FlakyRetryPolicy(RetryPolicy):
 
@@ -3420,7 +3425,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         for node in self.nodes:
             if node.ip_address in seed_nodes_ips:
-                node.is_seed = True
+                node.set_seed_flag(True)
 
         assert seed_nodes_ips, "We should have at least one selected seed by now"
 
