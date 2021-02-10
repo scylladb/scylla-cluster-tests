@@ -1078,6 +1078,9 @@ class SCTConfiguration(dict):
 
         dict(name="max_events_severities", env="SCT_MAX_EVENTS_SEVERITIES", type=str_or_list,
              help="Limit severity level for event types"),
+
+        dict(name="scylla_rsyslog_setup", env="SCT_SCYLLA_RSYSLOG_SETUP", type=boolean,
+             help="Configure rsyslog on Scylla nodes to send logs to monitoring nodes")
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',

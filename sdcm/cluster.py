@@ -4865,29 +4865,30 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
               message="Waiting for reconfiguring scylla monitoring")
     def reconfigure_scylla_monitoring(self):
         for node in self.nodes:
-            db_targets_list = ["[%s]:9180" % n.ip_address for n in self.targets["db_cluster"].nodes]
-            self._monitoring_targets = " ".join(db_targets_list)  # pylint: disable=attribute-defined-outside-init
-            configure_script = dedent("""
-                        cd {0.monitor_install_path}
-                        mkdir -p {0.monitoring_conf_dir}
-                        export PATH=/usr/local/bin:$PATH  # hack to enable running on docker
-                        python3 genconfig.py -s -n -d {0.monitoring_conf_dir} {0._monitoring_targets}
-                    """.format(self))
-            node.remoter.run("sudo bash -ce '%s'" % configure_script, verbose=True)
+            monitoring_targets = " ".join(f"[{n.ip_address}]:9180" for n in self.targets["db_cluster"].nodes)
+            node.remoter.sudo(shell_script_cmd(f"""\
+                cd {self.monitor_install_path}
+                mkdir -p {self.monitoring_conf_dir}
+                export PATH=/usr/local/bin:$PATH  # hack to enable running on docker
+                python3 genconfig.py -s -n -d {self.monitoring_conf_dir} {monitoring_targets}
+            """), verbose=True)
 
-            if not self.params.get('cluster_backend') == 'docker':
-                configure_self_node_exporter = dedent(f'''
-                    docker run --rm -v {self.monitoring_conf_dir}:/workdir mikefarah/yq:3 yq w -i node_exporter_servers.yml '[0].targets[+]' ''[{node.private_ip_address}]:9100''
-                ''')
-                node.remoter.run("sudo bash -ce '%s'" % configure_self_node_exporter, verbose=True)
+            if self.params.get("cluster_backend") != "docker":
+                node.remoter.sudo(f"docker run --rm -v {self.monitoring_conf_dir}:/workdir"
+                                  f" mikefarah/yq:3 yq w -i node_exporter_servers.yml"
+                                  f" '[0].targets[+]' ''[{node.private_ip_address}]:9100''", verbose=True)
 
-            if self.params.get('cloud_prom_bearer_token'):
-                cloud_prom_script = dedent("""
-                                        echo "targets: [] " > {0.monitoring_conf_dir}/scylla_servers.yml
-                                        echo "targets: [] " > {0.monitoring_conf_dir}/node_exporter_servers.yml
-                                    """.format(self))
+            if self.params.get("cloud_prom_bearer_token"):
+                node.remote.sudo(shell_script_cmd(f"""\
+                    echo "targets: [] " > {self.monitoring_conf_dir}/scylla_servers.yml
+                    echo "targets: [] " > {self.monitoring_conf_dir}/node_exporter_servers.yml
+                """), verbose=True)
 
-                node.remoter.run("sudo bash -ce '%s'" % cloud_prom_script, verbose=True)
+            if self.params.get("scylla_rsyslog_setup"):
+                for db_node in self.targets["db_cluster"].nodes:
+                    db_node.remoter.sudo(shell_script_cmd(
+                        f"[ -f /etc/rsyslog.d/scylla.conf ] || scylla_rsyslog_setup --remote-server {node.ip_address}"
+                    ), verbose=True)
 
     def start_scylla_monitoring(self, node):
         node.remoter.run("cp {0.monitor_install_path}/prometheus/scylla_manager_servers.example.yml"

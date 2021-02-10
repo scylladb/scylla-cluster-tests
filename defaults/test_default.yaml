@@ -142,3 +142,5 @@ jepsen_test_cmd: 'test-all --concurrency 10n'
 max_events_severities: ""
 mgmt_docker_image: ''
 k8s_deploy_monitoring: false
+
+scylla_rsyslog_setup: false
