@@ -2899,6 +2899,8 @@ class FillDatabaseData(ClusterTester):
         create_query = "CREATE TABLE IF NOT EXISTS truncate_table%d (my_id int PRIMARY KEY, col1 int, value int)"
         for i in range(rows):
             session.execute(create_query % i)
+            # Added sleep after each created table
+            time.sleep(15)
 
     @staticmethod
     def cql_insert_data_to_simple_tables(session, rows):  # pylint: disable=invalid-name
