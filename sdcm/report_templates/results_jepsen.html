@@ -23,3 +23,30 @@
         </ul>
     </div>
 {% endblock %}
+
+{% block hydra_commands %}
+    {% if test_id %}
+        <h3>
+            Hydra commands:
+        </h3>
+        <div>
+            <ul>
+                <li>Restore Monitor Stack command: $ hydra investigate show-monitor {{ test_id }}</li>
+                <li>Show all stored logs command: $ hydra investigate show-logs {{ test_id }}</li>
+                <li>Run web server with Jepsen results: $ hydra investigate show-jepsen-results {{ test_id }}</li>
+            </ul>
+        </div>
+    {% endif %}
+    {% if logs_links %}
+        <h3>
+            Logs:
+        </h3>
+        <div>
+            <ul>
+                {% for logs_link in logs_links %}
+                <li><a href="{{ logs_link.link }}">{{ logs_link.type }} - {{ logs_link.link }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+{% endblock %
