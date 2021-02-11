@@ -633,6 +633,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if self._is_it_on_kubernetes() and disruption_name is None:
             self.set_last_node_as_target()
         self._set_current_disruption(f"{disruption_name or 'Decommission'} {self.target_node}")
+        target_is_seed = self.target_node.is_seed
         self.cluster.decommission(self.target_node)
         new_node = None
         if add_node:
@@ -642,6 +643,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
             # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
             # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
+            if new_node.is_seed != target_is_seed:
+                new_node.set_seed_flag(target_is_seed)
+                self.cluster.update_seed_provider()
             try:
                 test_keyspaces = self.cluster.get_test_keyspaces()
                 for node in self.cluster.nodes:
