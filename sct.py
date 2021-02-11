@@ -1,4 +1,18 @@
 #!/usr/bin/env python3
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2021 ScyllaDB
+
 import os
 import sys
 import unittest
@@ -25,6 +39,8 @@ from sdcm.utils.common import (list_instances_aws, list_instances_gce, list_reso
                                aws_tags_to_dict, list_elastic_ips_aws, get_builder_by_test_id,
                                clean_resources_according_post_behavior, clean_sct_runners,
                                search_test_id_in_latest, get_testrun_dir, format_timestamp, list_clusters_gke)
+from sdcm.utils.jepsen import JepsenResults
+from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
                                      kill_running_monitoring_stack_services)
 from sdcm.cluster import Setup
@@ -514,6 +530,22 @@ def show_monitor(test_id, date_time, kill):
         click.echo('Errors were found when restoring Scylla monitoring stack')
         kill_running_monitoring_stack_services()
         sys.exit(1)
+
+
+@investigate.command('show-jepsen-results', help="Run a server with Jepsen results")
+@click.argument('test_id')
+def show_jepsen_results(test_id):
+    add_file_logger()
+
+    click.secho(message=f"\nSearch Jepsen results archive files for test id {test_id} and restoring...\n", fg="green")
+    jepsen = JepsenResults()
+    if jepsen.restore_jepsen_data(test_id):
+        click.secho(
+            message=f"\nJepsen data restored, starting web server on http://localhost:{jepsen.jepsen_results_port}/\n"
+                    f"Press Ctrl-C to stop the server.\n",
+            fg="green",
+        )
+        jepsen.run_jepsen_web_server()
 
 
 @investigate.command('search-builder', help='Search builder where test run with test-id located')
