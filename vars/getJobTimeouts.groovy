@@ -7,16 +7,16 @@ List<Integer> call(Map params, String region){
     #!/bin/bash
     export SCT_CLUSTER_BACKEND="${params.backend}"
     export SCT_CONFIG_FILES=${test_config}
+
     if [[ -n "${params.k8s_scylla_operator_docker_image ? params.k8s_scylla_operator_docker_image : ''}" ]] ; then
         export SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE=${params.k8s_scylla_operator_docker_image}
     fi
-    if [[ -n "${params.k8s_scylla_operator_helm_repo}" ]]; then
+    if [[ -n "${params.k8s_scylla_operator_helm_repo ? params.k8s_scylla_operator_helm_repo : ''}" ]] ; then
         export SCT_K8S_SCYLLA_OPERATOR_HELM_REPO=${params.k8s_scylla_operator_helm_repo}
     fi
-    if [[ -n "${params.k8s_scylla_operator_chart_version}" ]]; then
+    if [[ -n "${params.k8s_scylla_operator_chart_version ? params.k8s_scylla_operator_chart_version : ''}" ]] ; then
         export SCT_K8S_SCYLLA_OPERATOR_CHART_VERSION=${params.k8s_scylla_operator_chart_version}
     fi
-
     if [[ -n "${params.scylla_mgmt_agent_version ? params.scylla_mgmt_agent_version : ''}" ]] ; then
         export SCT_SCYLLA_MGMT_AGENT_VERSION=${params.scylla_mgmt_agent_version}
     fi

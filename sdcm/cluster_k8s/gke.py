@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-import os
 import logging
 import time
 from textwrap import dedent
@@ -21,11 +20,10 @@ from functools import cached_property
 import yaml
 
 from sdcm import sct_abs_path, cluster
-from sdcm.utils.k8s import ApiCallRateLimiter, K8S_CONFIGS_PATH_IN_CONTAINER
-from sdcm.utils.common import shorten_cluster_name
-from sdcm.utils.gce_utils import GcloudContextManager, GcloudTokenUpdateThread
-from sdcm.wait import wait_for
-from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BaseScyllaPodContainer
+from sdcm.utils.k8s import ApiCallRateLimiter, TokenUpdateThread
+from sdcm.utils.gce_utils import GcloudContextManager
+from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BaseScyllaPodContainer, CloudK8sNodePool
+
 from sdcm.cluster_k8s.iptables import IptablesPodIpRedirectMixin, IptablesClusterOpsMixin
 from sdcm.cluster_gce import MonitorSetGCE
 
@@ -34,18 +32,113 @@ GKE_API_CALL_RATE_LIMIT = 0.5  # ops/s
 GKE_API_CALL_QUEUE_SIZE = 1000  # ops
 GKE_URLLIB_RETRY = 6  # How many times api request is retried before reporting failure
 
-SCYLLA_CLUSTER_CONFIG = f"{K8S_CONFIGS_PATH_IN_CONTAINER}/gke-cluster-chart-values.yaml"
 LOADER_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/gke-loaders.yaml")
 CPU_POLICY_DAEMONSET = sct_abs_path("sdcm/k8s_configs/cpu-policy-daemonset.yaml")
 RAID_DAEMONSET = sct_abs_path("sdcm/k8s_configs/raid-daemonset.yaml")
-
-SCYLLA_POD_POOL_NAME = 'default-pool'
-OPERATOR_POD_POOL_NAME = 'operator-pool'
-
 LOGGER = logging.getLogger(__name__)
 
 
-class GkeCluster(KubernetesCluster, cluster.BaseCluster):
+class GkeNodePool(CloudK8sNodePool):
+    k8s_cluster: 'GkeCluster'
+
+    def __init__(
+            self,
+            k8s_cluster: 'KubernetesCluster',
+            name: str,
+            num_nodes: int,
+            instance_type: str,
+            disk_size: int = None,
+            disk_type: str = None,
+            image_type: str = 'UBUNTU',
+            labels: dict = None,
+            tags: dict = None,
+            local_ssd_count: int = None,
+            gce_project: str = None,
+            gce_zone: str = None,
+            is_deployed: bool = False
+    ):
+        super().__init__(
+            k8s_cluster=k8s_cluster,
+            name=name,
+            num_nodes=num_nodes,
+            disk_size=disk_size,
+            disk_type=disk_type,
+            image_type=image_type,
+            instance_type=instance_type,
+            labels=labels,
+            tags=tags,
+            is_deployed=is_deployed,
+        )
+        self.local_ssd_count = local_ssd_count
+        self.gce_project = self.k8s_cluster.gce_project if gce_project is None else gce_project
+        self.gce_zone = self.k8s_cluster.gce_zone if gce_zone is None else gce_zone
+
+    @property
+    def _deploy_cmd(self) -> str:
+        cmd = [f"container --project {self.gce_project} node-pools create {self.name}",
+               f"--zone {self.gce_zone}",
+               f"--cluster {self.k8s_cluster.short_cluster_name}",
+               f"--num-nodes {self.num_nodes}",
+               f"--machine-type {self.instance_type}",
+               f"--image-type UBUNTU",
+               f"--no-enable-autoupgrade",
+               f"--no-enable-autorepair"
+               ]
+        if self.disk_type:
+            cmd.append(f"--disk-type {self.disk_type}")
+        if self.disk_size:
+            cmd.append(f"--disk-size {self.disk_size}")
+        if self.local_ssd_count:
+            cmd.append(f"--local-ssd-count {self.local_ssd_count}")
+        return ' '.join(cmd)
+
+    def deploy(self) -> None:
+        self.k8s_cluster.gcloud.run(self._deploy_cmd)
+        self.is_deployed = True
+
+    def resize(self, num_nodes: int):
+        self.k8s_cluster.gcloud.run(
+            f"container clusters resize {self.k8s_cluster.short_cluster_name} --project {self.gce_project} "
+            f"--zone {self.gce_zone} --node-pool {self.name} --num-nodes {num_nodes} --quiet")
+        self.num_nodes = int(num_nodes)
+        self.wait_for_nodes_readiness()
+
+    def undeploy(self):
+        pass
+
+    @property
+    def instance_group_name(self) -> str:
+        try:
+            group_link = yaml.load(
+                self.k8s_cluster.gcloud.run(
+                    f'container node-pools describe {self.name} '
+                    f'--zone {self.gce_zone} --project {self.gce_project} '
+                    f'--cluster {self.k8s_cluster.short_cluster_name}')
+            ).get('instanceGroupUrls')[0]
+            return group_link.split('/')[-1]
+        except Exception as exc:
+            raise RuntimeError(f"Can't get instance group name due to the: {exc}")
+
+    def remove_instance(self, instance_name: str):
+        self.k8s_cluster.gcloud.run(f'compute instance-groups managed delete-instances {self.name} '
+                                    f'--zone={self.gce_zone} --instances={instance_name}')
+
+
+class GcloudTokenUpdateThread(TokenUpdateThread):
+    def __init__(self, gcloud, kubectl_token_path: str, token_min_duration: int = 60):
+        self._gcloud = gcloud
+        self._token_min_duration = token_min_duration
+        super().__init__(kubectl_token_path=kubectl_token_path)
+
+    def get_token(self) -> str:
+        return self._gcloud.run(
+            f'config config-helper --min-expiry={self._token_min_duration * 60} --format=json')
+
+
+class GkeCluster(KubernetesCluster):
+    AUXILIARY_POOL_NAME = 'default-pool'  # This is default pool that is deployed with the cluster
+    POOL_LABEL_NAME = 'cloud.google.com/gke-nodepool'
+    pools: Dict[str, GkeNodePool]
 
     def __init__(self,
                  gke_cluster_version,
@@ -53,26 +146,25 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
                  gce_image_size,
                  gce_network,
                  services,
-                 credentials,
-                 gce_n_local_ssd=0,
-                 gce_instance_type="n1-highmem-8",
-                 n_nodes=3,
+                 gce_instance_type='n1-standard-4',
                  user_prefix=None,
                  params=None,
-                 gce_datacenter=None):
-        cluster_prefix = cluster.prepend_user_prefix(user_prefix, "k8s-gke")
-        node_prefix = cluster.prepend_user_prefix(user_prefix, "node")
-        self._pools_info: Dict[str: int] = {}
-        self._gcloud_token_thread = None
+                 gce_datacenter=None,
+                 cluster_uuid=None,
+                 n_nodes=1
+                 ):
+        super().__init__(
+            params=params,
+            cluster_uuid=cluster_uuid,
+            user_prefix=user_prefix
+        )
         self.gke_cluster_version = gke_cluster_version
         self.gce_image_type = gce_image_type
         self.gce_image_size = gce_image_size
         self.gce_network = gce_network
         self.gce_services = services
-        self.credentials = credentials
         self.gce_instance_type = gce_instance_type
-        self.gce_n_local_ssd = int(gce_n_local_ssd) if gce_n_local_ssd else 0
-
+        self.n_nodes = n_nodes
         self.gce_project = services[0].project
         self.gce_user = services[0].key
         self.gce_zone = gce_datacenter[0]
@@ -85,116 +177,68 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
         )
         self.api_call_rate_limiter.start()
 
-        super().__init__(cluster_prefix=cluster_prefix,
-                         node_prefix=node_prefix,
-                         n_nodes=n_nodes,
-                         params=params,
-                         region_names=gce_datacenter,
-                         node_type="scylla-db")
-
-    @cached_property
-    def gke_cluster_name(self):
-        return shorten_cluster_name(self.name, 40)
-
     def __str__(self):
         return f"{type(self).__name__} {self.name} | Zone: {self.gce_zone} | Version: {self.gke_cluster_version}"
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
-        if not self.gke_cluster_created:
-            self.setup_gke_cluster(num_nodes=count)
-            self.gke_cluster_created = True
-        else:
-            raise NotImplementedError
-
-    @property
-    def gcloud(self) -> GcloudContextManager:
-        return cluster.Setup.tester_obj().localhost.gcloud
-
-    def setup_gke_cluster(self, num_nodes: int) -> None:
-        LOGGER.info("Create GKE cluster `%s' with %d node(s) in %s and 1 node in %s",
-                    self.gke_cluster_name, num_nodes, SCYLLA_POD_POOL_NAME, OPERATOR_POD_POOL_NAME)
+    def deploy(self):
+        LOGGER.info("Create GKE cluster `%s' with %d node(s) in %s",
+                    self.short_cluster_name, self.n_nodes, self.AUXILIARY_POOL_NAME)
         tags = ",".join(f"{key}={value}" for key, value in self.tags.items())
         with self.gcloud as gcloud:
-            gcloud.run(f"container --project {self.gce_project} clusters create {self.gke_cluster_name}"
+            gcloud.run(f"container --project {self.gce_project} clusters create {self.short_cluster_name}"
                        f" --zone {self.gce_zone}"
                        f" --cluster-version {self.gke_cluster_version}"
                        f" --username admin"
                        f" --network {self.gce_network}"
-                       f" --num-nodes {num_nodes}"
+                       f" --num-nodes {self.n_nodes}"
                        f" --machine-type {self.gce_instance_type}"
                        f" --image-type UBUNTU"
                        f" --disk-type {self.gce_image_type}"
                        f" --disk-size {self.gce_image_size}"
-                       f" --local-ssd-count {self.gce_n_local_ssd}"
-                       f" --node-taints role=scylla-clusters:NoSchedule"
                        f" --enable-stackdriver-kubernetes"
                        f" --no-enable-autoupgrade"
                        f" --no-enable-autorepair"
                        f" --metadata {tags}")
-            self.set_nodes_in_pool(SCYLLA_POD_POOL_NAME, num_nodes)
-            gcloud.run(f"container --project {self.gce_project} node-pools create {OPERATOR_POD_POOL_NAME}"
-                       f" --zone {self.gce_zone}"
-                       f" --cluster {self.gke_cluster_name}"
-                       f" --num-nodes 1"
-                       f" --machine-type n1-standard-4"
-                       f" --image-type UBUNTU"
-                       f" --disk-type pd-ssd"
-                       f" --disk-size 20"
-                       f" --no-enable-autoupgrade"
-                       f" --no-enable-autorepair")
-            self.set_nodes_in_pool(OPERATOR_POD_POOL_NAME, 1)
-
-            LOGGER.info("Get credentials for GKE cluster `%s'", self.name)
-            gcloud.run(f"container clusters get-credentials {self.gke_cluster_name} --zone {self.gce_zone}")
-        self.start_gcloud_token_update_thread()
-        self.patch_kube_config()
+            self.patch_kubectl_config()
+            self.deploy_node_pool(GkeNodePool(
+                name=self.AUXILIARY_POOL_NAME,
+                num_nodes=self.n_nodes,
+                disk_size=self.gce_image_size,
+                disk_type=self.gce_image_type,
+                k8s_cluster=self,
+                instance_type=self.gce_instance_type,
+                is_deployed=True
+            ))
 
         LOGGER.info("Setup RBAC for GKE cluster `%s'", self.name)
-        self.kubectl(f"create clusterrolebinding cluster-admin-binding"
-                     f" --clusterrole cluster-admin"
-                     f" --user {self.gce_user}")
+        self.kubectl("create clusterrolebinding cluster-admin-binding --clusterrole cluster-admin "
+                     f"--user {self.gce_user}")
 
-        LOGGER.info("Install RAID DaemonSet to GKE cluster `%s'", self.name)
-        self.apply_file(RAID_DAEMONSET, envsubst=False)
+    @cached_property
+    def gcloud(self) -> GcloudContextManager:
+        return cluster.Setup.tester_obj().localhost.gcloud
 
-        LOGGER.info("Install CPU policy DaemonSet to GKE cluster `%s'", self.name)
-        self.apply_file(CPU_POLICY_DAEMONSET, envsubst=False)
+    def deploy_node_pool(self, pool: GkeNodePool, wait_till_ready=True) -> None:
+        self._add_pool(pool)
+        if pool.is_deployed:
+            return
+        LOGGER.info("Create %s pool with %d node(s) in GKE cluster `%s'", pool.name, pool.num_nodes, self.name)
+        if wait_till_ready:
+            with self.api_call_rate_limiter.pause:
+                pool.deploy_and_wait_till_ready()
+                self.api_call_rate_limiter.wait_till_api_become_stable(self)
+        else:
+            pool.deploy()
 
-        LOGGER.info("Install local volume provisioner to GKE cluster `%s'", self.name)
-        self.helm(f"install local-provisioner {K8S_CONFIGS_PATH_IN_CONTAINER}/provisioner")
-
-    def get_nodes_in_pool(self, pool_name: str) -> int:
-        return self._pools_info.get(pool_name, 0)
-
-    def set_nodes_in_pool(self, pool_name: str, num: int):
-        self._pools_info[pool_name] = num
-
-    def add_gke_pool(self, name: str, num_nodes: int, instance_type: str) -> None:
-        LOGGER.info("Create %s pool with %d node(s) in GKE cluster `%s'", name, num_nodes, self.name)
+    def wait_all_node_pools_to_be_ready(self):
         with self.api_call_rate_limiter.pause:
-            self.gcloud.run(f"container --project {self.gce_project} node-pools create {name}"
-                            f" --zone {self.gce_zone}"
-                            f" --cluster {self.gke_cluster_name}"
-                            f" --num-nodes {num_nodes}"
-                            f" --machine-type {instance_type}"
-                            f" --image-type UBUNTU"
-                            f" --node-taints role=sct-loaders:NoSchedule"
-                            f" --no-enable-autoupgrade"
-                            f" --no-enable-autorepair")
-            self.api_call_rate_limiter.wait_till_api_become_not_operational(self)
+            super().wait_all_node_pools_to_be_ready()
             self.api_call_rate_limiter.wait_till_api_become_stable(self)
-            self.kubectl_no_wait('wait --timeout=15m --all --for=condition=Ready node')
-            self.set_nodes_in_pool(name, num_nodes)
 
-    def resize_gke_pool(self, name: str, num_nodes: int) -> None:
-        LOGGER.info("Resize %s pool with %d node(s) in GKE cluster `%s'", name, num_nodes, self.name)
+    def resize_node_pool(self, name: str, num_nodes: int) -> None:
         with self.api_call_rate_limiter.pause:
-            self.gcloud.run(f"container clusters resize {self.gke_cluster_name} --project {self.gce_project} "
-                            f"--zone {self.gce_zone} --node-pool {name} --num-nodes {num_nodes} --quiet")
-            self.api_call_rate_limiter.wait_till_api_become_not_operational(self)
+            self.pools[name].resize(num_nodes)
             self.api_call_rate_limiter.wait_till_api_become_stable(self)
-            self.kubectl_no_wait('wait --timeout=15m --all --for=condition=Ready node')
-            self.set_nodes_in_pool(name, num_nodes)
 
     def get_instance_group_name_for_pool(self, pool_name: str, default=None) -> str:
         try:
@@ -202,7 +246,7 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
                 self.gcloud.run(
                     f'container node-pools describe {pool_name} '
                     f'--zone {self.gce_zone} --project {self.gce_project} '
-                    f'--cluster {self.gke_cluster_name}')
+                    f'--cluster {self.short_cluster_name}')
             ).get('instanceGroupUrls')[0]
             return group_link.split('/')[-1]
         except Exception as exc:
@@ -214,64 +258,15 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
         self.gcloud.run(f'compute instance-groups managed delete-instances {group_name} '
                         f'--zone={self.gce_zone} --instances={instance_name}')
 
-    def get_kubectl_config_for_user(self, config, username):
-        for user in config["users"]:
-            if user["name"] == username:
-                return user["user"]["auth-provider"]["config"]
-        return None
+    def create_token_update_thread(self):
+        return GcloudTokenUpdateThread(self.gcloud, self.kubectl_token_path)
 
-    @cached_property
-    def gcloud_token_path(self):
-        return os.path.join(self.logdir, 'gcloud.output')
-
-    def start_gcloud_token_update_thread(self):
-        self._gcloud_token_thread = GcloudTokenUpdateThread(self.gcloud, self.gcloud_token_path)
-        self._gcloud_token_thread.start()
-        # Wait till GcloudTokenUpdateThread get tokens and dump them to gcloud_token_path
-        wait_for(os.path.exists, timeout=30, step=5, text="Wait for gcloud token", throw_exc=True,
-                 path=self.gcloud_token_path)
-
-    def patch_kube_config(self) -> None:
-        # It assumes that config is already created by gcloud
-        # It patches kube config so that instead of running gcloud each time
-        # we will get it's output from the cache file located at gcloud_token_path
-        # To keep this cache file updated we run GcloudTokenUpdateThread thread
-        kube_config_path = os.path.expanduser(os.environ.get('KUBECONFIG', '~/.kube/config'))
-        user_name = f"gke_{self.gce_project}_{self.gce_zone}_{self.gke_cluster_name}"
-        LOGGER.debug("Patch %s to use dockerized gcloud for auth against GKE cluster `%s'", kube_config_path, self.name)
-
-        with open(kube_config_path) as kube_config:
-            data = yaml.safe_load(kube_config)
-        user_config = self.get_kubectl_config_for_user(data, user_name)
-
-        if user_config is None:
-            raise RuntimeError(f"Unable to find configuration for `{user_name}' in ~/.kube/config")
-
-        user_config["cmd-args"] = self.gcloud_token_path
-        user_config["cmd-path"] = "cat"
-
-        with open(kube_config_path, "w") as kube_config:
-            yaml.safe_dump(data, kube_config)
-
-        self.log.debug(f'Patched kubectl config at {kube_config_path} '
-                       f'with static gcloud config from {self.gcloud_token_path}')
-
-    @cluster.wait_for_init_wrap
-    def wait_for_init(self):
-        LOGGER.info("--- List of nodes in GKE cluster `%s': ---\n%s\n", self.name, self.kubectl("get nodes").stdout)
-        LOGGER.info("--- List of pods in GKE cluster `%s': ---\n%s\n", self.name, self.kubectl("get pods -A").stdout)
-
-        LOGGER.info("Wait for readiness of all pods in default namespace...")
-        self.kubectl("wait --timeout=15m --all --for=condition=Ready pod", timeout=15*60+10)
-
-        # Create namespaces which are required in several different optional places
-        self.kubectl(f"create namespace {self._scylla_namespace}")
-        self.kubectl(f"create namespace {self._scylla_manager_namespace}")
+    def create_kubectl_config(self):
+        self.gcloud.run(f"container clusters get-credentials {self.short_cluster_name} --zone {self.gce_zone}")
 
     def destroy(self):
         self.api_call_rate_limiter.stop()
-        if self._gcloud_token_thread:
-            self._gcloud_token_thread.stop()
+        self.stop_token_update_thread()
 
 
 class GkeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
@@ -281,7 +276,7 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
     pod_readiness_timeout = 30  # minutes
     pod_terminate_timeout = 30  # minutes
 
-    @cached_property
+    @property
     def gce_node_ips(self):
         gce_node = self.k8s_node
         return gce_node.public_ips, gce_node.private_ips
@@ -359,21 +354,23 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
             Scylla Pod      X
             Scylla node     X
             '''))
-        group_name = self.parent_cluster.k8s_cluster.get_instance_group_name_for_pool(SCYLLA_POD_POOL_NAME)
         super().terminate_k8s_node()
 
         # Removing GKE instance and adding one node back to the cluster
         # TBD: Remove below lines when https://issuetracker.google.com/issues/178302655 is fixed
 
-        self.parent_cluster.k8s_cluster.delete_instance_that_belong_to_instance_group(group_name, self.node_name)
-        self.parent_cluster.k8s_cluster.resize_gke_pool(
-            SCYLLA_POD_POOL_NAME,
-            self.parent_cluster.k8s_cluster.get_nodes_in_pool(SCYLLA_POD_POOL_NAME)
+        self.parent_cluster.node_pool.remove_instance(instance_name=self.node_name)
+        self.parent_cluster.k8s_cluster.resize_node_pool(
+            self.parent_cluster.pool_name,
+            self.parent_cluster.node_pool.num_nodes
         )
 
 
 class GkeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
+    NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/gke/scylla-node-prepare.yaml")
+
     k8s_cluster: 'GkeCluster'
+    node_pool: 'GkeNodePool'
     PodContainerClass = GkeScyllaPodContainer
 
     def add_nodes(self,
@@ -395,5 +392,7 @@ class GkeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
 
 
 class MonitorSetGKE(MonitorSetGCE):
+    DB_NODES_IP_ADDRESS = 'public_ip_address'
+
     def install_scylla_manager(self, node, auth_token):
         pass

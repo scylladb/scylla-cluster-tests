@@ -20,7 +20,6 @@ import itertools
 import os
 import logging
 import random
-import re
 import socket
 import time
 import datetime
@@ -37,7 +36,7 @@ import re
 import requests
 import uuid
 import zipfile
-from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Tuple, Any
+from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Any
 from urllib.parse import urlparse
 from unittest.mock import Mock
 
@@ -51,7 +50,6 @@ import hashlib
 import boto3
 from mypy_boto3_s3 import S3Client, S3ServiceResource
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
-from botocore.exceptions import ClientError
 import docker  # pylint: disable=wrong-import-order; false warning because of docker import (local file vs. package)
 import libcloud.storage.providers
 import libcloud.storage.types
@@ -60,10 +58,10 @@ from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 from packaging.version import Version
 
+from sdcm.utils.aws_utils import EksClusterCleanupMixin
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
 from sdcm import wait
-
 
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
@@ -481,6 +479,7 @@ def clean_cloud_resources(tags_dict, dry_run=False):
     clean_instances_aws(tags_dict, dry_run=dry_run)
     clean_elastic_ips_aws(tags_dict, dry_run=dry_run)
     clean_clusters_gke(tags_dict, dry_run=dry_run)
+    clean_clusters_eks(tags_dict, dry_run=dry_run)
     clean_instances_gce(tags_dict, dry_run=dry_run)
     clean_resources_docker(tags_dict, dry_run=dry_run)
     return True
@@ -964,6 +963,64 @@ def list_clusters_gke(tags_dict: Optional[dict] = None, verbose: bool = False) -
     return clusters
 
 
+class EksCluster(EksClusterCleanupMixin):
+    def __init__(self, name: str, region: str):
+        self.short_cluster_name = name
+        self.name = name
+        self.region_name = region
+        self.body = self.eks_client.describe_cluster(name=name)['cluster']
+
+    @cached_property
+    def extra(self) -> dict:
+        metadata = self.body['tags'].items()
+        return {"metadata": {"items": [{"key": key, "value": value} for key, value in metadata], }, }
+
+    @cached_property
+    def create_time(self):
+        return self.body['createdAt']
+
+
+def list_clusters_eks(tags_dict: Optional[dict] = None, verbose: bool = False) -> List[EksCluster]:
+
+    class EksCleaner:
+        name = f"eks-cleaner-{uuid.uuid4()!s:.8}"
+        _containers = {}
+        tags = {}
+
+        @cached_property
+        def eks_client(self):
+            return
+
+        def list_clusters(self) -> list:
+            eks_clusters = []
+            for aws_region in all_aws_regions():
+                try:
+                    cluster_names = boto3.client('eks', region_name=aws_region).list_clusters()['clusters']
+                except Exception as exc:
+                    LOGGER.error("Failed to get list of clusters on EKS: %s", exc)
+                    return []
+                for cluster_name in cluster_names:
+                    try:
+                        eks_clusters.append(EksCluster(cluster_name, aws_region))
+                    except Exception as exc:
+                        LOGGER.error("Failed to get body of cluster on EKS: %s", exc)
+            return eks_clusters
+
+    clusters = EksCleaner().list_clusters()
+
+    if 'NodeType' in tags_dict:
+        tags_dict = tags_dict.copy()
+        del tags_dict['NodeType']
+
+    if tags_dict:
+        clusters = filter_gce_by_tags(tags_dict=tags_dict, instances=clusters)
+
+    if verbose:
+        LOGGER.info("Done. Found total of %s GKE clusters.", len(clusters))
+
+    return clusters
+
+
 def clean_instances_gce(tags_dict, dry_run=False):
     """
     Remove all instances with specific tags GCE
@@ -1000,10 +1057,29 @@ def clean_clusters_gke(tags_dict: dict, dry_run: bool = False) -> None:
         if not dry_run:
             try:
                 res = cluster.destroy()
+                LOGGER.info("%s deleted=%s", cluster.name, res)
             except Exception as exc:
                 LOGGER.error(exc)
-            LOGGER.info("%s deleted=%s", cluster.name, res)
     ParallelObject(gke_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
+
+
+def clean_clusters_eks(tags_dict: dict, dry_run: bool = False) -> None:
+    assert tags_dict, "tags_dict not provided (can't clean all clusters)"
+    eks_clusters_to_clean = list_clusters_eks(tags_dict=tags_dict)
+
+    if not eks_clusters_to_clean:
+        LOGGER.info("There are no clusters to remove in EKS")
+        return
+
+    def delete_cluster(cluster):
+        LOGGER.info("Going to delete: %s", cluster.name)
+        if not dry_run:
+            try:
+                res = cluster.destroy()
+                LOGGER.info("%s deleted=%s", cluster.name, res)
+            except Exception as exc:
+                LOGGER.error(exc)
+    ParallelObject(eks_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
 
 
 _SCYLLA_AMI_CACHE = defaultdict(dict)
@@ -2034,29 +2110,6 @@ def clean_enospc_on_node(target_node, sleep_time):
     time.sleep(sleep_time / 2)
     target_node.restart_scylla_server()
     target_node.wait_db_up()
-
-
-class PublicIpNotReady(Exception):
-    pass
-
-
-@retrying(n=7, sleep_time=10, allowed_exceptions=(PublicIpNotReady,),
-          message="Waiting for instance to get public ip")
-def ec2_instance_wait_public_ip(instance):
-    instance.reload()
-    if instance.public_ip_address is None:
-        raise PublicIpNotReady(instance)
-    LOGGER.debug(f"[{instance}] Got public ip: {instance.public_ip_address}")
-
-
-def ec2_ami_get_root_device_name(image_id, region):
-    ec2 = boto3.resource('ec2', region)
-    image = ec2.Image(image_id)
-    try:
-        if image.root_device_name:
-            return image.root_device_name
-    except (TypeError, ClientError):
-        raise AssertionError(f"Image '{image_id}' details not found in '{region}'")
 
 
 def parse_nodetool_listsnapshots(listsnapshots_output: str) -> defaultdict:

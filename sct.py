@@ -38,9 +38,9 @@ from sdcm.utils.common import (list_instances_aws, list_instances_gce, list_reso
                                list_logs_by_test_id, get_branched_ami, gce_meta_to_dict,
                                aws_tags_to_dict, list_elastic_ips_aws, get_builder_by_test_id,
                                clean_resources_according_post_behavior, clean_sct_runners,
-                               search_test_id_in_latest, get_testrun_dir, format_timestamp, list_clusters_gke)
+                               search_test_id_in_latest, get_testrun_dir, format_timestamp, list_clusters_gke,
+                               list_clusters_eks)
 from sdcm.utils.jepsen import JepsenResults
-from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
                                      kill_running_monitoring_stack_services)
 from sdcm.cluster import Setup
@@ -260,7 +260,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
     else:
         click.secho("No elastic ips found for selected filters in AWS!", fg="yellow")
 
-    click.secho("Checking GCE...", fg='green')
+    click.secho("Checking GKE...", fg='green')
     gke_clusters = list_clusters_gke(tags_dict=params, verbose=verbose)
     if gke_clusters:
         gke_table = PrettyTable(["Name", "Region-AZ", "TestId", "RunByUser", "CreateTime"])
@@ -277,6 +277,8 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
         click.echo(gke_table.get_string(title="GKE clusters"))
     else:
         click.secho("Nothing found for selected filters in GKE!", fg="yellow")
+
+    click.secho("Checking GCE...", fg='green')
     gce_instances = list_instances_gce(tags_dict=params, running=get_all_running, verbose=verbose)
     if gce_instances:
         gce_table = PrettyTable(table_header)
@@ -296,8 +298,6 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
     else:
         click.secho("Nothing found for selected filters in GCE!", fg="yellow")
 
-<<<<<<< HEAD
-=======
     click.secho("Checking EKS...", fg='green')
     eks_clusters = list_clusters_eks(tags_dict=params, verbose=verbose)
     if eks_clusters:
@@ -316,7 +316,6 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
     else:
         click.secho("Nothing found for selected filters in EKS!", fg="yellow")
 
->>>>>>> 8bd6ee1f... fix(operator-jenkins-pipelines): Generalize test files and create EKS jenkins pipelines
     click.secho("Checking Docker...", fg="green")
     docker_resources = \
         list_resources_docker(tags_dict=params, running=get_all_running, group_as_builder=True, verbose=verbose)

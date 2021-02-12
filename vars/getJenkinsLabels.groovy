@@ -15,11 +15,11 @@ def call(String backend, String aws_region=null) {
                           'aws-eu-central-1': 'aws-sct-builders-eu-central-1',
                           'aws-us-east-1' : 'aws-sct-builders-us-east-1-new',
                           'gce': 'gce-sct-builders',
-                          'k8s-gce-minikube': 'gce-sct-builders',
-                          'k8s-gke': 'gce-sct-builders',
                           'docker': 'sct-builders']
 
-    if (backend == 'aws' && aws_region)
+    def cloud_provider = getCloudProviderFromBackend(backend)
+
+    if (cloud_provider == 'aws' && aws_region)
     {
         println("Finding builder for AWS region: " + aws_region)
         if (aws_region == "random"){
@@ -27,7 +27,7 @@ def call(String backend, String aws_region=null) {
             Collections.shuffle(aws_supported_regions)
             aws_region = aws_supported_regions[0]
         }
-        def cp_region = backend + "-" + aws_region
+        def cp_region = cloud_provider + "-" + aws_region
         println("Checking if we have a label for " + cp_region)
         def label = jenkins_labels.get(cp_region, null)
         if (label != null){
@@ -41,6 +41,6 @@ def call(String backend, String aws_region=null) {
     }
     else
     {
-        return [ "label": jenkins_labels[backend] ]
+        return [ "label": jenkins_labels[cloud_provider] ]
     }
 }

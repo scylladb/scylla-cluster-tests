@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 import elasticsearch
 
@@ -69,3 +70,7 @@ class ES(elasticsearch.Elasticsearch):
         """
         if self.get_doc(index, doc_id, doc_type):
             self.delete(index=index, doc_type=doc_type, id=doc_id)
+
+    def search(self, **kwargs) -> Any:
+        # Needed to make pre-commit happy
+        return super().search(**kwargs)

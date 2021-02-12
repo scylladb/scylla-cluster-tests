@@ -8,8 +8,6 @@ stress_cmd_w: cassandra-stress write no-warmup cl=QUORUM n=2010020 -schema 'keys
 
 gce_instance_type_minikube: 'n1-highmem-16'
 gce_root_disk_size_minikube: 240
-k8s_scylla_cpu_n: 2
-k8s_scylla_mem_gi: 8
 k8s_scylla_disk_gi: 30
 
 n_db_nodes: 3

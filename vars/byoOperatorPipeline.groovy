@@ -16,15 +16,15 @@ def call(Map pipelineParams) {
             SCT_CLUSTER_BACKEND   = 'k8s-gce-minikube'
 		}
         parameters {
-            string(defaultValue: '',
-                   description: '',
-                   name: 'k8s_scylla_operator_docker_image')
             string(defaultValue: 'https://storage.googleapis.com/scylla-operator-charts/latest',
                    description: '',
                    name: 'k8s_scylla_operator_helm_repo')
             string(defaultValue: 'latest',
                    description: '',
                    name: 'k8s_scylla_operator_chart_version')
+            string(defaultValue: '',
+                   description: '',
+                   name: 'k8s_scylla_operator_docker_image')
             string(defaultValue: '4.0.0',
                    description: '',
                    name: 'scylla_version')
@@ -73,12 +73,11 @@ def call(Map pipelineParams) {
                             rm -fv ./latest
 
                             export SCT_CONFIG_FILES=${test_config}
-                            if [[ -n "${params.k8s_scylla_operator_docker_image}" ]]; then
-                                export SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE=${params.k8s_scylla_operator_docker_image}
-                            fi
-                            if [[ -n "${params.k8s_scylla_operator_helm_repo}" ]]; then
+
+                            if [[ -n "${params.k8s_scylla_operator_helm_repo ? params.k8s_scylla_operator_helm_repo : ''}" ]] ; then
                                 export SCT_K8S_SCYLLA_OPERATOR_HELM_REPO=${params.k8s_scylla_operator_helm_repo}
                             fi
+
                             if [[ -n "${params.k8s_scylla_operator_chart_version}" ]]; then
                                 export SCT_K8S_SCYLLA_OPERATOR_CHART_VERSION=${params.k8s_scylla_operator_chart_version}
                             fi

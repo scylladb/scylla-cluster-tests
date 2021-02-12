@@ -1,8 +1,8 @@
 #!groovy
 
 def call(Map params, Integer test_duration, String region) {
+    def cloud_provider = getCloudProviderFromBackend(params.backend)
 
-    def cloud_provider = params.backend.trim().toLowerCase()
     println(params)
     sh """
     #!/bin/bash

@@ -12,7 +12,7 @@ import boto3
 
 from sdcm.keystore import KeyStore
 from sdcm.remote import RemoteCmdRunnerBase
-from sdcm.utils.common import ec2_instance_wait_public_ip, ec2_ami_get_root_device_name
+from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, ec2_ami_get_root_device_name
 from sdcm.utils.get_username import get_username
 from sdcm.utils.prepare_region import AwsRegion
 

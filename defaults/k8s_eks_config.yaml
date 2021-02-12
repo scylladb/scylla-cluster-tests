@@ -1,0 +1,48 @@
+# In order to have EKS Cluster created you need to provide subnets from two different availability zone
+# otherwise it will fail due to the validation.
+# At the same time Scylla Operator can't work properly when nodes within one rack are deployed into
+#  different availability zones.
+# To make it work when node groups are created we pick subnets only from first availability zone
+# As result you need to specify two AZ to make it work, but scylla will occupy resources only from first one
+
+availability_zone: 'a,b'
+instance_provision: 'on_demand'
+instance_type_db: 'i3.4xlarge'
+
+eks_cluster_version: '1.18'
+eks_role_arn: 'arn:aws:iam::797456418907:role/eksServicePolicy'
+eks_service_ipv4_cidr: '172.20.0.0/16'
+eks_vpc_cni_version: 'v1.7.5-eksbuild.1'
+eks_nodegroup_role_arn: 'arn:aws:iam::797456418907:role/helm-test-worker-nodes-NodeInstanceRole-6ACHDYEKNN3I'
+
+scylla_version: '4.2.1'
+scylla_mgmt_agent_version: '2.2.0'
+k8s_cert_manager_version: '1.0.3'
+
+# Currently k8s monitoring does not work properly
+# https://trello.com/c/8Hwc0nUB/3061-eks-k8s-monitoring-stack-health-monitoring-fails
+# enable it when issue is fixed
+k8s_deploy_monitoring: false
+
+k8s_loader_cluster_name: 'sct-loaders'
+
+k8s_scylla_cluster_name: 'sct-cluster'
+k8s_scylla_datacenter: 'us-east1-b'
+k8s_scylla_disk_gi: 500
+k8s_scylla_disk_class: 'local-raid-disks'
+
+# NOTE: If 'k8s_scylla_operator_docker_image' not set then the one from helm chart will be used.
+# To test nightly builds define it like this: 'scylladb/scylla-operator:nightly'
+k8s_scylla_operator_docker_image: ''
+k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/latest'
+k8s_scylla_operator_chart_version: 'latest'
+
+k8s_scylla_rack: 'us-east1'
+
+n_monitor_nodes: 1
+n_loaders: 1
+n_db_nodes: 3
+
+append_scylla_args: ''
+docker_image: ''
+mgmt_docker_image: 'scylladb/scylla-manager:2.2.1'

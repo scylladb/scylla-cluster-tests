@@ -153,7 +153,6 @@
 | **<a href="#user-content-gce_root_disk_type_minikube" name="gce_root_disk_type_minikube">gce_root_disk_type_minikube</a>**  |  | N/A | SCT_GCE_ROOT_DISK_TYPE_MINIKUBE
 | **<a href="#user-content-gce_root_disk_size_minikube" name="gce_root_disk_size_minikube">gce_root_disk_size_minikube</a>**  |  | N/A | SCT_GCE_ROOT_DISK_SIZE_MINIKUBE
 | **<a href="#user-content-gke_cluster_version" name="gke_cluster_version">gke_cluster_version</a>**  |  | N/A | SCT_GKE_CLUSTER_VERSION
-| **<a href="#user-content-gke_cluster_n_nodes" name="gke_cluster_n_nodes">gke_cluster_n_nodes</a>**  |  | N/A | SCT_GKE_CLUSTER_N_NODES
 | **<a href="#user-content-k8s_deploy_monitoring" name="k8s_deploy_monitoring">k8s_deploy_monitoring</a>**  |  | N/A | SCT_K8S_DEPLOY_MONITORING
 | **<a href="#user-content-k8s_scylla_operator_docker_image" name="k8s_scylla_operator_docker_image">k8s_scylla_operator_docker_image</a>**  |  | N/A | SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE
 | **<a href="#user-content-k8s_scylla_operator_helm_repo" name="k8s_scylla_operator_helm_repo">k8s_scylla_operator_helm_repo</a>**  |  | N/A | SCT_K8S_SCYLLA_OPERATOR_HELM_REPO
@@ -161,12 +160,8 @@
 | **<a href="#user-content-k8s_scylla_datacenter" name="k8s_scylla_datacenter">k8s_scylla_datacenter</a>**  |  | N/A | SCT_K8S_SCYLLA_DATACENTER
 | **<a href="#user-content-k8s_scylla_rack" name="k8s_scylla_rack">k8s_scylla_rack</a>**  |  | N/A | SCT_K8S_SCYLLA_RACK
 | **<a href="#user-content-k8s_scylla_cluster_name" name="k8s_scylla_cluster_name">k8s_scylla_cluster_name</a>**  |  | N/A | SCT_K8S_SCYLLA_CLUSTER_NAME
-| **<a href="#user-content-k8s_scylla_cpu_n" name="k8s_scylla_cpu_n">k8s_scylla_cpu_n</a>**  |  | N/A | SCT_K8S_SCYLLA_CPU_N
-| **<a href="#user-content-k8s_scylla_mem_gi" name="k8s_scylla_mem_gi">k8s_scylla_mem_gi</a>**  |  | N/A | SCT_K8S_SCYLLA_MEM_GI
 | **<a href="#user-content-k8s_scylla_disk_gi" name="k8s_scylla_disk_gi">k8s_scylla_disk_gi</a>**  |  | N/A | SCT_K8S_SCYLLA_DISK_GI
 | **<a href="#user-content-k8s_loader_cluster_name" name="k8s_loader_cluster_name">k8s_loader_cluster_name</a>**  |  | N/A | SCT_K8S_LOADER_CLUSTER_NAME
-| **<a href="#user-content-k8s_loader_cpu_n" name="k8s_loader_cpu_n">k8s_loader_cpu_n</a>**  |  | N/A | SCT_K8S_LOADER_CPU_N
-| **<a href="#user-content-k8s_loader_mem_gi" name="k8s_loader_mem_gi">k8s_loader_mem_gi</a>**  |  | N/A | SCT_K8S_LOADER_MEM_GI
 | **<a href="#user-content-minikube_version" name="minikube_version">minikube_version</a>**  |  | N/A | SCT_MINIKUBE_VERSION
 | **<a href="#user-content-k8s_cert_manager_version" name="k8s_cert_manager_version">k8s_cert_manager_version</a>**  |  | N/A | SCT_K8S_CERT_MANAGER_VERSION
 | **<a href="#user-content-mgmt_docker_image" name="mgmt_docker_image">mgmt_docker_image</a>**  | Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1' | N/A | SCT_MGMT_DOCKER_IMAGE

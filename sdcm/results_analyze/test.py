@@ -544,7 +544,7 @@ class TestResultClass(ClassBase):
         es_result = es_result.get('hits', {}).get('hits', None) if es_result else None
         if not es_result:
             return output
-        for es_data in es_result:
+        for es_data in es_result:  # pylint: disable=not-an-iterable
             test = TestResultClass(es_data)
             output.append(test)
         return output

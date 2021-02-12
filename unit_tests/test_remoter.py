@@ -37,6 +37,18 @@ class FakeKluster(KubernetesCluster):
     def __init__(self, k8s_server_url):
         self.k8s_server_url = k8s_server_url
 
+    def deploy(self):
+        pass
+
+    def create_kubectl_config(self):
+        pass
+
+    def create_token_update_thread(self):
+        pass
+
+    def deploy_node_pool(self, pool, wait_till_ready=True) -> None:
+        pass
+
 
 for ip in ['::1', '127.0.0.1']:
     for cmd in [
