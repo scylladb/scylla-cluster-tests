@@ -378,6 +378,14 @@ class ContainerManager:
         docker_client = docker_client or cls.default_docker_client
         return docker_client.containers.get(c_id).name
 
+    @classmethod
+    def pause_container(cls, instance: object, name: str) -> None:
+        cls.get_container(instance, name).pause()
+
+    @classmethod
+    def unpause_container(cls, instance: object, name: str) -> None:
+        cls.get_container(instance, name).unpause()
+
 
 class RemoteDocker:
     def __init__(self, node, image_name, ports=None, command_line="tail -f /dev/null", extra_docker_opts=""):  # pylint: disable=too-many-arguments
