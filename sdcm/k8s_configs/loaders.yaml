@@ -34,11 +34,11 @@ spec:
               name: docker-socket
           resources:
             limits:
-              cpu: ${SCT_K8S_LOADER_CPU_N}
-              memory: ${SCT_K8S_LOADER_MEM_GI}Gi
+              cpu: ${CPU_LIMIT}
+              memory: ${MEMORY_LIMIT}
             requests:
-              cpu: ${SCT_K8S_LOADER_CPU_N}
-              memory: ${SCT_K8S_LOADER_MEM_GI}Gi
+              cpu: ${CPU_LIMIT}
+              memory: ${MEMORY_LIMIT}
           securityContext:
             privileged: true
       volumes:
@@ -51,17 +51,3 @@ spec:
             path: /var/run/docker.sock
             type: Socket
       hostNetwork: true
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                - key: failure-domain.beta.kubernetes.io/zone
-                  operator: In
-                  values:
-                    - ${SCT_K8S_SCYLLA_DATACENTER}
-      tolerations:
-        - key: role
-          operator: Equal
-          value: ${SCT_K8S_LOADER_CLUSTER_NAME}
-          effect: NoSchedule

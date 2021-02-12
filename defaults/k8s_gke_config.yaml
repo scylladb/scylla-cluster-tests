@@ -4,7 +4,6 @@ gce_network: 'qa-vpc'
 gce_image_username: 'scylla-test'
 
 gke_cluster_version: '1.17.15-gke.800'
-gke_cluster_n_nodes: 3
 
 gce_instance_type_db: 'n1-standard-8'
 gce_root_disk_type_db: 'pd-ssd'
@@ -29,13 +28,10 @@ k8s_deploy_monitoring: true
 k8s_scylla_datacenter: 'us-east1-b'
 k8s_scylla_rack: 'us-east1'
 k8s_scylla_cluster_name: 'sct-cluster'
-k8s_scylla_cpu_n: 6
-k8s_scylla_mem_gi: 16
 k8s_scylla_disk_gi: 500
+k8s_scylla_disk_class: 'local-raid-disks'
 
 k8s_loader_cluster_name: 'sct-loaders'
-k8s_loader_cpu_n: 3
-k8s_loader_mem_gi: 12
 gce_instance_type_loader: 'e2-standard-4'
 
 n_loaders: 1

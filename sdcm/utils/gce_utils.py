@@ -55,8 +55,12 @@ class GcloudContextManager:
         self._instance = instance
         self._name = name
         self._container = None
+        self._span_counter = 0
 
     def _span_container(self):
+        self._span_counter += 1
+        if self._container:
+            return
         try:
             self._container = self._instance._get_gcloud_container()  # pylint: disable=protected-access
         except Exception as exc:
@@ -67,6 +71,9 @@ class GcloudContextManager:
             raise exc from None
 
     def _destroy_container(self):
+        self._span_counter -= 1
+        if self._span_counter != 0:
+            return
         try:
             ContainerManager.destroy_container(self._instance, self._name)
         except Exception:  # pylint: disable=broad-except
@@ -103,9 +110,10 @@ class GcloudContainerMixin:
     _gcloud_container_instance = None
 
     def gcloud_container_run_args(self) -> dict:
-        kube_config_path = os.path.expanduser(os.environ.get('KUBECONFIG', '~/.kube/config'))
+        kube_config_path = os.environ.get('KUBECONFIG', '~/.kube/config')
+        kube_config_dir_path = os.path.expanduser(kube_config_path)
         volumes = {
-            os.path.dirname(kube_config_path): {"bind": "/.kube", "mode": "rw"}
+            os.path.dirname(kube_config_dir_path): {"bind": os.path.dirname(kube_config_dir_path), "mode": "rw"},
         }
         return dict(image=GOOGLE_CLOUD_SDK_IMAGE,
                     command="cat",
@@ -113,7 +121,8 @@ class GcloudContainerMixin:
                     name=f"{self.name}-gcloud",
                     volumes=volumes,
                     user=f"{os.getuid()}:{os.getgid()}",
-                    tmpfs={'/.config': f'size=50M,uid={os.getuid()}'}
+                    tmpfs={'/.config': f'size=50M,uid={os.getuid()}'},
+                    environment={'KUBECONFIG': kube_config_path},
                     )
 
     def _get_gcloud_container(self) -> Container:
@@ -141,34 +150,3 @@ class GcloudContainerMixin:
     @property
     def gcloud(self) -> GcloudContextManager:
         return GcloudContextManager(self, 'gcloud')
-
-
-class GcloudTokenUpdateThread(threading.Thread):
-    update_period = 1800
-
-    def __init__(self, gcloud: GcloudContextManager, config_path: str, token_min_duration: int = 60):
-        self._gcloud = gcloud
-        self._config_path = config_path
-        self._token_min_duration = token_min_duration
-        self._termination_event = threading.Event()
-        super().__init__(daemon=True)
-
-    def run(self):
-        wait_time = 0.01
-        while not self._termination_event.wait(wait_time):
-            try:
-                gcloud_config = self._gcloud.run(
-                    f'config config-helper --min-expiry={self._token_min_duration * 60} --format=json')
-                with open(self._config_path, 'w') as gcloud_config_file:
-                    gcloud_config_file.write(gcloud_config)
-                    gcloud_config_file.flush()
-                LOGGER.debug('Gcloud token has been updated and stored at %s', self._config_path)
-            except Exception as exc:  # pylint: disable=broad-except
-                LOGGER.debug('Failed to read gcloud config: %s', exc)
-                wait_time = 5
-            else:
-                wait_time = self.update_period
-
-    def stop(self, timeout=None):
-        self._termination_event.set()
-        self.join(timeout)

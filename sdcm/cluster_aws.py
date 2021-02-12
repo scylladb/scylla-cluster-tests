@@ -39,7 +39,8 @@ from sdcm import ec2_client, cluster
 from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
 from sdcm.cluster import INSTANCE_PROVISION_ON_DEMAND
 from sdcm.ec2_client import CreateSpotInstancesError
-from sdcm.utils.common import list_instances_aws, get_ami_tags, ec2_instance_wait_public_ip, MAX_SPOT_DURATION_TIME
+from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
+from sdcm.utils.common import list_instances_aws, get_ami_tags, MAX_SPOT_DURATION_TIME
 from sdcm.utils.decorators import retrying
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_events.filters import DbEventsFilter
@@ -59,10 +60,6 @@ LOCAL_CMD_RUNNER = LocalCmdRunner()
 # pylint: disable=too-many-lines
 
 
-def _tags_as_ec2_tags(tags: Dict[str, str]) -> List[Dict[str, str]]:
-    return [{"Key": key, "Value": value} for key, value in tags.items()]
-
-
 class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attributes,abstract-method,
 
     """
@@ -76,7 +73,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                  cluster_prefix='cluster',
                  node_prefix='node', n_nodes=10, params=None, node_type=None, extra_network_interface=False):
         # pylint: disable=too-many-locals
-        region_names = params.get('region_name').split()
+        region_names = params.region_names
         if len(credentials) > 1 or len(region_names) > 1:
             assert len(credentials) == len(region_names)
         for idx, _ in enumerate(region_names):
@@ -495,7 +492,7 @@ class AWSNode(cluster.BaseNode):
                 # first we need to configure the both networks so we'll have public ip
                 self.allocate_and_attach_elastic_ip(self.parent_cluster, self.dc_idx)
                 resources_to_tag.append(self.eip_allocation_id)
-            self._ec2_service.create_tags(Resources=resources_to_tag, Tags=_tags_as_ec2_tags(self.tags))
+            self._ec2_service.create_tags(Resources=resources_to_tag, Tags=tags_as_ec2_tags(self.tags))
 
         self._wait_public_ip()
 

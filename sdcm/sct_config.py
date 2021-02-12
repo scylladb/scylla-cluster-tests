@@ -28,9 +28,11 @@ from distutils.util import strtobool  # pylint: disable=import-error,no-name-in-
 import anyconfig
 
 from sdcm import sct_abs_path
+from sdcm.cluster_k8s import eks, gke
 from sdcm.utils import alternator
 from sdcm.utils.common import find_scylla_repo, get_scylla_ami_versions, get_branched_ami, get_ami_tags, \
     ami_built_by_scylla, MAX_SPOT_DURATION_TIME
+from sdcm.utils.k8s import convert_cpu_units_to_k8s_value, convert_memory_units_to_k8s_value
 from sdcm.utils.version_utils import get_branch_version, get_branch_version_for_multiple_repositories, \
     get_scylla_docker_repo_from_version, resolve_latest_repo_symlink
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
@@ -87,7 +89,8 @@ class SCTConfiguration(dict):
     """
     Class the hold the SCT configuration
     """
-    available_backends = ['aws', 'gce', 'docker', 'baremetal', 'aws-siren', 'k8s-gce-minikube', 'k8s-gke', 'gce-siren']
+    available_backends = [
+        'aws', 'gce', 'docker', 'baremetal', 'aws-siren', 'k8s-gce-minikube', 'k8s-gke', 'gce-siren', 'k8s-eks']
 
     config_options = [
         dict(name="config_files", env="SCT_CONFIG_FILES", type=str_or_list,
@@ -625,11 +628,25 @@ class SCTConfiguration(dict):
         dict(name="gce_root_disk_size_minikube", env="SCT_GCE_ROOT_DISK_SIZE_MINIKUBE", type=int,
              help=""),
 
-        # k8s-gke options
-        dict(name="gke_cluster_version", env="SCT_GKE_CLUSTER_VERSION", type=str,
+        # k8s-eks options
+
+        dict(name="eks_service_ipv4_cidr", env="SCT_EKS_SERVICE_IPV4_CIDR", type=str,
              help=""),
 
-        dict(name="gke_cluster_n_nodes", env="SCT_GKE_CLUSTER_N_NODES", type=int,
+        dict(name="eks_vpc_cni_version", env="SCT_EKS_VPC_CNI_VERSION", type=str,
+             help=""),
+
+        dict(name="eks_role_arn", env="SCT_EKS_ROLE_ARN", type=str,
+             help=""),
+
+        dict(name="eks_cluster_version", env="SCT_EKS_CLUSTER_VERSION", type=str,
+             help=""),
+
+        dict(name="eks_nodegroup_role_arn", env="SCT_EKS_NODEGROUP_ROLE_ARN", type=str,
+             help=""),
+
+        # k8s-gke options
+        dict(name="gke_cluster_version", env="SCT_GKE_CLUSTER_VERSION", type=str,
              help=""),
 
         # k8s options
@@ -657,22 +674,13 @@ class SCTConfiguration(dict):
         dict(name="k8s_scylla_cluster_name", env="SCT_K8S_SCYLLA_CLUSTER_NAME", type=str,
              help=""),
 
-        dict(name="k8s_scylla_cpu_n", env="SCT_K8S_SCYLLA_CPU_N", type=int,
-             help=""),
-
-        dict(name="k8s_scylla_mem_gi", env="SCT_K8S_SCYLLA_MEM_GI", type=int,
-             help=""),
-
         dict(name="k8s_scylla_disk_gi", env="SCT_K8S_SCYLLA_DISK_GI", type=int,
              help=""),
 
+        dict(name="k8s_scylla_disk_class", env="SCT_K8S_SCYLLA_DISK_CLASS", type=str,
+             help=""),
+
         dict(name="k8s_loader_cluster_name", env="SCT_K8S_LOADER_CLUSTER_NAME", type=str,
-             help=""),
-
-        dict(name="k8s_loader_cpu_n", env="SCT_K8S_LOADER_CPU_N", type=int,
-             help=""),
-
-        dict(name="k8s_loader_mem_gi", env="SCT_K8S_LOADER_MEM_GI", type=int,
              help=""),
 
         dict(name="minikube_version", env="SCT_MINIKUBE_VERSION", type=str,
@@ -1121,19 +1129,28 @@ class SCTConfiguration(dict):
         'k8s-gce-minikube': ['gce_image_minikube', 'gce_instance_type_minikube', 'gce_root_disk_type_minikube',
                              'gce_root_disk_size_minikube', 'user_credentials_path', 'scylla_version',
                              'scylla_mgmt_agent_version', 'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter',
-                             'k8s_scylla_rack', 'k8s_scylla_cluster_name', 'k8s_scylla_cpu_n', 'k8s_scylla_mem_gi',
+                             'k8s_scylla_rack', 'k8s_scylla_cluster_name',
                              'k8s_scylla_disk_gi', 'gce_image', 'gce_instance_type_loader', 'gce_root_disk_type_loader',
                              'gce_n_local_ssd_disk_loader', 'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
                              'gce_root_disk_size_monitor', 'gce_n_local_ssd_disk_monitor', 'minikube_version',
                              'mgmt_docker_image'],
 
-        'k8s-gke': ['gke_cluster_version', 'gke_cluster_n_nodes', 'gce_instance_type_db', 'gce_root_disk_type_db',
+        'k8s-gke': ['gke_cluster_version', 'gce_instance_type_db', 'gce_root_disk_type_db',
                     'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db', 'user_credentials_path', 'scylla_version',
                     'scylla_mgmt_agent_version', 'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter',
-                    'k8s_scylla_rack', 'k8s_scylla_cluster_name', 'k8s_scylla_cpu_n', 'k8s_scylla_mem_gi',
-                    'k8s_loader_cluster_name', 'k8s_loader_cpu_n', 'k8s_loader_mem_gi', 'gce_instance_type_loader',
+                    'k8s_scylla_rack', 'k8s_scylla_cluster_name',
+                    'k8s_loader_cluster_name', 'gce_instance_type_loader',
                     'gce_image_monitor', 'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
                     'gce_root_disk_size_monitor', 'gce_n_local_ssd_disk_monitor', 'mgmt_docker_image'],
+
+        'k8s-eks': ['instance_type_loader', 'instance_type_monitor', 'instance_type_db', 'region_name',
+                    'ami_id_db_scylla', 'ami_id_monitor', 'aws_root_disk_size_monitor',
+                    'aws_root_disk_name_monitor', 'ami_db_scylla_user', 'ami_monitor_user', 'user_credentials_path',
+                    'scylla_version', 'scylla_mgmt_agent_version', 'k8s_scylla_operator_docker_image',
+                    'k8s_scylla_datacenter', 'k8s_scylla_rack', 'k8s_scylla_cluster_name',
+                    'k8s_loader_cluster_name',
+                    'mgmt_docker_image', 'eks_service_ipv4_cidr', 'eks_vpc_cni_version', 'eks_role_arn',
+                    'eks_cluster_version', 'eks_nodegroup_role_arn'],
     }
 
     defaults_config_files = {
@@ -1145,6 +1162,7 @@ class SCTConfiguration(dict):
         "gce-siren": [sct_abs_path('defaults/gce_config.yaml')],
         "k8s-gce-minikube": [sct_abs_path('defaults/k8s_gce_minikube_config.yaml')],
         "k8s-gke": [sct_abs_path('defaults/k8s_gke_config.yaml')],
+        "k8s-eks": [sct_abs_path('defaults/aws_config.yaml'), sct_abs_path('defaults/k8s_eks_config.yaml')],
     }
 
     multi_region_params = [
@@ -1178,13 +1196,13 @@ class SCTConfiguration(dict):
             del self['regions_data']
 
         # 2.2) load the region data
-        region_names = (self.get('region_name') or '').split()
-        region_names = env.get('region_name', region_names)
 
         cluster_backend = self.get('cluster_backend')
         cluster_backend = env.get('cluster_backend', cluster_backend)
 
-        if 'aws' in cluster_backend:
+        region_names = self.region_names
+
+        if cluster_backend in ['aws', 'k8s-eks']:
             for region in region_names:
                 for key, value in regions_data[region].items():
                     if key not in self.keys():
@@ -1201,7 +1219,7 @@ class SCTConfiguration(dict):
 
         # 5) assume multi dc by n_db_nodes set size
         if 'aws' in cluster_backend:
-            num_of_regions = len((self.get('region_name')).split())
+            num_of_regions = len(region_names)
             num_of_db_nodes_sets = len(str(self.get('n_db_nodes')).split(' '))
             if num_of_db_nodes_sets > num_of_regions:
                 for region in list(regions_data.keys())[:num_of_db_nodes_sets]:
@@ -1224,7 +1242,7 @@ class SCTConfiguration(dict):
                 self.log.info("Assume that Scylla Docker image has repo file pre-installed.")
             elif not self.get('ami_id_db_scylla') and self.get('cluster_backend') == 'aws':
                 ami_list = []
-                for region in self.get('region_name').split():
+                for region in region_names:
                     if ':' in scylla_version:
                         amis = get_branched_ami(scylla_version, region_name=region)
                         ami_list.append(amis[0].id)
@@ -1258,7 +1276,7 @@ class SCTConfiguration(dict):
         if oracle_scylla_version:
             if not self.get('ami_id_db_oracle') and self.get('cluster_backend') == 'aws':
                 ami_list = []
-                for region in self.get('region_name').split():
+                for region in region_names:
                     if ':' in oracle_scylla_version:
                         amis = get_branched_ami(oracle_scylla_version, region_name=region)
                         ami_list.append(amis[0].id)
@@ -1327,6 +1345,24 @@ class SCTConfiguration(dict):
 
     def log_config(self):
         self.log.info(self.dump_config())
+
+    @property
+    def region_names(self) -> List[str]:
+        region_names = self._env.get('region_name')
+        if region_names is None:
+            region_names = self.get('region_name')
+        if region_names is None:
+            region_names = ''
+        if isinstance(region_names, str):
+            region_names = region_names.split()
+        output = []
+        for region_name in region_names:
+            output.extend(region_name.split())
+        return output
+
+    @property
+    def _env(self) -> dict:
+        return self._load_environment_variables()
 
     @classmethod
     def get_config_option(cls, name):
@@ -1477,7 +1513,7 @@ class SCTConfiguration(dict):
             if not all(region_count['region_name'] == x for x in region_count.values()):
                 raise ValueError("not all multi region values are equal: \n\t{}".format(region_count))
 
-        if 'extra_network_interface' in self and len(self.get('region_name').split()) >= 2:
+        if 'extra_network_interface' in self and len(self.region_names) >= 2:
             raise ValueError("extra_network_interface isn't supported for multi region use cases")
 
         # validate seeds number
@@ -1508,7 +1544,7 @@ class SCTConfiguration(dict):
         # verify that the AMIs used all have 'user_data_format_version' tag
         if 'aws' in backend:
             ami_id_db_scylla = self.get('ami_id_db_scylla').split()
-            region_names = self.get('region_name').split()
+            region_names = self.region_names
             ami_id_db_oracle = self.get('ami_id_db_oracle').split()
 
             for ami_list in [ami_id_db_scylla, ami_id_db_oracle]:

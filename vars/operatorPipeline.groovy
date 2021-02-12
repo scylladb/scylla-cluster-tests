@@ -2,7 +2,7 @@
 
 def call(Map pipelineParams) {
 
-    def builder = getJenkinsLabels('gce', null)
+    def builder = getJenkinsLabels(pipelineParams.backend, pipelineParams.aws_region)
 
     pipeline {
         agent {
@@ -16,18 +16,18 @@ def call(Map pipelineParams) {
             SCT_CLUSTER_BACKEND   = "${pipelineParams.get('backend', params.backend)}"
 		}
         parameters {
-            choice(choices: ['k8s-gke', 'k8s-gce-minikube'],
+            choice(choices: ['k8s-gke', 'k8s-eks', 'k8s-gce-minikube'],
                    description: '',
                    name: 'backend')
-            string(defaultValue: '',
-                   description: '',
-                   name: 'k8s_scylla_operator_docker_image')
             string(defaultValue: 'https://storage.googleapis.com/scylla-operator-charts/latest',
                    description: '',
                    name: 'k8s_scylla_operator_helm_repo')
             string(defaultValue: 'latest',
                    description: '',
                    name: 'k8s_scylla_operator_chart_version')
+            string(defaultValue: '',
+                   description: '',
+                   name: 'k8s_scylla_operator_docker_image')
             string(defaultValue: '',
                    description: '',
                    name: 'scylla_version')
@@ -68,19 +68,19 @@ def call(Map pipelineParams) {
                             rm -fv ./latest
 
                             export SCT_CONFIG_FILES=${pipelineParams.test_config}
-                            if [[ -n "${params.k8s_scylla_operator_docker_image}" ]]; then
+                            if [[ -n "${params.k8s_scylla_operator_docker_image ? params.k8s_scylla_operator_docker_image : ''}" ]] ; then
                                 export SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE=${params.k8s_scylla_operator_docker_image}
                             fi
-                            if [[ -n "${params.k8s_scylla_operator_helm_repo}" ]]; then
+                            if [[ -n "${params.k8s_scylla_operator_helm_repo ? params.k8s_scylla_operator_helm_repo : ''}" ]] ; then
                                 export SCT_K8S_SCYLLA_OPERATOR_HELM_REPO=${params.k8s_scylla_operator_helm_repo}
                             fi
-                            if [[ -n "${params.k8s_scylla_operator_chart_version}" ]]; then
+                            if [[ -n "${params.k8s_scylla_operator_chart_version ? params.k8s_scylla_operator_chart_version : ''}" ]] ; then
                                 export SCT_K8S_SCYLLA_OPERATOR_CHART_VERSION=${params.k8s_scylla_operator_chart_version}
                             fi
-                            if [[ -n "${params.scylla_version}" ]]; then
+                            if [[ -n "${params.scylla_version ? params.scylla_version : ''}" ]] ; then
                                 export SCT_SCYLLA_VERSION=${params.scylla_version}
                             fi
-                            if [[ -n "${params.scylla_mgmt_agent_version}" ]]; then
+                            if [[ -n "${params.scylla_mgmt_agent_version ? params.scylla_mgmt_agent_version : ''}" ]] ; then
                                 export SCT_SCYLLA_MGMT_AGENT_VERSION=${params.scylla_mgmt_agent_version}
                             fi
 

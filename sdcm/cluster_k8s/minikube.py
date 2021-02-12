@@ -18,19 +18,18 @@ from functools import cached_property
 
 from invoke.exceptions import UnexpectedExit
 
-from sdcm import sct_abs_path, cluster, cluster_gce
+from sdcm import cluster, cluster_gce
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.cluster_k8s import KubernetesCluster, BaseScyllaPodContainer, ScyllaPodCluster
 from sdcm.cluster_k8s.iptables import IptablesPodPortsRedirectMixin, IptablesClusterOpsMixin
 from sdcm.cluster_gce import MonitorSetGCE
-from sdcm.utils.k8s import KubernetesOps, K8S_CONFIGS_PATH_IN_CONTAINER
+from sdcm.utils.k8s import KubernetesOps
 from sdcm.utils.common import get_free_port, wait_for_port
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import ContainerManager
 
 
-SCYLLA_CLUSTER_CONFIG = f"{K8S_CONFIGS_PATH_IN_CONTAINER}/minikube-cluster-chart-values.yaml"
 KUBECTL_PROXY_PORT = 8001
 KUBECTL_PROXY_CONTAINER = "auto_ssh:kubectl_proxy"
 SCYLLA_POD_EXPOSED_PORTS = [3000, 9042, 9180, ]
@@ -172,6 +171,18 @@ class MinikubeCluster(KubernetesCluster):
         LOGGER.info("Pull `%s' to Minikube' Docker environment", image)
         self.remoter.run(f"docker pull -q {image}")
 
+    def deploy(self):
+        pass
+
+    def create_kubectl_config(self):
+        pass
+
+    def create_token_update_thread(self):
+        pass
+
+    def deploy_node_pool(self, pool, wait_till_ready=True) -> None:
+        raise NotImplementedError("Not supported in Minikube")
+
 
 class GceMinikubeCluster(MinikubeCluster, cluster_gce.GCECluster):
     def __init__(self, minikube_version, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,  # pylint: disable=too-many-arguments
@@ -182,6 +193,7 @@ class GceMinikubeCluster(MinikubeCluster, cluster_gce.GCECluster):
 
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, "k8s-minikube")
         node_prefix = cluster.prepend_user_prefix(user_prefix, "node")
+        # pylint: disable=unexpected-keyword-arg,no-value-for-parameter
         super().__init__(gce_image=gce_image,
                          gce_image_type=gce_image_type,
                          gce_image_size=gce_image_size,

@@ -78,6 +78,19 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('test_name', '')}",
                    description: 'Name of the test to run',
                    name: 'test_name')
+
+            string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_helm_repo', '')}",
+                   description: 'Scylla Operator helm repo',
+                   name: 'k8s_scylla_operator_helm_repo')
+
+            string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_chart_version', '')}",
+                   description: 'Scylla Operator helm chart version',
+                   name: 'k8s_scylla_operator_chart_version')
+
+            string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_docker_image', '')}",
+                   description: 'Scylla Operator docker image',
+                   name: 'k8s_scylla_operator_docker_image')
+
         }
         options {
             timestamps()

@@ -8,7 +8,6 @@ from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 from botocore.exceptions import ClientError, NoRegionError
 
 from sdcm.utils.decorators import retrying
-from sdcm.utils.pricing import AWSPricing
 
 LOGGER = logging.getLogger(__name__)
 
@@ -140,6 +139,7 @@ class EC2ClientWarpper():
         :return: spot bid price
         """
         LOGGER.info('Calculating spot price based on OnDemand price')
+        from sdcm.utils.pricing import AWSPricing
         aws_pricing = AWSPricing()
         on_demand_price = float(aws_pricing.get_on_demand_instance_price(self.region_name, instance_type))
 

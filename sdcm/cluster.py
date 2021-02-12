@@ -2844,7 +2844,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.log.info("Waiting for Scylla Machine Image setup to finish...")
         wait.wait_for(self.is_machine_image_configured, step=10, timeout=300)
 
-    def get_sysctl_output(self) -> dict[str, str]:
+    def get_sysctl_output(self) -> Dict[str, str]:
         properties = {}
         result = self.remoter.sudo("sysctl -a", ignore_status=True)
 
@@ -4517,7 +4517,7 @@ class BaseLoaderSet():
 
 class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-instance-attributes
     # This is a Mixin for monitoring cluster and should not be inherited
-
+    DB_NODES_IP_ADDRESS = 'ip_address'
     json_file_params_for_replace = {"$test_name": get_test_name()}
 
     def __init__(self, targets, params):
@@ -4776,7 +4776,8 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             with open(local_template_tmp) as output_file:
                 templ_yaml = yaml.safe_load(output_file)
                 self.log.debug("Configs %s" % templ_yaml)
-            loader_targets_list = ["[%s]:9103" % n.ip_address for n in self.targets["loaders"].nodes]
+            loader_targets_list = ["[%s]:9103" % getattr(node, self.DB_NODES_IP_ADDRESS)
+                                   for node in self.targets["loaders"].nodes]
 
             # remove those jobs if exists, for support of 'reuse_cluster: true'
             def remove_sct_metrics(metric):
@@ -4797,7 +4798,8 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                                            static_configs=[dict(targets=[cloud_prom_host])]))
 
             if self.params.get('gemini_cmd'):
-                gemini_loader_targets_list = ["%s:2112" % n.ip_address for n in self.targets["loaders"].nodes]
+                gemini_loader_targets_list = ["%s:2112" % getattr(node, self.DB_NODES_IP_ADDRESS)
+                                              for node in self.targets["loaders"].nodes]
                 scrape_configs.append(dict(job_name="gemini_metrics", honor_labels=True,
                                            static_configs=[dict(targets=gemini_loader_targets_list)]))
 
@@ -4872,13 +4874,11 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         for node in self.nodes:
             cluster_backend = self.params.get("cluster_backend")
             monitoring_targets = []
-            attr_name = f"{'public_' if cluster_backend == 'k8s-gke' else ''}ip_address"
             for db_node in self.targets["db_cluster"].nodes:
-                monitoring_targets.append(f"[{getattr(db_node, attr_name)}]:9180")
+                monitoring_targets.append(f"[{getattr(db_node, self.DB_NODES_IP_ADDRESS)}]:9180")
             monitoring_targets = " ".join(monitoring_targets)
             if self.params.get("ip_ssh_connections") == "ipv6":
                 monitoring_targets = monitoring_targets.replace("[", "").replace("]", "")
-
             node.remoter.sudo(shell_script_cmd(f"""\
                 cd {self.monitor_install_path}
                 mkdir -p {self.monitoring_conf_dir}
@@ -4930,7 +4930,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             -D "{labels}" \
             -s `realpath "{self.monitoring_conf_dir}/scylla_servers.yml"` \
             -n `realpath "{self.monitoring_conf_dir}/node_exporter_servers.yml"` \
-            {scylla_manager_servers_arg}
+            {scylla_manager_servers_arg} \
             -d `realpath "{self.monitoring_data_dir}"` -l -v master,{self.monitoring_version} -b "-web.enable-admin-api"
         """)
         node.remoter.run("bash -ce '%s'" % run_script, verbose=True)
