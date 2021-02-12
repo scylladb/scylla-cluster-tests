@@ -40,6 +40,7 @@ from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_st
     update_certificates, reach_enospc_on_node, clean_enospc_on_node, parse_nodetool_listsnapshots
 from sdcm.utils import cdc
 from sdcm.utils.decorators import retrying, latency_calculator_decorator, timeout
+from sdcm.utils.docker_utils import ContainerManager
 from sdcm.log import SDCMAdapter
 from sdcm.keystore import KeyStore
 from sdcm.prometheus import nemesis_metrics_obj
@@ -597,6 +598,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # or scylla-server was stopped gracefully.
             self.target_node.stop_scylla_server(verify_up=False, verify_down=True, ignore_status=True)
             self.target_node.start_scylla_server(verify_up=True, verify_down=False)
+
+    def disrupt_ldap_connection_toggle(self):
+        self._set_current_disruption('Disconnect and Reconnect LDAP connection')
+        if not self.cluster.params.get('use_ldap_authorization'):
+            raise UnsupportedNemesis('Cluster is not configured to run with LDAP authorization, hence skipping')
+
+        self.log.info('Will now pause the LDAP container')
+        ContainerManager.pause_container(self.tester.localhost, 'ldap')
+        self.log.info('Will now sleep 180 seconds')
+        time.sleep(180)
+        self.log.info('Will now resume the LDAP container')
+        ContainerManager.unpause_container(self.tester.localhost, 'ldap')
+        self.log.info('finished with nemesis')
 
     @retrying(n=3, sleep_time=60, allowed_exceptions=(NodeSetupFailed, NodeSetupTimeout))
     def _add_and_init_new_cluster_node(self, old_node_ip=None, timeout=HOUR_IN_SEC * 6, rack=0):
@@ -2874,6 +2888,14 @@ class SslHotReloadingNemesis(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_hot_reloading_internode_certificate()
+
+
+class PauseLdapNemesis(Nemesis):
+    disruptive = False
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_ldap_connection_toggle()
 
 
 class NoOpMonkey(Nemesis):
