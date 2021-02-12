@@ -384,6 +384,14 @@ class ContainerManager:
         docker_client = docker_client or cls.default_docker_client
         return docker_client.containers.get(c_id).name
 
+    @classmethod
+    def pause_container(cls, instance: object, name: str) -> None:
+        cls.get_container(instance, name).pause()
+
+    @classmethod
+    def unpause_container(cls, instance: object, name: str) -> None:
+        cls.get_container(instance, name).unpause()
+
 
 def running_in_docker():
     path = '/proc/self/cgroup'
