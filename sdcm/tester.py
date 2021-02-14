@@ -305,7 +305,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             aws_access_key_id=self.params.get("alternator_access_key_id"),
             aws_secret_access_key=self.params.get("alternator_secret_access_key"))
         if self.params.get("use_ldap_authorization"):
-            Setup.configure_ldap(self.localhost, use_ssl=False)
+            self.configure_ldap(node=self.localhost, use_ssl=False)
             ldap_role = LDAP_ROLE
             ldap_users = LDAP_USERS.copy()
             ldap_address = list(Setup.LDAP_ADDRESS).copy()
@@ -321,6 +321,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         start_events_device(self.logdir)
         time.sleep(0.5)
         InfoEvent('TEST_START test_id=%s' % Setup.test_id())
+
+    @staticmethod
+    def configure_ldap(node, use_ssl=False):
+        Setup.configure_ldap(node=node, use_ssl=use_ssl)
 
     def _init_localhost(self):
         return LocalHost(user_prefix=self.params.get("user_prefix", None), test_id=Setup.test_id())
