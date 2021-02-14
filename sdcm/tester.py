@@ -286,7 +286,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
         if self.params.get("use_ldap_authorization"):
-            Setup.configure_ldap(self.localhost, use_ssl=False)
+            self.configure_ldap(node=self.localhost, use_ssl=False)
             ldap_role = LDAP_ROLE
             ldap_users = LDAP_USERS.copy()
             ldap_address = list(Setup.LDAP_ADDRESS).copy()
@@ -302,6 +302,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         start_events_device(log_dir=self.logdir, _registry=self.events_processes_registry)
         time.sleep(0.5)
         InfoEvent(message=f"TEST_START test_id={Setup.test_id()}").publish()
+
+    @staticmethod
+    def configure_ldap(node, use_ssl=False):
+        Setup.configure_ldap(node=node, use_ssl=use_ssl)
 
     def _init_test_timeout_thread(self) -> threading.Timer:
         start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
