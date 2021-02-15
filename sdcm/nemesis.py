@@ -459,11 +459,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.wait_jmx_up()
         self.cluster.wait_for_nodes_up_and_normal(nodes=[self.target_node])
 
-    def disrupt_rolling_restart_cluster(self):
+    def disrupt_rolling_restart_cluster(self, random=False):
         self._set_current_disruption('RollingRestartCluster %s' % self.target_node)
-        if not self._is_it_on_kubernetes():
-            raise UnsupportedNemesis('RollingRestartCluster is supported only for kubernetes backends')
-        self.cluster.rollout_restart()
+        self.cluster.restart_scylla(random=random)
 
     def disrupt_restart_with_resharding(self):
         self._set_current_disruption('RestartNodeWithResharding %s' % self.target_node)
@@ -3557,7 +3555,16 @@ class ClusterRollingRestart(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self.disrupt_rolling_restart_cluster()
+        self.disrupt_rolling_restart_cluster(random=False)
+
+
+class ClusterRollingRestartRandomOrder(Nemesis):
+    disruptive = True
+    kubernetes = True
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_rolling_restart_cluster(random=True)
 
 
 class TopPartitions(Nemesis):
