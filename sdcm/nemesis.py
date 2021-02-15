@@ -461,9 +461,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_rolling_restart_cluster(self):
         self._set_current_disruption('RollingRestartCluster %s' % self.target_node)
-        if not self._is_it_on_kubernetes():
-            raise UnsupportedNemesis('RollingRestartCluster is supported only for kubernetes backends')
-        self.cluster.rollout_restart()
+        self.cluster.restart_scylla()
 
     def disrupt_restart_with_resharding(self):
         self._set_current_disruption('RestartNodeWithResharding %s' % self.target_node)
