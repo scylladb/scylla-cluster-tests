@@ -45,7 +45,7 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
         return stress_cmd
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
-        docker = RemoteDocker(loader, "scylladb/hydra-loaders:kcl-jdk8-20201229",
+        docker = RemoteDocker(loader, "scylladb/hydra-loaders:kcl-jdk8-20210215",
                               extra_docker_opts=f'--label shell_marker={self.shell_marker}')
         stress_cmd = self.build_stress_cmd()
 
