@@ -214,14 +214,19 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
         dns_options = ""
+        cpu_options = ""
         if self.params.get('alternator_use_dns_routing'):
             dns = RemoteDocker(loader, "scylladb/hydra-loaders:alternator-dns-0.2",
                                command_line=f'python3 /dns_server.py {self.db_node_to_query(loader)} '
                                             f'{self.params.get("alternator_port")}',
                                extra_docker_opts=f'--label shell_marker={self.shell_marker}')
             dns_options += f'--dns {dns.internal_ip_address} --dns-option use-vc'
+
+        if self.stress_num > 1:
+            cpu_options = '--cpuset-cpus="{cpu_idx}"'
+
         docker = RemoteDocker(loader, "scylladb/hydra-loaders:ycsb-jdk8-20200326",
-                              extra_docker_opts=f'{dns_options} --label shell_marker={self.shell_marker}')
+                              extra_docker_opts=f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker}')
         self.copy_template(docker)
         stress_cmd = self.build_stress_cmd()
 
@@ -237,12 +242,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
 
         LOGGER.debug("running: %s", stress_cmd)
 
-        if self.stress_num > 1:
-            node_cmd = 'taskset -c %s bash -c "%s"' % (cpu_idx, stress_cmd)
-        else:
-            node_cmd = stress_cmd
-
-        node_cmd = 'cd /YCSB && {}'.format(node_cmd)
+        node_cmd = 'cd /YCSB && {}'.format(stress_cmd)
 
         YcsbStressEvent.start(node=loader, stress_cmd=stress_cmd).publish()
 
