@@ -2202,12 +2202,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                                       es_doc_type=self._es_doc_type,
                                                                       send_email=self.params.get('send_email'),
                                                                       email_recipients=self.params.get(
-                                                                          'email_recipients'))
+                                                                          'email_recipients'),
+                                                                      events=get_events_grouped_by_category(_registry=self.events_processes_registry))
         if self.db_cluster.latency_results and self.create_stats:
             self.db_cluster.latency_results = calculate_latency(self.db_cluster.latency_results)
             self.log.debug(f'collected latency are: {self.db_cluster.latency_results}')
             self.update({"latency_during_ops": self.db_cluster.latency_results})
-            self.update({"events": get_events_grouped_by_category(_registry=self.events_processes_registry)})
 
             self.update_test_details()
             results_analyzer.check_regression(test_id=self._test_id, data=self.db_cluster.latency_results)
@@ -2215,7 +2215,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def check_regression(self):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
                                                       send_email=self.params.get('send_email'),
-                                                      email_recipients=self.params.get('email_recipients'))
+                                                      email_recipients=self.params.get('email_recipients'),
+                                                      events=get_events_grouped_by_category(_registry=self.events_processes_registry))
         is_gce = bool(self.params.get('cluster_backend') == 'gce')
         try:
             results_analyzer.check_regression(self._test_id, is_gce,
@@ -2227,7 +2228,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def check_regression_with_baseline(self, subtest_baseline):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
                                                       send_email=self.params.get('send_email'),
-                                                      email_recipients=self.params.get('email_recipients'))
+                                                      email_recipients=self.params.get('email_recipients'),
+                                                      events=get_events_grouped_by_category(_registry=self.events_processes_registry))
         is_gce = bool(self.params.get('cluster_backend') == 'gce')
         try:
             results_analyzer.check_regression_with_subtest_baseline(self._test_id,
@@ -2240,7 +2242,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def check_regression_multi_baseline(self, subtests_info=None, metrics=None, email_subject=None):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
                                                       send_email=self.params.get('send_email'),
-                                                      email_recipients=self.params.get('email_recipients'))
+                                                      email_recipients=self.params.get('email_recipients'),
+                                                      events=get_events_grouped_by_category(_registry=self.events_processes_registry))
         if email_subject is None:
             email_subject = 'Performance Regression Compare Results - {test.test_name} - {test.software.scylla_server_any.version.as_string}'
             email_postfix = self.params.get('email_subject_postfix')
@@ -2258,7 +2261,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def check_specified_stats_regression(self, stats):
         perf_analyzer = SpecifiedStatsPerformanceAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
                                                           send_email=self.params.get('send_email'),
-                                                          email_recipients=self.params.get('email_recipients'))
+                                                          email_recipients=self.params.get('email_recipients'),
+                                                          events=get_events_grouped_by_category(_registry=self.events_processes_registry))
         try:
             perf_analyzer.check_regression(self._test_id, stats)
         except Exception as ex:  # pylint: disable=broad-except

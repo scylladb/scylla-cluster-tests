@@ -140,7 +140,26 @@
 {% block body %}
 {% endblock %}
 
-{% block links %}
+{%- block events -%}
+    <div>
+        {% if last_events %}
+            <h3>
+                <span>Last events by severity</span>
+            </h3>
+            {% for severity, events in last_events.items() %}
+                <h4>
+                {{ severity }} - [{{ events_summary.get(severity, 0) }}]
+                </h4>
+                {% for event in events %}
+                    <pre>{{event}}</pre>
+                    <hr>
+                {% endfor %}
+            {% endfor %}
+        {% endif %}
+    </div>
+{%- endblock -%}
+
+{%- block links -%}
     {% if kibana_url or job_url or grafana_screenshots or grafana_snapshots %}
     <h3>Links:</h3>
     <ul>
@@ -180,7 +199,7 @@
             {% endfor %}
         {% endif %}
     {% endif %}
-{% endblock %}
+{%- endblock -%}
 
 </body>
 </html>
