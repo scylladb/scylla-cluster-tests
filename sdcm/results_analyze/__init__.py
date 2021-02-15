@@ -26,8 +26,8 @@ PP = pprint.PrettyPrinter(indent=2)
 
 
 class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
-    def __init__(self, es_index, es_doc_type, send_email=False, email_recipients=(),  # pylint: disable=too-many-arguments
-                 email_template_fp="", query_limit=1000, logger=None):
+    def __init__(self, es_index, es_doc_type, send_email=False, email_recipients=(),
+                 email_template_fp="", query_limit=1000, logger=None, events=None):  # pylint: disable=too-many-arguments
         self._es = ES()
         self._conf = self._es._conf  # pylint: disable=protected-access
         self._es_index = es_index
@@ -37,6 +37,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         self._email_recipients = email_recipients
         self._email_template_fp = email_template_fp
         self.log = logger if logger else LOGGER
+        self._events = events
 
     def get_all(self):
         """
@@ -99,18 +100,20 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         self.log.error('Scylla version is not found for test %s', test_doc['_id'])
         return None
 
-    @staticmethod
-    def get_events(doc):
+    def get_events(self):
         last_events = dict()
         events_summary = dict()
 
-        last_events['CRITICAL'] = doc["_source"]["events"]["CRITICAL"]
+        if not self._events:
+            return [last_events, events_summary]
+
+        last_events['CRITICAL'] = self._events.get("CRITICAL", [])
         events_summary['CRITICAL'] = len(last_events['CRITICAL'])
 
-        last_events['ERROR'] = doc["_source"]["events"]["ERROR"]
+        last_events['ERROR'] = self._events.get("ERROR", [])
         events_summary['ERROR'] = len(last_events['ERROR'])
 
-        last_events['WARNING'] = doc["_source"]["events"]["WARNING"]
+        last_events['WARNING'] = self._events.get("WARNING", [])
         events_summary['WARNING'] = len(last_events['WARNING'])
         return [last_events, events_summary]
 
@@ -156,15 +159,15 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
     Get latency during operations performance analyzer
     """
 
-    def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None):   # pylint: disable=too-many-arguments
+    def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None, events=None):   # pylint: disable=too-many-arguments
         super(LatencyDuringOperationsPerformanceAnalyzer, self).__init__(
             es_index=es_index,
             es_doc_type=es_doc_type,
             send_email=send_email,
             email_recipients=email_recipients,
             email_template_fp="results_latency_during_ops.html",
-            logger=logger
-        )
+            logger=logger,
+            events=events)
 
     def check_regression(self, test_id, data, is_gce=False):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         doc = self.get_test_by_id(test_id)
@@ -174,7 +177,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         test_version_info = self._test_version(doc)
         test_version = '.'.join([val for val in test_version_info.values()])
 
-        last_events, events_summary = self.get_events(doc)
+        last_events, events_summary = self.get_events()
 
         subject = f'Performance Regression Compare Results (latency during operations) -' \
                   f' {test_name} - {test_version} - {str(test_start_time)}'
@@ -200,15 +203,15 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
     Get specified performance test results from elasticsearch DB and analyze it to find a regression
     """
 
-    def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None):   # pylint: disable=too-many-arguments
+    def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None, events=None):   # pylint: disable=too-many-arguments
         super(SpecifiedStatsPerformanceAnalyzer, self).__init__(
             es_index=es_index,
             es_doc_type=es_doc_type,
             send_email=send_email,
             email_recipients=email_recipients,
             email_template_fp="",
-            logger=logger
-        )
+            logger=logger,
+            events=events)
 
     def _test_stats(self, test_doc):
         # check if stats exists
@@ -335,14 +338,15 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
     PARAMS = TestStatsMixin.STRESS_STATS
 
-    def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None):  # pylint: disable=too-many-arguments
+    def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None, events=None):  # pylint: disable=too-many-arguments
         super(PerformanceResultsAnalyzer, self).__init__(
             es_index=es_index,
             es_doc_type=es_doc_type,
             send_email=send_email,
             email_recipients=email_recipients,
             email_template_fp="results_performance.html",
-            logger=logger
+            logger=logger,
+            events=events
         )
 
     @staticmethod
@@ -541,6 +545,9 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         cassandra_stress = doc['_source']['test_details'].get('cassandra-stress')
         ycsb = doc['_source']['test_details'].get('ycsb')
         dashboard_path = "app/kibana#/dashboard/03414b70-0e89-11e9-a976-2fe0f5890cd0?_g=()"
+
+        last_events, events_summary = self.get_events()
+
         results = dict(test_name=full_test_name,
                        test_start_time=str(test_start_time),
                        test_version=test_version_info,
@@ -555,7 +562,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                        ycsb_raw_cmd=ycsb.get('raw_cmd', "") if ycsb else "",
                        job_url=doc['_source']['test_details'].get('job_url', ""),
                        kibana_url=self.gen_kibana_dashboard_url(dashboard_path),
-                       )
+                       events_summary=events_summary,
+                       last_events=last_events)
         self.log.debug('Regression analysis:')
         self.log.debug(PP.pformat(results))
         test_name = full_test_name.split('.')[-1]  # Example: longevity_test.py:LongevityTest.test_custom_time
@@ -740,6 +748,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         cassandra_stress = doc['_source']['test_details'].get('cassandra-stress')
         ycsb = doc['_source']['test_details'].get('ycsb')
         dashboard_path = "app/kibana#/dashboard/03414b70-0e89-11e9-a976-2fe0f5890cd0?_g=()"
+        last_events, events_summary = self.get_events()
         results = dict(test_name=full_test_name,
                        test_start_time=str(test_start_time),
                        test_version=test_version_info,
@@ -756,7 +765,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                        job_url=doc['_source']['test_details'].get('job_url', ""),
                        kibana_url=self.gen_kibana_dashboard_url(dashboard_path),
                        baseline_type=subtest_baseline,
-                       )
+                       events_summary=events_summary,
+                       last_events=last_events)
         self.log.debug('Regression analysis:')
         self.log.debug(PP.pformat(results))
         test_name = full_test_name.split('.', 1)[1]  # Example: longevity_test.py:LongevityTest.test_custom_time
@@ -1111,6 +1121,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                         number_of_metrics += 1
                     rp_metrics_table_l2['total_metrics'] += number_of_metrics
 
+        last_events, events_summary = self.get_events()
         results = dict(
             current_main_test=rp_main_test,
             results=rp_metrics_table,
@@ -1118,6 +1129,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             tests_info=rp_main_tests_to_compare,
             subtests=rp_subtests_of_current_test,
             subtests_info=rp_subtests_info,
+            events_summary=events_summary,
+            last_events=last_events
         )
         if len(rp_metric_info) == 1:
             html = self.render_to_html(results, template='results_performance_multi_baseline_single_metric.html')
