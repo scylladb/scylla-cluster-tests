@@ -4060,11 +4060,13 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if check_node_health:
             node_list[0].check_node_health()
 
-    def restart_scylla(self, nodes=None):
+    def restart_scylla(self, nodes=None, random=False):
         if nodes:
             nodes_to_restart = nodes
         else:
             nodes_to_restart = self.nodes
+        if random:
+            nodes_to_restart = random.sample(nodes_to_restart, len(nodes_to_restart))
         self.log.info("Going to restart Scylla on %s" % [n.name for n in nodes_to_restart])
         for node in nodes_to_restart:
             node.stop_scylla(verify_down=True)
