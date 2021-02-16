@@ -983,7 +983,12 @@ def start_events_device(log_dir, timeout=5):  # pylint: disable=redefined-outer-
         raise
 
     # default filters
+    workload_line = 'workload prioritization - update_service_levels_from_distributed_data: an error occurred while ' \
+                    'retrieving configuration'
     EVENTS_PROCESSES['default_filter'] = []
+    EVENTS_PROCESSES['default_filter'] += [EventsSeverityChangerFilter(event_class=DatabaseLogEvent,
+                                                                       regex=workload_line,
+                                                                       severity=Severity.WARNING)]
     EVENTS_PROCESSES['default_filter'] += [DbEventsFilter(type='BACKTRACE', line='Rate-limit: supressed')]
     EVENTS_PROCESSES['default_filter'] += [DbEventsFilter(type='BACKTRACE', line='Rate-limit: suppressed')]
 
