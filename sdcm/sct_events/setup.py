@@ -18,8 +18,9 @@ import logging
 from typing import Union, Optional
 from pathlib import Path
 
+from sdcm.sct_events import Severity
 from sdcm.sct_events.grafana import start_grafana_pipeline
-from sdcm.sct_events.filters import DbEventsFilter
+from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.file_logger import start_events_logger
 from sdcm.sct_events.events_device import start_events_main_device
@@ -55,6 +56,10 @@ def start_events_device(log_dir: Optional[Union[str, Path]] = None,
     time.sleep(EVENTS_SUBSCRIBERS_START_DELAY)
 
     # Default filters.
+    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                event_class=DatabaseLogEvent.DATABASE_ERROR,
+                                regex='workload prioritization - update_service_levels_from_distributed_data: an error '
+                                      'occurred while retrieving configuration').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: supressed').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: suppressed').publish()
 
