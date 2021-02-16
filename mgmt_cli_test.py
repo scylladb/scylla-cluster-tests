@@ -320,17 +320,18 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         4) test_client_encryption
         :return:
         """
-        with self.subTest('STEP 1: Basic Backup Test'):
+        with self.subTest('Basic Backup Test'):
             self.test_basic_backup()
-        with self.subTest('STEP 2: Repair Multiple Keyspace Types'):
+        with self.subTest('Repair Multiple Keyspace Types'):
             self.test_repair_multiple_keyspace_types()
-        with self.subTest('STEP 3: Mgmt Cluster CRUD'):
+        with self.subTest('Mgmt Cluster CRUD'):
             self.test_mgmt_cluster_crud()
-        with self.subTest('STEP 4: Mgmt cluster Health Check'):
+        with self.subTest('Mgmt cluster Health Check'):
             self.test_mgmt_cluster_healthcheck()
-        with self.subTest('STEP 5: Client Encryption'):
-            self.test_client_encryption()
         self.test_suspend_and_resume()
+        with self.subTest('Client Encryption'):
+            # Since this test activates encryption, it has to be the last test in the sanity
+            self.test_client_encryption()
 
     def test_repair_intensity_feature_on_multiple_node(self):
         self._repair_intensity_feature(fault_multiple_nodes=True)
