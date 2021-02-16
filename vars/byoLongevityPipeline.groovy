@@ -47,6 +47,7 @@ def call() {
 
             string(defaultValue: '', description: '', name: 'loader_ami_id')
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
+            string(defaultValue: '', description: '', name: 'gce_image_db')
             string(defaultValue: '', description: '', name: 'scylla_version')
             string(defaultValue: '', description: '', name: 'scylla_repo')
 
