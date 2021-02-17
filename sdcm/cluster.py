@@ -1940,7 +1940,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         :param scylla_repo: scylla repo file URL
         """
         self.log.info("Installing Scylla...")
-        force = '--force-yes '
         if self.is_rhel_like():
             # `screen' package is missed in CentOS/RHEL 8. Should be installed from EPEL repository.
             if self.distro.is_centos8 or self.distro.is_rhel8 or self.distro.is_oel8:
@@ -1989,7 +1988,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless -t jessie-backports')
                 self.remoter.run('sudo update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64')
             elif self.is_debian9():
-                force = ''
                 install_debian_9_prereqs = dedent("""
                     export DEBIAN_FRONTEND=noninteractive
                     apt-get update
@@ -2002,7 +2000,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 """)
                 self.remoter.run('sudo bash -cxe "%s"' % install_debian_9_prereqs)
             elif self.distro.is_debian10:
-                force = ''
                 install_debian_10_prereqs = dedent("""
                     export DEBIAN_FRONTEND=noninteractive
                     apt-get update
@@ -2017,13 +2014,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.remoter.run('sudo bash -cxe "%s"' % install_debian_10_prereqs)
 
             self.remoter.run(
-                'sudo DEBIAN_FRONTEND=noninteractive apt-get {}-o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" upgrade -y'.format(force))
+                'sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" upgrade -y')
             self.remoter.run('sudo apt-get install -y rsync tcpdump screen')
             self.download_scylla_repo(scylla_repo)
             self.remoter.run('sudo apt-get update')
             self.remoter.run(
-                'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" {}'
-                '--allow-unauthenticated {}'.format(force, self.scylla_pkg()))
+                'sudo apt-get install -y -o Dpkg::Options::="--force-overwrite" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '
+                '--allow-unauthenticated {}'.format(self.scylla_pkg()))
 
     def offline_install_scylla(self, unified_package, nonroot):
         """
@@ -2076,7 +2073,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run(
                 r'sudo yum install -y {0}-debuginfo-{1}\*'.format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
         else:
-            self.remoter.run(r'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated {0}-server-dbg={1}\*'
+            self.remoter.run(r'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --allow-unauthenticated {0}-server-dbg={1}\*'
                              .format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
 
     def is_scylla_installed(self):
@@ -4318,7 +4315,7 @@ class BaseLoaderSet():
         else:
             node.remoter.run('sudo apt-get update')
             node.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef"'
-                             ' -o Dpkg::Options::="--force-confold" --force-yes'
+                             ' -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite"'
                              ' --allow-unauthenticated {}-tools'.format(node.scylla_pkg()))
 
         if db_node_address is not None:
