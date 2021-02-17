@@ -3107,3 +3107,29 @@ class FillDatabaseData(ClusterTester):
             # override driver consistency level
             session.default_consistency_level = ConsistencyLevel.QUORUM
             self.run_db_queries(session, session.default_fetch_size)
+
+    def paged_query(self, keyspace='keyspace_complex'):
+        # Prepare connection
+        def create_table():
+            session.execute('CREATE TABLE IF NOT EXISTS paged_query_test (k int PRIMARY KEY, v1 int, v2 int)')
+
+        def fill_table():
+            for i in range(1000):
+                random_int = random.randint(1, 1000000)
+                session.execute(f'INSERT INTO paged_query_test (k, v1, v2) VALUES ({i}, {random_int}, {random_int+i})')
+        node = self.db_cluster.nodes[-1]
+        with self.db_cluster.cql_connection_patient(node, keyspace=keyspace) as session:
+            create_table()
+            fill_table()
+            statement = f'select * from {keyspace}.paged_query_test;'
+            self.log.info('running now session.execute')
+            full_query_res = self.rows_to_list(session.execute(statement))
+            if not full_query_res:
+                assert f'Query "{statement}" returned no entries'
+            self.log.info('running now fetch_all_rows')
+            full_res = self.rows_to_list(
+                self.fetch_all_rows(session=session, default_fetch_size=100, statement=statement))
+            if not full_res:
+                assert f'Paged query "{statement}" returned no value'
+            self.log.info('will now compare results from session.execute and fetch_all_rows')
+            self.assertEqual(sorted(full_query_res), sorted(full_res), "Results should be identical")
