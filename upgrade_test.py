@@ -487,6 +487,10 @@ class UpgradeTest(FillDatabaseData):
         # wait for the complex workload to finish
         self.verify_stress_thread(complex_cs_thread_pool)
 
+        self.log.info('Will check paged query before upgrading nodes')
+        self.paged_query()
+        self.log.info('Done checking paged query before upgrading nodes')
+
         # prepare write workload
         self.log.info('Starting c-s prepare write workload (n=10000000)')
         prepare_write_stress = self.params.get('prepare_write_stress')
@@ -619,6 +623,10 @@ class UpgradeTest(FillDatabaseData):
             stress_cmd=stress_cmd_complex_verify_read, profile='data_dir/complex_schema.yaml')
         # wait for the read complex workload to finish
         self.verify_stress_thread(complex_cs_thread_pool)
+
+        self.log.info('Will check paged query after upgrading all nodes')
+        self.paged_query()
+        self.log.info('Done checking paged query after upgrading nodes')
 
         # After adjusted the workloads, there is a entire write workload, and it uses a fixed duration for catching
         # the data lose.
