@@ -423,6 +423,22 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.wait_jmx_up()
         self.repair_nodetool_repair()
 
+    def disrupt_resetlocalschema(self):  # pylint: disable=invalid-name
+        self._set_current_disruption('ResetLocalSchema %s' % self.target_node)
+
+        result = self.target_node.run_nodetool(sub_cmd='help', args='resetlocalschema')
+        if 'Unknown command resetlocalschema' in result.stdout:
+            raise UnsupportedNemesis("nodetool doesn't support resetlocalschema")
+
+        rlocal_schema_res = self.target_node.follow_system_log(patterns=["schema_tables - Schema version changed to"])
+        self.target_node.run_nodetool("resetlocalschema")
+        assert list(rlocal_schema_res), "Schema version has not been recalculated"
+
+        # Check schema version on the nodes will be preformed after nemesis by ClusterHealthChecker
+        # Waiting 60 sec: this time is defined by Tomasz
+        self.log.debug("Sleep for 60 sec: the other nodes should pull new version")
+        time.sleep(60)
+
     def disrupt_hard_reboot_node(self):
         self._set_current_disruption('HardRebootNode %s' % self.target_node)
         self.target_node.reboot(hard=True)
@@ -3905,3 +3921,11 @@ class MemoryStressMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_memory_stress()
+
+
+class ResetLocalSchemaMonkey(Nemesis):
+    disruptive = False
+
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_resetlocalschema()
