@@ -138,6 +138,7 @@ class BaseEmailReporter:
         "region_name",
         "scylla_instance_type",
         "scylla_version",
+        "kernel_version",
         "start_time",
         "subject",
         "test_id",

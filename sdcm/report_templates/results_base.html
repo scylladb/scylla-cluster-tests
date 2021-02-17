@@ -152,6 +152,9 @@
             {% if backend %}
             <li>Backend: {{ backend }}{% if region_name %}: {{ region_name }}{% endif %}</li>
             {% endif %}
+            {% if kernel_version %}
+            <li>Kernel version: {{ kernel_version }}</li>
+            {% endif %}
             {% if test_id %}
             <li>Test-id: {{ test_id }}</li>
             {% endif %}

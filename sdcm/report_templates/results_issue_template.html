@@ -2,6 +2,7 @@
 {% block body %}
     <div>
         *Installation details*<br>
+        Kernel version: `{{ kernel_version }}`<br>
         Scylla version (or git commit hash): `{{ scylla_version }}`<br>
         Cluster size: {{ number_of_db_nodes }} nodes ({{ scylla_instance_type }})<br>
         OS (RHEL/CentOS/Ubuntu/AWS AMI): {% if scylla_ami_id %} `{{ scylla_ami_id }}` {% endif %} {% if scylla_node_image %} `{{ scylla_node_image }}`{% endif %} ({{ backend }}{% if region_name %}: {{ region_name }}{% endif %})<br>
