@@ -4879,7 +4879,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                                   f" '[0].targets[+]' ''[{node.private_ip_address}]:9100''", verbose=True)
 
             if self.params.get("cloud_prom_bearer_token"):
-                node.remote.sudo(shell_script_cmd(f"""\
+                node.remoter.sudo(shell_script_cmd(f"""\
                     echo "targets: [] " > {self.monitoring_conf_dir}/scylla_servers.yml
                     echo "targets: [] " > {self.monitoring_conf_dir}/node_exporter_servers.yml
                 """), verbose=True)
