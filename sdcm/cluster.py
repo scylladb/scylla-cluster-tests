@@ -2277,7 +2277,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             scyllamgr_ssl_cert_gen
             sed -i 's/#tls_cert_file/tls_cert_file/' /etc/scylla-manager/scylla-manager.yaml
             sed -i 's/#tls_key_file/tls_key_file/' /etc/scylla-manager/scylla-manager.yaml
-            sed -i 's/#prometheus: .*/prometheus: :{}/' /etc/scylla-manager/scylla-manager.yaml
+            sed -i "s/#prometheus: .*/prometheus: ':{}'/" /etc/scylla-manager/scylla-manager.yaml
             systemctl restart scylla-manager
             """.format(manager_prometheus_port))  # pylint: disable=too-many-format-args
             self.remoter.run('sudo bash -cxe "%s"' % configuring_manager_command)
