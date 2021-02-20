@@ -25,15 +25,14 @@ from typing import Optional
 from functools import cached_property
 
 import requests
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
+
+import sdcm.monitorstack.ui as monitoring_ui
 
 from sdcm.utils.common import (S3Storage, list_instances_aws, list_instances_gce,
                                ParallelObject, remove_files, get_builder_by_test_id,
                                get_testrun_dir, search_test_id_in_latest, filter_aws_instances_by_type,
                                filter_gce_instances_by_type, get_sct_root_path, normalize_ipv6_url,
-                               SCYLLA_YAML_PATH, get_test_name)
+                               SCYLLA_YAML_PATH)
 from sdcm.utils.decorators import retrying
 from sdcm.utils.get_username import get_username
 from sdcm.db_stats import PrometheusDBStats
@@ -44,7 +43,6 @@ from sdcm.utils.docker_utils import get_docker_bridge_gateway
 
 
 LOGGER = logging.getLogger(__name__)
-LOGGER.setLevel(logging.DEBUG)
 
 
 class CollectingNode(AutoSshContainerMixin, WebDriverContainerMixin):
@@ -356,6 +354,8 @@ class MonitoringStack(BaseMonitoringEntity):
         """
         checked_dashboard_url = "http://{grafana_ip}:{grafana_port}/api/dashboards/db/{uid}"
         try:
+            LOGGER.info(
+                f"Check dashbaord: {checked_dashboard_url.format(grafana_ip=grafana_ip, grafana_port=MonitoringStack.grafana_port, uid=uid)}")
             res = requests.get(checked_dashboard_url.format(grafana_ip=grafana_ip,
                                                             grafana_port=MonitoringStack.grafana_port,
                                                             uid=uid))
@@ -386,23 +386,11 @@ class GrafanaEntity(BaseMonitoringEntity):  # pylint: disable=too-few-public-met
         grafana_entity_url_tmpl {str} -- template of grafana url to collect
         phantomjs_base {str} -- name and version of phantomjs package
     """
-    if test_name := get_test_name():
-        test_name = f"{test_name.lower()}-"
-
-    base_grafana_entity_names = [
-        {
-            'name': 'overview',
-            'path': 'd/overview-{version}/scylla-{dashboard_name}',
-            'resolution': '1920px*4000px',
-            'scroll_ready_locator': (By.XPATH, """//h1[contains(text(), "Your Panels")]""")
-        },
-        {
-            'name': f'{test_name}scylla-per-server-metrics-nemesis',
-            'path': 'dashboard/db/{dashboard_name}-{version}',
-            'resolution': '1920px*7000px',
-        }
+    base_grafana_dashboards = [
+        monitoring_ui.OverviewDashboard(),
+        monitoring_ui.ServerMetricsNemesisDashboard(),
     ]
-    default_scroll_ready_locator = (By.XPATH, """//span[contains(text(), "Total Nodes")]""")
+
     grafana_port = 3000
     grafana_entity_url_tmpl = "http://{node_ip}:{grafana_port}/{path}?from={st}&to=now"
     sct_base_path = get_sct_root_path()
@@ -413,7 +401,7 @@ class GrafanaEntity(BaseMonitoringEntity):  # pylint: disable=too-few-public-met
             # set test start time previous 6 hours
             test_start_time = time.time() - (6 * 3600)
         self.start_time = str(test_start_time).split('.')[0] + '000'
-        self.grafana_entity_names = self.base_grafana_entity_names + kwargs.pop("extra_entities", [])
+        self.grafana_dashboards = self.base_grafana_dashboards + kwargs.pop("extra_entities", [])
         self.remote_browser = None
         super(GrafanaEntity, self).__init__(*args, **kwargs)
 
@@ -426,6 +414,13 @@ class GrafanaEntity(BaseMonitoringEntity):  # pylint: disable=too-few-public-met
         if self.remote_browser:
             self.remote_browser.destroy_containers()
 
+    def get_version(self, node):
+        _, _, version = self.get_monitoring_version(node)
+        if version:
+            version = version.replace('.', '-')
+            return version
+        LOGGER.warning("Monitoring version was not found")
+
 
 class GrafanaScreenShot(GrafanaEntity):
     """Collect Grafana screenshot
@@ -435,49 +430,49 @@ class GrafanaScreenShot(GrafanaEntity):
     Extends:
         GrafanaEntity
     """
-    collect_timeout = 150
 
     @retrying(n=5)
     def get_grafana_screenshot(self, node, local_dst):
         """
             Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
         """
-        _, _, monitoring_version = self.get_monitoring_version(node)
-        if not monitoring_version:
-            LOGGER.warning("Monitoring version was not found")
-            return []
-        version = monitoring_version.replace('.', '-')
+        screenshots = []
+        version = self.get_version(node)
+        if not version:
+            return screenshots
 
         try:
-            screenshots = []
             self.remote_browser = RemoteBrowser(node)
+            for dashboard in self.grafana_dashboards:
+                try:
+                    dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=normalize_ipv6_url(node.grafana_address),
+                                                                        uid="-".join([dashboard.name,
+                                                                                      version])
+                                                                        )
+                    if not dashboard_exists:
+                        version = "master"
 
-            for screenshot in self.grafana_entity_names:
-                dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=normalize_ipv6_url(node.grafana_address),
-                                                                    uid="-".join([screenshot['name'],
-                                                                                  version])
-                                                                    )
-                if not dashboard_exists:
-                    version = "master"
-
-                path = screenshot['path'].format(
-                    version=version,
-                    dashboard_name=screenshot['name'])
-                grafana_url = self.grafana_entity_url_tmpl.format(
-                    node_ip=normalize_ipv6_url(node.grafana_address),
-                    grafana_port=self.grafana_port,
-                    path=path,
-                    st=self.start_time)
-                screenshot_path = os.path.join(local_dst,
-                                               "%s-%s-%s-%s.png" % (self.name,
-                                                                    screenshot['name'],
-                                                                    datetime.datetime.now().strftime("%Y%m%d_%H%M%S"),
-                                                                    node.name))
-                LOGGER.debug("Get screenshot for url %s, save to %s", grafana_url, screenshot_path)
-                self.remote_browser.get_screenshot(grafana_url, screenshot_path,
-                                                   screenshot['resolution'],
-                                                   load_page_screenshot_delay=self.collect_timeout)
-                screenshots.append(screenshot_path)
+                    path = dashboard.path.format(
+                        version=version,
+                        dashboard_name=dashboard.name)
+                    grafana_url = self.grafana_entity_url_tmpl.format(
+                        node_ip=normalize_ipv6_url(node.grafana_address),
+                        grafana_port=self.grafana_port,
+                        path=path,
+                        st=self.start_time)
+                    screenshot_path = os.path.join(local_dst,
+                                                   "%s-%s-%s-%s.png" % (self.name,
+                                                                        dashboard.name,
+                                                                        datetime.datetime.now().strftime("%Y%m%d_%H%M%S"),
+                                                                        node.name))
+                    self.remote_browser.open(grafana_url, dashboard.resolution)
+                    dashboard.scroll_to_bottom(self.remote_browser.browser)
+                    dashboard.wait_panels_loading(self.remote_browser.browser)
+                    LOGGER.debug("Get screenshot for url %s, save to %s", grafana_url, screenshot_path)
+                    self.remote_browser.get_screenshot(grafana_url, screenshot_path)
+                    screenshots.append(screenshot_path)
+                except Exception as details:
+                    LOGGER.error(f"{details}")
 
             return screenshots
 
@@ -501,93 +496,37 @@ class GrafanaSnapshot(GrafanaEntity):
     Extends:
         GrafanaEntity
     """
-    panels_load_timeout = 10
-    scroll_step = 1000
-    snapshot_locators_sequence = [
-        (By.XPATH, """//div[contains(@class, "navbar-buttons--actions")]"""),
-        (By.XPATH, """//ul/li[contains(text(), "Snapshot")]"""),
-        (By.XPATH, """//button//span[contains(text(), "Publish to snapshot.raintank.io")]"""),
-        (By.XPATH, """//a[contains(@href, "https://snapshot.raintank.io")]""")
-    ]
-
-    snapshot_scroll_ready_locator = None
-    scroll_element_locator = (By.XPATH, "//div[@class='view']")
-
-    def scrolldown_dashboards_view(self, remote_browser: RemoteBrowser):
-
-        if not self.snapshot_scroll_ready_locator:
-            self.snapshot_scroll_ready_locator = self.default_scroll_ready_locator
-
-        WebDriverWait(remote_browser, 60).until(EC.visibility_of_element_located(self.snapshot_scroll_ready_locator))
-
-        scroll_element = remote_browser.find_element(*self.scroll_element_locator)
-
-        scroll_height = remote_browser.execute_script("return arguments[0].scrollHeight", scroll_element)
-
-        for scroll_size in range(0, scroll_height, self.scroll_step):
-            remote_browser.execute_script(f'arguments[0].scrollTop = {scroll_size}', scroll_element)
-            time.sleep(self.panels_load_timeout)
-
-    def _get_shared_snapshot_link(self, remote_browser, grafana_url):
-        """Get link from page to remote snapshot on https://snapshot.raintank.io
-
-        using selenium remote web driver remote_browser find sequentially web_element by locators
-        in self.snapshot_locators_sequence run actiom WebElement.click() and
-        get value from result link found by latest element in snapshot_locators_sequence
-
-        :param remote_browser: remote webdirver instance
-        :type remote_browser: selenium.webdriver.Remote
-        :param grafana_url: url to load and get snapshot
-        :type grafana_url: str
-        :returns: return value of link to remote snapshot on https://snapshot.raintank.io
-        :rtype: {str}
-        """
-        remote_browser.get(grafana_url)
-        self.scrolldown_dashboards_view(remote_browser)
-
-        for element in self.snapshot_locators_sequence[:-1]:
-            WebDriverWait(remote_browser, 60).until(EC.visibility_of_element_located(element))
-            found_element = remote_browser.find_element(*element)
-            found_element.click()
-        snapshot_link_locator = self.snapshot_locators_sequence[-1]
-        WebDriverWait(remote_browser, 60).until(EC.visibility_of_element_located(snapshot_link_locator))
-        snapshot_link_element = remote_browser.find_element(*snapshot_link_locator)
-
-        LOGGER.debug(snapshot_link_element.text)
-        return snapshot_link_element.text
-
     @retrying(n=5)
     def get_grafana_snapshot(self, node):
         """
             Take snapshot of the Grafana per-server-metrics dashboard and upload to S3
         """
-        _, _, monitoring_version = self.get_monitoring_version(node)
-        if not monitoring_version:
-            LOGGER.warning("Monitoring version was not found")
-            return []
+        snapshots = []
+        version = self.get_version(node)
+        if not version:
+            return snapshots
         try:
             self.remote_browser = RemoteBrowser(node)
-            snapshots = []
-            for snapshot in self.grafana_entity_names:
-                self.snapshot_scroll_ready_locator = snapshot.get("scroll_ready_locator")
-                version = monitoring_version.replace('.', '-')
+            for dashboard in self.grafana_dashboards:
                 dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=normalize_ipv6_url(node.grafana_address),
-                                                                    uid="-".join([snapshot['name'],
-                                                                                  version])
-                                                                    )
+                                                                    uid="-".join([dashboard.name, version]))
                 if not dashboard_exists:
                     version = "master"
 
-                path = snapshot['path'].format(
+                path = dashboard.path.format(
                     version=version,
-                    dashboard_name=snapshot['name'])
+                    dashboard_name=dashboard.name)
                 grafana_url = self.grafana_entity_url_tmpl.format(
                     node_ip=normalize_ipv6_url(node.grafana_address),
                     grafana_port=self.grafana_port,
                     path=path,
                     st=self.start_time)
                 LOGGER.info("Get snapshot link for url %s", grafana_url)
-                snapshots.append(self._get_shared_snapshot_link(self.remote_browser.browser, grafana_url))
+                self.remote_browser.open(grafana_url, dashboard.resolution)
+                dashboard.scroll_to_bottom(self.remote_browser.browser)
+                dashboard.wait_panels_loading(self.remote_browser.browser)
+
+                snapshots.append(dashboard.get_snapshot(self.remote_browser.browser))
             return snapshots
 
         except Exception as details:  # pylint: disable=broad-except

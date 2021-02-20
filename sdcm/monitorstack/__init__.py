@@ -355,12 +355,12 @@ def verify_dockers_are_running():
     return False
 
 
-def verify_grafana_is_available(version):
+def verify_grafana_is_available(version):  # pylint: disable=no-member
     from sdcm.logcollector import GrafanaEntity
     grafana_statuses = []
-    for entity in GrafanaEntity.base_grafana_entity_names:
-        path = entity['path'].format(version=version.replace('.', '-'),
-                                     dashboard_name=entity['name'])
+    for dashboard in GrafanaEntity.base_grafana_dashboards:
+        path = dashboard.path.format(version=version.replace('.', '-'),  # pylint: disable=no-member
+                                     dashboard_name=dashboard.name)  # pylint: disable=no-member
         url = f"http://localhost:{GRAFANA_DOCKER_PORT}/{path}"
         try:
             LOGGER.info("Test url {}".format(url))

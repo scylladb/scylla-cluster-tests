@@ -41,8 +41,8 @@ from sdcm.utils.common import (list_instances_aws, list_instances_gce, list_reso
                                search_test_id_in_latest, get_testrun_dir, format_timestamp, list_clusters_gke,
                                list_clusters_eks)
 from sdcm.utils.jepsen import JepsenResults
-from sdcm.utils.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
-                                     kill_running_monitoring_stack_services)
+from sdcm.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
+                               kill_running_monitoring_stack_services)
 from sdcm.cluster import Setup
 from sdcm.utils.log import setup_stdout_logger
 from sdcm.utils.prepare_region import AwsRegion
