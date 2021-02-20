@@ -97,17 +97,15 @@ class RemoteBrowser:
 
         return Remote(command_executor=f"http://{host}:{port}/wd/hub", options=ChromeOptions())
 
-    def get_screenshot(self, url, screenshot_path, resolution="1920px*1280px", load_page_screenshot_delay=30):
-        LOGGER.info("Get a screenshot of %s", url)
-
+    def open(self, url, resolution="1920px*1280px"):
+        LOGGER.info(f"Set resoltion {resolution}")
         self.browser.set_window_size(*resolution.replace("px", "").split("*", 1))
-
-        LOGGER.debug("Goto %s", url)
+        LOGGER.info(f"Get url {url}")
         self.browser.get(url)
 
-        LOGGER.debug("Wait for %s seconds and write a screenshot of %s to %s",
-                     load_page_screenshot_delay, url, screenshot_path)
-        time.sleep(load_page_screenshot_delay)
+    def get_screenshot(self, url, screenshot_path):
+        LOGGER.info(f"Save a screenshot of {url} to {screenshot_path}")
+
         self.browser.get_screenshot_as_file(screenshot_path)
 
     def quit(self):

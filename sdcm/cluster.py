@@ -81,6 +81,7 @@ from sdcm.sct_events.grafana import set_grafana_url
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
+from sdcm.monitorstack.ui import AlternatorDashboard
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3
 from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LDAP_BASE_OBJECT, LDAP_PASSWORD, LDAP_USERS, LDAP_ROLE
 from sdcm.utils.remote_logger import get_system_logging_thread
@@ -5143,22 +5144,16 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             return {}
         date_time = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
 
-        grafana_extra_entities = []
+        grafana_extra_dashboards = []
         if 'alternator_port' in self.params:
-            grafana_extra_entities = [
-                {
-                    'name': 'alternator',
-                    'path': 'd/alternator-{version}/{dashboard_name}',
-                    'resolution': '1920px*4000px'
-                }
-            ]
+            grafana_extra_dashboards = [AlternatorDashboard()]
 
         screenshot_links = []
         snapshots = []
         for node in self.nodes:
             screenshot_collector = GrafanaScreenShot(name="grafana-screenshot",
                                                      test_start_time=test_start_time,
-                                                     extra_entities=grafana_extra_entities)
+                                                     extra_entities=grafana_extra_dashboards)
             screenshot_files = screenshot_collector.collect(node, self.logdir)
             for screenshot in screenshot_files:
                 s3_path = "{test_id}/{date}".format(test_id=Setup.test_id(), date=date_time)
@@ -5166,7 +5161,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
 
             snapshots_collector = GrafanaSnapshot(name="grafana-snapshot",
                                                   test_start_time=test_start_time,
-                                                  extra_entities=grafana_extra_entities)
+                                                  extra_entities=grafana_extra_dashboards)
             snapshots_data = snapshots_collector.collect(node, self.logdir)
             snapshots.extend(snapshots_data.get('links', []))
         return {'screenshots': screenshot_links, 'snapshots': snapshots}
