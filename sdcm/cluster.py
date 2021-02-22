@@ -17,7 +17,7 @@ import queue
 import getpass
 import logging
 import os
-import random
+import random as librandom
 import re
 import tempfile
 import threading
@@ -3413,7 +3413,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                                            timeout=wait_for_timeout, throw_exc=True)
         else:
             if seeds_selector == 'random':
-                selected_nodes = random.sample(self.nodes, seeds_num)
+                selected_nodes = librandom.sample(self.nodes, seeds_num)
             # seeds_selector == 'first'
             else:
                 selected_nodes = self.nodes[:seeds_num]
@@ -3645,7 +3645,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         :return: dict
         """
         if not verification_node:
-            verification_node = random.choice(self.nodes)
+            verification_node = librandom.choice(self.nodes)
         status = {}
         res = verification_node.run_nodetool('status')
         data_centers = res.stdout.strip().split("Datacenter: ")
@@ -4066,7 +4066,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         else:
             nodes_to_restart = self.nodes
         if random:
-            nodes_to_restart = random.sample(nodes_to_restart, len(nodes_to_restart))
+            nodes_to_restart = librandom.sample(nodes_to_restart, len(nodes_to_restart))
         self.log.info("Going to restart Scylla on %s" % [n.name for n in nodes_to_restart])
         for node in nodes_to_restart:
             node.stop_scylla(verify_down=True)
@@ -4138,10 +4138,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         target_node_ip = node.ip_address
         node.run_nodetool("decommission")
-        verification_node = random.choice(self.nodes)
+        verification_node = librandom.choice(self.nodes)
         node_ip_list = get_node_ip_list(verification_node)
         while verification_node == node or node_ip_list is None:
-            verification_node = random.choice(self.nodes)
+            verification_node = librandom.choice(self.nodes)
             node_ip_list = get_node_ip_list(verification_node)
 
         if target_node_ip in node_ip_list:
