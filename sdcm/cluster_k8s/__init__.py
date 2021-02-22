@@ -18,7 +18,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
-import random
+import random as librandom
 import requests
 import time
 import base64
@@ -1319,7 +1319,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         readiness_timeout = self.get_nodes_reboot_timeout(len(self.nodes))
         statefulsets = KubernetesOps.list_statefulsets(self.k8s_cluster, namespace=self.namespace)
         if random:
-            statefulsets = random.sample(statefulsets, len(statefulsets))
+            statefulsets = librandom.sample(statefulsets, len(statefulsets))
         for statefulset in statefulsets:
             self.k8s_cluster.kubectl(
                 f"rollout status statefulset/{statefulset.metadata.name} "
