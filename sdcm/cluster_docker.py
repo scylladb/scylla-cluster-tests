@@ -13,7 +13,6 @@
 
 # pylint: disable=too-many-arguments; looks like we need to increase DESIGN.max_args to 10 in our pylintrc
 # pylint: disable=invalid-overridden-method; pylint doesn't know that cached_property is property
-
 import os
 import re
 import logging
@@ -24,6 +23,7 @@ from sdcm import cluster
 from sdcm.remote import LOCALRUNNER
 from sdcm.utils.docker_utils import get_docker_bridge_gateway, Container, ContainerManager, DockerException
 from sdcm.utils.health_checker import check_nodes_status
+from sdcm.utils.net import get_my_public_ip
 
 DEFAULT_SCYLLA_DB_IMAGE = "scylladb/scylla-nightly"
 DEFAULT_SCYLLA_DB_IMAGE_TAG = "latest"
@@ -92,6 +92,10 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
         self.log.warning("We don't support IPv6 for Docker backend")
         return ""
 
+    @cached_property
+    def host_public_ip_address(self) -> str:
+        return get_my_public_ip()
+
     def is_running(self):
         return ContainerManager.is_running(self, "node")
 
@@ -106,6 +110,10 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
         if verify_up:
             self.wait_db_up(timeout=verify_up_timeout)
 
+        # Need to start the scylla-housekeeping service manually because of autostart of this service is disabled
+        # for the docker backend. See, for example, docker/scylla-sct/ubuntu/Dockerfile
+        self.start_scylla_housekeeping_service(timeout=timeout)
+
     @cluster.log_run_info
     def start_scylla(self, verify_up=True, verify_down=False, timeout=300):
         self.start_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
@@ -118,6 +126,18 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
         if verify_down:
             self.wait_db_down(timeout=timeout)
 
+        # Need to start the scylla-housekeeping service manually because of autostart of this service is disabled
+        # for the docker backend. See, for example, docker/scylla-sct/ubuntu/Dockerfile
+        self.stop_scylla_housekeeping_service(timeout=timeout)
+
+    def stop_scylla_housekeeping_service(self, timeout=300):
+        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl stop scylla-housekeeping"),
+                          timeout=timeout)
+
+    def start_scylla_housekeeping_service(self, timeout=300):
+        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl start scylla-housekeeping"),
+                          timeout=timeout)
+
     @cluster.log_run_info
     def stop_scylla(self, verify_up=False, verify_down=True, timeout=300):
         self.stop_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
@@ -125,9 +145,14 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
     def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=300, ignore_status=False):
         if verify_up_before:
             self.wait_db_up(timeout=timeout)
+
+        # Need to restart the scylla-housekeeping service manually because of autostart of this service is disabled
+        # for the docker backend. See, for example, docker/scylla-sct/ubuntu/Dockerfile
+        self.stop_scylla_housekeeping_service(timeout=timeout)
         self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl restart scylla"), timeout=timeout)
         if verify_up_after:
             self.wait_db_up(timeout=timeout)
+        self.start_scylla_housekeeping_service(timeout=timeout)
 
     @cluster.log_run_info
     def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=300) -> None:
