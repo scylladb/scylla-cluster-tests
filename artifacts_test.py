@@ -10,12 +10,11 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-
 import datetime
 import re
 
 from sdcm.tester import ClusterTester
-
+from sdcm.utils.housekeeping import HousekeepingDB
 
 STRESS_CMD: str = "/usr/bin/cassandra-stress"
 
@@ -28,6 +27,60 @@ BACKENDS = {
 
 
 class ArtifactsTest(ClusterTester):
+    REPO_TABLE = "housekeeping.repo"
+    CHECK_VERSION_TABLE = "housekeeping.checkversion"
+
+    def setUp(self) -> None:
+        super().setUp()
+
+        self.housekeeping = HousekeepingDB.from_keystore_creds()
+        self.housekeeping.connect()
+
+    def tearDown(self) -> None:
+        self.housekeeping.close()
+
+        super().tearDown()
+
+    def check_scylla_version_in_housekeepingdb(self, prev_id: int, expected_status_code: str,
+                                               new_row_expected: bool, backend: str) -> int:
+        """
+        Validate reported version
+        prev_id: check if new version is created
+        """
+        assert self.node.uuid, "Node UUID wasn't created"
+
+        row = self.housekeeping.get_most_recent_record(query=f"SELECT id, version, ip, statuscode "
+                                                             f"FROM {self.CHECK_VERSION_TABLE} "
+                                                             f"WHERE uuid = %s", args=(self.node.uuid,))
+        self.log.debug("Last row in %s for uuid '%s': %s", self.CHECK_VERSION_TABLE, self.node.uuid, row)
+
+        public_ip_address = self.node.host_public_ip_address if backend == 'docker' else self.node.public_ip_address
+        self.log.debug("public_ip_address = %s", public_ip_address)
+
+        # Validate public IP address
+        assert public_ip_address == row[2], (
+            f"Wrong IP address is saved in '{self.CHECK_VERSION_TABLE}' table: "
+            f"expected {self.node.public_ip_address}, got: {row[2]}")
+
+        # Validate reported node version
+        assert row[1] == self.node.scylla_version, (
+            f"Wrong version is saved in '{self.CHECK_VERSION_TABLE}' table: "
+            f"expected {self.node.public_ip_address}, got: {row[2]}")
+
+        # Validate expected status code
+        assert row[3] == expected_status_code, (
+            f"Wrong statuscode is saved in '{self.CHECK_VERSION_TABLE}' table: "
+            f"expected {expected_status_code}, got: {row[3]}")
+
+        if prev_id:
+            # Validate row id
+            if new_row_expected:
+                assert row[0] > prev_id, f"New row wasn't saved in {self.CHECK_VERSION_TABLE}"
+            else:
+                assert row[0] == prev_id, f"New row was saved in {self.CHECK_VERSION_TABLE} unexpectedly"
+
+        return row[0] if row else 0
+
     @property
     def node(self):
         if self.db_cluster is None or not self.db_cluster.nodes:
@@ -124,6 +177,8 @@ class ArtifactsTest(ClusterTester):
             with self.subTest("verify users"):
                 self.verify_users()
 
+        expected_housekeeping_status_code = 'cr' if backend == "docker" else 'r'
+
         if self.params["use_preinstalled_scylla"] and backend != "docker":
             with self.subTest("check the cluster name"):
                 self.check_cluster_name()
@@ -137,14 +192,43 @@ class ArtifactsTest(ClusterTester):
         with self.subTest("check Scylla server after installation"):
             self.check_scylla()
 
+            # TODO: implement after the new provision will be added
+            # Task: https://trello.com/c/BIdIUwyT/4096-housekeeping-implemented-a-test-that-checks-i-value-when-scylla-
+            # is-first-installed
+
+            # Scylla service is stopping/starting after installation and re-configuration.
+            # To validate version after installation, we need to perform validation before re-config.
+            # For that the test should be changed to be able to call "add_nodes" function from BaseCluster.
+            # self.log.info("Validate version after install")
+            # self.check_scylla_version_in_housekeepingdb(prev_id=0,
+            #                                             expected_status_code='i',
+            #                                             new_row_expected=False)
+
+        version_id_after_stop = 0
         with self.subTest("check Scylla server after stop/start"):
             self.node.stop_scylla(verify_down=True)
             self.node.start_scylla(verify_up=True)
+
+            # Scylla service has been stopped/started after installation and re-configuration.
+            # So we don't need to stop and to start it again
             self.check_scylla()
+
+            self.log.info("Validate version after stop/start")
+            version_id_after_stop = self.check_scylla_version_in_housekeepingdb(
+                prev_id=0,
+                expected_status_code=expected_housekeeping_status_code,
+                new_row_expected=False,
+                backend=backend)
 
         with self.subTest("check Scylla server after restart"):
             self.node.restart_scylla(verify_up_after=True)
             self.check_scylla()
+
+            self.log.info("Validate version after restart")
+            self.check_scylla_version_in_housekeepingdb(prev_id=version_id_after_stop,
+                                                        expected_status_code=expected_housekeeping_status_code,
+                                                        new_row_expected=True,
+                                                        backend=backend)
 
     def get_email_data(self):
         self.log.info("Prepare data for email")

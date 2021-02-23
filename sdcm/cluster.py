@@ -268,6 +268,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         self._kernel_version = None
         self._cassandra_stress_version = None
+        self._uuid = None
 
     def init(self) -> None:
         if self.logdir:
@@ -1266,21 +1267,29 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             text = '%s: Waiting for JMX service to be down' % self
         wait.wait_for(func=lambda: not self.jmx_up(), step=60, text=text, timeout=timeout, throw_exc=True)
 
+    @property
+    def uuid(self):
+        if not self._uuid:
+            uuid_path = '/var/lib/scylla-housekeeping/housekeeping.uuid'
+            uuid_result = self.remoter.run('test -e %s' % uuid_path, ignore_status=True, verbose=True)
+            uuid_exists = uuid_result.ok
+            if uuid_exists:
+                result = self.remoter.run('cat %s' % uuid_path, verbose=True)
+                self._uuid = result.stdout.strip()
+        return self._uuid
+
     def _report_housekeeping_uuid(self, verbose=False):
         """
         report uuid of test db nodes to ScyllaDB
         """
-        uuid_path = '/var/lib/scylla-housekeeping/housekeeping.uuid'
         mark_path = '/var/lib/scylla-housekeeping/housekeeping.uuid.marked'
         cmd = 'curl "https://i6a5h9l1kl.execute-api.us-east-1.amazonaws.com/prod/check_version?uu=%s&mark=scylla"'
 
-        uuid_exists = self.remoter.run('test -e %s' % uuid_path, ignore_status=True, verbose=verbose).ok
         mark_exists = self.remoter.run('test -e %s' % mark_path, ignore_status=True, verbose=verbose).ok
-        if uuid_exists and not mark_exists:
-            result = self.remoter.run('cat %s' % uuid_path, verbose=verbose)
-            self.remoter.run(cmd % result.stdout.strip(), ignore_status=True)
+        if self.uuid and not mark_exists:
+            self.remoter.run(cmd % self.uuid, ignore_status=True)
             if self.is_docker():
-                self.remoter.run('touch %s' % mark_path, verbose=verbose)
+                self.remoter.sudo('touch %s' % mark_path, verbose=verbose)
             else:
                 self.remoter.sudo('touch %s' % mark_path, verbose=verbose, user='scylla')
 
@@ -1291,7 +1300,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         wait.wait_for(func=self.db_up, step=60, text=text, timeout=timeout, throw_exc=True)
         self.db_init_finished = True
         try:
-            self._report_housekeeping_uuid()
+            self._report_housekeeping_uuid(verbose=True)
         except Exception as details:  # pylint: disable=broad-except
             self.log.error('Failed to report housekeeping uuid. Error details: %s', details)
 
