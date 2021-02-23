@@ -256,7 +256,7 @@ class KubectlClusterEventsLogger(CommandClusterLoggerBase):
 
     @property
     def _logger_cmd(self) -> str:
-        cmd = self._cluster.kubectl_cmd("get events -w", namespace="scylla")
+        cmd = self._cluster.kubectl_cmd("get events -w", namespace=self._cluster._scylla_namespace)
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
