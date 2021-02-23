@@ -38,7 +38,8 @@ HELM_IMAGE = "alpine/helm:3.3.4"
 
 KUBECTL_TIMEOUT = 300  # seconds
 
-K8S_CONFIGS = sct_abs_path("sdcm/k8s_configs")
+K8S_CONFIGS_PATH_SCT = sct_abs_path("sdcm/k8s_configs")
+K8S_CONFIGS_PATH_IN_CONTAINER = "/apps/k8s_configs"
 
 JSON_PATCH_TYPE = "application/json-patch+json"
 
@@ -304,7 +305,7 @@ class HelmContainerMixin:
         volumes = {
             os.path.dirname(kube_config_path): {"bind": "/root/.kube", "mode": "rw"},
             helm_config_path: {"bind": "/root/.helm", "mode": "rw"},
-            K8S_CONFIGS: {"bind": "/apps", "mode": "rw"},
+            K8S_CONFIGS_PATH_SCT: {"bind": K8S_CONFIGS_PATH_IN_CONTAINER, "mode": "ro"},
             '/tmp': {"bind": "/tmp", "mode": "rw"},
         }
         return dict(image=HELM_IMAGE,

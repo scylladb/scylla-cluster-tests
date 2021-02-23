@@ -21,7 +21,7 @@ from functools import cached_property
 import yaml
 
 from sdcm import sct_abs_path, cluster
-from sdcm.utils.k8s import ApiCallRateLimiter
+from sdcm.utils.k8s import ApiCallRateLimiter, K8S_CONFIGS_PATH_IN_CONTAINER
 from sdcm.utils.common import shorten_cluster_name
 from sdcm.utils.gce_utils import GcloudContextManager, GcloudTokenUpdateThread
 from sdcm.wait import wait_for
@@ -34,7 +34,7 @@ GKE_API_CALL_RATE_LIMIT = 0.5  # ops/s
 GKE_API_CALL_QUEUE_SIZE = 1000  # ops
 GKE_URLLIB_RETRY = 6  # How many times api request is retried before reporting failure
 
-SCYLLA_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/cluster-gke.yaml")
+SCYLLA_CLUSTER_CONFIG = f"{K8S_CONFIGS_PATH_IN_CONTAINER}/gke-cluster-chart-values.yaml"
 LOADER_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/gke-loaders.yaml")
 CPU_POLICY_DAEMONSET = sct_abs_path("sdcm/k8s_configs/cpu-policy-daemonset.yaml")
 RAID_DAEMONSET = sct_abs_path("sdcm/k8s_configs/raid-daemonset.yaml")
@@ -161,7 +161,7 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
         self.apply_file(CPU_POLICY_DAEMONSET, envsubst=False)
 
         LOGGER.info("Install local volume provisioner to GKE cluster `%s'", self.name)
-        self.helm(f"install local-provisioner provisioner")
+        self.helm(f"install local-provisioner {K8S_CONFIGS_PATH_IN_CONTAINER}/provisioner")
 
     def get_nodes_in_pool(self, pool_name: str) -> int:
         return self._pools_info.get(pool_name, 0)

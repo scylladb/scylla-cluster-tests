@@ -67,6 +67,7 @@ SCYLLA_CLUSTER_RESOURCE_KIND = "ScyllaCluster"
 DEPLOY_SCYLLA_CLUSTER_DELAY = 15  # seconds
 SCYLLA_OPERATOR_NAMESPACE = "scylla-operator-system"
 SCYLLA_MANAGER_NAMESPACE = "scylla-manager-system"
+SCYLLA_NAMESPACE = "scylla"
 
 
 LOGGER = logging.getLogger(__name__)
@@ -88,6 +89,7 @@ class KubernetesCluster:
     #       such as 'sdcm.utils.remote_logger.ScyllaOperatorLogger'.
     _scylla_operator_namespace = SCYLLA_OPERATOR_NAMESPACE
     _scylla_manager_namespace = SCYLLA_MANAGER_NAMESPACE
+    _scylla_namespace = SCYLLA_NAMESPACE
 
     @property
     def k8s_server_url(self) -> Optional[str]:
@@ -313,7 +315,7 @@ class KubernetesCluster:
     @log_run_info
     def deploy_scylla_cluster(self, config: str, target_mgmt_agent_to_minio: bool = False) -> None:
         LOGGER.info("Create and initialize a Scylla cluster")
-        self.kubectl("create namespace scylla")
+        self.kubectl(f"create namespace {SCYLLA_NAMESPACE}")
         if target_mgmt_agent_to_minio:
             # Create kubernetes secret that holds scylla manager agent configuration
             self.update_secret_from_data('scylla-agent-config', 'scylla', {
@@ -328,11 +330,19 @@ class KubernetesCluster:
             })
 
         # Deploy scylla cluster
-        self.apply_file(config)
+        LOGGER.debug(self.helm_install(
+            target_chart_name="scylla",
+            source_chart_name="scylla-operator/scylla",
+            version=self._scylla_operator_chart_version,
+            use_devel=True,
+            set_options="",
+            values_file_path=config,
+            namespace=SCYLLA_NAMESPACE,
+        ))
 
         LOGGER.debug("Check Scylla cluster")
-        self.kubectl("get scyllaclusters.scylla.scylladb.com", namespace="scylla")
-        self.kubectl("get pods", namespace="scylla")
+        self.kubectl("get scyllaclusters.scylla.scylladb.com", namespace=SCYLLA_NAMESPACE)
+        self.kubectl("get pods", namespace=SCYLLA_NAMESPACE)
 
         LOGGER.debug("Wait for %d secs before we start to apply changes to the cluster", DEPLOY_SCYLLA_CLUSTER_DELAY)
         time.sleep(DEPLOY_SCYLLA_CLUSTER_DELAY)

@@ -1,0 +1,46 @@
+---
+nameOverride: ""
+fullnameOverride: ${SCT_K8S_SCYLLA_CLUSTER_NAME}
+
+scyllaImage:
+  repository: scylladb/scylla
+  tag: ${SCT_SCYLLA_VERSION}
+agentImage:
+  repository: scylladb/scylla-manager-agent
+  tag: ${SCT_SCYLLA_MGMT_AGENT_VERSION}
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ${SCT_K8S_SCYLLA_CLUSTER_NAME}-member
+
+alternator:
+  enabled: false
+  port: 8000
+  writeIsolation: "always"
+
+developerMode: true
+cpuset: false
+hostNetworking: false
+automaticOrphanedNodeCleanup: false
+sysctls: []
+backups: []
+repairs: []
+serviceMonitor:
+  create: false
+
+datacenter: ${SCT_K8S_SCYLLA_DATACENTER}
+racks:
+  - name: ${SCT_K8S_SCYLLA_RACK}
+    scyllaConfig: "scylla-config"
+    scyllaAgentConfig: "scylla-agent-config"
+    members: 0
+    storage:
+      capacity: ${SCT_K8S_SCYLLA_DISK_GI}Gi
+    resources:
+      limits:
+        cpu: ${SCT_K8S_SCYLLA_CPU_N}
+        memory: ${SCT_K8S_SCYLLA_MEM_GI}Gi
+      requests:
+        cpu: ${SCT_K8S_SCYLLA_CPU_N}
+        memory: ${SCT_K8S_SCYLLA_MEM_GI}Gi

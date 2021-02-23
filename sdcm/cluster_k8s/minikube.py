@@ -24,13 +24,13 @@ from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.cluster_k8s import KubernetesCluster, BaseScyllaPodContainer, ScyllaPodCluster
 from sdcm.cluster_k8s.iptables import IptablesPodPortsRedirectMixin, IptablesClusterOpsMixin
 from sdcm.cluster_gce import MonitorSetGCE
-from sdcm.utils.k8s import KubernetesOps
+from sdcm.utils.k8s import KubernetesOps, K8S_CONFIGS_PATH_IN_CONTAINER
 from sdcm.utils.common import get_free_port, wait_for_port
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import ContainerManager
 
 
-SCYLLA_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/cluster-minikube.yaml")
+SCYLLA_CLUSTER_CONFIG = f"{K8S_CONFIGS_PATH_IN_CONTAINER}/minikube-cluster-chart-values.yaml"
 KUBECTL_PROXY_PORT = 8001
 KUBECTL_PROXY_CONTAINER = "auto_ssh:kubectl_proxy"
 SCYLLA_POD_EXPOSED_PORTS = [3000, 9042, 9180, ]
