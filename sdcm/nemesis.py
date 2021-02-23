@@ -3298,7 +3298,8 @@ class LimitedChaosMonkey(Nemesis):
                                                          'disrupt_snapshot_operations', 'disrupt_abort_repair',
                                                          'disrupt_mgmt_backup',
                                                          'disrupt_mgmt_backup_specific_keyspaces',
-                                                         'disrupt_add_drop_column'])
+                                                         'disrupt_add_drop_column', 'disrupt_ldap_connection_toggle',
+                                                         'disrupt_disable_enable_ldap_authorization'])
 
 
 class ScyllaCloudLimitedChaosMonkey(Nemesis):
