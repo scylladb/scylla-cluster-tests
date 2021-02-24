@@ -478,13 +478,6 @@ class ArtifactsEmailReporter(BaseEmailReporter):
     email_template_file = "results_artifacts.html"
 
 
-class PrivateRepoEmailReporter(BaseEmailReporter):
-    _fields = ("repo_ostype",
-               "repo_uuid",
-               "scylla_repo",)
-    email_template_file = "results_private_repo.html"
-
-
 class TestAbortedEmailReporter(LongevityEmailReporter):
     email_template_file = "results_aborted.html"
 
@@ -535,8 +528,6 @@ def build_reporter(name: str,
         return UpgradeEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Artifacts" in name:
         return ArtifactsEmailReporter(email_recipients=email_recipients, logdir=logdir)
-    elif "PrivateRepo" in name:
-        return PrivateRepoEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Mgmt" in name:
         return MgmtEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "TestAborted" in name:
