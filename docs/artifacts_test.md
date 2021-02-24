@@ -128,11 +128,3 @@ If you want to run against some official ScyllaDB Docker image, you should go to
 ```sh
 SCT_SCYLLA_VERSION="<tag you've chose>" hydra run-test artifacts_test --backend docker --config test-cases/artifacts/docker.yaml
 ```
-
-# How to run private repo test using `hydra`
-
-Note, that this test doesn't create any node, but `hydra` required `--backend` parameter. Use `gce` for this parameter.
-
-```sh
-SCT_SCYLLA_REPO="<URL to private repo to verify>" hydra run-test private_repo_test --backend gce --config test-cases/private-repo/private-repo.yaml
-```

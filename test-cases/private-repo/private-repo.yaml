@@ -1,8 +1,0 @@
-cluster_backend: 'gce'
-logs_transport: 'ssh'
-n_db_nodes: 0
-n_loaders: 0
-n_monitor_nodes: 0
-nemesis_class_name: 'NoOpMonkey'
-user_prefix: 'private-repo'
-scylla_repo: 'https://repositories.scylladb.com/scylla/repo/qa-test-centos/centos/scylladb-3.2.repo'
