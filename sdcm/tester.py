@@ -291,6 +291,18 @@ class ClusterTester(db_stats.TestStatsMixin,
         self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
         if self.params.get("use_ldap_authorization"):
             self.configure_ldap(node=self.localhost, use_ssl=False)
+            self.params['are_ldap_users_on_scylla'] = False
+            ldap_role = LDAP_ROLE
+            ldap_users = LDAP_USERS.copy()
+            ldap_address = list(Setup.LDAP_ADDRESS).copy()
+            unique_members_list = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}' for user in ldap_users]
+            ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
+            user_password = LDAP_PASSWORD  # not in use not for authorization, but must be in the config
+            ldap_entry = [f'cn={ldap_role},{LDAP_BASE_OBJECT}',
+                          ['groupOfUniqueNames', 'simpleSecurityObject', 'top'],
+                          {'uniqueMember': unique_members_list, 'userPassword': user_password}]
+            self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
+                                          user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
         self.alternator = alternator.api.Alternator(sct_params=self.params)
         start_events_device(log_dir=self.logdir, _registry=self.events_processes_registry)
         time.sleep(0.5)
@@ -464,8 +476,9 @@ class ClusterTester(db_stats.TestStatsMixin,
                 self.legacy_init_nodes(db_cluster=self.db_cluster)
             else:
                 self.init_nodes(db_cluster=self.db_cluster)
-            if self.params.get('use_ldap_authorization'):
+            if self.params.get('use_ldap_authorization') and not self.params.get('are_ldap_users_on_scylla'):
                 self.db_cluster.nodes[0].create_ldap_users_on_scylla()
+                self.params['are_ldap_users_on_scylla'] = True
             self.set_system_auth_rf()
 
             db_node_address = self.db_cluster.nodes[0].ip_address

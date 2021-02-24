@@ -1622,11 +1622,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 'ldap_bind_passwd': LDAP_PASSWORD}
 
     def create_ldap_users_on_scylla(self):
-        if not self.parent_cluster.ldap_configured:
-            self.run_cqlsh(f'CREATE ROLE \'{LDAP_ROLE}\' WITH SUPERUSER=true')
-            for user in LDAP_USERS:
-                self.run_cqlsh(f'CREATE ROLE \'{user}\' WITH login=true AND password=\'{LDAP_PASSWORD}\'')
-            self.parent_cluster.ldap_configured = True
+        self.run_cqlsh(f'CREATE ROLE \'{LDAP_ROLE}\' WITH SUPERUSER=true')
+        for user in LDAP_USERS:
+            self.run_cqlsh(f'CREATE ROLE \'{user}\' WITH login=true AND password=\'{LDAP_PASSWORD}\'')
 
     # pylint: disable=invalid-name,too-many-arguments,too-many-locals,too-many-branches,too-many-statements
     def config_setup(self,
@@ -2938,7 +2936,6 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         else:
             raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
         self.coredumps = dict()
-        self.ldap_configured = False
         self.latency_results = dict()
         super(BaseCluster, self).__init__()
 
@@ -3045,7 +3042,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         node.destroy()
 
     def get_db_auth(self):
-        if self.params.get('use_ldap_authorization') and self.ldap_configured:
+        if self.params.get('use_ldap_authorization') and self.params.get('are_ldap_users_on_scylla'):
             user = LDAP_USERS[0]
             password = LDAP_PASSWORD
         else:
