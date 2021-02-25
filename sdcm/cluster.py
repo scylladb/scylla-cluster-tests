@@ -1930,7 +1930,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.remoter.run('sudo yum update -y --skip-broken', retry=3)
         else:
             self.remoter.run(
-                'sudo DEBIAN_FRONTEND=noninteractive apt-get --force-yes -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" upgrade -y', retry=3)
+                'sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confold" '
+                '-o Dpkg::Options::="--force-confdef" upgrade -y', retry=3)
         # update repo cache after upgrade
         self.update_repo_cache()
 
@@ -2204,7 +2205,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             # 2) scylla-manager-client
             # 3) scylla-manager-server
             self.remoter.run('sudo apt-get dist-upgrade scylla-manager-server scylla-manager-client -y -o '
-                             'Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes'
+                             'Dpkg::Options::="--force-overwrite" -o Dpkg::Options::="--force-confdef" -o '
+                             'Dpkg::Options::="--force-confold" '
                              ' --allow-unauthenticated')
         time.sleep(3)
         if start_manager_after_upgrade:
@@ -2247,7 +2249,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         else:
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
             self.remoter.run(
-                'sudo apt-get install -y {}{}'.format(package_names, ' --force-yes' if not self.is_debian9() else ''))
+                'sudo apt-get install -y {}'.format(package_names))
 
         if self.is_docker():
             try:
