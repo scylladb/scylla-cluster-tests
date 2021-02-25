@@ -23,11 +23,12 @@ class QueryFilter():
     SETUP_PARAMS = ['n_db_nodes', 'n_loaders', 'n_monitor_nodes']
     SETUP_INSTANCE_PARAMS = ['instance_type_db', 'instance_type_loader', 'instance_type_monitor']
 
-    def __init__(self, test_doc, is_gce=False):
+    def __init__(self, test_doc, is_gce=False, use_wide_query=False):
         self.test_doc = test_doc
         self.test_name = test_doc["_source"]["test_details"]["test_name"]
         self.is_gce = is_gce
         self.date_re = '/.*/'
+        self.use_wide_query = use_wide_query
 
     def setup_instance_params(self):
         return ['gce_' + param for param in self.SETUP_INSTANCE_PARAMS] if self.is_gce else self.SETUP_INSTANCE_PARAMS
@@ -51,9 +52,28 @@ class QueryFilter():
     def test_cmd_details(self):
         raise NotImplementedError('Derived classes must implement this method.')
 
+    def filter_by_dashboard_query(self):
+        if "throughput" in self.test_doc['_source']['test_details']['job_name']:
+            test_type = r'results.stats.op\ rate:*'
+        elif "latency" in self.test_doc['_source']['test_details']['job_name']:
+            test_type = r'results.stats.latency\ 99th\ percentile:*'
+        else:
+            test_type = ""
+        return test_type
+
+    def build_query(self):
+        query = [self.filter_test_details()]
+
+        if not self.use_wide_query:
+            query.append(self.filter_setup_details())
+        else:
+            query.append(self.filter_by_dashboard_query())
+
+        return " AND ".join([q for q in query if q])
+
     def __call__(self, *args, **kwargs):
         try:
-            return '{} AND {}'.format(self.filter_test_details(), self.filter_setup_details())
+            return self.build_query()
         except KeyError:
             LOGGER.exception('Expected parameters for filtering are not found , test {}'.format(self.test_doc['_id']))
         return None
@@ -75,9 +95,9 @@ class PerformanceQueryFilter(QueryFilter):
 
     def filter_test_details(self):
         test_details = self.build_filter_job_name()
-        test_details += self.test_cmd_details()
-        test_details += ' AND test_details.time_completed: {}'.format(self.date_re)
-
+        if not self.use_wide_query:
+            test_details += self.test_cmd_details()
+            test_details += ' AND test_details.time_completed: {}'.format(self.date_re)
         test_details += ' AND {}'.format(self.build_filter_test_name())
         return test_details
 
@@ -98,9 +118,13 @@ class PerformanceQueryFilter(QueryFilter):
             filter_query = ""
             if job_name[0] and job_name[0] in job_item['job_folder']:
                 base_job_name = job_name[1]
-                filter_query = r'(test_details.job_name.keyword: {}\/{}* OR'.format(job_name[0],
-                                                                                    base_job_name)
-                filter_query += r' test_details.job_name.keyword: {}*) '.format(base_job_name)
+                if self.use_wide_query:
+                    filter_query = r'test_details.job_name.keyword: {}\/{}* '.format(job_name[0],
+                                                                                     base_job_name)
+                else:
+                    filter_query = r'(test_details.job_name.keyword: {}\/{}* OR'.format(job_name[0],
+                                                                                        base_job_name)
+                    filter_query += r' test_details.job_name.keyword: {}*) '.format(base_job_name)
             return filter_query
 
         def get_query_filter_by_job_prefix(job_item):
@@ -109,9 +133,13 @@ class PerformanceQueryFilter(QueryFilter):
                 if not job_name[0].startswith(job_prefix):
                     continue
                 base_job_name = job_name[0]
-                filter_query = r'(test_details.job_name.keyword: {}\/{}* OR'.format(job_item['job_folder'],
-                                                                                    base_job_name)
-                filter_query += r' test_details.job_name.keyword: {}*) '.format(base_job_name)
+                if self.use_wide_query:
+                    filter_query = r'test_details.job_name.keyword: {}\/{}* '.format(job_item['job_folder'],
+                                                                                     base_job_name)
+                else:
+                    filter_query = r'(test_details.job_name.keyword: {}\/{}* OR'.format(job_item['job_folder'],
+                                                                                        base_job_name)
+                    filter_query += r' test_details.job_name.keyword: {}*) '.format(base_job_name)
                 break
             return filter_query
 
@@ -138,8 +166,10 @@ class PerformanceQueryFilter(QueryFilter):
         else:
             avocado_test_name = self.test_name.replace(".", r".py\:", 1)
             new_test_name = self.test_name
-
-        return " (test_details.test_name: {} OR test_details.test_name: {})".format(new_test_name, avocado_test_name)
+        if self.use_wide_query:
+            return " test_details.test_name: {}".format(new_test_name)
+        else:
+            return " (test_details.test_name: {} OR test_details.test_name: {})".format(new_test_name, avocado_test_name)
 
     def test_cmd_details(self):
         raise NotImplementedError('Derived classes must implement this method.')
@@ -497,9 +527,9 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         return val1 if val2 == 0 or val1 < val2 else val2  # latency
 
     @staticmethod
-    def _query_filter(test_doc, is_gce):
+    def _query_filter(test_doc, is_gce, use_wide_query=False):
         return PerformanceFilterScyllaBench(test_doc, is_gce)() if test_doc['_source']['test_details'].get('scylla-bench')\
-            else PerformanceFilterCS(test_doc, is_gce)()
+            else PerformanceFilterCS(test_doc, is_gce, use_wide_query)()
 
     def cmp(self, src, dst, version_dst, best_test_id):
         """
@@ -532,7 +562,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                     param, src[param], dst[param], version_dst))
         return cmp_res
 
-    def check_regression(self, test_id, is_gce=False):
+    def check_regression(self, test_id, is_gce=False, use_wide_query=False):
         """
         Get test results by id, filter similar results and calculate max values for each version,
         then compare with max in the test version and all the found versions.
@@ -555,7 +585,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             return False
 
         # filter tests
-        query = self._query_filter(doc, is_gce)
+        query = self._query_filter(doc, is_gce, use_wide_query)
         if not query:
             return False
         self.log.debug("Query to ES: %s", query)
