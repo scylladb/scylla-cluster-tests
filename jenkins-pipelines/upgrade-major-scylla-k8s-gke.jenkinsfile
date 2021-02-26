@@ -7,5 +7,5 @@ rollingOperatorUpgradePipeline(
     base_versions: '["4.1.5"]',
     new_version: '4.2.1',
     test_name: 'upgrade_test.UpgradeTest.test_kubernetes_scylla_upgrade',
-    test_config: 'test-cases/scylla-operator/kubernetes-scylla-upgrade-gke.yaml',
+    test_config: 'test-cases/scylla-operator/kubernetes-scylla-upgrade.yaml',
 )

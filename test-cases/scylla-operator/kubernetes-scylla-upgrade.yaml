@@ -8,8 +8,7 @@ n_db_nodes: 3
 n_loaders: 1
 n_monitor_nodes: 1
 
-# Need to keep rendered name less than 40 chars because of GKE restrictions. Note, that backend name included automatically.
-user_prefix: 'kubernetes-scylla-upgrade-gke'
+user_prefix: 'kubernetes-scylla-upgrade'
 
 # Following configurations does not currently work on kubernetes, due to the lack of ssl certificate support.
 # could be enabled after https://github.com/scylladb/scylla-cluster-tests/issues/2744

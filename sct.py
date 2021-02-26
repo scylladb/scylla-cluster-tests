@@ -296,6 +296,27 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
     else:
         click.secho("Nothing found for selected filters in GCE!", fg="yellow")
 
+<<<<<<< HEAD
+=======
+    click.secho("Checking EKS...", fg='green')
+    eks_clusters = list_clusters_eks(tags_dict=params, verbose=verbose)
+    if eks_clusters:
+        eks_table = PrettyTable(["Name", "TestId", "Region", "RunByUser", "CreateTime"])
+        eks_table.align = "l"
+        eks_table.sortby = 'CreateTime'
+        for cluster in eks_clusters:
+            tags = gce_meta_to_dict(cluster.extra['metadata'])
+            eks_table.add_row([cluster.name,
+                               tags.get('TestId', 'N/A') if tags else "N/A",
+                               cluster.region_name,
+                               tags.get('RunByUser', 'N/A') if tags else "N/A",
+                               cluster.create_time,
+                               ])
+        click.echo(eks_table.get_string(title="EKS clusters"))
+    else:
+        click.secho("Nothing found for selected filters in EKS!", fg="yellow")
+
+>>>>>>> 8bd6ee1f... fix(operator-jenkins-pipelines): Generalize test files and create EKS jenkins pipelines
     click.secho("Checking Docker...", fg="green")
     docker_resources = \
         list_resources_docker(tags_dict=params, running=get_all_running, group_as_builder=True, verbose=verbose)
