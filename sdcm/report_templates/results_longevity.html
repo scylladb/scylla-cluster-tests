@@ -8,6 +8,52 @@
             <li>Scylla version: {{ scylla_version }} ({{ scylla_ami_id }})</li>
             <li>Instance type: {{ scylla_instance_type }}</li>
             <li>Number of scylladb nodes: {{ number_of_db_nodes }}</li>
+
+
+            {% if live_nodes_shards %}
+            <h4>Live nodes (at the end of the test)</h4>
+            <div>
+                <table class='nodes_info_table'>
+                    <tr>
+                        <th>Name</th>
+                        <th>IP address</th>
+                        <th>Scylla shards</th>
+                    </tr>
+                    {% for node in live_nodes_shards %}
+                    <tr>
+                        <td>{{ node.name }}</td>
+                        <td>{{ node.ip }}</td>
+                        <td>{{ node.shards }}</td>
+                    </tr>
+                {% endfor %}
+                </table>
+            </div>
+            {% endif %}
+
+            {% if dead_nodes_shards %}
+            <h4>Terminated nodes</h4>
+            <div>
+                <table class='nodes_info_table'>
+                    <tr>
+                        <th>Name</th>
+                        <th>IP address</th>
+                        <th>Scylla shards</th>
+                        <th>Termination time</th>
+                        <th>Terminated by nemesis</th>
+                    </tr>
+                    {% for node in dead_nodes_shards %}
+                    <tr>
+                        <td>{{ node.name }}</td>
+                        <td>{{ node.ip }}</td>
+                        <td>{{ node.shards }}</td>
+                        <td>{{ node.termination_time }}</td>
+                        <td>{{ node.terminated_by_nemesis }}</td>
+                    </tr>
+                {% endfor %}
+                </table>
+            </div>
+            {% endif %}
+
         </ul>
     </div>
 {% include "results_nemesis_stats.html" %}
