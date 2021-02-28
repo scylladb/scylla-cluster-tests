@@ -6,7 +6,13 @@
     <div>
         <ul>
             <li>Jepsen repo: {{ jepsen_scylla_repo }}</li>
-            <li>Jepsen test command: {{ jepsen_test_cmd }}</li>
+            <li>Jepsen test commands:
+                <ul>
+                    {% for test in jepsen_test_cmd %}
+                    <li>- {{ test }}</li>
+                    {% endfor %}
+                </ul>
+            </li>
         </ul>
     </div>
     <h3>

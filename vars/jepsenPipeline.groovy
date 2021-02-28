@@ -33,7 +33,7 @@ def call(Map pipelineParams) {
                    description: 'a link to the git repository with Jepsen Scylla tests',
                    name: 'jepsen_scylla_repo')
             string(defaultValue: '',
-                   description: "Jepsen test command (e.g., 'test-all')",
+                   description: "Jepsen test command(s) (e.g., 'test-all')",
                    name: 'jepsen_test_cmd')
 
             string(defaultValue: "${pipelineParams.get('post_behavior_db_nodes', 'destroy')}",
