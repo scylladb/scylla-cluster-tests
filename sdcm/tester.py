@@ -11,6 +11,8 @@
 #
 # Copyright (c) 2016 ScyllaDB
 # pylint: disable=too-many-lines
+from collections import defaultdict
+from dataclasses import asdict
 
 import logging
 import os
@@ -28,8 +30,7 @@ import signal
 import sys
 import traceback
 
-import boto3.session
-from invoke.exceptions import UnexpectedExit, Failure
+from invoke.exceptions import UnexpectedExit, Failure  # pylint: disable=import-error
 
 from cassandra.concurrent import execute_concurrent_with_args  # pylint: disable=no-name-in-module
 from cassandra import ConsistencyLevel
@@ -2606,6 +2607,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         """
         return {}
 
+    def all_nodes_scylla_shards(self):
+        all_nodes_shards = defaultdict(list)
+        for node in self.db_cluster.nodes:
+            ipv6 = node.ipv6_ip_address if node.ip_address == node.ipv6_ip_address else ''
+            all_nodes_shards['live_nodes'].append({'name': node.name,
+                                                   'ip': f"{node.public_ip_address} | {node.private_ip_address}"
+                                                         f"{f' | {ipv6}' if ipv6 else ''}",
+                                                   'shards': node.scylla_shards})
+
+        all_nodes_shards['dead_nodes'] = [asdict(node) for node in self.db_cluster.dead_nodes_list]
+
+        return all_nodes_shards
+
     def _get_common_email_data(self) -> dict:
         """Helper for subclasses which extracts common data for email."""
 
@@ -2625,6 +2639,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.error(f"Can't discover instance type for {backend}!")
             scylla_instance_type = "N/A"
         job_name = os.environ.get('JOB_NAME').split("/")[-1] if os.environ.get('JOB_NAME') else config_file_name
+        nodes_shards = self.all_nodes_scylla_shards()
+
         return {"backend": backend,
                 "build_id": os.environ.get('BUILD_NUMBER', ''),
                 "job_url": os.environ.get("BUILD_URL"),
@@ -2636,6 +2652,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 "region_name": region_name,
                 "scylla_instance_type": scylla_instance_type,
                 "scylla_version": scylla_version,
+                "live_nodes_shards": nodes_shards['live_nodes'],
+                "dead_nodes_shards": nodes_shards['dead_nodes'],
                 "kernel_version": kernel_version,
                 "start_time": start_time,
                 "subject": f"{test_status}: {os.environ.get('JOB_NAME') or config_file_name}{build_id}: {start_time}",

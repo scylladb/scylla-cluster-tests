@@ -5,6 +5,18 @@
         Kernel version: `{{ kernel_version }}`<br>
         Scylla version (or git commit hash): `{{ scylla_version }}`<br>
         Cluster size: {{ number_of_db_nodes }} nodes ({{ scylla_instance_type }})<br>
+        {% if live_nodes_shards %}
+            Scylla running with shards number (live nodes):<br>
+            {% for shards_info in live_nodes_shards %}
+               &nbsp;&nbsp;{{ shards_info.name }} ({{ shards_info.ip }}): {{ shards_info.shards }} shards<br>
+            {% endfor %}
+        {% endif %}
+        {% if dead_nodes_shards %}
+            Scylla running with shards number (terminated nodes):<br>
+            {% for shards_info in dead_nodes_shards %}
+               &nbsp;&nbsp;{{ shards_info.name }} ({{ shards_info.ip }}): {{ shards_info.shards }} shards<br>
+            {% endfor %}
+        {% endif %}
         OS (RHEL/CentOS/Ubuntu/AWS AMI): {% if scylla_ami_id %} `{{ scylla_ami_id }}` {% endif %} {% if scylla_node_image %} `{{ scylla_node_image }}`{% endif %} ({{ backend }}{% if region_name %}: {{ region_name }}{% endif %})<br>
         {% if scylla_repo %}
         Private repo: `{{ scylla_repo }}`<br>
