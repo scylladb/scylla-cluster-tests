@@ -1073,7 +1073,7 @@ class SCTConfiguration(dict):
         # Jepsen test.
         dict(name="jepsen_scylla_repo", env="SCT_JEPSEN_SCYLLA_REPO", type=str,
              help="Link to the git repository with Jepsen Scylla tests"),
-        dict(name="jepsen_test_cmd", env="SCT_JEPSEN_TEST_CMD", type=str,
+        dict(name="jepsen_test_cmd", env="SCT_JEPSEN_TEST_CMD", type=str_or_list,
              help="Jepsen test command (e.g., 'test-all')"),
 
         dict(name="max_events_severities", env="SCT_MAX_EVENTS_SEVERITIES", type=str_or_list,

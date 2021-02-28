@@ -49,13 +49,14 @@ class JepsenTest(ClusterTester):
         self.setup_jepsen()
 
     def test_jepsen(self):
-        tests = self.params.get('jepsen_test_cmd')
         nodes = " ".join(f"--node {node.ip_address}" for node in self.db_cluster.nodes)
         creds = f"--username {self.db_cluster.nodes[0].ssh_login_info['user']} --ssh-private-key ~/{DB_SSH_KEY}"
-        jepsen_cmd = f"cd ~/jepsen-scylla && ~/lein run {tests} {nodes} {creds} --no-install-scylla"
-
-        self.log.info("Run Jepsen test: `%s'", jepsen_cmd)
-        self.jepsen_node.remoter.run(jepsen_cmd)
+        failed = False
+        for test in self.params.get('jepsen_test_cmd'):
+            jepsen_cmd = f"cd ~/jepsen-scylla && ~/lein run {test} {nodes} {creds} --no-install-scylla"
+            self.log.info("Run Jepsen test: `%s'", jepsen_cmd)
+            failed |= self.jepsen_node.remoter.run(jepsen_cmd, ignore_status=True, verbose=True).failed
+        self.failIf(failed, "Some of Jepsen tests were failed")
 
     def save_jepsen_report(self):
         url = f"http://{self.jepsen_node.external_address}:8080/"
