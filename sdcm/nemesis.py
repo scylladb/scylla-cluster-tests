@@ -23,12 +23,15 @@ import time
 import datetime
 import threading
 import os
+import shutil
 import re
+import yaml
 import traceback
 
 from typing import List, Optional
 from collections import OrderedDict, defaultdict
 from functools import wraps, partial
+from uuid import uuid4
 
 from invoke import UnexpectedExit
 from cassandra import ConsistencyLevel  # pylint: disable=ungrouped-imports
@@ -474,23 +477,39 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('LDAP_Toggle_authorization_configuration')
         if not self.cluster.params.get('use_ldap_authorization'):
             raise UnsupportedNemesis('Cluster is not configured to run with LDAP authorization, hence skipping')
-        ldap_config = {'role_manager': '',
-                       'ldap_url_template': '',
-                       'ldap_attr_role': '',
-                       'ldap_bind_dn': '',
-                       'ldap_bind_passwd': ''}
+        ldap_config_keys = ['role_manager', 'ldap_url_template', 'ldap_attr_role', 'ldap_bind_dn', 'ldap_bind_passwd']
+        ldap_config = dict()
 
         def destroy_ldap_container():
             ContainerManager.destroy_container(self.tester.localhost, 'ldap')
 
+        def get_remote_scylla_yaml(path, node):
+            os.makedirs(path)
+            node.remoter.receive_files(src=SCYLLA_YAML_PATH, dst=path)
+
+        def set_remote_scylla_yaml(path, node):
+            node.remoter.send_files(src=os.path.join(path, 'scylla.yaml'), dst='/tmp/scylla.yaml')
+            node.remoter.run(f'sudo mv /tmp/scylla.yaml {SCYLLA_YAML_PATH}')
+            shutil.rmtree(path, ignore_errors=True)
+
         def remove_ldap_configuration_from_node(node):
-            with node.remote_scylla_yaml() as scylla_yaml:
-                for key in ldap_config.keys():
-                    ldap_config[key] = scylla_yaml.pop(key)
+            temp = f'/tmp/{uuid4()}/'
+            get_remote_scylla_yaml(temp, node)
+            with open(os.path.join(temp, 'scylla.yaml'), 'r') as scylla_yaml:
+                scylla_yaml_content = yaml.safe_load(scylla_yaml)
+                for key in ldap_config_keys:
+                    if key in scylla_yaml_content:
+                        ldap_config[node][key] = scylla_yaml_content.pop(key)
+                    else:
+                        raise Exception(f"scylla.yaml doesn't have {key}")
+            with open(os.path.join(temp, 'scylla.yaml'), 'w') as scylla_yaml:
+                yaml.safe_dump(scylla_yaml_content, scylla_yaml)
+            set_remote_scylla_yaml(temp, node)
             node.restart_scylla_server()
 
         InfoEvent(message='Disable LDAP Authorization Configuration')
         for node in self.cluster.nodes:
+            ldap_config[node] = dict()
             remove_ldap_configuration_from_node(node)
         destroy_ldap_container()
 
@@ -502,8 +521,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         def add_ldap_configuration_to_node(node):
             node.refresh_ip_address()
-            with node.remote_scylla_yaml() as scylla_yaml:
-                scylla_yaml.update(ldap_config)
+            temp = f'/tmp/{uuid4()}/'
+            get_remote_scylla_yaml(temp, node)
+            with open(os.path.join(temp, 'scylla.yaml'), 'r') as scylla_yaml:
+                scylla_yaml_content = yaml.safe_load(scylla_yaml)
+            scylla_yaml_content.update(ldap_config[node])
+            with open(os.path.join(temp, 'scylla.yaml'), 'w') as scylla_yaml:
+                yaml.safe_dump(scylla_yaml_content, scylla_yaml)
+            set_remote_scylla_yaml(temp, node)
             node.restart_scylla_server()
 
         InfoEvent(message='Re-enable LDAP Authorization Configuration')
