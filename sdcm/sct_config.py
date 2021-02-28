@@ -315,6 +315,13 @@ class SCTConfiguration(dict):
         dict(name="test_id", env="SCT_TEST_ID", type=str,
              help="""Set the test_id of the run manually. Use only from the env before running Hydra"""),
 
+        dict(name="db_nodes_shards_selection", env="SCT_NODES_SHARDS_SELECTION", type=str,
+             choices=['default', 'random'],
+             help="""How to select number of shards of Scylla. Expected values: default/random.
+             Default value: 'default'.
+             In case of random option - Scylla will start with different (random) shards on every node of the cluster
+             """),
+
         dict(name="seeds_selector", env="SCT_SEEDS_SELECTOR", type=str,
              choices=['reflector', 'random', 'first'],
              help="""How to select the seeds. Expected values: reflector/random/first"""),

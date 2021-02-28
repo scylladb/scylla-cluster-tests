@@ -12,6 +12,9 @@
 # Copyright (c) 2016 ScyllaDB
 
 # pylint: disable=too-many-lines
+from dataclasses import dataclass
+
+import random
 
 import queue
 import getpass
@@ -604,6 +607,61 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         cores = result.stdout.lower()
         cores = int(cores) if cores else None
         return cores
+
+    @property
+    def scylla_shards(self):
+        """
+        Priority of selecting number of shards for Scylla is defined in
+        <dist.common.scripts.scylla_util.scylla_cpuinfo.nr_shards> and has following order:
+        1) SMP
+        2) CPUSET
+        3) Number of cores on the machine
+        """
+        return self.smp or self.cpuset or self.cpu_cores
+
+    @property
+    def cpuset(self):
+        # Possible output of grep:
+        #   'CPUSET="--cpuset 1-7 "'
+        #   'CPUSET="--cpuset 1-7,9-15 "'
+        grep_result = self.remoter.run('grep "^CPUSET" /etc/scylla.d/cpuset.conf')
+        scylla_cpu_set = re.findall(r'(\d+)', grep_result.stdout)
+        self.log.debug(f"CPUSET on node {self.name}: {grep_result}")
+
+        if scylla_cpu_set:
+            cpuset = int(scylla_cpu_set[1]) - int(scylla_cpu_set[0]) + 1
+
+            if len(scylla_cpu_set) == 4:
+                cpuset += int(scylla_cpu_set[3]) - int(scylla_cpu_set[2]) + 1
+
+            return cpuset
+
+        return ''
+
+    @property
+    def smp(self):
+        """
+        Example of SCYLLA_ARGS:
+        SCYLLA_ARGS="--blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc
+        --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstable-key-validation 1 --smp 6 --log-to-syslog 1
+        --log-to-stdout 0 --default-log-level info --network-stack posix"
+        """
+        grep_result = self.remoter.run(f'grep "^SCYLLA_ARGS=" {self.scylla_server_sysconfig_path}')
+        scylla_smp = re.search(r'--smp\s(\d+)', grep_result.stdout)
+        self.log.debug(f"SMP on node {self.name}: {scylla_smp.groups() if scylla_smp else scylla_smp}")
+
+        return scylla_smp.group(1) if scylla_smp else ''
+
+    @property
+    def scylla_server_sysconfig_path(self):
+        return f"/etc/{'sysconfig' if self.distro.is_rhel_like else 'default'}/scylla-server"
+
+    def scylla_random_shards(self):
+        max_shards = self.cpu_cores
+        min_shards = round(self.cpu_cores / 2)
+        scylla_shards = random.randrange(start=min_shards, stop=max_shards)
+        self.log.info(f"Random shards: {scylla_shards}")
+        return scylla_shards
 
     @property
     def is_server_encrypt(self):
@@ -1775,9 +1833,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             scylla_arg_parser = ScyllaArgParser.from_scylla_help(scylla_help)
             append_scylla_args = scylla_arg_parser.filter_args(append_scylla_args)
 
+        if self.parent_cluster.params.get('db_nodes_shards_selection') == 'random':
+            append_scylla_args += f" --smp {self.scylla_random_shards()}"
+
         if append_scylla_args:
             self.log.debug("Append following args to scylla: `%s'", append_scylla_args)
-            scylla_server_config = f"/etc/{'sysconfig' if self.distro.is_rhel_like else 'default'}/scylla-server"
+            scylla_server_config = self.scylla_server_sysconfig_path
             self.remoter.sudo(
                 f"sed -i '/{append_scylla_args}/! s/SCYLLA_ARGS=\"/&{append_scylla_args} /' {scylla_server_config}")
 
@@ -2889,6 +2950,23 @@ class FlakyRetryPolicy(RetryPolicy):
         return self._retry_message(msg="Retrying request after UE", retry_num=retry_num)
 
 
+@dataclass
+class DeadNode:
+    name: str
+    public_ip: str
+    private_ip: str
+    ipv6_ip: str
+    ip_address: str  # it's depend on SSH connection type (ip_ssh_connections): private|public|ipv6
+    shards: int
+    termination_time: str
+    terminated_by_nemesis: str = ""
+    ip: str = ""
+
+    def __post_init__(self):
+        if not self.ip:
+            self.ip = f"{self.public_ip} | {self.private_ip}{f' | {self.ipv6_ip}' if self.ipv6_ip else ''}"
+
+
 class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     """
     Cluster of Node objects.
@@ -2920,7 +2998,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.instance_provision = params.get('instance_provision')
         self.params = params
         self.datacenter = region_names or []
-        self.dead_nodes_ip_address_list = set()
+        self.dead_nodes_list = []
 
         if Setup.REUSE_CLUSTER:
             # get_node_ips_param should be defined in child
@@ -2946,6 +3024,10 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         return {**Setup.common_tags(),
                 "NodeType": str(self.node_type),
                 "keep_action": "terminate" if action == "destroy" else "", }
+
+    @property
+    def dead_nodes_ip_address_list(self):
+        return [node.ip_address for node in self.dead_nodes_list]
 
     def init_log_directory(self):
         assert '_SCT_TEST_LOGDIR' in os.environ
@@ -3034,9 +3116,16 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         for node in self.nodes:
             node.destroy()
 
-    def terminate_node(self, node):
+    def terminate_node(self, node, by_nemesis=""):
         if node.ip_address not in self.dead_nodes_ip_address_list:
-            self.dead_nodes_ip_address_list.add(node.ip_address)
+            self.dead_nodes_list.append(DeadNode(name=node.name,
+                                                 public_ip=node.public_ip_address,
+                                                 private_ip=node.private_ip_address,
+                                                 ipv6_ip=node.ipv6_ip_address if IP_SSH_CONNECTIONS == "ipv6" else '',
+                                                 ip_address=node.ip_address,
+                                                 shards=node.scylla_shards,
+                                                 termination_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
+                                                 terminated_by_nemesis=by_nemesis))
         if node in self.nodes:
             self.nodes.remove(node)
         node.destroy()
@@ -3802,7 +3891,17 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
     def get_test_keyspaces(self):
         out = self.nodes[0].run_cqlsh('select keyspace_name from system_schema.keyspaces',
                                       split=True)
-        return [ks.strip() for ks in out[3:-3] if 'system' not in ks]
+        # Possible output:
+        # Warning: Cannot create directory at `/home/scyllaadm/.cassandra`. Command history will not be saved.
+        #
+        #
+        #  keyspace_name
+        # --------------------
+        #         system_auth
+        #
+        # (1 rows)
+        ks_names_index = [i for i, ks in enumerate(out) if '--------' in ks][0]
+        return [ks.strip() for ks in out[ks_names_index + 1:-3] if 'system' not in ks]
 
     def cfstat_reached_threshold(self, key, threshold, keyspaces=None):
         """

@@ -135,6 +135,8 @@ class BaseEmailReporter:
         "logs_links",
         "nodes",
         "number_of_db_nodes",
+        "live_nodes_shards",
+        "dead_nodes_shards",
         "region_name",
         "scylla_instance_type",
         "scylla_version",
