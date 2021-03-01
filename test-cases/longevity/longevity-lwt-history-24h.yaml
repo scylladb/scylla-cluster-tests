@@ -17,4 +17,4 @@ nemesis_interval: 5
 nemesis_during_prepare: false
 space_node_threshold: 64424
 
-user_prefix: 'longevity-lwt-history-24h'
+user_prefix: 'longevity-lwt-parallel-24h'
