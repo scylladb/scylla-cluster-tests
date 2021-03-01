@@ -2798,7 +2798,7 @@
                         },
                         "yaxes": [
                             {
-                                "format": "ops",
+                                "format": "ns",
                                 "logBase": 1,
                                 "max": null,
                                 "min": 0,
