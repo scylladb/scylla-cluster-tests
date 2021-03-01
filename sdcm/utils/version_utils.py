@@ -312,3 +312,33 @@ def resolve_latest_repo_symlink(url: str) -> str:
     resolved_url = f"{base}{build}{rest}"
     LOGGER.info("%s resolved to %s", url, resolved_url)
     return resolved_url
+
+
+def get_git_tag_from_helm_chart_version(chart_version: str) -> str:
+    """Utility function used to parse out the git tag from a Helm chart version
+
+    Designed to be used for 'scylla-operator' helm charts.
+    See below the expected mapping of possible helm chart version structures
+    and git tags:
+
+    +-----------------------------------+----------------+
+    | Helm chart version                | Git tag        |
+    +-----------------------------------+----------------+
+    | v1.1.0-rc.1                       | v1.1.0-rc.1    |
+    | v1.1.0-rc.1-1-g6d35b37            | v1.1.0-rc.1    |
+    | v1.1.0-alpha.0-3-g6594091-nightly | v1.1.0-alpha.0 |
+    | v1.1.0-alpha.0-3-g6594091         | v1.1.0-alpha.0 |
+    | v1.0.0                            | v1.0.0         |
+    | v1.0.0-39-g5bc1839                | v1.0.0         |
+    | v1.0.0-rc0-53-g489398a-nightly    | v1.0.0-rc0     |
+    | v1.0.0-rc0-53-g489398a            | v1.0.0-rc0     |
+    | v1.0.0-rc0-51-ga52c206-latest     | v1.0.0-rc0     |
+    +-----------------------------------+----------------+
+    """
+    pattern = "^(v[a-z0-9.-]+)-[\d]{1,3}-g[0-9a-z]{7}|(v[a-z0-9.-]+){1}$"
+    search_result = re.search(pattern, chart_version)
+    if search_result:
+        git_tag = search_result.group(1) or search_result.group(2)
+    else:
+        raise ValueError(f"Got wrong chart version: {chart_version}")
+    return git_tag

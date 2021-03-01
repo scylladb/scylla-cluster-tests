@@ -642,6 +642,15 @@ class SCTConfiguration(dict):
         dict(name="k8s_scylla_operator_docker_image", env="SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE", type=str,
              help=""),
 
+        dict(name="k8s_scylla_operator_helm_repo", env="SCT_K8S_SCYLLA_OPERATOR_HELM_REPO",
+             type=str,
+             help="Link to the Helm repository where to get 'scylla-operator' charts from."),
+
+        dict(name="k8s_scylla_operator_chart_version", env="SCT_K8S_SCYLLA_OPERATOR_CHART_VERSION",
+             type=str,
+             help=("Version of 'scylla-operator' Helm chart to use. "
+                   "If not set then latest one will be used.")),
+
         dict(name="k8s_scylla_datacenter", env="SCT_K8S_SCYLLA_DATACENTER", type=str,
              help=""),
 
@@ -1114,7 +1123,7 @@ class SCTConfiguration(dict):
 
         'k8s-gce-minikube': ['gce_image_minikube', 'gce_instance_type_minikube', 'gce_root_disk_type_minikube',
                              'gce_root_disk_size_minikube', 'user_credentials_path', 'scylla_version',
-                             'scylla_mgmt_agent_version', 'k8s_scylla_operator_docker_image', 'k8s_scylla_datacenter',
+                             'scylla_mgmt_agent_version', 'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter',
                              'k8s_scylla_rack', 'k8s_scylla_cluster_name', 'k8s_scylla_cpu_n', 'k8s_scylla_mem_gi',
                              'k8s_scylla_disk_gi', 'gce_image', 'gce_instance_type_loader', 'gce_root_disk_type_loader',
                              'gce_n_local_ssd_disk_loader', 'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
@@ -1123,7 +1132,7 @@ class SCTConfiguration(dict):
 
         'k8s-gke': ['gke_cluster_version', 'gke_cluster_n_nodes', 'gce_instance_type_db', 'gce_root_disk_type_db',
                     'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db', 'user_credentials_path', 'scylla_version',
-                    'scylla_mgmt_agent_version', 'k8s_scylla_operator_docker_image', 'k8s_scylla_datacenter',
+                    'scylla_mgmt_agent_version', 'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter',
                     'k8s_scylla_rack', 'k8s_scylla_cluster_name', 'k8s_scylla_cpu_n', 'k8s_scylla_mem_gi',
                     'k8s_loader_cluster_name', 'k8s_loader_cpu_n', 'k8s_loader_mem_gi', 'gce_instance_type_loader',
                     'gce_image_monitor', 'gce_instance_type_monitor', 'gce_root_disk_type_monitor',

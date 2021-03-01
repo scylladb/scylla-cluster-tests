@@ -54,18 +54,19 @@ from sdcm.utils.k8s import KubernetesOps, ApiCallRateLimiter, JSON_PATCH_TYPE, K
 from sdcm.utils.decorators import log_run_info, retrying, timeout
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \
     KubectlClusterEventsLogger, ScyllaManagerLogger
+from sdcm.utils.version_utils import get_git_tag_from_helm_chart_version
 from sdcm.wait import wait_for
 from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring, ScyllaOperatorStatusMonitoring
 
 
 ANY_KUBERNETES_RESOURCE = Union[Resource, ResourceField, ResourceInstance, ResourceList, Subresource]
 
-SCYLLA_OPERATOR_CONFIG = sct_abs_path("sdcm/k8s_configs/operator.yaml")
 SCYLLA_MANAGER_CONFIG = sct_abs_path("sdcm/k8s_configs/manager.yaml")
 CERT_MANAGER_TEST_CONFIG = sct_abs_path("sdcm/k8s_configs/cert-manager-test.yaml")
 SCYLLA_API_VERSION = "scylla.scylladb.com/v1"
 SCYLLA_CLUSTER_RESOURCE_KIND = "ScyllaCluster"
 DEPLOY_SCYLLA_CLUSTER_DELAY = 15  # seconds
+SCYLLA_OPERATOR_NAMESPACE = "scylla-operator-system"
 
 
 LOGGER = logging.getLogger(__name__)
@@ -82,6 +83,10 @@ class KubernetesCluster:
 
     _scylla_operator_log_monitor_thread: Optional[ScyllaOperatorLogMonitoring] = None
     _scylla_operator_status_monitor_thread: Optional[ScyllaOperatorStatusMonitoring] = None
+
+    # NOTE: Following class attr(s) are defined for consumers of this class
+    #       such as 'sdcm.utils.remote_logger.ScyllaOperatorLogger'.
+    _scylla_operator_namespace = SCYLLA_OPERATOR_NAMESPACE
 
     @property
     def k8s_server_url(self) -> Optional[str]:
@@ -114,6 +119,12 @@ class KubernetesCluster:
         if self.api_call_rate_limiter:
             self.api_call_rate_limiter.wait()
         return partial(cluster.Setup.tester_obj().localhost.helm, self)
+
+    @cached_property
+    def helm_install(self):
+        if self.api_call_rate_limiter:
+            self.api_call_rate_limiter.wait()
+        return partial(cluster.Setup.tester_obj().localhost.helm_install, self)
 
     @property
     def cert_manager_log(self) -> str:
@@ -148,6 +159,29 @@ class KubernetesCluster:
             step=10,
             throw_exc=True)
         self.start_cert_manager_journal_thread()
+
+    @cached_property
+    def _scylla_operator_chart_version(self):
+        LOGGER.debug(self.helm(
+            f"repo add scylla-operator {self.params.get('k8s_scylla_operator_helm_repo')}"))
+
+        chart_version = self.params.get(
+            "k8s_scylla_operator_chart_version").strip().lower()
+        if chart_version in ("", "latest"):
+            latest_version_raw = self.helm(
+                "search repo scylla-operator/scylla-operator --devel -o yaml")
+            latest_version = yaml.safe_load(latest_version_raw)
+            assert isinstance(
+                latest_version, list), f"Expected list of data, got: {type(latest_version)}"
+            assert len(latest_version) == 1, "Expected only one element in the list of versions"
+            assert "version" in latest_version[0], "Expected presence of 'version' key"
+            chart_version = latest_version[0]["version"].strip()
+            LOGGER.info(f"Using automatically found following "
+                        f"latest scylla-operator chart version: {chart_version}")
+        else:
+            LOGGER.info(f"Using following predefined scylla-operator "
+                        f"chart version: {chart_version}")
+        return chart_version
 
     @log_run_info
     def deploy_scylla_manager(self) -> None:
@@ -188,10 +222,38 @@ class KubernetesCluster:
 
     @log_run_info
     def deploy_scylla_operator(self) -> None:
+        # Calculate options values which must be set
+        #
+        # image.repository -> self.params.get('k8s_scylla_operator_docker_image').split('/')[0]
+        # image.tag        -> self.params.get('k8s_scylla_operator_docker_image').split(':')[-1]
+        set_options = []
+
+        scylla_operator_repo_base = self.params.get(
+            'k8s_scylla_operator_docker_image').split('/')[0]
+        if scylla_operator_repo_base:
+            set_options.append(f"controllerImage.repository={scylla_operator_repo_base}")
+
+        scylla_operator_image_tag = self.params.get(
+            'k8s_scylla_operator_docker_image').split(':')[-1]
+        if scylla_operator_image_tag:
+            set_options.append(f"controllerImage.tag={scylla_operator_image_tag}")
+
+        # Install and wait for initialization of the Scylla Operator chart
         LOGGER.info("Deploy Scylla Operator")
-        self.apply_file(SCYLLA_OPERATOR_CONFIG)
+        self.kubectl(f'create namespace {SCYLLA_OPERATOR_NAMESPACE}')
+        LOGGER.debug(self.helm_install(
+            target_chart_name="scylla-operator",
+            source_chart_name="scylla-operator/scylla-operator",
+            version=self._scylla_operator_chart_version,
+            use_devel=True,
+            set_options=",".join(set_options),
+            namespace=SCYLLA_OPERATOR_NAMESPACE,
+        ))
         time.sleep(10)
-        self.kubectl("wait --timeout=5m --all --for=condition=Ready pod", namespace="scylla-operator-system")
+        self.kubectl("wait --timeout=5m --all --for=condition=Ready pod",
+                     namespace=SCYLLA_OPERATOR_NAMESPACE)
+
+        # Start the Scylla Operator logging thread
         self.start_scylla_operator_journal_thread()
 
     @log_run_info
@@ -259,6 +321,9 @@ class KubernetesCluster:
         LOGGER.info("Create and initialize a monitoring cluster")
         if scylla_operator_tag == 'nightly':
             scylla_operator_tag = 'master'
+        elif scylla_operator_tag == '':
+            scylla_operator_tag = get_git_tag_from_helm_chart_version(
+                self._scylla_operator_chart_version)
         with TemporaryDirectory() as tmp_dir_name:
             scylla_operator_dir = os.path.join(tmp_dir_name, 'scylla-operator')
             scylla_monitoring_dir = os.path.join(tmp_dir_name, 'scylla-monitoring')
@@ -341,7 +406,7 @@ class KubernetesCluster:
 
     @property
     def operator_pod_status(self):
-        pods = KubernetesOps.list_pods(self, namespace='scylla-operator-system')
+        pods = KubernetesOps.list_pods(self, namespace=SCYLLA_OPERATOR_NAMESPACE)
         return pods[0].status if pods else None
 
     @property

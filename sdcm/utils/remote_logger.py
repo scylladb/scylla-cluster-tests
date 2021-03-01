@@ -292,7 +292,7 @@ class ScyllaOperatorLogger(CommandClusterLoggerBase):
         cmd = self._cluster.kubectl_cmd(
             f"logs  --previous=false -f --since={int(self.time_delta)}s scylla-operator-controller-manager-0 "
             "--all-containers=true",
-            namespace="scylla-operator-system")
+            namespace=self._cluster._scylla_operator_namespace)
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 

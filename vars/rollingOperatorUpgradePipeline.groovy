@@ -24,6 +24,10 @@ def call(Map pipelineParams) {
                    name: 'scylla_mgmt_agent_version')
             string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_docker_image', '')}",
                    name: 'k8s_scylla_operator_docker_image')
+            string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_helm_repo', '')}",
+                   name: 'k8s_scylla_operator_helm_repo')
+            string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_chart_version', '')}",
+                   name: 'k8s_scylla_operator_chart_version')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
                    description: 'spot_low_price|on_demand|spot_fleet|spot_low_price|spot_duration',
                    name: 'provision_type')
