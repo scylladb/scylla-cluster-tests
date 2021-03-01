@@ -7,6 +7,6 @@ longevityPipeline(
     backend: 'aws',
     aws_region: 'eu-west-1',
     test_name: 'longevity_lwt_test.LWTLongevityTest.test_lwt_longevity',
-    test_config: 'test-cases/longevity/longevity-lwt-history-24h.yaml',
+    test_config: 'test-cases/longevity/longevity-lwt-parallel-24h.yaml',
 
 )
