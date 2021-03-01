@@ -11,10 +11,19 @@ minikube_version: '1.11.0'
 
 n_db_nodes: 3
 
-k8s_scylla_operator_docker_image: 'scylladb/scylla-operator:nightly'
-k8s_cert_manager_version: '1.0.3'
-scylla_version: '4.2.1'
-scylla_mgmt_agent_version: '2.2.0'
+# '4.3.0' version doesn't work with GKE: https://github.com/scylladb/scylla/issues/8032
+scylla_version: '4.2.0'
+scylla_mgmt_agent_version: '2.2.1'
+mgmt_docker_image: 'scylladb/scylla-manager:2.2.1'
+
+# NOTE: If 'k8s_scylla_operator_docker_image' not set then the one from helm chart will be used.
+# To test nightly builds define it like this: 'scylladb/scylla-operator:nightly'
+k8s_scylla_operator_docker_image: ''
+k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/latest'
+k8s_scylla_operator_chart_version: 'latest'
+k8s_cert_manager_version: '1.2.0'
+k8s_deploy_monitoring: true
+
 k8s_scylla_datacenter: 'gce'
 k8s_scylla_rack: 'minikube'
 k8s_scylla_cluster_name: 'sct-cluster'
@@ -39,9 +48,7 @@ n_monitor_nodes: 1
 user_credentials_path: '~/.ssh/scylla-test'
 use_preinstalled_scylla: true
 backtrace_decoding: false
-k8s_deploy_monitoring: true
 
 append_scylla_args: ''
 docker_image: ''
-mgmt_docker_image: 'scylladb/scylla-manager:2.2.1'
 backup_bucket_location: 'minio-bucket'

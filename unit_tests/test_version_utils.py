@@ -1,9 +1,15 @@
 from __future__ import absolute_import
-
 import unittest
 
-from sdcm.utils.version_utils import get_branch_version, \
-    is_enterprise, VERSION_NOT_FOUND_ERROR, get_branch_version_for_multiple_repositories
+import pytest
+
+from sdcm.utils.version_utils import (
+    get_branch_version,
+    get_branch_version_for_multiple_repositories,
+    get_git_tag_from_helm_chart_version,
+    is_enterprise,
+    VERSION_NOT_FOUND_ERROR,
+)
 
 BASE_S3_DOWNLOAD_URL = 'https://s3.amazonaws.com/downloads.scylladb.com'
 DEB_URL = \
@@ -50,3 +56,30 @@ class TestVersionUtils(unittest.TestCase):
         self.assertEqual(is_enterprise('3.1'), False)
         self.assertEqual(is_enterprise('2.2'), False)
         self.assertEqual(is_enterprise('666.development'), False)
+
+
+@pytest.mark.parametrize("chart_version,git_tag", [
+    ("v1.1.0-rc.2-0-gc86ad89", "v1.1.0-rc.2"),
+    ("v1.1.0-rc.1-1-g6d35b37", "v1.1.0-rc.1"),
+    ("v1.1.0-rc.1", "v1.1.0-rc.1"),
+    ("v1.1.0-alpha.0-3-g6594091-nightly", "v1.1.0-alpha.0"),
+    ("v1.1.0-alpha.0-3-g6594091", "v1.1.0-alpha.0"),
+    ("v1.0.0", "v1.0.0"),
+    ("v1.0.0-39-g5bc1839", "v1.0.0"),
+    ("v1.0.0-rc0-53-g489398a-nightly", "v1.0.0-rc0"),
+    ("v1.0.0-rc0-53-g489398a", "v1.0.0-rc0"),
+    ("v1.0.0-rc0-51-ga52c206-latest", "v1.0.0-rc0"),
+])
+def test_06_get_git_tag_from_helm_chart_version(chart_version, git_tag):
+    assert get_git_tag_from_helm_chart_version(chart_version) == git_tag
+
+
+@pytest.mark.parametrize("chart_version", [
+    "", "fake", "V1.0.0", "1.0.0", "1.1.0-rc.1", "1.1.0-rc.1-1-g6d35b37",
+])
+def test_07_get_git_tag_from_helm_chart_version__wrong_input(chart_version):
+    try:
+        git_tag = get_git_tag_from_helm_chart_version(chart_version)
+    except ValueError:
+        return
+    assert False, f"'ValueError' was expected, but absent. Returned value: {git_tag}"

@@ -316,18 +316,64 @@ class HelmContainerMixin:
 
     @cached_property
     def _helm_container(self) -> Container:
-        return ContainerManager.run_container(self, "helm")
+        container = ContainerManager.run_container(self, "helm")
 
-    def helm(self, kluster, *command: str, namespace: Optional[str] = None) -> str:
+        # NOTE: Install 'gettext' package that contains 'envsubst' binary
+        # needed for installation of helm charts uisng "values.yaml" files.
+        res = container.exec_run(["sh", "-c", "apk add gettext"])
+        if res.exit_code:
+            raise DockerException(f"{container}: {res.output.decode('utf-8')}")
+
+        return container
+
+    def helm(self, kluster, *command: str, namespace: Optional[str] = None,
+             prepend_command=None) -> str:
         cmd = ["helm", ]
+        if prepend_command:
+            if isinstance(prepend_command, list):
+                cmd = prepend_command + cmd
+            else:
+                raise TypeError("'prepend_cmd' param expected to be 'list'")
         if kluster.k8s_server_url:
             cmd.extend(("--kube-apiserver", kluster.k8s_server_url, ))
         if namespace:
             cmd.extend(("--namespace", namespace, ))
         cmd.extend(command)
         cmd = " ".join(cmd)
+        environment = [f"SCT_{k.upper()}={v}" for k, v in kluster.params.items()]
+
         LOGGER.debug("Execute `%s'", cmd)
-        res = self._helm_container.exec_run(["sh", "-c", cmd])
+        res = self._helm_container.exec_run(["sh", "-c", cmd], environment=environment)
         if res.exit_code:
             raise DockerException(f"{self._helm_container}: {res.output.decode('utf-8')}")
         return res.output.decode("utf-8")
+
+    def helm_install(self, kluster,
+                     target_chart_name: str,
+                     source_chart_name: str,
+                     version: str = "",
+                     use_devel: bool = False,
+                     set_options: str = "",
+                     values_file_path: str = "",
+                     namespace: Optional[str] = None) -> str:
+        command = ["install", target_chart_name, source_chart_name]
+        prepend_command = []
+        if version:
+            command.extend(("--version", version))
+        if use_devel:
+            command.extend(("--devel",))
+        if set_options:
+            command.extend(("--set", set_options))
+        if values_file_path:
+            # NOTE: It must look like following:
+            # $ envsubst < {values_file_path} | helm install \
+            #     scylla scylla-operator/scylla --version {v} --devel --values -
+            command.extend(("--values", "-"))
+            prepend_command = ["envsubst", "<", values_file_path, "|"]
+
+        return self.helm(
+            kluster,
+            *command,
+            prepend_command=prepend_command,
+            namespace=namespace,
+        )
