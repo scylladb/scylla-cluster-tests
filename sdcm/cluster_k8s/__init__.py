@@ -61,12 +61,12 @@ from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring, Sc
 
 ANY_KUBERNETES_RESOURCE = Union[Resource, ResourceField, ResourceInstance, ResourceList, Subresource]
 
-SCYLLA_MANAGER_CONFIG = sct_abs_path("sdcm/k8s_configs/manager.yaml")
 CERT_MANAGER_TEST_CONFIG = sct_abs_path("sdcm/k8s_configs/cert-manager-test.yaml")
 SCYLLA_API_VERSION = "scylla.scylladb.com/v1"
 SCYLLA_CLUSTER_RESOURCE_KIND = "ScyllaCluster"
 DEPLOY_SCYLLA_CLUSTER_DELAY = 15  # seconds
 SCYLLA_OPERATOR_NAMESPACE = "scylla-operator-system"
+SCYLLA_MANAGER_NAMESPACE = "scylla-manager-system"
 
 
 LOGGER = logging.getLogger(__name__)
@@ -87,6 +87,7 @@ class KubernetesCluster:
     # NOTE: Following class attr(s) are defined for consumers of this class
     #       such as 'sdcm.utils.remote_logger.ScyllaOperatorLogger'.
     _scylla_operator_namespace = SCYLLA_OPERATOR_NAMESPACE
+    _scylla_manager_namespace = SCYLLA_MANAGER_NAMESPACE
 
     @property
     def k8s_server_url(self) -> Optional[str]:
@@ -165,6 +166,8 @@ class KubernetesCluster:
         LOGGER.debug(self.helm(
             f"repo add scylla-operator {self.params.get('k8s_scylla_operator_helm_repo')}"))
 
+        # NOTE: 'scylla-operator' and 'scylla-manager' chart versions are always the same.
+        #       So, we can reuse one for another.
         chart_version = self.params.get(
             "k8s_scylla_operator_chart_version").strip().lower()
         if chart_version in ("", "latest"):
@@ -185,10 +188,45 @@ class KubernetesCluster:
 
     @log_run_info
     def deploy_scylla_manager(self) -> None:
+        # Calculate options values which must be set
+        #
+        # image.tag                  -> self.params.get('mgmt_docker_image').split(':')[-1]
+        # controllerImage.repository -> self.params.get(
+        #                                   'k8s_scylla_operator_docker_image').split('/')[0]
+        # controllerImage.tag        -> self.params.get(
+        #                                   'k8s_scylla_operator_docker_image').split(':')[-1]
+        set_options = []
+
+        mgmt_docker_image_tag = self.params.get('mgmt_docker_image').split(':')[-1]
+        if mgmt_docker_image_tag:
+            set_options.append(f"image.tag={mgmt_docker_image_tag}")
+
+        scylla_operator_repo_base = self.params.get(
+            'k8s_scylla_operator_docker_image').split('/')[0]
+        if scylla_operator_repo_base:
+            set_options.append(f"controllerImage.repository={scylla_operator_repo_base}")
+
+        scylla_operator_image_tag = self.params.get(
+            'k8s_scylla_operator_docker_image').split(':')[-1]
+        if scylla_operator_image_tag:
+            set_options.append(f"controllerImage.tag={scylla_operator_image_tag}")
+
+        # Install and wait for initialization of the Scylla Operator chart
         LOGGER.info("Deploy scylla-manager")
-        self.apply_file(SCYLLA_MANAGER_CONFIG)
+        self.kubectl(f'create namespace {SCYLLA_MANAGER_NAMESPACE}')
+        LOGGER.debug(self.helm_install(
+            target_chart_name="scylla-manager",
+            source_chart_name="scylla-operator/scylla-manager",
+            version=self._scylla_operator_chart_version,
+            use_devel=True,
+            set_options=",".join(set_options),
+            namespace=SCYLLA_MANAGER_NAMESPACE,
+        ))
         time.sleep(10)
-        self.kubectl("wait --timeout=10m --all --for=condition=Ready pod", namespace="scylla-manager-system")
+        self.kubectl("wait --timeout=10m --all --for=condition=Ready pod",
+                     namespace=SCYLLA_MANAGER_NAMESPACE)
+
+        # Start the Scylla Manager logging thread
         self.start_scylla_manager_journal_thread()
 
     def check_if_cert_manager_fully_functional(self) -> bool:
@@ -440,7 +478,7 @@ class KubernetesCluster:
     def scylla_manager_cluster(self) -> 'PodCluster':
         return PodCluster(
             k8s_cluster=self,
-            namespace='scylla-manager-system',
+            namespace=SCYLLA_MANAGER_NAMESPACE,
             container='scylla-manager',
             cluster_prefix='mgr-',
             node_prefix='mgr-node-',

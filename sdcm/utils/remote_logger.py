@@ -280,7 +280,7 @@ class ScyllaManagerLogger(CommandClusterLoggerBase):
         cmd = self._cluster.kubectl_cmd(
             f"logs --previous=false -f --since={int(self.time_delta)}s --all-containers=true "
             "-l app=scylla-manager",
-            namespace="scylla-manager-system")
+            namespace=self._cluster._scylla_manager_namespace)
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
