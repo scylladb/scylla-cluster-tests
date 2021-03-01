@@ -36,7 +36,6 @@ from typing import Optional, Union, List, Dict, Any, ContextManager, Type, Calla
 import json
 import yaml
 import kubernetes as k8s
-from boto3 import client as boto3_client
 from kubernetes.client import V1Container
 from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance, ResourceList, Subresource
 
@@ -201,21 +200,15 @@ class KubernetesCluster:
         self.helm('repo add minio https://helm.min.io/')
         self.kubectl("create namespace minio")
         self.helm(
-            'install --set accessKey=minio_access_key,secretKey=minio_access_key --generate-name minio/minio',
+            'install --set accessKey=minio_access_key,secretKey=minio_access_key,'
+            f'defaultBucket.enabled=true,defaultBucket.name={minio_bucket_name},'
+            'defaultBucket.policy=public --generate-name minio/minio',
             namespace='minio')
 
         minio_ip_address = wait_for(
             lambda: self.minio_ip_address, text='Waiting for minio pod to popup', timeout=120, throw_exc=True)
 
         self.kubectl("wait --timeout=10m --all --for=condition=Ready pod", namespace="minio")
-
-        LOGGER.info('Create bucket on minio to store scylla manager backups')
-        boto3_client(
-            service_name='s3',
-            aws_access_key_id='minio_access_key',
-            aws_secret_access_key='minio_access_key',
-            endpoint_url=f'http://{minio_ip_address}:9000'
-        ).create_bucket(Bucket=minio_bucket_name)
 
     @log_run_info
     def deploy_scylla_cluster(self, config: str, target_mgmt_agent_to_minio: bool = False) -> None:
