@@ -213,9 +213,8 @@ class KubernetesCluster:
         if scylla_operator_image_tag:
             set_options.append(f"controllerImage.tag={scylla_operator_image_tag}")
 
-        # Install and wait for initialization of the Scylla Operator chart
+        # Install and wait for initialization of the Scylla Manager chart
         LOGGER.info("Deploy scylla-manager")
-        self.kubectl(f'create namespace {SCYLLA_MANAGER_NAMESPACE}')
         LOGGER.debug(self.helm_install(
             target_chart_name="scylla-manager",
             source_chart_name="scylla-operator/scylla-manager",
@@ -315,7 +314,6 @@ class KubernetesCluster:
     @log_run_info
     def deploy_scylla_cluster(self, config: str, target_mgmt_agent_to_minio: bool = False) -> None:
         LOGGER.info("Create and initialize a Scylla cluster")
-        self.kubectl(f"create namespace {SCYLLA_NAMESPACE}")
         if target_mgmt_agent_to_minio:
             # Create kubernetes secret that holds scylla manager agent configuration
             self.update_secret_from_data('scylla-agent-config', 'scylla', {

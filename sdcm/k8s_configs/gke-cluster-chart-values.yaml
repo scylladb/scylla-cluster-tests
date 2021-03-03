@@ -27,7 +27,7 @@ sysctls: ["fs.aio-max-nr=2097152"]
 backups: []
 repairs: []
 serviceMonitor:
-  create: false
+  create: ${SCT_K8S_DEPLOY_MONITORING}
 
 datacenter: ${SCT_K8S_SCYLLA_DATACENTER}
 racks:

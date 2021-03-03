@@ -264,6 +264,10 @@ class GkeCluster(KubernetesCluster, cluster.BaseCluster):
         LOGGER.info("Wait for readiness of all pods in default namespace...")
         self.kubectl("wait --timeout=15m --all --for=condition=Ready pod", timeout=15*60+10)
 
+        # Create namespaces which are required in several different optional places
+        self.kubectl(f"create namespace {self._scylla_namespace}")
+        self.kubectl(f"create namespace {self._scylla_manager_namespace}")
+
     def destroy(self):
         self.api_call_rate_limiter.stop()
         if self._gcloud_token_thread:

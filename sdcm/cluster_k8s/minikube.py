@@ -204,6 +204,10 @@ class GceMinikubeCluster(MinikubeCluster, cluster_gce.GCECluster):
         for node in self.nodes:
             node.remoter._reconnect()  # Reconnect to update user groups in main thread too.
 
+        # Create namespaces which are required in several different optional places
+        self.kubectl(f"create namespace {self._scylla_namespace}")
+        self.kubectl(f"create namespace {self._scylla_manager_namespace}")
+
     def get_node_ips_param(self, public_ip=True):
         raise NotImplementedError("Not implemented yet.")  # TODO: add implementation of this method
 
