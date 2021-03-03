@@ -4869,7 +4869,11 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
               message="Waiting for reconfiguring scylla monitoring")
     def reconfigure_scylla_monitoring(self):
         for node in self.nodes:
-            monitoring_targets = " ".join(f"[{n.ip_address}]:9180" for n in self.targets["db_cluster"].nodes)
+            if self.params.get("ip_ssh_connections") == "ipv6":
+                socket_format = "[{0.ip_address}]:9180"
+            else:
+                socket_format = "{0.ip_address}:9180"
+            monitoring_targets = " ".join(socket_format.format(n) for n in self.targets["db_cluster"].nodes)
             node.remoter.sudo(shell_script_cmd(f"""\
                 cd {self.monitor_install_path}
                 mkdir -p {self.monitoring_conf_dir}
@@ -4894,10 +4898,26 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                         f"[ -f /etc/rsyslog.d/scylla.conf ] || scylla_rsyslog_setup --remote-server {node.ip_address}"
                     ), verbose=True)
 
+    def _create_manager_prometheus_yaml(self, node):
+        manager_prometheus_port = self.params.get("manager_prometheus_port")
+        # Manager server prometheus:
+        manager_prometheus_target_list = [f"127.0.0.1:{manager_prometheus_port}"]
+        full_yaml_string = "- targets:\n"
+        for prometheus_target in manager_prometheus_target_list:
+            full_yaml_string += f"  - {prometheus_target}\n"
+
+        node.remoter.sudo(f"echo '{str(full_yaml_string)}' > "
+                          f"{self.monitor_install_path}/prometheus/scylla_manager_servers.yml")
+        # Writing directly to the yaml in the conf dir results in permission denied
+        node.remoter.sudo(f"cp {self.monitor_install_path}/prometheus/scylla_manager_servers.yml "
+                          f"{self.monitoring_conf_dir}/scylla_manager_servers.yml")
+
     def start_scylla_monitoring(self, node):
-        node.remoter.run("cp {0.monitor_install_path}/prometheus/scylla_manager_servers.example.yml"
-                         " {0.monitor_install_path}/prometheus/scylla_manager_servers.yml".format(self))
+        self._create_manager_prometheus_yaml(node=node)
         labels = " ".join(f"--label {key}={value}" for key, value in node.tags.items())
+        scylla_manager_servers_arg = ""
+        if self.params.get("use_mgmt"):
+            scylla_manager_servers_arg = f'-N `realpath "{self.monitoring_conf_dir}/scylla_manager_servers.yml"` \\'
         run_script = dedent(f"""
             cd -P {self.monitor_install_path}
             mkdir -p {self.monitoring_data_dir}
@@ -4905,6 +4925,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             -D "{labels}" \
             -s `realpath "{self.monitoring_conf_dir}/scylla_servers.yml"` \
             -n `realpath "{self.monitoring_conf_dir}/node_exporter_servers.yml"` \
+            {scylla_manager_servers_arg}
             -d `realpath "{self.monitoring_data_dir}"` -l -v master,{self.monitoring_version} -b "-web.enable-admin-api"
         """)
         node.remoter.run("bash -ce '%s'" % run_script, verbose=True)
