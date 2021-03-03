@@ -274,17 +274,15 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         """
         self.log.info('starting test_mgmt_cluster_crud')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        hosts = self.get_cluster_hosts_ip()
-        selected_host = hosts[0]
-        cluster_name = 'mgr_cluster_crud'
-        mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=selected_host,
-                                               auth_token=self.monitors.mgmt_auth_token)
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
+                                        auth_token=self.monitors.mgmt_auth_token)
         # Test cluster attributes
         cluster_orig_name = mgr_cluster.name
         mgr_cluster.update(name="{}_renamed".format(cluster_orig_name))
         assert mgr_cluster.name == cluster_orig_name+"_renamed", "Cluster name wasn't changed after update command"
         mgr_cluster.delete()
-        mgr_cluster = manager_tool.add_cluster(name=cluster_name, host=selected_host,
+        mgr_cluster = manager_tool.add_cluster(self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
 
         mgr_cluster.delete()  # remove cluster at the end of the test
@@ -444,8 +442,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self.update_config_file()
         location_list = [self.bucket_name, ]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_basic', db_cluster=self.db_cluster,
-                                               auth_token=self.monitors.mgmt_auth_token)
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
+                                        auth_token=self.monitors.mgmt_auth_token)
         self.generate_load_and_wait_for_results()
         backup_task = mgr_cluster.create_backup_task(location_list=location_list)
         backup_task.wait_for_status(list_status=[TaskStatus.DONE])
@@ -508,8 +507,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     def test_client_encryption(self):
         self.log.info('starting test_client_encryption')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME+"_encryption", db_cluster=self.db_cluster,
-                                               auth_token=self.monitors.mgmt_auth_token)
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
+                                        auth_token=self.monitors.mgmt_auth_token)
         self.generate_load_and_wait_for_results()
         repair_task = mgr_cluster.create_repair_task(fail_fast=True)
         dict_host_health = mgr_cluster.get_hosts_health()
@@ -545,12 +545,12 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     def test_mgmt_cluster_healthcheck(self):
         self.log.info('starting test_mgmt_cluster_healthcheck')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        selected_host_ip = self.get_cluster_hosts_ip()[0]
-        cluster_name = 'mgr_cluster1'
-        mgr_cluster = manager_tool.get_cluster(cluster_name=cluster_name) or manager_tool.add_cluster(
-            name=cluster_name, db_cluster=self.db_cluster, auth_token=self.monitors.mgmt_auth_token)
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
+                                        auth_token=self.monitors.mgmt_auth_token)
         other_host, other_host_ip = [
-            host_data for host_data in self.get_cluster_hosts_with_ips() if host_data[1] != selected_host_ip][0]
+            host_data for host_data in self.get_cluster_hosts_with_ips() if
+            host_data[1] != self.get_cluster_hosts_ip()[0]][0]
         sleep = 40
         self.log.debug('Sleep {} seconds, waiting for health-check task to run by schedule on first time'.format(sleep))
         time.sleep(sleep)
@@ -657,10 +657,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     def test_repair_multiple_keyspace_types(self):  # pylint: disable=invalid-name
         self.log.info('starting test_repair_multiple_keyspace_types')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        hosts = self.get_cluster_hosts_ip()
-        selected_host = hosts[0]
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
-            or manager_tool.add_cluster(name=self.CLUSTER_NAME, host=selected_host,
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
         self._create_keyspace_and_basic_table(self.SIMPLESTRATEGY_KEYSPACE_NAME, "SimpleStrategy", rf=2)
         self._create_keyspace_and_basic_table(self.LOCALSTRATEGY_KEYSPACE_NAME, "LocalStrategy")
@@ -856,8 +854,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self.update_config_file()
         location_list = [self.bucket_name, ]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + f'_suspend_{task_type}',
-                                               db_cluster=self.db_cluster, auth_token=self.monitors.mgmt_auth_token)
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
+                                        auth_token=self.monitors.mgmt_auth_token)
         if task_type == "backup":
             suspendable_task = mgr_cluster.create_backup_task(location_list=location_list)
         elif task_type == "repair":
@@ -880,8 +879,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self.update_config_file()
         location_list = [self.bucket_name, ]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_suspend_and_not_starting',
-                                               db_cluster=self.db_cluster, auth_token=self.monitors.mgmt_auth_token)
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
+                                        auth_token=self.monitors.mgmt_auth_token)
         suspendable_task = mgr_cluster.create_backup_task(location_list=location_list)
         assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), \
             f"task {suspendable_task.id} failed to reach status {TaskStatus.RUNNING}"
