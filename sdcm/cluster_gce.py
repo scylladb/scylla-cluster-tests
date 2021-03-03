@@ -349,7 +349,13 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             # instance before creating new one
             if "Instance failed to start due to preemption" in str(details) and \
                     (failed_instance := self._get_instances_by_name(dc_idx=dc_idx, name=name)):
-                self._gce_services[dc_idx].destroy_node(node=failed_instance, destroy_boot_disk=True)
+                try:
+                    self._gce_services[dc_idx].destroy_node(node=failed_instance, destroy_boot_disk=True)
+                # if the instance is destroyed already - ignore the exception
+                # otherwise - raise exception
+                except ResourceNotFoundError as exc:
+                    if 'notFound' not in str(exc):
+                        raise
 
             create_node_params['ex_preemptible'] = spot = False
             instance = self._gce_services[dc_idx].create_node(**create_node_params)
