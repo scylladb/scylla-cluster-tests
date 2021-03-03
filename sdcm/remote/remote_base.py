@@ -239,7 +239,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
                     files_received = False
                 # Avoid "already printed" message without real error
                 if result.stderr:
-                    self.log.deubg("Stderr: %s", result.stderr)
+                    self.log.debug("Stderr: %s", result.stderr)
                     files_received = False
 
         if not preserve_perm:
