@@ -921,6 +921,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                         params=self.params,
                                         gce_datacenter=gce_datacenter)
         self.k8s_cluster.wait_for_init()
+
+        if self.params.get('k8s_deploy_monitoring'):
+            self.k8s_cluster.deploy_monitoring_cluster(
+                self.params.get('k8s_scylla_operator_docker_image').split(':')[-1],
+                is_manager_deployed=self.params.get('use_mgmt')
+            )
+
         self.k8s_cluster.deploy_cert_manager()
         self.k8s_cluster.deploy_scylla_operator()
         if self.params.get('use_mgmt'):
@@ -937,12 +944,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                               user_prefix=self.params.get("user_prefix"),
                                               n_nodes=self.params.get("n_db_nodes"),
                                               params=self.params)
-
-        if self.params.get('k8s_deploy_monitoring'):
-            self.k8s_cluster.deploy_monitoring_cluster(
-                self.params.get('k8s_scylla_operator_docker_image').split(':')[-1],
-                is_manager_deployed=self.params.get('use_mgmt')
-            )
 
         self.log.debug("Update startup script with iptables rules")
         startup_script = "\n".join((Setup.get_startup_script(), *self.db_cluster.nodes_iptables_redirect_rules(), ))
@@ -1000,6 +1001,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                           params=self.params,
                                           gce_datacenter=gce_datacenter)
         self.k8s_cluster.wait_for_init()
+
+        if self.params.get('k8s_deploy_monitoring'):
+            self.k8s_cluster.add_gke_pool(name="monitoring",
+                                          num_nodes=1,
+                                          instance_type=self.params.get("gce_instance_type_monitor"))
+            self.k8s_cluster.deploy_monitoring_cluster(
+                self.params.get('k8s_scylla_operator_docker_image').split(':')[-1],
+                is_manager_deployed=self.params.get('use_mgmt')
+            )
+
         self.k8s_cluster.deploy_cert_manager()
         self.k8s_cluster.deploy_scylla_operator()
         if self.params.get('use_mgmt'):
@@ -1012,15 +1023,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                   user_prefix=self.params.get("user_prefix"),
                                                   n_nodes=self.params.get("n_db_nodes"),
                                                   params=self.params)
-
-        if self.params.get('k8s_deploy_monitoring'):
-            self.k8s_cluster.add_gke_pool(name="monitoring",
-                                          num_nodes=1,
-                                          instance_type=self.params.get("gce_instance_type_monitor"))
-            self.k8s_cluster.deploy_monitoring_cluster(
-                self.params.get('k8s_scylla_operator_docker_image').split(':')[-1],
-                is_manager_deployed=self.params.get('use_mgmt')
-            )
 
         self.k8s_cluster.add_gke_pool(name=self.params.get("k8s_loader_cluster_name"),
                                       num_nodes=self.params.get("n_loaders"),
