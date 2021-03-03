@@ -35,6 +35,8 @@ regions_data:
     ami_id_loader: 'ami-0bf19545bc7bc9e1f'
   us-west-2:
     ami_id_loader: 'ami-063a97bde47353690'
+  eu-north-1:
+    ami_id_loader: 'ami-04af71cc28c321f61'
 
 
 # disables coredump on bad alloc temporary cause of https://github.com/scylladb/scylla/issues/4951
