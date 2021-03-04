@@ -783,7 +783,9 @@ class FillDatabaseData(ClusterTester):
                 "INSERT INTO nameless_index_test (id, birth_year) VALUES ('Paul', 24)",
                 "INSERT INTO nameless_index_test (id, birth_year) VALUES ('Bob', 42)"],
             'queries': ["SELECT id FROM nameless_index_test WHERE birth_year = 42"],
-            'results': [[['Bob'], ['Tom']]],
+            # Due the issue https://github.com/scylladb/scylla/issues/7443, the result of the query changed
+            # from "[['Bob'], ['Tom']]" to "[['Tom'], ['Bob']]" from versions Scylla 4.4 and above
+            'results': [[['Tom'], ['Bob']]],
             'min_version': '3.0',
             'max_version': '',
             'skip': ''},
