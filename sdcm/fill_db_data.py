@@ -3047,7 +3047,7 @@ class FillDatabaseData(ClusterTester):
                             self.assertEqual(str([list(row) for row in res]), item['results'][i])
                         else:
                             res = session.execute(item['queries'][i])
-                            self.assertEqual([list(row) for row in res], item['results'][i])
+                            self.assertEqual(sorted([list(row) for row in res]), sorted(item['results'][i]))
                     except Exception as ex:
                         LOGGER.exception(item['queries'][i])
                         raise ex
