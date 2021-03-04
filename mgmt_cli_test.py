@@ -459,8 +459,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self.update_config_file()
         location_list = [self.bucket_name, ]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_multiple-ks', db_cluster=self.db_cluster,
-                                               auth_token=self.monitors.mgmt_auth_token)
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
+                                        auth_token=self.monitors.mgmt_auth_token)
         tables = self.create_ks_and_tables(10, 100)
         self.generate_load_and_wait_for_results()
         self.log.debug(f'tables list = {tables}')
@@ -476,9 +477,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self.update_config_file()
         location_list = [f'{self.bucket_name}/path_testing/']
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_bucket_with_path',
-                                               db_cluster=self.db_cluster,
-                                               auth_token=self.monitors.mgmt_auth_token)
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
+                                        auth_token=self.monitors.mgmt_auth_token)
         self.generate_load_and_wait_for_results()
         try:
             mgr_cluster.create_backup_task(location_list=location_list)
@@ -492,8 +493,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self.update_config_file()
         location_list = [self.bucket_name, ]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_rate_limit', db_cluster=self.db_cluster,
-                                               auth_token=self.monitors.mgmt_auth_token)
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
+                                        auth_token=self.monitors.mgmt_auth_token)
         self.generate_load_and_wait_for_results()
         rate_limit_list = [f'{dc}:{randint(1, 10)}' for dc in self.get_all_dcs_names()]
         self.log.info(f'rate limit will be {rate_limit_list}')
@@ -694,11 +696,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         if not self.is_cred_file_configured:
             self.update_config_file()
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        hosts = self.get_cluster_hosts_ip()
         location_list = [self.bucket_name, ]
-        selected_host = hosts[0]
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
-            or manager_tool.add_cluster(name=self.CLUSTER_NAME, host=selected_host,
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
 
         target_node = self.db_cluster.nodes[1]
