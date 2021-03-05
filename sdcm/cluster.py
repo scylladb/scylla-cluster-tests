@@ -2053,8 +2053,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.remoter.run('sudo yum update -y --skip-broken', retry=3)
         else:
             self.remoter.run(
-                'sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confold" '
-                '-o Dpkg::Options::="--force-confdef" upgrade -y', retry=3)
+                'sudo DEBIAN_FRONTEND=noninteractive apt-get '
+                '-o Dpkg::Options::="--force-confold" '
+                '-o Dpkg::Options::="--force-confdef" '
+                'upgrade -y ', retry=3)
         # update repo cache after upgrade
         self.update_repo_cache()
 
@@ -2138,13 +2140,18 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.remoter.run('sudo bash -cxe "%s"' % install_debian_10_prereqs)
 
             self.remoter.run(
-                'sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" upgrade -y')
+                'sudo DEBIAN_FRONTEND=noninteractive apt-get '
+                '-o Dpkg::Options::="--force-confold" '
+                '-o Dpkg::Options::="--force-confdef" '
+                'upgrade -y ')
             self.remoter.run('sudo apt-get install -y rsync tcpdump screen')
             self.download_scylla_repo(scylla_repo)
             self.remoter.run('sudo apt-get update')
             self.remoter.run(
-                'sudo apt-get install -y -o Dpkg::Options::="--force-overwrite" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '
-                '--allow-unauthenticated {}'.format(self.scylla_pkg()))
+                'sudo apt-get install -y '
+                '-o Dpkg::Options::="--force-confdef" '
+                '-o Dpkg::Options::="--force-confold" '
+                '--allow-unauthenticated {} '.format(self.scylla_pkg()))
 
     def offline_install_scylla(self, unified_package, nonroot):
         """
@@ -2327,10 +2334,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             # 1) scylla-manager
             # 2) scylla-manager-client
             # 3) scylla-manager-server
-            self.remoter.run('sudo apt-get dist-upgrade scylla-manager-server scylla-manager-client -y -o '
-                             'Dpkg::Options::="--force-overwrite" -o Dpkg::Options::="--force-confdef" -o '
-                             'Dpkg::Options::="--force-confold" '
-                             ' --allow-unauthenticated')
+            self.remoter.run('sudo apt-get dist-upgrade scylla-manager-server scylla-manager-client -y '
+                             '-o Dpkg::Options::="--force-confdef" '
+                             '-o Dpkg::Options::="--force-confold" '
+                             '--allow-unauthenticated ')
         time.sleep(3)
         if start_manager_after_upgrade:
             if self.is_docker():
@@ -4509,9 +4516,10 @@ class BaseLoaderSet():
             node.remoter.run('sudo yum install -y {}-tools'.format(node.scylla_pkg()))
         else:
             node.remoter.run('sudo apt-get update')
-            node.remoter.run('sudo apt-get install -y -o Dpkg::Options::="--force-confdef"'
-                             ' -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite"'
-                             ' --allow-unauthenticated {}-tools'.format(node.scylla_pkg()))
+            node.remoter.run('sudo apt-get install -y '
+                             '-o Dpkg::Options::="--force-confdef" '
+                             '-o Dpkg::Options::="--force-confold" '
+                             '--allow-unauthenticated {}-tools '.format(node.scylla_pkg()))
 
         if db_node_address is not None:
             node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" % db_node_address)
