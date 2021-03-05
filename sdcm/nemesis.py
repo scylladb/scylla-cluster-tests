@@ -2537,6 +2537,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self.log.debug('Interrupt the task by hard reboot')
 
+        new_node = None
         with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
                             line="This node was decommissioned and will not rejoin",
                             node=self.target_node), \
@@ -2546,9 +2547,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.reboot(hard=True, verify_ssh=True)
             streaming_thread.join(60)
 
-        new_node = None
-        if task == 'decommission':
-            new_node = decommission_post_action()
+            if task == 'decommission':
+                new_node = decommission_post_action()
 
         if self.task_used_streaming:
             err = list(streaming_error_logs_stream)
