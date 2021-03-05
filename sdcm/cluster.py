@@ -2149,8 +2149,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run('sudo apt-get update')
             self.remoter.run(
                 'sudo apt-get install -y '
-                '-o Dpkg::Options::="--force-confdef" '
-                '-o Dpkg::Options::="--force-confold" '
                 ' {} '.format(self.scylla_pkg()))
 
     def offline_install_scylla(self, unified_package, nonroot):
@@ -2204,7 +2202,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run(
                 r'sudo yum install -y {0}-debuginfo-{1}\*'.format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
         else:
-            self.remoter.run(r'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" {0}-server-dbg={1}\*'
+            self.remoter.run(r'sudo apt-get install -y {0}-server-dbg={1}\*'
                              .format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
 
     def is_scylla_installed(self):
@@ -2334,9 +2332,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             # 1) scylla-manager
             # 2) scylla-manager-client
             # 3) scylla-manager-server
-            self.remoter.run('sudo apt-get dist-upgrade scylla-manager-server scylla-manager-client -y '
-                             '-o Dpkg::Options::="--force-confdef" '
-                             '-o Dpkg::Options::="--force-confold" ')
+            self.remoter.run('sudo apt-get dist-upgrade scylla-manager-server scylla-manager-client -y ')
         time.sleep(3)
         if start_manager_after_upgrade:
             if self.is_docker():
@@ -4516,8 +4512,6 @@ class BaseLoaderSet():
         else:
             node.remoter.run('sudo apt-get update')
             node.remoter.run('sudo apt-get install -y '
-                             '-o Dpkg::Options::="--force-confdef" '
-                             '-o Dpkg::Options::="--force-confold" '
                              ' {}-tools '.format(node.scylla_pkg()))
 
         if db_node_address is not None:
