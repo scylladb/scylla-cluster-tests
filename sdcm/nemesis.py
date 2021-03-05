@@ -2474,9 +2474,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
 
         def decommission_post_action():
-            decommission_done = list(self.target_node.follow_system_log(
-                patterns=['DECOMMISSIONING: done'], start_from_beginning=True))
-
             ips = []
             seed_nodes = [node for node in self.cluster.nodes if node.is_seed]
             status = self.cluster.get_nodetool_status(verification_node=seed_nodes[0])
@@ -2486,6 +2483,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     ips.extend(dc_info.keys())
                 except Exception:  # pylint: disable=broad-except
                     self.log.debug(dc_info)
+
+            decommission_done = list(self.target_node.follow_system_log(
+                patterns=['DECOMMISSIONING: done'], start_from_beginning=True))
 
             if self.target_node.ip_address not in ips or decommission_done:
                 self.log.error(
