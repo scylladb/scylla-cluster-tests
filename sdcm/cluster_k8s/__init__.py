@@ -640,10 +640,10 @@ class BasePodContainer(cluster.BaseNode):
 
         if cluster_ip_service := self._cluster_ip_service:
             cluster_ip = cluster_ip_service.spec.cluster_ip
-            public_ips.append(cluster_ip)
             private_ips.append(cluster_ip)
 
         if pod_status := self._pod_status:
+            public_ips.append(pod_status.host_ip)
             private_ips.append(pod_status.pod_ip)
         return (public_ips or [None, ], private_ips or [None, ])
 
