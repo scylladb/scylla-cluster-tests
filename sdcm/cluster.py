@@ -4869,11 +4869,15 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
               message="Waiting for reconfiguring scylla monitoring")
     def reconfigure_scylla_monitoring(self):
         for node in self.nodes:
+            cluster_backend = self.params.get("cluster_backend")
+            monitoring_targets = []
+            attr_name = f"{'public_' if cluster_backend == 'k8s-gke' else ''}ip_address"
+            for db_node in self.targets["db_cluster"].nodes:
+                monitoring_targets.append(f"[{getattr(db_node, attr_name)}]:9180")
+            monitoring_targets = " ".join(monitoring_targets)
             if self.params.get("ip_ssh_connections") == "ipv6":
-                socket_format = "[{0.ip_address}]:9180"
-            else:
-                socket_format = "{0.ip_address}:9180"
-            monitoring_targets = " ".join(socket_format.format(n) for n in self.targets["db_cluster"].nodes)
+                monitoring_targets = monitoring_targets.replace("[", "").replace("]", "")
+
             node.remoter.sudo(shell_script_cmd(f"""\
                 cd {self.monitor_install_path}
                 mkdir -p {self.monitoring_conf_dir}
@@ -4881,7 +4885,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                 python3 genconfig.py -s -n -d {self.monitoring_conf_dir} {monitoring_targets}
             """), verbose=True)
 
-            if self.params.get("cluster_backend") != "docker":
+            if cluster_backend != "docker":
                 node.remoter.sudo(f"docker run --rm -v {self.monitoring_conf_dir}:/workdir"
                                   f" mikefarah/yq:3 yq w -i node_exporter_servers.yml"
                                   f" '[0].targets[+]' ''[{node.private_ip_address}]:9100''", verbose=True)
