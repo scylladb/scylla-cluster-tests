@@ -183,8 +183,7 @@ class UpgradeTest(FillDatabaseData):
                     # fixme: add publick key
                     node.remoter.run(
                         r'sudo apt-get install {}{} -y '
-                        r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '
-                        r'--allow-unauthenticated'.format(scylla_pkg, ver_suffix))
+                        r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '.format(scylla_pkg, ver_suffix))
                     node.remoter.run(r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles /var/lib/dpkg/info/scylla-*conf.conffiles /var/lib/dpkg/info/scylla-*jmx.conffiles'
                                      r' | grep -v init ); do sudo cp -v $conf $conf.backup-2.1; done')
             else:
@@ -194,8 +193,7 @@ class UpgradeTest(FillDatabaseData):
                     node.remoter.run('sudo apt-get update')
                     node.remoter.run(
                         r'sudo apt-get dist-upgrade {} -y '
-                        r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '
-                        r'--allow-unauthenticated'.format(scylla_pkg))
+                        r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '.format(scylla_pkg))
         if self.params.get('test_sst3'):
             node.remoter.run("echo 'enable_sstables_mc_format: true' |sudo tee --append /etc/scylla/scylla.yaml")
         if self.params.get('test_upgrade_from_installed_3_1_0'):
@@ -255,8 +253,7 @@ class UpgradeTest(FillDatabaseData):
                 node.remoter.run(r'sudo apt-get remove scylla\* -y')
                 node.remoter.run(
                     r'sudo apt-get install %s -y '
-                    r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '
-                    r'--allow-unauthenticated' % node.scylla_pkg())
+                    r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" ' % node.scylla_pkg())
                 node.remoter.run(
                     r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles /var/lib/dpkg/info/scylla-*conf.conffiles /var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do sudo cp -v $conf.backup $conf; done')
 

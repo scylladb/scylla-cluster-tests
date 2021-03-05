@@ -2028,7 +2028,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 'sudo apt-get install -y '
                 '-o Dpkg::Options::="--force-confdef" '
                 '-o Dpkg::Options::="--force-confold" '
-                '--allow-unauthenticated {} '.format(self.scylla_pkg()))
+                ' {} '.format(self.scylla_pkg()))
 
     def offline_install_scylla(self, unified_package, nonroot):
         """
@@ -2081,7 +2081,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run(
                 r'sudo yum install -y {0}-debuginfo-{1}\*'.format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
         else:
-            self.remoter.run(r'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --allow-unauthenticated {0}-server-dbg={1}\*'
+            self.remoter.run(r'sudo apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" {0}-server-dbg={1}\*'
                              .format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
 
     def is_scylla_installed(self):
@@ -2213,8 +2213,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             # 3) scylla-manager-server
             self.remoter.run('sudo apt-get dist-upgrade scylla-manager-server scylla-manager-client -y '
                              '-o Dpkg::Options::="--force-confdef" '
-                             '-o Dpkg::Options::="--force-confold" '
-                             '--allow-unauthenticated ')
+                             '-o Dpkg::Options::="--force-confold" ')
         time.sleep(3)
         if start_manager_after_upgrade:
             if self.is_docker():
@@ -4328,7 +4327,7 @@ class BaseLoaderSet():
             node.remoter.run('sudo apt-get install -y '
                              '-o Dpkg::Options::="--force-confdef" '
                              '-o Dpkg::Options::="--force-confold" '
-                             '--allow-unauthenticated {}-tools '.format(node.scylla_pkg()))
+                             ' {}-tools '.format(node.scylla_pkg()))
 
         if db_node_address is not None:
             node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" % db_node_address)
