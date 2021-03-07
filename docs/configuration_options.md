@@ -43,7 +43,6 @@
 | **<a href="#user-content-use_cloud_manager" name="use_cloud_manager">use_cloud_manager</a>**  | When define true, will install scylla cloud manager | N/A | SCT_USE_CLOUD_MANAGER
 | **<a href="#user-content-use_ldap_authorization" name="use_ldap_authorization">use_ldap_authorization</a>**  | When defined true, will create a docker container with LDAP and configure scylla.yaml to use it | N/A | SCT_USE_LDAP_AUTHORIZATION
 | **<a href="#user-content-use_mgmt" name="use_mgmt">use_mgmt</a>**  | When define true, will install scylla management | N/A | SCT_USE_MGMT
-| **<a href="#user-content-mgmt_port" name="mgmt_port">mgmt_port</a>**  | The port of scylla management | 10090 | SCT_MGMT_PORT
 | **<a href="#user-content-manager_prometheus_port" name="manager_prometheus_port">manager_prometheus_port</a>**  | Port to be used by the manager to contact Prometheus | 5090 | SCT_MANAGER_PROMETHEUS_PORT
 | **<a href="#user-content-target_scylla_mgmt_server_repo" name="target_scylla_mgmt_server_repo">target_scylla_mgmt_server_repo</a>**  | Url to the repo of scylla manager version used to upgrade the manager server | N/A | SCT_TARGET_SCYLLA_MGMT_SERVER_REPO
 | **<a href="#user-content-target_scylla_mgmt_agent_repo" name="target_scylla_mgmt_agent_repo">target_scylla_mgmt_agent_repo</a>**  | Url to the repo of scylla manager version used to upgrade the manager agents | N/A | SCT_TARGET_SCYLLA_MGMT_AGENT_REPO

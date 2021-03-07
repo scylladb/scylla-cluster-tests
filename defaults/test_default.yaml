@@ -4,7 +4,6 @@ test_duration: 60
 
 ip_ssh_connections: 'private'
 
-mgmt_port: 10090
 scylla_repo: ''
 scylla_repo_m: 'http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylla-2020.1.repo'
 scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylladb-manager-2.2.repo'

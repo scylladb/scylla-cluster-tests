@@ -15,7 +15,6 @@ space_node_threshold: 6442
 # ip_ssh_connections: 'public'
 
 use_mgmt: true
-mgmt_port: 10090
 
 gce_datacenter: 'us-east1'
 backup_bucket_location: 'manager-backup-tests-us-east1'
