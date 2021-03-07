@@ -19,6 +19,5 @@ space_node_threshold: 6442
 ip_ssh_connections: 'ipv6'
 
 use_mgmt: true
-mgmt_port: 10090
 
 aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'
