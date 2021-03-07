@@ -1268,12 +1268,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         http_status_code = int(curl_output.stdout.strip())
         return http_status_code == 204
 
-    def wait_manager_server_up(self, verbose=True, timeout=300):
+    def wait_manager_server_up(self, verbose=True, timeout=300, port=None):
         text = None
         if verbose:
             text = '%s: Waiting for manager server to be up' % self
         try:
-            wait.wait_for(func=self.is_manager_server_up, step=10, text=text, timeout=timeout, throw_exc=True)
+            wait.wait_for(func=self.is_manager_server_up, port=port,
+                          step=10, text=text, timeout=timeout, throw_exc=True)
         except RetryError:
             wait.wait_for(func=self.is_manager_server_up, port=self.OLD_MANAGER_PORT,
                           step=10, text=text, timeout=timeout, throw_exc=True)
