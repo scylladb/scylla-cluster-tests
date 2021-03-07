@@ -22,4 +22,3 @@ user_prefix: manager-repair
 space_node_threshold: 6442
 
 use_mgmt: true
-mgmt_port: 10090
