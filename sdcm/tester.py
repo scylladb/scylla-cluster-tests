@@ -306,25 +306,23 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             aws_secret_access_key=self.params.get("alternator_secret_access_key"))
         if self.params.get("use_ldap_authorization"):
             self.configure_ldap(node=self.localhost, use_ssl=False)
-            ldap_role = LDAP_ROLE
-            ldap_users = LDAP_USERS.copy()
-            ldap_address = list(Setup.LDAP_ADDRESS).copy()
-            unique_members_list = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}' for user in ldap_users]
-            ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
-            user_password = LDAP_PASSWORD  # not in use not for authorization, but must be in the config
-            ldap_entry = [f'cn={ldap_role},{LDAP_BASE_OBJECT}',
-                          ['groupOfUniqueNames', 'simpleSecurityObject', 'top'],
-                          {'uniqueMember': unique_members_list, 'userPassword': user_password}]
-            self.log.info('LDAP info {}'.format(ldap_address))
-            self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
-                                          user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
-        start_events_device(self.logdir)
+        start_events_device(log_dir=self.logdir)
         time.sleep(0.5)
         InfoEvent('TEST_START test_id=%s' % Setup.test_id())
 
-    @staticmethod
-    def configure_ldap(node, use_ssl=False):
+    def configure_ldap(self, node, use_ssl=False):
         Setup.configure_ldap(node=node, use_ssl=use_ssl)
+        ldap_role = LDAP_ROLE
+        ldap_users = LDAP_USERS.copy()
+        ldap_address = list(Setup.LDAP_ADDRESS).copy()
+        unique_members_list = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}' for user in ldap_users]
+        ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
+        user_password = LDAP_PASSWORD  # not in use not for authorization, but must be in the config
+        ldap_entry = [f'cn={ldap_role},{LDAP_BASE_OBJECT}',
+                      ['groupOfUniqueNames', 'simpleSecurityObject', 'top'],
+                      {'uniqueMember': unique_members_list, 'userPassword': user_password}]
+        self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
+                                      user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
 
     def _init_localhost(self):
         return LocalHost(user_prefix=self.params.get("user_prefix", None), test_id=Setup.test_id())
