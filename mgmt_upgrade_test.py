@@ -97,17 +97,6 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
             assert rerunning_backup_task.status == TaskStatus.DONE, \
                 f"Unknown failure in task {rerunning_backup_task.id}"
 
-        with self.subTest("Creating repairs using legacy flags"):
-            legacy_args = [
-                f" --host {self.db_cluster.nodes[0].ip_address}",
-                f" --with-hosts {self.db_cluster.nodes[0].ip_address}",
-                f" --token-ranges all --host {self.db_cluster.nodes[0].ip_address}"
-            ]
-            legacy_args_tasks = {}
-            for arg in legacy_args:
-                legacy_args_tasks[arg] = _create_stopped_repair_task_with_manual_argument(
-                    mgr_cluster=mgr_cluster, arg_string=arg)
-
         upgrade_scylla_manager(pre_upgrade_manager_version=current_manager_version,
                                target_upgrade_server_version=target_upgrade_server_version,
                                target_upgrade_agent_version=target_upgrade_agent_version,
@@ -156,21 +145,6 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
                 # making sure that the files of the missing table isn't in s3
                 assert "cf1" not in per_node_backup_file_paths[node_id]["ks1"], \
                     "The missing table is still in s3, even though it should have been purged"
-
-        with self.subTest("Rerunning legacy repairs, expecting success"):
-            for original_arg_string, task in legacy_args_tasks.items():
-                task.start()
-                task.wait_and_get_final_status(timeout=5000, step=10)
-
-                current_arg_string = task.arguments
-                assert task.status == TaskStatus.DONE, f"Task {task.id} with legacy arg '{original_arg_string}' did " \
-                                                       f"not end successfully in the expected time after the upgrade." \
-                                                       f"\nThe arguments string of the task after the upgrade is " \
-                                                       f"'{current_arg_string}'"
-                assert not current_arg_string, f"Task {task.id}, which was created before the upgrade with the legacy" \
-                                               f" arg '{original_arg_string}' Was expected to contain an empty arg " \
-                                               f"string after the upgrade, but instead the current arg string" \
-                                               f" is '{current_arg_string}'"
 
     def update_all_agent_config_files(self):
         region_name = self.params.get('region_name').split()[0]
