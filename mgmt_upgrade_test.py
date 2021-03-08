@@ -110,23 +110,24 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
         validate_previous_task_details(task=repair_task, previous_task_details=repair_task_current_details)
         validate_previous_task_details(task=backup_task, previous_task_details=backup_task_current_details)
 
-        with self.subTest("Restoring a 2.0 backup task with 2.1 manager"):
+        with self.subTest("Restoring an older version backup task with newer version manager"):
             self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
 
-        with self.subTest("Continuing a 2.0 stopped backup task with 2.1 manager"):
+        with self.subTest("Continuing a older version stopped backup task with newer version manager"):
             pausable_backup_task.start()
             pausable_backup_task.wait_and_get_final_status(timeout=1200, step=20)
             assert pausable_backup_task.status == TaskStatus.DONE, \
                 f"task {pausable_backup_task.id} failed to continue after manager upgrade"
 
-        with self.subTest("Executing the 'backup list' and 'backup files' commands on a 2.0 backup with 2.1 manager"):
+        with self.subTest("Executing the 'backup list' and 'backup files' commands on a older version backup"
+                          " with newer version manager"):
             current_backup_files = mgr_cluster.get_backup_files_dict(backup_task_snapshot)
             assert pre_upgrade_backup_task_files == current_backup_files,\
                 f"Backup task of the task {backup_task.id} is not identical after the manager upgrade:" \
                 f"\nbefore the upgrade:\n{pre_upgrade_backup_task_files}\nafter the upgrade:\n{current_backup_files}"
             mgr_cluster.sctool.run(cmd=f" backup list -c {mgr_cluster.id}", is_verify_errorless_result=True)
 
-        with self.subTest("purging a 2.0 backup"):
+        with self.subTest("purging a older version backup"):
             # Dropping one table
             with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
                 session.execute("DROP TABLE ks1.cf1 ;")
