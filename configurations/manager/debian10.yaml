@@ -1,0 +1,4 @@
+ami_id_monitor: 'ami-07d02ee1eeb0c996c'  # Debian buster image - debian-10-amd64-20210208-542
+ami_monitor_user: 'admin'
+
+scylla_repo_m: null # no 2020 build for debian 10, no testing for it so far

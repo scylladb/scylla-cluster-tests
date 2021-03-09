@@ -1,0 +1,22 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+managerPipeline(
+    manager: true,
+    backend: 'aws',
+    aws_region: 'us-east-1',
+
+    target_scylla_mgmt_server_repo: 'http://downloads.scylladb.com/manager/deb/unstable/focal/master/latest/scylla-manager-master/scylla-manager.list',
+    target_scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo',
+
+    scylla_mgmt_repo: Null,  // no ubuntu 20 build of branch 2.2, nothing to upgrade from
+    scylla_mgmt_agent_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.2.repo',
+    scylla_version: 'master:latest',
+
+    test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
+    test_config: '''["test-cases/upgrades/manager-upgrade.yaml", "configurations/manager/ubuntu20.yaml"]''',
+
+    timeout: [time: 360, unit: 'MINUTES']
+)

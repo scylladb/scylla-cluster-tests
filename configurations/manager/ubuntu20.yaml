@@ -1,0 +1,4 @@
+ami_id_monitor: 'ami-042e8287309f5df03'  # Canonical, Ubuntu, 20.04 LTS, amd64 focal image build on 2021-02-23
+ami_monitor_user: 'ubuntu'
+
+scylla_repo_m: null  # no 2020 build for ubuntu 20, no testing for it so far

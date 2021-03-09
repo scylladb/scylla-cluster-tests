@@ -1,0 +1,21 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+managerPipeline(
+    backend: 'aws',
+    ip_ssh_connections: 'public',
+    aws_region: '''["us-east-1", "us-west-2"]''',
+    test_name: 'mgmt_cli_test.MgmtCliTest.test_manager_sanity',
+    test_config: '''["test-cases/manager/manager-regression-multiDC-set-distro.yaml", "configurations/manager/debian10.yaml"]''',
+
+    scylla_mgmt_repo: 'http://downloads.scylladb.com/manager/deb/unstable/buster/master/latest/scylladb-manager-master/scylla-manager.list',
+    scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo',
+    scylla_version: 'master:latest',
+
+    timeout: [time: 120, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy',
+    post_behavior_loader_nodes: 'destroy',
+    post_behavior_monitor_nodes: 'destroy'
+)
