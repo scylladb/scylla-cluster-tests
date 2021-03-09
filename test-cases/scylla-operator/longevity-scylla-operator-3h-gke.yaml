@@ -10,7 +10,7 @@ n_db_nodes: 3
 n_loaders: 2
 n_monitor_nodes: 1
 
-nemesis_class_name: 'OperatorMgmtBackup'
+nemesis_class_name: 'KubernetesScyllaOperatorMonkey'
 nemesis_interval: 5
 use_mgmt: true
 
