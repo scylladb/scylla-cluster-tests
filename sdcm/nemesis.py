@@ -647,10 +647,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def _init_new_node_with_latency_calculation(self, old_node_ip):
         return self._add_and_init_new_cluster_node(old_node_ip)
 
-    @latency_calculator_decorator
-    def run_nodetool_repair_on_new_node(self, node):
-        self.repair_nodetool_repair(node)
-
     def disrupt_terminate_and_replace_node(self):  # pylint: disable=invalid-name
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
         self._set_current_disruption('TerminateAndReplaceNode %s' % self.target_node)
@@ -658,11 +654,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message='StartEvent - Terminate node and wait 5 minutes').publish()
         self._terminate_and_wait(target_node=self.target_node)
         InfoEvent(message='FinishEvent - target_node was terminated').publish()
-        new_node = self._add_and_init_new_cluster_node(old_node_ip, rack=self.target_node.rack)
+        new_node = self._init_new_node_with_latency_calculation(old_node_ip)
         try:
             if new_node.get_scylla_config_param("enable_repair_based_node_ops") == 'false':
                 InfoEvent(message='StartEvent - Run repair on new node').publish()
-                self.run_nodetool_repair_on_new_node(new_node)
+                self.repair_nodetool_repair(new_node)
                 InfoEvent(message='FinishEvent - Finished running repair on new node').publish()
 
             # wait until node gives up on the old node, the default timeout is `ring_delay_ms: 300000`
