@@ -965,6 +965,8 @@ class SCTLogCollector(LogCollector):
                 search_locally=True),
         FileLog(name='normal.log',
                 search_locally=True),
+        FileLog(name='debug.log',
+                search_locally=True),
         FileLog(name='summary.log',
                 search_locally=True),
         FileLog(name='cdc-replicator.log',

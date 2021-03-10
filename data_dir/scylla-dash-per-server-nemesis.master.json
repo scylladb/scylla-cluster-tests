@@ -29,6 +29,20 @@
                   "datasource": "-- Grafana --",
                   "enable": false,
                   "hide": false,
+                  "iconColor": "#aaacad",
+                  "limit": 100,
+                  "matchAny": true,
+                  "name": "Events[DEBUG]",
+                  "showIn": 0,
+                  "tags": [
+                    "DEBUG"
+                  ],
+                  "type": "tags"
+                },
+                {
+                  "datasource": "-- Grafana --",
+                  "enable": false,
+                  "hide": false,
                   "iconColor": "#badff4",
                   "limit": 100,
                   "matchAny": true,
