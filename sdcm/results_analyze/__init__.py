@@ -13,8 +13,8 @@ import jinja2
 
 from sdcm.es import ES
 from sdcm.db_stats import TestStatsMixin
-from sdcm.send_email import Email
-from sdcm.sct_events.file_logger import get_events_grouped_by_category, get_logger_event_summary
+from sdcm.send_email import Email, BaseEmailReporter
+from sdcm.sct_events import Severity
 from sdcm.utils.es_queries import query_filter, QueryFilter, PerformanceFilterYCSB, PerformanceFilterScyllaBench, \
     PerformanceFilterCS, CDCQueryFilterCS
 from test_lib.utils import MagicList, get_data_by_path
@@ -100,21 +100,17 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         self.log.error('Scylla version is not found for test %s', test_doc['_id'])
         return None
 
-    def get_events(self):
+    def get_events(self, event_severity=None):
         last_events = dict()
         events_summary = dict()
+        if not event_severity:
+            for event in Severity:
+                event_severity.append(event.name)
 
-        if not self._events:
-            return [last_events, events_summary]
-
-        last_events['CRITICAL'] = self._events.get("CRITICAL", [])
-        events_summary['CRITICAL'] = len(last_events['CRITICAL'])
-
-        last_events['ERROR'] = self._events.get("ERROR", [])
-        events_summary['ERROR'] = len(last_events['ERROR'])
-
-        last_events['WARNING'] = self._events.get("WARNING", [])
-        events_summary['WARNING'] = len(last_events['WARNING'])
+        if self._events:
+            for event in event_severity:
+                last_events[event] = self._events.get(event, [])
+                events_summary[event] = len(last_events[event])
         return [last_events, events_summary]
 
     def render_to_html(self, results, html_file_path="", template=None):
@@ -150,6 +146,15 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
             self.log.warning("Won't send email (send_email: %s, recipients: %s)",
                              self._send_email, self._email_recipients)
 
+    def save_html_to_file(self, results):
+        email = BaseEmailReporter()
+        report_file = os.path.join(email.logdir, 'reactor_stall_events_list.html')
+        self.log.debug(f'report_file = {report_file}')
+        template_file = 'results_reactor_stall_events_list.html'
+        email.save_html_to_file(results, report_file, template_file=template_file)
+        self.log.debug('HTML successfully saved to local file')
+        return report_file
+
     def gen_kibana_dashboard_url(self, dashboard_path=""):
         return "%s/%s" % (self._conf.get('kibana_url'), dashboard_path)
 
@@ -169,6 +174,9 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             logger=logger,
             events=events)
 
+    def get_starred_events(self):
+        return self.get_events(event_severity=[Severity.STARRED])
+
     def check_regression(self, test_id, data, is_gce=False):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         doc = self.get_test_by_id(test_id)
         full_test_name = doc["_source"]["test_details"]["test_name"]
@@ -177,13 +185,17 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         test_version_info = self._test_version(doc)
         test_version = '.'.join([val for val in test_version_info.values()])
 
-        last_events, events_summary = self.get_events()
+        last_events, events_summary = self.get_events(event_severity=[
+            Severity.CRITICAL, Severity.ERROR, Severity.WARNING])
+        reactor_stall_events, reactor_stall_events_summary = self.get_starred_events()
 
         subject = f'Performance Regression Compare Results (latency during operations) -' \
                   f' {test_name} - {test_version} - {str(test_start_time)}'
         results = dict(
             events_summary=events_summary,
             last_events=last_events,
+            starred_events=reactor_stall_events,
+            starred_events_summary=reactor_stall_events_summary,
             stats=data,
             test_name=full_test_name,
             test_start_time=str(test_start_time),
@@ -194,6 +206,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             grafana_screenshots=self._get_grafana_screenshot(doc),
             job_url=doc['_source']['test_details'].get('job_url', ""),
         )
+        self.save_html_to_file(results)
         html = self.render_to_html(results=results)
         self.send_email(subject=subject, content=html)
 

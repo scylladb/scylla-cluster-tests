@@ -16,6 +16,7 @@ n_monitor_nodes: 1
 instance_type_loader: 'c5.2xlarge'
 instance_type_monitor: 't3.large'
 instance_type_db: 'i3.2xlarge'
+max_events_severities: 'DatabaseLogEvent.REACTOR_STALLED=STARRED'
 
 nemesis_class_name: 'NemesisSequence'
 nemesis_interval: 30

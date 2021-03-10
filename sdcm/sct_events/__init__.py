@@ -18,6 +18,7 @@ from typing import Protocol, Optional, Type, runtime_checkable
 
 
 class Severity(enum.Enum):
+    STARRED = -1  # this should only be through test case configuration!!!
     UNKNOWN = 0
     NORMAL = 1
     WARNING = 2

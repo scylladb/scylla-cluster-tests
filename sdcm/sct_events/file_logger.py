@@ -37,6 +37,7 @@ CRITICAL_LOG: str = "critical.log"
 ERROR_LOG: str = "error.log"
 WARNING_LOG: str = "warning.log"
 NORMAL_LOG: str = "normal.log"
+STARRED_LOG: str = "starred.log"
 
 LINE_START_RE = re.compile(r"^\d{4}-\d{2}-\d{2} ")  # date in YYYY-MM-DD format
 
@@ -53,6 +54,7 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
             Severity.ERROR:    base_dir / ERROR_LOG,
             Severity.WARNING:  base_dir / WARNING_LOG,
             Severity.NORMAL:   base_dir / NORMAL_LOG,
+            Severity.STARRED:  base_dir / STARRED_LOG,
         }
 
         self.events_summary = collections.defaultdict(int)
