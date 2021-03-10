@@ -36,11 +36,13 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     RUNTIME_ERROR: Type[LogEventProtocol]
     FILESYSTEM_ERROR: Type[LogEventProtocol]
     STACKTRACE: Type[LogEventProtocol]
+
+    # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
+    REACTOR_STALLED: Type[LogEventProtocol]
     BACKTRACE: Type[LogEventProtocol]
     ABORTING_ON_SHARD: Type[LogEventProtocol]
     SEGMENTATION: Type[LogEventProtocol]
     INTEGRITY_CHECK: Type[LogEventProtocol]
-    REACTOR_STALLED: Type[LogEventProtocol]
     BOOT: Type[LogEventProtocol]
     SUPPRESSED_MESSAGES: Type[LogEventProtocol]
     stream_exception: Type[LogEventProtocol]
@@ -55,8 +57,8 @@ class ReactorStalledMixin(Generic[T_log_event]):
     def add_info(self: T_log_event, node, line: str, line_number: int) -> T_log_event:
         try:
             # Dynamically handle reactor stalls severity.
-            if int(MILLI_RE.findall(line)[0]) <= self.tolerable_reactor_stall:
-                self.severity = Severity.NORMAL
+            if int(MILLI_RE.findall(line)[0]) >= self.tolerable_reactor_stall:
+                self.severity = Severity.ERROR
         except (ValueError, IndexError, ):
             LOGGER.warning("failed to read REACTOR_STALLED line=[%s] ", line)
         return super().add_info(node=node, line=line, line_number=line_number)
@@ -85,6 +87,10 @@ DatabaseLogEvent.add_subevent_type("FILESYSTEM_ERROR", severity=Severity.ERROR,
                                    regex="filesystem_error")
 DatabaseLogEvent.add_subevent_type("STACKTRACE", severity=Severity.ERROR,
                                    regex="stacktrace")
+
+# REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
+DatabaseLogEvent.add_subevent_type("REACTOR_STALLED", mixin=ReactorStalledMixin, severity=Severity.DEBUG,
+                                   regex="Reactor stalled")
 DatabaseLogEvent.add_subevent_type("BACKTRACE", severity=Severity.ERROR,
                                    regex="backtrace")
 DatabaseLogEvent.add_subevent_type("ABORTING_ON_SHARD", severity=Severity.ERROR,
@@ -93,8 +99,6 @@ DatabaseLogEvent.add_subevent_type("SEGMENTATION", severity=Severity.ERROR,
                                    regex="segmentation")
 DatabaseLogEvent.add_subevent_type("INTEGRITY_CHECK", severity=Severity.ERROR,
                                    regex="integrity check failed")
-DatabaseLogEvent.add_subevent_type("REACTOR_STALLED", mixin=ReactorStalledMixin, severity=Severity.WARNING,
-                                   regex="Reactor stalled")
 DatabaseLogEvent.add_subevent_type("BOOT", severity=Severity.NORMAL,
                                    regex="Starting Scylla Server")
 DatabaseLogEvent.add_subevent_type("SUPPRESSED_MESSAGES", severity=Severity.WARNING,
@@ -115,11 +119,13 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.RUNTIME_ERROR(),
     DatabaseLogEvent.FILESYSTEM_ERROR(),
     DatabaseLogEvent.STACKTRACE(),
+
+    # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
+    DatabaseLogEvent.REACTOR_STALLED(),
     DatabaseLogEvent.BACKTRACE(),
     DatabaseLogEvent.ABORTING_ON_SHARD(),
     DatabaseLogEvent.SEGMENTATION(),
     DatabaseLogEvent.INTEGRITY_CHECK(),
-    DatabaseLogEvent.REACTOR_STALLED(),
     DatabaseLogEvent.BOOT(),
     DatabaseLogEvent.SUPPRESSED_MESSAGES(),
     DatabaseLogEvent.stream_exception(),
