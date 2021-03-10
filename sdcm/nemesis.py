@@ -795,10 +795,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def _init_new_node_with_latency_calculation(self, old_node_ip, rack=0):
         return self._add_and_init_new_cluster_node(old_node_ip, rack=rack)
 
-    @latency_calculator_decorator
-    def run_nodetool_repair_on_new_node(self, node):
-        self.repair_nodetool_repair(node)
-
     def disrupt_terminate_and_recover_node_kubernetes(self):  # pylint: disable=invalid-name
         if not self._is_it_on_kubernetes():
             raise UnsupportedNemesis('OperatorNodeTerminateAndRecover is supported only on kubernetes')
@@ -880,11 +876,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message='StartEvent - Terminate node and wait 5 minutes').publish()
         self._terminate_and_wait(target_node=self.target_node)
         InfoEvent(message='FinishEvent - target_node was terminated').publish()
-        new_node = self._add_and_init_new_cluster_node(old_node_ip, rack=self.target_node.rack)
+        new_node = self._init_new_node_with_latency_calculation(old_node_ip, rack=self.target_node.rack)
         try:
             if new_node.get_scylla_config_param("enable_repair_based_node_ops") == 'false':
                 InfoEvent(message='StartEvent - Run repair on new node').publish()
-                self.run_nodetool_repair_on_new_node(new_node)
+                self.repair_nodetool_repair(new_node)
                 InfoEvent(message='FinishEvent - Finished running repair on new node').publish()
 
             # wait until node gives up on the old node, the default timeout is `ring_delay_ms: 300000`
