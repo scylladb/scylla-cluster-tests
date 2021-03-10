@@ -1010,6 +1010,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 self.params.get('k8s_scylla_operator_docker_image').split(':')[-1],
                 is_manager_deployed=self.params.get('use_mgmt')
             )
+        self.k8s_cluster.add_gke_pool(name=self.params.get("k8s_loader_cluster_name"),
+                                      num_nodes=self.params.get("n_loaders"),
+                                      instance_type=self.params.get("gce_instance_type_loader"))
 
         self.k8s_cluster.deploy_cert_manager()
         self.k8s_cluster.deploy_scylla_operator()
@@ -1023,10 +1026,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                   user_prefix=self.params.get("user_prefix"),
                                                   n_nodes=self.params.get("n_db_nodes"),
                                                   params=self.params)
-
-        self.k8s_cluster.add_gke_pool(name=self.params.get("k8s_loader_cluster_name"),
-                                      num_nodes=self.params.get("n_loaders"),
-                                      instance_type=self.params.get("gce_instance_type_loader"))
 
         self.loaders = cluster_k8s.LoaderPodCluster(k8s_cluster=self.k8s_cluster,
                                                     loader_cluster_config=gke.LOADER_CLUSTER_CONFIG,
