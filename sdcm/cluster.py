@@ -4876,7 +4876,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
             for db_node in self.targets["db_cluster"].nodes:
                 monitoring_targets.append(f"[{getattr(db_node, attr_name)}]:9180")
             monitoring_targets = " ".join(monitoring_targets)
-            if self.params.get("ip_ssh_connections") == "ipv6":
+            if self.params.get("ip_ssh_connections") != "ipv6":
                 monitoring_targets = monitoring_targets.replace("[", "").replace("]", "")
 
             node.remoter.sudo(shell_script_cmd(f"""\
