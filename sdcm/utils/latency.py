@@ -35,8 +35,10 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
         query = f'collectd_cassandra_stress_{load_type}_gauge{{type="lat_{precision}"}}'
         query_res = prometheus.query(query, start, end)
         latency_values_lst = list()
+        max_latency_values_lst = list()
         for entry in query_res:
             lat_value = None
+            max_lat_value = None
             if not entry['values']:
                 continue
             sequence = [val[-1] for val in entry['values'] if not val[-1].lower() == 'nan']
@@ -47,10 +49,15 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
                     lat_value = max([float(val) for val in sequence])
             else:
                 lat_value = avg(sequence)
+                max_lat_value = max(sequence)
             latency_values_lst.append(lat_value)
+            max_latency_values_lst.append(max_lat_value)
+
         if latency_values_lst:
             res[metric] = format(float(max([float(val) for val in latency_values_lst])), '.2f') if precision == 'max' \
                 else format(float(avg(latency_values_lst)), '.2f')
+        if max_latency_values_lst:
+            res[f'{metric} max'] = format(float(max([float(val) for val in max_latency_values_lst])), '.2f')
 
     if load_type == 'mixed':
         load_type = ['read', 'write']
