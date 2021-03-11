@@ -1066,7 +1066,6 @@ class ClusterTester(db_stats.TestStatsMixin,
                 # It should have at least 3 vCPU to be able to hold all the pods
                 disk_size=40,
                 role_arn=self.k8s_cluster.nodegroup_role_arn,
-                provision_type=self.params.get('instance_provision'),
                 k8s_cluster=self.k8s_cluster),
             wait_till_ready=False)
 
@@ -1075,7 +1074,6 @@ class ClusterTester(db_stats.TestStatsMixin,
             num_nodes=self.params.get("n_db_nodes") + 1,
             instance_type=self.params.get('instance_type_db'),
             role_arn=self.params.get('eks_nodegroup_role_arn'),
-            provision_type=self.params.get('instance_provision'),
             disk_size=self.params.get('aws_root_disk_size_db'),
             k8s_cluster=self.k8s_cluster
         )
@@ -1086,7 +1084,6 @@ class ClusterTester(db_stats.TestStatsMixin,
             num_nodes=self.params.get("n_loaders"),
             instance_type=self.params.get("instance_type_monitor"),
             role_arn=self.params.get('eks_nodegroup_role_arn'),
-            provision_type=self.params.get('instance_provision'),
             disk_size=self.params.get('aws_root_disk_size_monitor'),
             k8s_cluster=self.k8s_cluster)
         self.k8s_cluster.deploy_node_pool(loader_pool, wait_till_ready=False)
@@ -1098,7 +1095,6 @@ class ClusterTester(db_stats.TestStatsMixin,
                 num_nodes=1,
                 instance_type=self.params.get("instance_type_monitor"),
                 role_arn=self.params.get('eks_nodegroup_role_arn'),
-                provision_type=self.params.get('instance_provision'),
                 disk_size=self.params.get('aws_root_disk_size_monitor'),
                 k8s_cluster=self.k8s_cluster
             )

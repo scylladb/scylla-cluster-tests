@@ -16,6 +16,8 @@ def call(Map pipelineParams) {
         parameters {
             choice(choices: ["${pipelineParams.get('backend', 'k8s-gke')}", 'k8s-gke', 'k8s-gce-minikube'],
                    name: 'backend')
+            choice(choices: ["${pipelineParams.get('aws_region', '')}", 'eu-north-1', 'eu-west-1', 'eu-central-1', 'us-east-1'],
+                   name: 'aws_region')
             string(defaultValue: "${pipelineParams.get('base_versions', '')}",
                    name: 'base_versions')
             string(defaultValue: "${pipelineParams.get('new_version', '')}",
