@@ -593,11 +593,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             LOGGER.info("Install local volume provisioner")
             self.helm(f"install local-provisioner {LOCAL_PROVISIONER_DIR}", values=node_pool.helm_affinity_values)
 
-            self.deploy_node_pool(node_pool, wait_till_ready=False)
-            time.sleep(10)
-
-            self.wait_till_cluster_is_operational()
-
             # Calculate cpu and memory limits to occupy all available amounts by scylla pods
             cpu_limit, memory_limit = node_pool.cpu_and_memory_capacity
             # TBD: Remove reduction logic after https://github.com/scylladb/scylla-operator/issues/384 is fixed
