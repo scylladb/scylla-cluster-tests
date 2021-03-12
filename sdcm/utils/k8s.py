@@ -319,6 +319,18 @@ class ApiCallRateLimiter(threading.Thread):
         return output
 
 
+class CordonNodes:
+    def __init__(self, kubectl_method, selector):
+        self.kubectl = kubectl_method
+        self.cordon_cmd = f"cordon -l '{selector}'"
+
+    def __enter__(self):
+        return self.kubectl(self.cordon_cmd)
+
+    def __exit__(self, *exc):
+        self.kubectl(f"un{self.cordon_cmd}")
+
+
 class KubernetesOps:
 
     @staticmethod
