@@ -943,15 +943,16 @@ class ClusterTester(db_stats.TestStatsMixin,
                                           params=self.params,
                                           gce_datacenter=gce_datacenter)
         self.k8s_cluster.deploy()
-        scylla_pool = gke.GkeNodePool(
-            name=self.k8s_cluster.SCYLLA_POOL_NAME,
-            local_ssd_count=self.params.get("gce_n_local_ssd_disk_db"),
-            disk_size=self.params.get("gce_root_disk_size_db"),
-            disk_type=self.params.get("gce_root_disk_type_db"),
-            instance_type=self.params.get("gce_instance_type_db"),
-            num_nodes=int(self.params.get("n_db_nodes")) + 1,
-            k8s_cluster=self.k8s_cluster)
-        self.k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
+
+        # NOTE: between GKE cluster creation and addition of new node pools we need
+        # several minutes gap to avoid "repair" status of a cluster when API server goes down.
+        # So, deploy apps specific to default-pool in between above mentioned deployment steps.
+        self.k8s_cluster.deploy_cert_manager()
+        self.k8s_cluster.deploy_scylla_operator()
+        if self.params.get('use_mgmt'):
+            self.k8s_cluster.deploy_minio_s3_backend(minio_bucket_name=self.params.get('backup_bucket_location'))
+            self.k8s_cluster.deploy_scylla_manager()
+
         loader_pool = gke.GkeNodePool(
             name=self.k8s_cluster.LOADER_POOL_NAME,
             instance_type=self.params.get("gce_instance_type_loader"),
@@ -970,12 +971,18 @@ class ClusterTester(db_stats.TestStatsMixin,
                 num_nodes=self.params.get("n_monitor_nodes"),
                 k8s_cluster=self.k8s_cluster)
             self.k8s_cluster.deploy_node_pool(monitor_pool, wait_till_ready=False)
+
+        scylla_pool = gke.GkeNodePool(
+            name=self.k8s_cluster.SCYLLA_POOL_NAME,
+            local_ssd_count=self.params.get("gce_n_local_ssd_disk_db"),
+            disk_size=self.params.get("gce_root_disk_size_db"),
+            disk_type=self.params.get("gce_root_disk_type_db"),
+            instance_type=self.params.get("gce_instance_type_db"),
+            num_nodes=int(self.params.get("n_db_nodes")) + 1,
+            k8s_cluster=self.k8s_cluster)
+        self.k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
+
         self.k8s_cluster.wait_all_node_pools_to_be_ready()
-        self.k8s_cluster.deploy_cert_manager()
-        self.k8s_cluster.deploy_scylla_operator()
-        if self.params.get('use_mgmt'):
-            self.k8s_cluster.deploy_minio_s3_backend(minio_bucket_name=self.params.get('backup_bucket_location'))
-            self.k8s_cluster.deploy_scylla_manager()
 
         self.db_cluster = gke.GkeScyllaPodCluster(k8s_cluster=self.k8s_cluster,
                                                   scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
