@@ -6,5 +6,9 @@ operatorPipeline(
     backend: 'k8s-eks',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: 'test-cases/scylla-operator/longevity-scylla-operator-basic-3h.yaml',
+    email_recipients: 'qa@scylladb.com,scylla-operator@scylladb.com',
+    post_behavior_db_nodes: 'destroy',
+    post_behavior_loader_nodes: 'destroy',
+    post_behavior_monitor_nodes: 'destroy',
     timeout: [time: 400, unit: 'MINUTES']
 )
