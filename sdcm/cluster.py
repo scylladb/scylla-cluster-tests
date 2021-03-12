@@ -4259,7 +4259,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         for node in self.nodes:
             node.run_nodetool('repair')
 
-    def decommission(self, node):
+    def verify_decommission(self, node):
         def get_node_ip_list(verification_node):
             try:
                 ip_node_list = []
@@ -4272,7 +4272,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 return None
 
         target_node_ip = node.ip_address
-        node.run_nodetool("decommission")
         verification_node = librandom.choice(self.nodes)
         node_ip_list = get_node_ip_list(verification_node)
         while verification_node == node or node_ip_list is None:
@@ -4292,6 +4291,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         LOGGER.info('Decommission %s PASS', node)
         self.terminate_node(node)  # pylint: disable=no-member
         Setup.tester_obj().monitors.reconfigure_scylla_monitoring()
+
+    def decommission(self, node):
+        node.run_nodetool("decommission")
+        self.verify_decommission(node)
 
     @property
     def scylla_manager_node(self) -> BaseNode:
