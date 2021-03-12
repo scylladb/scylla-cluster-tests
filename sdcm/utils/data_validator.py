@@ -286,7 +286,9 @@ class LongevityDataValidator:
                     if not all_entries:
                         break
 
-        return mv_names
+        # If same user profile is called in parallel, the same MVs will be included few time in the list and test data
+        # will be copied a few times. Return list of unique MVs to prevent to duplicate of copying test data
+        return list(set(mv_names))
 
     @staticmethod
     def get_view_cmd_from_profile(profile_content, name_substr, all_entries=False):
