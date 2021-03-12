@@ -35,6 +35,7 @@ from invoke import UnexpectedExit
 from cassandra import ConsistencyLevel
 
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady
+from sdcm.cluster import NodeStayInClusterAfterDecommission
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_string, \
     update_certificates, reach_enospc_on_node, clean_enospc_on_node, parse_nodetool_listsnapshots
@@ -2484,27 +2485,22 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
 
         def decommission_post_action():
-            ips = []
-            seed_nodes = [node for node in self.cluster.nodes if node.is_seed]
-            status = self.cluster.get_nodetool_status(verification_node=seed_nodes[0])
-            self.log.debug(status)
-            for dc_info in status.values():
-                try:
-                    ips.extend(dc_info.keys())
-                except Exception:  # pylint: disable=broad-except
-                    self.log.debug(dc_info)
+            target_is_seed = self.target_node.is_seed
+            try:
+                self.cluster.verify_decommission(self.target_node)
+            except NodeStayInClusterAfterDecommission:
+                self.log.debug('The decommission of target node is successfully interrupted')
+                return None
+            except:
+                self.log.error('Unexpected exception raised in checking decommission status')
 
-            decommission_done = list(self.target_node.follow_system_log(
-                patterns=['DECOMMISSIONING: done'], start_from_beginning=True))
-
-            if self.target_node.ip_address not in ips or decommission_done:
-                self.log.error(
-                    'The target node is decommission unexpectedly, decommission might complete before stopping it. Re-add a new node')
-                self._terminate_cluster_node(self.target_node)
-                new_node = self._add_and_init_new_cluster_node(rack=self.target_node.rack)
-                self.unset_current_running_nemesis(new_node)
-                return new_node
-            return None
+            self.log.info('Decommission might complete before stopping it. Re-add a new node')
+            new_node = self._add_and_init_new_cluster_node(rack=self.target_node.rack)
+            if new_node.is_seed != target_is_seed:
+                new_node.set_seed_flag(target_is_seed)
+                self.cluster.update_seed_provider()
+            self.unset_current_running_nemesis(new_node)
+            return new_node
 
         def streaming_task_thread(nodetool_task='rebuild'):
             """
