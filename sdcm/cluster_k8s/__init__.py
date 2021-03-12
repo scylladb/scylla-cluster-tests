@@ -52,10 +52,23 @@ from sdcm.mgmt import AnyManagerCluster
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils.common import download_from_github, shorten_cluster_name, walk_thru_data
-from sdcm.utils.k8s import KubernetesOps, ApiCallRateLimiter, JSON_PATCH_TYPE, KUBECTL_TIMEOUT, TokenUpdateThread, \
-    get_helm_pool_affinity_values, convert_cpu_value_from_k8s_to_units, convert_memory_value_from_k8s_to_units, \
-    convert_cpu_units_to_k8s_value, convert_memory_units_to_k8s_value, get_pool_affinity_modifiers, PortExposeService, \
-    HelmValues, add_pool_node_affinity
+from sdcm.utils.k8s import (
+    add_pool_node_affinity,
+    convert_cpu_units_to_k8s_value,
+    convert_cpu_value_from_k8s_to_units,
+    convert_memory_units_to_k8s_value,
+    convert_memory_value_from_k8s_to_units,
+    get_helm_pool_affinity_values,
+    get_pool_affinity_modifiers,
+    ApiCallRateLimiter,
+    CordonNodes,
+    JSON_PATCH_TYPE,
+    KubernetesOps,
+    KUBECTL_TIMEOUT,
+    HelmValues,
+    PortExposeService,
+    TokenUpdateThread,
+)
 from sdcm.utils.decorators import log_run_info, retrying, timeout
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \
     KubectlClusterEventsLogger, ScyllaManagerLogger
@@ -413,14 +426,20 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         # Install and wait for initialization of the Scylla Manager chart
         LOGGER.info("Deploy scylla-manager")
         self.kubectl(f'create namespace {SCYLLA_MANAGER_NAMESPACE}')
-        LOGGER.debug(self.helm_install(
-            target_chart_name="scylla-manager",
-            source_chart_name="scylla-operator/scylla-manager",
-            version=self._scylla_operator_chart_version,
-            use_devel=True,
-            values=values,
-            namespace=SCYLLA_MANAGER_NAMESPACE,
-        ))
+
+        # TODO: usage of 'cordon' feature below is a workaround for the scylla-operator issue #496
+        # where it is not possible to provide node/pod affinity for the scylla server
+        # which gets installed for the scylla-manager deployed by scylla-operator.
+        to_cordon = ", ".join(['loader-pool', 'monitoring-pool', 'scylla-pool'])
+        with CordonNodes(self.kubectl, f"{self.POOL_LABEL_NAME} in ({to_cordon})"):
+            LOGGER.debug(self.helm_install(
+                target_chart_name="scylla-manager",
+                source_chart_name="scylla-operator/scylla-manager",
+                version=self._scylla_operator_chart_version,
+                use_devel=True,
+                values=values,
+                namespace=SCYLLA_MANAGER_NAMESPACE,
+            ))
 
         time.sleep(10)
 
