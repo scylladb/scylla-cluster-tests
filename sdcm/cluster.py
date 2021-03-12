@@ -4143,7 +4143,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             verification_node = librandom.choice(self.nodes)
             node_ip_list = get_node_ip_list(verification_node)
 
-        if target_node_ip in node_ip_list:
+        decommission_done = list(node.follow_system_log(
+            patterns=['DECOMMISSIONING: done'], start_from_beginning=True))
+
+        if target_node_ip in node_ip_list and not decommission_done:
             cluster_status = self.get_nodetool_status(verification_node)
             error_msg = ('Node that was decommissioned %s still in the cluster. '
                          'Cluster status info: %s' % (node,
