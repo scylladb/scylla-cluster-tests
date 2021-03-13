@@ -183,6 +183,10 @@ class MinikubeCluster(KubernetesCluster):
     def deploy_node_pool(self, pool, wait_till_ready=True) -> None:
         raise NotImplementedError("Not supported in Minikube")
 
+    def deploy_scylla_manager(self, pool_name: str = None) -> None:
+        self.deploy_minio_s3_backend()
+        super().deploy_scylla_manager(pool_name=pool_name)
+
 
 class GceMinikubeCluster(MinikubeCluster, cluster_gce.GCECluster):
     def __init__(self, minikube_version, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,  # pylint: disable=too-many-arguments

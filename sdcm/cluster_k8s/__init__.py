@@ -500,18 +500,17 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         )
 
     @log_run_info
-    def deploy_minio_s3_backend(self, minio_bucket_name):
+    def deploy_minio_s3_backend(self):
         LOGGER.info('Deploy minio s3-like backend server')
         self.helm('repo add minio https://helm.min.io/')
         self.kubectl("create namespace minio")
         self.helm(
             'install --set accessKey=minio_access_key,secretKey=minio_access_key,'
-            f'defaultBucket.enabled=true,defaultBucket.name={minio_bucket_name},'
+            f'defaultBucket.enabled=true,defaultBucket.name={self.manager_bucket_name},'
             'defaultBucket.policy=public --generate-name minio/minio',
             namespace='minio')
 
         wait_for(lambda: self.minio_ip_address, text='Waiting for minio pod to popup', timeout=120, throw_exc=True)
-
         self.kubectl("wait --timeout=10m --all --for=condition=Ready pod", namespace="minio")
 
     def get_scylla_cluster_helm_values(self, cpu_limit, memory_limit, pool_name: str = None) -> HelmValues:
@@ -577,11 +576,27 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                 self.api_call_rate_limiter.wait_till_api_become_stable(self)
         self.wait_all_node_pools_to_be_ready()
 
+    def create_scylla_manager_agent_config(self):
+        # Create kubernetes secret that holds scylla manager agent configuration
+        self.update_secret_from_data('scylla-agent-config', SCYLLA_NAMESPACE, {
+            'scylla-manager-agent.yaml': {
+                's3': {
+                    'provider': 'Minio',
+                    'endpoint': self.s3_provider_endpoint,
+                    'access_key_id': 'minio_access_key',
+                    'secret_access_key': 'minio_access_key'
+                }
+            }
+        })
+
     @log_run_info
-    def deploy_scylla_cluster(self, target_mgmt_agent_to_minio: bool = False,
-                              node_pool: CloudK8sNodePool = None, node_prepare_config: str = None) -> None:
+    def deploy_scylla_cluster(self,  node_pool: CloudK8sNodePool = None, node_prepare_config: str = None) -> None:
         LOGGER.info("Create and initialize a Scylla cluster")
         self.kubectl(f"create namespace {SCYLLA_NAMESPACE}")
+
+        if self.params['use_mgmt']:
+            self.create_scylla_manager_agent_config()
+
         affinity_modifiers = []
 
         if node_pool:
@@ -605,19 +620,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
 
         cpu_limit = int(cpu_limit)
         memory_limit = convert_memory_units_to_k8s_value(memory_limit)
-
-        if target_mgmt_agent_to_minio:
-            # Create kubernetes secret that holds scylla manager agent configuration
-            self.update_secret_from_data('scylla-agent-config', 'scylla', {
-                'scylla-manager-agent.yaml': {
-                    's3': {
-                        'provider': 'Minio',
-                        'endpoint': f"http://{self.minio_ip_address}:9000",
-                        'access_key_id': 'minio_access_key',
-                        'secret_access_key': 'minio_access_key'
-                    }
-                }
-            })
 
         # Deploy scylla cluster
         LOGGER.debug(self.helm_install(
@@ -791,8 +793,16 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         raise RuntimeError("Can't find minio pod")
 
     @property
+    def manager_bucket_name(self):
+        return self.params.get('backup_bucket_location') or 'bucket'
+
+    @property
     def minio_ip_address(self) -> str:
         return self.minio_pod.status.pod_ip
+
+    @property
+    def s3_provider_endpoint(self) -> str:
+        return f"http://{self.minio_ip_address}:9000"
 
     @property
     def operator_pod_status(self):
@@ -838,8 +848,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         return KubernetesOps.dynamic_client(self.api_client)
 
     @cached_property
-    def scylla_manager_cluster(self) -> 'PodCluster':
-        return PodCluster(
+    def scylla_manager_cluster(self) -> 'ManagerPodCluser':
+        return ManagerPodCluser(
             k8s_cluster=self,
             namespace=SCYLLA_MANAGER_NAMESPACE,
             container='scylla-manager',
@@ -1527,7 +1537,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                  node_pool: CloudK8sNodePool = None,
                  ) -> None:
         k8s_cluster.deploy_scylla_cluster(
-            target_mgmt_agent_to_minio=bool(params.get('use_mgmt')),
             node_pool=node_pool,
             node_prepare_config=self.NODE_PREPARE_FILE
         )
@@ -1925,6 +1934,17 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                 timeout=readiness_timeout * 60 + 10)
 
 
+class ManagerPodCluser(PodCluster):
+    def wait_for_pods_readiness(self, pods_to_wait: int, total_pods: int):
+        time.sleep(self.get_nodes_readiness_delay)
+        KubernetesOps.wait_for_pods_readiness(
+            kluster=self.k8s_cluster,
+            total_pods=lambda x: x > 1,
+            readiness_timeout=self.get_nodes_reboot_timeout(pods_to_wait),
+            namespace=self.namespace
+        )
+
+
 class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
     def __init__(self,
                  k8s_cluster: KubernetesCluster,
@@ -1975,7 +1995,6 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
             raise NotImplementedError("Changing number of nodes in LoaderPodCluster is not supported.")
 
         self.k8s_cluster.deploy_loaders_cluster(self.loader_cluster_config, node_pool=self.node_pool)
-        self.wait_for_pods_readiness(pods_to_wait=count, total_pods=count)
         new_nodes = super().add_nodes(count=count,
                                       ec2_user_data=ec2_user_data,
                                       dc_idx=dc_idx,
