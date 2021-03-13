@@ -14,8 +14,8 @@ n_db_nodes: 3
 
 # '4.3.0' version doesn't work with GKE: https://github.com/scylladb/scylla/issues/8032
 scylla_version: '4.2.0'
-scylla_mgmt_agent_version: '2.2.1'
-mgmt_docker_image: 'scylladb/scylla-manager:2.2.1'
+scylla_mgmt_agent_version: '2.2.4'
+mgmt_docker_image: 'scylladb/scylla-manager:2.2.4'
 
 # NOTE: If 'k8s_scylla_operator_docker_image' not set then the one from helm chart will be used.
 # To test nightly builds define it like this: 'scylladb/scylla-operator:nightly'
