@@ -16,7 +16,7 @@ eks_vpc_cni_version: 'v1.7.5-eksbuild.1'
 eks_nodegroup_role_arn: 'arn:aws:iam::797456418907:role/helm-test-worker-nodes-NodeInstanceRole-6ACHDYEKNN3I'
 
 scylla_version: '4.2.1'
-scylla_mgmt_agent_version: '2.2.0'
+scylla_mgmt_agent_version: '2.2.4'
 k8s_cert_manager_version: '1.0.3'
 
 # Currently k8s monitoring does not work properly
@@ -45,4 +45,4 @@ n_db_nodes: 3
 
 append_scylla_args: ''
 docker_image: ''
-mgmt_docker_image: 'scylladb/scylla-manager:2.2.1'
+mgmt_docker_image: 'scylladb/scylla-manager:2.2.4'
