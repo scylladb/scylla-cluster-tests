@@ -268,6 +268,10 @@ class GkeCluster(KubernetesCluster):
         self.api_call_rate_limiter.stop()
         self.stop_token_update_thread()
 
+    def deploy_scylla_manager(self, pool_name: str = None) -> None:
+        self.deploy_minio_s3_backend()
+        super().deploy_scylla_manager(pool_name=pool_name)
+
 
 class GkeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
     parent_cluster: 'GkeScyllaPodCluster'
