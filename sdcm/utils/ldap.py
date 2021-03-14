@@ -12,9 +12,11 @@
 # Copyright (c) 2020 ScyllaDB
 
 import logging
+from sdcm.utils.decorators import retrying
 
 from time import sleep
 from ldap3 import Server, Connection, ALL, ALL_ATTRIBUTES
+from ldap3.core.exceptions import LDAPSocketOpenError
 
 
 LOGGER = logging.getLogger(__name__)
@@ -30,6 +32,10 @@ LDAP_PASSWORD = 'scylla'
 LDAP_ROLE = 'scylla_ldap'
 LDAP_USERS = ['scylla-qa', 'dummy-user']
 LDAP_BASE_OBJECT = (lambda l: ','.join([f'dc={part}' for part in l.split('.')]))(LDAP_DOMAIN)
+
+
+class LdapServerNotReady(Exception):
+    pass
 
 
 class LdapContainerMixin:  # pylint: disable=too-few-public-methods
@@ -48,6 +54,7 @@ class LdapContainerMixin:  # pylint: disable=too-few-public-methods
                     )
 
     @staticmethod
+    @retrying(n=10, sleep_time=6, allowed_exceptions=(LdapServerNotReady, LDAPSocketOpenError))
     def create_ldap_connection(ip, ldap_port, user, password):
         LdapContainerMixin.ldap_server = Server(host=f'ldap://{ip}:{ldap_port}', get_info=ALL)
         LdapContainerMixin.ldap_conn = Connection(server=LdapContainerMixin.ldap_server, user=user, password=password)
