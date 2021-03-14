@@ -3122,6 +3122,7 @@ class FillDatabaseData(ClusterTester):
         node = self.db_cluster.nodes[-1]
         with self.db_cluster.cql_connection_patient(node, keyspace=keyspace) as session:
             create_table()
+            self.db_cluster.wait_for_schema_agreement()  # WORKAROUND TO SCHEMA PROPAGATION TAKING TOO LONG
             fill_table()
             statement = f'select * from {keyspace}.paged_query_test;'
             self.log.info('running now session.execute')
