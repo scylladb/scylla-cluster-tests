@@ -13,7 +13,7 @@ managerPipeline(
 
     scylla_mgmt_repo: 'http://downloads.scylladb.com/deb/debian/scylladb-manager-2.2-stretch.list',
     scylla_mgmt_agent_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.2.repo',
-    scylla_version: 'master:latest',
+    scylla_version: '4.3',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
     test_config: '''["test-cases/upgrades/manager-upgrade.yaml", "configurations/manager/debian9.yaml"]''',
