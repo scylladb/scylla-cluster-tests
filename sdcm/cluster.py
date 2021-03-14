@@ -62,7 +62,8 @@ from sdcm.sct_events import Severity, CoreDumpEvent, DatabaseLogEvent, \
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack
-from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LDAP_BASE_OBJECT, LDAP_PASSWORD, LDAP_USERS, LDAP_ROLE
+from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LDAP_BASE_OBJECT, LDAP_PASSWORD, LDAP_USERS, LDAP_ROLE, \
+    LdapServerNotReady
 from sdcm.utils.remote_logger import get_system_logging_thread
 
 CREDENTIALS = []
@@ -236,6 +237,7 @@ class Setup:
         return tags
 
     @classmethod
+    @retrying(n=20, sleep_time=6, allowed_exceptions=LdapServerNotReady)
     def configure_ldap(cls, node, use_ssl=False):
         ContainerManager.run_container(node, "ldap")
         if use_ssl:
@@ -244,6 +246,8 @@ class Setup:
             port = node.ldap_ports['ldap_port']
         address = get_my_ip()
         cls.LDAP_ADDRESS = (address, port)
+        if ContainerManager.get_container(node, 'ldap').exec_run("timeout 30s container/tool/wait-process")[0] != 0:
+            raise LdapServerNotReady("LDAP server didn't finish its startup yet...")
 
     @classmethod
     def configure_rsyslog(cls, node, enable_ngrok=False):

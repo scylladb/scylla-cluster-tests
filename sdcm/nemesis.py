@@ -67,6 +67,14 @@ class FilesNotCorrupted(Exception):
     pass
 
 
+class LogContentNotFound(Exception):
+    pass
+
+
+class LdapNotRunning(Exception):
+    pass
+
+
 class UnsupportedNemesis(Exception):
     """ raised from within a nemesis execution to skip this nemesis"""
 
@@ -507,7 +515,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             set_remote_scylla_yaml(temp, node)
             node.restart_scylla_server()
 
-        InfoEvent(message='Disable LDAP Authorization Configuration')
+        if not ContainerManager.is_running(self.tester.localhost, 'ldap'):
+            raise LdapNotRunning("LDAP server was supposed to be running, but it is not")
+
+        InfoEvent(message='Disable LDAP Authorization Configuration').publish()
         for node in self.cluster.nodes:
             ldap_config[node] = dict()
             remove_ldap_configuration_from_node(node)
@@ -535,6 +546,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         create_ldap_container()
         for node in self.cluster.nodes:
             add_ldap_configuration_to_node(node)
+
+        if not ContainerManager.is_running(self.tester.localhost, 'ldap'):
+            raise LdapNotRunning("LDAP server was supposed to be running, but it is not")
 
     @retrying(n=3, sleep_time=60, allowed_exceptions=(NodeSetupFailed, NodeSetupTimeout))
     def _add_and_init_new_cluster_node(self, old_node_ip=None, timeout=HOUR_IN_SEC * 6):
