@@ -2606,6 +2606,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         Try to rebuild the sstables of all test keyspaces by scrub, the corrupted partitions
         will be skipped.
         """
+        self._set_current_disruption('CorruptThenScrub')
         self.log.debug("Rebuild sstables by scrub with `--skip-corrupted`, corrupted partitions will be skipped.")
         with ignore_scrub_invalid_errors():
             for ks in self.cluster.get_test_keyspaces():
