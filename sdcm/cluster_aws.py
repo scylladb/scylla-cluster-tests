@@ -701,7 +701,7 @@ class AWSNode(cluster.BaseNode):
                 self.remoter.sudo(shell_script_cmd(f"""\
                     sed -e '/.*scylla/s/^/#/g' -i /etc/fstab
                     sed -e '/auto_bootstrap:.*/s/false/true/g' -i /etc/scylla/scylla.yaml
-                    if ! grep replace_address_first_boot: /etc/scylla/scylla.yaml; then
+                    if ! grep ^replace_address_first_boot: /etc/scylla/scylla.yaml; then
                         echo 'replace_address_first_boot: {self.ip_address}' | tee --append /etc/scylla/scylla.yaml
                     fi
                 """))
