@@ -124,7 +124,7 @@ class ScyllaBenchThread:
         return sb_summary, errors
 
     def _run_stress_bench(self, node, loader_idx, stress_cmd, node_list):
-        read_gap = 480 # reads starts after write, read can look before start read time to current time using several sstables
+        read_gap = 480  # reads starts after write, read can look before start read time to current time using several sstables
         stress_cmd = re.sub(r"SCT_TIME", f"{int(time.time()) - read_gap}", stress_cmd)
         LOGGER.debug(f"replaced stress command {stress_cmd}")
 
