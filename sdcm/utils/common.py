@@ -955,7 +955,10 @@ def list_clusters_gke(tags_dict: Optional[dict] = None, verbose: bool = False) -
     clusters = GkeCleaner().list_gke_clusters()
 
     if tags_dict:
-        clusters = filter_gce_by_tags(tags_dict=tags_dict, instances=clusters)
+        clusters = filter_gce_by_tags(
+            tags_dict={k: v for k, v in tags_dict.items() if k != 'NodeType'},
+            instances=clusters,
+        )
 
     if verbose:
         LOGGER.info("Done. Found total of %s GKE clusters.", len(clusters))
