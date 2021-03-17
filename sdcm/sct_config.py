@@ -1202,7 +1202,7 @@ class SCTConfiguration(dict):
 
         region_names = self.region_names
 
-        if cluster_backend in ['aws', 'k8s-eks']:
+        if cluster_backend in ['aws', 'aws-siren', 'k8s-eks']:
             for region in region_names:
                 for key, value in regions_data[region].items():
                     if key not in self.keys():
