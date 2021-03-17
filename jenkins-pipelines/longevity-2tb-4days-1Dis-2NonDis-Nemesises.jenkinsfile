@@ -9,5 +9,5 @@ longevityPipeline(
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: 'test-cases/longevity/longevity-2TB-48h-authorization-and-tls-ssl-1dis-2nondis-nemesis.yaml',
 
-    timeout: [time: 3100, unit: 'MINUTES']
+    timeout: [time: 3120, unit: 'MINUTES']
 )
