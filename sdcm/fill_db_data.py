@@ -42,6 +42,8 @@ class FillDatabaseData(ClusterTester):
     """
     NON_FROZEN_SUPPORT_OS_MIN_VERSION = '4.1'  # open source version with non-frozen user_types support
     NON_FROZEN_SUPPORT_ENTERPRISE_MIN_VERSION = '2020'  # enterprise version with non-frozen user_types support
+    NULL_VALUES_SUPPORT_OS_MIN_VERSION = "4.4"
+    NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_OS_MIN_VERSION = "4.4"
 
     # List of dictionaries for all items tables and their data
     all_verification_items = [
@@ -739,7 +741,7 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # null_support_test:  Test support for nulls
+        # null_support_test:  Test support for nulls on new versions
         {
             'create_tables': ["""CREATE TABLE null_support_test (
                                 k int,
@@ -767,8 +769,44 @@ class FillDatabaseData(ClusterTester):
             'invalid_queries': [
                 "INSERT INTO null_support_test (k, c, v2) VALUES (0, 2, {1, null})",
                 "INSERT INTO null_support_test (k, c, v2) VALUES (0, 0, { 'foo', 'bar', null })"],
-            'min_version': '',
+            'min_version': '4.4',
             'max_version': '',
+            'skip_condition': 'self.version_null_values_support()',
+            'skip': ''},
+        # null_support_test_old_version:  Test support for nulls on old versions
+        {
+            # NOTE: Useful for scylla-operator's scylla upgrade tests
+            # while https://github.com/scylladb/scylla/issues/8032 is not fixed
+            'create_tables': ["""CREATE TABLE null_support_test_old_version (
+                                k int,
+                                c int,
+                                v1 int,
+                                v2 set<text>,
+                                PRIMARY KEY (k, c));"""],
+            'truncates': ['TRUNCATE order_by_validation_test'],
+            'inserts': [
+                "INSERT INTO null_support_test_old_version (k, c, v1, v2) VALUES (0, 0, null, {'1', '2'})",
+                "INSERT INTO null_support_test_old_version (k, c, v1) VALUES (0, 1, 1)",
+            ],
+            'queries': ["SELECT * FROM null_support_test_old_version",
+                        "INSERT INTO null_support_test_old_version (k, c, v1) VALUES (0, 1, null)",
+                        "INSERT INTO null_support_test_old_version (k, c, v2) VALUES(0, 0, null)",
+                        "SELECT * FROM null_support_test_old_version",
+                        ],
+            'results': [
+                [[0, 0, None, set(['1', '2'])], [0, 1, 1, None]],
+                [],
+                [],
+                [[0, 0, None, None], [0, 1, None, None]],
+            ],
+            'invalid_queries': [
+                "INSERT INTO null_support_test_old_version (k, c, v2) VALUES (0, 2, {1, null})",
+                "INSERT INTO null_support_test_old_version (k, c, v2) VALUES (0, 0, { 'foo', 'bar', null })",
+                "SELECT * FROM null_support_test_old_version WHERE k = null",
+            ],
+            'min_version': '',
+            'max_version': '4.3',
+            'skip_condition': 'not self.version_null_values_support()',
             'skip': ''},
         # nameless_index_test:  Test CREATE INDEX without name and validate the index can be dropped
         {
@@ -786,8 +824,29 @@ class FillDatabaseData(ClusterTester):
             # Due the issue https://github.com/scylladb/scylla/issues/7443, the result of the query changed
             # from "[['Bob'], ['Tom']]" to "[['Tom'], ['Bob']]" from versions Scylla 4.4 and above
             'results': [[['Tom'], ['Bob']]],
-            'min_version': '3.0',
+            'min_version': '4.4',
             'max_version': '',
+            'skip_condition': 'self.version_new_sorting_order_with_secondary_indexes()',
+            'skip': ''},
+        # nameless_index_test_old_version:  Test CREATE INDEX without name and validate the index can be dropped
+        {
+            'create_tables': ["""CREATE TABLE nameless_index_test_old_version (
+                                id text PRIMARY KEY,
+                                birth_year int,
+                            )""",
+                              'CREATE INDEX on nameless_index_test_old_version(birth_year)'],
+            'truncates': ['TRUNCATE nameless_index_test_old_version'],
+            'inserts': [
+                "INSERT INTO nameless_index_test_old_version (id, birth_year) VALUES ('Tom', 42)",
+                "INSERT INTO nameless_index_test_old_version (id, birth_year) VALUES ('Paul', 24)",
+                "INSERT INTO nameless_index_test_old_version (id, birth_year) VALUES ('Bob', 42)"],
+            'queries': ["SELECT id FROM nameless_index_test_old_version WHERE birth_year = 42"],
+            # Due the issue https://github.com/scylladb/scylla/issues/7443, the result of the query changed
+            # from "[['Bob'], ['Tom']]" to "[['Tom'], ['Bob']]" from versions Scylla 4.4 and above
+            'results': [[['Bob'], ['Tom']]],
+            'min_version': '3.0',
+            'max_version': '4.3',
+            'skip_condition': 'not self.version_new_sorting_order_with_secondary_indexes()',
             'skip': ''},
         # deletion_test: Test simple deletion and in particular check for CASSANDRA-4193 bug
         {
@@ -2950,6 +3009,9 @@ class FillDatabaseData(ClusterTester):
                 self.all_verification_items[i]['skip'] = 'skip'
                 self.log.debug(f"Version doesn't support the item, skip it: {item['create_tables']}.")
 
+            # TODO: fix following condition to make "skip_condition" really skip stuff
+            # when it is True, not False as it is now.
+            # As of now it behaves as "run_condition".
             if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
                 for create_table in item['create_tables']:
                     # wait a while before creating index, there is a delay of create table for waiting the schema agreement
@@ -2967,17 +3029,29 @@ class FillDatabaseData(ClusterTester):
         for truncate in truncates:
             session.execute(truncate)
 
+    def get_scylla_version(self):
+        node = self.db_cluster.nodes[0]
+        if not node.scylla_version:
+            node.get_scylla_version()
+        return node.scylla_version, node.is_enterprise
+
+    def version_null_values_support(self):
+        scylla_version, is_enterprise = self.get_scylla_version()
+        return is_enterprise or parse_version(scylla_version) >= parse_version(
+            self.NULL_VALUES_SUPPORT_OS_MIN_VERSION)
+
+    def version_new_sorting_order_with_secondary_indexes(self):
+        scylla_version, is_enterprise = self.get_scylla_version()
+        return is_enterprise or parse_version(scylla_version) >= parse_version(
+            self.NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_OS_MIN_VERSION)
+
     def version_non_frozen_udt_support(self):
         """
         Check if current version supports non-frozen user type
         Issue: https://github.com/scylladb/scylla/pull/4934
         """
-        node = self.db_cluster.nodes[0]
-        if not node.scylla_version:
-            node.get_scylla_version()
-
-        scylla_version = node.scylla_version
-        if node.is_enterprise:
+        scylla_version, is_enterprise = self.get_scylla_version()
+        if is_enterprise:
             version_with_support = self.NON_FROZEN_SUPPORT_ENTERPRISE_MIN_VERSION
         else:
             version_with_support = self.NON_FROZEN_SUPPORT_OS_MIN_VERSION
@@ -3002,6 +3076,9 @@ class FillDatabaseData(ClusterTester):
     def cql_insert_data_to_tables(self, session, default_fetch_size):
         # pylint: disable=too-many-nested-blocks
         for item in self.all_verification_items:
+            # TODO: fix following condition to make "skip_condition" really skip stuff
+            # when it is True, not False as it is now.
+            # As of now it behaves as "run_condition".
             if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
                 if 'disable_paging' in item and item['disable_paging']:
                     session.default_fetch_size = 0
@@ -3028,6 +3105,9 @@ class FillDatabaseData(ClusterTester):
         for item in self.all_verification_items:
             # Some queries contains statement of switch keyspace, reset keyspace at the beginning
             session.set_keyspace("keyspace_fill_db_data")
+            # TODO: fix following condition to make "skip_condition" really skip stuff
+            # when it is True, not False as it is now.
+            # As of now it behaves as "run_condition".
             if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
                 if 'disable_paging' in item and item['disable_paging']:
                     session.default_fetch_size = 0
