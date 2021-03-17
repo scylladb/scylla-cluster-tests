@@ -1,13 +1,13 @@
-test_duration: 3000
+test_duration: 3120 # 7h (preapre) + 41h for stress + 4h spare.
 prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=536870912 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1..536870912",
                     "cassandra-stress write cl=QUORUM n=536870912 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=536870913..1073741824",
                     "cassandra-stress write cl=QUORUM n=536870912 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1073741825..1610612736",
                     "cassandra-stress write cl=QUORUM n=536870912 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native  -rate threads=50 -col 'size=FIXED(64) n=FIXED(16)' -pop seq=1610612737..2147483648"]
 
-stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=2640m -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=50 -pop seq=1..2147483648  -log interval=5 -col 'size=FIXED(64) n=FIXED(16)' ",
-             "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=5760m -port jmx=6868 -mode cql3 native -rate threads=10"]
+stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=2460m -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=50 -pop seq=1..2147483648  -log interval=5 -col 'size=FIXED(64) n=FIXED(16)' ",
+             "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=2460m -port jmx=6868 -mode cql3 native -rate threads=10"]
 
-stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=2640m -port jmx=6868 -mode cql3 native  -rate threads=10 -pop seq=1..2147483648  -log interval=5 -col 'size=FIXED(64) n=FIXED(16)'"]
+stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=2460m -port jmx=6868 -mode cql3 native  -rate threads=10 -pop seq=1..2147483648  -log interval=5 -col 'size=FIXED(64) n=FIXED(16)'"]
 
 run_fullscan: 'random, 240'  # 'ks.cf|random, interval(min)''
 
