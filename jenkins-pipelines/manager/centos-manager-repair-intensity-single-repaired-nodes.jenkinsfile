@@ -18,5 +18,5 @@ managerPipeline(
     timeout: [time: 1620, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
-    post_behavior_monitor_nodes: 'keep-on-failure'
+    post_behavior_monitor_nodes: 'destroy'
 )
