@@ -1856,6 +1856,8 @@ class SCTConfiguration(dict):
 
         dict(name="vector_store_threads", env="SCT_VECTOR_STORE_THREADS", type=int,
              help="Vector Store indexing threads (if not set, defaults to number of CPU cores on VS node)"),
+        dict(name="cdc_replication_rounds_num", env="SCT_CDC_REPLICATION_ROUNDS_NUM", type=int,
+             help="""Number of rounds for cdc replication longevity tests""")
 
     ]
 
