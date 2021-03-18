@@ -1,5 +1,5 @@
 ClusterHealthValidatorEvent.NodeStatus: CRITICAL
-ClusterHealthValidatorEvent.MonitoringStatus: ERROR
+ClusterHealthValidatorEvent.MonitoringStatus: WARNING
 ClusterHealthValidatorEvent.NodePeersNulls: ERROR
 ClusterHealthValidatorEvent.NodeSchemaVersion: ERROR
 ClusterHealthValidatorEvent.NodesNemesis: WARNING
