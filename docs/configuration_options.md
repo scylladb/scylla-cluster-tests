@@ -266,3 +266,4 @@
 | **<a href="#user-content-jepsen_test_cmd" name="jepsen_test_cmd">jepsen_test_cmd</a>**  | Jepsen test command (e.g., 'test-all') | N/A | SCT_JEPSEN_TEST_CMD
 | **<a href="#user-content-max_events_severities" name="max_events_severities">max_events_severities</a>**  | Limit severity level for event types | N/A | SCT_MAX_EVENTS_SEVERITIES
 | **<a href="#user-content-scylla_rsyslog_setup" name="scylla_rsyslog_setup">scylla_rsyslog_setup</a>**  | Configure rsyslog on scylla nodes to send logs to monitoring nodes | False | SCT_SCYLLA_RSYSLOG_SETUP
+| **<a href="#user-content-cdc_replication_rounds_num" name="cdc_replication_rounds_num">cdc_replication_rounds_num</a>**  | Number of rounds for cdc replication longevity tests | False | SCT_CDC_REPLICATION_ROUNDS_NUM

@@ -1094,7 +1094,11 @@ class SCTConfiguration(dict):
              help="Limit severity level for event types"),
 
         dict(name="scylla_rsyslog_setup", env="SCT_SCYLLA_RSYSLOG_SETUP", type=boolean,
-             help="Configure rsyslog on Scylla nodes to send logs to monitoring nodes")
+             help="Configure rsyslog on Scylla nodes to send logs to monitoring nodes"),
+
+        dict(name="cdc_replication_rounds_num", env="SCT_CDC_REPLICATION_ROUNDS_NUM", type=int,
+             help="""Number of rounds for cdc replication longevity tests""")
+
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',

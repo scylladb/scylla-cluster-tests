@@ -151,3 +151,5 @@ mgmt_docker_image: ''
 k8s_deploy_monitoring: false
 
 scylla_rsyslog_setup: false
+
+cdc_replication_rounds_num: 2

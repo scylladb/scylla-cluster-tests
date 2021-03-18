@@ -1,4 +1,4 @@
-test_duration: 900
+test_duration: 300
 
 user_prefix: 'cdc-replication-longevity'
 db_type: mixed_scylla
@@ -24,5 +24,3 @@ gemini_cmd: "gemini --duration 30m --warmup 0s -c 4 -m write --non-interactive -
 gemini_version: 'latest'
 # Required by SCT, although not used:
 gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'
-
-cdc_replication_rounds_num: 9
