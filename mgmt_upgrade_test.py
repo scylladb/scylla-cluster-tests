@@ -75,13 +75,6 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
             backup_task_snapshot = backup_task.get_snapshot_tag()
             pre_upgrade_backup_task_files = mgr_cluster.get_backup_files_dict(backup_task_snapshot)
 
-        with self.subTest("Creating a backup task and stopping it"):
-            legacy_args = "--force" if manager_tool.client_version.startswith("2.1") else None
-            pausable_backup_task = mgr_cluster.create_backup_task(interval="1d", location_list=location_list,
-                                                                  keyspace_list=["system_*"], legacy_args=legacy_args)
-            pausable_backup_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=180, step=2)
-            pausable_backup_task.stop()
-
         with self.subTest("Creating a simple backup with the intention of purging it"):
             self.create_simple_table(table_name="cf1")
             self.write_multiple_rows(table_name="cf1", key_range=(1, 11))
@@ -97,6 +90,13 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
             assert rerunning_backup_task.status == TaskStatus.DONE, \
                 f"Unknown failure in task {rerunning_backup_task.id}"
 
+        with self.subTest("Creating a backup task and stopping it"):
+            legacy_args = "--force" if manager_tool.client_version.startswith("2.1") else None
+            pausable_backup_task = mgr_cluster.create_backup_task(interval="1d", location_list=location_list,
+                                                                  keyspace_list=["system_*"], legacy_args=legacy_args)
+            pausable_backup_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=180, step=2)
+            pausable_backup_task.stop()
+
         upgrade_scylla_manager(pre_upgrade_manager_version=current_manager_version,
                                target_upgrade_server_version=target_upgrade_server_version,
                                target_upgrade_agent_version=target_upgrade_agent_version,
@@ -110,14 +110,14 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
         validate_previous_task_details(task=repair_task, previous_task_details=repair_task_current_details)
         validate_previous_task_details(task=backup_task, previous_task_details=backup_task_current_details)
 
-        with self.subTest("Restoring an older version backup task with newer version manager"):
-            self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
-
         with self.subTest("Continuing a older version stopped backup task with newer version manager"):
             pausable_backup_task.start()
             pausable_backup_task.wait_and_get_final_status(timeout=1200, step=20)
             assert pausable_backup_task.status == TaskStatus.DONE, \
                 f"task {pausable_backup_task.id} failed to continue after manager upgrade"
+
+        with self.subTest("Restoring an older version backup task with newer version manager"):
+            self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
 
         with self.subTest("Executing the 'backup list' and 'backup files' commands on a older version backup"
                           " with newer version manager"):
