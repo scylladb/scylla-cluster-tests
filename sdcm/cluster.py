@@ -34,7 +34,7 @@ from typing import List, Optional, Dict, Union, Set
 from textwrap import dedent
 from datetime import datetime
 from functools import cached_property, wraps
-from tenacity import RetryError
+from tenacity import RetryError  # pylint: disable=import-error
 
 import yaml
 import requests
@@ -45,7 +45,7 @@ from cassandra.cluster import NoHostAvailable  # pylint: disable=no-name-in-modu
 from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy
 
-from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
+from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut  # pylint: disable=import-error
 from paramiko import SSHException
 
 from sdcm.collectd import ScyllaCollectdSetup
@@ -59,7 +59,7 @@ from sdcm import wait, mgmt
 from sdcm.utils import alternator
 from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
     get_latest_gemini_version, normalize_ipv6_url, download_dir_from_cloud, generate_random_string, ScyllaCQLSession, \
-    SCYLLA_YAML_PATH, get_test_name
+    SCYLLA_YAML_PATH, get_test_name, PageFetcher
 from sdcm.utils.distro import Distro
 from sdcm.utils.docker_utils import ContainerManager, NotFound
 
@@ -3197,7 +3197,14 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             else:
                 raise ValueError(f"The following value '{entity_type}' not supported")
 
-            for row in cql_session.execute(cmd).current_rows:
+            session.default_fetch_size = 1000
+            session.default_consistency_level = ConsistencyLevel.ONE
+            execute_result = session.execute_async(cmd)
+            fetcher = PageFetcher(execute_result).request_all()
+            current_rows = fetcher.all_data()
+
+            # for row in cql_session.execute(cmd).current_rows:
+            for row in current_rows:
                 is_valid_table = True
                 table_name = f"{getattr(row, column_names[0])}.{getattr(row, column_names[1])}"
 
