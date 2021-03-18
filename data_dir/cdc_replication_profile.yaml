@@ -2,29 +2,53 @@ keyspace: ks1
 
 keyspace_definition: |
 
-  CREATE KEYSPACE IF NOT EXISTS ks1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'} AND durable_writes = true;
+  CREATE KEYSPACE IF NOT EXISTS ks1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': '3'} AND durable_writes = true AND tablets = {'enabled': true};
 
 table: table1
 
 table_definition: |
 
   CREATE TABLE ks1.table1 (
-    pk int,
+    pk bigint,
     ck int,
     v text,
-    primary key (pk, ck)) WITH cdc = {'enabled': true}
+    v1 text,
+    v2 text,
+    very_very_very_long_column_name text,
+    very_very_very_long_column_namevery_very_very_long_column_name blob,
+    primary key (pk, ck)) WITH cdc = {'enabled': true} AND tablets = {'expected_data_size_in_gb': 1, 'min_per_shard_tablet_count': 10};
 
 columnspec:
   - name: pk
-    population: uniform(1..1k)
+    population: uniform(1..10k)
 
   - name: ck
-    population: uniform(1..1k)
+    population: uniform(1..100k)
 
   - name: v
+    size: exp(10..50)
+    population: uniform(1..10k)
+
+  - name: v1
+    size: exp(100..500)
+    population: uniform(1..10k)
+
+  - name: v2
     size: exp(1..5)
+    population: uniform(1..10k)
+
+  - name: very_very_very_long_column_name
+    size: exp(5..15)
+    population: uniform(1..10k)
+
+  - name: very_very_very_long_column_namevery_very_very_long_column_name
+    size: exp(50..500)
+    population: uniform(1..10k)
 
 queries:
-  update:
-    cql: update ks1.table1 set v = ? where pk = ? and ck = ?
+  update1:
+    cql: update ks1.table1 set v = ?, v1 = ?, v2 = ? where pk = ? and ck = ?
+    fields: samerow
+  update2:
+    cql: update ks1.table1 set v = ?, very_very_very_long_column_name = ?, very_very_very_long_column_namevery_very_very_long_column_name = ? where pk = ? and ck = ?
     fields: samerow
