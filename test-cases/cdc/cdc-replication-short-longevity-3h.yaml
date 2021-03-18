@@ -1,0 +1,37 @@
+test_duration: 600
+cluster_backend: aws
+user_prefix: 'cdc-replication-longevity'
+db_type: mixed_scylla
+
+n_db_nodes: 3
+instance_type_db: 'i4i.2xlarge'
+
+n_test_oracle_db_nodes: 3
+instance_type_db_oracle: 'i4i.2xlarge'
+oracle_scylla_version: 2025.2.0
+
+n_loaders: 1
+instance_type_loader: 'c5.large'
+
+n_monitor_nodes: 1
+
+nemesis_class_name: 'CategoricalMonkey'
+nemesis_interval: 5
+
+extra_network_interface: True
+
+gemini_cmd: |
+  --duration 1h
+  --warmup 30m
+  --concurrency 50
+  --mode mixed
+
+gemini_table_options:
+  - "cdc={'enabled': true}"
+
+
+gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json' # currently is not used
+gemini_log_cql_statements: true
+# gemini_version: 'latest'
+# # Required by SCT, although not used:
+# gemini_schema_url: 'https://s3.amazonaws.com/scylla-gemini/Binaries/schema.json'

@@ -168,10 +168,11 @@ class CDCReplicationTest(ClusterTester):
             }, default_weight=0))
         self.db_cluster.nemesis_count = 1
 
-        # 9 rounds, ~1h30 minutes each -> ~11h30m total
+        # 1 rounds, ~1h30 minutes each
         # The number of rounds is tuned according to the available disk space in an i3.large AWS instance.
         # One more round would cause the nodes to run out of disk space.
-        no_rounds = 9
+        # default value is 2. test duration is ~ 3h
+        no_rounds = self.params.get("cdc_replication_rounds_num")
         for rnd in range(no_rounds):
             self.log.info('Starting round {}'.format(rnd))
 
@@ -386,19 +387,26 @@ class CDCReplicationTest(ClusterTester):
 
     def start_gemini(self, seed: Optional[int] = None) -> GeminiStressThread:
         params = {'gemini_seed': seed} if seed else {}
+        self.params.update(params)
         return GeminiStressThread(
             test_cluster=self.db_cluster,
             oracle_cluster=None,
             loaders=self.loaders,
             stress_cmd=self.params.get('gemini_cmd'),
             timeout=self.get_duration(None),
-            params=params).run()
+            params=self.params).run()
 
-    def setup_tools(self, loader_node) -> None:
+    def setup_tools(self, loader_node: cluster.BaseNode) -> None:
         self.log.info('Installing tmux on loader node.')
-        res = loader_node.remoter.run(cmd='sudo yum install -y tmux')
-        if res.exit_status != 0:
-            self.fail('Could not install tmux.')
+        try:
+            loader_node.install_package('tmux')
+        except Exception as e:  # noqa: BLE001
+            raise Exception('Could not install tmux: {}'.format(e))
+        try:
+            loader_node.install_package('openjdk-8-jre')
+            loader_node.install_package('openjdk-17-jre')
+        except Exception as e:  # noqa: BLE001
+            raise Exception('Could not install java: {}'.format(e))
 
         self.log.info('Getting scylla-migrate on loader node.')
         res = loader_node.remoter.run(cmd=f'wget {SCYLLA_MIGRATE_URL} -O scylla-migrate && chmod +x scylla-migrate')
