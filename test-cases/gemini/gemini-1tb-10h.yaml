@@ -6,9 +6,10 @@ n_monitor_nodes: 1
 instance_type_db: 'i3.4xlarge'
 
 user_prefix: 'gemini-1tb-10h'
-# gemini
-# cmd: gemini -d -n [NUM_OF_TEST_ITERATIONS] -c [NUM_OF_THREADS] -m mixed -f
-# the below cmd runs about 10 hours
+
+nemesis_class_name: 'GeminiChaosMonkey'
+nemesis_interval: 5
+
 gemini_cmd: "gemini -d --duration 36000s --warmup 7200s -c 100 \
 -m mixed -f --non-interactive --cql-features normal \
 --max-mutation-retries 5 --max-mutation-retries-backoff 500ms \
