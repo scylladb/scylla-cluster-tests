@@ -6,7 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 longevityPipeline(
     backend: 'aws',
     aws_region: 'eu-west-1',
-    test_name: 'gemini_test.GeminiTest.test_random_load',
+    test_name: 'gemini_test.GeminiTest.test_load_random_with_nemesis',
     test_config: 'test-cases/gemini/gemini-1tb-10h.yaml',
 
     timeout: [time: 1000, unit: 'MINUTES'],
