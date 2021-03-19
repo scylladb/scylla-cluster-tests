@@ -4137,10 +4137,12 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 return None
 
         target_node_ip = node.ip_address
-        verification_node = librandom.choice(self.nodes)
+        undecommission_nodes = [n for n in self.nodes if n != node]
+
+        verification_node = librandom.choice(undecommission_nodes)
         node_ip_list = get_node_ip_list(verification_node)
         while verification_node == node or node_ip_list is None:
-            verification_node = librandom.choice(self.nodes)
+            verification_node = librandom.choice(undecommission_nodes)
             node_ip_list = get_node_ip_list(verification_node)
 
         decommission_done = list(node.follow_system_log(
