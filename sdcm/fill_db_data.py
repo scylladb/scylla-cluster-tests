@@ -42,8 +42,8 @@ class FillDatabaseData(ClusterTester):
     """
     NON_FROZEN_SUPPORT_OS_MIN_VERSION = '4.1'  # open source version with non-frozen user_types support
     NON_FROZEN_SUPPORT_ENTERPRISE_MIN_VERSION = '2020'  # enterprise version with non-frozen user_types support
-    NULL_VALUES_SUPPORT_OS_MIN_VERSION = "4.4"
-    NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_OS_MIN_VERSION = "4.4"
+    NULL_VALUES_SUPPORT_OS_MIN_VERSION = "4.4.rc0"
+    NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_OS_MIN_VERSION = "4.4.rc0"
 
     # List of dictionaries for all items tables and their data
     all_verification_items = [
@@ -769,7 +769,7 @@ class FillDatabaseData(ClusterTester):
             'invalid_queries': [
                 "INSERT INTO null_support_test (k, c, v2) VALUES (0, 2, {1, null})",
                 "INSERT INTO null_support_test (k, c, v2) VALUES (0, 0, { 'foo', 'bar', null })"],
-            'min_version': '4.4',
+            'min_version': '4.4.rc0',
             'max_version': '',
             'skip_condition': 'self.version_null_values_support()',
             'skip': ''},
@@ -824,7 +824,7 @@ class FillDatabaseData(ClusterTester):
             # Due the issue https://github.com/scylladb/scylla/issues/7443, the result of the query changed
             # from "[['Bob'], ['Tom']]" to "[['Tom'], ['Bob']]" from versions Scylla 4.4 and above
             'results': [[['Tom'], ['Bob']]],
-            'min_version': '4.4',
+            'min_version': '4.4.rc0',
             'max_version': '',
             'skip_condition': 'self.version_new_sorting_order_with_secondary_indexes()',
             'skip': ''},
