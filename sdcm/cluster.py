@@ -62,7 +62,7 @@ from sdcm import wait, mgmt
 from sdcm.utils import alternator
 from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
     get_latest_gemini_version, normalize_ipv6_url, download_dir_from_cloud, generate_random_string, ScyllaCQLSession, \
-    SCYLLA_YAML_PATH, get_test_name, PageFetcher
+    SCYLLA_YAML_PATH, get_test_name, PageFetcher, update_authenticator
 from sdcm.utils.distro import Distro
 from sdcm.utils.docker_utils import ContainerManager, NotFound
 
@@ -1697,6 +1697,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @staticmethod
     def get_ldap_config():
+        if Setup.LDAP_ADDRESS is None:
+            return {}
         ldap_server_ip = '127.0.0.1' if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION else Setup.LDAP_ADDRESS[0]
         ldap_port = LDAP_SSH_TUNNEL_LOCAL_PORT if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION else \
             Setup.LDAP_ADDRESS[1]
@@ -1723,11 +1725,17 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def create_ldap_users_on_scylla(self):
         self.run_cqlsh(f'CREATE ROLE \'{LDAP_ROLE}\' WITH SUPERUSER=true')
         for user in LDAP_USERS:
-            if user == 'cassandra':
-                # User `cassandra' has been created by default
-                continue
-        for user in LDAP_USERS:
-            self.run_cqlsh(f'CREATE ROLE \'{user}\' WITH login=true AND password=\'{LDAP_PASSWORD}\'')
+            # Cannot create passwords with SaslauthdAuthenticator
+            self.run_cqlsh(f'CREATE ROLE \'{user}\' WITH login=true')
+        result = self.remoter.run("grep -o '^authenticator: .*' /etc/scylla/scylla.yaml")
+        if 'com.scylladb.auth.SaslauthdAuthenticator' in result.stdout:
+            opposite_auth = 'PasswordAuthenticator'
+            update_authenticator([self], opposite_auth)
+        # First LDAP_USERS will be used to alter system tables, so change it to superuser.
+        self.run_cqlsh(f'ALTER ROLE \'{LDAP_USERS[0]}\' with SUPERUSER=true and password=\'{LDAP_PASSWORD}\'')
+        if 'com.scylladb.auth.SaslauthdAuthenticator' in result.stdout:
+            orig_auth = 'com.scylladb.auth.SaslauthdAuthenticator'
+            update_authenticator([self], orig_auth)
 
     # pylint: disable=invalid-name,too-many-arguments,too-many-locals,too-many-branches,too-many-statements
     def config_setup(self,
@@ -3221,10 +3229,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         if protocol_version is None:
             protocol_version = 3
 
-        authenticator = self.params.get('authenticator')
-        if authenticator and authenticator == 'PasswordAuthenticator':
-            user = self.params.get('authenticator_user')
-            password = self.params.get('authenticator_password')
+        credentials = self.get_db_auth()
+        user, password = credentials if credentials else (None, None)
 
         if user is not None:
             auth_provider = PlainTextAuthProvider(username=user, password=password)
