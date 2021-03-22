@@ -57,7 +57,7 @@ from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, upd
     rows_to_list
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
-from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT
+from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT, BUILDIN_USERS
 from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer, \
@@ -291,25 +291,37 @@ class ClusterTester(db_stats.TestStatsMixin,
             Setup.configure_rsyslog(self.localhost, enable_ngrok=False)
 
         self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
-        if self.params.get("use_ldap_authorization"):
+        if self.params.get("use_ldap_authorization") or self.params.get("prepare_saslauthd") or self.params.get("use_saslauthd_authenticator"):
             self.configure_ldap(node=self.localhost, use_ssl=False)
+
+        ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
+        if self.params.get("use_ldap_authorization"):
             self.params['are_ldap_users_on_scylla'] = False
             ldap_role = LDAP_ROLE
             ldap_users = LDAP_USERS.copy()
             ldap_address = list(Setup.LDAP_ADDRESS).copy()
             unique_members_list = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}' for user in ldap_users]
-            ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
             user_password = LDAP_PASSWORD  # not in use not for authorization, but must be in the config
             ldap_entry = [f'cn={ldap_role},{LDAP_BASE_OBJECT}',
                           ['groupOfUniqueNames', 'simpleSecurityObject', 'top'],
                           {'uniqueMember': unique_members_list, 'userPassword': user_password}]
             self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
                                           user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
-        if self.params.get("prepare_saslauthd"):
-            ldap_entry = [f'uid=cassandra,ou=Person,{self.test_ldap_docker.ldap_base_object}',
-                ['uidObject', 'organizationalPerson', 'top'],
-                {'userPassword': LDAP_PASSWORD, 'sn': 'PersonSn', 'cn': 'PersonCn'}]
-            self.localhost.add_ldap_entry(ldap_entry)
+        if self.params.get("prepare_saslauthd") or self.params.get("use_saslauthd_authenticator"):
+            ldap_users = LDAP_USERS.copy()
+            ldap_address = list(Setup.LDAP_ADDRESS).copy()
+            ldap_entry = [f'ou=Person,{LDAP_BASE_OBJECT}',
+                          ['organizationalUnit', 'top'],
+                          {'ou': 'Person'}]
+            self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
+                                          user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
+            # Buildin user also need to be added in ldap server, otherwise it can't login to create LDAP_USERS
+            for user in BUILDIN_USERS + LDAP_USERS:
+                ldap_entry = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}',
+                              ['uidObject', 'organizationalPerson', 'top'],
+                              {'userPassword': LDAP_PASSWORD, 'sn': 'PersonSn', 'cn': 'PersonCn'}]
+                self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
+                                              user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
         self.alternator = alternator.api.Alternator(sct_params=self.params)
         start_events_device(log_dir=self.logdir, _registry=self.events_processes_registry)
         time.sleep(0.5)
