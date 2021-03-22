@@ -53,7 +53,7 @@ from sdcm.utils.common import ScyllaCQLSession, get_non_system_ks_cf_list, forma
     get_testrun_status, download_encrypt_keys, PageFetcher, rows_to_list, normalize_ipv6_url
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
-from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT
+from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT, BUILDIN_USERS
 from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer
@@ -304,14 +304,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.alternator = alternator.api.Alternator(
             aws_access_key_id=self.params.get("alternator_access_key_id"),
             aws_secret_access_key=self.params.get("alternator_secret_access_key"))
-        if self.params.get("use_ldap_authorization"):
+        if self.params.get("use_ldap_authorization") or self.params.get("prepare_saslauthd") or self.params.get("use_saslauthd_authenticator"):
             self.configure_ldap(node=self.localhost, use_ssl=False)
+
+        ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
+        if self.params.get("use_ldap_authorization"):
             self.params['are_ldap_users_on_scylla'] = False
             ldap_role = LDAP_ROLE
             ldap_users = LDAP_USERS.copy()
             ldap_address = list(Setup.LDAP_ADDRESS).copy()
             unique_members_list = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}' for user in ldap_users]
-            ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
             user_password = LDAP_PASSWORD  # not in use not for authorization, but must be in the config
             ldap_entry = [f'cn={ldap_role},{LDAP_BASE_OBJECT}',
                           ['groupOfUniqueNames', 'simpleSecurityObject', 'top'],
@@ -319,12 +321,21 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.info('LDAP info {}'.format(ldap_address))
             self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
                                           user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
-        if self.params.get("prepare_saslauthd"):
-            ldap_entry = [f'uid=cassandra,ou=Person,{self.test_ldap_docker.ldap_base_object}',
-                ['uidObject', 'organizationalPerson', 'top'],
-                {'userPassword': LDAP_PASSWORD, 'sn': 'PersonSn', 'cn': 'PersonCn'}]
-            self.localhost.add_ldap_entry(ldap_entry)
-
+        if self.params.get("prepare_saslauthd") or self.params.get("use_saslauthd_authenticator"):
+            ldap_users = LDAP_USERS.copy()
+            ldap_address = list(Setup.LDAP_ADDRESS).copy()
+            ldap_entry = [f'ou=Person,{LDAP_BASE_OBJECT}',
+                          ['organizationalUnit', 'top'],
+                          {'ou': 'Person'}]
+            self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
+                                          user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
+            # Buildin user also need to be added in ldap server, otherwise it can't login to create LDAP_USERS
+            for user in BUILDIN_USERS + LDAP_USERS:
+                ldap_entry = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}',
+                              ['uidObject', 'organizationalPerson', 'top'],
+                              {'userPassword': LDAP_PASSWORD, 'sn': 'PersonSn', 'cn': 'PersonCn'}]
+                self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
+                                              user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
         start_events_device(log_dir=self.logdir)
         time.sleep(0.5)
         InfoEvent('TEST_START test_id=%s' % Setup.test_id())
@@ -1305,10 +1316,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if protocol_version is None:
             protocol_version = 3
 
-        authenticator = self.params.get('authenticator')
-        if user is None and password is None and (authenticator and authenticator == 'PasswordAuthenticator'):
-            user = self.params.get('authenticator_user', default='cassandra')
-            password = self.params.get('authenticator_password', default='cassandra')
+        credentials = self.db_cluster.get_db_auth()
+        user, password = credentials if credentials else (None, None)
 
         if user is not None:
             auth_provider = self.get_auth_provider(user=user,

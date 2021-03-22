@@ -57,6 +57,7 @@ from packaging.version import Version
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
 from sdcm import wait
+from sdcm.utils.ldap import LDAP_PASSWORD, LDAP_USERS
 
 
 LOGGER = logging.getLogger('utils')
@@ -1880,9 +1881,12 @@ def update_authenticator(nodes, authenticator='AllowAllAuthenticator', restart=T
     Update the authenticator of nodes, restart the nodes to make the change effective
     """
     for node in nodes:
-        node.remoter.sudo(
-            f"sed -ie 's/^authenticator:.*/authenticator: {authenticator}/g' /etc/scylla/scylla.yaml")
+        with node.remote_scylla_yaml() as scylla_yml:
+            scylla_yml['authenticator'] = authenticator
         if restart:
+            if authenticator == 'com.scylladb.auth.SaslauthdAuthenticator':
+                node.run_cqlsh(f'ALTER ROLE \'{LDAP_USERS[0]}\' with password=\'{LDAP_PASSWORD}\'')
             node.use_saslauthd_authenticator = authenticator == 'com.scylladb.auth.SaslauthdAuthenticator'
+            node.parent_cluster.params['are_ldap_users_on_scylla'] = node.use_saslauthd_authenticator
             node.restart_scylla_server()
             node.wait_db_up()
