@@ -55,15 +55,20 @@ class TestDownloadDir(unittest.TestCase):
     def test_update_db_packages_gce(self):
         sct_update_db_packages = 'gs://scratch.scylladb.com/sct_test/'
 
+        class FakeObject:
+            def __init__(self, name):
+                self.name = name
+
+            def download(self, destination_path, overwrite_existing, *args, **kwargs):
+                Path(destination_path).touch(exist_ok=overwrite_existing)
+
         self.clear_cloud_downloaded_path(sct_update_db_packages)
-
-        def touch_file(**kwargs):
-            Path(kwargs["destination_path"]).touch()
-
-        with unittest.mock.patch("libcloud.storage.base.Object.download", side_effect=touch_file):
+        test_file_names = ["sct_test/bentsi.txt", "sct_test/charybdis.fs"]
+        with unittest.mock.patch("libcloud.storage.drivers.google_storage.GoogleStorageDriver.list_container_objects",
+                                 return_value=[FakeObject(name=fname) for fname in test_file_names]):
             update_db_packages = download_dir_from_cloud(sct_update_db_packages)
-
-        assert os.path.exists(os.path.join(update_db_packages, "text.txt"))
+        for fname in test_file_names:
+            assert (Path(update_db_packages) / os.path.basename(fname)).exists()
 
     @staticmethod
     def test_update_db_packages_none():
