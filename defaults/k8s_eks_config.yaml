@@ -34,8 +34,8 @@ k8s_scylla_disk_class: 'local-raid-disks'
 # NOTE: If 'k8s_scylla_operator_docker_image' not set then the one from helm chart will be used.
 # To test nightly builds define it like this: 'scylladb/scylla-operator:nightly'
 k8s_scylla_operator_docker_image: ''
-k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/latest'
-k8s_scylla_operator_chart_version: 'latest'
+k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/stable'
+k8s_scylla_operator_chart_version: 'v1.1.0'
 
 k8s_scylla_rack: 'us-east1'
 
