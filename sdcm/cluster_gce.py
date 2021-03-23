@@ -189,8 +189,9 @@ class GCENode(cluster.BaseNode):
         return b''
 
     def _get_ipv6_ip_address(self):
-        raise NotImplementedError('On GCE, VPC networks only support IPv4 unicast traffic. '
-                                  'They do not support IPv6 traffic within the network.')
+        self.log.warning('On GCE, VPC networks only support IPv4 unicast traffic. '
+                         'They do not support IPv6 traffic within the network.')
+        return ""
 
     @property
     def image(self):
