@@ -20,16 +20,19 @@ class JenkinsPipelines:
         except jenkins.JenkinsException as ex:
             print(ex)
 
-    def create_pipeline_job(self, jenkins_file, group_name, job_name=None):
+    def create_pipeline_job(self, jenkins_file, group_name, job_name=None, job_name_suffix="-test"):
         base_name = job_name or Path(jenkins_file).stem
-        sct_jenkinsfile = 'jenkins-pipelines/{}'.format(Path(jenkins_file).name)
+        sct_jenkinsfile = jenkins_file.split("scylla-cluster-tests/")[-1]
         print(sct_jenkinsfile)
-        xml_data = JOB_TEMPLATE % dict(sct_display_name=f"{base_name}-test",
+        xml_data = JOB_TEMPLATE % dict(sct_display_name=f"{base_name}{job_name_suffix}",
                                        sct_description=sct_jenkinsfile,
                                        sct_repo=self.sct_repo,
                                        sct_branch_name=self.sct_branch_name,
                                        sct_jenkinsfile=sct_jenkinsfile)
         try:
-            self.jenkins.create_job(f'{self.base_job_dir}/{group_name}/{base_name}-test', xml_data)
+            if group_name:
+                group_name = "/" + group_name
+            self.jenkins.create_job(
+                f'{self.base_job_dir}{group_name}/{base_name}{job_name_suffix}', xml_data)
         except jenkins.JenkinsException as ex:
             print(ex)

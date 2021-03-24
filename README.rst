@@ -444,6 +444,17 @@ Once a new branch is create, we could build all the need job for this branch wit
     # enterprise features
     JENKINS_USERNAME=[jenkins username] JENKINS_PASSWORD=[token from jenkins] hydra create-test-release-jobs-enterprise enterprise-2020.1 --sct_branch branch-2020.1
 
+Creating pipeline jobs for new scylla-operator branch/release/tag
+=================================================================
+
+Create new set of scylla-operator jobs using following command ::
+
+    hydra create-operator-test-release-jobs \
+      operator-1.2 \
+      jenkins-username \
+      jenkins-user-password-or-api-token \
+      --sct_branch dev \
+      --sct_repo git@github.com:some-github-username-123321/scylla-cluster-tests.git
 
 FAQ
 ====
