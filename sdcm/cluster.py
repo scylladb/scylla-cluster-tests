@@ -624,7 +624,18 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # Possible output of grep:
         #   'CPUSET="--cpuset 1-7 "'
         #   'CPUSET="--cpuset 1-7,9-15 "'
-        grep_result = self.remoter.run('grep "^CPUSET" /etc/scylla.d/cpuset.conf')
+
+        # If Scylla is installed as nonroot, we can't run scylla_prepare and perftune so cpuset doesn't help (by Avi).
+        # Ignore it
+        if self.is_nonroot_install:
+            return ''
+
+        try:
+            grep_result = self.remoter.run(f'grep "^CPUSET" /etc/scylla.d/cpuset.conf')
+        except Exception as exc:
+            self.log.error(f"Failed to get CPUSET. Error: {exc}")
+            return ''
+
         scylla_cpu_set = re.findall(r'(\d+)', grep_result.stdout)
         self.log.debug(f"CPUSET on node {self.name}: {grep_result}")
 
@@ -646,7 +657,17 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstable-key-validation 1 --smp 6 --log-to-syslog 1
         --log-to-stdout 0 --default-log-level info --network-stack posix"
         """
-        grep_result = self.remoter.run(f'grep "^SCYLLA_ARGS=" {self.scylla_server_sysconfig_path}')
+        # If Scylla is installed as nonroot, we don't append SCYLLA_ARGS in the sysconfig/scylla-server.
+        # So it's not needed to check SMP
+        if self.is_nonroot_install:
+            return ''
+
+        try:
+            grep_result = self.remoter.run(f'grep "^SCYLLA_ARGS=" {self.scylla_server_sysconfig_path}')
+        except Exception as exc:
+            self.log.error(f"Failed to get SCYLLA_ARGS. Error: {exc}")
+            return ''
+
         scylla_smp = re.search(r'--smp\s(\d+)', grep_result.stdout)
         self.log.debug(f"SMP on node {self.name}: {scylla_smp.groups() if scylla_smp else scylla_smp}")
 
@@ -1838,9 +1859,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         if append_scylla_args:
             self.log.debug("Append following args to scylla: `%s'", append_scylla_args)
-            scylla_server_config = self.scylla_server_sysconfig_path
             self.remoter.sudo(
-                f"sed -i '/{append_scylla_args}/! s/SCYLLA_ARGS=\"/&{append_scylla_args} /' {scylla_server_config}")
+                f"sed -i '/{append_scylla_args}/! s/SCYLLA_ARGS=\"/&{append_scylla_args} /' "
+                f"{self.scylla_server_sysconfig_path}")
 
         if debug_install and self.distro.is_rhel_like:
             self.remoter.sudo("yum install -y scylla-gdb", verbose=True, ignore_status=True)
