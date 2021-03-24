@@ -796,6 +796,40 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
         })
 
 
+@cli.command('create-operator-test-release-jobs',
+             help="Create pipeline jobs for a new scylla-operator branch/release")
+@click.argument('branch', type=str)
+@click.argument('username', envvar='JENKINS_USERNAME', type=str)
+@click.argument('password', envvar='JENKINS_PASSWORD', type=str)
+@click.option('--sct_branch', default='master', type=str)
+@click.option('--sct_repo', default='git@github.com:scylladb/scylla-cluster-tests.git', type=str)
+def create_operator_test_release_jobs(branch, username, password, sct_branch, sct_repo):
+    add_file_logger()
+
+    base_job_dir = "scylla-operator"
+    server = JenkinsPipelines(
+        username=username, password=password, base_job_dir=base_job_dir,
+        sct_branch_name=sct_branch, sct_repo=sct_repo)
+    server.create_directory(name=branch, display_name=branch)
+    server.base_job_dir = "/".join([server.base_job_dir, branch])
+
+    def walk_dirs(path):
+        for dirpath, dirnames, filenames in os.walk(path):
+            for filename in filenames:
+                if filename.endswith('.jenkinsfile'):
+                    finalpath = "/".join([dirpath, filename])
+                    server.create_pipeline_job(finalpath, "", job_name_suffix="")
+            for dirname in dirnames:
+                server.create_directory(name=dirname, display_name=dirname)
+                server.base_job_dir = "/".join([server.base_job_dir, dirname])
+                walk_dirs("/".join([dirpath, dirname]))
+                server.base_job_dir = server.base_job_dir.rsplit("/", 1)[0]
+            break
+
+    path = "/".join([str(server.base_sct_dir), "jenkins-pipelines/operator"])
+    walk_dirs(path)
+
+
 @cli.command('create-test-release-jobs', help="Create pipeline jobs for a new branch")
 @click.argument('branch', type=str)
 @click.argument('username', envvar='JENKINS_USERNAME', type=str)
@@ -815,7 +849,6 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
                                    ('features-', 'SCT Feature Tests'),
                                    ('artifacts', 'SCT Artifacts Tests'),
                                    ('load-test', 'SCT Load Tests'),
-                                   ('k8s', 'SCT Kubernetes Tests'),
                                    ]:
         server.create_directory(name=group_name, display_name=group_desc)
 
