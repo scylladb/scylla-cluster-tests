@@ -1,0 +1,46 @@
+test_duration: 210
+
+bench_run: true
+max_partitions_in_test_table: 400
+partition_range_with_data_validation: 0-100
+prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=5555                       -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data" ,
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=5555 -partition-offset=101 -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s",
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=5555 -partition-offset=201 -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s",
+                     "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100 -clustering-row-count=5555 -partition-offset=301 -clustering-row-size=uniform:1024..2048 -concurrency=10 -connection-count=10 -consistency-level=quorum -rows-per-request=10 -timeout=30s"
+                    ]
+
+prepare_verify_cmd: ["scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=25 -clustering-row-count=5555                      -clustering-row-size=uniform:1024..2048 -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -iterations 1 -validate-data",
+                     "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=25 -clustering-row-count=5555 -partition-offset=26 -clustering-row-size=uniform:1024..2048 -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -iterations 1 -validate-data",
+                     "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=25 -clustering-row-count=5555 -partition-offset=51 -clustering-row-size=uniform:1024..2048 -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -iterations 1 -validate-data",
+                     "scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=25 -clustering-row-count=5555 -partition-offset=76 -clustering-row-size=uniform:1024..2048 -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -iterations 1 -validate-data"
+                    ]
+
+stress_cmd: ["scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=25 -clustering-row-count=10000 -partition-offset=401 -clustering-row-size=uniform:10..1024     -concurrency=10  -connection-count=10  -consistency-level=quorum -rows-per-request=10 -timeout=30s -iterations 10",
+             "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=25 -clustering-row-count=100   -partition-offset=426 -clustering-row-size=uniform:2048..5120   -concurrency=10  -connection-count=10  -consistency-level=quorum -rows-per-request=10 -timeout=30s -iterations 10",
+             "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=25 -clustering-row-count=10    -partition-offset=451 -clustering-row-size=uniform:5120..8192   -concurrency=10  -connection-count=10  -consistency-level=quorum -rows-per-request=10 -timeout=30s -iterations 10",
+             "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=25 -clustering-row-count=1     -partition-offset=476 -clustering-row-size=uniform:8192..10240  -concurrency=10  -connection-count=10  -consistency-level=quorum -rows-per-request=10 -timeout=30s -iterations 10",
+             "scylla-bench -workload=sequential -mode=read  -replication-factor=3 -partition-count=25 -clustering-row-count=5555                        -clustering-row-size=uniform:1024..2048   -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -iterations 0 -duration=540m -validate-data",
+             "scylla-bench -workload=sequential -mode=read  -replication-factor=3 -partition-count=25 -clustering-row-count=5555 -partition-offset=26   -clustering-row-size=uniform:1024..2048   -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -iterations 0 -duration=540m -validate-data",
+             "scylla-bench -workload=sequential -mode=read  -replication-factor=3 -partition-count=25 -clustering-row-count=5555 -partition-offset=51   -clustering-row-size=uniform:1024..2048   -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -iterations 0 -duration=540m -validate-data",
+             "scylla-bench -workload=sequential -mode=read  -replication-factor=3 -partition-count=25 -clustering-row-count=5555 -partition-offset=76   -clustering-row-size=uniform:1024..2048   -concurrency=100 -connection-count=100 -consistency-level=quorum -rows-per-request=10 -timeout=30s -iterations 0 -duration=540m -validate-data"
+            ]
+
+
+n_db_nodes: 5
+n_loaders: 4
+n_monitor_nodes: 1
+
+round_robin: true
+
+instance_type_db: 'i3.2xlarge'
+
+nemesis_class_name: 'ChaosMonkey'
+nemesis_interval: 15
+
+user_prefix: 'longevity-large-partitions-3h'
+
+space_node_threshold: 644245094
+
+# scylla-manager configuration
+# if running on aws and use_mgmt is true, the monitor image should not contain scylla
+use_mgmt: true
