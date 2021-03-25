@@ -702,8 +702,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             ]
         raise UnsupportedNemesis("Only GkeScyllaPodCluster is supported")
 
-    def _terminate_cluster_node(self, node, by_nemesis=""):
-        self.cluster.terminate_node(node, by_nemesis=by_nemesis)
+    def _terminate_cluster_node(self, node):
+        self.cluster.terminate_node(node)
         self.monitoring_set.reconfigure_scylla_monitoring()
 
     def disrupt_nodetool_decommission(self, add_node=True, disruption_name=None):
@@ -747,8 +747,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.cluster.update_seed_provider()
 
     @latency_calculator_decorator
-    def _terminate_and_wait(self, target_node, sleep_time=300, by_nemesis=""):
-        self._terminate_cluster_node(target_node, by_nemesis=by_nemesis)
+    def _terminate_and_wait(self, target_node, sleep_time=300):
+        self._terminate_cluster_node(target_node)
         time.sleep(sleep_time)  # Sleeping for 5 mins to let the cluster live with a missing node for a while
 
     @latency_calculator_decorator
@@ -836,7 +836,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('TerminateAndReplaceNode %s' % self.target_node)
         old_node_ip = self.target_node.ip_address
         InfoEvent(message='StartEvent - Terminate node and wait 5 minutes').publish()
-        self._terminate_and_wait(target_node=self.target_node, by_nemesis='TerminateAndReplaceNode')
+        self._terminate_and_wait(target_node=self.target_node)
         InfoEvent(message='FinishEvent - target_node was terminated').publish()
         new_node = self._add_and_init_new_cluster_node(old_node_ip, rack=self.target_node.rack)
         try:
@@ -2255,7 +2255,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         node_to_remove.stop_scylla_server(verify_up=True, verify_down=True)
 
         # terminate node
-        self._terminate_cluster_node(node_to_remove, by_nemesis='TerminateAndRemoveNodeMonkey')
+        self._terminate_cluster_node(node_to_remove)
 
         # full cluster repair
         up_normal_nodes.remove(node_to_remove)
@@ -2496,7 +2496,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             if self.target_node.ip_address not in ips or decommission_done:
                 self.log.error(
                     'The target node is decommission unexpectedly, decommission might complete before stopping it. Re-add a new node')
-                self._terminate_cluster_node(self.target_node, by_nemesis='DecommissionStreamingErr')
+                self._terminate_cluster_node(self.target_node)
                 new_node = self._add_and_init_new_cluster_node(rack=self.target_node.rack)
                 self.unset_current_running_nemesis(new_node)
                 return new_node
