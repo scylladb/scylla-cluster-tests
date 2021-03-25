@@ -735,6 +735,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 'drain_k8s_node',
                 # NOTE: enable below methods when it's support fully implemented
                 # https://trello.com/c/LrAObHPC/3119-fix-gce-node-termination-nemesis-on-k8s
+                # https://github.com/scylladb/scylla-operator/issues/524
+                # https://github.com/scylladb/scylla-operator/issues/507
                 # 'terminate_k8s_host',
                 # 'terminate_k8s_node',
             ]
@@ -847,7 +849,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         node_terminate_method()
         self.log.info(f'Decommission %s', node)
         self.cluster.decommission(node)
-        self.add_new_node(rack=node.rack)
+        new_node = self.add_new_node(rack=node.rack)
+        self.unset_current_running_nemesis(new_node)
 
     def _disrupt_terminate_and_replace_node_kubernetes(self, node, node_terminate_method_name):  # pylint: disable=invalid-name
         old_uid = node.k8s_pod_uid
