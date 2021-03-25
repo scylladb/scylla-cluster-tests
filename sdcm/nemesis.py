@@ -2257,6 +2257,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # terminate node
         self._terminate_cluster_node(node_to_remove)
 
+        def remove_node():
+            # nodetool removenode 'host_id'
+            rnd_node = random.choice([n for n in self.cluster.nodes if n is not self.target_node])
+            self.log.info("Running removenode command on {}, Removing node with the following host_id: {}"
+                          .format(rnd_node.ip_address, host_id))
+            res = rnd_node.run_nodetool("removenode {}".format(host_id), ignore_status=True, verbose=True)
+            return res.exit_status
+
         # full cluster repair
         up_normal_nodes.remove(node_to_remove)
         # Repairing will result in a best effort repair due to the terminated node,
@@ -2270,38 +2278,34 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     self.log.error(f"failed to execute repair command "
                                    f"on node {node} due to the following error: {str(details)}")
 
-        def remove_node():
-            # nodetool removenode 'host_id'
-            rnd_node = random.choice([n for n in self.cluster.nodes if n is not self.target_node])
-            self.log.info("Running removenode command on {}, Removing node with the following host_id: {}"
-                          .format(rnd_node.ip_address, host_id))
-            res = rnd_node.run_nodetool("removenode {}".format(host_id), ignore_status=True, verbose=True)
-            return res.exit_status
+            # WORKAROUND: adding here the continuation of the nemesis to avoid the late filter messages above failing
+            # the entire nemesis.
 
-        exit_status = remove_node()
-        assert exit_status == 0, "nodetool removenode command exited with status {}".format(exit_status)
+            exit_status = remove_node()
+            assert exit_status == 0, "nodetool removenode command exited with status {}".format(exit_status)
 
-        # verify node is removed by nodetool status
-        removed_node_status = self.cluster.get_node_status_dictionary(
-            ip_address=node_to_remove.ip_address, verification_node=verification_node)
-        assert removed_node_status is None, "Node was not removed properly (Node status:{})".format(removed_node_status)
+            # verify node is removed by nodetool status
+            removed_node_status = self.cluster.get_node_status_dictionary(
+                ip_address=node_to_remove.ip_address, verification_node=verification_node)
+            assert removed_node_status is None,\
+                "Node was not removed properly (Node status:{})".format(removed_node_status)
 
-        # add new node
-        new_node = self._add_and_init_new_cluster_node(rack=self.target_node.rack)
-        # in case the removed node was a seed
-        if node_to_remove.is_seed:
-            new_node.set_seed_flag(True)
-            self.cluster.update_seed_provider()
-        # after add_node, the left nodes have data that isn't part of their tokens anymore.
-        # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
-        # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
-        try:
-            test_keyspaces = self.cluster.get_test_keyspaces()
-            for node in self.cluster.nodes:
-                for keyspace in test_keyspaces:
-                    node.run_nodetool(sub_cmd='cleanup', args=keyspace)
-        finally:
-            self.unset_current_running_nemesis(new_node)
+            # add new node
+            new_node = self._add_and_init_new_cluster_node(rack=self.target_node.rack)
+            # in case the removed node was a seed
+            if node_to_remove.is_seed:
+                new_node.set_seed_flag(True)
+                self.cluster.update_seed_provider()
+            # after add_node, the left nodes have data that isn't part of their tokens anymore.
+            # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
+            # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
+            try:
+                test_keyspaces = self.cluster.get_test_keyspaces()
+                for node in self.cluster.nodes:
+                    for keyspace in test_keyspaces:
+                        node.run_nodetool(sub_cmd='cleanup', args=keyspace)
+            finally:
+                self.unset_current_running_nemesis(new_node)
 
     # Temporary disable due to  https://github.com/scylladb/scylla/issues/6522
     def _disrupt_network_reject_inter_node_communication(self):
