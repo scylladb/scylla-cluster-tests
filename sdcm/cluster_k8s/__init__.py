@@ -43,7 +43,7 @@ from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstanc
 from invoke.exceptions import CommandTimedOut
 
 from sdcm import sct_abs_path, cluster, cluster_docker
-from sdcm.cluster import Setup
+from sdcm.cluster import Setup, DeadNode, IP_SSH_CONNECTIONS
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import NETWORK_EXCEPTIONS
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
@@ -1728,19 +1728,44 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         racks.pop(rack)
         self.replace_scylla_cluster_value('/spec/datacenter/racks', racks)
 
-    def terminate_node(self, node: BasePodContainer):
-        raise NotImplementedError("Kubernetes can't terminate nodes")
+    def terminate_node(self, node: BasePodContainer, scylla_shards=""):
+        """Terminate node.
+
+        :param node: 'node' object to be processed.
+        :param scylla_shards: expected to be the same as 'node.scylla_shards'.
+            Used to avoid remoter calls to the target node.
+            Useful when the node is unreachable by SSH on the moment of this method call.
+        """
+        if node.ip_address not in self.dead_nodes_ip_address_list:
+            self.dead_nodes_list.append(DeadNode(
+                name=node.name,
+                public_ip=node.public_ip_address,
+                private_ip=node.private_ip_address,
+                ipv6_ip=node.ipv6_ip_address if IP_SSH_CONNECTIONS == "ipv6" else '',
+                ip_address=node.ip_address,
+                shards=scylla_shards or node.scylla_shards,
+                termination_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
+                terminated_by_nemesis=node.running_nemesis,
+            ))
+        if node in self.nodes:
+            self.nodes.remove(node)
+        node.destroy()
 
     def decommission(self, node):
         rack = node.rack
         assert self.get_rack_nodes(rack)[-1] == node, "Can withdraw the last node only"
         current_members = self.scylla_cluster_spec.datacenter.racks[rack].members
 
+        # NOTE: "scylla_shards" property uses remoter calls and we save it's result before
+        # the target scylla node gets killed using kubectl command which precedes the target GCE
+        # node deletion using "terminate_node" command.
+        scylla_shards = node.scylla_shards
+
         self.replace_scylla_cluster_value(f"/spec/datacenter/racks/{rack}/members", current_members - 1)
         self.k8s_cluster.kubectl(f"wait --timeout={node.pod_terminate_timeout}m --for=delete pod {node.name}",
                                  namespace=self.namespace,
                                  timeout=node.pod_terminate_timeout * 60 + 10)
-        super().terminate_node(node)
+        self.terminate_node(node, scylla_shards=scylla_shards)
         # TBD: Enable rack deletion after https://github.com/scylladb/scylla-operator/issues/287 is resolved
         # if current_members - 1 == 0:
         #     self.delete_rack(rack)
