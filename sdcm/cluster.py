@@ -3145,7 +3145,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         for node in self.nodes:
             node.destroy()
 
-    def terminate_node(self, node, by_nemesis=""):
+    def terminate_node(self, node):
         if node.ip_address not in self.dead_nodes_ip_address_list:
             self.dead_nodes_list.append(DeadNode(name=node.name,
                                                  public_ip=node.public_ip_address,
@@ -3154,7 +3154,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                                                  ip_address=node.ip_address,
                                                  shards=node.scylla_shards,
                                                  termination_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
-                                                 terminated_by_nemesis=by_nemesis))
+                                                 terminated_by_nemesis=node.running_nemesis))
         if node in self.nodes:
             self.nodes.remove(node)
         node.destroy()
