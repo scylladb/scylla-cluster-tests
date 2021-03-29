@@ -2750,12 +2750,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         return {}
 
     def all_nodes_scylla_shards(self):
-        all_nodes_shards = defaultdict(list, {'live_nodes': [], 'dead_nodes': []})
-
-        # There are scale tests with a lot of nodes. It will be so big list of nodes to print it in the email
-        if len(self.db_cluster.dead_nodes_list) + len(self.db_cluster.nodes) > 20:
-            return all_nodes_shards
-
+        all_nodes_shards = defaultdict(list)
         for node in self.db_cluster.nodes:
             ipv6 = node.ipv6_ip_address if node.ip_address == node.ipv6_ip_address else ''
             all_nodes_shards['live_nodes'].append({'name': node.name,
