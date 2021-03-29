@@ -88,6 +88,10 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
     def _get_private_ip_address(self) -> Optional[str]:
         return self.public_ip_address
 
+    def _get_ipv6_ip_address(self):
+        self.log.warning("We don't support IPv6 for Docker backend")
+        return ""
+
     def is_running(self):
         return ContainerManager.is_running(self, "node")
 

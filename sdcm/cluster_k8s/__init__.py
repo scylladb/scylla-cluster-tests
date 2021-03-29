@@ -1197,7 +1197,8 @@ class BasePodContainer(cluster.BaseNode):
         return self._container_status.image
 
     def _get_ipv6_ip_address(self):
-        raise NotImplementedError()
+        self.log.warning("We don't support IPv6 for k8s-* backends")
+        return ""
 
     def restart(self):
         raise NotImplementedError("Not implemented yet")  # TODO: implement this method.
