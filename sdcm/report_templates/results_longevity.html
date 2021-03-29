@@ -20,11 +20,19 @@
                         <th>Scylla shards</th>
                     </tr>
                     {% for node in live_nodes_shards %}
-                    <tr>
-                        <td>{{ node.name }}</td>
-                        <td>{{ node.ip }}</td>
-                        <td>{{ node.shards }}</td>
-                    </tr>
+                        {% if loop.length > 10 %}
+                            <tr>
+                                <td colspan="3">There are {{ loop.length }} nodes in the cluster.
+                                    The list is so long and won't be printed in the email</td>
+                            </tr>
+                            {% break %}
+                        {% else %}
+                            <tr>
+                                <td>{{ node.name }}</td>
+                                <td>{{ node.ip }}</td>
+                                <td>{{ node.shards }}</td>
+                            </tr>
+                        {% endif %}
                 {% endfor %}
                 </table>
             </div>
@@ -42,14 +50,22 @@
                         <th>Terminated by nemesis</th>
                     </tr>
                     {% for node in dead_nodes_shards %}
-                    <tr>
-                        <td>{{ node.name }}</td>
-                        <td>{{ node.ip }}</td>
-                        <td>{{ node.shards }}</td>
-                        <td>{{ node.termination_time }}</td>
-                        <td>{{ node.terminated_by_nemesis }}</td>
-                    </tr>
-                {% endfor %}
+                        {% if loop.length > 10 %}
+                            <tr>
+                                <td colspan="5">There are {{ loop.length }} nodes in the cluster.
+                                    The list is so long and won't be printed in the email</td>
+                            </tr>
+                            {% break %}
+                        {% else %}
+                            <tr>
+                                <td>{{ node.name }}</td>
+                                <td>{{ node.ip }}</td>
+                                <td>{{ node.shards }}</td>
+                                <td>{{ node.termination_time }}</td>
+                                <td>{{ node.terminated_by_nemesis }}</td>
+                            </tr>
+                        {% endif %}
+                    {% endfor %}
                 </table>
             </div>
             {% endif %}
