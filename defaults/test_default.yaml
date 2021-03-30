@@ -147,6 +147,8 @@ jepsen_test_cmd:
   - 'test-all -w write-isolation --concurrency 10n'
   - 'test-all -w list-append --concurrency 10n'
   - 'test-all -w wr-register --concurrency 10n'
+jepsen_test_count: 1
+jepsen_test_run_policy: all
 
 max_events_severities: ""
 mgmt_docker_image: ''

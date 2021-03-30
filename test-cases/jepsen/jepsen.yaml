@@ -1,4 +1,4 @@
-test_duration: 360
+test_duration: 720
 cluster_backend: 'gce'
 gce_image_username: 'sct'
 gce_image_db: 'https://www.googleapis.com/compute/v1/projects/debian-cloud/global/images/family/debian-10'
@@ -16,3 +16,5 @@ scylla_linux_distro: 'debian-buster'
 user_prefix: 'jepsen'
 use_legacy_cluster_init: true
 jepsen_scylla_repo: 'https://github.com/scylladb/jepsen.git'
+jepsen_test_count: 5
+jepsen_test_run_policy: any

@@ -265,5 +265,7 @@
 | **<a href="#user-content-stress_after_cluster_upgrade" name="stress_after_cluster_upgrade">stress_after_cluster_upgrade</a>**  | Stress command to be run after full upgrade - usually used to read the dataset for verification | N/A | SCT_STRESS_AFTER_CLUSTER_UPGRADE
 | **<a href="#user-content-jepsen_scylla_repo" name="jepsen_scylla_repo">jepsen_scylla_repo</a>**  | Link to the git repository with Jepsen Scylla tests | https://github.com/jepsen-io/scylla.git | SCT_JEPSEN_SCYLLA_REPO
 | **<a href="#user-content-jepsen_test_cmd" name="jepsen_test_cmd">jepsen_test_cmd</a>**  | Jepsen test command (e.g., 'test-all') | N/A | SCT_JEPSEN_TEST_CMD
+| **<a href="#user-content-jepsen_test_count" name="jepsen_test_count">jepsen_test_count</a>**  | possible number of reruns of single Jepsen test command | 1 | SCT_JEPSEN_TEST_COUNT
+| **<a href="#user-content-jepsen_test_run_policy" name="jepsen_test_run_policy">jepsen_test_run_policy</a>**  | Jepsen test run policy (i.e., what we want to consider as passed for a single test)<br><br>'most' - most test runs are passed<br>'any'  - one pass is enough<br>'all'  - all test runs should pass | all | SCT_JEPSEN_TEST_RUN_POLICY
 | **<a href="#user-content-max_events_severities" name="max_events_severities">max_events_severities</a>**  | Limit severity level for event types | N/A | SCT_MAX_EVENTS_SEVERITIES
 | **<a href="#user-content-scylla_rsyslog_setup" name="scylla_rsyslog_setup">scylla_rsyslog_setup</a>**  | Configure rsyslog on scylla nodes to send logs to monitoring nodes | False | SCT_SCYLLA_RSYSLOG_SETUP
