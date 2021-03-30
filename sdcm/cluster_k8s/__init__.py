@@ -472,12 +472,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         scylla_operator_repo_base = self.params.get(
             'k8s_scylla_operator_docker_image').split('/')[0]
         if scylla_operator_repo_base:
-            values.set('controllerImage.repository', scylla_operator_repo_base)
+            values.set('image.repository', scylla_operator_repo_base)
 
         scylla_operator_image_tag = self.params.get(
             'k8s_scylla_operator_docker_image').split(':')[-1]
         if scylla_operator_image_tag:
-            values.set('controllerImage.tag', scylla_operator_image_tag)
+            values.set('image.tag', scylla_operator_image_tag)
 
         # Install and wait for initialization of the Scylla Operator chart
         LOGGER.info("Deploy Scylla Operator")
@@ -692,7 +692,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         helm_values.set('server.resources.limits.memory', memory_limit)
         helm_values.set('nodeExporter.enabled', False)
 
-        if scylla_operator_tag == 'nightly':
+        if scylla_operator_tag in ('nightly', 'latest'):
             scylla_operator_tag = 'master'
         elif scylla_operator_tag == '':
             scylla_operator_tag = get_git_tag_from_helm_chart_version(
