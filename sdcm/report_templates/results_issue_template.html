@@ -8,24 +8,20 @@
         {% if live_nodes_shards %}
             Scylla running with shards number (live nodes):<br>
             {% for shards_info in live_nodes_shards %}
+               &nbsp;&nbsp;&nbsp;{{ shards_info.name }} ({{ shards_info.ip }}): {{ shards_info.shards }} shards<br>
                 {% if loop.length > 10 %}
-                    &nbsp;&nbsp;&nbsp;There are {{ loop.length }} nodes in the cluster.
-                    The list is so long and won't be printed in the email<br><br>
+                    &nbsp;&nbsp;&nbsp;>> List of nodes is larger than 10. See sct log for a full list of nodes.<br><br>
                     {% break %}
-                {% else %}
-               &nbsp;&nbsp;   {{ shards_info.name }} ({{ shards_info.ip }}): {{ shards_info.shards }} shards<br><br>
                 {% endif %}
             {% endfor %}
         {% endif %}
         {% if dead_nodes_shards %}
             Scylla running with shards number (terminated nodes):<br>
             {% for shards_info in dead_nodes_shards %}
+                &nbsp;&nbsp;&nbsp;{{ shards_info.name }} ({{ shards_info.ip }}): {{ shards_info.shards }} shards<br>
                 {% if loop.length > 10 %}
-                    &nbsp;&nbsp;&nbsp;There are {{ loop.length }} nodes in the cluster.
-                    The list is so long and won't be printed in the email<br><br>
+                    &nbsp;&nbsp;&nbsp;>> List of nodes is larger than 10. See sct log for a full list of nodes.<br><br>
                     {% break %}
-                {% else %}
-               &nbsp;&nbsp;   {{ shards_info.name }} ({{ shards_info.ip }}): {{ shards_info.shards }} shards<br><br>
                 {% endif %}
             {% endfor %}
         {% endif %}
