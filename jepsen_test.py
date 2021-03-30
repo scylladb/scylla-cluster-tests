@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
+from functools import partial
 
 import requests
 
@@ -48,15 +49,32 @@ class JepsenTest(ClusterTester):
         super().setUp()
         self.setup_jepsen()
 
+    def iter_jepsen_cmd(self, jepsen_cmd, ntimes=1):
+        for ntry in range(1, ntimes+1):
+            self.log.info("Run #%s/%s of Jepsen test: `%s'", ntry, ntimes, jepsen_cmd)
+            yield self.jepsen_node.remoter.run(jepsen_cmd, ignore_status=True, verbose=True).ok
+
+    def run_jepsen_cmd_most(self, jepsen_cmd, ntimes):
+        return sum(self.iter_jepsen_cmd(jepsen_cmd, ntimes)) << 1 > ntimes
+
+    def run_jepsen_cmd_any(self, jepsen_cmd, ntimes):
+        return any(self.iter_jepsen_cmd(jepsen_cmd, ntimes))
+
+    def run_jepsen_cmd_all(self, jepsen_cmd, ntimes):
+        return all(self.iter_jepsen_cmd(jepsen_cmd, ntimes))
+
     def test_jepsen(self):
         nodes = " ".join(f"--node {node.ip_address}" for node in self.db_cluster.nodes)
         creds = f"--username {self.db_cluster.nodes[0].ssh_login_info['user']} --ssh-private-key ~/{DB_SSH_KEY}"
-        failed = False
-        for test in self.params.get('jepsen_test_cmd'):
+        run_jepsen_cmd = partial(
+            getattr(self, f"run_jepsen_cmd_{self.params.get('jepsen_test_run_policy')}"),
+            ntimes=self.params.get("jepsen_test_count")
+        )
+        passed = True
+        for test in self.params.get("jepsen_test_cmd"):
             jepsen_cmd = f"cd ~/jepsen-scylla && ~/lein run {test} {nodes} {creds} --no-install-scylla"
-            self.log.info("Run Jepsen test: `%s'", jepsen_cmd)
-            failed |= self.jepsen_node.remoter.run(jepsen_cmd, ignore_status=True, verbose=True).failed
-        self.failIf(failed, "Some of Jepsen tests were failed")
+            passed &= run_jepsen_cmd(jepsen_cmd)
+        self.assertTrue(passed, "Some of Jepsen tests were failed")
 
     def save_jepsen_report(self):
         url = f"http://{self.jepsen_node.external_address}:8080/"
