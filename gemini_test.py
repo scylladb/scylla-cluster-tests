@@ -67,6 +67,38 @@ class GeminiTest(ClusterTester):
 
         self.verify_results()
 
+    def test_load_random_with_nemesis_cdc_reader(self):
+        cmd = self.params.get('gemini_cmd')
+        cdc_stress = self.params.get('stress_cdclog_reader_cmd')
+        update_es = self.params.get('store_cdclog_reader_stats_in_es')
+
+        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
+                                    tester_obj=self)
+
+        self.log.debug('Start gemini benchmark')
+        gemini_thread = self.run_gemini(cmd=cmd)
+        self.gemini_results["cmd"] = gemini_thread.gemini_commands
+        # wait gemini create schema and write some data
+        self.db_cluster.wait_for_schema_agreement()
+        cdc_stress_queue = self.run_cdclog_reader_thread(stress_cmd=cdc_stress,
+                                                         keyspace_name="ks1",
+                                                         base_table_name="table1")
+        # sleep before run nemesis test_duration * .1
+        sleep_before_start = float(self.params.get('test_duration')) * 60 * .1
+        self.log.info('Sleep interval {}'.format(sleep_before_start))
+        time.sleep(sleep_before_start)
+
+        self.db_cluster.start_nemesis()
+
+        self.gemini_results.update(self.verify_gemini_results(queue=gemini_thread))
+
+        cdc_stress_results = self.verify_cdclog_reader_results(cdc_stress_queue, update_es)
+        self.log.debug(cdc_stress_results)
+
+        self.db_cluster.stop_nemesis(timeout=1600)
+
+        self.verify_results()
+
     def test_gemini_and_cdc_reader(self):
         gemini_cmd = self.params.get('gemini_cmd')
         cdc_stress = self.params.get('stress_cdclog_reader_cmd')
@@ -75,7 +107,7 @@ class GeminiTest(ClusterTester):
         gemini_thread = self.run_gemini(cmd=gemini_cmd)
         self.gemini_results["cmd"] = gemini_thread.gemini_commands
 
-        # waite gemini create schema
+        # wait gemini create schema
         time.sleep(10)
 
         cdc_stress_queue = self.run_cdclog_reader_thread(stress_cmd=cdc_stress,
