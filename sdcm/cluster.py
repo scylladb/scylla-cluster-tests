@@ -1143,13 +1143,24 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             text = '%s: Waiting for SSH to be up' % self
         wait.wait_for(func=self.remoter.is_up, step=10, text=text, timeout=timeout, throw_exc=True)
 
-    def is_port_used(self, port, service_name):
+    def is_port_used(self, port: int, service_name: str) -> bool:
         try:
-            # check that port is taken
-            result_netstat = self.remoter.run('netstat -ln | grep :%s' % port,
-                                              # -n don't translate port numbers to names
-                                              verbose=False, ignore_status=True)
-            return result_netstat.exit_status == 0
+
+            # Path to `ss' is /usr/sbin/ss for RHEL-like distros and /bin/ss for Debian-based.  Unfortunately,
+            # /usr/sbin is not always in $PATH, so need to set it explicitly.
+            #
+            # Output of `ss -ln' command in case of used port:
+            # $ ss -ln '( sport = :8000 )'
+            # Netid State      Recv-Q Send-Q     Local Address:Port                    Peer Address:Port
+            # tcp   LISTEN     0      5                      *:8000                               *:*
+            #
+            # And if there are no processes listening on the port:
+            # $ ss -ln '( sport = :8001 )'
+            # Netid State      Recv-Q Send-Q     Local Address:Port                    Peer Address:Port
+            #
+            # Can't avoid the header by using `-H' option because of ss' core on Ubuntu 18.04.
+            cmd = f"PATH=/bin:/usr/sbin ss -ln '( sport = :{port} )'"
+            return len(self.remoter.run(cmd, verbose=False).stdout.splitlines()) > 1
         except Exception as details:  # pylint: disable=broad-except
             self.log.error("Error checking for '%s' on port %s: %s", service_name, port, details)
             return False
