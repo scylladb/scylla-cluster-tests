@@ -1096,6 +1096,17 @@ class SCTConfiguration(dict):
              help="Link to the git repository with Jepsen Scylla tests"),
         dict(name="jepsen_test_cmd", env="SCT_JEPSEN_TEST_CMD", type=str_or_list,
              help="Jepsen test command (e.g., 'test-all')"),
+        dict(name="jepsen_test_count", env="SCT_JEPSEN_TEST_COUNT", type=int,
+             help="possible number of reruns of single Jepsen test command"),
+        dict(name="jepsen_test_run_policy", env="SCT_JEPSEN_TEST_RUN_POLICY", type=str,
+             help="""
+                Jepsen test run policy (i.e., what we want to consider as passed for a single test)
+
+                'most' - most test runs are passed
+                'any'  - one pass is enough
+                'all'  - all test runs should pass
+             """,
+             choices=("most", "any", "all")),
 
         dict(name="max_events_severities", env="SCT_MAX_EVENTS_SEVERITIES", type=str_or_list,
              help="Limit severity level for event types"),
