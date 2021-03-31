@@ -389,7 +389,7 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
             DatabaseLogEvent(type='SEGMENTATION', regex='segmentation'),
             DatabaseLogEvent(type='INTEGRITY_CHECK', regex='integrity check failed'),
             DatabaseLogEvent(type='REACTOR_STALLED', regex='Reactor stalled'),
-            DatabaseLogEvent(type='SEMAPHORE_TIME_OUT', regex='semaphore_timed_out'),
+            DatabaseLogEvent(type='SEMAPHORE_TIME_OUT', regex='semaphore_timed_out', severity=Severity.WARNING),
             DatabaseLogEvent(type='BOOT', regex='Starting Scylla Server', severity=Severity.NORMAL),
             DatabaseLogEvent(type='SUPPRESSED_MESSAGES', regex='journal: Suppressed', severity=Severity.WARNING),
         ]
