@@ -23,6 +23,7 @@ import getpass
 import socket
 import threading
 from shlex import quote
+from typing import Optional, List
 
 from fabric import Connection, Config
 from invoke.exceptions import UnexpectedExit, Failure
@@ -139,6 +140,31 @@ class CommandRunner:
     def run(self, cmd, timeout=None, ignore_status=False,  # pylint: disable=too-many-arguments
             verbose=True, new_session=False, log_file=None, retry=0, watchers=None):
         raise NotImplementedError("Should be implemented in subclasses")
+
+    # pylint: disable=too-many-arguments
+    def sudo(self,
+             cmd: str,
+             timeout: Optional[float] = None,
+             ignore_status: bool = False,
+             verbose: bool = True,
+             new_session: bool = False,
+             log_file: Optional[str] = None,
+             retry: int = 1,
+             watchers: Optional[List[StreamWatcher]] = None,
+             user: Optional[str] = 'root'):
+        if user != self.user:
+            if user == 'root':
+                cmd = f"sudo {cmd}"
+            else:
+                cmd = f"sudo -u {user} {cmd}"
+        return self.run(cmd=cmd,
+                        timeout=timeout,
+                        ignore_status=ignore_status,
+                        verbose=verbose,
+                        new_session=new_session,
+                        log_file=log_file,
+                        retry=retry,
+                        watchers=watchers)
 
     def _create_connection(self):
         raise NotImplementedError("_create_connection should be implemented")
