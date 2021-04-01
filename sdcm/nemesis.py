@@ -228,8 +228,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return nodes
 
     def set_target_node(self, dc_idx: Optional[int] = None, rack: Optional[int] = None,
-                        is_seed: Union[bool, DefaultValue, None] = DefaultValue):
-        """Randomly pick a  node from list of the nodes that fit the filter and set it as target node
+                        is_seed: Union[bool, DefaultValue, None] = DefaultValue,
+                        allow_only_last_node_in_rack: bool = False):
+        """Set a Scylla node as target node.
+
         if is_seed is None - it will ignore seed status of the nodes
         if is_seed is True - it will pick only seed nodes
         if is_seed is False - it will pick only non-seed nodes
@@ -239,30 +241,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.unset_current_running_nemesis(self.target_node)
         nodes = self._get_target_nodes(is_seed=is_seed, dc_idx=dc_idx, rack=rack)
         if not nodes:
-            raise UnsupportedNemesis("Can't allocate node to run nemesis on")
-        # Set name of nemesis, which is going to run on target node
-        self.target_node = random.choice(nodes)
-        self.set_current_running_nemesis(node=self.target_node)
-        self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
-
-    def set_last_node_as_target(self, dc_idx: Optional[int] = None, rack: Optional[int] = None,
-                                is_seed: Union[bool, DefaultValue, None] = DefaultValue):
-        """Pick last node from list of the nodes that fit the filter and set it as target node
-        if is_seed is None - it will ignore seed status of the nodes
-        if is_seed is True - it will pick only seed nodes
-        if is_seed is False - it will pick only non-seed nodes
-        if is_seed is DefaultValue - if self.filter_seed is True it act as if is_seed=False,
-          otherwise it will act as if is_seed is None
-        """
-        self.unset_current_running_nemesis(self.target_node)
-        target_nodes = self._get_target_nodes(is_seed=is_seed, dc_idx=dc_idx, rack=rack)
-        if not target_nodes:
             dc_str = '' if dc_idx is None else f'dc {dc_idx} '
             rack_str = '' if rack is None else f'rack {rack} '
-            raise UnsupportedNemesis(f"Can't allocate node from {dc_str}{rack_str}to run nemesis on")
-        self.target_node = target_nodes[-1]
+            raise UnsupportedNemesis(
+                f"Can't allocate node from {dc_str}{rack_str}to run nemesis on")
+        elif allow_only_last_node_in_rack:
+            self.target_node = nodes[-1]
+        else:
+            self.target_node = random.choice(nodes)
+
         self.set_current_running_nemesis(node=self.target_node)
-        self.log.info('Current Target: %s with running nemesis: %s', self.target_node, self.target_node.running_nemesis)
+        self.log.info('Current Target: %s with running nemesis: %s',
+                      self.target_node, self.target_node.running_nemesis)
 
     @raise_event_on_failure
     def run(self, interval=None):
@@ -746,7 +736,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_nodetool_decommission(self, add_node=True, disruption_name=None):
         if self._is_it_on_kubernetes() and disruption_name is None:
-            self.set_last_node_as_target()
+            self.set_target_node(allow_only_last_node_in_rack=True)
         self._set_current_disruption(f"{disruption_name or 'Decommission'} {self.target_node}")
         target_is_seed = self.target_node.is_seed
         self.cluster.decommission(self.target_node)
@@ -819,7 +809,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self._is_it_on_kubernetes():
             raise UnsupportedNemesis('OperatorNodeTerminateDecommissionAdd is supported only on kubernetes')
         for node_terminate_method_name in self._get_kubernetes_node_break_methods():
-            self.set_last_node_as_target(rack=random.choice(list(self.cluster.racks)))
+            self.set_target_node(rack=random.choice(list(self.cluster.racks)),
+                                 allow_only_last_node_in_rack=True)
             self._set_current_disruption(
                 f'OperatorNodeTerminateDecommissionAdd ({node_terminate_method_name}) {self.target_node}')
             self._disrupt_terminate_decommission_add_node_kubernetes(self.target_node, node_terminate_method_name)
@@ -2666,7 +2657,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def decommission_nodes(self, add_nodes_number, rack, is_seed: Optional[Union[bool, DefaultValue]] = DefaultValue):
         for _ in range(add_nodes_number):
             if self._is_it_on_kubernetes():
-                self.set_last_node_as_target(rack=rack, is_seed=is_seed)
+                self.set_target_node(rack=rack, is_seed=is_seed, allow_only_last_node_in_rack=True)
             else:
                 self.set_target_node(is_seed=is_seed)
             self.log.info("Next node will be removed %s", self.target_node)
