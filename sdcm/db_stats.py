@@ -579,7 +579,8 @@ class TestStatsMixin(Stats):
 
             if self.db_cluster and scylla_conf and 'scylla_args' not in self._stats['setup_details'].keys():
                 node = self.db_cluster.nodes[0]
-                res = node.remoter.run('grep ^SCYLLA_ARGS /etc/sysconfig/scylla-server', verbose=True)
+                scylla_server_conf = f"/etc/{'sysconfig' if node.distro.is_rhel_like else 'default'}/scylla-server"
+                res = node.remoter.run(f"grep ^SCYLLA_ARGS {scylla_server_conf}", verbose=True)
                 self._stats['setup_details']['scylla_args'] = res.stdout.strip()
                 res = node.remoter.run('cat /etc/scylla.d/io.conf', verbose=True)
                 self._stats['setup_details']['io_conf'] = remove_comments(res.stdout.strip())
