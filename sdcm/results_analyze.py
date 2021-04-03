@@ -631,8 +631,11 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             if '_source' not in row:  # non-valid record?
                 self.log.error('Skip non-valid test: %s', row['_id'])
                 continue
+            if not row['_source']['versions'] or 'scylla-server' not in row['_source']['versions']:
+                continue
             version_info = self._test_version(row)
             version = version_info['version']
+            self.log.debug("version_info={} version={}".format(version_info, version))
             if not version:
                 continue
             curr_test_stats = self._test_stats(row)
