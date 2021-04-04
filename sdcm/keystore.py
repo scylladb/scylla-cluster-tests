@@ -79,6 +79,9 @@ class KeyStore:
     def get_housekeeping_db_credentials(self):
         return self.get_json("housekeeping-db.json")
 
+    def get_ldap_ms_ad_credentials(self):
+        return self.get_json("ldap_ms_ad.json")
+
 
 def pub_key_from_private_key_file(key_file):
     return paramiko.rsakey.RSAKey.from_private_key_file(os.path.expanduser(key_file)).get_base64()

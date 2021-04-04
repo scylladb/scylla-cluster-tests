@@ -291,7 +291,8 @@ class ClusterTester(db_stats.TestStatsMixin,
             Setup.configure_rsyslog(self.localhost, enable_ngrok=False)
 
         self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
-        if self.params.get("use_ldap_authorization") or self.params.get("prepare_saslauthd") or self.params.get("use_saslauthd_authenticator"):
+        if self.params.get("use_ldap_authorization") or self.params.get("prepare_saslauthd") or self.params.get(
+                "use_saslauthd_authenticator"):
             self.configure_ldap(node=self.localhost, use_ssl=False)
 
         ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
@@ -500,8 +501,10 @@ class ClusterTester(db_stats.TestStatsMixin,
             # running `set_system_auth_rf()` before changing authorization/authentication protocols
             self.set_system_auth_rf()
 
-            if (self.params.get('use_ldap_authorization') and not self.params.get('are_ldap_users_on_scylla')) or \
-                    self.params.get('prepare_saslauthd'):
+            if (not self.params.get('are_ldap_users_on_scylla') and
+                (self.params.get('use_ldap_authorization') or
+                 self.params.get('use_ms_ad_ldap'))) \
+                    or self.params.get('prepare_saslauthd'):
                 self.db_cluster.nodes[0].create_ldap_users_on_scylla()
                 self.params['are_ldap_users_on_scylla'] = True
 
@@ -1862,9 +1865,9 @@ class ClusterTester(db_stats.TestStatsMixin,
                 for column in columns_list or result.column_names:
                     column_kind = session.execute("select kind from system_schema.columns where keyspace_name='{ks}' "
                                                   "and table_name='{name}' and column_name='{column}'".format(
-                                                      ks=src_keyspace,
-                                                      name=src_table,
-                                                      column=column))
+                        ks=src_keyspace,
+                        name=src_table,
+                        column=column))
                     if column_kind.current_rows[0].kind in ['partition_key', 'clustering']:
                         primary_keys.append(column)
 
@@ -2310,7 +2313,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         start = 1
         for i in range(1, n_loaders + 1):
             stress_cmd = base_cmd + stress_keys + str(keys_per_node) + population + str(start) + ".." + \
-                str(keys_per_node * i) + stress_fixed_params
+                         str(keys_per_node * i) + stress_fixed_params
             start = keys_per_node * i + 1
 
             write_queue.append(self.run_stress_thread(stress_cmd=stress_cmd, round_robin=True))
@@ -2427,7 +2430,8 @@ class ClusterTester(db_stats.TestStatsMixin,
                                                                       send_email=self.params.get('send_email'),
                                                                       email_recipients=self.params.get(
                                                                           'email_recipients'),
-                                                                      events=get_events_grouped_by_category(_registry=self.events_processes_registry))
+                                                                      events=get_events_grouped_by_category(
+                                                                          _registry=self.events_processes_registry))
         if self.db_cluster.latency_results and self.create_stats:
             self.db_cluster.latency_results = calculate_latency(self.db_cluster.latency_results)
             self.log.debug(f'collected latency are: {self.db_cluster.latency_results}')
@@ -2440,7 +2444,8 @@ class ClusterTester(db_stats.TestStatsMixin,
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
                                                       send_email=self.params.get('send_email'),
                                                       email_recipients=self.params.get('email_recipients'),
-                                                      events=get_events_grouped_by_category(_registry=self.events_processes_registry))
+                                                      events=get_events_grouped_by_category(
+                                                          _registry=self.events_processes_registry))
         is_gce = bool(self.params.get('cluster_backend') == 'gce')
         try:
             results_analyzer.check_regression(self._test_id, is_gce,
@@ -2453,7 +2458,8 @@ class ClusterTester(db_stats.TestStatsMixin,
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
                                                       send_email=self.params.get('send_email'),
                                                       email_recipients=self.params.get('email_recipients'),
-                                                      events=get_events_grouped_by_category(_registry=self.events_processes_registry))
+                                                      events=get_events_grouped_by_category(
+                                                          _registry=self.events_processes_registry))
         is_gce = bool(self.params.get('cluster_backend') == 'gce')
         try:
             results_analyzer.check_regression_with_subtest_baseline(self._test_id,
@@ -2467,7 +2473,8 @@ class ClusterTester(db_stats.TestStatsMixin,
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
                                                       send_email=self.params.get('send_email'),
                                                       email_recipients=self.params.get('email_recipients'),
-                                                      events=get_events_grouped_by_category(_registry=self.events_processes_registry))
+                                                      events=get_events_grouped_by_category(
+                                                          _registry=self.events_processes_registry))
         if email_subject is None:
             email_subject = 'Performance Regression Compare Results - {test.test_name} - {test.software.scylla_server_any.version.as_string}'
             email_postfix = self.params.get('email_subject_postfix')
@@ -2486,7 +2493,8 @@ class ClusterTester(db_stats.TestStatsMixin,
         perf_analyzer = SpecifiedStatsPerformanceAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
                                                           send_email=self.params.get('send_email'),
                                                           email_recipients=self.params.get('email_recipients'),
-                                                          events=get_events_grouped_by_category(_registry=self.events_processes_registry))
+                                                          events=get_events_grouped_by_category(
+                                                              _registry=self.events_processes_registry))
         try:
             perf_analyzer.check_regression(self._test_id, stats)
         except Exception as ex:  # pylint: disable=broad-except
