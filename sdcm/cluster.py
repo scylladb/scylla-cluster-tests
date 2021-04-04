@@ -83,12 +83,13 @@ from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3
 from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LDAP_BASE_OBJECT, LDAP_PASSWORD, LDAP_USERS, LDAP_ROLE, \
-    LdapServerNotReady
+    LdapServerNotReady, LDAP_PORT
 from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
 from sdcm.utils import cdc
 from sdcm.coredump import CoredumpExportSystemdThread
+from sdcm.keystore import KeyStore
 
 
 CREDENTIALS = []
@@ -1706,6 +1707,19 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 'ldap_bind_passwd': LDAP_PASSWORD}
 
     @staticmethod
+    def get_ldap_ms_ad_config():
+        if Setup.LDAP_ADDRESS is None:
+            return {}
+        ldap_ms_ad_credentials = KeyStore().get_ldap_ms_ad_credentials()
+        return {'ldap_attr_role': 'cn',
+                'ldap_bind_dn': ldap_ms_ad_credentials['ldap_bind_dn'],
+                'ldap_bind_passwd': ldap_ms_ad_credentials['admin_password'],
+                'ldap_url_template':
+                    f'ldap://{ldap_ms_ad_credentials["server_address"]}:{LDAP_PORT}/{LDAP_BASE_OBJECT}?cn?sub?'
+                    f'(member=CN={{USER}},DC=scylla-qa,DC=com)',
+                'role_manager': 'com.scylladb.auth.LDAPRoleManager'}
+
+    @staticmethod
     def get_saslauthd_config():
         if Setup.LDAP_ADDRESS is None:
             return {}
@@ -1756,7 +1770,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                      alternator_enforce_authorization=False,
                      internode_compression=None,
                      internode_encryption=None,
-                     ldap=False):
+                     ldap=False,
+                     ms_ad_ldap=False):
         with self.remote_scylla_yaml(yaml_file) as scylla_yml:
             if seed_address:
                 # Set seeds
@@ -1859,6 +1874,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
             if ldap:
                 scylla_yml.update(self.get_ldap_config())
+            elif ms_ad_ldap:
+                scylla_yml.update(self.get_ldap_ms_ad_config())
 
             if append_scylla_yaml:
                 scylla_yml.update(yaml.safe_load(append_scylla_yaml))
@@ -3181,7 +3198,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         node.destroy()
 
     def get_db_auth(self):
-        if (self.params.get('use_ldap_authorization') or self.use_saslauthd_authenticator) and self.params.get('are_ldap_users_on_scylla'):
+        if (self.params.get('use_ldap_authorization') or self.use_saslauthd_authenticator or
+                self.params.get('use_ms_ad_ldap')) and self.params.get('are_ldap_users_on_scylla'):
             user = LDAP_USERS[0]
             password = LDAP_PASSWORD
         else:
@@ -4040,7 +4058,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                           alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'),
                           internode_compression=self.params.get('internode_compression'),
                           internode_encryption=self.params.get('internode_encryption'),
-                          ldap=self.params.get('use_ldap_authorization'))
+                          ldap=self.params.get('use_ldap_authorization'),
+                          ms_ad_ldap=self.params.get('use_ms_ad_ldap'))
 
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # pylint: disable=too-many-branches
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
