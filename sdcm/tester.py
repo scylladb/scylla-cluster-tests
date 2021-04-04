@@ -443,7 +443,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 self.legacy_init_nodes(db_cluster=self.db_cluster)
             else:
                 self.init_nodes(db_cluster=self.db_cluster)
-            if self.params.get('use_ldap_authorization') and not self.params.get('are_ldap_users_on_scylla'):
+
+            # running `set_system_auth_rf()` before changing authorization/authentication protocols
+            self.set_system_auth_rf()
+
+            if (not self.params.get('are_ldap_users_on_scylla') and
+                (self.params.get('use_ldap_authorization') or
+                 self.params.get('use_ms_ad_ldap'))):
                 self.db_cluster.nodes[0].create_ldap_users_on_scylla()
                 self.params['are_ldap_users_on_scylla'] = True
             self.set_system_auth_rf()
@@ -1662,9 +1668,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
                 for column in columns_list or result.column_names:
                     column_kind = session.execute("select kind from system_schema.columns where keyspace_name='{ks}' "
-                                                  "and table_name='{name}' and column_name='{column}'".format(ks=src_keyspace,
-                                                                                                              name=src_table,
-                                                                                                              column=column))
+                                                  "and table_name='{name}' and column_name='{column}'".format(
+                        ks=src_keyspace,
+                        name=src_table,
+                        column=column))
                     if column_kind.current_rows[0].kind in ['partition_key', 'clustering']:
                         primary_keys.append(column)
 
@@ -2014,7 +2021,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         start = 1
         for i in range(1, n_loaders + 1):
             stress_cmd = base_cmd + stress_keys + str(keys_per_node) + population + str(start) + ".." + \
-                str(keys_per_node * i) + stress_fixed_params
+                         str(keys_per_node * i) + stress_fixed_params
             start = keys_per_node * i + 1
 
             write_queue.append(self.run_stress_thread(stress_cmd=stress_cmd, round_robin=True))

@@ -246,6 +246,9 @@ class SCTConfiguration(dict):
         dict(name="use_ldap_authorization", env="SCT_USE_LDAP_AUTHORIZATION", type=boolean,
              help="When defined true, will create a docker container with LDAP and configure scylla.yaml to use it"),
 
+        dict(name="use_ms_ad_ldap", env="SCT_USE_MS_AD_LDAP", type=boolean,
+             help="This option will use LDAP authorization from QA MS Active Directory"),
+
         dict(name="use_mgmt", env="SCT_USE_MGMT", type=boolean,
              help="When define true, will install scylla management"),
 

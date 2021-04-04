@@ -63,8 +63,10 @@ from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, MonitoringStack
 from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LDAP_BASE_OBJECT, LDAP_PASSWORD, LDAP_USERS, LDAP_ROLE, \
-    LdapServerNotReady
+    LdapServerNotReady, LDAP_PORT
 from sdcm.utils.remote_logger import get_system_logging_thread
+from sdcm.keystore import KeyStore
+
 
 CREDENTIALS = []
 DEFAULT_USER_PREFIX = getpass.getuser()
@@ -1759,6 +1761,19 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 'ldap_bind_dn': f'cn=admin,{LDAP_BASE_OBJECT}',
                 'ldap_bind_passwd': LDAP_PASSWORD}
 
+    @staticmethod
+    def get_ldap_ms_ad_config():
+        if Setup.LDAP_ADDRESS is None:
+            return {}
+        ldap_ms_ad_credentials = KeyStore().get_ldap_ms_ad_credentials()
+        return {'ldap_attr_role': 'cn',
+                'ldap_bind_dn': ldap_ms_ad_credentials['ldap_bind_dn'],
+                'ldap_bind_passwd': ldap_ms_ad_credentials['admin_password'],
+                'ldap_url_template':
+                    f'ldap://{ldap_ms_ad_credentials["server_address"]}:{LDAP_PORT}/{LDAP_BASE_OBJECT}?cn?sub?'
+                    f'(member=CN={{USER}},DC=scylla-qa,DC=com)',
+                'role_manager': 'com.scylladb.auth.LDAPRoleManager'}
+
     def create_ldap_users_on_scylla(self):
         self.run_cqlsh(f'CREATE ROLE \'{LDAP_ROLE}\' WITH SUPERUSER=true')
         for user in LDAP_USERS:
@@ -1770,7 +1785,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                      client_encrypt=None, append_scylla_yaml=None, append_scylla_args=None, debug_install=False,
                      hinted_handoff='enabled', murmur3_partitioner_ignore_msb_bits=None, authorizer=None,
                      alternator_port=None, listen_on_all_interfaces=False, ip_ssh_connections=None,
-                     alternator_enforce_authorization=False, ldap=False):
+                     alternator_enforce_authorization=False, ldap=False, ms_ad_ldap=False):
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='scylla-longevity'), 'scylla.yaml')
         wait.wait_for(self.remoter.receive_files, step=10, text='Waiting for copying scylla.yaml',
                       timeout=300, throw_exc=True, src=yaml_file, dst=yaml_dst_path)
@@ -1876,6 +1891,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         if ldap:
             scylla_yml.update(self.get_ldap_config())
+        elif ms_ad_ldap:
+            scylla_yml.update(self.get_ldap_ms_ad_config())
 
         if append_scylla_yaml:
             scylla_yml.update(yaml.safe_load(append_scylla_yaml))
@@ -2970,7 +2987,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         node.destroy()
 
     def get_db_auth(self):
-        if self.params.get('use_ldap_authorization') and self.params.get('are_ldap_users_on_scylla'):
+        if (self.params.get('use_ldap_authorization') or self.params.get('use_ms_ad_ldap')) and \
+                self.params.get('are_ldap_users_on_scylla'):
             user = LDAP_USERS[0]
             password = LDAP_PASSWORD
         else:
@@ -3553,7 +3571,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             nemesis_thread.join(timeout)
         self.nemesis_threads = []
 
-    def node_config_setup(self, node, seed_address=None, endpoint_snitch=None, murmur3_partitioner_ignore_msb_bits=None, client_encrypt=None):  # pylint: disable=too-many-arguments,invalid-name
+    def node_config_setup(self, node, seed_address=None, endpoint_snitch=None, murmur3_partitioner_ignore_msb_bits=None,
+                          client_encrypt=None):  # pylint: disable=too-many-arguments,invalid-name
         node.config_setup(seed_address=seed_address,
                           cluster_name=self.name,  # pylint: disable=no-member
                           enable_exp=self.params.get('experimental'),
@@ -3569,7 +3588,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                           alternator_port=self.params.get('alternator_port'),
                           murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
                           alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'),
-                          ldap=self.params.get('use_ldap_authorization'))
+                          ldap=self.params.get('use_ldap_authorization'),
+                          ms_ad_ldap=self.params.get('use_ms_ad_ldap'))
 
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # pylint: disable=too-many-branches
         node.wait_ssh_up(verbose=verbose, timeout=timeout)

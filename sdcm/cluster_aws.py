@@ -802,6 +802,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             ip_ssh_connections=self.params.get('ip_ssh_connections'),
             alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'),
             ldap=self.params.get('use_ldap_authorization'),
+            ms_ad_ldap=self.params.get('use_ms_ad_ldap'),
         )
         if cluster.Setup.INTRA_NODE_COMM_PUBLIC:
             setup_params.update(dict(
