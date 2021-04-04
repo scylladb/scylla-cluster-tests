@@ -908,6 +908,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             internode_compression=self.params.get('internode_compression'),
             internode_encryption=self.params.get('internode_encryption'),
             ldap=self.params.get('use_ldap_authorization'),
+            ms_ad_ldap=self.params.get('use_ms_ad_ldap'),
         )
         if cluster.Setup.INTRA_NODE_COMM_PUBLIC:
             setup_params.update(dict(
