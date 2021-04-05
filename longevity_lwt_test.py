@@ -17,8 +17,11 @@
 # After the test is finished will be performed the data validation.
 
 import time
+from unittest.mock import MagicMock
 
 from longevity_test import LongevityTest
+from sdcm.sct_events import Severity
+from sdcm.sct_events.health import DataValidatorEvent
 from sdcm.utils.data_validator import LongevityDataValidator
 from sdcm.sct_events.group_common_events import ignore_mutation_write_errors
 
@@ -46,9 +49,15 @@ class LWTLongevityTest(LongevityTest):
         # Wait for MVs data will be fully inserted (running on background)
         time.sleep(300)
 
-        self.data_validator = LongevityDataValidator(longevity_self_object=self,
-                                                     user_profile_name='c-s_lwt',
-                                                     base_table_partition_keys=self.BASE_TABLE_PARTITION_KEYS)
+        if self.db_cluster.nemesis_count > 1:
+            self.data_validator = MagicMock()
+            DataValidatorEvent.DataValidator(severity=Severity.WARNING,
+                                             message="Test runs with parallel nemesis. Data validator is disabled."
+                                             ).publish()
+        else:
+            self.data_validator = LongevityDataValidator(longevity_self_object=self,
+                                                         user_profile_name='c-s_lwt',
+                                                         base_table_partition_keys=self.BASE_TABLE_PARTITION_KEYS)
 
         self.data_validator.copy_immutable_expected_data()
         self.data_validator.copy_updated_expected_data()
