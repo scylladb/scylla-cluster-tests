@@ -1865,9 +1865,9 @@ class ClusterTester(db_stats.TestStatsMixin,
                 for column in columns_list or result.column_names:
                     column_kind = session.execute("select kind from system_schema.columns where keyspace_name='{ks}' "
                                                   "and table_name='{name}' and column_name='{column}'".format(
-                        ks=src_keyspace,
-                        name=src_table,
-                        column=column))
+                                                      ks=src_keyspace,
+                                                      name=src_table,
+                                                      column=column))
                     if column_kind.current_rows[0].kind in ['partition_key', 'clustering']:
                         primary_keys.append(column)
 
@@ -2313,7 +2313,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         start = 1
         for i in range(1, n_loaders + 1):
             stress_cmd = base_cmd + stress_keys + str(keys_per_node) + population + str(start) + ".." + \
-                         str(keys_per_node * i) + stress_fixed_params
+                str(keys_per_node * i) + stress_fixed_params
             start = keys_per_node * i + 1
 
             write_queue.append(self.run_stress_thread(stress_cmd=stress_cmd, round_robin=True))
