@@ -4336,6 +4336,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             host_ip = self.nodes[0].ip_address
         return manager_tool.add_cluster(name=cluster_name, host=host_ip, auth_token=self.scylla_manager_auth_token)
 
+    @cached_property
+    def is_enterprise(self):
+        return self.nodes[0].is_enterprise
+
 
 class BaseLoaderSet():
 

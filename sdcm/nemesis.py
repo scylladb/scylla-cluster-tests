@@ -33,6 +33,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from invoke import UnexpectedExit
 from cassandra import ConsistencyLevel
+from pkg_resources import parse_version
 
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady
 from sdcm.cluster import NodeStayInClusterAfterDecommission
@@ -887,6 +888,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.run_nodetool("compact")
 
     def disrupt_nodetool_refresh(self, big_sstable: bool = False):
+        # skip test if it's older from 2021.1 enterprise version
+        if self.cluster.is_enterprise and parse_version(self.cluster.scylla_version) < parse_version("2021.1"):
+            raise UnsupportedNemesis("Skipping this nemesis due this job run from Siren cloud with 2020.1 version!")
+
         self._set_current_disruption('Refresh keyspace1.standard1 on {}'.format(self.target_node.name))
 
         # Checking the columns number of keyspace1.standard1
@@ -2232,8 +2237,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         3.Nodetool removenode
         4.Add new node
         """
-        if self.cluster.params.get("cluster_backend") == 'aws-siren':
-            raise UnsupportedNemesis("Skipping this nemesis due this job run from Siren cloud with 2019 version!")
+        # skip test if it's older from 2021.1 enterprise version
+        if self.cluster.is_enterprise and parse_version(self.cluster.scylla_version) < parse_version("2021.1"):
+            raise UnsupportedNemesis("Skipping this nemesis due this job run from Siren cloud with 2020.1 version!")
 
         self._set_current_disruption('TerminateAndRemoveNodeMonkey')
         node_to_remove = self.target_node
