@@ -43,7 +43,9 @@ class FillDatabaseData(ClusterTester):
     NON_FROZEN_SUPPORT_OS_MIN_VERSION = '4.1'  # open source version with non-frozen user_types support
     NON_FROZEN_SUPPORT_ENTERPRISE_MIN_VERSION = '2020'  # enterprise version with non-frozen user_types support
     NULL_VALUES_SUPPORT_OS_MIN_VERSION = "4.4.rc0"
+    NULL_VALUES_SUPPORT_ENTERPRISE_MIN_VERSION = "2021.2.dev"
     NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_OS_MIN_VERSION = "4.4.rc0"
+    NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_ENTERPRISE_MIN_VERSION = "2021.2.dev"
 
     # List of dictionaries for all items tables and their data
     all_verification_items = [
@@ -3037,13 +3039,19 @@ class FillDatabaseData(ClusterTester):
 
     def version_null_values_support(self):
         scylla_version, is_enterprise = self.get_scylla_version()
-        return is_enterprise or parse_version(scylla_version) >= parse_version(
-            self.NULL_VALUES_SUPPORT_OS_MIN_VERSION)
+        if is_enterprise:
+            version_with_support = self.NULL_VALUES_SUPPORT_ENTERPRISE_MIN_VERSION
+        else:
+            version_with_support = self.NULL_VALUES_SUPPORT_OS_MIN_VERSION
+        return parse_version(scylla_version) >= parse_version(version_with_support)
 
     def version_new_sorting_order_with_secondary_indexes(self):
         scylla_version, is_enterprise = self.get_scylla_version()
-        return is_enterprise or parse_version(scylla_version) >= parse_version(
-            self.NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_OS_MIN_VERSION)
+        if is_enterprise:
+            version_with_support = self.NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_ENTERPRISE_MIN_VERSION
+        else:
+            version_with_support = self.NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_OS_MIN_VERSION
+        return parse_version(scylla_version) >= parse_version(version_with_support)
 
     def version_non_frozen_udt_support(self):
         """
@@ -3056,10 +3064,7 @@ class FillDatabaseData(ClusterTester):
         else:
             version_with_support = self.NON_FROZEN_SUPPORT_OS_MIN_VERSION
 
-        if parse_version(scylla_version) < parse_version(version_with_support):
-            return False  # current version doesn't support non-frozen UDT
-        else:
-            return True  # current version supports non-frozen UDT
+        return parse_version(scylla_version) >= parse_version(version_with_support)
 
     @retrying(n=3, sleep_time=20, allowed_exceptions=ProtocolException)
     def truncate_table(self, session, truncate):  # pylint: disable=no-self-use
