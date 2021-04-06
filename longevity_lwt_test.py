@@ -53,13 +53,14 @@ class LWTLongevityTest(LongevityTest):
         self.db_cluster.start_nemesis()
 
     def test_lwt_longevity(self):
-        self.test_custom_time()
+        with ignore_mutation_write_errors():
+            self.test_custom_time()
 
-        # Stop nemesis. Prefer all nodes will be run before collect data for validation
-        # Increase timeout to wait for nemesis finish
-        if self.db_cluster.nemesis_threads:
-            self.db_cluster.stop_nemesis(timeout=300)
-        self.validate_data()
+            # Stop nemesis. Prefer all nodes will be run before collect data for validation
+            # Increase timeout to wait for nemesis finish
+            if self.db_cluster.nemesis_threads:
+                self.db_cluster.stop_nemesis(timeout=300)
+            self.validate_data()
 
     def validate_data(self):
         node = self.db_cluster.nodes[0]
