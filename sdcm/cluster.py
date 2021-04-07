@@ -2465,8 +2465,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if self.is_ubuntu14():
             self.remoter.run('sudo service scylla-server stop', timeout=timeout, ignore_status=ignore_status)
         else:
+            # systemd stop timeout of scylla-server is 900 seconds, the addition 100 seconds
+            # is used for killing scylla and finishing the stop.
             self.remoter.run(f'{self.systemctl} stop scylla-server.service',
-                             timeout=timeout, ignore_status=ignore_status)
+                             timeout=timeout * 3 + 100, ignore_status=ignore_status)
         if verify_down:
             self.wait_db_down(timeout=timeout)
 
@@ -2493,8 +2495,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run("sudo service scylla-server restart",
                              timeout=timeout, ignore_status=ignore_status)
         else:
+            # systemd stop timeout of scylla-server is 900 seconds, the resest time is for starting
             self.remoter.run(f"{self.systemctl} restart scylla-server.service",
-                             timeout=timeout, ignore_status=ignore_status)
+                             timeout=timeout * 3, ignore_status=ignore_status)
         if verify_up_after:
             self.wait_db_up(timeout=timeout)
 
