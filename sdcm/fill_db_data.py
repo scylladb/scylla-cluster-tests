@@ -804,7 +804,6 @@ class FillDatabaseData(ClusterTester):
             'invalid_queries': [
                 "INSERT INTO null_support_test_old_version (k, c, v2) VALUES (0, 2, {1, null})",
                 "INSERT INTO null_support_test_old_version (k, c, v2) VALUES (0, 0, { 'foo', 'bar', null })",
-                "SELECT * FROM null_support_test_old_version WHERE k = null",
             ],
             'min_version': '',
             'max_version': '4.3',
