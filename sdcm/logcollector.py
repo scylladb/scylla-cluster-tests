@@ -876,7 +876,9 @@ class LoaderLogCollector(LogCollector):
         FileLog(name='gemini_result*.log',
                 search_locally=True),
         FileLog(name='cdclogreader*.log',
-                search_locally=True)
+                search_locally=True),
+        FileLog(name='scylla-bench-l*.log',
+                search_locally=True),
     ]
 
     def collect_logs(self, local_search_path=None):
