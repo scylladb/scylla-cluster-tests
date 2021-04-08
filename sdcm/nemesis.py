@@ -2607,6 +2607,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         will be skipped.
         """
         self.log.debug("Rebuild sstables by scrub with `--skip-corrupted`, corrupted partitions will be skipped.")
+        if '2021.1' in self.cluster.nodes[0].get_scylla_version():
+            raise UnsupportedNemesis("Disabled in branch 2021.1 due issue "
+                                     "https://github.com/scylladb/scylla-enterprise/issues/1688")
+
         with ignore_scrub_invalid_errors():
             for ks in self.cluster.get_test_keyspaces():
                 self.target_node.run_nodetool("scrub", args=f"--skip-corrupted {ks}")
