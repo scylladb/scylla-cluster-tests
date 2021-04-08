@@ -26,6 +26,7 @@ from sdcm.utils.version_utils import is_enterprise, get_node_supported_sstable_v
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.database import IndexSpecialColumnErrorEvent
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused
+from sdcm.sct_events.group_common_events import ignore_upgrade_cdc_errors
 
 
 def truncate_entries(func):
@@ -207,7 +208,8 @@ class UpgradeTest(FillDatabaseData):
         check_reload_systemd_config(node)
         # Current default 300s aren't enough for upgrade test of Debian 9.
         # Related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1726
-        node.start_scylla_server(verify_up_timeout=500)
+        with ignore_upgrade_cdc_errors(self.orig_ver):
+            node.start_scylla_server(verify_up_timeout=500)
         result = node.remoter.run('scylla --version')
         new_ver = result.stdout
         assert self.orig_ver != self.new_ver, "scylla-server version isn't changed"

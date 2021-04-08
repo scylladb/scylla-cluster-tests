@@ -88,16 +88,27 @@ def ignore_upgrade_schema_errors():
             db_event=DatabaseLogEvent.RUNTIME_ERROR,
             line="Failed to load schema",
         ))
-        stack.enter_context(DbEventsFilter(
-            db_event=DatabaseLogEvent.DATABASE_ERROR,
-            line="Could not retrieve CDC streams with timestamp",
-        ))
         # This error message occurs during version rating only for the Drain operating system.
         stack.enter_context(DbEventsFilter(
             db_event=DatabaseLogEvent.DATABASE_ERROR,
             line="cql_server - exception while processing connection: seastar::nested_exception "
                  "(seastar::nested_exception)",
         ))
+        yield
+
+
+@contextmanager
+def ignore_upgrade_cdc_errors(version=None):
+    with ExitStack() as stack:
+        if version and '2020.1' in version:
+            stack.enter_context(DbEventsFilter(
+                db_event=DatabaseLogEvent.DATABASE_ERROR,
+                line="Could not retrieve CDC streams with timestamp",
+            ))
+            stack.enter_context(DbEventsFilter(
+                db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                line="Could not retrieve CDC streams with timestamp",
+            ))
         yield
 
 
