@@ -25,7 +25,7 @@ from invoke import Result
 
 from sdcm.cluster import BaseNode, BaseCluster, BaseMonitorSet
 from sdcm.sct_events import Severity
-from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
+from sdcm.sct_events.group_common_events import ignore_upgrade_cdc_errors
 from sdcm.utils.distro import Distro
 
 from unit_tests.dummy_remote import DummyRemote
@@ -117,14 +117,23 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             assert event_b["type"] == "REACTOR_STALLED"
             assert event_b["line_number"] == 3
 
-    def test_search_cdc_invalid_request(self):
+    def test_search_cdc_invalid_request_2021_1(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_cdc_invalid_request.log')
-        with ignore_upgrade_schema_errors():
+        with ignore_upgrade_cdc_errors('2021.1'):
             self.node._read_system_log_and_publish_events(start_from_beginning=True)
 
         with self.get_events_logger().events_logs_by_severity[Severity.ERROR].open() as events_file:
-            events = [json.loads(line) for line in events_file]
-            assert events == []
+            cdc_err_events = [line for line in events_file if 'cdc - Could not retrieve CDC streams' in line]
+            assert cdc_err_events != []
+
+    def test_search_cdc_invalid_request_2020_1(self):
+        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_cdc_invalid_request.log')
+        with ignore_upgrade_cdc_errors('2020.1'):
+            self.node._read_system_log_and_publish_events(start_from_beginning=True)
+
+        with self.get_events_logger().events_logs_by_severity[Severity.ERROR].open() as events_file:
+            cdc_err_events = [line for line in events_file if 'cdc - Could not retrieve CDC streams' in line]
+            assert cdc_err_events == []
 
     def test_search_system_suppressed_messages(self):
         self.node.system_log = os.path.join(os.path.dirname(
