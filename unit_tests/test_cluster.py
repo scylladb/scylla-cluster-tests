@@ -19,6 +19,7 @@ import logging
 import os.path
 import tempfile
 import unittest
+import time
 from weakref import proxy as weakproxy
 
 from invoke import Result
@@ -122,9 +123,10 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
         with ignore_upgrade_schema_errors():
             self.node._read_system_log_and_publish_events(start_from_beginning=True)
 
+        time.sleep(0.1)
         with self.get_events_logger().events_logs_by_severity[Severity.ERROR].open() as events_file:
-            events = [json.loads(line) for line in events_file]
-            assert events == []
+            cdc_err_events = [line for line in events_file if 'cdc - Could not retrieve CDC streams' in line]
+            assert cdc_err_events != []
 
     def test_search_system_suppressed_messages(self):
         self.node.system_log = os.path.join(os.path.dirname(
