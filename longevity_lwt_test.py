@@ -53,7 +53,16 @@ class LWTLongevityTest(LongevityTest):
         self.db_cluster.start_nemesis()
 
     def test_lwt_longevity(self):
-        with ignore_mutation_write_errors():
+        # mutation_write_ warning is thrown when system is overloaded and got timeout on operations on system.paxos
+        # table. Decrease severity of this event during prepare. Shouldn't impact on test result
+        with EventsSeverityChangerFilter(event_class=DatabaseLogEvent, regex=r".*mutation_write_*",
+                                         severity=Severity.WARNING, extra_time_to_expiration=30), \
+                EventsSeverityChangerFilter(event_class=DatabaseLogEvent,
+                                            regex=r'.*Operation failed for system.paxos.*',
+                                            severity=Severity.WARNING, extra_time_to_expiration=30), \
+                EventsSeverityChangerFilter(event_class=DatabaseLogEvent,
+                                            regex=r'.*Operation timed out for system.paxos.*',
+                                            severity=Severity.WARNING, extra_time_to_expiration=30):
             self.test_custom_time()
 
             # Stop nemesis. Prefer all nodes will be run before collect data for validation
