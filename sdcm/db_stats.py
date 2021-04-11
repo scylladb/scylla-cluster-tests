@@ -312,6 +312,7 @@ class PrometheusDBStats():
         query = 'avg(irate(scylla_scheduler_runtime_ms{group=~"service_level_.*", instance="%s"}  [30s] )) ' \
             'by (group, instance)' % node_ip
         results = self.query(query=query, start=start_time, end=end_time)
+        LOGGER.debug("Scylla CPU scheduler runtime from Prometheus for node %s: %s", node_ip, results)
         res = defaultdict(dict)
         for item in results:
             res[item['metric']['instance']].update({item['metric']['group']:
