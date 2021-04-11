@@ -192,7 +192,7 @@ class UserRoleBase:
     AUTHENTICATION_ENTITY = ''
 
     def __init__(self, session, name, password=None, superuser=None, verbose=False, **kwargs):
-        self._name = f'"{name}"'
+        self._name = f'{name}'
         self.password = password
         self.session = session
         self.superuser = superuser

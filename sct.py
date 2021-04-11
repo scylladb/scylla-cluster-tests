@@ -94,7 +94,7 @@ from sdcm.utils.aws_utils import AwsArchType
 from sdcm.utils.gce_utils import SUPPORTED_PROJECTS
 from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module,import-error
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module,import-error
-from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module
+from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module,import-error
 
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
@@ -1147,7 +1147,7 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
     else:
         LOGGER.warning("Failed to find test directory for %s", test_id)
     job_name = os.environ.get('JOB_NAME', '')
-    if 'latency' in job_name or 'throughput' in job_name or 'perf' in job_name:
+    if (('latency' in job_name or 'throughput' in job_name or 'perf' in job_name) and 'sla' not in job_name):
         logs = list_logs_by_test_id(test_results.get('test_id', test_id))
         if not test_results:
             LOGGER.error("Test Results file not found")
