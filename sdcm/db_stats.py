@@ -318,7 +318,7 @@ class PrometheusDBStats:
         if not self._check_start_end_time(start_time, end_time):
             return {}
         # the query is taken from the Grafana Dashborad definition
-        query = 'avg(irate(scylla_scheduler_runtime_ms{group=~"service_level_.*", instance="%s"}  [30s] )) ' \
+        query = 'avg(irate(scylla_scheduler_runtime_ms{group=~"sl:.*", instance="%s"}  [30s] )) ' \
             'by (group, instance)' % node_ip
         results = self.query(query=query, start=start_time, end=end_time)
         res = defaultdict(dict)
@@ -336,7 +336,7 @@ class PrometheusDBStats:
         if not self._check_start_end_time(start_time, end_time):
             return {}
         # the query is taken from the Grafana Dashborad definition
-        query = 'avg(scylla_scheduler_shares{group=~"service_level_.*", instance="%s"} ) by (group, instance)' % node_ip
+        query = 'avg(scylla_scheduler_shares{group=~"sl:.*", instance="%s"} ) by (group, instance)' % node_ip
         results = self.query(query=query, start=start_time, end=end_time)
         res = {}
         for item in results:
