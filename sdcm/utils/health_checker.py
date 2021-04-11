@@ -13,6 +13,9 @@ def check_nodes_status(nodes_status, current_node, removed_nodes_list=None):
 
     LOGGER.info(f'Status for {node_type} node {current_node.name}')
 
+    if removed_nodes_list is None:
+        removed_nodes_list = []
+
     for node_ip, node_properties in nodes_status.items():
         if node_properties['status'] != "UN":
             is_target = current_node.print_node_running_nemesis(node_ip)
