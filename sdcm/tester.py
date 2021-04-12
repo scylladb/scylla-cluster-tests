@@ -317,9 +317,10 @@ class ClusterTester(db_stats.TestStatsMixin,
                                           user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
             # Buildin user also need to be added in ldap server, otherwise it can't login to create LDAP_USERS
             for user in [self.params.get('authenticator_user')] + LDAP_USERS:
+                password = LDAP_PASSWORD if user in LDAP_USERS else self.params.get("authenticator_password")
                 ldap_entry = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}',
                               ['uidObject', 'organizationalPerson', 'top'],
-                              {'userPassword': LDAP_PASSWORD, 'sn': 'PersonSn', 'cn': 'PersonCn'}]
+                              {'userPassword': password, 'sn': 'PersonSn', 'cn': 'PersonCn'}]
                 self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
                                               user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
         self.alternator = alternator.api.Alternator(sct_params=self.params)
