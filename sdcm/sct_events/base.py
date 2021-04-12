@@ -311,7 +311,20 @@ class LogEvent(Generic[T_log_event], SctEvent, abstract=True):
         """
 
         try:
-            self.timestamp = dateutil.parser.parse(line.split(None, 1)[0]).timestamp()
+            splitted_line = line.split()
+            if "T" in splitted_line[0]:
+                # Cover messages log time format. Example:
+                # 2021-04-06T13:03:28  ...
+                event_time = splitted_line[0]
+            else:
+                # Cover ScyllaBench event time format. Example:
+                # 2021/04/06 13:03:28 Operation timed out for scylla_bench.test - received only 1 responses from ...
+                #
+                # And regular log time. Example:
+                # 2021-04-06 13:03:28  ...
+                event_time = " ".join(splitted_line[:2])
+
+            self.timestamp = dateutil.parser.parse(event_time).timestamp()
         except ValueError:
             self.timestamp = time.time()
         self.node = str(node)
