@@ -28,7 +28,6 @@ LDAP_DOMAIN = 'scylladb.com'
 LDAP_PASSWORD = 'scylla'
 LDAP_ROLE = 'scylla_ldap'
 LDAP_USERS = ['scylla-qa', 'dummy-user']
-BUILDIN_USERS = ['cassandra']
 LDAP_BASE_OBJECT = (lambda l: ','.join([f'dc={part}' for part in l.split('.')]))(LDAP_DOMAIN)
 
 
