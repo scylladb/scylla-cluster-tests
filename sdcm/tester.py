@@ -54,7 +54,7 @@ from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, upd
     rows_to_list, ec2_ami_get_root_device_name
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
-from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT, BUILDIN_USERS
+from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT
 from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer, \
@@ -312,7 +312,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
                                           user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
             # Buildin user also need to be added in ldap server, otherwise it can't login to create LDAP_USERS
-            for user in BUILDIN_USERS + LDAP_USERS:
+            for user in [self.params.get('authenticator_user')] + LDAP_USERS:
                 ldap_entry = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}',
                               ['uidObject', 'organizationalPerson', 'top'],
                               {'userPassword': LDAP_PASSWORD, 'sn': 'PersonSn', 'cn': 'PersonCn'}]
