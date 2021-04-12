@@ -2954,6 +2954,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if hasattr(self.log, 'extra'):
             self.log.extra['prefix'] = str(self)
 
+    def disable_daily_triggered_services(self):
+        if self.distro.uses_systemd == 'systemd' and (self.is_ubuntu() or self.is_debian()):
+            LOGGER.info("Disabling 'apt-daily' and 'apt-daily-upgrade' services...")
+            self.remoter.sudo('systemctl disable apt-daily.timer')
+            self.remoter.sudo('systemctl disable apt-daily-upgrade.timer')
+            self.remoter.sudo('systemctl stop apt-daily.timer', ignore_status=True)
+            self.remoter.sudo('systemctl stop apt-daily-upgrade.timer', ignore_status=True)
+
 
 class FlakyRetryPolicy(RetryPolicy):
 
@@ -4123,11 +4131,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     def _scylla_install(self, node):
         node.update_repo_cache()
-        if node.init_system == 'systemd' and (node.is_ubuntu() or node.is_debian()):
-            node.remoter.sudo('systemctl disable apt-daily.timer')
-            node.remoter.sudo('systemctl disable apt-daily-upgrade.timer')
-            node.remoter.sudo('systemctl stop apt-daily.timer', ignore_status=True)
-            node.remoter.sudo('systemctl stop apt-daily-upgrade.timer', ignore_status=True)
         node.clean_scylla()
         if self.params.get('unified_package'):
             node.offline_install_scylla(unified_package=self.params.get('unified_package'),
