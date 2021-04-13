@@ -640,7 +640,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_nodetool_drain(self):
         self._set_current_disruption('Drainer %s' % self.target_node)
         result = self.target_node.run_nodetool("drain", timeout=3600, coredump_on_timeout=True)
-        self.target_node.run_nodetool("status", ignore_status=True, verbose=True)
+        self.target_node.run_nodetool("status", ignore_status=True, verbose=True,
+                                      warning_event_on_exception=(Exception,))
 
         if result is not None:
             # workaround for issue #7332: don't interrupt test and don't raise exception
@@ -1832,14 +1833,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         @raise_event_on_failure
         def silenced_nodetool_repair_to_fail():
             try:
-                self.target_node.run_nodetool("repair", verbose=False)
+                self.target_node.run_nodetool("repair", verbose=False,
+                                              warning_event_on_exception=(UnexpectedExit, Libssh2UnexpectedExit),
+                                              error_message="Repair failed as expected. ")
             except (UnexpectedExit, Libssh2UnexpectedExit):
                 self.log.info('Repair failed as expected')
             except Exception:
                 self.log.error('Repair failed due to the unknown error')
                 raise
-            else:
-                raise RuntimeError('This repair should fail due to the being aborted')
 
         def repair_streaming_exists():
             active_repair_cmd = 'curl -s -X GET --header "Content-Type: application/json" --header ' \
@@ -2551,7 +2552,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self._destroy_data_and_restart_scylla()
 
             try:
-                self.target_node.run_nodetool(nodetool_task)
+                self.target_node.run_nodetool(nodetool_task, warning_event_on_exception=(Exception,))
             except Exception:  # pylint: disable=broad-except
                 self.log.debug('%s is stopped' % nodetool_task)
 

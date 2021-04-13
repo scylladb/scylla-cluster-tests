@@ -106,7 +106,8 @@ class PerformanceRegressionLWTTest(PerformanceRegressionTest):
     @retrying(n=3, sleep_time=15, allowed_exceptions=(UnexpectedExit, Failure))  # retrying since SSH can fail with 255
     def run_compaction_on_all_nodes(self):
         for node in self.db_cluster.nodes:
-            node.run_nodetool("compact")
+            node.run_nodetool("compact", warning_event_on_exception=(UnexpectedExit, Failure),
+                              error_message="Expected exception. ")
 
     def _run_workload(self, param_name, subtype, keyspace_num=1):
         cmd = self.params.get(param_name)

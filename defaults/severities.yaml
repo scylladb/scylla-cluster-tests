@@ -86,3 +86,4 @@ DisruptionEvent: ERROR
 DbEventsFilter: NORMAL
 EventsFilter: NORMAL
 EventsSeverityChangerFilter: NORMAL
+NodetoolEvent: ERROR
