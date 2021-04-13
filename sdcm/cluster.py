@@ -3609,21 +3609,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 raise Exception("There is no pre-installed ScyllaDB")
 
         if not Setup.REUSE_CLUSTER:
-            # prepare and start saslauthd service
-            if self.params.get('prepare_saslauthd'):
-                setup_script = dedent(f"""
-                    sudo yum install -y cyrus-sasl
-                    sudo systemctl enable saslauthd
-                    echo 'MECH=ldap' | sudo tee -a /etc/sysconfig/saslauthd
-                    sudo touch /etc/saslauthd.conf
-                    echo 'saslauthd_socket_path: /run/saslauthd/mux' | sudo tee -a /etc/scylla/scylla.yaml
-                """)
-                node.remoter.run('bash -cxe "%s"' % setup_script)
-                conf = node.get_saslauthd_config()
-                for key in conf.keys():
-                    node.remoter.run(f'echo "{key}: {conf[key]}" | sudo tee -a /etc/saslauthd.conf')
-                node.remoter.sudo('systemctl restart saslauthd')
-
             if install_scylla:
                 self._scylla_install(node)
             else:
@@ -3637,6 +3622,31 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             self.node_config_setup(node, ','.join(self.seed_nodes_ips), self.get_endpoint_snitch())
 
             self._scylla_post_install(node, install_scylla)
+
+            # prepare and start saslauthd service
+            if self.params.get('prepare_saslauthd'):
+                if node.is_rhel_like():
+                    setup_script = dedent(f"""
+                        sudo yum install -y cyrus-sasl
+                        sudo systemctl enable saslauthd
+                        echo 'MECH=ldap' | sudo tee -a /etc/sysconfig/saslauthd
+                        sudo touch /etc/saslauthd.conf
+                    """)
+                else:
+                    setup_script = dedent(f"""
+                        sudo apt-get install -y sasl2-bin
+                        sudo systemctl enable saslauthd
+                        echo -e 'MECHANISMS=ldap\nSTART=yes\n' | sudo tee -a /etc/default/saslauthd
+                        sudo touch /etc/saslauthd.conf
+                        sudo adduser scylla sasl  # to avoid the permission issue of unit socket
+                    """)
+                node.remoter.run('bash -cxe "%s"' % setup_script)
+                conf = node.get_saslauthd_config()
+                for key in conf.keys():
+                    node.remoter.run(f'echo "{key}: {conf[key]}" | sudo tee -a /etc/saslauthd.conf')
+                with node.remote_scylla_yaml() as scylla_yml:
+                    scylla_yml['saslauthd_socket_path'] = '/run/saslauthd/mux'
+                node.remoter.sudo('systemctl restart saslauthd')
 
             node.stop_scylla_server(verify_down=False)
             node.clean_scylla_data()
