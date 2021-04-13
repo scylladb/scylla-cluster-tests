@@ -3,7 +3,8 @@ gce_datacenter: 'us-east1-b'
 gce_network: 'qa-vpc'
 gce_image_username: 'scylla-test'
 
-gke_cluster_version: '1.18.16-gke.2100'
+gke_cluster_version: '1.19.9-gke.100'
+gke_k8s_release_channel: 'rapid'
 
 gce_instance_type_db: 'n1-standard-8'
 gce_root_disk_type_db: 'pd-ssd'
