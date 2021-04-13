@@ -59,6 +59,7 @@ from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd
 from sdcm.remote.remote_file import remote_file
 from sdcm import wait, mgmt
+from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.utils import alternator
 from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
     get_latest_gemini_version, normalize_ipv6_url, download_dir_from_cloud, generate_random_string, ScyllaCQLSession, \
@@ -74,6 +75,7 @@ from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, BUILD_ID_RE, get_gemini_version, get_systemd_version
 from sdcm.sct_events.base import LogEvent
+from sdcm.sct_events.filters import EventsFilter
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, BACKTRACE_RE
@@ -1286,7 +1288,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         wait.wait_for(keyspace_available, timeout=120, step=60,
                       text='Waiting until keyspace {} is available'.format(keyspace))
         try:
-            result = self.run_nodetool(sub_cmd='cfstats', args=keyspace, timeout=60)
+            result = self.run_nodetool(sub_cmd='cfstats', args=keyspace, timeout=60,
+                                       warning_event_on_exception=(Failure, UnexpectedExit))
         except (Failure, UnexpectedExit):
             self.log.error('nodetool error - see tcpdump thread uuid %s for '
                            'debugging info', tcpdump_id)
@@ -2696,7 +2699,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return f"{self.add_install_prefix('/usr/bin/nodetool')} {options} {sub_cmd} {args}"
 
     def run_nodetool(self, sub_cmd, args="", options="", timeout=None,
-                     ignore_status=False, verbose=True, coredump_on_timeout=False):
+                     ignore_status=False, verbose=True, coredump_on_timeout=False,
+                     warning_event_on_exception=None, error_message="", publish_event=True):
         """
             Wrapper for nodetool command.
             Command format: nodetool [options] command [args]
@@ -2712,17 +2716,41 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         :param timeout: time for command execution
         :param ignore_status: don't throw exception if the command fails
         :param coredump_on_timeout: Send signal SIGQUIT to scylla process
+        :param warning_event_on_exception: create WARNING instead of ERROR NodetoolEvent severity if the exception is
+                                           in the list
+        :param error_message: additional error message to exception message
+        :param publish_event: publish event or not
         :return: Remoter result object
         """
+        def _publish_event(subtype, severity, duration=None, error=None, full_traceback=None):
+            if publish_event:
+                NodetoolEvent(type=sub_cmd, subtype=subtype, severity=severity, node=self.name,
+                              duration=duration, options=options, error=error,
+                              full_traceback=full_traceback).publish()
+
         cmd = self._gen_nodetool_cmd(sub_cmd, args, options)
+        start_time = time.time()
         try:
+            _publish_event(subtype='start', severity=Severity.NORMAL)
+
             result = self.remoter.run(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose)
             self.log.debug("Command '%s' duration -> %s s" % (result.command, result.duration))
+
+            _publish_event(subtype='end', severity=Severity.NORMAL, duration=f"{result.duration}s")
             return result
         except Exception as details:  # pylint: disable=broad-except
+            event_severity_on_failure = Severity.ERROR
+            if warning_event_on_exception and type(details) in warning_event_on_exception or \
+                    Exception in warning_event_on_exception:
+                event_severity_on_failure = Severity.WARNING
+
             self.log.critical(f"Command '{cmd}' error: {details}")
             if coredump_on_timeout and isinstance(details, CommandTimedOut):
                 self.generate_coredump_file()
+
+            duration = int(time.time() - start_time)
+            _publish_event(subtype='end', severity=event_severity_on_failure, duration=f"{duration}s",
+                           error=f"{error_message}{str(details)}", full_traceback=traceback.format_exc())
             raise
 
     def check_node_health(self, retries: int = CHECK_NODE_HEALTH_RETRIES) -> None:
@@ -2823,7 +2851,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @retrying(n=5, sleep_time=10, raise_on_exceeded=False)
     def get_gossip_info(self):
-        gossip_info = self.run_nodetool('gossipinfo', verbose=False)
+        gossip_info = self.run_nodetool('gossipinfo', verbose=False, warning_event_on_exception=(Exception,),
+                                        publish_event=False)
         gossip_node_schemas = {}
         schema = ip = status = dc = ''
         for line in gossip_info.stdout.split():
@@ -3842,7 +3871,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if not verification_node:
             verification_node = librandom.choice(self.nodes)
         status = {}
-        res = verification_node.run_nodetool('status')
+        res = verification_node.run_nodetool('status', warning_event_on_exception=(Exception,), publish_event=False)
         data_centers = res.stdout.strip().split("Datacenter: ")
         for dc in data_centers:
             if dc:

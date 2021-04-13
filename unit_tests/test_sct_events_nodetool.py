@@ -1,0 +1,72 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
+import unittest
+
+from sdcm.sct_events import Severity
+from sdcm.sct_events.base import LogEvent
+from sdcm.sct_events.database import \
+    DatabaseLogEvent, FullScanEvent, IndexSpecialColumnErrorEvent, TOLERABLE_REACTOR_STALL, SYSTEM_ERROR_EVENTS
+from sdcm.sct_events.nodetool import NodetoolEvent
+
+
+class TestNodetoolEvent(unittest.TestCase):
+
+    def test_nodetool_cmd_no_options(self):
+        event = NodetoolEvent(type="scrub --skip-corrupted drop_table_during_repair_ks_0",
+                              subtype='start',
+                              severity=Severity.NORMAL,
+                              node='1.0.0.121',
+                              options="")
+        self.assertEqual(
+            str(event),
+            "(NodetoolEvent Severity.NORMAL): type=scrub subtype=start node=1.0.0.121 options=--skip-corrupted "
+            "drop_table_during_repair_ks_0"
+        )
+
+        event = NodetoolEvent(type="scrub --skip-corrupted drop_table_during_repair_ks_0",
+                              subtype='end',
+                              severity=Severity.NORMAL,
+                              node='1.0.0.121',
+                              duration="20s",
+                              options="")
+        self.assertEqual(
+            str(event),
+            '(NodetoolEvent Severity.NORMAL): type=scrub subtype=end node=1.0.0.121 '
+            'options=--skip-corrupted drop_table_during_repair_ks_0 duration=20s'
+        )
+
+    def test_nodetool_cmd_with_options(self):
+        event = NodetoolEvent(type="scrub --skip-corrupted drop_table_during_repair_ks_0",
+                              subtype='start',
+                              severity=Severity.NORMAL,
+                              node='1.0.0.121',
+                              options="more options")
+        self.assertEqual(
+            str(event),
+            '(NodetoolEvent Severity.NORMAL): type=scrub subtype=start node=1.0.0.121 options=--skip-corrupted '
+            'drop_table_during_repair_ks_0 more options'
+        )
+
+    def test_nodetool_failure(self):
+        event = NodetoolEvent(type="scrub --skip-corrupted drop_table_during_repair_ks_0",
+                              subtype='end',
+                              severity=Severity.ERROR,
+                              node='1.0.0.121',
+                              error="Failed with status 1",
+                              full_traceback="Traceback:")
+        self.assertEqual(
+            str(event),
+            '(NodetoolEvent Severity.ERROR): type=scrub subtype=end node=1.0.0.121 options=--skip-corrupted '
+            'drop_table_during_repair_ks_0 error=Failed with status 1\nTraceback:'
+        )
