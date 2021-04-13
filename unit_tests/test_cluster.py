@@ -19,6 +19,7 @@ import logging
 import os.path
 import tempfile
 import unittest
+import time
 from weakref import proxy as weakproxy
 
 from invoke import Result
@@ -30,6 +31,9 @@ from sdcm.utils.distro import Distro
 
 from unit_tests.dummy_remote import DummyRemote
 from unit_tests.lib.events_utils import EventsUtilsMixin
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class DummyNode(BaseNode):  # pylint: disable=abstract-method
@@ -122,9 +126,16 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
         with ignore_upgrade_cdc_errors('2021.1'):
             self.node._read_system_log_and_publish_events(start_from_beginning=True)
 
-        with self.get_events_logger().events_logs_by_severity[Severity.ERROR].open() as events_file:
-            cdc_err_events = [line for line in events_file if 'cdc - Could not retrieve CDC streams' in line]
-            assert cdc_err_events != []
+        retry_max = 20
+        for i in range(retry_max):
+            time.sleep(1)
+            with self.get_events_logger().events_logs_by_severity[Severity.ERROR].open() as events_file:
+                events_file.flush()
+                cdc_err_events = [line for line in events_file if 'cdc - Could not retrieve CDC streams' in line]
+                LOGGER.info(cdc_err_events)
+                if cdc_err_events == [] and i < retry_max - 1:
+                    continue
+                assert cdc_err_events != [], f'Fail to search expected cdc error! retried: {i} times'
 
     def test_search_cdc_invalid_request_2020_1(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_cdc_invalid_request.log')
