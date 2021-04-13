@@ -30,6 +30,7 @@ import signal
 import sys
 import traceback
 
+import boto3.session
 from invoke.exceptions import UnexpectedExit, Failure  # pylint: disable=import-error
 
 from cassandra.concurrent import execute_concurrent_with_args  # pylint: disable=no-name-in-module
