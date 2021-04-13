@@ -966,6 +966,7 @@ class ClusterTester(db_stats.TestStatsMixin,
 
         services, gce_datacenter = list(services.values()), list(services.keys())
         self.k8s_cluster = gke.GkeCluster(gke_cluster_version=self.params.get("gke_cluster_version"),
+                                          gke_k8s_release_channel=self.params.get("gke_k8s_release_channel"),
                                           gce_image_type=self.params.get("gce_root_disk_type_db"),
                                           gce_image_size=self.params.get("gce_root_disk_size_db"),
                                           gce_network=self.params.get("gce_network"),
