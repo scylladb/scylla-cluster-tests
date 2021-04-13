@@ -80,10 +80,12 @@ class GkeNodePool(CloudK8sNodePool):
                f"--cluster {self.k8s_cluster.short_cluster_name}",
                f"--num-nodes {self.num_nodes}",
                f"--machine-type {self.instance_type}",
-               f"--image-type UBUNTU",
-               f"--no-enable-autoupgrade",
-               f"--no-enable-autorepair"
+               f"--image-type UBUNTU"
                ]
+        if not self.k8s_cluster.gke_k8s_release_channel:
+            # NOTE: only static K8S release channel supports disabling of autoupgrade
+            cmd.append("--no-enable-autoupgrade")
+            cmd.append("--no-enable-autorepair")
         if self.disk_type:
             cmd.append(f"--disk-type {self.disk_type}")
         if self.disk_size:
@@ -142,6 +144,7 @@ class GkeCluster(KubernetesCluster):
 
     def __init__(self,
                  gke_cluster_version,
+                 gke_k8s_release_channel,
                  gce_image_type,
                  gce_image_size,
                  gce_network,
@@ -159,6 +162,7 @@ class GkeCluster(KubernetesCluster):
             user_prefix=user_prefix
         )
         self.gke_cluster_version = gke_cluster_version
+        self.gke_k8s_release_channel = gke_k8s_release_channel.strip()
         self.gce_image_type = gce_image_type
         self.gce_image_size = gce_image_size
         self.gce_network = gce_network
@@ -185,9 +189,11 @@ class GkeCluster(KubernetesCluster):
                     self.short_cluster_name, self.n_nodes, self.AUXILIARY_POOL_NAME)
         tags = ",".join(f"{key}={value}" for key, value in self.tags.items())
         with self.gcloud as gcloud:
+            # NOTE: only static K8S release channel supports disabling of autoupgrade
             gcloud.run(f"container --project {self.gce_project} clusters create {self.short_cluster_name}"
                        f" --zone {self.gce_zone}"
                        f" --cluster-version {self.gke_cluster_version}"
+                       f"{' --release-channel ' + self.gke_k8s_release_channel if self.gke_k8s_release_channel else ''}"
                        f" --username admin"
                        f" --network {self.gce_network}"
                        f" --num-nodes {self.n_nodes}"
@@ -196,8 +202,8 @@ class GkeCluster(KubernetesCluster):
                        f" --disk-type {self.gce_image_type}"
                        f" --disk-size {self.gce_image_size}"
                        f" --enable-stackdriver-kubernetes"
-                       f" --no-enable-autoupgrade"
-                       f" --no-enable-autorepair"
+                       f"{'' if self.gke_k8s_release_channel else ' --no-enable-autoupgrade'}"
+                       f"{'' if self.gke_k8s_release_channel else ' --no-enable-autorepair'}"
                        f" --metadata {tags}")
             self.patch_kubectl_config()
             self.deploy_node_pool(GkeNodePool(

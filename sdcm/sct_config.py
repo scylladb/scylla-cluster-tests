@@ -655,6 +655,9 @@ class SCTConfiguration(dict):
         # k8s-gke options
         dict(name="gke_cluster_version", env="SCT_GKE_CLUSTER_VERSION", type=str,
              help=""),
+        dict(name="gke_k8s_release_channel", env="SCT_GKE_K8S_RELEASE_CHANNEL", type=str,
+             help="K8S release channel name to be used. Expected values are: "
+                  "'rapid', 'regular', 'stable' and '' (static / No channel)."),
 
         # k8s options
         dict(name="k8s_deploy_monitoring", env="SCT_K8S_DEPLOY_MONITORING", type=str,
