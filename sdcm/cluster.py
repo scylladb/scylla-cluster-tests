@@ -2979,7 +2979,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.log.extra['prefix'] = str(self)
 
     def disable_daily_triggered_services(self):
-        if self.distro.uses_systemd == 'systemd' and (self.is_ubuntu() or self.is_debian()):
+        if self.distro.uses_systemd and (self.is_ubuntu() or self.is_debian()):
             LOGGER.info("Disabling 'apt-daily' and 'apt-daily-upgrade' services...")
             self.remoter.sudo('systemctl disable apt-daily.timer')
             self.remoter.sudo('systemctl disable apt-daily-upgrade.timer')
