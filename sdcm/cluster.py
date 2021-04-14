@@ -2983,8 +2983,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             LOGGER.info("Disabling 'apt-daily' and 'apt-daily-upgrade' services...")
             self.remoter.sudo('systemctl disable apt-daily.timer')
             self.remoter.sudo('systemctl disable apt-daily-upgrade.timer')
+            self.remoter.sudo('systemctl disable apt-daily.service', ignore_status=True)
+            self.remoter.sudo('systemctl disable apt-daily-upgrade.service', ignore_status=True)
             self.remoter.sudo('systemctl stop apt-daily.timer', ignore_status=True)
             self.remoter.sudo('systemctl stop apt-daily-upgrade.timer', ignore_status=True)
+            self.remoter.sudo('systemctl stop apt-daily.service', ignore_status=True)
+            self.remoter.sudo('systemctl stop apt-daily-upgrade.service', ignore_status=True)
 
 
 class FlakyRetryPolicy(RetryPolicy):
