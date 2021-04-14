@@ -62,7 +62,7 @@ from sdcm import wait, mgmt
 from sdcm.utils import alternator
 from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
     get_latest_gemini_version, normalize_ipv6_url, download_dir_from_cloud, generate_random_string, ScyllaCQLSession, \
-    SCYLLA_YAML_PATH, get_test_name, PageFetcher, update_authenticator
+    SCYLLA_YAML_PATH, get_test_name, PageFetcher, update_authenticator, prepare_and_start_saslauthd_service
 from sdcm.utils.distro import Distro
 from sdcm.utils.docker_utils import ContainerManager, NotFound
 
@@ -4115,28 +4115,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
             # prepare and start saslauthd service
             if self.params.get('prepare_saslauthd'):
-                if node.is_rhel_like():
-                    setup_script = dedent(f"""
-                        sudo yum install -y cyrus-sasl
-                        sudo systemctl enable saslauthd
-                        echo 'MECH=ldap' | sudo tee -a /etc/sysconfig/saslauthd
-                        sudo touch /etc/saslauthd.conf
-                    """)
-                else:
-                    setup_script = dedent(f"""
-                        sudo apt-get install -y sasl2-bin
-                        sudo systemctl enable saslauthd
-                        echo -e 'MECHANISMS=ldap\nSTART=yes\n' | sudo tee -a /etc/default/saslauthd
-                        sudo touch /etc/saslauthd.conf
-                        sudo adduser scylla sasl  # to avoid the permission issue of unit socket
-                    """)
-                node.remoter.run('bash -cxe "%s"' % setup_script)
-                conf = node.get_saslauthd_config()
-                for key in conf.keys():
-                    node.remoter.run(f'echo "{key}: {conf[key]}" | sudo tee -a /etc/saslauthd.conf')
-                with node.remote_scylla_yaml() as scylla_yml:
-                    scylla_yml['saslauthd_socket_path'] = '/run/saslauthd/mux'
-                node.remoter.sudo('systemctl restart saslauthd')
+                prepare_and_start_saslauthd_service(node)
 
             if self.node_setup_requires_scylla_restart:
                 node.stop_scylla_server(verify_down=False)
