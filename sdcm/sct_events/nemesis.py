@@ -46,7 +46,7 @@ class DisruptionEvent(SctEvent):
 
     @property
     def msgfmt(self) -> str:
-        fmt = super().msgfmt + ": type={0.type} subtype={0.subtype} node={0.node} duration={0.duration}"
+        fmt = super().msgfmt + ": type={0.type} subtype={0.subtype} target_node={0.node} duration={0.duration}"
         if self.severity == Severity.ERROR:
             fmt += " error={0.error}\n{0.full_traceback}"
         return fmt
