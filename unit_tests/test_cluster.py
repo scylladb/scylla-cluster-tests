@@ -14,6 +14,7 @@
 # pylint: disable=too-few-public-methods
 
 import json
+import time
 import shutil
 import logging
 import os.path
@@ -21,12 +22,15 @@ import tempfile
 import unittest
 import time
 from weakref import proxy as weakproxy
+from contextlib import ExitStack
 
 from invoke import Result
 
 from sdcm.cluster import BaseNode, BaseCluster, BaseMonitorSet
 from sdcm.sct_events import Severity
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
+from sdcm.sct_events.filters import DbEventsFilter
+from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.utils.distro import Distro
 
 from unit_tests.dummy_remote import DummyRemote
@@ -127,6 +131,25 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
         with self.get_events_logger().events_logs_by_severity[Severity.ERROR].open() as events_file:
             cdc_err_events = [line for line in events_file if 'cdc - Could not retrieve CDC streams' in line]
             assert cdc_err_events != []
+
+    def test_search_power_off(self):
+        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'power_off.log')
+        self.node._read_system_log_and_publish_events(start_from_beginning=True)
+
+        time.sleep(0.1)
+        with self.get_events_logger().events_logs_by_severity[Severity.CRITICAL].open() as events_file:
+            events = [line for line in events_file if 'Powering Off' in line]
+            assert events != []
+
+    def test_ignore_power_off(self):
+        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'power_off.log')
+        with DbEventsFilter(db_event=DatabaseLogEvent.POWER_OFF, node=self.node):
+            self.node._read_system_log_and_publish_events(start_from_beginning=True)
+
+            time.sleep(0.1)
+            with self.get_events_logger().events_logs_by_severity[Severity.CRITICAL].open() as events_file:
+                events = [line for line in events_file if 'Powering Off' in line]
+                assert events == []
 
     def test_search_system_suppressed_messages(self):
         self.node.system_log = os.path.join(os.path.dirname(

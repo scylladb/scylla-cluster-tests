@@ -30,6 +30,7 @@ DatabaseLogEvent.REACTOR_STALLED: WARNING
 DatabaseLogEvent.BOOT: NORMAL
 DatabaseLogEvent.SUPPRESSED_MESSAGES: WARNING
 DatabaseLogEvent.stream_exception: ERROR
+DatabaseLogEvent.POWER_OFF: CRITICAL
 IndexSpecialColumnErrorEvent: ERROR
 GeminiEvent.error: CRITICAL
 GeminiEvent.warning: WARNING
