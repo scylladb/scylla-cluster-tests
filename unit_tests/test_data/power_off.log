@@ -1,0 +1,35 @@
+2021-02-01T22:01:01+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd-logind: Removed session 8570.
+2021-02-01T22:01:03+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !WARNING | scylla: [shard 8] sstable - Unable to delete /var/lib/
+scylla/data/large_collection_test/table_with_large_collection-b75c53b0647311eb8d04000000000000/md-3596-big-TOC.txt because it doesn't exist.
+2021-02-01T22:01:03+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | scylla: [shard 8] compaction - [Cleanup large_collecti
+on_test.table_with_large_collection c0849500-64d8-11eb-afba-000000000007] Cleaned 1 sstables to [/var/lib/scylla/data/large_collection_test/table_w
+ith_large_collection-b75c53b0647311eb8d04000000000000/md-5480-big-Data.db:level=0, ]. 1GB to 1GB (~75% of original) in 96611ms = 11MB/s. ~1152 tota
+l partitions merged to 849.
+2021-02-01T22:01:03+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | scylla: [shard 8] compaction - [Cleanup large_collecti
+on_test.table_with_large_collection fa1c3c00-64d8-11eb-afba-000000000007] Cleaning [/var/lib/scylla/data/large_collection_test/table_with_large_col
+lection-b75c53b0647311eb8d04000000000000/md-3608-big-Data.db:level=0, ]
+2021-02-01T22:01:27+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | sshd[27535]: pam_unix(sshd:session): session closed fo
+r user centos
+2021-02-01T22:01:27+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd-logind: Removed session 8575.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd-logind: Power key pressed.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd-logind: Powering Off...
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !NOTICE  | systemd-logind: System is powering down.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Stopped target RPC Port Mapper.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Stopping Session 227 of user scyllaadm.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Stopping Session 11 of user scyllaadm.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Stopping RPC bind service...
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Stopping Session 3 of user scyllaadm.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Stopped target Timers.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Stopped Daily Cleanup of Temporary Directories.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Stopped Run Scylla Housekeeping daily mode.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Stopped Run Scylla Housekeeping restart mode.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Stopped Dump dmesg to /var/log/dmesg.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Stopped target Cloud-init target.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Stopped Apply the settings specified in cloud-config.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Stopped target Cloud-config availability.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | sshd[9478]: pam_unix(sshd:session): session closed for user centos
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Stopped target rpc_pipefs.target.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Unmounting RPC Pipe File System...
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Removed slice system-selinux\x2dpolicy\x2dmigrate\x2dlocal\x2dchanges.slice.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Stopping Session 4 of user scyllaadm.
+2021-02-01T22:01:29+00:00  longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd: Stopping Scylla JMX...

@@ -44,6 +44,7 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     BOOT: Type[LogEventProtocol]
     SUPPRESSED_MESSAGES: Type[LogEventProtocol]
     stream_exception: Type[LogEventProtocol]
+    POWER_OFF: Type[LogEventProtocol]
 
 
 MILLI_RE = re.compile(r"(\d+) ms")
@@ -101,6 +102,7 @@ DatabaseLogEvent.add_subevent_type("SUPPRESSED_MESSAGES", severity=Severity.WARN
                                    regex="journal: Suppressed")
 DatabaseLogEvent.add_subevent_type("stream_exception", severity=Severity.ERROR,
                                    regex="stream_exception")
+DatabaseLogEvent.add_subevent_type("POWER_OFF", severity=Severity.CRITICAL, regex="Powering Off")
 
 
 SYSTEM_ERROR_EVENTS = (
@@ -123,6 +125,7 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.BOOT(),
     DatabaseLogEvent.SUPPRESSED_MESSAGES(),
     DatabaseLogEvent.stream_exception(),
+    DatabaseLogEvent.POWER_OFF(),
 )
 SYSTEM_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex, re.IGNORECASE), event) for event in SYSTEM_ERROR_EVENTS]
