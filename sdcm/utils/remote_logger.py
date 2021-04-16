@@ -279,7 +279,7 @@ class ScyllaManagerLogger(CommandClusterLoggerBase):
     def _logger_cmd(self) -> str:
         cmd = self._cluster.kubectl_cmd(
             f"logs --previous=false -f --since={int(self.time_delta)}s --all-containers=true "
-            "-l app=scylla-manager",
+            "-l app.kubernetes.io/instance=scylla-manager",
             namespace=self._cluster._scylla_manager_namespace)
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
@@ -290,8 +290,8 @@ class ScyllaOperatorLogger(CommandClusterLoggerBase):
     @property
     def _logger_cmd(self) -> str:
         cmd = self._cluster.kubectl_cmd(
-            f"logs  --previous=false -f --since={int(self.time_delta)}s scylla-operator-controller-manager-0 "
-            "--all-containers=true",
+            f"logs --previous=false -f --since={int(self.time_delta)}s --all-containers=true "
+            "-l app.kubernetes.io/instance=scylla-operator",
             namespace=self._cluster._scylla_operator_namespace)
         return f"{cmd} >> {self._target_log_file} 2>&1"
 

@@ -498,6 +498,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             readiness_timeout=5*60,
             namespace=SCYLLA_OPERATOR_NAMESPACE
         )
+        # Start the Scylla Operator logging thread
+        self.start_scylla_operator_journal_thread()
 
     @log_run_info
     def deploy_minio_s3_backend(self):

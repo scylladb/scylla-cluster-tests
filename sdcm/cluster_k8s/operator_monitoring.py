@@ -49,10 +49,12 @@ class ScyllaOperatorLogMonitoring(threading.Thread):
             event_to_log = None
             for pattern, event in SCYLLA_OPERATOR_EVENT_PATTERNS:
                 if pattern.search(log_record):
-                    event_to_log = event.clone()
+                    event_to_log = event.clone().add_info(
+                        node="N/A", line=log_record, line_number=0)
                     break
             if event_to_log is None:
-                event_to_log = ScyllaOperatorLogEvent()
+                # NOTE: here we have log line that doesn't match any pattern, so, move on
+                continue
             if event_to_log := event_to_log.load_from_json_string(log_record):
                 event_to_log.publish()
 
