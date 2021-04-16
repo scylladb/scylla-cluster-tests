@@ -26,6 +26,8 @@ LOGGER = logging.getLogger(__name__)
 
 class ScyllaOperatorLogEvent(LogEvent):
     REAPPLY: Type[LogEventProtocol]
+    TLS_HANDSHAKE_ERROR: Type[LogEventProtocol]
+    OPERATOR_STARTED_INFO: Type[LogEventProtocol]
     timestamp: str
     namespace: str
     cluster: str
@@ -95,11 +97,20 @@ class ScyllaOperatorRestartEvent(SctEvent):
 
 
 ScyllaOperatorLogEvent.add_subevent_type(
-    "REAPPLY", severity=Severity.WARNING, regex="please apply your changes to the latest version and try again")
+    "REAPPLY", severity=Severity.WARNING,
+    regex="please apply your changes to the latest version and try again")
+ScyllaOperatorLogEvent.add_subevent_type(
+    "TLS_HANDSHAKE_ERROR", severity=Severity.WARNING,
+    regex="TLS handshake error from .*: EOF")
+ScyllaOperatorLogEvent.add_subevent_type(
+    "OPERATOR_STARTED_INFO", severity=Severity.NORMAL,
+    regex="Starting the operator...")
 
 
 SCYLLA_OPERATOR_EVENTS = [
     ScyllaOperatorLogEvent.REAPPLY(),
+    ScyllaOperatorLogEvent.TLS_HANDSHAKE_ERROR(),
+    ScyllaOperatorLogEvent.OPERATOR_STARTED_INFO(),
 ]
 
 
