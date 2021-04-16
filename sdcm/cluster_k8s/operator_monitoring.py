@@ -26,7 +26,10 @@ from sdcm.sct_events.operator import ScyllaOperatorLogEvent, ScyllaOperatorResta
 class ScyllaOperatorLogMonitoring(threading.Thread):
     lookup_time = 0.1
     log = logging.getLogger('ScyllaOperatorLogMonitoring')
-    patterns = [re.compile('^\s*{\s*"L"\s*:\s*"ERROR"')]
+    patterns = [
+        re.compile('^\s*{\s*"L"\s*:\s*"ERROR"'),
+        re.compile('^\s*{\s*"L"\s*:\s*"INFO"'),
+    ]
 
     def __init__(self, kluster):
         self.termination_event = threading.Event()
