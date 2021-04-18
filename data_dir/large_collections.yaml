@@ -9,7 +9,7 @@ table: table_with_large_collection
 table_definition: |
 
   CREATE TABLE large_collection_test.table_with_large_collection (
-    pk_id text PRIMARY KEY,
+    pk_id text,
     init_time timestamp,
     user_name text,
     new_num int,
@@ -19,6 +19,9 @@ table_definition: |
     nums_set set<int>,
     names_set set<text>,
     books_set set<text>,
+    static_data1 blob static,
+    static_data2 blob static,
+    PRIMARY KEY(pk_id, user_name)
   ) WITH bloom_filter_fp_chance = 0.01
     AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
     AND comment = 'Request for unit level UIs'
@@ -72,13 +75,20 @@ columnspec:
     size: fixed(1024)
     population: uniform(1..1024)
 
+  - name: static_data1
+    size: uniform(2620..62400)
+
+  - name: static_data2
+    size: uniform(2620..62400)
+
+
 insert:
   batchtype: UNLOGGED
 
 queries:
   read1:
-    cql: select * from large_collection_test.table_with_large_collection where pk_id = ?
+    cql: select * from large_collection_test.table_with_large_collection where pk_id = ? and user_name = ?
     fields: samerow
   update1:
-    cql: update large_collection_test.table_with_large_collection set users_name=?,nums_list=?,nums_set=?,names_set=?,books_set=? where pk_id = ?
+    cql: update large_collection_test.table_with_large_collection set users_name=?,nums_list=?,nums_set=?,names_set=?,books_set=?, static_data1=?, static_data2=? where pk_id = ? and user_name = ?
     fields: samerow
