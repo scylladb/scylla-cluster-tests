@@ -16,6 +16,6 @@ scylla_linux_distro: 'centos'
 scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-3.3.repo'
 test_duration: 60
 use_preinstalled_scylla: false
-user_prefix: 'artifacts-oel76'
+user_prefix: 'artifacts-oel81'
 system_auth_rf: 1
 scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo'
