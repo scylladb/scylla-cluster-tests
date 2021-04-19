@@ -19,7 +19,7 @@ from sdcm.sct_events import Severity, SctEventProtocol
 from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event
 
 
-TOLERABLE_REACTOR_STALL: int = 2000  # ms
+TOLERABLE_REACTOR_STALL: int = 1000  # ms
 
 LOGGER = logging.getLogger(__name__)
 
