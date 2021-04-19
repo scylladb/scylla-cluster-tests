@@ -43,20 +43,20 @@ class TestDatabaseLogEvent(unittest.TestCase):
 
     def test_reactor_stalled_severity(self):
         event1 = DatabaseLogEvent.REACTOR_STALLED()
-        self.assertEqual(event1.severity, Severity.WARNING)
+        self.assertEqual(event1.severity, Severity.DEBUG)
 
-        self.assertIs(event1, event1.add_info(node="n1", line=f"{TOLERABLE_REACTOR_STALL} ms", line_number=1))
-        self.assertEqual(event1.severity, Severity.NORMAL)
+        self.assertIs(event1, event1.add_info(node="n1", line=f"{TOLERABLE_REACTOR_STALL-1} ms", line_number=1))
+        self.assertEqual(event1.severity, Severity.DEBUG)
         self.assertEqual(event1.node, "n1")
-        self.assertEqual(event1.line, f"{TOLERABLE_REACTOR_STALL} ms")
+        self.assertEqual(event1.line, f"{TOLERABLE_REACTOR_STALL-1} ms")
         self.assertEqual(event1.line_number, 1)
 
         event2 = DatabaseLogEvent.REACTOR_STALLED()
-        self.assertEqual(event2.severity, Severity.WARNING)
-        self.assertIs(event2, event2.add_info(node="n2", line=f"{TOLERABLE_REACTOR_STALL+1} ms", line_number=2))
-        self.assertEqual(event2.severity, Severity.WARNING)
+        self.assertEqual(event2.severity, Severity.DEBUG)
+        self.assertIs(event2, event2.add_info(node="n2", line=f"{TOLERABLE_REACTOR_STALL} ms", line_number=2))
+        self.assertEqual(event2.severity, Severity.ERROR)
         self.assertEqual(event2.node, "n2")
-        self.assertEqual(event2.line, f"{TOLERABLE_REACTOR_STALL+1} ms")
+        self.assertEqual(event2.line, f"{TOLERABLE_REACTOR_STALL} ms")
         self.assertEqual(event2.line_number, 2)
 
     def test_system_error_events_list(self):

@@ -337,4 +337,4 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                                line_number=22,
                                line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  reactor stall 20").publish()
 
-        self.assertEqual(event.severity, Severity.WARNING)
+        self.assertEqual(event.severity, Severity.DEBUG)
