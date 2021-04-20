@@ -496,10 +496,14 @@ class ClusterTester(db_stats.TestStatsMixin,
                 self.legacy_init_nodes(db_cluster=self.db_cluster)
             else:
                 self.init_nodes(db_cluster=self.db_cluster)
-            if (self.params.get('use_ldap_authorization') and not self.params.get('are_ldap_users_on_scylla')) or self.params.get('prepare_saslauthd'):
+
+            # running `set_system_auth_rf()` before changing authorization/authentication protocols
+            self.set_system_auth_rf()
+
+            if (self.params.get('use_ldap_authorization') and not self.params.get('are_ldap_users_on_scylla')) or \
+                    self.params.get('prepare_saslauthd'):
                 self.db_cluster.nodes[0].create_ldap_users_on_scylla()
                 self.params['are_ldap_users_on_scylla'] = True
-            self.set_system_auth_rf()
 
             db_node_address = self.db_cluster.nodes[0].ip_address
             self.loaders.wait_for_init(db_node_address=db_node_address)
