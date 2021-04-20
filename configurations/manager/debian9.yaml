@@ -1,4 +1,4 @@
 ami_id_monitor: 'ami-0cfac3931b2a799d1'  # Debian stretch image
 ami_monitor_user: 'admin'
 
-scylla_repo_m: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/debian/scylla-2019.1-stretch.list'
+scylla_repo_m: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/debian/scylla-2020.1-stretch.list'
