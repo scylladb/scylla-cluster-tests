@@ -28,6 +28,7 @@ DatabaseLogEvent.SEGMENTATION: ERROR
 DatabaseLogEvent.INTEGRITY_CHECK: ERROR
 DatabaseLogEvent.REACTOR_STALLED: WARNING
 DatabaseLogEvent.BOOT: NORMAL
+DatabaseLogEvent.STOP: NORMAL
 DatabaseLogEvent.SUPPRESSED_MESSAGES: WARNING
 DatabaseLogEvent.stream_exception: ERROR
 IndexSpecialColumnErrorEvent: ERROR

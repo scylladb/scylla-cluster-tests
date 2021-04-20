@@ -44,6 +44,7 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     SEGMENTATION: Type[LogEventProtocol]
     INTEGRITY_CHECK: Type[LogEventProtocol]
     BOOT: Type[LogEventProtocol]
+    STOP: Type[LogEventProtocol]
     SUPPRESSED_MESSAGES: Type[LogEventProtocol]
     stream_exception: Type[LogEventProtocol]
 
@@ -101,6 +102,8 @@ DatabaseLogEvent.add_subevent_type("INTEGRITY_CHECK", severity=Severity.ERROR,
                                    regex="integrity check failed")
 DatabaseLogEvent.add_subevent_type("BOOT", severity=Severity.NORMAL,
                                    regex="Starting Scylla Server")
+DatabaseLogEvent.add_subevent_type("STOP", severity=Severity.NORMAL,
+                                   regex="Stopping Scylla Server")
 DatabaseLogEvent.add_subevent_type("SUPPRESSED_MESSAGES", severity=Severity.WARNING,
                                    regex="journal: Suppressed")
 DatabaseLogEvent.add_subevent_type("stream_exception", severity=Severity.ERROR,
@@ -127,6 +130,7 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.SEGMENTATION(),
     DatabaseLogEvent.INTEGRITY_CHECK(),
     DatabaseLogEvent.BOOT(),
+    DatabaseLogEvent.STOP(),
     DatabaseLogEvent.SUPPRESSED_MESSAGES(),
     DatabaseLogEvent.stream_exception(),
 )
