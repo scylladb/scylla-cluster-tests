@@ -760,7 +760,8 @@ class ScyllaManagerTool(ScyllaManagerBase):
         ScyllaManagerBase.__init__(self, id="MANAGER", manager_node=manager_node)
         self._initial_wait(20)
         LOGGER.info("Initiating Scylla-Manager, version: {}".format(self.version))
-        list_supported_distros = [Distro.CENTOS7, Distro.DEBIAN8, Distro.DEBIAN9, Distro.UBUNTU16, Distro.UBUNTU18]
+        list_supported_distros = [Distro.CENTOS7, Distro.DEBIAN8, Distro.DEBIAN9, Distro.DEBIAN10,
+                                  Distro.UBUNTU16, Distro.UBUNTU18, Distro.UBUNTU20]
         self.default_user = "centos"
         if manager_node.distro not in list_supported_distros:
             raise ScyllaManagerError(

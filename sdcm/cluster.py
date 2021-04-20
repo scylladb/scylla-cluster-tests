@@ -662,6 +662,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         deprecation("consider to use node.distro.is_ubuntu18 property instead")
         return self.distro.is_ubuntu18
 
+    def is_ubuntu20(self):
+        deprecation("consider to use node.distro.is_ubuntu20 property instead")
+        return self.distro.is_ubuntu20
+
     def is_ubuntu(self):
         deprecation("consider to use node.distro.is_ubuntu property instead")
         return self.distro.is_ubuntu
@@ -673,6 +677,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def is_debian9(self):
         deprecation("consider to use node.distro.is_debian9 property instead")
         return self.distro.is_debian9
+
+    def is_debian10(self):
+        deprecation("consider to use node.distro.is_debian10 property instead")
+        return self.distro.is_debian10
 
     def is_debian(self):
         deprecation("consider to use node.distro.is_debian property instead")
@@ -4716,7 +4724,7 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                 pip3 install -I -U psutil
                 systemctl start docker
             """)
-        elif node.is_debian9():
+        elif node.is_debian9() or node.is_debian10():
             node.remoter.run(
                 cmd="sudo apt install -y apt-transport-https ca-certificates curl software-properties-common gnupg2")
             node.remoter.run('curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -', retry=3)
