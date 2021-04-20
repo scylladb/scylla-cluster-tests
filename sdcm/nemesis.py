@@ -31,7 +31,7 @@ from functools import wraps, partial
 from collections import OrderedDict, defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
 
-from invoke import UnexpectedExit
+from invoke import UnexpectedExit  # pylint: disable=import-error
 from cassandra import ConsistencyLevel
 
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady
@@ -2670,11 +2670,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             else:
                 self.set_target_node(is_seed=is_seed)
             self.log.info("Next node will be removed %s", self.target_node)
-            try:
-                InfoEvent(message='StartEvent - ShrinkCluster started decommissioning a node').publish()
-                self.decommission_node(self.target_node)
-            finally:
-                InfoEvent(message='FinishEvent - ShrinkCluster has done decommissioning a node').publish()
+
+            self.decommission_node(self.target_node)
 
     def disrupt_grow_shrink_cluster(self):
         self._disrupt_grow_shrink_cluster(rack=0)
@@ -2688,18 +2685,30 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 raise UnsupportedNemesis("SCT rack functionality is implemented only on kubernetes")
             self.log.info("Rack deletion is not supported on kubernetes yet. "
                           "Please see https://github.com/scylladb/scylla-operator/issues/287")
+
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
         self.unset_current_running_nemesis(self.target_node)
         self._set_current_disruption("GrowCluster")
-        self.log.info("Start grow cluster on %s nodes", add_nodes_number)
-        InfoEvent(message=f'GrowCluster - Add New node to {rack} rack').publish()
-        for _ in range(add_nodes_number):
-            added_node = self.add_new_node(rack=rack)
-            self.unset_current_running_nemesis(added_node)
-            InfoEvent(message='GrowCluster - Done adding New node').publish()
-            self.log.info("New node added %s", added_node.name)
-        self.log.info("Finish cluster grow")
-        time.sleep(self.interval)
+        start_time = time.time()
+        try:
+            self.log.info("Start grow cluster on %s nodes", add_nodes_number)
+            for _ in range(add_nodes_number):
+                InfoEvent(message=f'GrowCluster - Add New node to {rack} rack').publish()
+                added_node = self.add_new_node(rack=rack)
+                self.unset_current_running_nemesis(added_node)
+                InfoEvent(message=f'GrowCluster - Done adding New node {added_node.name}').publish()
+            self.log.info("Finish cluster grow")
+            time.sleep(self.interval)
+            status = True
+            log_info = {}
+        except Exception as details:
+            log_info = {'error': details, 'full_traceback': traceback.format_exc()}
+            status = False
+        finally:
+            end_time = time.time()
+            time_elapsed = int(time.time() - start_time)
+            DisruptionEvent(type=self.get_disrupt_name(), subtype="end", status=status, node=self.target_node,
+                            end=end_time, duration=time_elapsed, **log_info).publish()
 
         self._set_current_disruption("ShrinkCluster")
         self.log.info("Start shrink cluster on %s nodes", add_nodes_number)
