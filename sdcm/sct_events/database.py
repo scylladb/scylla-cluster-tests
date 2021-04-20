@@ -29,6 +29,7 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     UNKNOWN_VERB: Type[LogEventProtocol]
     CLIENT_DISCONNECT: Type[LogEventProtocol]
     SEMAPHORE_TIME_OUT: Type[LogEventProtocol]
+    RESTARTED_DUE_TO_TIME_OUT: Type[LogEventProtocol]
     EMPTY_NESTED_EXCEPTION: Type[LogEventProtocol]
     DATABASE_ERROR: Type[LogEventProtocol]
     BAD_ALLOC: Type[LogEventProtocol]
@@ -70,6 +71,8 @@ DatabaseLogEvent.add_subevent_type("CLIENT_DISCONNECT", severity=Severity.WARNIN
                                    regex=r"\!INFO.*cql_server - exception while processing connection:.*")
 DatabaseLogEvent.add_subevent_type("SEMAPHORE_TIME_OUT", severity=Severity.WARNING,
                                    regex="semaphore_timed_out")
+DatabaseLogEvent.add_subevent_type("RESTARTED_DUE_TO_TIME_OUT", severity=Severity.WARNING,
+                                   regex="scylla-server.service.*State 'stop-sigterm' timed out.*Killing")
 DatabaseLogEvent.add_subevent_type("EMPTY_NESTED_EXCEPTION", severity=Severity.WARNING,
                                    regex=r"cql_server - exception while processing connection: "
                                          r"seastar::nested_exception \(seastar::nested_exception\)$")
@@ -108,6 +111,7 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.UNKNOWN_VERB(),
     DatabaseLogEvent.CLIENT_DISCONNECT(),
     DatabaseLogEvent.SEMAPHORE_TIME_OUT(),
+    DatabaseLogEvent.RESTARTED_DUE_TO_TIME_OUT(),
     DatabaseLogEvent.EMPTY_NESTED_EXCEPTION(),
     DatabaseLogEvent.DATABASE_ERROR(),
     DatabaseLogEvent.BAD_ALLOC(),
