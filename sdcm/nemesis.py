@@ -459,22 +459,26 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise UnsupportedNemesis(
                 'Non-system keyspace and table are not found. CorruptThenRepair nemesis can\'t be run')
 
-        # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
-        self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
+        # A workaround for: https://github.com/scylladb/scylla/issues/6155
+        with DbEventsFilter(type='DATABASE_ERROR',
+                            line="Operation timed out for system.paxos - received only 0 responses from 1 CL=ONE",
+                            node=self.target_node):
+            # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
+            self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
 
-        try:
-            # Remove 5 data files
-            for _ in range(5):
-                file_for_destroy = self._choose_file_for_destroy(ks_cfs)
+            try:
+                # Remove 5 data files
+                for _ in range(5):
+                    file_for_destroy = self._choose_file_for_destroy(ks_cfs)
 
-                result = self.target_node.remoter.sudo('rm -f %s' % file_for_destroy)
-                if result.stderr:
-                    raise FilesNotCorrupted('Files were not corrupted. CorruptThenRepair nemesis can\'t be run. '
-                                            'Error: {}'.format(result))
-                self.log.debug('Files {} were destroyed'.format(file_for_destroy))
+                    result = self.target_node.remoter.sudo('rm -f %s' % file_for_destroy)
+                    if result.stderr:
+                        raise FilesNotCorrupted('Files were not corrupted. CorruptThenRepair nemesis can\'t be run. '
+                                                'Error: {}'.format(result))
+                    self.log.debug('Files {} were destroyed'.format(file_for_destroy))
 
-        finally:
-            self.target_node.start_scylla_server(verify_up=True, verify_down=False)
+            finally:
+                self.target_node.start_scylla_server(verify_up=True, verify_down=False)
 
     def disrupt(self):
         raise NotImplementedError('Derived classes must implement disrupt()')
@@ -1963,7 +1967,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # Repairing the first node will result in a best effort repair due to the terminated node,
         # and as a result requires ignoring repair errors
         first_node_to_repair = up_normal_nodes[0]
-        with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+        with DbEventsFilter(type='RUNTIME_ERROR',
                             line="failed to repair",
                             node=first_node_to_repair):
             try:
