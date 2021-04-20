@@ -96,6 +96,7 @@ def call(Map pipelineParams) {
                                                         export SCT_CLUSTER_BACKEND=${params.backend}
                                                         export SCT_REGION_NAME=${pipelineParams.aws_region}
                                                         export SCT_CONFIG_FILES=${pipelineParams.test_config}
+                                                        export SCT_SCYLLA_MGMT_AGENT_REPO=${pipelineParams.mgmt_agent_repo}
                                                         export SCT_EMAIL_RECIPIENTS="${email_recipients}"
                                                         if [[ ! -z "${params.scylla_ami_id}" ]] ; then
                                                             export SCT_AMI_ID_DB_SCYLLA=${params.scylla_ami_id}
