@@ -8,6 +8,7 @@ perfRegressionParallelPipeline(
     test_name: "performance_regression_test.PerformanceRegressionTest",
     test_config: "test-cases/performance/perf-regression-latency-250gb-with-nemesis.yaml",
     sub_tests: ["test_latency_write_with_nemesis", "test_latency_read_with_nemesis", "test_latency_mixed_with_nemesis"],
+    mgmt_agent_repo: "https://s3.amazonaws.com/downloads.scylladb.com/manager/deb/unstable/focal/branch-2.3/latest/scylla-manager-2.3/scylla-manager.list",
 
     timeout: [time: 1600, unit: "MINUTES"]
 )
