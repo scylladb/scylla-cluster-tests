@@ -149,7 +149,7 @@ class CommandLog(BaseLogEntity):  # pylint: disable=too-few-public-methods
     """
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None) -> Optional[str]:
-        if not node.remoter or remote_dst is None:
+        if not node or not node.remoter or remote_dst is None:
             return None
         remote_logfile = LogCollector.collect_log_remotely(node=node,
                                                            cmd=self.cmd,
@@ -821,44 +821,6 @@ class ScyllaLogCollector(LogCollector):
         return super(ScyllaLogCollector, self).collect_logs(local_search_path)
 
 
-class KubernetesLogCollector(LogCollector):
-    """Minikube cluster log collecting
-
-    Collect on each node the logs for Scylla DB cluster
-
-    Extends:
-        LogCollector
-
-    Variables:
-        log_entities {list} -- LogEntities to collect
-        cluster_log_type {str} -- cluster type name
-    """
-    log_entities = [FileLog(name='system.log',
-                            command="sudo journalctl --no-tail --no-pager",
-                            search_locally=True),
-                    FileLog(name='scylla_operator.log', search_locally=True),
-                    FileLog(name='cert_manager.log', search_locally=True),
-                    FileLog(name='scylla_cluster_events.log', search_locally=True),
-                    CommandLog(name='cpu_info',
-                               command='cat /proc/cpuinfo'),
-                    CommandLog(name='mem_info',
-                               command='cat /proc/meminfo'),
-                    CommandLog(name='interrupts',
-                               command='cat /proc/interrupts'),
-                    CommandLog(name='vmstat',
-                               command='cat /proc/vmstat'),
-                    CommandLog(name='coredumps.info',
-                               command='sudo coredumpctl info')
-                    ]
-    cluster_log_type = "kubernetes"
-    cluster_dir_prefix = "k8s-"
-    collect_timeout = 600
-
-    def collect_logs(self, local_search_path=None):
-        self.collect_logs_for_inactive_nodes(local_search_path)
-        return super().collect_logs(local_search_path)
-
-
 class LoaderLogCollector(LogCollector):
     cluster_log_type = "loader-set"
     cluster_dir_prefix = "loader-set"
@@ -1000,6 +962,20 @@ class SCTLogCollector(LogCollector):
         remove_files(self.local_dir)
         remove_files(final_archive)
         return s3_link
+
+
+class KubernetesLogCollector(SCTLogCollector):
+    """Gather K8S logs."""
+    # TODO: gather more logs when available
+    log_entities = [
+        FileLog(name='cert_manager.log', search_locally=True),
+        FileLog(name='scylla_manager.log', search_locally=True),
+        FileLog(name='scylla_operator.log', search_locally=True),
+        FileLog(name='scylla_cluster_events.log', search_locally=True),
+    ]
+    cluster_log_type = "kubernetes"
+    cluster_dir_prefix = "k8s-"
+    collect_timeout = 600
 
 
 class JepsenLogCollector(LogCollector):
