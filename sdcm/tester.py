@@ -2796,13 +2796,19 @@ class ClusterTester(db_stats.TestStatsMixin,
         build_id = f'#{os.environ.get("BUILD_NUMBER")}' if os.environ.get('BUILD_NUMBER', '') else ''
         scylla_version = self.db_cluster.nodes[0].scylla_version_detailed if self.db_cluster else "N/A"
         kernel_version = self.db_cluster.nodes[0].kernel_version if self.db_cluster else "N/A"
-        if backend == "aws":
-            scylla_instance_type = self.params.get('instance_type_db') or "N/A"
-        elif backend == "gce":
-            scylla_instance_type = self.params.get('gce_instance_type_db') or "N/A"
-        else:
-            self.log.error(f"Can't discover instance type for {backend}!")
+
+        if backend in ("aws", "aws-siren", "k8s-eks"):
+            scylla_instance_type = self.params.get("instance_type_db") or "Unknown"
+        elif backend in ("gce", "gce-siren", "k8s-gke"):
+            scylla_instance_type = self.params.get("gce_instance_type_db") or "Unknown"
+        elif backend == "k8s-gce-minikube":
+            scylla_instance_type = self.params.get("gce_instance_type_minikube") or "Unknown"
+        elif backend in ("baremetal", "docker"):
             scylla_instance_type = "N/A"
+        else:
+            self.log.error(f"Don't know how to get instance type for the '{backend}' backend.")
+            scylla_instance_type = "N/A"
+
         job_name = os.environ.get('JOB_NAME').split("/")[-1] if os.environ.get('JOB_NAME') else config_file_name
         nodes_shards = self.all_nodes_scylla_shards()
 
