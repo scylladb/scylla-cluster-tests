@@ -2084,12 +2084,42 @@ def parse_nodetool_listsnapshots(listsnapshots_output: str) -> defaultdict:
 
 
 def convert_metric_to_ms(metric: str) -> float:
-    # Convert metric value to ms and float
+    """
+    Convert metric value to ms and float.
+    Expected values:
+        "8.592961906s"
+        "18.120703ms"
+        "5.963775µs"
+        "9h0m0.024080491s"
+        "1m0.024080491s"
+        "546431"
+        "950µs"
+        "30ms"
+    """
+    def _convert_to_ms(units, value):
+        if not value:
+            return 0
+
+        if units == 'hour':
+            return float(value) * 3600 * 1000
+        elif units == 'min':
+            return float(value) * 60 * 1000
+        elif units == 's':
+            return float(value) * 1000
+        elif units == 'µs':
+            return float(value) / 1000
+        else:
+            return float(value)
+
+    pattern = r"^((?P<hour>\d+)h)?((?P<min>\d+)m)?(?P<sec>\d+\.?(\d+)?)(?P<units>s|ms|µs)?"
     try:
-        if metric.endswith('µs'):
-            metric_converted = float(metric[:-2]) / 1000
-        elif metric.endswith('ms'):
-            metric_converted = float(metric[:-2])
+        found = re.match(pattern, metric)
+        if found:
+            parsed_values = found.groupdict()
+            metric_converted = 0
+            metric_converted += _convert_to_ms('hour', parsed_values['hour'])
+            metric_converted += _convert_to_ms('min', parsed_values['min'])
+            metric_converted += _convert_to_ms(parsed_values['units'], parsed_values['sec'])
         else:
             metric_converted = float(metric)
     except ValueError as ve:

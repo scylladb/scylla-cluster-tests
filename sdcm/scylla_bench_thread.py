@@ -222,7 +222,7 @@ class ScyllaBenchThread:
             if line.startswith('Results'):
                 enable_parse = True
                 continue
-            if line.startswith('Latency:') or ':' not in line:
+            if line.startswith('Latency:') or ':' not in line or 'EOF' in line:
                 continue
             if not enable_parse:
                 continue
