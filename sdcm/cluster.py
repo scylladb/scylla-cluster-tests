@@ -4038,6 +4038,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node.wait_jmx_up(verbose=verbose, timeout=200)
                 return
 
+            self.get_scylla_version()
             if Setup.BACKTRACE_DECODING:
                 node.install_scylla_debuginfo()
 
