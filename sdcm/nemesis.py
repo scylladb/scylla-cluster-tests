@@ -2671,7 +2671,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.set_target_node(is_seed=is_seed)
             self.log.info("Next node will be removed %s", self.target_node)
 
-            self.decommission_node(self.target_node)
+            try:
+                InfoEvent(message='StartEvent - ShrinkCluster started decommissioning a node').publish()
+                self.decommission_node(self.target_node)
+                InfoEvent(message='FinishEvent - ShrinkCluster has done decommissioning a node').publish()
+            except Exception as exc:
+                InfoEvent(message=f'FinishEvent - ShrinkCluster failed decommissioning a node with error {str(exc)}') \
+                    .publish()
 
     def disrupt_grow_shrink_cluster(self):
         self._disrupt_grow_shrink_cluster(rack=0)
