@@ -19,7 +19,7 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from sdcm.utils.common import tag_ami
+from sdcm.utils.common import tag_ami, convert_metric_to_ms
 from sdcm.utils.common import download_dir_from_cloud
 
 logging.basicConfig(level=logging.DEBUG)
@@ -29,6 +29,14 @@ class TestUtils(unittest.TestCase):
     def test_tag_ami_01(self):  # pylint: disable=no-self-use
         tag_ami(ami_id='ami-0876bfff890e17a06',
                 tags_dict={'JOB_longevity-multi-keyspaces-60h': 'PASSED'}, region_name='eu-west-1')
+
+    def test_scylla_bench_metrics_conversion(self):
+        metrics = {"4ms": 4.0, "950µs": 0.95, "30ms": 30.0, "8.592961906s": 8592.961905999999,
+                   "18.120703ms": 18.120703, "5.963775µs": 0.005963775, "9h0m0.024080491s": 32400024.080491,
+                   "1m0.024080491s": 60024.080491, "546431": 546431.0}
+        for metric, converted in metrics.items():
+            actual = convert_metric_to_ms(metric)
+            assert actual == converted, f"Expected {converted}, got {actual}"
 
 
 class TestDownloadDir(unittest.TestCase):
