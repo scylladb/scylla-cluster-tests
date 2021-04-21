@@ -1,17 +1,17 @@
-test_duration: 40
-stress_cmd: ["cassandra-stress write cl=QUORUM duration=30m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5"
+test_duration: 240
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5"
              ]
 
-n_db_nodes: 3
-n_loaders: 1
+n_db_nodes: 6
+n_loaders: 2
 n_monitor_nodes: 1
 
-instance_type_db: 'i3.2xlarge'
+instance_type_db: 'i3.4xlarge'
 gce_instance_type_db: 'n1-highmem-16'
 gce_instance_type_loader: 'e2-standard-4'
 scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.3.repo'
 
-nemesis_class_name: 'GrowShrinkClusterNemesis'
+nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '111'
 nemesis_interval: 2
 ssh_transport: 'libssh2'
