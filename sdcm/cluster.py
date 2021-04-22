@@ -1722,14 +1722,15 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         for user in LDAP_USERS:
             # Cannot create passwords with SaslauthdAuthenticator
             self.run_cqlsh(f'CREATE ROLE \'{user}\' WITH login=true')
-        result = self.remoter.run("grep -o '^authenticator: .*' /etc/scylla/scylla.yaml")
-        if 'com.scylladb.auth.SaslauthdAuthenticator' in result.stdout:
-            opposite_auth = 'PasswordAuthenticator'
-            update_authenticator([self], opposite_auth)
+        orig_auth = None
+        with self.remote_scylla_yaml() as scylla_yml:
+            if scylla_yml.get('authenticator') == 'com.scylladb.auth.SaslauthdAuthenticator':
+                orig_auth = 'com.scylladb.auth.SaslauthdAuthenticator'
+                opposite_auth = 'PasswordAuthenticator'
+                update_authenticator([self], opposite_auth)
         # First LDAP_USERS will be used to alter system tables, so change it to superuser.
         self.run_cqlsh(f'ALTER ROLE \'{LDAP_USERS[0]}\' with SUPERUSER=true and password=\'{LDAP_PASSWORD}\'')
-        if 'com.scylladb.auth.SaslauthdAuthenticator' in result.stdout:
-            orig_auth = 'com.scylladb.auth.SaslauthdAuthenticator'
+        if orig_auth:
             update_authenticator([self], orig_auth)
 
     # pylint: disable=invalid-name,too-many-arguments,too-many-locals,too-many-branches,too-many-statements
