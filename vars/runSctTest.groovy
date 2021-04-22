@@ -39,9 +39,7 @@ def call(Map params, String region){
         export SCT_SCYLLA_MGMT_AGENT_VERSION=${params.scylla_mgmt_agent_version}
     fi
 
-    if [[ "${params.backend ? params.backend : ''}" == *"k8s"* ]] ; then
-        echo "Kubernetes backend can have empty scylla version"
-    elif [[ -n "${params.scylla_ami_id ? params.scylla_ami_id : ''}" ]] ; then
+    if [[ -n "${params.scylla_ami_id ? params.scylla_ami_id : ''}" ]] ; then
         export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
     elif [[ -n "${params.gce_image_db ? params.gce_image_db : ''}" ]] ; then
         export SCT_GCE_IMAGE_DB="${params.gce_image_db}"
@@ -49,6 +47,8 @@ def call(Map params, String region){
         export SCT_SCYLLA_VERSION="${params.scylla_version}"
     elif [[ -n "${params.scylla_repo ? params.scylla_repo : ''}" ]] ; then
         export SCT_SCYLLA_REPO="${params.scylla_repo}"
+    elif [[ "${params.backend ? params.backend : ''}" == *"k8s"* ]] ; then
+        echo "Kubernetes backend can have empty scylla version. It will be taken from defaults of the scylla helm chart"
     else
         echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO | SCT_GCE_IMAGE_DB"
         exit 1
