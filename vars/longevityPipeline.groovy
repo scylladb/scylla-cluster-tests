@@ -38,6 +38,7 @@ def call(Map pipelineParams) {
                    name: 'update_db_packages')
             string(defaultValue: '', description: '', name: 'scylla_version')
             string(defaultValue: '', description: '', name: 'scylla_repo')
+            string(defaultValue: '', description: '', name: 'scylla_mgmt_agent_version')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'spot|on_demand|spot_fleet',
                    name: 'provision_type')
@@ -79,11 +80,11 @@ def call(Map pipelineParams) {
                    description: 'Name of the test to run',
                    name: 'test_name')
 
-            string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_helm_repo', '')}",
+            string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_helm_repo', 'https://storage.googleapis.com/scylla-operator-charts/latest')}",
                    description: 'Scylla Operator helm repo',
                    name: 'k8s_scylla_operator_helm_repo')
 
-            string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_chart_version', '')}",
+            string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_chart_version', 'latest')}",
                    description: 'Scylla Operator helm chart version',
                    name: 'k8s_scylla_operator_chart_version')
 
@@ -98,6 +99,22 @@ def call(Map pipelineParams) {
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
         stages {
+            stage("Preparation") {
+                // NOTE: this stage is a workaround for the following Jenkins bug:
+                // https://issues.jenkins-ci.org/browse/JENKINS-41929
+                when { expression { env.BUILD_NUMBER == '1' } }
+                steps {
+                    script {
+                        if (currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause') != null) {
+                            currentBuild.description = ('Aborted build#1 not having parameters loaded. \n'
+                              + 'Build#2 is ready to run')
+                            currentBuild.result = 'ABORTED'
+
+                            error('Abort build#1 which only loads params')
+                        }
+                    }
+                }
+            }
             stage('Checkout') {
                 steps {
                     script {
