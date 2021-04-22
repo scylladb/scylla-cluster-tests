@@ -488,15 +488,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         self._set_current_disruption('SwitchBetweenPasswordAuthAndSaslauthdAuth %s' % self.target_node)
         result = self.target_node.remoter.run("grep -o '^authenticator: .*' /etc/scylla/scylla.yaml")
-        if 'com.scylladb.auth.SaslauthdAuthenticator' in result.stdout:
-            orig_auth = 'com.scylladb.auth.SaslauthdAuthenticator'
-            opposite_auth = 'PasswordAuthenticator'
-        elif 'PasswordAuthenticator' in result.stdout:
-            orig_auth = 'PasswordAuthenticator'
-            opposite_auth = 'com.scylladb.auth.SaslauthdAuthenticator'
-        else:
-            raise UnsupportedNemesis(
-                'This nemesis only supports to switch between SaslauthdAuthenticator and PasswordAuthenticator')
+        with self.target_node.remote_scylla_yaml() as scylla_yml:
+            orig_auth = scylla_yml.get('authenticator')
+            if orig_auth == 'com.scylladb.auth.SaslauthdAuthenticator':
+                opposite_auth = 'PasswordAuthenticator'
+            elif orig_auth == 'PasswordAuthenticator':
+                opposite_auth = 'com.scylladb.auth.SaslauthdAuthenticator'
+            else:
+                raise UnsupportedNemesis(
+                    'This nemesis only supports to switch between SaslauthdAuthenticator and PasswordAuthenticator')
         if self.cluster.params.get('prepare_saslauthd'):
             update_authenticator(self.cluster.nodes, opposite_auth)
             try:
