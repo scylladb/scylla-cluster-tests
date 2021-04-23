@@ -85,17 +85,6 @@ class ScyllaOperatorLogEvent(LogEvent):
         return self
 
 
-class ScyllaOperatorRestartEvent(SctEvent):
-    def __init__(self, restart_count):
-        super().__init__(severity=Severity.ERROR)
-
-        self.restart_count = restart_count
-
-    @property
-    def msgfmt(self):
-        return super().msgfmt + ": Scylla Operator has been restarted, restart_count={0.restart_count}"
-
-
 ScyllaOperatorLogEvent.add_subevent_type(
     "REAPPLY", severity=Severity.WARNING,
     regex="please apply your changes to the latest version and try again")
@@ -118,4 +107,4 @@ SCYLLA_OPERATOR_EVENT_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex, re.IGNORECASE), event) for event in SCYLLA_OPERATOR_EVENTS]
 
 
-__all__ = ("ScyllaOperatorLogEvent", "ScyllaOperatorRestartEvent", "SCYLLA_OPERATOR_EVENT_PATTERNS")
+__all__ = ("ScyllaOperatorLogEvent", "SCYLLA_OPERATOR_EVENT_PATTERNS")

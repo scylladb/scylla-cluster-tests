@@ -16,7 +16,7 @@ import re
 import unittest
 
 from sdcm.sct_events.base import LogEvent
-from sdcm.sct_events.operator import ScyllaOperatorLogEvent, ScyllaOperatorRestartEvent
+from sdcm.sct_events.operator import ScyllaOperatorLogEvent
 
 
 class TestOperatorEvents(unittest.TestCase):
@@ -67,12 +67,3 @@ class TestOperatorEvents(unittest.TestCase):
             f"line_number=0 node=N/A\n{log_record} None None: None, None",
             str(event),
         )
-
-    def test_scylla_operator_restart_event(self):
-        event = ScyllaOperatorRestartEvent(restart_count=10)
-        self.assertEqual(
-            str(event),
-            "(ScyllaOperatorRestartEvent Severity.ERROR): "
-            "Scylla Operator has been restarted, restart_count=10",
-        )
-        self.assertEqual(event, pickle.loads(pickle.dumps(event)))
