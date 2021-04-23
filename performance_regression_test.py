@@ -430,17 +430,10 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         2. Run a read workload
         """
 
-        base_cmd_w = self.params.get('prepare_write_cmd')
         base_cmd_r = self.params.get('stress_cmd_r')
-        # create new document in ES with doc_id = test_id + timestamp
-        # allow to correctly save results for future compare
-        self.create_test_stats(sub_type='write-prepare', doc_id_with_timestamp=True)
         self.run_fstrim_on_all_db_nodes()
         # run a write workload
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-',
-                                              stats_aggregate_cmds=False)
-        self.get_stress_results(queue=stress_queue, store_results=False)
-        self.update_test_details()
+        self.preload_data()
 
         # create new document in ES with doc_id = test_id + timestamp
         # allow to correctly save results for future compare
@@ -462,18 +455,10 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         2. Run a mixed workload
         """
 
-        base_cmd_w = self.params.get('prepare_write_cmd')
         base_cmd_m = self.params.get('stress_cmd_m')
-        # create new document in ES with doc_id = test_id + timestamp
-        # allow to correctly save results for future compare
-        self.create_test_stats(sub_type='write-prepare', doc_id_with_timestamp=True)
         self.run_fstrim_on_all_db_nodes()
         # run a write workload as a preparation
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=2, prefix='preload-',
-                                              stats_aggregate_cmds=False)
-        self.get_stress_results(queue=stress_queue, store_results=False)
-        self.update_test_details()
-
+        self.preload_data()
         # run a mixed workload
         # create new document in ES with doc_id = test_id + timestamp
         # allow to correctly save results for future compare
