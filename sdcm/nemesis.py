@@ -3883,7 +3883,7 @@ class ScyllaOperatorBasicOperationsMonkey(Nemesis):
             'disrupt_grow_shrink_new_rack',
             'disrupt_stop_start_scylla_server',
             'disrupt_terminate_and_replace_node_kubernetes',
-            'disrupt_terminate_and_recover_node_kubernetes',
+            'disrupt_terminate_decommission_add_node_kubernetes',
             'disrupt_replace_node_kubernetes',
             'disrupt_mgmt_repair_cli',
             'disrupt_mgmt_backup_specific_keyspaces',
