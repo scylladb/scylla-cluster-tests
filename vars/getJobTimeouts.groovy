@@ -29,7 +29,7 @@ List<Integer> call(Map params, String region){
     Integer testStartupTimeout = 20
     Integer testTeardownTimeout = 40
     Integer collectLogsTimeout = 70
-    Integer resourceCleanupTimeout = 15
+    Integer resourceCleanupTimeout = 30
     Integer sendEmailTimeout = 5
     Integer testRunTimeout = testStartupTimeout + testDuration + testTeardownTimeout
     Integer runnerTimeout = testRunTimeout + collectLogsTimeout + resourceCleanupTimeout + sendEmailTimeout
