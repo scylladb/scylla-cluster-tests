@@ -20,7 +20,10 @@ from datetime import datetime
 
 from sdcm.utils.file import File
 from sdcm.utils.decorators import timeout
-from sdcm.sct_events.operator import ScyllaOperatorLogEvent, ScyllaOperatorRestartEvent, SCYLLA_OPERATOR_EVENT_PATTERNS
+from sdcm.sct_events.operator import (
+    ScyllaOperatorLogEvent,
+    SCYLLA_OPERATOR_EVENT_PATTERNS,
+)
 
 
 class ScyllaOperatorLogMonitoring(threading.Thread):
@@ -60,43 +63,6 @@ class ScyllaOperatorLogMonitoring(threading.Thread):
                 continue
             if event_to_log := event_to_log.load_from_json_string(log_record):
                 event_to_log.publish()
-
-    def stop(self):
-        self.termination_event.set()
-
-
-class ScyllaOperatorStatusMonitoring(threading.Thread):
-    status_check_period = 10
-    log = logging.getLogger('ScyllaOperatorStatusMonitoring')
-
-    def __init__(self, kluster):
-        self.termination_event = threading.Event()
-        self.kluster = kluster
-        self.last_restart_count = 0
-        super().__init__(daemon=True)
-
-    def run(self):
-        while not self.termination_event.wait(self.status_check_period):
-            self.check_pod_status()
-        self.check_pod_status()
-
-    def check_pod_status(self):
-        restart_happened = False
-        try:
-            status = self.kluster.operator_pod_status
-            if status is None:
-                return
-            current_restart_count = status.container_statuses[0].restart_count
-            if self.last_restart_count != current_restart_count:
-                restart_happened = True
-                self.last_restart_count = current_restart_count
-        except Exception as exc:
-            self.log.warning(f'Failed to get scylla operator status, due to the: {str(exc)}')
-        if restart_happened:
-            try:
-                ScyllaOperatorRestartEvent(self.last_restart_count).publish()
-            except Exception as exc:
-                self.log.warning(f'Failed to publish event: {str(exc)}')
 
     def stop(self):
         self.termination_event.set()

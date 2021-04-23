@@ -72,7 +72,6 @@ ScyllaOperatorLogEvent: ERROR
 ScyllaOperatorLogEvent.REAPPLY: WARNING
 ScyllaOperatorLogEvent.TLS_HANDSHAKE_ERROR: WARNING
 ScyllaOperatorLogEvent.OPERATOR_STARTED_INFO: NORMAL
-ScyllaOperatorRestartEvent: ERROR
 StartupTestEvent: NORMAL
 TestTimeoutEvent: CRITICAL
 TestFrameworkEvent: ERROR

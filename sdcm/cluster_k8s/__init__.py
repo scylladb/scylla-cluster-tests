@@ -74,7 +74,7 @@ from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogge
     KubectlClusterEventsLogger, ScyllaManagerLogger
 from sdcm.utils.version_utils import get_git_tag_from_helm_chart_version
 from sdcm.wait import wait_for
-from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring, ScyllaOperatorStatusMonitoring
+from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring
 
 
 ANY_KUBERNETES_RESOURCE = Union[Resource, ResourceField, ResourceInstance, ResourceList, Subresource]
@@ -252,7 +252,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
     _scylla_cluster_events_thread: Optional[KubectlClusterEventsLogger] = None
 
     _scylla_operator_log_monitor_thread: Optional[ScyllaOperatorLogMonitoring] = None
-    _scylla_operator_status_monitor_thread: Optional[ScyllaOperatorStatusMonitoring] = None
     _token_update_thread: Optional[TokenUpdateThread] = None
     pools: Dict[str, CloudK8sNodePool]
 
@@ -469,8 +468,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         self._scylla_operator_journal_thread.start()
         self._scylla_operator_log_monitor_thread = ScyllaOperatorLogMonitoring(self)
         self._scylla_operator_log_monitor_thread.start()
-        self._scylla_operator_status_monitor_thread = ScyllaOperatorStatusMonitoring(self)
-        self._scylla_operator_status_monitor_thread.start()
 
     def start_scylla_cluster_events_thread(self) -> None:
         self._scylla_cluster_events_thread = KubectlClusterEventsLogger(self, self.scylla_cluster_event_log)
@@ -793,8 +790,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             self._cert_manager_journal_thread.stop(timeout)
         if self._scylla_operator_log_monitor_thread:
             self._scylla_operator_log_monitor_thread.stop()
-        if self._scylla_operator_status_monitor_thread:
-            self._scylla_operator_status_monitor_thread.stop()
         if self._scylla_operator_journal_thread:
             self._scylla_operator_journal_thread.stop(timeout)
         if self._scylla_cluster_events_thread:
