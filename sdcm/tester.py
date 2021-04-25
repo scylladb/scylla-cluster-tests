@@ -287,15 +287,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             Setup.configure_rsyslog(self.localhost, enable_ngrok=False)
 
         self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
+        if (self.params.get("use_ldap_authorization") or self.params.get("prepare_saslauthd") or self.params.get(
+                "use_saslauthd_authenticator")) and not self.params.get("use_ms_ad_ldap"):
+            self.configure_ldap(node=self.localhost, use_ssl=False)
         if self.params.get("use_ms_ad_ldap"):
             ldap_ms_ad_credentials = KeyStore().get_ldap_ms_ad_credentials()
             Setup.LDAP_ADDRESS = ldap_ms_ad_credentials["server_address"]
-        elif self.params.get("use_ldap_authorization") or self.params.get("prepare_saslauthd") or self.params.get(
-                "use_saslauthd_authenticator"):
-            self.configure_ldap(node=self.localhost, use_ssl=False)
 
         ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
-        if self.params.get("use_ldap_authorization"):
+        if self.params.get("use_ldap_authorization") and not self.params.get("use_ms_ad_ldap"):
             self.params['are_ldap_users_on_scylla'] = False
             ldap_role = LDAP_ROLE
             ldap_users = LDAP_USERS.copy()
@@ -307,7 +307,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                           {'uniqueMember': unique_members_list, 'userPassword': user_password}]
             self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
                                           user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
-        if self.params.get("prepare_saslauthd") or self.params.get("use_saslauthd_authenticator"):
+        if (self.params.get("prepare_saslauthd") or self.params.get("use_saslauthd_authenticator")) and not self.params.get("use_ms_ad_ldap"):
             ldap_users = LDAP_USERS.copy()
             ldap_address = list(Setup.LDAP_ADDRESS).copy()
             ldap_entry = [f'ou=Person,{LDAP_BASE_OBJECT}',

@@ -25,10 +25,13 @@ LDAP_SSH_TUNNEL_LOCAL_PORT = 5001
 LDAP_SSH_TUNNEL_SSL_PORT = 5002
 ORGANISATION = 'ScyllaDB'
 LDAP_DOMAIN = 'scylla-qa.com'
-LDAP_PASSWORD = 'scylla'
+# Ths suffix is added to default cassandra password to make it stronger, otherwise MS-AD doesn't allow it
+DEFAULT_PWD_SUFFIX = '-0'
+LDAP_PASSWORD = 'scylla-0'
 LDAP_ROLE = 'scylla_ldap'
 LDAP_USERS = ['scylla-qa', 'dummy-user']
 LDAP_BASE_OBJECT = (lambda l: ','.join([f'dc={part}' for part in l.split('.')]))(LDAP_DOMAIN)
+SASLAUTHD_AUTHENTICATOR = 'com.scylladb.auth.SaslauthdAuthenticator'
 
 
 class LdapServerNotReady(Exception):

@@ -6,4 +6,3 @@ authenticator_user: 'cassandra'
 authenticator_password: 'cassandra'
 
 authorizer: 'CassandraAuthorizer'
-#use_ldap_authorization: true
