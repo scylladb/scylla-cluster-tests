@@ -64,6 +64,8 @@ KclStressEvent.start: NORMAL
 KclStressEvent.finish: NORMAL
 CassandraStressLogEvent.IOException: ERROR
 CassandraStressLogEvent.ConsistencyError: ERROR
+CassandraStressLogEvent.OperationOnKey: CRITICAL
+CassandraStressLogEvent.TooManyHintsInFlight: CRITICAL
 ScyllaBenchLogEvent.ConsistencyError: ERROR
 GeminiLogEvent.geminievent: CRITICAL
 PrometheusAlertManagerEvent.start: WARNING

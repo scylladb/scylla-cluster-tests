@@ -140,7 +140,15 @@ KclStressEvent.add_stress_subevents(failure=Severity.ERROR)
 class CassandraStressLogEvent(LogEvent, abstract=True):
     IOException: Type[LogEventProtocol]
     ConsistencyError: Type[LogEventProtocol]
+    OperationOnKey: Type[LogEventProtocol]
+    TooManyHintsInFlight: Type[LogEventProtocol]
 
+
+# Task: https://trello.com/c/kGply3WI/2718-stress-failure-should-stop-the-test-immediately
+CassandraStressLogEvent.add_subevent_type("OperationOnKey", severity=Severity.CRITICAL,
+                                          regex=r"Operation x10 on key\(s\) \[")
+CassandraStressLogEvent.add_subevent_type("TooManyHintsInFlight", severity=Severity.CRITICAL,
+                                          regex="Too many hints in flight")
 
 CassandraStressLogEvent.add_subevent_type("IOException", severity=Severity.ERROR,
                                           regex=r"java\.io\.IOException")
@@ -151,6 +159,8 @@ CassandraStressLogEvent.add_subevent_type("ConsistencyError", severity=Severity.
 CS_ERROR_EVENTS = (
     CassandraStressLogEvent.IOException(),
     CassandraStressLogEvent.ConsistencyError(),
+    CassandraStressLogEvent.OperationOnKey(),
+    CassandraStressLogEvent.TooManyHintsInFlight(),
 )
 CS_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex), event) for event in CS_ERROR_EVENTS]

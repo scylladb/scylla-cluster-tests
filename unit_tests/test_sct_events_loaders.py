@@ -249,6 +249,8 @@ class TestCassandraStressLogEvent(unittest.TestCase):
     def test_known_cs_errors(self):
         self.assertTrue(issubclass(CassandraStressLogEvent.IOException, CassandraStressLogEvent))
         self.assertTrue(issubclass(CassandraStressLogEvent.ConsistencyError, CassandraStressLogEvent))
+        self.assertTrue(issubclass(CassandraStressLogEvent.OperationOnKey, CassandraStressLogEvent))
+        self.assertTrue(issubclass(CassandraStressLogEvent.TooManyHintsInFlight, CassandraStressLogEvent))
 
     def test_cs_error_events_list(self):
         self.assertSetEqual(set(dir(CassandraStressLogEvent)) - set(dir(LogEvent)),
