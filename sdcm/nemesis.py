@@ -37,6 +37,7 @@ from cassandra import ConsistencyLevel
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady
 from sdcm.cluster import NodeStayInClusterAfterDecommission
 from sdcm.mgmt import TaskStatus
+from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR
 from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_string, \
     update_certificates, reach_enospc_on_node, clean_enospc_on_node, parse_nodetool_listsnapshots, \
     update_authenticator
@@ -495,10 +496,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         with self.target_node.remote_scylla_yaml() as scylla_yml:
             orig_auth = scylla_yml.get('authenticator')
-            if orig_auth == 'com.scylladb.auth.SaslauthdAuthenticator':
+            if orig_auth == SASLAUTHD_AUTHENTICATOR:
                 opposite_auth = 'PasswordAuthenticator'
             elif orig_auth == 'PasswordAuthenticator':
-                opposite_auth = 'com.scylladb.auth.SaslauthdAuthenticator'
+                opposite_auth = SASLAUTHD_AUTHENTICATOR
             else:
                 raise UnsupportedNemesis(
                     'This nemesis only supports to switch between SaslauthdAuthenticator and PasswordAuthenticator')
