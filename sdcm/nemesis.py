@@ -805,12 +805,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self._disrupt_terminate_and_recover_node_kubernetes(self.target_node, node_terminate_method_name)
 
     def disrupt_terminate_and_replace_node_kubernetes(self):  # pylint: disable=invalid-name
-        if not self._is_it_on_kubernetes():
-            raise UnsupportedNemesis('OperatorNodeTerminateAndReplace is supported only on kubernetes')
         for node_terminate_method_name in self._get_kubernetes_node_break_methods():
             self.set_target_node()
             self._set_current_disruption(
                 f'OperatorNodeTerminateAndReplace ({node_terminate_method_name}) {self.target_node}')
+            if not self._is_it_on_kubernetes():
+                raise UnsupportedNemesis('OperatorNodeTerminateAndReplace is supported only on kubernetes')
+
             self._disrupt_terminate_and_replace_node_kubernetes(self.target_node, node_terminate_method_name)
 
     def disrupt_terminate_decommission_add_node_kubernetes(self):  # pylint: disable=invalid-name
