@@ -64,7 +64,7 @@ from sdcm.utils.aws_utils import EksClusterCleanupMixin
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
 from sdcm import wait
-from sdcm.utils.ldap import LDAP_PASSWORD, LDAP_USERS
+from sdcm.utils.ldap import LDAP_PASSWORD, LDAP_USERS, DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR
 
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
@@ -2295,10 +2295,12 @@ def update_authenticator(nodes, authenticator='AllowAllAuthenticator', restart=T
         with node.remote_scylla_yaml() as scylla_yml:
             scylla_yml['authenticator'] = authenticator
         if restart:
-            if authenticator == 'com.scylladb.auth.SaslauthdAuthenticator':
+            if authenticator == SASLAUTHD_AUTHENTICATOR:
                 node.run_cqlsh(f'ALTER ROLE \'{LDAP_USERS[0]}\' with password=\'{LDAP_PASSWORD}\'')
-            node.use_saslauthd_authenticator = authenticator == 'com.scylladb.auth.SaslauthdAuthenticator'
-            node.parent_cluster.params['are_ldap_users_on_scylla'] = node.use_saslauthd_authenticator
+                node.parent_cluster.use_saslauthd_authenticator = True
+            else:
+                node.parent_cluster.use_saslauthd_authenticator = False
+            node.parent_cluster.params['are_ldap_users_on_scylla'] = node.parent_cluster.use_saslauthd_authenticator
             node.restart_scylla_server()
             node.wait_db_up()
 
@@ -2322,10 +2324,23 @@ def prepare_and_start_saslauthd_service(node):
             sudo touch /etc/saslauthd.conf
             sudo adduser scylla sasl  # to avoid the permission issue of unit socket
         """)
+    node.wait_apt_not_running()
     node.remoter.run('bash -cxe "%s"' % setup_script)
-    conf = node.get_saslauthd_config()
+    if node.parent_cluster.params.get('use_ms_ad_ldap'):
+        conf = node.get_saslauthd_ms_ad_config()
+    else:
+        conf = node.get_saslauthd_config()
     for key in conf.keys():
         node.remoter.run(f'echo "{key}: {conf[key]}" | sudo tee -a /etc/saslauthd.conf')
     with node.remote_scylla_yaml() as scylla_yml:
         scylla_yml['saslauthd_socket_path'] = '/run/saslauthd/mux'
     node.remoter.sudo('systemctl restart saslauthd')
+
+
+def change_default_password(node, user='cassandra', password='cassandra'):
+    """
+    Default password of Role `cassandra` is same as username, MS-AD doesn't allow the weak password.
+    Here we change password of `cassandra`, then the cassandra user can smoothly work in switching Authenticator.
+    """
+    node.run_cqlsh(f"ALTER ROLE '{user}' with password='{password}{DEFAULT_PWD_SUFFIX}'")
+    node.parent_cluster.added_password_suffix = True
