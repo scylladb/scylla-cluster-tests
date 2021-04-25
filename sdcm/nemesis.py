@@ -2789,10 +2789,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         no coredump, serious db error occur during the heavy load of memory.
         """
         self._set_current_disruption(f'MemoryStress on {self.target_node}')
-        if self.target_node.distro.is_rhel_like():
+        if self.target_node.distro.is_rhel_like:
             self.target_node.install_epel()
             self.target_node.remoter.sudo('yum install -y stress-ng')
-        elif self.target_node.distro.is_ubuntu():
+        elif self.target_node.distro.is_ubuntu:
             self.target_node.remoter.sudo('apt install -y stress-ng')
         else:
             raise UnsupportedNemesis(f"{self.target_node.distro} OS not supported!")
