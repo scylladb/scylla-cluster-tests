@@ -260,7 +260,7 @@ class UpgradeTest(FillDatabaseData):
             node.remoter.run('sudo systemctl daemon-reload')
 
         elif self.upgrade_rollback_mode == 'minor_release':
-            node.remoter.run(r'sudo yum downgrade scylla\*%s -y' % self.orig_ver.split('-')[0])
+            node.remoter.run(r'sudo yum downgrade scylla\*%s-\* -y' % self.orig_ver.split('-')[0])
         else:
             if new_introduced_pkgs:
                 node.remoter.run('sudo yum remove %s -y' % new_introduced_pkgs)
