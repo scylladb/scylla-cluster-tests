@@ -693,22 +693,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         If it fails please consider reporting and fixing issue in scylla-operator repo too
         """
         LOGGER.info("Create and initialize a monitoring cluster")
-        if node_pool:
-            self.deploy_node_pool(node_pool)
-            helm_values = node_pool.helm_affinity_values
-            cpu_limit, memory_limit = node_pool.cpu_and_memory_capacity
-            cpu_limit, memory_limit = cpu_limit - 1, memory_limit - 1
-        else:
-            helm_values = HelmValues()
-            cpu_limit = 2
-            memory_limit = 4
-
-        cpu_limit = convert_cpu_units_to_k8s_value(cpu_limit)
-        memory_limit = convert_memory_units_to_k8s_value(memory_limit)
-
-        helm_values.set('server.resources.limits.cpu', cpu_limit)
-        helm_values.set('server.resources.limits.memory', memory_limit)
-        helm_values.set('nodeExporter.enabled', False)
 
         if scylla_operator_tag in ('nightly', 'latest'):
             scylla_operator_tag = 'master'
@@ -729,16 +713,46 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                 repo='scylladb/scylla-monitoring',
                 tag='scylla-monitoring-3.6.0',
                 dst_dir=scylla_monitoring_dir)
-            LOGGER.info("Install prometheus-community/kube-prometheus-stack helm chart")
+
+            values_filepath = os.path.join(
+                scylla_operator_dir, "examples", "common", "monitoring", "values.yaml")
+            with open(values_filepath, "r") as values_stream:
+                values_data = yaml.safe_load(values_stream)
+            if node_pool:
+                self.deploy_node_pool(node_pool)
+                monitoring_affinity_rules = get_helm_pool_affinity_values(
+                    node_pool.pool_label_name, node_pool.name)
+            else:
+                monitoring_affinity_rules = {}
+
+            helm_values = HelmValues(values_data)
+
+            # Additional values to be set:
+            #   nodeExporter.enabled = False
+            #   alertmanager.alertmanagerSpec.affinity
+            #   prometheusOperator.affinity
+            #   prometheus.prometheusSpec.affinity
+            #   grafana.affinity
+            helm_values.set('nodeExporter.enabled', False)
+            helm_values.set('alertmanager.alertmanagerSpec', monitoring_affinity_rules)
+            helm_values.set('prometheusOperator', monitoring_affinity_rules)
+            helm_values.set('prometheus.prometheusSpec', monitoring_affinity_rules)
+            helm_values.set('grafana', monitoring_affinity_rules)
+            LOGGER.debug(f"Monitoring helm chart values are following: {helm_values.as_dict()}")
+
+            repo_name = "prometheus-community"
+            source_chart_name = f"{repo_name}/kube-prometheus-stack"
+            LOGGER.info(f"Install {source_chart_name} helm chart")
             self.kubectl(f'create namespace {namespace}', ignore_status=True)
-            self.helm('repo add prometheus-community https://prometheus-community.github.io/helm-charts')
+            self.helm(f'repo add {repo_name} https://prometheus-community.github.io/helm-charts')
             self.helm('repo update')
-            self.helm(
-                f'install monitoring prometheus-community/kube-prometheus-stack --create-namespace '
-                f'-f {os.path.join(scylla_operator_dir, "examples", "common", "monitoring", "values.yaml")} ',
+            LOGGER.debug(self.helm_install(
+                target_chart_name="monitoring",
+                source_chart_name=source_chart_name,
+                use_devel=False,
                 values=helm_values,
-                namespace=namespace
-            )
+                namespace=namespace,
+            ))
 
             LOGGER.info("Install scylla-monitoring dashboards and monitoring services for scylla")
             self.apply_file(os.path.join(scylla_operator_dir, "examples", "common", "monitoring",
