@@ -782,6 +782,8 @@ class LoaderLogCollector(LogCollector):
                 search_locally=True),
         FileLog(name='scylla-bench-l*.log',
                 search_locally=True),
+        FileLog(name='kcl-l*.log',
+                search_locally=True),
     ]
 
     def collect_logs(self, local_search_path=None):
