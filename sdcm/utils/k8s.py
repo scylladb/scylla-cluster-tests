@@ -763,6 +763,8 @@ class HelmValues:
             self._data = dict(**kwargs)
 
     def get(self, path):
+        if "[" in path or "]" in path:
+            raise ValueError("List items ref is not supported. Only dict keys ref is allowed")
         current = self._data
         for name in path.split('.'):
             if current is None:
@@ -776,49 +778,25 @@ class HelmValues:
             current = current.get(name, None)
         return current
 
+    def _path_to_dict(self, path, value):
+        keys = path.split(".")
+        if len(keys) > 1:
+            value = self._path_to_dict(".".join(keys[1:]), value)
+        if "[" in keys[0] or "]" in keys[0]:
+            raise ValueError("List items ref is not supported. Only dict keys ref is allowed")
+        return {keys[0]: value}
+
+    def _merge_dicts(self, destination_dict, patch_dict):
+        for k, v in patch_dict.items():
+            if isinstance(v, dict):
+                destination_dict[k] = self._merge_dicts(destination_dict.get(k, {}), v)
+            else:
+                destination_dict[k] = v
+        return destination_dict
+
     def set(self, path, value):
-        current = self._data
-        chain = []
-        types = []
-        for attr in path.split('.'):
-            types.append(dict)
-            if attr[-1] == ']':
-                idx = attr.find('[')
-                chain.extend([attr[0:idx], int(attr[idx + 1:-1])])
-                types.append(list)
-                continue
-            chain.append(attr)
-
-        # last_item = chain.pop()
-        types.pop(0)
-        types.append(None)
-
-        for num, (attr, next_item_type) in enumerate(zip(chain, types)):
-            try:
-                if isinstance(attr, int) and isinstance(current, dict):
-                    raise TypeError()
-                attr_value = current[attr]
-            except (KeyError, IndexError):
-                attr_value = None
-            except TypeError:
-                raise ValueError("Wrong type provided at section")
-
-            if None is attr_value:
-                if next_item_type is None:
-                    attr_value = value
-                else:
-                    attr_value = next_item_type()
-                if type(current) is dict:
-                    current[attr] = attr_value
-                else:
-                    if attr > len(current):
-                        raise ValueError("Can add items to tail of the list only")
-                    elif attr == len(current):
-                        current.append(attr_value)
-                    else:
-                        current[attr] = attr_value
-
-            current = attr_value
+        patch_d = self._path_to_dict(path, value)
+        self._merge_dicts(self._data, patch_d)
 
     def as_dict(self):
         return self._data
