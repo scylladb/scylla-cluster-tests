@@ -489,6 +489,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('SwitchBetweenPasswordAuthAndSaslauthdAuth %s' % self.target_node)
         if not self.cluster.params.get('prepare_saslauthd'):
             raise UnsupportedNemesis("SaslauthdAuthenticator can't work without saslauthd environment")
+        if not self.cluster.nodes[0].is_enterprise:
+            raise UnsupportedNemesis("SaslauthdAuthenticator is only supported by Scylla Enterprise")
 
         with self.target_node.remote_scylla_yaml() as scylla_yml:
             orig_auth = scylla_yml.get('authenticator')
