@@ -4497,7 +4497,7 @@ class BaseLoaderSet():
                           ">> /etc/security/limits.d/20-coredump.conf\"")
         if result.exit_status == 0:
             # Update existing scylla-bench to latest
-            node.remoter.run('go get -u github.com/scylladb/scylla-bench')
+            self.install_scylla_bench(node)
             self.log.debug('Skip loader setup for using a prepared AMI')
             return
 
@@ -4730,6 +4730,7 @@ class BaseLoaderSet():
                 apt-get install -y git
             """))
         node.remoter.sudo(shell_script_cmd("""\
+            rm -rf /usr/local/go
             curl -LO https://storage.googleapis.com/golang/go1.13.linux-amd64.tar.gz
             tar -C /usr/local -xvzf go1.13.linux-amd64.tar.gz
             echo 'export GOPATH=$HOME/go' >> $HOME/.bash_profile
