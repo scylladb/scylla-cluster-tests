@@ -21,8 +21,7 @@ k8s_cert_manager_version: '1.0.3'
 
 # Currently k8s monitoring does not work properly
 # https://trello.com/c/8Hwc0nUB/3061-eks-k8s-monitoring-stack-health-monitoring-fails
-# enable it when issue is fixed
-k8s_deploy_monitoring: false
+k8s_deploy_monitoring: true
 
 k8s_loader_cluster_name: 'sct-loaders'
 

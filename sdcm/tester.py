@@ -1138,7 +1138,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         if self.params.get('k8s_deploy_monitoring'):
             monitor_pool = eks.EksNodePool(
                 name=self.k8s_cluster.MONITORING_POOL_NAME,
-                num_nodes=1,
+                num_nodes=self.params.get("n_monitor_nodes"),
                 instance_type=self.params.get("instance_type_monitor"),
                 role_arn=self.params.get('eks_nodegroup_role_arn'),
                 disk_size=self.params.get('aws_root_disk_size_monitor'),
