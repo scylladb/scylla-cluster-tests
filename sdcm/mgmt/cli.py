@@ -273,7 +273,7 @@ class ManagerTask:
 
     def wait_for_status(self, list_status, check_task_progress=True, timeout=3600, step=120):
         text = "Waiting until task: {} reaches status of: {}".format(self.id, list_status)
-        is_status_reached = wait.wait_for(func=self.is_status_in_list, step=step,
+        is_status_reached = wait.wait_for(func=self.is_status_in_list, step=step, throw_exc=True,
                                           text=text, list_status=list_status, check_task_progress=check_task_progress,
                                           timeout=timeout)
         return is_status_reached
@@ -282,7 +282,7 @@ class ManagerTask:
         text = f"Waiting until task: {self.id} reaches at least {minimum_percentage}% progress"
         is_percentage_reached = wait.wait_for(func=self.has_progress_reached_percentage,
                                               minimum_percentage=minimum_percentage,
-                                              step=step, text=text, timeout=timeout)
+                                              step=step, text=text, timeout=timeout, throw_exc=True)
         return is_percentage_reached
 
     def has_progress_reached_percentage(self, minimum_percentage):
@@ -367,7 +367,7 @@ class BackupTask(ManagerTask):
     def wait_for_uploading_stage(self, timeout=1440, step=10):
         text = "Waiting until backup task: {} starts to upload snapshots".format(self.id)
         is_status_reached = wait.wait_for(func=self.is_task_in_uploading_stage, step=step,
-                                          text=text, timeout=timeout)
+                                          text=text, timeout=timeout, throw_exc=True)
         return is_status_reached
 
 
