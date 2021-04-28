@@ -13,6 +13,7 @@
 
 # pylint: disable=too-many-arguments
 import abc
+import json
 import os
 import time
 import queue
@@ -149,6 +150,12 @@ class PortExposeService:
 
     def deploy(self):
         events = KubernetesOps.watch_events(self.core_v1_api, name=self.name, namespace=self.namespace)
+
+        # Delete old service if it exists from predecessor node with same name
+        self.delete()
+
+        LOGGER.debug(f"Trying to create '{self.name}' K8S service "
+                     f"in the '{self.namespace}' namespace")
         self.core_v1_api.create_namespaced_service(namespace=self.namespace, body=self.service_definition)
         service_hostname = wait_for(self.get_service_hostname, timeout=300, throw_exc=False)
         if not service_hostname:
@@ -165,6 +172,33 @@ class PortExposeService:
         self.service_hostname = service_hostname
         self.service_ip = service_ip
         self.is_deployed = True
+
+    def is_deleted(self):
+        try:
+            self.service
+        except RuntimeError:
+            return True
+        return False
+
+    def delete(self):
+        try:
+            LOGGER.debug(
+                f"Trying to delete '{self.name}' K8S service in the '{self.namespace}' namespace")
+            self.core_v1_api.delete_namespaced_service(
+                name=self.name, namespace=self.namespace, async_req=False)
+        except k8s.client.exceptions.ApiException as e:
+            LOGGER.debug(f"Failed to delete '{self.name}' K8S service "
+                         f"in the '{self.namespace}' namespace, error:\n{str(e)}")
+            if getattr(e, 'body', None) is not None:
+                if isinstance(e.body, str):
+                    e.body = json.loads(e.body)
+                if e.body.get("reason") == "NotFound" or e.body.get("code") == 404:
+                    LOGGER.debug(f"Could not find '{self.name}' K8S service in the "
+                                 f"'{self.namespace}' namespace trying to delete it. Ignoring.")
+                    return
+            raise
+
+        wait_for(self.is_deleted, step=4, timeout=180, throw_exc=True)
 
     @property
     def service(self) -> V1Service:
