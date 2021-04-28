@@ -13,7 +13,7 @@ def call(Map params, RunWrapper currentBuild){
     }
 
     def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
-    def cloud_provider = params.backend.trim().toLowerCase()
+    def cloud_provider = getCloudProviderFromBackend(params.backend)
 
     sh """
     #!/bin/bash
