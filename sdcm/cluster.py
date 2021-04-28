@@ -2350,7 +2350,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             # 1) scylla-manager
             # 2) scylla-manager-client
             # 3) scylla-manager-server
-            self.remoter.run('sudo apt-get dist-upgrade scylla-manager-server scylla-manager-client -y ')
+            self.remoter.sudo('DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade '
+                              '-o Dpkg::Options::="--force-confold" '
+                              '-o Dpkg::Options::="--force-confdef" '
+                              'scylla-manager-server scylla-manager-client -y ')
         time.sleep(3)
         if start_manager_after_upgrade:
             if self.is_docker():
