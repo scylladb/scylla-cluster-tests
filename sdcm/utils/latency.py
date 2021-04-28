@@ -15,10 +15,7 @@ from sdcm.db_stats import PrometheusDBStats
 
 
 def avg(values):
-    if values:
-        return float(format(sum([float(val) for val in values])/len(values), '.1f'))
-    else:
-        return None
+    return sum(values)/len(values)
 
 
 def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
@@ -37,27 +34,18 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
         latency_values_lst = list()
         max_latency_values_lst = list()
         for entry in query_res:
-            lat_value = None
-            max_lat_value = None
             if not entry['values']:
                 continue
-            sequence = [val[-1] for val in entry['values'] if not val[-1].lower() == 'nan']
-            if all([val == sequence[0] for val in sequence]):
+            sequence = [float(val[-1]) for val in entry['values'] if not val[-1].lower() == 'nan']
+            if not sequence or all([val == sequence[0] for val in sequence]):
                 continue
-            if precision == 'max':
-                if sequence:
-                    lat_value = max([float(val) for val in sequence])
-            else:
-                lat_value = avg(sequence)
-                max_lat_value = max(sequence)
-            latency_values_lst.append(lat_value)
-            max_latency_values_lst.append(max_lat_value)
+            latency_values_lst.extend(sequence)
+            max_latency_values_lst.extend(sequence)
 
         if latency_values_lst:
-            res[metric] = format(float(max([float(val) for val in latency_values_lst])), '.2f') if precision == 'max' \
-                else format(float(avg(latency_values_lst)), '.2f')
+            res[metric] = format(avg(latency_values_lst), '.2f')
         if max_latency_values_lst:
-            res[f'{metric} max'] = format(float(max([float(val) for val in max_latency_values_lst])), '.2f')
+            res[f'{metric} max'] = format(max(max_latency_values_lst), '.2f')
 
     if load_type == 'mixed':
         load_type = ['read', 'write']
@@ -84,9 +72,9 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
                 metric = f"Scylla P{precision}_{load} - {node_name}"
                 if not entry['values']:
                     continue
-                sequence = [val[-1] for val in entry['values'] if not val[-1].lower() == 'nan']
+                sequence = [float(val[-1]) for val in entry['values'] if not val[-1].lower() == 'nan']
                 if sequence:
-                    res[metric] = format(float(avg(sequence) / 1000), '.2f')
+                    res[metric] = format(avg(sequence) / 1000, '.2f')
 
     return res
 
@@ -113,7 +101,7 @@ def calculate_latency(latency_results):
         for temp_key, temp_val in temp_dict.items():
             if 'Cycles Average' not in result_dict[key]:
                 result_dict[key]['Cycles Average'] = dict()
-            average = format(float(avg(temp_val)), '.2f')
+            average = format(avg([float(val) for val in temp_val]), '.2f')
             result_dict[key]['Cycles Average'][temp_key] = float(f'{average}')
             if 'Relative to Steady' not in result_dict[key]:
                 result_dict[key]['Relative to Steady'] = dict()
