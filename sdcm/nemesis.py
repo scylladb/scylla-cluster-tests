@@ -60,6 +60,7 @@ from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.cluster_k8s import PodCluster
 from sdcm.cluster_k8s.minikube import MinikubeScyllaPodCluster
+from sdcm.cluster_k8s.eks import EksScyllaPodCluster
 from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
@@ -731,7 +732,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return new_node
 
     def _get_kubernetes_node_break_methods(self):
-        if isinstance(self.cluster, GkeScyllaPodCluster):
+        if isinstance(self.cluster, (GkeScyllaPodCluster, EksScyllaPodCluster)):
             return [
                 'drain_k8s_node',
                 # NOTE: enable below methods when it's support fully implemented
@@ -741,7 +742,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 # 'terminate_k8s_host',
                 # 'terminate_k8s_node',
             ]
-        raise UnsupportedNemesis("Only GkeScyllaPodCluster is supported")
+        raise UnsupportedNemesis("Only GKE and EKS backends support this nemesis")
 
     def _terminate_cluster_node(self, node):
         self.cluster.terminate_node(node)
