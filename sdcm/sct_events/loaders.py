@@ -147,7 +147,9 @@ class CassandraStressLogEvent(LogEvent, abstract=True):
 # Task: https://trello.com/c/kGply3WI/2718-stress-failure-should-stop-the-test-immediately
 CassandraStressLogEvent.add_subevent_type("OperationOnKey", severity=Severity.CRITICAL,
                                           regex=r"Operation x10 on key\(s\) \[")
-CassandraStressLogEvent.add_subevent_type("TooManyHintsInFlight", severity=Severity.CRITICAL,
+# TODO: change TooManyHintsInFlight severity to CRITICAL, when we have more stable hinted handoff
+# TODO: backpressure mechanism.
+CassandraStressLogEvent.add_subevent_type("TooManyHintsInFlight", severity=Severity.ERROR,
                                           regex="Too many hints in flight")
 
 CassandraStressLogEvent.add_subevent_type("IOException", severity=Severity.ERROR,
