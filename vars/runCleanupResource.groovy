@@ -3,7 +3,7 @@
 def call(Map params, String region){
     def aws_region = initAwsRegionParam(params.aws_region, region)
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
-    def cloud_provider = params.backend.trim().toLowerCase()
+    def cloud_provider = getCloudProviderFromBackend(params.backend)
 
     sh """
     #!/bin/bash
