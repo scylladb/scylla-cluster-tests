@@ -65,7 +65,9 @@ KclStressEvent.finish: NORMAL
 CassandraStressLogEvent.IOException: ERROR
 CassandraStressLogEvent.ConsistencyError: ERROR
 CassandraStressLogEvent.OperationOnKey: CRITICAL
-CassandraStressLogEvent.TooManyHintsInFlight: CRITICAL
+# TODO: change TooManyHintsInFlight severity to CRITICAL, when we have more stable hinted handoff backpressure
+# TODO: mechanism.
+CassandraStressLogEvent.TooManyHintsInFlight: ERROR
 ScyllaBenchLogEvent.ConsistencyError: ERROR
 GeminiLogEvent.geminievent: CRITICAL
 PrometheusAlertManagerEvent.start: WARNING
