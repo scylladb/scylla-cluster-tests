@@ -71,7 +71,7 @@ CassandraStressLogEvent.OperationOnKey: CRITICAL
 CassandraStressLogEvent.TooManyHintsInFlight: ERROR
 ScyllaBenchLogEvent.ConsistencyError: ERROR
 GeminiLogEvent.geminievent: CRITICAL
-PrometheusAlertManagerEvent.start: WARNING
+PrometheusAlertManagerEvent.start: CRITICAL
 PrometheusAlertManagerEvent.end: WARNING
 ScyllaOperatorLogEvent: ERROR
 ScyllaOperatorLogEvent.REAPPLY: WARNING

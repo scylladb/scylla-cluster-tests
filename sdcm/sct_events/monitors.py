@@ -10,11 +10,13 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-
+import logging
 from typing import Type
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import SctEvent, SctEventProtocol
+
+LOGGER = logging.getLogger()
 
 
 class PrometheusAlertManagerEvent(SctEvent, abstract=True):
@@ -49,9 +51,10 @@ class PrometheusAlertManagerEvent(SctEvent, abstract=True):
         self.alert_name = self.labels.get("alertname", "")
 
         try:
-            self.severity = Severity[self.labels["sct_severity"]]
-        except KeyError:
-            pass
+            if "sct_severity" in self.labels:
+                self.severity = Severity[self.labels["sct_severity"]]
+        except Exception as e:
+            LOGGER.error(f'PrometheusAlertManagerEvent failed to get severity ({self.labels["sct_severity"]}): {e}')
 
     @property
     def msgfmt(self) -> str:

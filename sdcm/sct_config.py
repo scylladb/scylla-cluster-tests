@@ -269,6 +269,10 @@ class SCTConfiguration(dict):
         dict(name="manager_prometheus_port", env="SCT_MANAGER_PROMETHEUS_PORT", type=int,
              help="Port to be used by the manager to contact Prometheus"),
 
+        dict(name="prometheus_stuck_stress_critical", env="SCT_PROMETHEUS_STUCK_STRESS_CRITICAL", type=boolean,
+             help="Create or not Prometheus event when stress latency P99 is stuck (the same value for more than 5 "
+                  "minutes "),
+
         dict(name="target_scylla_mgmt_server_repo", env="SCT_TARGET_SCYLLA_MGMT_SERVER_REPO", type=str,
              help="Url to the repo of scylla manager version used to upgrade the manager server"),
 

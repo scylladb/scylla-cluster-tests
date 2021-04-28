@@ -5152,6 +5152,22 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                   description: "YCSB verify errors more than 5 errors per min"
                   summary:  "YCSB verify errors more than 5 errors per min"
         """)
+
+        if self.params.get("prometheus_stuck_stress_critical"):
+            conf += dedent("""
+
+                # Alert for stuck stress latency P99
+                  - alert: LatencyP99Stuck
+                    expr: (collectd_cassandra_stress_write_gauge{type="lat_perc_99"} > 0 or collectd_cassandra_stress_read_gauge{type="lat_perc_99"} >0) and (delta(collectd_cassandra_stress_write_gauge{type="lat_perc_99"}[300s]) == 0 OR delta(collectd_cassandra_stress_read_gauge{type="lat_perc_99"}[300s]) == 0)
+                    for: 1s
+                    labels:
+                      severity: "4"
+                      sct_severity: "CRITICAL"
+                    annotations:
+                      description: "Stress latency P99 is stuck for more than 5 minutes"
+                      summary:  "Stress latency P99 is stuck for more than 5 minutes"
+            """)
+
         with tempfile.NamedTemporaryFile("w") as alert_cont_tmp_file:
             alert_cont_tmp_file.write(conf)
             alert_cont_tmp_file.flush()
