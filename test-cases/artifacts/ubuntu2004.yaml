@@ -13,7 +13,7 @@ n_loaders: 0
 n_monitor_nodes: 0
 nemesis_class_name: 'NoOpMonkey'
 scylla_linux_distro: 'ubuntu-focal'
-scylla_repo: 'http://downloads.scylladb.com/deb/unstable/unified/master/latest/scylladb-master/scylla.list'
+scylla_repo: 'http://downloads.scylladb.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list'
 test_duration: 60
 user_prefix: 'artifacts-ubuntu2004'
 system_auth_rf: 1
