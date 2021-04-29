@@ -61,7 +61,7 @@ def parse_cdc_blob_settings(blob: bytes) -> Dict[str, Union[bool, str]]:
         res = re.search(regexp, blob.decode())
         if res:
             for key, value in res.groupdict().items():
-                if value == 'false':
+                if value == 'false' or value == "off":
                     value = False
                 elif value == 'true':
                     value = True
