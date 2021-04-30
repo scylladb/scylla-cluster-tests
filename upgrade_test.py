@@ -13,6 +13,7 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+from pathlib import Path
 import random
 import time
 import re
@@ -310,6 +311,25 @@ class UpgradeTest(FillDatabaseData):
         if "yes" in upgradesstables_supported.stdout:
             upgradesstables_available = True
             self.log.info("calling upgradesstables")
+
+            # NOTE: some 4.3.x and 4.4.x scylla images have nodetool with bug [1]
+            # that is not yet fixed [3] there.
+            # So, in such case we must use '/etc/scylla/cassandra' path for
+            # the 'cassandra-rackdc.properties' file instead of the expected
+            # one - '/etc/scylla' [2].
+            # Example of the error:
+            #     WARN  16:42:29,831 Unable to read cassandra-rackdc.properties
+            #     error: DC or rack not found in snitch properties,
+            #         check your configuration in: cassandra-rackdc.properties
+            #
+            # [1] https://github.com/scylladb/scylla-tools-java/commit/3eca0e35
+            # [2] https://github.com/scylladb/scylla/issues/7930
+            # [3] https://github.com/scylladb/scylla-tools-java/pull/232
+            main_dir, subdir = Path("/etc/scylla"), "cassandra"
+            filename = "cassandra-rackdc.properties"
+            result = node.remoter.run(
+                f"cp {main_dir / filename} {main_dir / subdir / filename}")
+
             node.run_nodetool(sub_cmd="upgradesstables", args="-a")
         if queue:
             queue.put(upgradesstables_available)
