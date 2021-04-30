@@ -2344,7 +2344,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # the entire nemesis.
 
             exit_status = remove_node()
-            assert exit_status == 0, "nodetool removenode command exited with status {}".format(exit_status)
+
+            # if remove node command failed by any reason,
+            # we will remove the terminated node from
+            # dead_nodes_list, so the health validator terminate the job
+            if exit_status != 0:
+                self.log.error(f"nodetool removenode command exited with status {exit_status}")
+                self.log.debug(
+                    f"Remove failed node {node_to_remove} from dead node list {self.cluster.dead_nodes_list}")
+                node = next((n for n in self.cluster.dead_nodes_list if n.ip_address == node_to_remove.ip_address), None)
+                if node:
+                    self.cluster.dead_nodes_list.remove(node)
+                else:
+                    self.log.debug(f"Node {node.name} with ip {node.ip_address} was not found in dead_nodes_list")
 
             # verify node is removed by nodetool status
             removed_node_status = self.cluster.get_node_status_dictionary(
