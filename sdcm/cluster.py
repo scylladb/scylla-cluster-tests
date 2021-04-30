@@ -2755,8 +2755,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return result
         except Exception as details:  # pylint: disable=broad-except
             event_severity_on_failure = Severity.ERROR
-            if warning_event_on_exception and type(details) in warning_event_on_exception or \
-                    Exception in warning_event_on_exception:
+            if warning_event_on_exception and isinstance(details, warning_event_on_exception):
                 event_severity_on_failure = Severity.WARNING
 
             self.log.critical(f"Command '{cmd}' error: {details}")
