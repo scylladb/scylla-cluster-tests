@@ -137,6 +137,19 @@ def call(Map pipelineParams) {
                                         }
                                     }
                                 }
+                                stage("${base_version} -> ${new_version} - Send email with result") {
+                                    catchError(stageResult: 'FAILURE') {
+                                        script {
+                                            wrap([$class: 'BuildUser']) {
+                                                dir('scylla-cluster-tests') {
+                                                    timeout(time: 10, unit: 'MINUTES') {
+                                                        runSendEmail(run_params, currentBuild)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                         parallel tasks
