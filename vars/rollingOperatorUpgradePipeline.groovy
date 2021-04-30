@@ -18,6 +18,9 @@ def call(Map pipelineParams) {
                    name: 'backend')
             choice(choices: ["${pipelineParams.get('aws_region', '')}", 'eu-north-1', 'eu-west-1', 'eu-central-1', 'us-east-1'],
                    name: 'aws_region')
+            string(defaultValue: "a",
+               description: 'Availability zone',
+               name: 'availability_zone')
             string(defaultValue: "${pipelineParams.get('base_versions', '')}",
                    name: 'base_versions')
             string(defaultValue: "${pipelineParams.get('new_version', '')}",
@@ -80,6 +83,21 @@ def call(Map pipelineParams) {
                                     dir('scylla-cluster-tests') {
                                         checkout scm
                                         (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Create SCT Runner') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    timeout(time: 5, unit: 'MINUTES') {
+                                        createSctRunner(params, runnerTimeout , builder.region)
                                     }
                                 }
                             }
