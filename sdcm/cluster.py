@@ -1204,6 +1204,18 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         wait.wait_for(func=self.remoter.is_up, step=10, text=text, timeout=timeout, throw_exc=True)
 
     def is_port_used(self, port: int, service_name: str) -> bool:
+        # Check that "ss" is present and install if absent
+        ss_version_result = self.remoter.run("ss --version || echo ss_not_found")
+        if "ss_not_found" in ss_version_result.stdout:
+            self.log.debug(
+                f"Failed to get 'ss' binary version\n"
+                f"stdout: {ss_version_result.stdout}\n"
+                f"stderr: {ss_version_result.stderr}")
+            if self.is_rhel_like():
+                self.remoter.sudo("yum install -y iproute", ignore_status=True)
+            else:
+                self.remoter.sudo("apt-get install -y iproute2", ignore_status=True)
+
         try:
             # Path to `ss' is /usr/sbin/ss for RHEL-like distros and /bin/ss for Debian-based.  Unfortunately,
             # /usr/sbin is not always in $PATH, so need to set it explicitly.
