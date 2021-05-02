@@ -473,9 +473,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.wait_jmx_up()
         self.cluster.wait_for_nodes_up_and_normal(nodes=[self.target_node])
 
-    def disrupt_rolling_restart_cluster(self, random=False):
+    def disrupt_rolling_restart_cluster(self, random_order=False):
         self._set_current_disruption('RollingRestartCluster %s' % self.target_node)
-        self.cluster.restart_scylla(random=random)
+        self.cluster.restart_scylla(random_order=random_order)
 
     def disrupt_switch_between_PasswordAuthenticator_and_SaslauthdAuthenticator_and_back(self):
         """
@@ -3690,7 +3690,7 @@ class ClusterRollingRestart(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self.disrupt_rolling_restart_cluster(random=False)
+        self.disrupt_rolling_restart_cluster(random_order=False)
 
 
 class RollingRestartConfigChangeInternodeCompression(Nemesis):
@@ -3708,7 +3708,7 @@ class ClusterRollingRestartRandomOrder(Nemesis):
 
     @log_time_elapsed_and_status
     def disrupt(self):
-        self.disrupt_rolling_restart_cluster(random=True)
+        self.disrupt_rolling_restart_cluster(random_order=True)
 
 
 class SwitchBetweenPasswordAuthAndSaslauthdAuth(Nemesis):
