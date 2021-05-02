@@ -15,16 +15,16 @@
 
 from __future__ import annotations
 
-import abc
-import contextlib
-import logging
 import os
-import random as librandom
+import abc
+import json
 import time
 import base64
+import random
 import socket
+import logging
 import traceback
-
+import contextlib
 from copy import deepcopy
 from datetime import datetime
 from difflib import unified_diff
@@ -34,7 +34,6 @@ from textwrap import dedent
 from threading import RLock
 from typing import Optional, Union, List, Dict, Any, ContextManager, Type, Tuple, Callable
 
-import json
 import yaml
 import kubernetes as k8s
 from kubernetes.client import V1Container, V1ResourceRequirements
@@ -1946,14 +1945,14 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
 
         ClusterHealthValidatorEvent.Done(message="Kubernetes monitoring health check finished").publish()
 
-    def restart_scylla(self, nodes=None, random=False):
+    def restart_scylla(self, nodes=None, random_order=False):
         # TODO: add support for the "nodes" param to have compatible logic with
         # other backends.
         self.k8s_cluster.kubectl("rollout restart statefulset", namespace=self.namespace)
         readiness_timeout = self.get_nodes_reboot_timeout(len(self.nodes))
         statefulsets = KubernetesOps.list_statefulsets(self.k8s_cluster, namespace=self.namespace)
-        if random:
-            statefulsets = librandom.sample(statefulsets, len(statefulsets))
+        if random_order:
+            random.shuffle(statefulsets)
         for statefulset in statefulsets:
             self.k8s_cluster.kubectl(
                 f"rollout status statefulset/{statefulset.metadata.name} "

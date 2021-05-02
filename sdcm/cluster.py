@@ -14,13 +14,11 @@
 # pylint: disable=too-many-lines
 from dataclasses import dataclass
 
-import random
-
 import queue
 import getpass
 import logging
 import os
-import random as librandom
+import random
 import re
 import tempfile
 import threading
@@ -3583,7 +3581,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                                            timeout=wait_for_timeout, throw_exc=True)
         else:
             if seeds_selector == 'random':
-                selected_nodes = librandom.sample(self.nodes, seeds_num)
+                selected_nodes = random.sample(self.nodes, seeds_num)
             # seeds_selector == 'first'
             else:
                 selected_nodes = self.nodes[:seeds_num]
@@ -3819,7 +3817,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         :return: dict
         """
         if not verification_node:
-            verification_node = librandom.choice(self.nodes)
+            verification_node = random.choice(self.nodes)
         status = {}
         res = verification_node.run_nodetool('status')
         data_centers = res.stdout.strip().split("Datacenter: ")
@@ -4245,18 +4243,15 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if check_node_health:
             node_list[0].check_node_health()
 
-    def restart_scylla(self, nodes=None, random=False):
-        if nodes:
-            nodes_to_restart = nodes
-        else:
-            nodes_to_restart = self.nodes
-        if random:
-            nodes_to_restart = librandom.sample(nodes_to_restart, len(nodes_to_restart))
-        self.log.info("Going to restart Scylla on %s" % [n.name for n in nodes_to_restart])
+    def restart_scylla(self, nodes=None, random_order=False):
+        nodes_to_restart = (nodes or self.nodes)[:]  # create local copy of nodes list
+        if random_order:
+            random.shuffle(nodes_to_restart)
+        self.log.info("Going to restart Scylla on %s", [n.name for n in nodes_to_restart])
         for node in nodes_to_restart:
             node.stop_scylla(verify_down=True)
             node.start_scylla(verify_up=True)
-            self.log.debug("'{0.name}' restarted.".format(node))
+            self.log.debug("'%s' restarted.", node.name)
 
     def get_seed_selected_by_reflector(self, node=None):
         """
@@ -4324,10 +4319,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         target_node_ip = node.ip_address
         undecommission_nodes = [n for n in self.nodes if n != node]
 
-        verification_node = librandom.choice(undecommission_nodes)
+        verification_node = random.choice(undecommission_nodes)
         node_ip_list = get_node_ip_list(verification_node)
         while verification_node == node or node_ip_list is None:
-            verification_node = librandom.choice(undecommission_nodes)
+            verification_node = random.choice(undecommission_nodes)
             node_ip_list = get_node_ip_list(verification_node)
 
         decommission_done = list(node.follow_system_log(
