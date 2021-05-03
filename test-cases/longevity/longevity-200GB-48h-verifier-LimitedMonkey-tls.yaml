@@ -20,8 +20,6 @@ user_prefix: 'longevity-200gb-48h-verify-limited-tls'
 
 space_node_threshold: 644245094
 
-use_mgmt: true
-
 server_encrypt: true
 client_encrypt: true
 authenticator: 'PasswordAuthenticator'

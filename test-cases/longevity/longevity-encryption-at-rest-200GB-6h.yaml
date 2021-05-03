@@ -19,8 +19,6 @@ user_prefix: 'longevity-encrypt-at-rest-200gb-6h-tls'
 
 space_node_threshold: 644245094
 
-use_mgmt: true
-
 server_encrypt: true
 authenticator: 'PasswordAuthenticator'
 authenticator_user: cassandra

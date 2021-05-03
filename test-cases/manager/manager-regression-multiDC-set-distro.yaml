@@ -18,6 +18,4 @@ user_prefix: manager-regression
 space_node_threshold: 6442
 ip_ssh_connections: 'public'
 
-use_mgmt: true
-
 aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'

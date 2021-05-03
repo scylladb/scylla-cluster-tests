@@ -29,8 +29,6 @@ round_robin: true
 append_scylla_args: '--blocked-reactor-notify-ms 5'
 backtrace_decoding: false
 
-use_mgmt: true
-
 store_perf_results: true
 send_email: true
 email_recipients: ["scylla-perf-results@scylladb.com"]

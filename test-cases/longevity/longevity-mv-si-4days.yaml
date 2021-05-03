@@ -22,7 +22,3 @@ nemesis_interval: 30
 user_prefix: 'longevity-mv-si-4d'
 
 space_node_threshold: 644245
-
-# scylla-manager configuration
-# if running on aws and use_mgmt is true, the monitor image should not contain scylla
-use_mgmt: true

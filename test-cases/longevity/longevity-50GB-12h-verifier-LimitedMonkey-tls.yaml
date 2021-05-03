@@ -19,8 +19,6 @@ user_prefix: 'longevity-50gb-12h'
 
 space_node_threshold: 644245094
 
-use_mgmt: true
-
 server_encrypt: true
 client_encrypt: true
 authenticator: 'PasswordAuthenticator'

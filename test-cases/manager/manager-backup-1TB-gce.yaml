@@ -37,5 +37,4 @@ scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/un
 
 space_node_threshold: 644245094
 
-use_mgmt: true
 nemesis_during_prepare: false

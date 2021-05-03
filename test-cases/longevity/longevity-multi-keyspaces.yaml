@@ -42,8 +42,5 @@ regions_data:
 # disables coredump on bad alloc temporary cause of https://github.com/scylladb/scylla/issues/4951
 append_scylla_args: '--blocked-reactor-notify-ms 500'
 
-# Manager
-use_mgmt: true
-
 # TODO: remove when https://github.com/scylladb/scylla-tools-java/issues/175 resolved
 stop_test_on_stress_failure: false

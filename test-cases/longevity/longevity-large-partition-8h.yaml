@@ -46,7 +46,3 @@ nemesis_interval: 15
 user_prefix: 'longevity-large-partitions-8h'
 
 space_node_threshold: 644245094
-
-# scylla-manager configuration
-# if running on aws and use_mgmt is true, the monitor image should not contain scylla
-use_mgmt: true

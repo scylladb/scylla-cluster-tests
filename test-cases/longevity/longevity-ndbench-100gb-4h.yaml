@@ -24,5 +24,3 @@ nemesis_interval: 5
 
 user_prefix: 'longevity-ndbench-100gb-4h'
 space_node_threshold: 64424
-
-use_mgmt: true
