@@ -24,8 +24,6 @@ append_scylla_args: '--blocked-reactor-notify-ms 500  --abort-on-lsa-bad-alloc 1
 instance_provision: 'on_demand'
 
 
-use_mgmt: true
-
 user_credentials_path: '~/.ssh/scylla-test'
 gce_network: 'qa-vpc'
 gce_image: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'

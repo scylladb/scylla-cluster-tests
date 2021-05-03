@@ -97,7 +97,7 @@ stress_cdc_log_reader_batching_enable: true
 use_legacy_cluster_init: false
 internode_encryption: 'all'
 
-use_mgmt: false
+use_mgmt: true
 manager_prometheus_port: 5090
 scylla_mgmt_pkg: ''
 

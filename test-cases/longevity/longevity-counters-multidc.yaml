@@ -17,8 +17,6 @@ space_node_threshold: 6442
 nemesis_class_name: 'ChaosMonkey'
 nemesis_interval: 15
 
-use_mgmt: true
-
 server_encrypt: true
 internode_encryption: 'dc'
 

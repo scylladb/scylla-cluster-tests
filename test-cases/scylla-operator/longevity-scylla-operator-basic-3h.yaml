@@ -7,7 +7,6 @@ n_monitor_nodes: 1
 
 nemesis_class_name: 'ScyllaOperatorBasicOperationsMonkey'
 nemesis_interval: 5
-use_mgmt: true
 
 user_prefix: 'longevity-scylla-operator-basic-3h'
 

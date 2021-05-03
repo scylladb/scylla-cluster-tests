@@ -24,7 +24,3 @@ space_node_threshold: 644245094
 validate_partitions: true
 table_name: "scylla_bench.test"
 primary_key_column: "pk"
-
-# scylla-manager configuration
-# if running on aws and use_mgmt is true, the monitor image should not contain scylla
-use_mgmt: true

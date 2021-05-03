@@ -18,7 +18,6 @@ user_prefix: manager-upgrade
 space_node_threshold: 6442
 ip_ssh_connections: 'private'
 
-use_mgmt: true
 manager_prometheus_port: 10091
 scylla_mgmt_agent_repo: "http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.1.repo"
 
