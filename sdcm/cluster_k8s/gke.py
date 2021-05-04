@@ -191,10 +191,10 @@ class GkeCluster(KubernetesCluster):
         with self.gcloud as gcloud:
             # NOTE: only static K8S release channel supports disabling of autoupgrade
             gcloud.run(f"container --project {self.gce_project} clusters create {self.short_cluster_name}"
+                       f" --no-enable-basic-auth"
                        f" --zone {self.gce_zone}"
                        f" --cluster-version {self.gke_cluster_version}"
                        f"{' --release-channel ' + self.gke_k8s_release_channel if self.gke_k8s_release_channel else ''}"
-                       f" --username admin"
                        f" --network {self.gce_network}"
                        f" --num-nodes {self.n_nodes}"
                        f" --machine-type {self.gce_instance_type}"
