@@ -790,6 +790,7 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Step6 - Wait till cluster got upgraded')
         self.wait_till_scylla_is_upgraded_on_all_nodes(target_upgrade_version)
         self.log.info('Step7 - Upgrade sstables')
+        self.expected_sstable_format_version = self.get_highest_supported_sstable_version()
         upgradesstables = self.db_cluster.run_func_parallel(func=self.upgradesstables_if_command_available)
         # only check sstable format version if all nodes had 'nodetool upgradesstables' available
         if all(upgradesstables):
