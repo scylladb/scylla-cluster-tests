@@ -883,6 +883,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         new_node = self.replace_node(old_node_ip, rack=self.target_node.rack)
         try:
             if new_node.get_scylla_config_param("enable_repair_based_node_ops") == 'false':
+                time.sleep(300)  # sleep 5 minutes to give some time to the bootstrap will settle before running repair
                 InfoEvent(message='StartEvent - Run repair on new node').publish()
                 self.repair_nodetool_repair(new_node)
                 InfoEvent(message='FinishEvent - Finished running repair on new node').publish()
