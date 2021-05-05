@@ -809,16 +809,23 @@ class UpgradeTest(FillDatabaseData):
         self.db_cluster.upgrade_scylla_cluster(target_upgrade_version)
         self.log.info('Step6 - Wait till cluster got upgraded')
         self.wait_till_scylla_is_upgraded_on_all_nodes(target_upgrade_version)
+
         self.log.info('Step7 - Upgrade sstables')
-        self.expected_sstable_format_version = self.get_highest_supported_sstable_version()
-        upgradesstables = self.db_cluster.run_func_parallel(func=self.upgradesstables_if_command_available)
-        # only check sstable format version if all nodes had 'nodetool upgradesstables' available
-        if all(upgradesstables):
-            self.log.info("Waiting until jmx is up across the board")
-            self.wait_till_jmx_on_all_nodes()
-            self.log.info('Upgrading sstables if new version is available')
-            tables_upgraded = self.db_cluster.run_func_parallel(func=self.wait_for_sstable_upgrade)
-            assert all(tables_upgraded), f"Failed to upgrade the sstable format {tables_upgraded}"
+        if self.params.get('upgrade_sstables'):
+            self.expected_sstable_format_version = self.get_highest_supported_sstable_version()
+            upgradesstables = self.db_cluster.run_func_parallel(
+                func=self.upgradesstables_if_command_available)
+            # only check sstable format version if all nodes had 'nodetool upgradesstables' available
+            if all(upgradesstables):
+                self.log.info("Waiting until jmx is up across the board")
+                self.wait_till_jmx_on_all_nodes()
+                self.log.info('Upgrading sstables if new version is available')
+                tables_upgraded = self.db_cluster.run_func_parallel(
+                    func=self.wait_for_sstable_upgrade)
+                assert all(tables_upgraded), f"Failed to upgrade the sstable format {tables_upgraded}"
+        else:
+            self.log.info("Upgrade of sstables is disabled")
+
         self.log.info('Step8 - Verify data after upgrade')
         self.fill_and_verify_db_data(note='after all nodes upgraded')
         self.log.info('Step9 - Starting c-s read workload')
