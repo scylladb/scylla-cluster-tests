@@ -235,7 +235,7 @@ class Setup:
 
     @classmethod
     def should_keep_alive(cls, node_type: Optional[str]) -> bool:
-        if TEST_DURATION >= 24 * 60:
+        if TEST_DURATION >= 11 * 60:
             return True
         if node_type is None:
             return False
