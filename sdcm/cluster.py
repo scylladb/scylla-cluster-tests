@@ -686,6 +686,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         max_shards = self.cpu_cores
         min_shards = round(self.cpu_cores / 2)
         scylla_shards = random.randrange(start=min_shards, stop=max_shards)
+        # scylla_shards value (will be used as SMP) shouldn't exceed CPUs amount in cpuset.conf
+        if self.cpuset and scylla_shards > self.cpuset:
+            scylla_shards = self.cpuset
+
         self.log.info(f"Random shards: {scylla_shards}")
         return scylla_shards
 
