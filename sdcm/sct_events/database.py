@@ -29,6 +29,7 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     UNKNOWN_VERB: Type[LogEventProtocol]
     CLIENT_DISCONNECT: Type[LogEventProtocol]
     SEMAPHORE_TIME_OUT: Type[LogEventProtocol]
+    SYSTEM_PAXOS_TIMEOUT: Type[LogEventProtocol]
     RESTARTED_DUE_TO_TIME_OUT: Type[LogEventProtocol]
     EMPTY_NESTED_EXCEPTION: Type[LogEventProtocol]
     DATABASE_ERROR: Type[LogEventProtocol]
@@ -71,6 +72,13 @@ DatabaseLogEvent.add_subevent_type("CLIENT_DISCONNECT", severity=Severity.WARNIN
                                    regex=r"\!INFO.*cql_server - exception while processing connection:.*")
 DatabaseLogEvent.add_subevent_type("SEMAPHORE_TIME_OUT", severity=Severity.WARNING,
                                    regex="semaphore_timed_out")
+# This scylla WARNING includes "exception" word and reported as ERROR. To prevent it I add the subevent below and locate
+# it before DATABASE_ERROR. Message example:
+# storage_proxy - Failed to apply mutation from 10.0.2.108#8: exceptions::mutation_write_timeout_exception
+# (Operation timed out for system.paxos - received only 0 responses from 1 CL=ONE.)
+DatabaseLogEvent.add_subevent_type("SYSTEM_PAXOS_TIMEOUT", severity=Severity.WARNING,
+                                   regex=".*mutation_write_*|.*Operation timed out for system.paxos.*|"
+                                         ".*Operation failed for system.paxos.*")
 DatabaseLogEvent.add_subevent_type("RESTARTED_DUE_TO_TIME_OUT", severity=Severity.WARNING,
                                    regex="scylla-server.service.*State 'stop-sigterm' timed out.*Killing")
 DatabaseLogEvent.add_subevent_type("EMPTY_NESTED_EXCEPTION", severity=Severity.WARNING,
@@ -111,6 +119,7 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.UNKNOWN_VERB(),
     DatabaseLogEvent.CLIENT_DISCONNECT(),
     DatabaseLogEvent.SEMAPHORE_TIME_OUT(),
+    DatabaseLogEvent.SYSTEM_PAXOS_TIMEOUT(),
     DatabaseLogEvent.RESTARTED_DUE_TO_TIME_OUT(),
     DatabaseLogEvent.EMPTY_NESTED_EXCEPTION(),
     DatabaseLogEvent.DATABASE_ERROR(),
