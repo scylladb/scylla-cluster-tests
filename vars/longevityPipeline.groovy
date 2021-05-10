@@ -38,6 +38,10 @@ def call(Map pipelineParams) {
                    name: 'update_db_packages')
             string(defaultValue: '', description: '', name: 'scylla_version')
             string(defaultValue: '', description: '', name: 'scylla_repo')
+            string(defaultValue: '', description: '', name: 'scylla_mgmt_agent_version')
+            string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_repo', '')}",
+                   description: 'If empty - the default scylla manager agent repo will be taken',
+                   name: 'scylla_mgmt_agent_repo')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'spot|on_demand|spot_fleet',
                    name: 'provision_type')
