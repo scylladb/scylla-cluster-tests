@@ -94,6 +94,10 @@ def ignore_upgrade_schema_errors():
             line="cql_server - exception while processing connection: seastar::nested_exception "
                  "(seastar::nested_exception)",
         ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.DATABASE_ERROR,
+            line="Can't find a column family with UUID"
+        ))
         yield
 
 
