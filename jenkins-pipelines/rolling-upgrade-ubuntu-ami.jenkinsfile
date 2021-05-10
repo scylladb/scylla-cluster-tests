@@ -5,8 +5,8 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 rollingUpgradePipeline(
     backend: 'aws',
-    base_versions: ['2020.1', '4.3'],
-    linux_distro: 'centos',
+    base_versions: ['2021.1'],
+    linux_distro: 'ubuntu-focal',
 
     test_name: 'upgrade_test.UpgradeTest.test_rolling_upgrade',
     test_config: 'test-cases/upgrades/rolling-upgrade.yaml',
