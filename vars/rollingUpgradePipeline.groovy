@@ -84,6 +84,10 @@ def call(Map pipelineParams) {
 
                                                         export SCT_CLUSTER_BACKEND=${params.backend}
 
+                                                        if [[ -n "${params.aws_region ? params.aws_region : ''}" ]] ; then
+                                                            export SCT_REGION_NAME=${aws_region}
+                                                        fi
+
                                                         export SCT_CONFIG_FILES=${test_config}
                                                         export SCT_SCYLLA_VERSION=${base_version}
                                                         export SCT_NEW_SCYLLA_REPO=${params.new_scylla_repo}
