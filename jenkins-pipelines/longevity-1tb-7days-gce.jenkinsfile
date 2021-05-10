@@ -7,4 +7,5 @@ longevityPipeline(
     backend: 'gce',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: 'test-cases/longevity/longevity-1TB-7days-authorization-and-tls-ssl.yaml',
+    scylla_mgmt_agent_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.3.repo',
 )
