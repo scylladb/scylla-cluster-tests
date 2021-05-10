@@ -39,6 +39,7 @@ def call(Map pipelineParams) {
             string(defaultValue: '', description: '', name: 'scylla_version')
             string(defaultValue: '', description: '', name: 'scylla_repo')
             string(defaultValue: '', description: '', name: 'scylla_mgmt_agent_version')
+            string(defaultValue: '', description: '', name: 'scylla_mgmt_agent_repo')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'spot|on_demand|spot_fleet',
                    name: 'provision_type')
