@@ -30,6 +30,7 @@ from typing import List, Optional, Type, Callable, Tuple, Dict, Set, Union
 from functools import wraps, partial
 from collections import OrderedDict, defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
+from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 
 from invoke import UnexpectedExit  # pylint: disable=import-error
 from cassandra import ConsistencyLevel
@@ -2990,7 +2991,14 @@ def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
             disrupt = args[0].get_disrupt_name()
             del log_info['operation']
 
-            args[0].update_stats(disrupt, status, log_info)
+            try:  # So that the nemesis thread won't stop due to elasticsearch failure
+                args[0].update_stats(disrupt, status, log_info)
+            except ElasticSearchConnectionTimeout as err:
+                args[0].log.warning(f"Connection timed out when attempting to update elasticsearch statistics:\n"
+                                    f"{err}")
+            except Exception as err:
+                args[0].log.warning(f"Unexpected error when attempting to update elasticsearch statistics:\n"
+                                    f"{err}")
             DisruptionEvent(type=disrupt, status=status, **log_info).publish()
             args[0].cluster.check_cluster_health()
             num_nodes_after = len(args[0].cluster.nodes)
