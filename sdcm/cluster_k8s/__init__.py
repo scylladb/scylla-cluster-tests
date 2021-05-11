@@ -89,6 +89,7 @@ DEPLOY_SCYLLA_CLUSTER_DELAY = 15  # seconds
 SCYLLA_OPERATOR_NAMESPACE = "scylla-operator-system"
 SCYLLA_MANAGER_NAMESPACE = "scylla-manager-system"
 SCYLLA_NAMESPACE = "scylla"
+MINIO_NAMESPACE = "minio"
 
 # Resources that are used by container deployed by scylla-operator on scylla nodes
 OPERATOR_CONTAINERS_RESOURCES = {
@@ -521,15 +522,17 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
     def deploy_minio_s3_backend(self):
         LOGGER.info('Deploy minio s3-like backend server')
         self.helm('repo add minio https://helm.min.io/')
-        self.kubectl("create namespace minio")
+
+        self.kubectl(f"create namespace {MINIO_NAMESPACE}")
         self.helm(
             'install --set accessKey=minio_access_key,secretKey=minio_access_key,'
             f'defaultBucket.enabled=true,defaultBucket.name={self.manager_bucket_name},'
             'defaultBucket.policy=public --generate-name minio/minio',
-            namespace='minio')
+            namespace=MINIO_NAMESPACE)
 
         wait_for(lambda: self.minio_ip_address, text='Waiting for minio pod to popup', timeout=120, throw_exc=True)
-        self.kubectl("wait --timeout=10m --all --for=condition=Ready pod", namespace="minio")
+        self.kubectl("wait --timeout=10m --all --for=condition=Ready pod",
+                     timeout=605, namespace=MINIO_NAMESPACE)
 
     def get_scylla_cluster_helm_values(self, cpu_limit, memory_limit, pool_name: str = None) -> HelmValues:
         return HelmValues({
@@ -811,7 +814,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
 
     @property
     def minio_pod(self) -> Resource:
-        for pod in KubernetesOps.list_pods(self, namespace='minio'):
+        for pod in KubernetesOps.list_pods(self, namespace=MINIO_NAMESPACE):
             found = False
             for container in pod.spec.containers:
                 if any([portRec for portRec in container.ports
