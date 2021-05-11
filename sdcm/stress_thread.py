@@ -58,6 +58,7 @@ class CassandraStressEventsPublisher(FileFollowerThread):
                 for pattern, event in CS_ERROR_EVENTS_PATTERNS:
                     if pattern.search(line):
                         event.add_info(node=self.node, line=line, line_number=line_number).publish()
+                        break  # Stop iterating patterns to avoid creating two events for one line of the log
 
 
 class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
