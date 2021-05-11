@@ -3018,6 +3018,9 @@ class FillDatabaseData(ClusterTester):
             # when it is True, not False as it is now.
             # As of now it behaves as "run_condition".
             if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
+                # NOTE: skip condition may change during upgrade, nail down it
+                # to be able to run proper queries on target scylla version
+                self.all_verification_items[i]['skip_condition'] = True
                 for create_table in item['create_tables']:
                     # wait a while before creating index, there is a delay of create table for waiting the schema agreement
                     if 'CREATE INDEX' in create_table.upper():
@@ -3028,6 +3031,8 @@ class FillDatabaseData(ClusterTester):
                         time.sleep(15)
                 for truncate in item['truncates']:
                     truncates.append(truncate)
+            else:
+                self.all_verification_items[i]['skip_condition'] = False
         # Sleep a while after creating test tables to avoid schema disagreement.
         # Refs: https://github.com/scylladb/scylla/issues/5235
         time.sleep(30)
