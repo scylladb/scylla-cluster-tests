@@ -314,10 +314,10 @@
         {% endif %}
         {% if grafana_screenshots %}
             {% if grafana_screenshots[0] %}
-                <li><a href={{ grafana_screenshots[0] }}>Download "Per server metrics nemesis" Grafana Screenshot</a></li>
+                <li><a href={{ grafana_screenshots[0] }}>Download "Overview metrics" Grafana Screenshot</a></li>
             {% endif %}
             {% if grafana_screenshots[1] %}
-                <li><a href={{ grafana_screenshots[1] }}>Download "Overview metrics" Grafana Screenshot</a></li>
+                <li><a href={{ grafana_screenshots[1] }}>Download "Per server metrics nemesis" Grafana Screenshot</a></li>
             {% endif %}
             {% if grafana_screenshots[2] %}
                 <li><a href={{ grafana_screenshots[2] }}>Download "Alternator metrics" Grafana Screenshot</a></li>
@@ -325,10 +325,10 @@
         {% endif %}
         {% if grafana_snapshots %}
             {% if grafana_snapshots[0] %}
-                <li><a href={{ grafana_snapshots[0] }}>Shared "Per server metrics nemesis" Grafana Snapshot</a></li>
+                <li><a href={{ grafana_snapshots[0] }}>Shared "Overview metrics" Grafana Snapshot</a></li>
             {% endif %}
             {% if grafana_snapshots[1] %}
-                <li><a href={{ grafana_snapshots[1] }}>Shared "Overview metrics" Grafana Snapshot</a></li>
+                <li><a href={{ grafana_snapshots[1] }}>Shared "Per server metrics nemesis" Grafana Snapshot</a></li>
             {% endif %}
             {% if grafana_snapshots[2] %}
                 <li><a href={{  grafana_snapshots[2] }}>Shared "Alternator metrics" Grafana Snapshot</a></li>
