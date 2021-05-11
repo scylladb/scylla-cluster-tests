@@ -150,7 +150,7 @@ CassandraStressLogEvent.add_subevent_type("OperationOnKey", severity=Severity.CR
 # TODO: change TooManyHintsInFlight severity to CRITICAL, when we have more stable hinted handoff
 # TODO: backpressure mechanism.
 CassandraStressLogEvent.add_subevent_type("TooManyHintsInFlight", severity=Severity.ERROR,
-                                          regex="Too many hints in flight")
+                                          regex=r"Too many hints in flight|Too many in flight hints")
 
 CassandraStressLogEvent.add_subevent_type("IOException", severity=Severity.ERROR,
                                           regex=r"java\.io\.IOException")
@@ -159,10 +159,10 @@ CassandraStressLogEvent.add_subevent_type("ConsistencyError", severity=Severity.
 
 
 CS_ERROR_EVENTS = (
+    CassandraStressLogEvent.TooManyHintsInFlight(),
+    CassandraStressLogEvent.OperationOnKey(),
     CassandraStressLogEvent.IOException(),
     CassandraStressLogEvent.ConsistencyError(),
-    CassandraStressLogEvent.OperationOnKey(),
-    CassandraStressLogEvent.TooManyHintsInFlight(),
 )
 CS_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex), event) for event in CS_ERROR_EVENTS]
