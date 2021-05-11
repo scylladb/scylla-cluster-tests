@@ -34,8 +34,10 @@ aws_root_disk_size_monitor: 50  # GB, remove this field if default disk size sho
 aws_root_disk_size_db: 30  # GB, increase root disk for larger swap (maximum: 16G)
 aws_root_disk_size_loader: 30  # GB, Increase loader disk in order to have extra space for a larger swap
 loader_swap_size: 10240  #10GB SWAP space
-ami_db_scylla_user: 'centos'
+ami_db_scylla_user: 'scyllaadm'
+# used prepared centos7 AMI for loader
 ami_loader_user: 'centos'
+# centos7 is used for monitor
 ami_monitor_user: 'centos'
 aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'
 
