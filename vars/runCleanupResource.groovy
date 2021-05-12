@@ -23,7 +23,7 @@ def call(Map params, String region){
     export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
 
     echo "Starting to clean resources ..."
-    if [[ "$cloud_provider" == "aws" ]]; then
+    if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" ]]; then
         SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
         if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
             ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} clean-resources --post-behavior --test-id \$SCT_TEST_ID
