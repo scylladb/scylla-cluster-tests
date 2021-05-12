@@ -20,7 +20,7 @@ def call(Map params, RunWrapper currentBuild){
     set -xe
     env
     echo "Start send email ..."
-    if [[ "$cloud_provider" == "aws" ]]; then
+    if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" ]]; then
         SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
         if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
             ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} send-email ${test_status} ${start_time} --email-recipients "${email_recipients}"

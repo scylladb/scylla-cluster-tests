@@ -129,11 +129,11 @@ To configure a region: create VPC and all related environment elements (Subnet, 
 SCT can run locally and on remote Runner instance.
 First of all we before creating a Runner instance we need to  create an image using::
 
-    hydra create-runner-image --region <region_name>
+    hydra create-runner-image --cloud-provider <cloud_name> --region <region_name>
 
 Then create a Runner instance::
 
-    hydra create-runner-instance -r <region_name> -z <az> -t <test-id> -d <run_duration>
+    hydra create-runner-instance --cloud-provider <cloud_name> -r <region_name> -z <az> -t <test-id> -d <run_duration>
 
 
 Run a test

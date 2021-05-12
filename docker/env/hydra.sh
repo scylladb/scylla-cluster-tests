@@ -115,6 +115,7 @@ if [[ "$1" == "--execute-on-runner" ]]; then
         }
         trap clean_ssh_agent EXIT
         ssh-add ~/.ssh/scylla-qa-ec2
+        ssh-add ~/.ssh/scylla-test
         echo "Going to run a Hydra commands on SCT runner '$SCT_RUNNER_IP'..."
         HOME_DIR="/home/ubuntu"
         echo "Syncing ${SCT_DIR} to the SCT runner instance..."
@@ -133,6 +134,12 @@ if [[ "$1" == "--execute-on-runner" ]]; then
         else
             echo "AWS_* environment variables found and will passed to Hydra container."
         fi
+        # Only copy GCE credential for GCE backend
+        if [[ ${@:3} =~ " gce " && -f ~/.google_libcloud_auth.skilled-adapter-452 ]]; then
+           echo "GCE credentials file found. Syncing to SCT Runner..."
+           rsync -ar -e "ssh -o StrictHostKeyChecking=no" --delete ~/.google_libcloud_auth.skilled-adapter-452 ubuntu@${SCT_RUNNER_IP}:/home/ubuntu/
+        fi
+
         SCT_DIR="/home/ubuntu/scylla-cluster-tests"
         USER_ID=1000
         group_args=()

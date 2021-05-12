@@ -34,7 +34,7 @@ from prettytable import PrettyTable
 
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_runner import SctRunner
+from sdcm.sct_runner import AwsSctRunner, GceSctRunner
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.common import (list_instances_aws, list_instances_gce, list_resources_docker, clean_cloud_resources,
                                all_aws_regions, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
@@ -42,7 +42,7 @@ from sdcm.utils.common import (list_instances_aws, list_instances_gce, list_reso
                                aws_tags_to_dict, list_elastic_ips_aws, get_builder_by_test_id,
                                clean_resources_according_post_behavior, clean_sct_runners,
                                search_test_id_in_latest, get_testrun_dir, format_timestamp, list_clusters_gke,
-                               list_clusters_eks)
+                               list_clusters_eks, get_all_gce_regions)
 from sdcm.utils.jepsen import JepsenResults
 from sdcm.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
                                kill_running_monitoring_stack_services)
@@ -1025,44 +1025,71 @@ def prepare_aws_region(region):
     aws_region.configure()
 
 
-@cli.command("create-runner-image", help="Create an SCT runner image in selected AWS region. "
+@cli.command("create-runner-image", help="Create an SCT runner image in selected AWS or GCE region. "
                                          f"If the requested region is not a source region "
-                                         f"({SctRunner.SOURCE_IMAGE_REGION}) the image will be first created in the"
+                                         f"(aws: {AwsSctRunner.SOURCE_IMAGE_REGION}, gce: {GceSctRunner.SOURCE_IMAGE_REGION})"
+                                         f" the image will be first created in the"
                                          f" source region and then copied to the chosen one.")
-@click.option("-r", "--region", required=True, type=click.Choice(all_aws_regions(cached=True)),
+@click.option("-c", "--cloud-provider", required=True, type=click.Choice(['aws', 'gce']), default="aws",
+              help="Cloud provider, currently only AWS and GCE are supported")
+@click.option("-r", "--region", required=True, type=click.Choice(all_aws_regions(cached=True) + get_all_gce_regions()),
               help="Name of the region")
-def create_runner_image(region):
+@click.option("-z", "--availability-zone", required=False, default="", type=str,
+              help="Name of availability zone, ex. 'a'")
+def create_runner_image(cloud_provider, region, availability_zone):
+    cloud_provider = cloud_provider.lower()
+    if cloud_provider == 'aws' and availability_zone != "":
+        assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
     add_file_logger()
-    sct_runner = SctRunner(region_name=region)
+    if cloud_provider == 'aws':
+        sct_runner = AwsSctRunner(region_name=region,
+                                  availability_zone=availability_zone)
+    elif cloud_provider == 'gce':
+        sct_runner = GceSctRunner(datacenter=region, availability_zone=availability_zone)
+    else:
+        raise Exception('Unsupported Cloud provider')
     sct_runner.create_image()
 
 
-@cli.command("create-runner-instance", help="Create an SCT runner instance in selected AWS region")
-@click.option("-c", "--cloud-provider", required=True, type=str, default="aws",
-              help="Cloud provider, currently only AWS is supported")
-@click.option("-r", "--region", required=True, type=click.Choice(all_aws_regions(cached=True)),
+@cli.command("create-runner-instance", help="Create an SCT runner instance in selected AWS or GCE region")
+@click.option("-c", "--cloud-provider", required=True, type=click.Choice(['aws', 'gce']), default="aws",
+              help="Cloud provider, currently only AWS and GCE are supported")
+@click.option("-r", "--region", required=True, type=click.Choice(all_aws_regions(cached=True) + get_all_gce_regions()),
               help="Name of the region")
 @click.option("-z", "--availability-zone", required=False, default="", type=str,
               help="Name of availability zone, ex. 'a'")
 @click.option("-t", "--test-id", required=True, type=str, help="Test ID")
 @click.option("-d", "--duration", required=True, type=int, help="Test duration in MINUTES")
 def create_runner_instance(cloud_provider, region, availability_zone, test_id, duration):
-    assert cloud_provider.lower() == "aws", "Only AWS is supported"
-    assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}"
+    cloud_provider = cloud_provider.lower()
+    if cloud_provider == 'aws' and availability_zone != "":
+        assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
     add_file_logger()
     sct_runner_ip_path = Path("sct_runner_ip")
     sct_runner_ip_path.unlink(missing_ok=True)
-    sct_runner = SctRunner(region_name=region)
+    if cloud_provider == 'aws':
+        sct_runner = AwsSctRunner(region_name=region,
+                                  availability_zone=availability_zone)
+    elif cloud_provider == 'gce':
+        sct_runner = GceSctRunner(datacenter=region,
+                                  availability_zone=availability_zone)
+    else:
+        raise Exception('Unsupported Cloud provider')
+
     instance = sct_runner.create_instance(test_id=test_id, test_duration=duration, region_az=region + availability_zone)
+    if cloud_provider == 'aws':
+        runner_public_ip = instance.public_ip_address
+    elif cloud_provider == 'gce':
+        runner_public_ip = instance.public_ips[0]
     LOGGER.info("Verifying SSH connectivity...")
-    remoter = sct_runner.get_remoter(host=instance.public_ip_address, connect_timeout=120)
+    remoter = sct_runner.get_remoter(host=runner_public_ip, connect_timeout=120)
     result = remoter.run("true", timeout=100, verbose=False, ignore_status=True)
     if result.exit_status == 0:
-        LOGGER.info("Successfully connected the SCT Runner. Public IP: %s", instance.public_ip_address)
+        LOGGER.info("Successfully connected the SCT Runner. Public IP: %s", runner_public_ip)
         with sct_runner_ip_path.open("w") as sct_runner_ip_file:
-            sct_runner_ip_file.write(instance.public_ip_address)
+            sct_runner_ip_file.write(runner_public_ip)
     else:
-        LOGGER.error("Unable to SSH to %s! Exiting...", instance.public_ip_address)
+        LOGGER.error("Unable to SSH to %s! Exiting...", runner_public_ip)
         sys.exit(1)
 
 
