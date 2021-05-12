@@ -1165,9 +1165,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.termination_event.set()
 
     @latency_calculator_decorator
-    def repair_nodetool_repair(self, node=None):
+    def repair_nodetool_repair(self, node=None, publish_event=True):
         node = node if node else self.target_node
-        node.run_nodetool("repair")
+        node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
 
     def repair_nodetool_rebuild(self):
         self.target_node.run_nodetool('rebuild')
@@ -1835,7 +1835,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             try:
                 self.target_node.run_nodetool("repair", verbose=False,
                                               warning_event_on_exception=(UnexpectedExit, Libssh2UnexpectedExit),
-                                              error_message="Repair failed as expected. ")
+                                              error_message="Repair failed as expected. ",
+                                              publish_event=False)
             except (UnexpectedExit, Libssh2UnexpectedExit):
                 self.log.info('Repair failed as expected')
             except Exception:
@@ -2315,7 +2316,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                             line="failed to repair"):
             for node in up_normal_nodes:
                 try:
-                    self.repair_nodetool_repair(node=node)
+                    self.repair_nodetool_repair(node=node, publish_event=False)
                 except Exception as details:  # pylint: disable=broad-except
                     self.log.error(f"failed to execute repair command "
                                    f"on node {node} due to the following error: {str(details)}")
