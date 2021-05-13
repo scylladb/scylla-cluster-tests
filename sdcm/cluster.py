@@ -1848,7 +1848,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         install_package()
         install_and_config_agent_command = dedent(r"""
             sed -i 's/# auth_token:.*$/auth_token: {}/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
-            scyllamgr_ssl_cert_gen
             sed -i 's/#tls_cert_file/tls_cert_file/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
             sed -i 's/#tls_key_file/tls_key_file/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
             sed -i 's/#prometheus: .*/prometheus: :{}/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
