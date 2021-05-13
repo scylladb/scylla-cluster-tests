@@ -1829,6 +1829,20 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if not self.is_rhel_like():
             self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
 
+    @retrying(n=30, sleep_time=15, allowed_exceptions=UnexpectedExit)
+    def install_package(self, package_mgr, package_name):
+        if self.distro.is_ubuntu:
+            wait.wait_for(func=self.is_apt_lock_free, step=30, timeout=60, text='Checking if package manager is free')
+        self.remoter.sudo(f'{package_mgr} install -y {package_name}')
+
+    def is_apt_lock_free(self):
+        cmd = 'lsof /var/lib/dpkg/lock'
+        res = self.remoter.sudo(cmd, ignore_status=True)
+        if res.exit_status == 0:
+            return True
+        else:
+            return False
+
     def install_manager_agent(self, package_path=None):
         auth_token = Setup.test_id()
         manager_prometheus_port = self.parent_cluster.params.get("manager_prometheus_port")
@@ -1840,12 +1854,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.parent_cluster.params.get("scylla_mgmt_repo"))
             package_name = 'scylla-manager-agent'
         package_mgr = "yum" if self.distro.is_rhel_like else "apt-get"
-
-        @retrying(n=10, sleep_time=5, allowed_exceptions=UnexpectedExit)
-        def install_package():
-            self.remoter.sudo(f'{package_mgr} install -y {package_name}')
-
-        install_package()
+        self.install_package(package_mgr, package_name)
         install_and_config_agent_command = dedent(r"""
             sed -i 's/# auth_token:.*$/auth_token: {}/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
             sed -i 's/#tls_cert_file/tls_cert_file/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
