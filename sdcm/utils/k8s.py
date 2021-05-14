@@ -25,6 +25,7 @@ import contextlib
 from tempfile import NamedTemporaryFile
 from typing import Optional, Union, Callable, List
 from functools import cached_property
+from pathlib import Path
 
 import kubernetes as k8s
 import yaml
@@ -428,6 +429,8 @@ class KubernetesOps:
     @staticmethod
     def kubectl_cmd(kluster, *command, namespace=None, ignore_k8s_server_url=False):
         cmd = [KUBECTL_BIN, ]
+        if sct_test_logdir := os.environ.get('_SCT_TEST_LOGDIR'):
+            cmd.append(f"--cache-dir={Path(sct_test_logdir) / '.kube/http-cache'}")
         if not ignore_k8s_server_url and kluster.k8s_server_url is not None:
             cmd.append(f"--server={kluster.k8s_server_url}")
         if namespace:
