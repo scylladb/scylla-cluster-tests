@@ -23,7 +23,7 @@ from sdcm.keystore import KeyStore
 from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
 
 
-GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:334.0.0-alpine"
+GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:348.0.0-alpine"
 
 LOGGER = logging.getLogger(__name__)
 
