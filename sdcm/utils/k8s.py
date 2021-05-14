@@ -258,7 +258,7 @@ class ApiCallRateLimiter(threading.Thread):
     If some call not able to start after `queue_size / rate_limit' seconds then raise `queue.Full' for caller.
     """
 
-    def __init__(self, rate_limit: float, queue_size: int, urllib_retry: int):
+    def __init__(self, rate_limit: float, queue_size: int, urllib_retry: int, urllib_backoff_factor: float):
         super().__init__(name=type(self).__name__, daemon=True)
         self._lock = multiprocessing.Semaphore(value=1)
         self._requests_pause_event = multiprocessing.Event()
@@ -266,6 +266,7 @@ class ApiCallRateLimiter(threading.Thread):
         self.rate_limit = rate_limit  # ops/s
         self.queue_size = queue_size
         self.urllib_retry = urllib_retry
+        self.urllib_backoff_factor = urllib_backoff_factor
         self.running = threading.Event()
 
     def put_requests_on_pause(self):
@@ -343,7 +344,7 @@ class ApiCallRateLimiter(threading.Thread):
 
     def get_k8s_configuration(self, kluster) -> k8s.client.Configuration:
         output = KubernetesOps.create_k8s_configuration(kluster)
-        output.retries = ApiLimiterRetry(self.urllib_retry)
+        output.retries = ApiLimiterRetry(self.urllib_retry, backoff_factor=self.urllib_backoff_factor)
         output.retries.bind_api_limiter(self)
         return output
 
