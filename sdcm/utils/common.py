@@ -47,6 +47,7 @@ import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from concurrent.futures.thread import _python_exit
 import hashlib
+from pathlib import Path
 
 import boto3
 from mypy_boto3_s3 import S3Client, S3ServiceResource
@@ -1816,6 +1817,11 @@ def clean_resources_according_post_behavior(params, config, logdir, dry_run=Fals
     success = get_testrun_status(params.get('TestId'), logdir, only_critical=True)
     actions_per_type = get_post_behavior_actions(config)
     LOGGER.debug(actions_per_type)
+
+    # Define 'KUBECONFIG' env var that is needed in some cases on K8S backends
+    testrun_dir = get_testrun_dir(test_id=params.get('TestId'), base_dir=logdir)
+    os.environ['KUBECONFIG'] = str(Path(testrun_dir) / ".kube/config")
+
     for cluster_nodes_type, action_type in actions_per_type.items():
         if action_type["action"] == "keep":
             LOGGER.info("Post behavior %s for %s. Keep resources running", action_type["action"], cluster_nodes_type)
