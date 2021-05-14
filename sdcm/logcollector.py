@@ -15,6 +15,7 @@
 import datetime
 import logging
 import os
+from pathlib import Path
 import shutil
 import tempfile
 import time
@@ -219,6 +220,34 @@ class FileLog(CommandLog):
         if file_path := self.find_on_builder(builder, self.name, search_in_dir):
             if archive_logfile := LogCollector.archive_log_remotely(builder, file_path):
                 builder.remoter.receive_files(archive_logfile, local_dst, timeout=self.collect_timeout)
+
+
+class DirLog(FileLog):
+    """Get files that match provided filter keeping their dir placement the same.
+
+    It is useful when you want to copy whole dir with lots of files,
+    which could have dynamic names.
+
+    Usage example:
+         DirLog(name='some-dir-name-with-files/*', search_locally=True)
+    """
+
+    def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
+        os.makedirs(local_dst, exist_ok=True)
+        if self.search_locally and local_search_path:
+            local_logfiles = self.find_local_files(local_search_path, self.name)
+            for logfile in local_logfiles:
+                relative_path = logfile.split(local_search_path)[-1]
+                if relative_path[0] == "/":
+                    relative_path = relative_path[1:]
+                current_dst = Path(local_dst) / relative_path
+                os.makedirs(str(current_dst).rsplit("/", 1)[0], exist_ok=True)
+                shutil.copy(src=logfile, dst=current_dst)
+        return local_dst
+
+    def collect_from_builder(self, builder, local_dst, search_in_dir) -> None:
+        # TODO: implement it to be able to gather whole dirs on remote nodes
+        raise NotImplementedError()
 
 
 class PrometheusSnapshots(BaseMonitoringEntity):
@@ -911,12 +940,14 @@ class SCTLogCollector(LogCollector):
 
 class KubernetesLogCollector(SCTLogCollector):
     """Gather K8S logs."""
-    # TODO: gather more logs when available
     log_entities = [
         FileLog(name='cert_manager.log', search_locally=True),
         FileLog(name='scylla_manager.log', search_locally=True),
         FileLog(name='scylla_operator.log', search_locally=True),
         FileLog(name='scylla_cluster_events.log', search_locally=True),
+        FileLog(name='kubectl.version', search_locally=True),
+        DirLog(name='cluster-scoped-resources/*', search_locally=True),
+        DirLog(name='namespaces/*', search_locally=True),
     ]
     cluster_log_type = "kubernetes"
     cluster_dir_prefix = "k8s-"
