@@ -19,7 +19,9 @@ import abc
 import contextlib
 import logging
 import os
+from pathlib import Path
 import random as librandom
+import re
 import time
 import base64
 import socket
@@ -797,6 +799,76 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
 
         self.kubectl("get statefulset", namespace=namespace)
         self.kubectl("get pods", namespace=namespace)
+
+    @log_run_info
+    def gather_k8s_logs(self) -> None:
+        # NOTE: reuse data where possible to minimize spent time due to API limiter restrictions
+        LOGGER.info("K8S-LOGS: starting logs gathering")
+        logdir = Path(self.logdir)
+        self.kubectl(f"version > {logdir / 'kubectl.version'} 2>&1")
+
+        # Gather cluster-scoped resources info
+        LOGGER.info("K8S-LOGS: gathering cluster scoped resources")
+        cluster_scope_dir = "cluster-scoped-resources"
+        os.makedirs(logdir / cluster_scope_dir, exist_ok=True)
+        for resource_type in self.kubectl(
+                "api-resources --namespaced=false --verbs=list -o name").stdout.split():
+            for output_format in ("yaml", "wide"):
+                logfile = logdir / cluster_scope_dir / f"{resource_type}.{output_format}"
+                self.kubectl(f"get {resource_type} -o {output_format} > {logfile}")
+        self.kubectl(f"describe nodes > {logdir / cluster_scope_dir / 'nodes.desc'}")
+
+        # Read all the namespaces from already saved file
+        with open(logdir / cluster_scope_dir / "namespaces.wide", mode="r") as f:
+            # Reverse order of namespaces because preferred once are there
+            namespaces = [n.split()[0] for n in f.readlines()[1:]][::-1]
+
+        # Gather namespace-scoped resources info
+        LOGGER.info("K8S-LOGS: gathering namespace scoped resources. "
+                    f"list of namespaces: {', '.join(namespaces)}")
+        os.makedirs(logdir / "namespaces", exist_ok=True)
+        namespaced_resource_types = self.kubectl(
+            "api-resources --namespaced=true --verbs=get,list -o name").stdout.split()
+        for resource_type in namespaced_resource_types:
+            LOGGER.info(f"K8S-LOGS: gathering '{resource_type}' resources")
+            logfile = logdir / "namespaces" / f"{resource_type}.{output_format}"
+            resources_wide = self.kubectl(
+                f"get {resource_type} -A -o wide 2>&1 | tee {logfile}").stdout
+            if resource_type.startswith("events"):
+                # NOTE: skip both kinds on 'events' available in k8s
+                continue
+            for namespace in namespaces:
+                if not re.search(f"\n{namespace} ", resources_wide):
+                    # NOTE: move to the next namespace because such resources are absent here
+                    continue
+                LOGGER.info(
+                    f"K8S-LOGS: gathering '{resource_type}' resources in the '{namespace}' "
+                    "namespace")
+                resource_dir = logdir / "namespaces" / namespace / resource_type
+                os.makedirs(resource_dir, exist_ok=True)
+                for res in resources_wide.split("\n"):
+                    if not re.match(f"{namespace} ", res):
+                        continue
+                    res = res.split()[1]
+                    logfile = resource_dir / f"{res}.yaml"
+                    res_stdout = self.kubectl(
+                        f"get {resource_type}/{res} -o yaml 2>&1 | tee {logfile}",
+                        namespace=namespace).stdout
+                    if resource_type != "pods":
+                        continue
+                    try:
+                        container_names = [
+                            c["name"] for c in yaml.safe_load(res_stdout)["spec"]["containers"]]
+                    except KeyError:
+                        # NOTE: pod could be in 'deleting' state during 'list' command
+                        # and be absent during 'get' command. So, just skip it.
+                        continue
+                    os.makedirs(resource_dir / res, exist_ok=True)
+                    for container_name in container_names:
+                        logfile = resource_dir / res / f"{container_name}.log"
+                        # NOTE: ignore status because it may fail when pod is not ready/running
+                        self.kubectl(f"logs pod/{res} -c={container_name} > {logfile}",
+                                     namespace=namespace, ignore_status=True)
 
     @log_run_info
     def stop_k8s_task_threads(self, timeout=10):

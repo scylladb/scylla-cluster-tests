@@ -2211,6 +2211,12 @@ class ClusterTester(db_stats.TestStatsMixin,
         self.stop_event_analyzer()
         self.stop_resources()
         self.get_test_failures()
+
+        # NOTE: running on K8S we need to gather logs otherwise a lot of
+        # debugging info is lost
+        if self.k8s_cluster:
+            self.k8s_cluster.gather_k8s_logs()
+
         if self.params.get('collect_logs'):
             self.collect_logs()
         self.clean_resources()
