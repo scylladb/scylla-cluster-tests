@@ -531,7 +531,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             namespace=MINIO_NAMESPACE)
 
         wait_for(lambda: self.minio_ip_address, text='Waiting for minio pod to popup', timeout=120, throw_exc=True)
-        self.kubectl("wait --timeout=10m --all --for=condition=Ready pod",
+        self.kubectl("wait --timeout=10m -l app=minio --for=condition=Ready pod",
                      timeout=605, namespace=MINIO_NAMESPACE)
 
     def get_scylla_cluster_helm_values(self, cpu_limit, memory_limit, pool_name: str = None) -> HelmValues:
