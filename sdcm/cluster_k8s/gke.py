@@ -28,9 +28,10 @@ from sdcm.cluster_k8s.iptables import IptablesPodIpRedirectMixin, IptablesCluste
 from sdcm.cluster_gce import MonitorSetGCE
 
 
-GKE_API_CALL_RATE_LIMIT = 0.5  # ops/s
+GKE_API_CALL_RATE_LIMIT = 5  # ops/s
 GKE_API_CALL_QUEUE_SIZE = 1000  # ops
-GKE_URLLIB_RETRY = 6  # How many times api request is retried before reporting failure
+GKE_URLLIB_RETRY = 5  # How many times api request is retried before reporting failure
+GKE_URLLIB_BACKOFF_FACTOR = 0.1
 
 LOADER_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/gke-loaders.yaml")
 CPU_POLICY_DAEMONSET = sct_abs_path("sdcm/k8s_configs/cpu-policy-daemonset.yaml")
@@ -177,7 +178,8 @@ class GkeCluster(KubernetesCluster):
         self.api_call_rate_limiter = ApiCallRateLimiter(
             rate_limit=GKE_API_CALL_RATE_LIMIT,
             queue_size=GKE_API_CALL_QUEUE_SIZE,
-            urllib_retry=GKE_URLLIB_RETRY
+            urllib_retry=GKE_URLLIB_RETRY,
+            urllib_backoff_factor=GKE_URLLIB_BACKOFF_FACTOR,
         )
         self.api_call_rate_limiter.start()
 
