@@ -3074,6 +3074,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.sudo('systemctl stop apt-daily-upgrade.timer', ignore_status=True)
             self.remoter.sudo('systemctl stop apt-daily.service', ignore_status=True)
             self.remoter.sudo('systemctl stop apt-daily-upgrade.service', ignore_status=True)
+            self.wait_apt_not_running()
+            self.remoter.sudo('rm -f /etc/apt/apt.conf.d/*unattended-upgrades', ignore_status=True)
+            self.remoter.sudo('rm -f /etc/apt/apt.conf.d/*auto-upgrades', ignore_status=True)
+            self.remoter.sudo('rm -f /etc/apt/apt.conf.d/*periodic', ignore_status=True)
+            self.remoter.sudo('rm -f /etc/apt/apt.conf.d/*update-notifier', ignore_status=True)
+            self.remoter.sudo('apt-get remove -y unattended-upgrades', ignore_status=True)
+            self.remoter.sudo('apt-get remove -y update-manager', ignore_status=True)
 
 
 class FlakyRetryPolicy(RetryPolicy):
