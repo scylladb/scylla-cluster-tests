@@ -2724,7 +2724,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def _gen_nodetool_cmd(self, sub_cmd, args, options):
         credentials = self.parent_cluster.get_db_auth()
         if credentials:
-            options += '-u {} -pw {} '.format(*credentials)
+            options += "-u {} -pw '{}' ".format(*credentials)
         return f"{self.add_install_prefix('/usr/bin/nodetool')} {options} {sub_cmd} {args}"
 
     def run_nodetool(self, sub_cmd, args="", options="", timeout=None,
@@ -2909,7 +2909,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def _gen_cqlsh_cmd(self, command, keyspace, timeout, host, port, connect_timeout):
         """cqlsh [options] [host [port]]"""
         credentials = self.parent_cluster.get_db_auth()
-        auth_params = '-u {} -p {}'.format(*credentials) if credentials else ''
+        auth_params = "-u {} -p '{}'".format(*credentials) if credentials else ''
         use_keyspace = "--keyspace {}".format(keyspace) if keyspace else ""
         ssl_params = '--ssl' if self.parent_cluster.params.get("client_encrypt") else ''
         options = "--no-color {auth_params} {use_keyspace} --request-timeout={timeout} " \
