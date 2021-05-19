@@ -843,13 +843,15 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
     server = JenkinsPipelines(username=username, password=password, base_job_dir=base_job_dir,
                               sct_branch_name=sct_branch, sct_repo=sct_repo)
 
-    for group_name, group_desc in [('longevity', 'SCT Longevity Tests'),
-                                   ('rolling-upgrade', 'SCT Rolling Upgrades'),
-                                   ('gemini-', 'SCT Gemini Tests'),
-                                   ('features-', 'SCT Feature Tests'),
-                                   ('artifacts', 'SCT Artifacts Tests'),
-                                   ('load-test', 'SCT Load Tests'),
-                                   ]:
+    for group_name, group_desc in [
+        ('longevity', 'SCT Longevity Tests'),
+        ('rolling-upgrade', 'SCT Rolling Upgrades'),
+        ('gemini-', 'SCT Gemini Tests'),
+        ('features-', 'SCT Feature Tests'),
+        ('artifacts', 'SCT Artifacts Tests'),
+        ('load-test', 'SCT Load Tests'),
+        ('repair-based-operation', "SCT RBO Tests"),
+    ]:
         server.create_directory(name=group_name, display_name=group_desc)
 
         for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/{group_name}*.jenkinsfile'):
@@ -857,6 +859,9 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
 
         if group_name == 'load-test':
             for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/admission_control_overload*'):
+                server.create_pipeline_job(jenkins_file, group_name)
+        if group_name == 'repair-based-operation':
+            for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/repair-based-operation/*'):
                 server.create_pipeline_job(jenkins_file, group_name)
 
     server.create_directory(name='artifacts-offline-install', display_name='SCT Artifacts Offline Install Tests')
