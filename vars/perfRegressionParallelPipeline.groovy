@@ -27,7 +27,7 @@ def call(Map pipelineParams) {
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'scylla_version')
             string(defaultValue: '', description: '', name: 'scylla_repo')
-            string(defaultValue: "${pipelineParams.get('mgmt_agent_repo', 'https://s3.amazonaws.com/downloads.scylladb.com/manager/deb/unstable/focal/branch-2.3/latest/scylla-manager-2.3/scylla-manager.list')}",
+            string(defaultValue: "${pipelineParams.get('mgmt_agent_repo', 'http://downloads.scylladb.com/manager/deb/unstable/focal/branch-2.3/latest/scylladb-manager-2.3/scylla-manager.list')}",
                    description: 'default manager agent repo URL (on master it is on Ubuntu)',
                    name: 'mgmt_agent_repo')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
