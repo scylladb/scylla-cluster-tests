@@ -8,7 +8,7 @@ mgmt_port: 10090
 scylla_repo: ''
 scylla_repo_m: 'http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylla-2020.1.repo'
 scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylladb-manager-2.3.repo'
-scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/deb/unstable/focal/branch-2.3/latest/scylla-manager-2.3/scylla-manager.list'
+scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/deb/unstable/focal/branch-2.3/latest/scylladb-manager-2.3/scylla-manager.list'
 scylla_repo_loader: ''
 
 experimental: true
