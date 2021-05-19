@@ -247,7 +247,9 @@ class DirLog(FileLog):
 
     def collect_from_builder(self, builder, local_dst, search_in_dir) -> None:
         # TODO: implement it to be able to gather whole dirs on remote nodes
-        raise NotImplementedError()
+        LOGGER.warning(
+            "'DirLog' class doesn't support 'collect_from_builder' method. "
+            f"It is to be implemented. Ignoring gathering following logs: '{self.name}'")
 
 
 class PrometheusSnapshots(BaseMonitoringEntity):
@@ -1009,10 +1011,11 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
             MonitorLogCollector: self.monitor_set,
             SirenManagerLogCollector: self.siren_manager_set,
             LoaderLogCollector: self.loader_set,
-            KubernetesLogCollector: self.kubernetes_set,
             SCTLogCollector: self.sct_set,
             JepsenLogCollector: self.loader_set,
         }
+        if self.backend.startswith("k8s"):
+            self.cluster_log_collectors[KubernetesLogCollector] = self.kubernetes_set
 
     @property
     def test_id(self):
