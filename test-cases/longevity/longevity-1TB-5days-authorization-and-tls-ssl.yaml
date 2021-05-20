@@ -1,0 +1,48 @@
+test_duration: 7200
+prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=275050075 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1..275050075",
+                    "cassandra-stress write cl=QUORUM n=275050075 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=275050076..550100150",
+                    "cassandra-stress write cl=QUORUM n=275050075 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=550100151..825150225",
+                    "cassandra-stress write cl=QUORUM n=275050075 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=825150226..1100200300"]
+
+stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=7000m -schema 'replication(factor=3) -port jmx=6868 -mode cql3 native -rate threads=100 -pop seq=1..550100150  -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'",
+             "cassandra-stress mixed cl=QUORUM duration=7000m -schema 'replication(factor=3) -port jmx=6868 -mode cql3 native -rate threads=100 -pop seq=550100151..1100200300  -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'",
+             "cassandra-stress user profile=/tmp/cs_mv_profile.yaml ops'(insert=3,read1=1,read2=1,read3=1)' cl=QUORUM duration=7000m -port jmx=6868 -mode cql3 native -rate threads=10"]
+
+
+stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=7000m -port jmx=6868 -mode cql3 native  -rate threads=10 -pop seq=1..1100200300  -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'" ]
+
+
+run_fullscan: 'random, 120'  # 'ks.cf|random, interval(min)''
+
+round_robin: true
+
+n_db_nodes: 4
+n_loaders: 4
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.4xlarge'
+gce_instance_type_db: 'n1-highmem-16'
+gce_n_local_ssd_disk_db: 6
+
+instance_type_loader: 'c5.4xlarge'
+gce_instance_type_loader: 'c2-standard-16'
+scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.3.repo'
+
+
+nemesis_class_name: 'ChaosMonkey'
+nemesis_interval: 30
+nemesis_filter_seeds: false
+seeds_num: 2
+
+user_prefix: 'longevity-tls-1tb-7d'
+space_node_threshold: 644245094
+server_encrypt: true
+client_encrypt: true
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+authorizer: 'CassandraAuthorizer'
+
+nemesis_during_prepare: false
+use_preinstalled_scylla: true
