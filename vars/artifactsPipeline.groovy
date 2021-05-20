@@ -70,6 +70,22 @@ def call(Map pipelineParams) {
             buildDiscarder(logRotator(numToKeepStr: "${pipelineParams.get('builds_to_keep', '20')}",))
         }
         stages {
+            stage("Preparation") {
+                // NOTE: this stage is a workaround for the following Jenkins bug:
+                // https://issues.jenkins-ci.org/browse/JENKINS-41929
+                when { expression { env.BUILD_NUMBER == '1' } }
+                steps {
+                    script {
+                        if (currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause') != null) {
+                            currentBuild.description = ('Aborted build#1 not having parameters loaded. \n'
+                              + 'Build#2 is ready to run')
+                            currentBuild.result = 'ABORTED'
+
+                            error('Abort build#1 which only loads params')
+                        }
+                    }
+                }
+            }
             stage('Run SCT stages') {
                 steps {
                     script {

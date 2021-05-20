@@ -1,3 +1,5 @@
+import logging
+
 from pathlib import Path
 
 import jenkins  # pylint: disable=import-error
@@ -6,6 +8,7 @@ from sdcm.wait import wait_for
 
 DIR_TEMPLATE = open(Path(__file__).parent / 'folder-template.xml').read()
 JOB_TEMPLATE = open(Path(__file__).parent / 'template.xml').read()
+LOGGER = logging.getLogger(__name__)
 
 
 class JenkinsPipelines:
@@ -21,12 +24,12 @@ class JenkinsPipelines:
             dir_xml_data = DIR_TEMPLATE % dict(sct_display_name=display_name)
             self.jenkins.create_job(f'{self.base_job_dir}/{name}', dir_xml_data)
         except jenkins.JenkinsException as ex:
-            print(ex)
+            self._log_jenkins_exception(ex)
 
     def create_pipeline_job(self, jenkins_file, group_name, job_name=None, job_name_suffix="-test"):
         base_name = job_name or Path(jenkins_file).stem
         sct_jenkinsfile = jenkins_file.split("scylla-cluster-tests/")[-1]
-        print(sct_jenkinsfile)
+        LOGGER.info(f"{sct_jenkinsfile} is used to create job")
         xml_data = JOB_TEMPLATE % dict(sct_display_name=f"{base_name}{job_name_suffix}",
                                        sct_description=sct_jenkinsfile,
                                        sct_repo=self.sct_repo,
@@ -37,11 +40,11 @@ class JenkinsPipelines:
                 group_name = "/" + group_name
             self.jenkins.create_job(
                 f'{self.base_job_dir}{group_name}/{base_name}{job_name_suffix}', xml_data)
-            self.build_job_first_time(f'{self.base_job_dir}{group_name}/{base_name}{job_name_suffix}')
+            self.build_job_and_wait_completion(f'{self.base_job_dir}{group_name}/{base_name}{job_name_suffix}')
         except jenkins.JenkinsException as ex:
-            print(ex)
+            self._log_jenkins_exception(ex)
 
-    def build_job_first_time(self, name):
+    def build_job_and_wait_completion(self, name):
         """start job first time
 
         Need to start job first time
@@ -49,7 +52,7 @@ class JenkinsPipelines:
         Job started one by one, to avoid situation
         when all jenkins resources will be allocated
         """
-        print(f"Start first build {name}")
+        LOGGER.info(f"Start first build {name}")
         job_id = self.jenkins.build_job(name)
 
         # wait while worker will be found
@@ -64,4 +67,11 @@ class JenkinsPipelines:
         wait_for(check_job_is_finished, step=5, text="Check job is finished",
                  timeout=120, throw_exc=True, job_name=name)
 
-        print("First build finished")
+        LOGGER.info("First build finished")
+
+    @staticmethod
+    def _log_jenkins_exception(exc):
+        if "already exists" in str(exc):
+            LOGGER.info(exc)
+        else:
+            LOGGER.error(exc)
