@@ -8,8 +8,8 @@ managerPipeline(
     backend: 'aws',
     aws_region: 'us-east-1',
 
-    target_scylla_mgmt_server_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo',
-    target_scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo',
+    target_scylla_mgmt_server_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylladb-manager.repo',
+    target_scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylladb-manager.repo',
 
     scylla_mgmt_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.3.repo',
     scylla_mgmt_agent_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.3.repo',

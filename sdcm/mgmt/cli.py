@@ -928,7 +928,7 @@ class ScyllaManagerToolRedhatLike(ScyllaManagerTool):
 
     def __init__(self, manager_node):
         ScyllaManagerTool.__init__(self, manager_node=manager_node)
-        self.manager_repo_path = '/etc/yum.repos.d/scylla-manager.repo'
+        self.manager_repo_path = '/etc/yum.repos.d/scylladb-manager.repo'
 
     def rollback_upgrade(self, scylla_mgmt_repo):
 
@@ -959,7 +959,7 @@ class ScyllaManagerToolRedhatLike(ScyllaManagerTool):
 class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
     def __init__(self, manager_node):
         ScyllaManagerTool.__init__(self, manager_node=manager_node)
-        self.manager_repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
+        self.manager_repo_path = '/etc/apt/sources.list.d/scylladb-manager.list'
 
     def rollback_upgrade(self, scylla_mgmt_repo):
         manager_from_version = self.version[0]

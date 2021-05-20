@@ -8,7 +8,7 @@ artifactsPipeline(
     backend: 'gce',
     nonroot_offline_install: true,
     provision_type: 'spot',
-    scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo',
+    scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylladb-manager.repo',
 
     timeout: [time: 30, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy'
