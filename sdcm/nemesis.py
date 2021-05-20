@@ -796,15 +796,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def _init_new_node_with_latency_calculation(self, old_node_ip, rack=0):
         return self._add_and_init_new_cluster_node(old_node_ip, rack=rack)
 
-    def disrupt_terminate_and_recover_node_kubernetes(self):  # pylint: disable=invalid-name
-        if not self._is_it_on_kubernetes():
-            raise UnsupportedNemesis('OperatorNodeTerminateAndRecover is supported only on kubernetes')
-        for node_terminate_method_name in self._get_kubernetes_node_break_methods():
-            self.set_target_node()
-            self._set_current_disruption(
-                f'OperatorNodeTerminateAndRecover ({node_terminate_method_name}) {self.target_node}')
-            self._disrupt_terminate_and_recover_node_kubernetes(self.target_node, node_terminate_method_name)
-
     def disrupt_terminate_and_replace_node_kubernetes(self):  # pylint: disable=invalid-name
         if not self._is_it_on_kubernetes():
             raise UnsupportedNemesis('OperatorNodeTerminateAndReplace is supported only on kubernetes')
@@ -834,12 +825,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.wait_for_svc()
         self.target_node.mark_to_be_replaced()
         self._kubernetes_wait_till_node_up_after_been_recreated(self.target_node, old_uid=old_uid)
-
-    def _disrupt_terminate_and_recover_node_kubernetes(self, node, node_terminate_method_name):  # pylint: disable=invalid-name
-        old_uid = node.k8s_pod_uid
-        node_terminate_method = getattr(node, node_terminate_method_name)
-        node_terminate_method()
-        self._kubernetes_wait_till_node_up_after_been_recreated(node, old_uid=old_uid)
 
     def _disrupt_terminate_decommission_add_node_kubernetes(self, node, node_terminate_method_name):  # pylint: disable=invalid-name
         self.log.info(f'Terminate %s', node)
@@ -3605,15 +3590,6 @@ class NodeTerminateAndReplace(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_terminate_and_replace_node()
-
-
-class OperatorNodeTerminateAndRecover(Nemesis):
-    disruptive = True
-    kubernetes = True
-
-    @log_time_elapsed_and_status
-    def disrupt(self):
-        self.disrupt_terminate_and_recover_node_kubernetes()
 
 
 class OperatorNodeTerminateAndReplace(Nemesis):
