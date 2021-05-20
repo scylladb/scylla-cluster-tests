@@ -3839,7 +3839,15 @@ class KubernetesScyllaOperatorMonkey(Nemesis):
 
     def __init__(self, *args, **kwargs):
         super(KubernetesScyllaOperatorMonkey, self).__init__(*args, **kwargs)
-        self.disrupt_methods_list = self.get_list_of_methods_compatible_with_backend()
+        ignore_methods = (
+            # NOTE: 'disrupt_nodetool_refresh' and 'disrupt_restart_with_resharding'
+            # happen to not work correctly on different scylla versions.
+            # So, skip it until it gets stabilized.
+            "disrupt_nodetool_refresh",
+            "disrupt_restart_with_resharding",
+        )
+        self.disrupt_methods_list = list(
+            set(self.get_list_of_methods_compatible_with_backend()) - set(ignore_methods))
 
     @log_time_elapsed_and_status
     def disrupt(self):
