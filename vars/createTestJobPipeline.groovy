@@ -13,7 +13,6 @@ def call() {
         environment {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
-            SCT_TEST_ID = UUID.randomUUID().toString()
         }
         parameters {
             string(defaultValue: "",
@@ -43,12 +42,6 @@ def call() {
                     dir('scylla-cluster-tests') {
                         timeout(time: 5, unit: 'MINUTES') {
                             checkout scm
-
-                            dir("scylla-qa-internal") {
-                                git(url: 'git@github.com:scylladb/scylla-qa-internal.git',
-                                    credentialsId:'b8a774da-0e46-4c91-9f74-09caebaea261',
-                                    branch: 'master')
-                            }
                         }
                     }
                 }
