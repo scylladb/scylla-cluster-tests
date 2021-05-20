@@ -1,0 +1,50 @@
+test_duration: 4320
+prepare_write_cmd: [ "cassandra-stress write cl=QUORUM n=50000000 -schema 'replication(factor=3) compression=LZ4Compressor'     -port jmx=6868 -mode cql3 native compression=lz4     -rate threads=100 -pop seq=1..50000000 -log interval=5",
+                     "cassandra-stress write cl=QUORUM n=50000000 -schema 'replication(factor=3) compression=SnappyCompressor'  -port jmx=6868 -mode cql3 native compression=snappy  -rate threads=100 -pop seq=1..50000000 -log interval=5",
+                     "cassandra-stress write cl=QUORUM n=50000000 -schema 'replication(factor=3) compression=DeflateCompressor' -port jmx=6868 -mode cql3 native compression=none    -rate threads=100 -pop seq=1..50000000 -log interval=5",
+                     "cassandra-stress write cl=QUORUM n=50000000 -schema 'replication(factor=3) compression=ZstdCompressor'    -port jmx=6868 -mode cql3 native compression=none    -rate threads=100 -pop seq=1..50000000 -log interval=5" ]
+
+stress_cmd: [ "cassandra-stress mixed cl=QUORUM duration=4200m -schema 'replication(factor=3) compression=LZ4Compressor'       -port jmx=6868 -mode cql3 native compression=lz4     -rate threads=50 -pop seq=1..50000000 -log interval=5",
+              "cassandra-stress mixed cl=QUORUM duration=4200m -schema 'replication(factor=3) compression=SnappyCompressor'    -port jmx=6868 -mode cql3 native compression=snappy  -rate threads=50 -pop seq=1..50000000 -log interval=5",
+              "cassandra-stress mixed cl=QUORUM duration=4200m -schema 'replication(factor=3) compression=DeflateCompressor'   -port jmx=6868 -mode cql3 native compression=none    -rate threads=50 -pop seq=1..50000000 -log interval=5",
+              "cassandra-stress mixed cl=QUORUM duration=4200m -schema 'replication(factor=3) compression=ZstdCompressor'      -port jmx=6868 -mode cql3 native compression=none    -rate threads=50 -pop seq=1..50000000 -log interval=5" ]
+
+stress_read_cmd: [ "cassandra-stress read cl=QUORUM duration=4200m -schema 'replication(factor=3) compression=LZ4Compressor'     -port jmx=6868 -mode cql3 native compression=lz4    -rate threads=20 -pop seq=1..50000000 -log interval=5",
+                   "cassandra-stress read cl=QUORUM duration=4200m -schema 'replication(factor=3) compression=SnappyCompressor'  -port jmx=6868 -mode cql3 native compression=snappy -rate threads=20 -pop seq=1..50000000 -log interval=5",
+                   "cassandra-stress read cl=QUORUM duration=4200m -schema 'replication(factor=3) compression=DeflateCompressor' -port jmx=6868 -mode cql3 native compression=none   -rate threads=20 -pop seq=1..50000000 -log interval=5",
+                   "cassandra-stress read cl=QUORUM duration=4200m -schema 'replication(factor=3) compression=ZstdCompressor'    -port jmx=6868 -mode cql3 native compression=none   -rate threads=20 -pop seq=1..50000000 -log interval=5" ]
+
+run_fullscan: 'random, 120'  # 'ks.cf|random, interval(min)''
+
+round_robin: true
+
+n_db_nodes: 4
+n_loaders: 4
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.4xlarge'
+gce_instance_type_db: 'n1-highmem-16'
+gce_n_local_ssd_disk_db: 6
+
+instance_type_loader: 'c5.4xlarge'
+gce_instance_type_loader: 'c2-standard-16'
+scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.3.repo'
+
+
+nemesis_class_name: 'ChaosMonkey'
+nemesis_interval: 30
+nemesis_filter_seeds: false
+seeds_num: 2
+
+user_prefix: 'longevity-tls-1tb-7d'
+space_node_threshold: 644245094
+server_encrypt: true
+client_encrypt: true
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: 'cassandra'
+authenticator_password: 'cassandra'
+authorizer: 'CassandraAuthorizer'
+
+nemesis_during_prepare: true
+use_preinstalled_scylla: true
