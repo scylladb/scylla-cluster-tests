@@ -2560,7 +2560,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         :return:
         """
         for node in self.db_cluster.nodes:
-            node.remoter.run('sudo fstrim -v /var/lib/scylla')
+            node.fstrim_scylla_disks()
 
     @silence()
     def collect_logs(self) -> None:
