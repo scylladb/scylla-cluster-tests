@@ -106,14 +106,6 @@ def call(Map pipelineParams) {
                                                         export SCT_SCYLLA_VERSION="${params.scylla_version}"
                                                     elif [[ ! -z "${params.scylla_repo}" ]]; then
                                                         export SCT_SCYLLA_REPO="${params.scylla_repo}"
-                                                        if [[ ! -z "${params.scylla_mgmt_repo}" ]]; then
-                                                            export SCT_USE_MGMT=true
-                                                            export SCT_SCYLLA_REPO_M="${params.scylla_repo}"
-                                                            export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
-                                                        fi
-                                                        if [[ ! -z "${params.scylla_mgmt_agent_repo}" ]] ; then
-                                                            export SCT_SCYLLA_MGMT_AGENT_REPO="${params.scylla_mgmt_agent_repo}"
-                                                        fi
                                                     elif [[ ! -z "${params.unified_package}" ]]; then
                                                         export SCT_UNIFIED_PACKAGE="${params.unified_package}"
                                                         export SCT_NONROOT_OFFLINE_INSTALL=${params.nonroot_offline_install}
@@ -121,6 +113,16 @@ def call(Map pipelineParams) {
                                                     else
                                                         echo "need to choose one of SCT_GCE_IMAGE_DB | SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO | SCT_UNIFIED_PACKAGE"
                                                         exit 1
+                                                    fi
+
+                                                    if [[ ! -z "${params.scylla_mgmt_repo}" ]]; then
+                                                        export SCT_USE_MGMT=true
+                                                        export SCT_SCYLLA_REPO_M="${params.scylla_repo}"
+                                                        export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
+                                                    fi
+
+                                                    if [[ ! -z "${params.scylla_mgmt_agent_repo}" ]] ; then
+                                                        export SCT_SCYLLA_MGMT_AGENT_REPO="${params.scylla_mgmt_agent_repo}"
                                                     fi
 
                                                     if [[ ! -z "${params.scylla_docker_image}" ]]; then
