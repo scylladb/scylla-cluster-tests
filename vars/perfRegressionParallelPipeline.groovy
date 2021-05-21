@@ -48,6 +48,16 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('email_recipients', 'scylla-perf-results@scylladb.com')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
+
+            string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_helm_repo', 'https://storage.googleapis.com/scylla-operator-charts/latest')}",
+                   description: 'Scylla Operator helm repo',
+                   name: 'k8s_scylla_operator_helm_repo')
+            string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_chart_version', 'latest')}",
+                   description: 'Scylla Operator helm chart version',
+                   name: 'k8s_scylla_operator_chart_version')
+            string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_docker_image', '')}",
+                   description: 'Scylla Operator docker image',
+                   name: 'k8s_scylla_operator_docker_image')
         }
         options {
             timestamps()
@@ -56,6 +66,22 @@ def call(Map pipelineParams) {
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
         stages {
+            stage("Preparation") {
+                // NOTE: this stage is a workaround for the following Jenkins bug:
+                // https://issues.jenkins-ci.org/browse/JENKINS-41929
+                when { expression { env.BUILD_NUMBER == '1' } }
+                steps {
+                    script {
+                        if (currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause') != null) {
+                            currentBuild.description = ('Aborted build#1 not having parameters loaded. \n'
+                              + 'Build#2 is ready to run')
+                            currentBuild.result = 'ABORTED'
+
+                            error('Abort build#1 which only loads params')
+                        }
+                    }
+                }
+            }
             stage('Run SCT Performance Tests') {
                 steps {
                     script {
@@ -103,6 +129,8 @@ def call(Map pipelineParams) {
                                                             export SCT_SCYLLA_VERSION=${params.scylla_version}
                                                         elif [[ ! -z "${params.scylla_repo}" ]] ; then
                                                             export SCT_SCYLLA_REPO=${params.scylla_repo}
+                                                        elif [[ "${params.backend ? params.backend : ''}" == *"k8s"* ]] ; then
+                                                            echo "Kubernetes backend can have empty scylla version. It will be taken from defaults of the scylla helm chart"
                                                         else
                                                             echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO"
                                                             exit 1
@@ -115,6 +143,16 @@ def call(Map pipelineParams) {
                                                         export SCT_INSTANCE_PROVISION=${params.provision_type}
                                                         export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
                                                         export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
+
+                                                        if [[ -n "${params.k8s_scylla_operator_helm_repo ? params.k8s_scylla_operator_helm_repo : ''}" ]] ; then
+                                                            export SCT_K8S_SCYLLA_OPERATOR_HELM_REPO=${params.k8s_scylla_operator_helm_repo}
+                                                        fi
+                                                        if [[ -n "${params.k8s_scylla_operator_chart_version ? params.k8s_scylla_operator_chart_version : ''}" ]] ; then
+                                                            export SCT_K8S_SCYLLA_OPERATOR_CHART_VERSION=${params.k8s_scylla_operator_chart_version}
+                                                        fi
+                                                        if [[ -n "${params.k8s_scylla_operator_docker_image ? params.k8s_scylla_operator_docker_image : ''}" ]] ; then
+                                                            export SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE=${params.k8s_scylla_operator_docker_image}
+                                                        fi
 
                                                         echo "start test ......."
                                                         ./docker/env/hydra.sh run-test ${perf_test} --backend ${params.backend}  --logdir "`pwd`"

@@ -1291,6 +1291,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.log.error('Error running tcpdump on lo, tcp port 10000: %s',
                            str(details))
 
+    def fstrim_scylla_disks(self):
+        self.remoter.sudo("fstrim -v /var/lib/scylla")
+
     def get_cfstats(self, keyspace, tcpdump=False):
         def keyspace_available():
             self.run_nodetool("flush", ignore_status=True, timeout=60)

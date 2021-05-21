@@ -273,6 +273,9 @@ class MinikubeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodPortsRedirec
             self.parent_cluster.k8s_cluster, self.name, namespace=self.parent_cluster.namespace)
         super().destroy()
 
+    def fstrim_scylla_disks(self):
+        LOGGER.warning("'k8s-gce-minikube' doesn't support running 'fstrim' command. Ignoring.")
+
 
 class MinikubeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
     k8s_cluster: MinikubeCluster
