@@ -574,7 +574,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                     'scyllaAgentConfig': 'scylla-agent-config',
                     'members': 0,
                     'storage': {
-                        'storageClassName': 'local-raid-disks',
+                        'storageClassName': self.params.get('k8s_scylla_disk_class'),
                         'capacity': f"{self.params.get('k8s_scylla_disk_gi')}Gi"
                     },
                     'resources': {
@@ -1505,6 +1505,27 @@ class BaseScyllaPodContainer(BasePodContainer):
             return
 
         self._init_port_mapping()
+
+    def fstrim_scylla_disks(self):
+        # NOTE: to be able to run 'fstrim' command in a pod, it must have direct device mount and
+        # appropriate priviledges.
+        # Both requirements are satisfied by 'local-volume-provisioner' pods which provide disks
+        # for scylla pods.
+        # So, we run this command not on 'scylla' pods but on 'local-volume-provisioner'
+        # ones on each K8S node dedicated for scylla pods.
+        podname_path_list = self.parent_cluster.k8s_cluster.kubectl(
+            "get pod -l app=local-volume-provisioner "
+            f"--field-selector spec.nodeName={self.node_name} "
+            "-o jsonpath='{range .items[*]}{.metadata.name} {.spec.volumes[?(@.name==\""
+            f"{self.parent_cluster.params.get('k8s_scylla_disk_class')}"
+            "\")].hostPath.path}{\"\\n\"}'",
+            namespace="default").stdout.strip().split("\n")
+        if len(podname_path_list) == 0:
+            self.log.warning(f"Could not find scylla disks path on '{self.node_name}'")
+        podname, path = podname_path_list[0].split()
+        self.parent_cluster.k8s_cluster.kubectl(
+            f"exec -ti {podname} -- sh -c 'fstrim -v {path}/*'",
+            namespace="default")
 
 
 class PodCluster(cluster.BaseCluster):
