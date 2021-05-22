@@ -66,13 +66,12 @@ from sdcm.utils.decorators import retrying
 from sdcm import wait
 from sdcm.utils.ldap import LDAP_PASSWORD, LDAP_USERS, DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR
 
+
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
 DOCKER_CGROUP_RE = re.compile("/docker/([0-9a-f]+)")
 SCYLLA_AMI_OWNER_ID = "797456418907"
 MAX_SPOT_DURATION_TIME = 360
-SCYLLA_YAML_PATH = "/etc/scylla/scylla.yaml"
-SCYLLA_PROPERTIES_PATH = "/etc/scylla/cassandra-rackdc.properties"
 
 
 def deprecation(message):

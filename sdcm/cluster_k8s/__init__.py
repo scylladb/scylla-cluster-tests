@@ -40,7 +40,6 @@ import yaml
 import kubernetes as k8s
 from kubernetes.client import V1Container, V1ResourceRequirements
 from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance, ResourceList, Subresource
-
 from invoke.exceptions import CommandTimedOut
 
 from sdcm import sct_abs_path, cluster, cluster_docker
@@ -1463,7 +1462,7 @@ class BaseScyllaPodContainer(BasePodContainer):
     parent_cluster: ScyllaPodCluster
 
     @contextlib.contextmanager
-    def remote_scylla_yaml(self, path: str = cluster.SCYLLA_YAML_PATH) -> ContextManager:
+    def remote_scylla_yaml(self) -> ContextManager:
         """Update scylla.yaml, k8s way
 
         Scylla Operator handles scylla.yaml updates using ConfigMap resource and we don't need to update it
@@ -1864,7 +1863,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
             return None
 
     @contextlib.contextmanager
-    def remote_cassandra_rackdc_properties(self, path: str = cluster.SCYLLA_PROPERTIES_PATH) -> ContextManager:
+    def remote_cassandra_rackdc_properties(self) -> ContextManager:
         """Update cassandra-rackdc.properties, k8s way
 
         Scylla Operator handles cassandra-rackdc.properties updates using ConfigMap resource
@@ -1883,7 +1882,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
             if not old_rack_properties:
                 if len(self.nodes) > 1:
                     # If there is not config_map than get properties from the very first node in the cluster
-                    with self.nodes[0].remote_cassandra_rackdc_properties(path) as node_rack_properties:
+                    with self.nodes[0].remote_cassandra_rackdc_properties() as node_rack_properties:
                         old_rack_properties = node_rack_properties
             new_rack_properties = deepcopy(old_rack_properties)
             yield new_rack_properties
