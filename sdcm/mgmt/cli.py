@@ -1,24 +1,33 @@
-# coding: utf-8
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2021 ScyllaDB
 
 # pylint: disable=too-many-lines
 import os
-import logging
 import json
 import time
+import logging
 import datetime
-import requests
-import yaml
-
-from invoke.exceptions import UnexpectedExit, Failure
 from re import findall
-from statistics import mean
 from textwrap import dedent
+from statistics import mean
+
+import requests
+from invoke.exceptions import UnexpectedExit, Failure
 
 from sdcm import wait
+from sdcm.mgmt.common import \
+    TaskStatus, ScyllaManagerError, HostStatus, HostSsl, HostRestStatus, duration_to_timedelta, DEFAULT_TASK_TIMEOUT
 from sdcm.utils.distro import Distro
-
-from .common import TaskStatus, ScyllaManagerError, HostStatus, HostSsl, HostRestStatus, duration_to_timedelta, \
-    DEFAULT_TASK_TIMEOUT
 
 
 LOGGER = logging.getLogger(__name__)
@@ -28,28 +37,10 @@ STATUS_ERROR = 'error'
 MANAGER_IDENTITY_FILE_DIR = '/root/.ssh'
 MANAGER_IDENTITY_FILE_NAME = 'scylla-manager.pem'
 MANAGER_IDENTITY_FILE = os.path.join(MANAGER_IDENTITY_FILE_DIR, MANAGER_IDENTITY_FILE_NAME)
-SCYLLA_MANAGER_YAML_PATH = "/etc/scylla-manager/scylla-manager.yaml"
-SCYLLA_MANAGER_AGENT_YAML_PATH = "/etc/scylla-manager-agent/scylla-manager-agent.yaml"
 SSL_CONF_DIR = '/tmp/ssl_conf'
 SSL_USER_CERT_FILE = SSL_CONF_DIR + '/db.crt'
 SSL_USER_KEY_FILE = SSL_CONF_DIR + '/db.key'
 REPAIR_TIMEOUT_SEC = 7200  # 2 hours
-
-
-def update_config_file(node, region, config_file=SCYLLA_MANAGER_AGENT_YAML_PATH):
-    # FIXME: if the bucket and the node are in the same region, no need to update config file
-    # the problem is that with multi DC is that i get 2 regions and 2 buckets:
-    # 'us-east-1 us-west-2' and 'manager-backup-tests-us-east-1 manager-backup-tests-eu-west-2'
-
-    node.remoter.run(f'sudo chmod o+w {config_file}')
-    configuration = yaml.safe_load(node.remoter.run(f'cat {config_file}').stdout)
-    if 's3' not in configuration:
-        configuration['s3'] = {}
-    configuration['s3']['region'] = region
-    new_configuration = yaml.dump(configuration, default_flow_style=False)
-    node.remoter.run(f'sudo echo -e \"{new_configuration}\" > {config_file}')
-    node.remoter.run('sudo systemctl restart scylla-manager-agent')
-    node.wait_manager_agent_up()
 
 
 class ScyllaManagerBase:  # pylint: disable=too-few-public-methods
@@ -1001,17 +992,18 @@ class SCTool:
     def __init__(self, manager_node):
         self.manager_node = manager_node
 
-    def _remoter_run(self, cmd):
-        return self.manager_node.remoter.run(cmd)
-
-    def run(self, cmd, is_verify_errorless_result=False, parse_table_res=True, is_multiple_tables=False,  # pylint: disable=too-many-arguments
+    def run(self,  # pylint: disable=too-many-arguments
+            cmd,
+            is_verify_errorless_result=False,
+            parse_table_res=True,
+            is_multiple_tables=False,
             replace_broken_unicode_values=True):
-        LOGGER.debug("Issuing: 'sctool {}'".format(cmd))
+        LOGGER.debug("Issuing: 'sctool %s'", cmd)
         try:
-            res = self._remoter_run(cmd='sudo sctool {}'.format(cmd))
+            res = self.manager_node.remoter.sudo(f"sctool {cmd}")
             LOGGER.debug("sctool output: %s", res.stdout)
         except (UnexpectedExit, Failure) as ex:
-            raise ScyllaManagerError("Encountered an error on sctool command: {}: {}".format(cmd, ex))
+            raise ScyllaManagerError(f"Encountered an error on sctool command: {cmd}: {ex}")
 
         if replace_broken_unicode_values:
             res.stdout = self.replace_broken_unicode_values(res.stdout)
@@ -1025,7 +1017,7 @@ class SCTool:
             if is_multiple_tables:
                 dict_res_tables = self.parse_result_multiple_tables(res=res)
                 return dict_res_tables
-        LOGGER.debug('sctool res after parsing: %s', str(res))
+        LOGGER.debug("sctool res after parsing: %s", res)
         return res
 
     @staticmethod

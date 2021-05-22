@@ -1009,10 +1009,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         raise RuntimeError("Can't find minio pod")
 
     @property
-    def manager_bucket_name(self):
-        return self.params.get('backup_bucket_location') or 'bucket'
-
-    @property
     def minio_ip_address(self) -> str:
         return self.minio_pod.status.pod_ip
 

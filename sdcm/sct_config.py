@@ -28,11 +28,9 @@ from distutils.util import strtobool  # pylint: disable=import-error,no-name-in-
 import anyconfig
 
 from sdcm import sct_abs_path
-from sdcm.cluster_k8s import eks, gke
 from sdcm.utils import alternator
 from sdcm.utils.common import find_scylla_repo, get_scylla_ami_versions, get_branched_ami, get_ami_tags, \
     ami_built_by_scylla, MAX_SPOT_DURATION_TIME
-from sdcm.utils.k8s import convert_cpu_units_to_k8s_value, convert_memory_units_to_k8s_value
 from sdcm.utils.version_utils import get_branch_version, get_branch_version_for_multiple_repositories, \
     get_scylla_docker_repo_from_version, resolve_latest_repo_symlink
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
@@ -556,9 +554,14 @@ class SCTConfiguration(dict):
         dict(name="aws_instance_profile_name", env="SCT_AWS_INSTANCE_PROFILE_NAME", type=str,
              help="This is the name of the instance profile to set on all instances"),
 
+        dict(name="backup_bucket_backend", env="SCT_BACKUP_BUCKET_BACKEND", type=str,
+             help="the backend to be used for backup (e.g., 's3', 'gcs' or 'azure')"),
+
         dict(name="backup_bucket_location", env="SCT_BACKUP_BUCKET_LOCATION", type=str_or_list,
-             help="""This is the bucket name to be used for backup with its region
-             (e.g. backup_bucket_location: 'manager-backup-tests')"""),
+             help="the bucket name to be used for backup (e.g., 'manager-backup-tests')"),
+
+        dict(name="backup_bucket_region", env="SCT_BACKUP_BUCKET_REGION", type=str,
+             help="the AWS region of a bucket to be used for backup (e.g., 'eu-west-1')"),
 
         dict(name="tag_ami_with_result", env="SCT_TAG_AMI_WITH_RESULT", type=boolean,
              help="If True, would tag the ami with the test final result"),

@@ -125,7 +125,9 @@
 | **<a href="#user-content-spot_max_price" name="spot_max_price">spot_max_price</a>**  | The max percentage of the on demand price we set for spot/fleet instances | N/A | SCT_SPOT_MAX_PRICE
 | **<a href="#user-content-extra_network_interface" name="extra_network_interface">extra_network_interface</a>**  | if true, create extra network interface on each node | N/A | SCT_EXTRA_NETWORK_INTERFACE
 | **<a href="#user-content-aws_instance_profile_name" name="aws_instance_profile_name">aws_instance_profile_name</a>**  | This is the name of the instance profile to set on all instances | N/A | SCT_AWS_INSTANCE_PROFILE_NAME
-| **<a href="#user-content-backup_bucket_location" name="backup_bucket_location">backup_bucket_location</a>**  | This is the bucket name to be used for backup with its region<br>(e.g. backup_bucket_location: 'manager-backup-tests') | N/A | SCT_BACKUP_BUCKET_LOCATION
+| **<a href="#user-content-backup_bucket_backend" name="backup_bucket_backend">backup_bucket_backend</a>**  | the backend to be used for backup (e.g., 's3', 'gcs' or 'azure') | N/A | SCT_BACKUP_BUCKET_BACKEND
+| **<a href="#user-content-backup_bucket_location" name="backup_bucket_location">backup_bucket_location</a>**  | the bucket name to be used for backup with its region (e.g., 'manager-backup-tests') | N/A | SCT_BACKUP_BUCKET_LOCATION
+| **<a href="#user-content-backup_bucket_region" name="backup_bucket_region">backup_bucket_region</a>**  | the AWS region of a bucket to be used for backup (e.g., 'eu-west-1') | N/A | SCT_BACKUP_BUCKET_REGION
 | **<a href="#user-content-tag_ami_with_result" name="tag_ami_with_result">tag_ami_with_result</a>**  | If True, would tag the ami with the test final result | N/A | SCT_TAG_AMI_WITH_RESULT
 | **<a href="#user-content-gce_datacenter" name="gce_datacenter">gce_datacenter</a>**  | Supported: us-east1 - means that the zone will be selected automatically or you can mention the zone explicitly, for example: us-east1-b | N/A | SCT_GCE_DATACENTER
 | **<a href="#user-content-gce_network" name="gce_network">gce_network</a>**  |  | N/A | SCT_GCE_NETWORK

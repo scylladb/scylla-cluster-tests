@@ -45,3 +45,5 @@ ami_id_db_scylla: ''
 ami_id_db_oracle: ''
 
 use_preinstalled_scylla: true
+
+backup_bucket_backend: 's3'
