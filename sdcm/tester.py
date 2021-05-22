@@ -264,6 +264,9 @@ class ClusterTester(db_stats.TestStatsMixin,
         elif cluster_backend == 'gce':
             Setup.set_multi_region(len(self.params.get('gce_datacenter').split()) > 1)
 
+        if self.params.get("backup_bucket_backend") == "azure":
+            Setup.set_backup_azure_blob_credentials()
+
         Setup.BACKTRACE_DECODING = self.params.get('backtrace_decoding')
         if Setup.BACKTRACE_DECODING:
             Setup.set_decoding_queue()

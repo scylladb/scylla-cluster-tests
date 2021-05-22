@@ -19,6 +19,9 @@ def call(Map pipelineParams) {
             SCT_TEST_ID = UUID.randomUUID().toString()
         }
         parameters {
+            string(defaultValue: "${pipelineParams.get('backup_bucket_backend', '')}",
+               description: 's3|gcs|azure or empty',
+               name: 'backup_bucket_backend')
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
                description: 'aws|gce',
                name: 'backend')
@@ -171,6 +174,10 @@ def call(Map pipelineParams) {
                                         export SCT_REGION_NAME=${aws_region}
                                         export SCT_CONFIG_FILES=${test_config}
                                         export SCT_COLLECT_LOGS=false
+
+                                        if [[ -n "${params.backup_bucket_backend}" ]] ; then
+                                            export SCT_BACKUP_BUCKET_BACKEND="${params.backup_bucket_backend}"
+                                        fi
 
                                         if [[ ! -z "${params.scylla_ami_id}" ]] ; then
                                             export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"

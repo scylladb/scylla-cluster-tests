@@ -212,15 +212,33 @@ class OperatorManagerCluster(ManagerCluster):
             raise
         return so_backup_task
 
-    def create_backup_task(self, dc_list=None, dry_run=None, interval=None, keyspace_list=None, location_list=None,
-                           num_retries=None, rate_limit_list=None, retention=None, show_tables=None,
-                           snapshot_parallel_list=None, start_date=None, upload_parallel_list=None,
-                           legacy_args=None) -> BackupTask:
+    def create_backup_task(
+            self,
+            dc_list=None,
+            dry_run=None,
+            interval=None,
+            keyspace_list=None,
+            location_list=None,
+            num_retries=None,
+            rate_limit_list=None,
+            retention=None,
+            show_tables=None,
+            snapshot_parallel_list=None,
+            start_date=None,
+            upload_parallel_list=None,
+            legacy_args=None) -> BackupTask:
         so_task = self._create_operator_backup_task(
-            dc_list=dc_list, interval=interval, keyspace_list=keyspace_list, location_list=location_list,
-            num_retries=num_retries, rate_limit_list=rate_limit_list, retention=retention,
-            snapshot_parallel_list=snapshot_parallel_list, start_date=start_date,
-            upload_parallel_list=upload_parallel_list)
+            dc_list=dc_list,
+            interval=interval,
+            keyspace_list=keyspace_list,
+            location_list=location_list,
+            num_retries=num_retries,
+            rate_limit_list=rate_limit_list,
+            retention=retention,
+            snapshot_parallel_list=snapshot_parallel_list,
+            start_date=start_date,
+            upload_parallel_list=upload_parallel_list,
+        )
         so_task_status = self.wait_for_operator_backup_task_status(so_task)
         return self.get_mgr_backup_task_by_id(so_task_status.mgmt_task_id)
 
@@ -266,40 +284,41 @@ class OperatorManagerCluster(ManagerCluster):
             text=f"Waiting until operator repair task: {so_repair_task.name} get it's status",
             timeout=timeout,
             task_name=so_repair_task.name,
-            throw_exc=True)
+            throw_exc=True,
+        )
 
     def wait_for_operator_backup_task_status(
             self, so_backup_task: ScyllaOperatorBackupTask, timeout=120, step=1) -> ScyllaOperatorBackupTaskStatus:
-        text = f"Waiting until operator backup task '{so_backup_task.name}' get it's status"
         return wait_for(
-            func=self.get_operator_backup_task_status, step=step, text=text, timeout=timeout,
-            task_name=so_backup_task.name, throw_exc=True)
+            func=self.get_operator_backup_task_status,
+            step=step,
+            text=f"Waiting until operator backup task '{so_backup_task.name}' get it's status",
+            timeout=timeout,
+            task_name=so_backup_task.name,
+            throw_exc=True,
+        )
 
     def get_mgr_repair_task_by_id(self, task_id: str) -> Optional[RepairTask]:
-        manager_task = None
         for mgr_task in self.repair_task_list:
             if mgr_task.id == task_id:
-                manager_task = mgr_task
-                break
-        return manager_task
+                return mgr_task
+        return None
 
     def get_mgr_backup_task_by_id(self, task_id: str) -> Optional[BackupTask]:
-        manager_task = None
         for mgr_task in self.backup_task_list:
             if mgr_task.id == task_id:
-                manager_task = mgr_task
-                break
-        return manager_task
+                return mgr_task
+        return None
 
     def get_operator_repair_task_status(self, task_name: str) -> Optional[ScyllaOperatorRepairTaskStatus]:
         for task_status in self.operator_repair_task_statuses:
-            if task_name == task_status.name:
+            if task_status.name == task_name:
                 return task_status
         return None
 
     def get_operator_backup_task_status(self, task_name: str) -> Optional[ScyllaOperatorBackupTaskStatus]:
         for task_status in self.operator_backup_task_statuses:
-            if task_name == task_status.name:
+            if task_status.name == task_name:
                 return task_status
         return None
 

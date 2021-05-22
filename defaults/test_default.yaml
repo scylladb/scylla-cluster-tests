@@ -156,3 +156,5 @@ mgmt_docker_image: ''
 k8s_deploy_monitoring: false
 
 scylla_rsyslog_setup: false
+
+backup_bucket_region: ''  # use the same region as a cluster

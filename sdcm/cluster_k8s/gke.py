@@ -404,5 +404,5 @@ class GkeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
 class MonitorSetGKE(MonitorSetGCE):
     DB_NODES_IP_ADDRESS = 'public_ip_address'
 
-    def install_scylla_manager(self, node, auth_token):
+    def install_scylla_manager(self, node):
         pass

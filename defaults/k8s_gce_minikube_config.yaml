@@ -51,4 +51,5 @@ backtrace_decoding: false
 
 append_scylla_args: ''
 docker_image: ''
+backup_bucket_backend: 's3'
 backup_bucket_location: 'minio-bucket'

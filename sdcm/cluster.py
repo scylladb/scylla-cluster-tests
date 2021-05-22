@@ -12,7 +12,6 @@
 # Copyright (c) 2016 ScyllaDB
 
 # pylint: disable=too-many-lines
-from dataclasses import dataclass
 
 import queue
 import getpass
@@ -28,17 +27,18 @@ import uuid
 import itertools
 import json
 import ipaddress
-
-from collections import defaultdict
-from sdcm.sct_events import Severity
 from typing import List, Optional, Dict, Union, Set
-from textwrap import dedent
 from datetime import datetime
+from textwrap import dedent
 from functools import cached_property, wraps
-from tenacity import RetryError  # pylint: disable=import-error
+from collections import defaultdict
+from dataclasses import dataclass
 
 import yaml
 import requests
+from paramiko import SSHException
+from tenacity import RetryError  # pylint: disable=import-error
+from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut  # pylint: disable=import-error
 from cassandra import ConsistencyLevel
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster as ClusterDriver  # pylint: disable=no-name-in-module
@@ -46,12 +46,8 @@ from cassandra.cluster import NoHostAvailable  # pylint: disable=no-name-in-modu
 from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy
 
-from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut  # pylint: disable=import-error
-from paramiko import SSHException
-
 from sdcm.collectd import ScyllaCollectdSetup
 from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
-from sdcm.mgmt.cli import update_config_file
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd
@@ -76,7 +72,6 @@ from sdcm.utils.common import (
 )
 from sdcm.utils.distro import Distro
 from sdcm.utils.docker_utils import ContainerManager, NotFound
-
 from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_gossip_and_nodetool_status, \
     check_schema_version, check_nulls_in_peers, check_schema_agreement_in_gossip_and_peers, \
     CHECK_NODE_HEALTH_RETRIES, CHECK_NODE_HEALTH_RETRY_DELAY
@@ -84,11 +79,12 @@ from sdcm.utils.decorators import retrying, log_run_info
 from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, BUILD_ID_RE, get_gemini_version, get_systemd_version
+from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, BACKTRACE_RE
 from sdcm.sct_events.grafana import set_grafana_url
+from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, BACKTRACE_RE
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
@@ -101,8 +97,14 @@ from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
 from sdcm.utils import cdc
 from sdcm.coredump import CoredumpExportSystemdThread
-from sdcm.paths import \
-    SCYLLA_YAML_PATH, SCYLLA_MANAGER_YAML_PATH, SCYLLA_MANAGER_AGENT_YAML_PATH
+from sdcm.keystore import KeyStore
+from sdcm.paths import (
+    SCYLLA_YAML_PATH,
+    SCYLLA_MANAGER_YAML_PATH,
+    SCYLLA_MANAGER_AGENT_YAML_PATH,
+    SCYLLA_MANAGER_TLS_CERT_FILE,
+    SCYLLA_MANAGER_TLS_KEY_FILE,
+)
 
 
 CREDENTIALS = []
@@ -161,6 +163,8 @@ class Setup:
     _test_name = None
     _logdir = None
     _tester_obj = None
+
+    backup_azure_blob_credentials = {}
 
     @classmethod
     def test_id(cls):
@@ -229,6 +233,10 @@ class Setup:
     @classmethod
     def set_intra_node_comm_public(cls, intra_node_comm_public):
         cls.INTRA_NODE_COMM_PUBLIC = intra_node_comm_public
+
+    @classmethod
+    def set_backup_azure_blob_credentials(cls) -> None:
+        cls.backup_azure_blob_credentials = KeyStore().get_backup_azure_blob_credentials()
 
     @classmethod
     def reuse_cluster(cls, val=False):
@@ -1959,58 +1967,87 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             verify_scylla_repo_file(result.stdout, is_rhel_like=False)
         self.update_repo_cache()
 
-    def download_scylla_manager_repo(self, scylla_repo):
-        if self.is_rhel_like():
+    def download_scylla_manager_repo(self, scylla_repo: str) -> None:
+        if self.distro.is_rhel_like:
             repo_path = '/etc/yum.repos.d/scylla-manager.repo'
         else:
             repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
-        self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
-        if not self.is_rhel_like():
-            self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
+        self.remoter.sudo(f"curl -o {repo_path} -L {scylla_repo}")
+        if not self.distro.is_rhel_like:
+            self.remoter.sudo("apt-get update", ignore_status=True)
 
-    def install_manager_agent(self, package_path=None):
-        auth_token = Setup.test_id()
-        manager_prometheus_port = self.parent_cluster.params.get("manager_prometheus_port")
+    @retrying(n=30, sleep_time=15, allowed_exceptions=UnexpectedExit)
+    def install_package(self, package_name: str) -> None:
+        if self.distro.is_ubuntu:
+            wait.wait_for(func=self.is_apt_lock_free, step=30, timeout=60, text='Checking if package manager is free')
+        self.remoter.sudo(f'{"yum" if self.distro.is_rhel_like else "apt-get"} install -y {package_name}')
+
+    def is_apt_lock_free(self) -> bool:
+        return self.remoter.sudo("lsof /var/lib/dpkg/lock", ignore_status=True).ok
+
+    def install_manager_agent(self, package_path: Optional[str] = None) -> None:
         if package_path:
-            package_name = '{}scylla-manager-agent*'.format(package_path)
+            package_name = f"{package_path}scylla-manager-agent*"
         else:
             self.download_scylla_manager_repo(
                 self.parent_cluster.params.get("scylla_mgmt_agent_repo") or
                 self.parent_cluster.params.get("scylla_mgmt_repo"))
-            package_name = 'scylla-manager-agent'
-        package_mgr = "yum" if self.distro.is_rhel_like else "apt-get"
+            package_name = "scylla-manager-agent"
 
-        @retrying(n=10, sleep_time=5, allowed_exceptions=UnexpectedExit)
-        def install_package():
-            self.remoter.sudo(f'{package_mgr} install -y {package_name}')
+        self.install_package(package_name)
 
-        install_package()
-        install_and_config_agent_command = dedent(r"""
-            sed -i 's/# auth_token:.*$/auth_token: {}/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
-            scyllamgr_ssl_cert_gen
-            sed -i 's/#tls_cert_file/tls_cert_file/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
-            sed -i 's/#tls_key_file/tls_key_file/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
-            sed -i 's/#prometheus: .*/prometheus: :{}/' /etc/scylla-manager-agent/scylla-manager-agent.yaml
+        tls_cert_file = tls_key_file = None
+        if self.remoter.sudo("scyllamgr_ssl_cert_gen", ignore_status=True).ok:
+            tls_cert_file = SCYLLA_MANAGER_TLS_CERT_FILE
+            tls_key_file = SCYLLA_MANAGER_TLS_KEY_FILE
+
+        with self.remote_manager_agent_yaml() as manager_agent_yaml:
+            manager_agent_yaml["auth_token"] = Setup.test_id()
+            manager_agent_yaml["tls_cert_file"] = tls_cert_file
+            manager_agent_yaml["tls_key_file"] = tls_key_file
+            manager_agent_yaml["prometheus"] = f":{self.parent_cluster.params.get('manager_prometheus_port')}"
+
+        self.remoter.sudo(shell_script_cmd("""\
             systemctl restart scylla-manager-agent
             systemctl enable scylla-manager-agent
-        """.format(auth_token, manager_prometheus_port))
-        self.remoter.run('sudo bash -cxe "%s"' % install_and_config_agent_command)
-        version = self.remoter.run('scylla-manager-agent --version').stdout
-        self.log.info(f'node {self.name} has scylla-manager-agent version {version}')
+        """))
 
-    def upgrade_manager_agent(self, scylla_mgmt_repo, start_agent_after_upgrade=True):
+        manager_agent_version = self.remoter.run("scylla-manager-agent --version").stdout
+        self.log.info("node %s has scylla-manager-agent version %s", self.name, manager_agent_version)
+
+    def update_manager_agent_config(self, region: Optional[str] = None) -> None:
+        backup_backend = self.parent_cluster.params.get("backup_bucket_backend")
+        backup_backend_config = {}
+        if backup_backend == "s3":
+            if region and region != self.region:
+                backup_backend_config["region"] = region
+        elif backup_backend == "gcs":
+            pass
+        elif backup_backend == "azure":
+            backup_backend_config["account"] = Setup.backup_azure_blob_credentials["account"]
+            backup_backend_config["key"] = Setup.backup_azure_blob_credentials["key"]
+        else:
+            raise ValueError(f"{backup_backend=} is not supported")
+
+        with self.remote_manager_agent_yaml() as manager_agent_yaml:
+            manager_agent_yaml[backup_backend] = backup_backend_config
+
+        self.remoter.sudo("systemctl restart scylla-manager-agent")
+        self.wait_manager_agent_up()
+
+    def upgrade_manager_agent(self, scylla_mgmt_repo: str, start_agent_after_upgrade: bool = True) -> None:
         self.download_scylla_manager_repo(scylla_mgmt_repo)
         if self.is_rhel_like():
-            self.remoter.run('sudo yum update scylla-manager-agent -y')
+            self.remoter.sudo("yum update scylla-manager-agent -y")
         else:
-            self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
-            self.remoter.run('sudo apt-get install -y scylla-manager-agent')
-        self.remoter.run("sudo scyllamgr_agent_setup -y")
+            self.remoter.sudo("apt-get update", ignore_status=True)
+            self.remoter.sudo("apt-get install -y scylla-manager-agent")
+        self.remoter.sudo("scyllamgr_agent_setup -y")
         if start_agent_after_upgrade:
             if self.is_docker():
-                self.remoter.run('sudo supervisorctl start scylla-manager-agent')
+                self.remoter.sudo("supervisorctl start scylla-manager-agent")
             else:
-                self.remoter.run("sudo systemctl start scylla-manager-agent")
+                self.remoter.sudo("systemctl start scylla-manager-agent")
 
     def clean_scylla_data(self):
         """Clean all scylla data file
@@ -2330,12 +2367,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run('sudo systemctl enable scylla-jmx.service')
 
     def upgrade_mgmt(self, scylla_mgmt_repo, start_manager_after_upgrade=True):
+        self.log.debug("Upgrade scylla-manager via repo: %s", scylla_mgmt_repo)
         self.download_scylla_manager_repo(scylla_mgmt_repo)
-        self.log.debug('Upgrade scylla-manager via repo: {}'.format(scylla_mgmt_repo))
-        if self.is_rhel_like():
-            self.remoter.run('sudo yum update scylla-manager -y')
+        if self.distro.is_rhel_like:
+            self.remoter.sudo("yum update scylla-manager -y")
         else:
-            self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
+            self.remoter.sudo("apt-get update", ignore_status=True)
             # Upgrade should update packages of:
             # 1) scylla-manager
             # 2) scylla-manager-client
@@ -2347,81 +2384,73 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         time.sleep(3)
         if start_manager_after_upgrade:
             if self.is_docker():
-                self.remoter.run('sudo supervisorctl start scylla-manager')
+                self.remoter.sudo("supervisorctl start scylla-manager")
             else:
-                self.remoter.run('sudo systemctl restart scylla-manager.service')
+                self.remoter.sudo("systemctl restart scylla-manager.service")
             time.sleep(5)
 
-    # pylint: disable=too-many-branches,too-many-statements
-    def install_mgmt(self, scylla_mgmt_repo, auth_token, package_url=None):
-        self.log.debug('Install scylla-manager')
-        rsa_id_dst = '/tmp/scylla-test'
-        rsa_id_dst_pub = '/tmp/scylla-test-pub'
-        mgmt_user = 'scylla-manager'
-        if not (self.is_rhel_like() or self.is_debian() or self.is_ubuntu()):
-            raise ValueError('Unsupported Distribution type: {}'.format(str(self.distro)))
-        if self.is_rhel_like():
-            self.install_epel()
-            self.remoter.run('sudo yum install python36-PyYAML -y', retry=3)
-        else:
-            self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B', retry=3)
-            self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19', retry=3)
-            self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5E08FBD8B5D6EC9C', retry=3)
+    def install_mgmt(self, scylla_mgmt_repo: str, package_url: Optional[str] = None) -> None:
+        self.log.debug("Install scylla-manager")
 
-        self.log.debug("Copying TLS files from data_dir to node")
-        self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')  # pylint: disable=not-callable
+        if self.is_docker():
+            self.remoter.sudo(
+                "yum remove -y scylla scylla-jmx scylla-tools scylla-tools-core scylla-server scylla-conf")
+
+        if self.distro.is_rhel_like:
+            self.install_epel()
+            self.remoter.sudo("yum install python36-PyYAML -y", retry=3)
+        elif self.distro.is_debian or self.distro.is_ubuntu:
+            self.remoter.sudo('apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B', retry=3)
+            self.remoter.sudo('apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19', retry=3)
+            self.remoter.sudo('apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5E08FBD8B5D6EC9C', retry=3)
+        else:
+            raise ValueError(f"Unsupported Linux distribution: {self.distro}")
 
         if package_url:
-            package_names = '{0}scylla-manager-server* {0}scylla-manager-client*'.format(package_url)
+            package_names = f"{package_url}scylla-manager-server* {package_url}scylla-manager-client*"
         else:
             self.download_scylla_manager_repo(scylla_mgmt_repo)
-            package_names = 'scylla-manager'
-        if self.is_docker():
-            self.remoter.run('sudo yum remove -y scylla scylla-jmx scylla-tools scylla-tools-core'
-                             ' scylla-server scylla-conf')
+            package_names = "scylla-manager"
+        self.install_package(package_names)
 
-        if self.is_rhel_like():
-            self.remoter.run('sudo yum install -y {}'.format(package_names))
-        else:
-            self.remoter.run(cmd="sudo apt-get update", ignore_status=True)
-            self.remoter.run(
-                'sudo apt-get install -y {}'.format(package_names))
+        self.log.debug("Copying TLS files from data_dir to the node")
+        self.remoter.send_files(src="./data_dir/ssl_conf", dst="/tmp/")
 
         if self.is_docker():
             try:
-                self.remoter.run('echo no| sudo scyllamgr_setup')
+                self.remoter.run("echo no | sudo scyllamgr_setup")
             except Exception as ex:  # pylint: disable=broad-except
                 self.log.warning(ex)
         else:
-            self.remoter.run('echo yes| sudo scyllamgr_setup')
-        self.remoter.send_files(src=self.ssh_login_info['key_file'], dst=rsa_id_dst)  # pylint: disable=not-callable
-        ssh_config_script = dedent("""
-                chmod 0400 {rsa_id_dst}
-                chown {mgmt_user}:{mgmt_user} {rsa_id_dst}
-                ssh-keygen -y -f {rsa_id_dst} > {rsa_id_dst_pub}
-        """.format(mgmt_user=mgmt_user, rsa_id_dst=rsa_id_dst, rsa_id_dst_pub=rsa_id_dst_pub))  # generate ssh public key from private key.
-        self.remoter.run('sudo bash -cxe "%s"' % ssh_config_script)
+            self.remoter.run("echo yes | sudo scyllamgr_setup")
+
+        # Copy the private SSH key and generate the public key.
+        self.remoter.send_files(src=self.ssh_login_info["key_file"], dst="/tmp/scylla-test")
+        self.remoter.sudo(shell_script_cmd("""\
+            chmod 0400 /tmp/scylla-test
+            chown scylla-manager:scylla-manager /tmp/scylla-test
+            ssh-keygen -y -f /tmp/scylla-test > /tmp/scylla-test-pub
+        """))
+
+        tls_cert_file = tls_key_file = None
+        if self.remoter.sudo("scyllamgr_ssl_cert_gen", ignore_status=True).ok:
+            tls_cert_file = SCYLLA_MANAGER_TLS_CERT_FILE
+            tls_key_file = SCYLLA_MANAGER_TLS_KEY_FILE
+
+        with self.remote_manager_yaml() as manager_yaml:
+            manager_yaml["tls_cert_file"] = tls_cert_file
+            manager_yaml["tls_key_file"] = tls_key_file
+            manager_yaml["prometheus"] = f":{self.parent_cluster.params.get('manager_prometheus_port')}"
 
         if self.is_docker():
-            self.remoter.run('sudo supervisorctl restart scylla-manager')
-            res = self.remoter.run('sudo supervisorctl status scylla-manager')
+            self.remoter.sudo("supervisorctl restart scylla-manager")
+            res = self.remoter.sudo("supervisorctl status scylla-manager")
         else:
-            self.remoter.run('sudo systemctl restart scylla-manager.service')
-            res = self.remoter.run('sudo systemctl status scylla-manager.service')
-
-        manager_prometheus_port = self.parent_cluster.params.get("manager_prometheus_port")
-        if self.is_rhel_like():  # TODO: Add debian and ubuntu support
-            configuring_manager_command = dedent("""
-            scyllamgr_ssl_cert_gen
-            sed -i 's/#tls_cert_file/tls_cert_file/' /etc/scylla-manager/scylla-manager.yaml
-            sed -i 's/#tls_key_file/tls_key_file/' /etc/scylla-manager/scylla-manager.yaml
-            sed -i 's/#prometheus: .*/prometheus: :{}/' /etc/scylla-manager/scylla-manager.yaml
-            systemctl restart scylla-manager
-            """.format(manager_prometheus_port))  # pylint: disable=too-many-format-args
-            self.remoter.run('sudo bash -cxe "%s"' % configuring_manager_command)
+            self.remoter.sudo("systemctl restart scylla-manager.service")
+            res = self.remoter.sudo("systemctl status scylla-manager.service")
 
         if not res or "Active: failed" in res.stdout:
-            raise ScyllaManagerError("Scylla-Manager is not properly installed or not running: {}".format(res))
+            raise ScyllaManagerError(f"Scylla-Manager is not properly installed or not running: {res}")
 
         self.start_scylla_manager_log_capture()
 
@@ -4171,19 +4200,14 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.clean_replacement_node_ip(node)
 
     def install_scylla_manager(self, node):
-        pkgs_url = self.params.get('scylla_mgmt_pkg')
+        pkgs_url = self.params.get("scylla_mgmt_pkg")
         pkg_path = None
         if pkgs_url:
             pkg_path = download_dir_from_cloud(pkgs_url)
-            node.remoter.run('mkdir -p {}'.format(pkg_path))
-            node.remoter.send_files(src='{}*.rpm'.format(pkg_path), dst=pkg_path)
+            node.remoter.run(f"mkdir -p {pkg_path}")
+            node.remoter.send_files(src=f"{pkg_path}*.rpm", dst=pkg_path)
         node.install_manager_agent(package_path=pkg_path)
-        cluster_backend = self.params.get("cluster_backend")
-        if cluster_backend == "aws":
-            region = self.params.get('region_name').split()
-            update_config_file(node=node, region=region[0])
-        else:
-            self.log.warning("Backend '%s' not support. Won't configure manager backups!", cluster_backend)
+        node.update_manager_agent_config(region=self.params.get("backup_bucket_region"))
 
     def _scylla_install(self, node):
         node.update_repo_cache()
@@ -4838,18 +4862,17 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
         # for starting the alert manager thread (since it depends on DB cluster size and num of loaders)
         node.start_alert_manager_thread()  # remove when start task threads will be started after node setup
         if self.params.get("use_mgmt"):
-            self.install_scylla_manager(node, auth_token=self.mgmt_auth_token)
+            self.install_scylla_manager(node)
 
-    def install_scylla_manager(self, node, auth_token):
-        if self.params.get('use_mgmt'):
-            node.install_scylla(scylla_repo=self.params.get('scylla_repo_m'))
-            package_path = self.params.get('scylla_mgmt_pkg')
-            if package_path:
-                node.remoter.run('mkdir -p {}'.format(package_path))
-                node.remoter.send_files(src='{}*.rpm'.format(package_path), dst=package_path)
-            node.install_mgmt(scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'), auth_token=auth_token,
-                              package_url=package_path)
-            self.nodes[0].wait_manager_server_up()
+    def install_scylla_manager(self, node):
+        node.install_scylla(scylla_repo=self.params.get("scylla_repo_m"))
+        package_path = self.params.get("scylla_mgmt_pkg")
+        if package_path:
+            node.remoter.run(f"mkdir -p {package_path}")
+            node.remoter.send_files(src=f"{package_path}*.rpm", dst=package_path)
+        node.install_mgmt(scylla_mgmt_repo=self.params.get("scylla_mgmt_repo"),
+                          package_url=package_path)
+        self.nodes[0].wait_manager_server_up()
 
     def configure_ngrok(self):
         port = self.local_metrics_addr.split(':')[1]
