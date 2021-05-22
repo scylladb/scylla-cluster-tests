@@ -51,16 +51,29 @@ from paramiko import SSHException
 
 from sdcm.collectd import ScyllaCollectdSetup
 from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
-from sdcm.mgmt.cli import update_config_file, SCYLLA_MANAGER_YAML_PATH
+from sdcm.mgmt.cli import update_config_file
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd
-from sdcm.remote.remote_file import remote_file
+from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
 from sdcm import wait, mgmt
 from sdcm.utils import alternator
-from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
-    get_latest_gemini_version, normalize_ipv6_url, download_dir_from_cloud, generate_random_string, ScyllaCQLSession, \
-    SCYLLA_YAML_PATH, get_test_name, PageFetcher, update_authenticator, prepare_and_start_saslauthd_service
+from sdcm.utils.common import (
+    S3Storage,
+    ScyllaCQLSession,
+    PageFetcher,
+    deprecation,
+    get_data_dir_path,
+    verify_scylla_repo_file,
+    get_my_ip,
+    get_latest_gemini_version,
+    normalize_ipv6_url,
+    download_dir_from_cloud,
+    generate_random_string,
+    get_test_name,
+    update_authenticator,
+    prepare_and_start_saslauthd_service,
+)
 from sdcm.utils.distro import Distro
 from sdcm.utils.docker_utils import ContainerManager, NotFound
 
@@ -88,6 +101,8 @@ from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
 from sdcm.utils import cdc
 from sdcm.coredump import CoredumpExportSystemdThread
+from sdcm.paths import \
+    SCYLLA_YAML_PATH, SCYLLA_MANAGER_YAML_PATH, SCYLLA_MANAGER_AGENT_YAML_PATH
 
 
 CREDENTIALS = []
@@ -1683,20 +1698,21 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.remoter.run(cmd)
 
     def _remote_yaml(self, path):
-        file_name = os.path.split(path)[1].split(".", maxsplit=1)[0].title()
-        self.log.debug("Update {} YAML configuration file ({})".format(file_name, path))
+        self.log.debug("Update %s YAML file", path)
         return remote_file(remoter=self.remoter,
                            remote_path=path,
-                           serializer=yaml.safe_dump,
-                           deserializer=yaml.safe_load,
+                           serializer=dict_to_yaml_file,
+                           deserializer=yaml_file_to_dict,
                            sudo=True)
 
-    def remote_scylla_yaml(self, path=SCYLLA_YAML_PATH):
-        path = self.add_install_prefix(path)
-        return self._remote_yaml(path=path)
+    def remote_scylla_yaml(self):
+        return self._remote_yaml(path=self.add_install_prefix(abs_path=SCYLLA_YAML_PATH))
 
-    def remote_manager_yaml(self, path=SCYLLA_MANAGER_YAML_PATH):
-        return self._remote_yaml(path=path)
+    def remote_manager_yaml(self):
+        return self._remote_yaml(path=SCYLLA_MANAGER_YAML_PATH)
+
+    def remote_manager_agent_yaml(self):
+        return self._remote_yaml(path=SCYLLA_MANAGER_AGENT_YAML_PATH)
 
     @staticmethod
     def get_ldap_config():
@@ -1746,7 +1762,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                      cluster_name=None,
                      enable_exp=True,
                      endpoint_snitch=None,
-                     yaml_file=SCYLLA_YAML_PATH,
                      broadcast=None,
                      authenticator=None,
                      server_encrypt=None,
@@ -1764,7 +1779,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                      internode_compression=None,
                      internode_encryption=None,
                      ldap=False):
-        with self.remote_scylla_yaml(yaml_file) as scylla_yml:
+        with self.remote_scylla_yaml() as scylla_yml:
             if seed_address:
                 # Set seeds
                 scylla_yml['seed_provider'] = [
