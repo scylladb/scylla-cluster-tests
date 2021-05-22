@@ -17,6 +17,8 @@ import tempfile
 import contextlib
 from io import StringIO
 
+import yaml
+
 from sdcm import wait
 
 
@@ -73,3 +75,11 @@ def remote_file(remoter, remote_path, serializer=StringIO.getvalue, deserializer
         remoter.sudo(f"chown {ownership} {remote_path}")
     if preserve_permissions:
         remoter.sudo(f"chmod {permissions} {remote_path}")
+
+
+def yaml_file_to_dict(fobj):
+    return yaml.safe_load(fobj) or {}
+
+
+def dict_to_yaml_file(data):
+    return yaml.safe_dump(data) if data else ""

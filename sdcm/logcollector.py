@@ -12,35 +12,44 @@
 # Copyright (c) 2020 ScyllaDB
 
 #  pylint: disable=too-many-lines
-import datetime
-import logging
 import os
-from pathlib import Path
-import shutil
-import tempfile
 import time
-import zipfile
+import shutil
 import fnmatch
+import logging
+import zipfile
+import datetime
+import tempfile
 import traceback
 from typing import Optional
+from pathlib import Path
 from functools import cached_property
 
 import requests
 
 import sdcm.monitorstack.ui as monitoring_ui
-
-from sdcm.utils.common import (S3Storage, list_instances_aws, list_instances_gce,
-                               ParallelObject, remove_files, get_builder_by_test_id,
-                               get_testrun_dir, search_test_id_in_latest, filter_aws_instances_by_type,
-                               filter_gce_instances_by_type, get_sct_root_path, normalize_ipv6_url,
-                               SCYLLA_YAML_PATH)
-from sdcm.utils.decorators import retrying
-from sdcm.utils.get_username import get_username
-from sdcm.db_stats import PrometheusDBStats
+from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.remote import RemoteCmdRunnerBase, LocalCmdRunner
+from sdcm.db_stats import PrometheusDBStats
+from sdcm.utils.common import (
+    S3Storage,
+    ParallelObject,
+    list_instances_aws,
+    list_instances_gce,
+    remove_files,
+    get_builder_by_test_id,
+    get_testrun_dir,
+    search_test_id_in_latest,
+    filter_aws_instances_by_type,
+    filter_gce_instances_by_type,
+    get_sct_root_path,
+    normalize_ipv6_url,
+)
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
-from sdcm.utils.remotewebbrowser import RemoteBrowser, WebDriverContainerMixin
+from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import get_docker_bridge_gateway
+from sdcm.utils.get_username import get_username
+from sdcm.utils.remotewebbrowser import RemoteBrowser, WebDriverContainerMixin
 
 
 LOGGER = logging.getLogger(__name__)

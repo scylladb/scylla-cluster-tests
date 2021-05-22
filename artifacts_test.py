@@ -14,7 +14,6 @@
 import datetime
 import re
 
-from sdcm.cluster import SCYLLA_YAML_PATH
 from sdcm.tester import ClusterTester
 
 
@@ -36,7 +35,7 @@ class ArtifactsTest(ClusterTester):
         return self.db_cluster.nodes[0]
 
     def check_cluster_name(self):
-        with self.node.remote_scylla_yaml(SCYLLA_YAML_PATH) as scylla_yaml:
+        with self.node.remote_scylla_yaml() as scylla_yaml:
             yaml_cluster_name = scylla_yaml.get('cluster_name', '')
 
         self.assertTrue(self.db_cluster.name == yaml_cluster_name,
@@ -90,7 +89,7 @@ class ArtifactsTest(ClusterTester):
         the backend used.
         """
         describecluster_snitch = self.get_describecluster_info().snitch
-        with self.node.remote_manager_yaml(SCYLLA_YAML_PATH) as scylla_yaml:
+        with self.node.remote_scylla_yaml() as scylla_yaml:
             scylla_yaml_snitch = scylla_yaml['endpoint_snitch']
         expected_snitches = BACKENDS[backend_name]
 
