@@ -1,9 +1,22 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2021 ScyllaDB
+
 import logging
 from time import sleep
 
 from sdcm.tester import ClusterTester
 from sdcm.mgmt import get_scylla_manager_tool, TaskStatus
-from sdcm.mgmt.cli import update_config_file, SCYLLA_MANAGER_AGENT_YAML_PATH, RepairTask
+from sdcm.mgmt.cli import RepairTask
 from mgmt_cli_test import BackupFunctionsMixIn
 
 
@@ -11,7 +24,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
-    DESTINATION = '/tmp/backup'
     CLUSTER_NAME = "cluster_under_test"
 
     def create_simple_table(self, table_name, keyspace_name="ks1"):
@@ -66,10 +78,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
             repair_task = mgr_cluster.create_repair_task(interval="1d")
             repair_task_current_details = wait_until_task_finishes_return_details(repair_task)
 
-            if not self.is_cred_file_configured:
-                self.update_config_file()
-            location_list = [self.bucket_name, ]
-            backup_task = mgr_cluster.create_backup_task(interval="1d", location_list=location_list,
+            backup_task = mgr_cluster.create_backup_task(interval="1d", location_list=self.locations,
                                                          keyspace_list=["keyspace1"])
             backup_task_current_details = wait_until_task_finishes_return_details(backup_task)
             backup_task_snapshot = backup_task.get_snapshot_tag()
@@ -81,19 +90,20 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
             self.create_simple_table(table_name="cf2")
             self.write_multiple_rows(table_name="cf2", key_range=(1, 11))
 
-            if not self.is_cred_file_configured:
-                self.update_config_file()
-            location_list = [self.bucket_name, ]
-            rerunning_backup_task = mgr_cluster.create_backup_task(location_list=location_list, keyspace_list=["ks1"],
-                                                                   retention=2)
+            rerunning_backup_task = \
+                mgr_cluster.create_backup_task(location_list=self.locations, keyspace_list=["ks1"], retention=2)
             rerunning_backup_task.wait_and_get_final_status(timeout=300, step=20)
             assert rerunning_backup_task.status == TaskStatus.DONE, \
                 f"Unknown failure in task {rerunning_backup_task.id}"
 
         with self.subTest("Creating a backup task and stopping it"):
             legacy_args = "--force" if manager_tool.client_version.startswith("2.1") else None
-            pausable_backup_task = mgr_cluster.create_backup_task(interval="1d", location_list=location_list,
-                                                                  keyspace_list=["system_*"], legacy_args=legacy_args)
+            pausable_backup_task = mgr_cluster.create_backup_task(
+                interval="1d",
+                location_list=self.locations,
+                keyspace_list=["system_*"],
+                legacy_args=legacy_args,
+            )
             pausable_backup_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=180, step=2)
             pausable_backup_task.stop()
 
@@ -148,9 +158,9 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
                     "The missing table is still in s3, even though it should have been purged"
 
     def update_all_agent_config_files(self):
-        region_name = self.params.get('region_name').split()[0]
+        region_name = self.params.get("backup_bucket_region") or self.params.get("region_name").split()[0]
         for node in self.db_cluster.nodes:
-            update_config_file(node=node, region=region_name, config_file=SCYLLA_MANAGER_AGENT_YAML_PATH)
+            node.update_manager_agent_config(region=region_name)
         sleep(60)
 
     def get_email_data(self):
@@ -192,17 +202,21 @@ def validate_previous_task_details(task, previous_task_details):
             f"previous task {detail_name} is not identical to the current history"
 
 
-def upgrade_scylla_manager(pre_upgrade_manager_version, target_upgrade_server_version, target_upgrade_agent_version,
-                           manager_node, db_cluster):
+def upgrade_scylla_manager(
+        pre_upgrade_manager_version,
+        target_upgrade_server_version,
+        target_upgrade_agent_version,
+        manager_node,
+        db_cluster):
     LOGGER.debug("Stopping manager server")
     if manager_node.is_docker():
-        manager_node.remoter.run('sudo supervisorctl stop scylla-manager')
+        manager_node.remoter.sudo('supervisorctl stop scylla-manager')
     else:
-        manager_node.remoter.run("sudo systemctl stop scylla-manager")
+        manager_node.remoter.sudo("systemctl stop scylla-manager")
 
     LOGGER.debug("Stopping manager agents")
     for node in db_cluster.nodes:
-        node.remoter.run("sudo systemctl stop scylla-manager-agent")
+        node.remoter.sudo("systemctl stop scylla-manager-agent")
 
     LOGGER.debug("Upgrading manager server")
     manager_node.upgrade_mgmt(target_upgrade_server_version, start_manager_after_upgrade=False)
@@ -213,11 +227,11 @@ def upgrade_scylla_manager(pre_upgrade_manager_version, target_upgrade_server_ve
 
     LOGGER.debug("Starting manager server")
     if manager_node.is_docker():
-        manager_node.remoter.run('sudo supervisorctl start scylla-manager')
+        manager_node.remoter.sudo('supervisorctl start scylla-manager')
     else:
-        manager_node.remoter.run("sudo systemctl start scylla-manager")
+        manager_node.remoter.sudo("systemctl start scylla-manager")
     time_to_sleep = 30
-    LOGGER.debug('Sleep {} seconds, waiting for manager service ready to respond'.format(time_to_sleep))
+    LOGGER.debug("Sleep %s seconds, waiting for manager service ready to respond", time_to_sleep)
     sleep(time_to_sleep)
 
     LOGGER.debug("Comparing the new manager versions")

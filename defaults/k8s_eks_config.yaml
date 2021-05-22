@@ -46,3 +46,5 @@ n_db_nodes: 3
 append_scylla_args: ''
 docker_image: ''
 mgmt_docker_image: 'scylladb/scylla-manager:2.2.4'
+
+backup_bucket_backend: 's3'

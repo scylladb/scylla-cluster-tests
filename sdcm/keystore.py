@@ -79,6 +79,9 @@ class KeyStore:
     def get_housekeeping_db_credentials(self):
         return self.get_json("housekeeping-db.json")
 
+    def get_backup_azure_blob_credentials(self):
+        return self.get_json("backup_azure_blob.json")
+
 
 def pub_key_from_private_key_file(key_file):
     return paramiko.rsakey.RSAKey.from_private_key_file(os.path.expanduser(key_file)).get_base64()

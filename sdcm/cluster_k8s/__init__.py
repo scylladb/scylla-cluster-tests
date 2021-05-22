@@ -506,7 +506,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         self.kubectl("create namespace minio")
         self.helm(
             'install --set accessKey=minio_access_key,secretKey=minio_access_key,'
-            f'defaultBucket.enabled=true,defaultBucket.name={self.manager_bucket_name},'
+            f'defaultBucket.enabled=true,defaultBucket.name={self.params.get("backup_bucket_location")},'
             'defaultBucket.policy=public --generate-name minio/minio',
             namespace='minio')
 
@@ -791,10 +791,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             if found:
                 return pod
         raise RuntimeError("Can't find minio pod")
-
-    @property
-    def manager_bucket_name(self):
-        return self.params.get('backup_bucket_location') or 'bucket'
 
     @property
     def minio_ip_address(self) -> str:

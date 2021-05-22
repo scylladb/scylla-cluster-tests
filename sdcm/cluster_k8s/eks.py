@@ -461,5 +461,5 @@ class MonitorSetEKS(MonitorSetAWS):
     # On EKS nodes you can't communicate to cluster nodes outside of it, so we have to enforce using public ip
     DB_NODES_IP_ADDRESS = 'public_ip_address'
 
-    def install_scylla_manager(self, node, auth_token):
+    def install_scylla_manager(self, node):
         pass

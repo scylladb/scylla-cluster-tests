@@ -14,3 +14,5 @@
 SCYLLA_YAML_PATH = "/etc/scylla/scylla.yaml"
 SCYLLA_MANAGER_YAML_PATH = "/etc/scylla-manager/scylla-manager.yaml"
 SCYLLA_MANAGER_AGENT_YAML_PATH = "/etc/scylla-manager-agent/scylla-manager-agent.yaml"
+SCYLLA_MANAGER_TLS_CERT_FILE = "/var/lib/scylla-manager/scylla_manager.crt"
+SCYLLA_MANAGER_TLS_KEY_FILE = "/var/lib/scylla-manager/scylla_manager.key"

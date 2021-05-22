@@ -14,94 +14,117 @@
 # Copyright (c) 2016 ScyllaDB
 
 import os
-import time
 import re
+import time
 from random import randint
+from pathlib import Path
+from functools import cached_property
 
 from invoke import exceptions
 from pkg_resources import parse_version
 
 from sdcm import mgmt
-from sdcm.sct_events.group_common_events import ignore_no_space_errors
 from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
-from sdcm.mgmt.cli import ScyllaManagerTool, SCYLLA_MANAGER_AGENT_YAML_PATH, update_config_file
+from sdcm.mgmt.cli import ScyllaManagerTool
+from sdcm.remote import shell_script_cmd
+from sdcm.tester import ClusterTester
+from sdcm.cluster import Setup
 from sdcm.nemesis import MgmtRepair
+from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.database import DatabaseLogEvent
-from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
-from sdcm.tester import ClusterTester
+from sdcm.sct_events.group_common_events import ignore_no_space_errors
 
 
 class BackupFunctionsMixIn:
-    is_cred_file_configured = False
-    region = None
-    bucket_name = None
-    DESTINATION = '/tmp/backup'
+    DESTINATION = Path('/tmp/backup')
 
-    @staticmethod
-    def download_files_from_s3(node, destination, file_list):
-        download_cmd = 'aws s3 cp {} {}'
-        for file_path in file_list:
-            node.remoter.run(download_cmd.format(file_path, destination))
+    backup_azure_blob_service = None
+    backup_azure_blob_sas = None
 
-    @staticmethod
-    def download_files_from_gs(node, destination, file_list):
-        download_cmd = 'gsutil cp {} {}'
-        for file_path in file_list:
-            file_path = file_path.replace('gcs://', 'gs://')
-            node.remoter.run(download_cmd.format(file_path, destination))
+    @cached_property
+    def locations(self) -> list[str]:
+        backend = self.params.get("backup_bucket_backend")
 
-    def run_cmd_with_retry(self, cmd, node, retries=10):
+        # FIXME: Make it works with multiple locations or file a bug for scylla-manager.
+        return [f"{backend}:{location}" for location in self.params.get("backup_bucket_location").split()[:1]]
+
+    def _run_cmd_with_retry(self, executor, cmd, retries=10):
         for _ in range(retries):
             try:
-                node.remoter.run(cmd)
-            except exceptions.UnexpectedExit as ex:
-                self.log.debug(f'cmd {cmd} failed with error {ex}, will retry')
-            else:
+                executor(cmd)
                 break
+            except exceptions.UnexpectedExit as ex:
+                self.log.debug("cmd %s failed with error %s, will retry", cmd, ex)
 
-    def install_awscli_dependencies(self, node, destination):
-        cmd = f'''sudo yum install -y epel-release
-                  sudo yum install -y python-pip
-                  sudo yum remove -y epel-release
-                  sudo pip install awscli==1.18.140
-                  mkdir -p {destination}'''
-        self.run_cmd_with_retry(cmd=cmd, node=node)
+    def install_awscli_dependencies(self, node):
+        self._run_cmd_with_retry(executor=node.remoter.sudo, cmd=shell_script_cmd("""\
+            yum install -y epel-release
+            yum install -y python-pip
+            yum remove -y epel-release
+            pip install awscli==1.18.140
+        """))
 
-    def install_gsutil_dependencies(self, node, destination):
-        cmd = f'''curl https://sdk.cloud.google.com > install.sh
-                  bash install.sh --disable-prompts
-                  mkdir -p {destination}'''
-        self.run_cmd_with_retry(cmd=cmd, node=node)
+    def install_gsutil_dependencies(self, node):
+        self._run_cmd_with_retry(executor=node.remoter.run, cmd=shell_script_cmd("""\
+            curl https://sdk.cloud.google.com > install.sh
+            bash install.sh --disable-prompts
+        """))
+
+    def install_azcopy_dependencies(self, node):
+        self._run_cmd_with_retry(executor=node.remoter.sudo, cmd=shell_script_cmd("""\
+            curl -L https://aka.ms/downloadazcopy-v10-linux | \
+                tar xz -C /usr/local/bin --strip-components 1 --wildcards '*/azcopy'
+        """))
+        self.backup_azure_blob_service = \
+            f"https://{Setup.backup_azure_blob_credentials['account']}.blob.core.windows.net/"
+        self.backup_azure_blob_sas = Setup.backup_azure_blob_credentials["download_sas"]
+
+    @staticmethod
+    def download_from_s3(node, source, destination):
+        node.remoter.run(f"aws s3 cp '{source}' '{destination}'")
+
+    @staticmethod
+    def download_from_gs(node, source, destination):
+        node.remoter.run(f"gsutil cp '{source.replace('gcs://', 'gs://')}' '{destination}'")
+
+    def download_from_azure(self, node, source, destination):
+        # azure://<bucket>/<path> -> https://<account>.blob.core.windows.net/<bucket>/<path>?SAS
+        source = f"{source.replace('azure://', self.backup_azure_blob_service)}{self.backup_azure_blob_sas}"
+        node.remoter.run(f"azcopy copy '{source}' '{destination}'")
 
     def restore_backup(self, mgr_cluster, snapshot_tag, keyspace_and_table_list):
-        # pylint: disable=too-many-locals
-        if self.params.get('cluster_backend') == 'aws':
+        backup_bucket_backend = self.params.get("backup_bucket_backend")
+        if backup_bucket_backend == "s3":
             install_dependencies = self.install_awscli_dependencies
-            download_files = self.download_files_from_s3
-        elif self.params.get('cluster_backend') == 'gce':
+            download = self.download_from_s3
+        elif backup_bucket_backend == "gcs":
             install_dependencies = self.install_gsutil_dependencies
-            download_files = self.download_files_from_gs
+            download = self.download_from_gs
+        elif backup_bucket_backend == "azure":
+            install_dependencies = self.install_azcopy_dependencies
+            download = self.download_from_azure
         else:
-            raise ValueError(f'"{self.params.get("cluster_backend")}" not supported')
+            raise ValueError(f'{backup_bucket_backend=} is not supported')
 
         per_node_backup_file_paths = mgr_cluster.get_backup_files_dict(snapshot_tag)
         for node in self.db_cluster.nodes:
-            install_dependencies(node=node, destination=self.DESTINATION)
-            node_data_path = '/var/lib/scylla/data'
+            install_dependencies(node=node)
+            node_data_path = Path("/var/lib/scylla/data")
             node_id = node.host_id
             for keyspace, tables in keyspace_and_table_list.items():
-                keyspace_path = os.path.join(node_data_path, keyspace)
+                keyspace_path = node_data_path / keyspace
                 for table in tables:
-                    node.remoter.run(f'mkdir -p {os.path.join(self.DESTINATION, table)}')
-                    download_files(node=node, destination=os.path.join(self.DESTINATION, table, ''),
-                                   file_list=per_node_backup_file_paths[node_id][keyspace][table])
+                    destination = self.DESTINATION / table
+                    node.remoter.run(f'mkdir -p {destination}')
+                    for file_path in per_node_backup_file_paths[node_id][keyspace][table]:
+                        download(node=node, source=file_path, destination=destination)
                     file_details_lst = per_node_backup_file_paths[node_id][keyspace][table][0].split('/')
                     table_id = file_details_lst[file_details_lst.index(table) + 1]
-                    table_upload_path = os.path.join(keyspace_path, table + '-' + table_id, 'upload')
-                    node.remoter.run(f'sudo cp {os.path.join(self.DESTINATION, table, "*")} {table_upload_path}/.')
-                    node.remoter.run(f'sudo chown scylla:scylla -Rf {table_upload_path}')
+                    table_upload_path = keyspace_path / f"{table}-{table_id}" / "upload"
+                    node.remoter.sudo(f"cp {destination / '*'} {table_upload_path}")
+                    node.remoter.sudo(f"chown scylla:scylla -Rf {table_upload_path}")
                     node.run_nodetool(f"refresh -- {keyspace} {table}")
 
     def restore_backup_from_backup_task(self, mgr_cluster, backup_task, keyspace_and_table_list):
@@ -198,19 +221,6 @@ class BackupFunctionsMixIn:
 
         for stress in write_queue:
             self.verify_stress_thread(cs_thread_pool=stress)
-
-    def update_config_file(self):
-        # FIXME: add to the nodes not in the same region as the bucket the bucket's region
-        # this is a temporary fix, after https://github.com/scylladb/mermaid/issues/1456 is fixed, this is not necessary
-        if self.params.get('cluster_backend') == 'aws':
-            self.region = self.params.get('region_name').split()
-            self.bucket_name = f"s3:{self.params.get('backup_bucket_location').split()[0]}"
-            for node in self.db_cluster.nodes:
-                update_config_file(node=node, region=self.region[0], config_file=SCYLLA_MANAGER_AGENT_YAML_PATH)
-        elif self.params.get('cluster_backend') == 'gce':
-            self.region = self.params.get('gce_datacenter')
-            self.bucket_name = f"gcs:{self.params.get('backup_bucket_location')}"
-        self.is_cred_file_configured = True
 
     def generate_background_read_load(self):
         self.log.info('Starting c-s read')
@@ -316,7 +326,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         2) Run test_mgmt_cluster test.
         3) test_mgmt_cluster_healthcheck
         4) test_client_encryption
-        :return:
         """
         with self.subTest('Basic Backup Test'):
             self.test_basic_backup()
@@ -338,25 +347,23 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self._repair_intensity_feature(fault_multiple_nodes=False)
 
     def test_repair_control(self):
-        InfoEvent(message="Starting C-S write load")
+        InfoEvent(message="Starting C-S write load").publish()
         self.run_prepare_write_cmd()
-        InfoEvent(message="Flushing")
+        InfoEvent(message="Flushing").publish()
         for node in self.db_cluster.nodes:
             node.run_nodetool("flush")
-        InfoEvent(message="Waiting for compactions to end")
+        InfoEvent(message="Waiting for compactions to end").publish()
         self.wait_no_compactions_running(n=90, sleep_time=30)
-        InfoEvent(message="Starting C-S read load")
+        InfoEvent(message="Starting C-S read load").publish()
         stress_read_thread = self.generate_background_read_load()
         time.sleep(600)  # So we will see the base load of the cluster
-        InfoEvent(message="Sleep ended - Starting tests")
+        InfoEvent(message="Sleep ended - Starting tests").publish()
         self._create_repair_and_alter_it_with_repair_control()
         load_results = stress_read_thread.get_results()
         self.log.info(f'load={load_results}')
 
     def _create_repair_and_alter_it_with_repair_control(self):
         keyspace_to_be_repaired = "keyspace2"
-        if not self.is_cred_file_configured:
-            self.update_config_file()
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.add_cluster(name=self.CLUSTER_NAME + '_repair_control',
                                                db_cluster=self.db_cluster,
@@ -371,17 +378,17 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                     {"parallel": 1},
                     {"intensity": 2, "parallel": 1}]
 
-        InfoEvent(message="Repair started")
+        InfoEvent(message="Repair started").publish()
         repair_task = mgr_cluster.create_repair_task(keyspace="keyspace2")
         next_percentage_block = 20
         repair_task.wait_for_percentage(next_percentage_block)
         for args in arg_list:
             next_percentage_block += 20
-            InfoEvent(message=f"Changing repair args to: {args}")
+            InfoEvent(message=f"Changing repair args to: {args}").publish()
             mgr_cluster.control_repair(**args)
             repair_task.wait_for_percentage(next_percentage_block)
         repair_task.wait_and_get_final_status(step=30)
-        InfoEvent(message="Repair ended")
+        InfoEvent(message="Repair ended").publish()
 
     def _repair_intensity_feature(self, fault_multiple_nodes):
         InfoEvent(message="Starting C-S write load").publish()
@@ -438,15 +445,12 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
     def test_basic_backup(self):
         self.log.info('starting test_basic_backup')
-        if not self.is_cred_file_configured:
-            self.update_config_file()
-        location_list = [self.bucket_name, ]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
         self.generate_load_and_wait_for_results()
-        backup_task = mgr_cluster.create_backup_task(location_list=location_list)
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
         backup_task.wait_for_status(list_status=[TaskStatus.DONE])
         self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
 
@@ -455,9 +459,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
     def test_backup_multiple_ks_tables(self):
         self.log.info('starting test_backup_multiple_ks_tables')
-        if not self.is_cred_file_configured:
-            self.update_config_file()
-        location_list = [self.bucket_name, ]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
@@ -466,32 +467,26 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self.generate_load_and_wait_for_results()
         self.log.debug(f'tables list = {tables}')
         # TODO: insert data to those tables
-        backup_task = mgr_cluster.create_backup_task(location_list=location_list)
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
         backup_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=10800)
         self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
         self.log.info('finishing test_backup_multiple_ks_tables')
 
     def test_backup_location_with_path(self):
         self.log.info('starting test_backup_location_with_path')
-        if not self.is_cred_file_configured:
-            self.update_config_file()
-        location_list = [f'{self.bucket_name}/path_testing/']
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
         self.generate_load_and_wait_for_results()
         try:
-            mgr_cluster.create_backup_task(location_list=location_list)
+            mgr_cluster.create_backup_task(location_list=[f'{location}/path_testing/' for location in self.locations])
         except ScyllaManagerError as error:
             self.log.info(f'Expected to fail - error: {error}')
         self.log.info('finishing test_backup_location_with_path')
 
     def test_backup_rate_limit(self):
         self.log.info('starting test_backup_rate_limit')
-        if not self.is_cred_file_configured:
-            self.update_config_file()
-        location_list = [self.bucket_name, ]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
@@ -499,7 +494,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self.generate_load_and_wait_for_results()
         rate_limit_list = [f'{dc}:{randint(1, 10)}' for dc in self.get_all_dcs_names()]
         self.log.info(f'rate limit will be {rate_limit_list}')
-        backup_task = mgr_cluster.create_backup_task(location_list=location_list, rate_limit_list=rate_limit_list)
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=rate_limit_list)
         task_status = backup_task.wait_and_get_final_status()
         self.log.info(f'backup task finished with status {task_status}')
         # TODO: verify that the rate limit is as set in the cmd
@@ -693,10 +688,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
     def test_enospc_during_backup(self):
         self.log.info('starting test_enospc_during_backup')
-        if not self.is_cred_file_configured:
-            self.update_config_file()
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        location_list = [self.bucket_name, ]
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
@@ -707,7 +699,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         has_enospc_been_reached = False
         with ignore_no_space_errors(node=target_node):
             try:
-                backup_task = mgr_cluster.create_backup_task(location_list=location_list)
+                backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
                 backup_task.wait_for_uploading_stage()
                 backup_task.stop()
 
@@ -789,8 +781,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     def test_intensity_and_parallel(self, fault_multiple_nodes):
         keyspace_to_be_repaired = "keyspace2"
         InfoEvent(message='starting test_intensity_and_parallel').publish()
-        if not self.is_cred_file_configured:
-            self.update_config_file()
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.add_cluster(
             name=self.CLUSTER_NAME + '_intensity_and_parallel',
@@ -850,15 +840,12 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     def _suspend_and_resume_task_template(self, task_type):
         # task types: backup/repair
         self.log.info(f'starting test_suspend_and_resume_{task_type}')
-        if not self.is_cred_file_configured:
-            self.update_config_file()
-        location_list = [self.bucket_name, ]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
         if task_type == "backup":
-            suspendable_task = mgr_cluster.create_backup_task(location_list=location_list)
+            suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
         elif task_type == "repair":
             suspendable_task = mgr_cluster.create_repair_task()
         else:
@@ -875,14 +862,11 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
     def test_suspend_and_resume_without_starting_tasks(self):
         self.log.info(f'starting test_suspend_and_resume_without_starting_tasks')
-        if not self.is_cred_file_configured:
-            self.update_config_file()
-        location_list = [self.bucket_name, ]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
-        suspendable_task = mgr_cluster.create_backup_task(location_list=location_list)
+        suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
         assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), \
             f"task {suspendable_task.id} failed to reach status {TaskStatus.RUNNING}"
         mgr_cluster.suspend()
