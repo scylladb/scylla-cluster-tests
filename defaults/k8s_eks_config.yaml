@@ -46,4 +46,5 @@ append_scylla_args: ''
 docker_image: ''
 mgmt_docker_image: 'scylladb/scylla-manager:2.3.0'
 
+backup_bucket_backend: 's3'
 backup_bucket_location: 'minio-bucket'

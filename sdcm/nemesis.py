@@ -1783,25 +1783,20 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise UnsupportedNemesis('backup bucket location configuration is not defined!')
 
         mgr_cluster = self.cluster.get_cluster_manager()
-        cluster_backend = self.cluster.params.get('cluster_backend')
-        backup_bucket_location = self.cluster.params.get('backup_bucket_location')
-        if self._is_it_on_kubernetes():
-            bucket_name = f"s3:{backup_bucket_location.split()[0]}"
-        elif cluster_backend == 'aws':
-            bucket_name = f"s3:{backup_bucket_location.split()[0]}"
-        elif cluster_backend == 'gce':
-            bucket_name = f"gcs:{backup_bucket_location}"
-        else:
-            raise ValueError(f"cluster_backend={cluster_backend} not supported in ManagementBackup")
+        backup_bucket_backend = self.cluster.params.get("backup_bucket_backend")
+        backup_bucket_location = self.cluster.params.get("backup_bucket_location")
+        bucket_name = f"{backup_bucket_backend}:{backup_bucket_location.split()[0]}"
         if backup_specific_tables:
             non_test_keyspaces = self.cluster.get_test_keyspaces()
             mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ], keyspace_list=non_test_keyspaces)
         else:
             mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ])
 
+        assert mgr_task is not None, "Backup task wasn't created"
+
         status = mgr_task.wait_and_get_final_status(timeout=54000, step=5, only_final=True)
         if status == TaskStatus.DONE:
-            self.log.info('Task: {} is done.'.format(mgr_task.id))
+            self.log.info("Task: %s is done.", mgr_task.id)
         elif status == TaskStatus.ERROR:
             assert False, f'Backup task {mgr_task.id} failed'
         else:
