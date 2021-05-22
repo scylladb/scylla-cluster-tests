@@ -34,7 +34,8 @@ from concurrent.futures import ThreadPoolExecutor
 from invoke import UnexpectedExit
 from cassandra import ConsistencyLevel
 
-from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady
+from sdcm.paths import SCYLLA_YAML_PATH
+from sdcm.cluster import NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady
 from sdcm.cluster import NodeStayInClusterAfterDecommission
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_string, \
@@ -48,7 +49,6 @@ from sdcm.keystore import KeyStore
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm import wait
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import CassandraStressLogEvent
