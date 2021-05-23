@@ -183,7 +183,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             events=events)
 
     def get_debug_events(self):
-        return self.get_events(event_severity=[Severity.DEBUG])
+        return self.get_events(event_severity=[Severity.DEBUG.name])
 
     def check_regression(self, test_id, data, is_gce=False):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         doc = self.get_test_by_id(test_id)
@@ -199,9 +199,8 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             build_id = ''
 
         last_events, events_summary = self.get_events(event_severity=[
-            Severity.CRITICAL, Severity.ERROR, Severity.WARNING])
+            Severity.CRITICAL.name, Severity.ERROR.name, Severity.WARNING.name])
         reactor_stall_events, reactor_stall_events_summary = self.get_debug_events()
-
         subject = f'Performance Regression Compare Results (latency during operations) -' \
                   f' {test_name} - {test_version} - {str(test_start_time)}'
         results = dict(
