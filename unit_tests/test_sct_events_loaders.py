@@ -260,7 +260,7 @@ class TestCassandraStressLogEvent(unittest.TestCase):
         def _get_event(line, expected_type, expected_severity):
             for pattern, event in CS_ERROR_EVENTS_PATTERNS:
                 if pattern.search(line):
-                    event.add_info(node='self.node', line=line, line_number=1)
+                    event.add_info(node='self.node', line=line, line_number=1).dont_publish()
                     assert event.type == expected_type, \
                         f'Unexpected event.type {event.type}. Expected "{expected_type}"'
                     assert event.severity == expected_severity, \
