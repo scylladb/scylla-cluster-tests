@@ -199,7 +199,6 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
             if report_results[key].get('has_diff', False) or report_results[key].get('has_improve', False):
                 self.assertIn(key, report_results)
         self.assertIn('Kibana dashboard', report_html)
-        self.assertIn('Build URL', report_html)
 
     def test_generate_html_report_file_and_email_body_for_results_without_aio(self):
         result_path = os.path.join(os.path.dirname(__file__), 'test_data/test_microbenchmarking/PFF_without_AVGAIO')
