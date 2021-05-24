@@ -1901,7 +1901,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if ldap and ms_ad_ldap:
                 scylla_yml.update(self.get_ldap_ms_ad_config())
             elif ldap:
-                scylla_yml.update(self.get_openldap_config())
+                scylla_yml.update(self.get_ldap_config())
 
             if append_scylla_yaml:
                 scylla_yml.update(yaml.safe_load(append_scylla_yaml))
