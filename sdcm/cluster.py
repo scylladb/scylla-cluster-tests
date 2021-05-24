@@ -4176,6 +4176,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # pylint: disable=too-many-branches
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
+        if node.distro.is_centos8 or node.distro.is_rhel8 or node.distro.is_oel8:
+            node.remoter.sudo('systemctl stop iptables')
+            node.remoter.sudo('systemctl disable iptables')
         node.update_repo_cache()
 
         install_scylla = True
