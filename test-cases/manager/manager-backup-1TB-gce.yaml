@@ -30,10 +30,10 @@ nemesis_filter_seeds: false
 
 gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1804-lts'
 scylla_linux_distro: 'ubuntu-bionic'
-scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/deb/unstable/bionic/master/latest/scylladb-manager-master/scylla-manager.list'
+scylla_mgmt_agent_repo: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.3-bionic.list'
 
 scylla_linux_distro_loader: 'centos'
-scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo'
+scylla_mgmt_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.3.repo'
 
 space_node_threshold: 644245094
 

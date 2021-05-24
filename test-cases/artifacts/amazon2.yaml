@@ -18,3 +18,5 @@ system_auth_rf: 1
 test_duration: 60
 use_preinstalled_scylla: false
 user_prefix: 'artifacts-amazon2'
+
+scylla_mgmt_agent_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.3.repo'

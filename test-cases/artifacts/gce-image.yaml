@@ -17,3 +17,5 @@ store_results_in_elasticsearch: false
 test_duration: 60
 user_prefix: 'artifacts-gce-image'
 system_auth_rf: 1
+
+scylla_mgmt_agent_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.3.repo'
