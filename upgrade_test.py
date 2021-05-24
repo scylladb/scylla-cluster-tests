@@ -327,7 +327,7 @@ class UpgradeTest(FillDatabaseData):
             # [3] https://github.com/scylladb/scylla-tools-java/pull/232
             main_dir, subdir = Path("/etc/scylla"), "cassandra"
             filename = "cassandra-rackdc.properties"
-            result = node.remoter.run(
+            node.remoter.sudo(
                 f"cp {main_dir / filename} {main_dir / subdir / filename}")
 
             node.run_nodetool(sub_cmd="upgradesstables", args="-a")
