@@ -18,3 +18,5 @@ test_duration: 60
 use_preinstalled_scylla: false
 user_prefix: 'artifacts-oel76'
 system_auth_rf: 1
+
+scylla_mgmt_agent_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.3.repo'
