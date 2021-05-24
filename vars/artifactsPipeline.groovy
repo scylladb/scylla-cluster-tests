@@ -109,6 +109,7 @@ def call(Map pipelineParams) {
                                                     elif [[ ! -z "${params.unified_package}" ]]; then
                                                         export SCT_UNIFIED_PACKAGE="${params.unified_package}"
                                                         export SCT_NONROOT_OFFLINE_INSTALL=${params.nonroot_offline_install}
+                                                        export SCT_USE_MGMT=false
                                                     else
                                                         echo "need to choose one of SCT_GCE_IMAGE_DB | SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO | SCT_UNIFIED_PACKAGE"
                                                         exit 1
