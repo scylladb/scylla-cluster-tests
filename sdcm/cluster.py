@@ -76,10 +76,10 @@ from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version, get_systemd_version
 from sdcm.sct_events.base import LogEvent
-from sdcm.sct_events.filters import EventsFilter
+from sdcm.sct_events.filters import EventsFilter, DbEventsFilter
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, BACKTRACE_RE
+from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, BACKTRACE_RE, DatabaseLogEvent
 from sdcm.sct_events.grafana import set_grafana_url
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
@@ -4452,7 +4452,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             raise NodeStayInClusterAfterDecommission(error_msg)
 
         LOGGER.info('Decommission %s PASS', node)
-        self.terminate_node(node)  # pylint: disable=no-member
+        with DbEventsFilter(db_event=DatabaseLogEvent.POWER_OFF, node=node):
+            self.terminate_node(node)  # pylint: disable=no-member
         Setup.tester_obj().monitors.reconfigure_scylla_monitoring()
 
     def decommission(self, node):
