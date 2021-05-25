@@ -112,8 +112,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         last_events = dict()
         events_summary = dict()
         if not event_severity:
-            for event in Severity:
-                event_severity.append(event.name)
+            event_severity = [event.name for event in Severity]
 
         if self._events:
             for event in event_severity:
