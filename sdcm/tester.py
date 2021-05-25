@@ -287,7 +287,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             Setup.configure_rsyslog(self.localhost, enable_ngrok=False)
 
         self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
-        if self.params.get("use_ldap_authorization") or self.params.get("prepare_saslauthd") or self.params.get(
+        if self.params.get("use_ms_ad_ldap"):
+            ldap_ms_ad_credentials = KeyStore().get_ldap_ms_ad_credentials()
+            Setup.LDAP_ADDRESS = ldap_ms_ad_credentials["server_address"]
+        elif self.params.get("use_ldap_authorization") or self.params.get("prepare_saslauthd") or self.params.get(
                 "use_saslauthd_authenticator"):
             self.configure_ldap(node=self.localhost, use_ssl=False)
 
