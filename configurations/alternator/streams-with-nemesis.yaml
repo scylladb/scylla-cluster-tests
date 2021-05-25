@@ -1,4 +1,4 @@
 user_prefix: 'alternator-streams-nemesis'
 nemesis_class_name: 'DecommissionMonkey'
-nemesis_interval: 30
+nemesis_interval: 700
 nemesis_during_prepare: true
