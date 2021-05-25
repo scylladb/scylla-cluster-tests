@@ -1696,7 +1696,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return self._remote_yaml(path=path)
 
     @staticmethod
-    def get_ldap_config():
+    def get_openldap_config():
         if Setup.LDAP_ADDRESS is None:
             return {}
         ldap_server_ip = '127.0.0.1' if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION else Setup.LDAP_ADDRESS[0]
@@ -1879,7 +1879,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if ldap and ms_ad_ldap:
                 scylla_yml.update(self.get_ldap_ms_ad_config())
             elif ldap:
-                scylla_yml.update(self.get_ldap_config())
+                scylla_yml.update(self.get_openldap_config())
 
             if append_scylla_yaml:
                 scylla_yml.update(yaml.safe_load(append_scylla_yaml))
