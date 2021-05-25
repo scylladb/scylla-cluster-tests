@@ -765,7 +765,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         raise UnsupportedNemesis("Only GKE and EKS backends support this nemesis")
 
     def _terminate_cluster_node(self, node):
-        self.cluster.terminate_node(node)
+        with DbEventsFilter(db_event=DatabaseLogEvent.POWER_OFF, node=node):
+            self.cluster.terminate_node(node)
         self.monitoring_set.reconfigure_scylla_monitoring()
 
     def disrupt_nodetool_decommission(self, add_node=True, disruption_name=None):
