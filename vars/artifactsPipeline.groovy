@@ -115,7 +115,7 @@ def call(Map pipelineParams) {
                                                         exit 1
                                                     fi
 
-                                                    if [[ ! -z "${params.scylla_mgmt_repo}" ]]; then
+                                                    if [[ ! -z "${params.scylla_mgmt_repo}" && -z "${params.unified_package}" ]]; then
                                                         export SCT_USE_MGMT=true
                                                         export SCT_SCYLLA_REPO_M="${params.scylla_repo}"
                                                         export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
