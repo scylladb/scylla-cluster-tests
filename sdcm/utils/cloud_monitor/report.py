@@ -1,5 +1,7 @@
 import os
 import tempfile
+import pytz
+from datetime import datetime, timedelta
 from collections import defaultdict
 from copy import deepcopy
 import jinja2
@@ -127,3 +129,44 @@ class DetailedReport(BaseReport):
         resources_html = self.render_template()
         self.html_template = "base.html"
         return self._jinja_render_template(body=resources_html)
+
+
+class QAonlyTimeDistributionReport(BaseReport):
+    def __init__(self, cloud_instances: CloudInstances, static_ips: StaticIPs, user=None):
+        super(QAonlyTimeDistributionReport, self).__init__(
+            cloud_instances, static_ips, html_template="per_qa_user.html")
+        self.user = user
+        self.report = {7: defaultdict(list), 5: defaultdict(list), 3: defaultdict(list)}
+        self.qa_users = KeyStore().get_qa_users()
+
+    def to_html(self):
+        for instance in self.cloud_instances.all:
+            if instance.owner not in self.qa_users or instance.state != "running":
+                continue
+            if self._is_older_than_3days(instance.create_time):
+                self.report[3][instance.owner].append(instance)
+            elif self._is_older_than_5days(instance.create_time):
+                self.report[5][instance.owner].append(instance)
+            elif self._is_older_than_7days(instance.create_time):
+                self.report[7][instance.owner].append(instance)
+            else:
+                continue
+        if self.user:
+            for key in self.report:
+                self.report[key] = {self.user: self.report[key].get(self.user, list())}
+
+        resources_html = self.render_template()
+        self.html_template = "base.html"
+        return self._jinja_render_template(body=resources_html)
+
+    @staticmethod
+    def _is_older_than_3days(create_time):
+        return pytz.utc.localize(datetime.utcnow() - timedelta(days=3)) > create_time > pytz.utc.localize(datetime.utcnow() - timedelta(days=5))
+
+    @staticmethod
+    def _is_older_than_5days(create_time):
+        return pytz.utc.localize(datetime.utcnow() - timedelta(days=5)) > create_time > pytz.utc.localize(datetime.utcnow() - timedelta(days=7))
+
+    @staticmethod
+    def _is_older_than_7days(create_time):
+        return create_time < pytz.utc.localize(datetime.utcnow() - timedelta(days=7))

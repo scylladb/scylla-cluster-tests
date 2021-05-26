@@ -1,0 +1,31 @@
+    <h2>Instances</h2>
+    {% for day, rep in report|dictsort(reverse=True) %}
+        <h2> Older than {{ day }} days </h2>
+        {% if rep %}
+            {% for user, instances in rep|dictsort %}
+                {% if instances %}
+                    <h3>{{ user }}</h3>
+                    <table id="results_table">
+                        <tr>
+                            <th>Cloud</th>
+                            <th>Region-AZ</th>
+                            <th>Name</th>
+                            <th>State</th>
+                            <th>Launch time</th>
+                        </tr>
+                        {% for instance in instances|sort(attribute="create_time") %}
+                        <tr>
+                            <td>{{ instance.cloud }}</td>
+                            <td>{{ instance.region_az }}</td>
+                            <td>{{ instance.name }}</td>
+                            <td>{{ instance.state }}</td>
+                            <td>{{ instance.create_time }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                {% endif %}
+            {% endfor %}
+        {% else %}
+            <h4> No instances found </h4>
+        {% endif %}
+    {% endfor %}
