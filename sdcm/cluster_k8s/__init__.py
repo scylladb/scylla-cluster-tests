@@ -53,6 +53,7 @@ from sdcm.coredump import CoredumpExportFileThread
 from sdcm.mgmt import AnyManagerCluster
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.utils import properties
 from sdcm.utils.common import download_from_github, shorten_cluster_name, walk_thru_data
 from sdcm.utils.k8s import (
     add_pool_node_affinity,
@@ -1375,6 +1376,7 @@ class BaseScyllaPodContainer(BasePodContainer):
         More details here: https://github.com/scylladb/scylla-operator/blob/master/docs/generic.md#configure-scylla
         """
         with self.parent_cluster.scylla_yaml_lock:
+            # TBD: Interfere with remote_cassandra_rackdc_properties, needed to be addressed
             scylla_yaml_copy = deepcopy(self.parent_cluster.scylla_yaml)
             yield self.parent_cluster.scylla_yaml
             if scylla_yaml_copy == self.parent_cluster.scylla_yaml:
@@ -1749,6 +1751,58 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
             namespace=self.namespace,
             content_type=JSON_PATCH_TYPE
         )
+
+    @property
+    def scylla_config_map(self):
+        try:
+            return self.k8s_cluster.k8s_core_v1_api.read_namespaced_config_map(
+                name='scylla-config', namespace=self.namespace)
+        except:
+            return None
+
+    @contextlib.contextmanager
+    def remote_cassandra_rackdc_properties(self, path: str = cluster.SCYLLA_PROPERTIES_PATH) -> ContextManager:
+        """Update cassandra-rackdc.properties, k8s way
+
+        Scylla Operator handles cassandra-rackdc.properties updates using ConfigMap resource
+        and we don't need to update it manually on each node.
+        Only rollout restart stateful set is needed to get it updated.
+
+        More details here: https://github.com/scylladb/scylla-operator/blob/master/docs/generic.md#configure-scylla
+        """
+        with self.scylla_yaml_lock:
+            scylla_config_map = self.scylla_config_map
+            if scylla_config_map is None:
+                old_rack_properties = {}
+            else:
+                old_rack_properties = properties.deserialize(
+                    scylla_config_map.data.get('cassandra-rackdc.properties', ""))
+            if not old_rack_properties:
+                if len(self.nodes) > 1:
+                    # If there is not config_map than get properties from the very first node in the cluster
+                    with self.nodes[0].remote_cassandra_rackdc_properties(path) as node_rack_properties:
+                        old_rack_properties = node_rack_properties
+            new_rack_properties = deepcopy(old_rack_properties)
+            yield new_rack_properties
+            if new_rack_properties == old_rack_properties:
+                LOGGER.debug("%s: cassandra-rackdc.properties hasn't been changed", self)
+                return
+            original = properties.serialize(old_rack_properties).splitlines(keepends=True)
+            changed_bare = properties.serialize(new_rack_properties)
+            changed = changed_bare.splitlines(keepends=True)
+            diff = "".join(unified_diff(original, changed))
+            LOGGER.debug("%s: cassandra-rackdc.properties has been updated:\n%s", self, diff)
+            config_map = self.k8s_cluster.k8s_core_v1_api.read_namespaced_config_map(
+                name='scylla-config',
+                namespace=self.namespace)
+            config_map.data.get('scylla.yaml')
+            config_map.data['cassandra-rackdc.properties'] = changed_bare
+            self.k8s_cluster.k8s_core_v1_api.patch_namespaced_config_map(
+                name='scylla-config',
+                namespace='scylla',
+                body=config_map)
+            self.restart_scylla()
+            self.wait_for_nodes_up_and_normal()
 
     @property
     def scylla_cluster_spec(self) -> ResourceField:
