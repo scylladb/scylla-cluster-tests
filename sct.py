@@ -32,7 +32,7 @@ from prettytable import PrettyTable
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_runner import SctRunner
-from sdcm.utils.cloud_monitor import cloud_report
+from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.common import (list_instances_aws, list_instances_gce, list_resources_docker, clean_cloud_resources,
                                all_aws_regions, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
                                list_logs_by_test_id, get_branched_ami, gce_meta_to_dict,
@@ -685,6 +685,18 @@ def cloud_usage_report(emails):
     email_list = emails.split(",")
     click.secho(message="Will send Cloud Usage report to %s" % email_list, fg="green")
     cloud_report(mail_to=email_list)
+    click.secho(message="Done." % email_list, fg="yellow")
+
+
+@cli.command("cloud-usage-qa-report", help="Generate and send Cloud usage report")
+@click.option("-e", "--emails", required=True, type=str, help="Comma separated list of emails. Example a@b.com,c@d.com")
+@click.option("-u", "--user", required=False, type=str, help="User or instance owner")
+def cloud_usage_qa_report(emails, user=None):
+    add_file_logger()
+
+    email_list = emails.split(",")
+    click.secho(message="Will send Cloud Usage report to %s" % email_list, fg="green")
+    cloud_qa_report(mail_to=email_list, user=user)
     click.secho(message="Done." % email_list, fg="yellow")
 
 
