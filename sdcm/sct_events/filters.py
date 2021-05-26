@@ -50,6 +50,17 @@ class DbEventsFilter(BaseFilter):
 
         return result
 
+    @property
+    def msgfmt(self) -> str:
+        output = ['{0.base}']
+        if self.filter_type:
+            output.append('type={0.filter_type}')
+        if self.filter_line:
+            output.append('line={0.filter_line}')
+        if self.filter_node:
+            output.append('type={0.filter_node}')
+        return '(' + (' '.join(output)) + ')'
+
 
 class EventsFilter(BaseFilter):
     def __init__(self,
@@ -92,6 +103,15 @@ class EventsFilter(BaseFilter):
             result &= self._regex.match(str(event)) is not None
 
         return result
+
+    @property
+    def msgfmt(self) -> str:
+        output = ['{0.base}']
+        if self.event_class:
+            output.append('event_class={0.event_class}')
+        if self.regex:
+            output.append('regex={0.regex}')
+        return '(' + (' '.join(output)) + ')'
 
 
 class EventsSeverityChangerFilter(EventsFilter):
