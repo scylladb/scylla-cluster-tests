@@ -677,6 +677,29 @@ def run_test(argv, backend, config, logdir):
                   failfast=False, buffer=False, catchbreak=True)
 
 
+@cli.command('run-pytest', help="Run tests using pytest")
+@click.argument('target')
+@click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
+@click.option('-c', '--config', multiple=True, type=click.Path(exists=True), help="Test config .yaml to use, can have multiple of those")
+@click.option('-l', '--logdir', help="Directory to use for logs")
+def run_pytest(target, backend, config, logdir):
+    if config:
+        os.environ['SCT_CONFIG_FILES'] = str(list(config))
+    if backend:
+        os.environ['SCT_CLUSTER_BACKEND'] = backend
+
+    if logdir:
+        os.environ['_SCT_LOGDIR'] = logdir
+
+    logfile = os.path.join(Setup.logdir(), 'output.log')
+    sys.stdout = OutputLogger(logfile, sys.stdout)
+    sys.stderr = OutputLogger(logfile, sys.stderr)
+    if not target:
+        print("argv is referring to the directory or file that contain tests, it can't be empty")
+        sys.exit(1)
+    pytest.main(args=[target])
+
+
 @cli.command("cloud-usage-report", help="Generate and send Cloud usage report")
 @click.option("-e", "--emails", required=True, type=str, help="Comma separated list of emails. Example a@b.com,c@d.com")
 def cloud_usage_report(emails):
