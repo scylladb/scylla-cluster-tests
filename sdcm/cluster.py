@@ -60,11 +60,11 @@ from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, sh
 from sdcm.remote.remote_file import remote_file
 from sdcm import wait, mgmt
 from sdcm.sct_events.nodetool import NodetoolEvent
-from sdcm.utils import alternator
+from sdcm.utils import alternator, properties
 from sdcm.utils.common import deprecation, get_data_dir_path, verify_scylla_repo_file, S3Storage, get_my_ip, \
     get_latest_gemini_version, normalize_ipv6_url, download_dir_from_cloud, generate_random_string, ScyllaCQLSession, \
     SCYLLA_YAML_PATH, get_test_name, PageFetcher, update_authenticator, prepare_and_start_saslauthd_service, \
-    change_default_password
+    change_default_password, SCYLLA_PROPERTIES_PATH
 from sdcm.utils.distro import Distro
 from sdcm.utils.docker_utils import ContainerManager, NotFound
 
@@ -1717,9 +1717,22 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                            deserializer=yaml.safe_load,
                            sudo=True)
 
+    def _remote_properties(self, path):
+        file_name = os.path.split(path)[1].split(".", maxsplit=1)[0].title()
+        self.log.debug("Update {} properties configuration file ({})".format(file_name, path))
+        return remote_file(remoter=self.remoter,
+                           remote_path=path,
+                           serializer=properties.serialize,
+                           deserializer=properties.deserialize,
+                           sudo=True)
+
     def remote_scylla_yaml(self, path=SCYLLA_YAML_PATH):
         path = self.add_install_prefix(path)
         return self._remote_yaml(path=path)
+
+    def remote_cassandra_rackdc_properties(self, path=SCYLLA_PROPERTIES_PATH):
+        path = self.add_install_prefix(path)
+        return self._remote_properties(path=path)
 
     def remote_manager_yaml(self, path=SCYLLA_MANAGER_YAML_PATH):
         return self._remote_yaml(path=path)
@@ -2534,6 +2547,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return abs_path
         checklist = {
             SCYLLA_YAML_PATH: f'{INSTALL_DIR}{SCYLLA_YAML_PATH}',
+            SCYLLA_PROPERTIES_PATH: f'{INSTALL_DIR}{SCYLLA_PROPERTIES_PATH}',
             '/etc/scylla.d/io.conf': f'{INSTALL_DIR}/etc/scylla.d/io.conf',
             '/usr/bin/scylla': f'{INSTALL_DIR}/bin/scylla',
             '/usr/bin/nodetool': f'{INSTALL_DIR}/share/cassandra/bin/nodetool',

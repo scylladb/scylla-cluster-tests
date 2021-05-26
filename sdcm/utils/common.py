@@ -72,6 +72,7 @@ DOCKER_CGROUP_RE = re.compile("/docker/([0-9a-f]+)")
 SCYLLA_AMI_OWNER_ID = "797456418907"
 MAX_SPOT_DURATION_TIME = 360
 SCYLLA_YAML_PATH = "/etc/scylla/scylla.yaml"
+SCYLLA_PROPERTIES_PATH = "/etc/scylla/cassandra-rackdc.properties"
 
 
 def deprecation(message):
