@@ -310,8 +310,8 @@ class MinikubeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
 
     @retrying(n=20, sleep_time=60, allowed_exceptions=(cluster.ClusterNodesNotReady, UnexpectedExit),
               message="Waiting for nodes to join the cluster")
-    def wait_for_nodes_up_and_normal(self, nodes, verification_node=None):
-        super().wait_for_nodes_up_and_normal(nodes, verification_node)
+    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None):
+        super().wait_for_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 
 
 class MonitorSetMinikube(MonitorSetGCE):
