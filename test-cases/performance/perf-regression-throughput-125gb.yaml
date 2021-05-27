@@ -34,3 +34,5 @@ email_recipients: ['scylla-perf-results@scylladb.com']
 backtrace_decoding: false
 
 email_subject_postfix: 'disk and cache'
+
+use_mgmt: false
