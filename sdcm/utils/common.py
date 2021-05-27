@@ -2329,3 +2329,16 @@ def prepare_and_start_saslauthd_service(node):
     with node.remote_scylla_yaml() as scylla_yml:
         scylla_yml['saslauthd_socket_path'] = '/run/saslauthd/mux'
     node.remoter.sudo('systemctl restart saslauthd')
+
+
+def make_threads_be_daemonic_by_default():
+    """
+    There is a problem with some code that uses Thread with no option to tweak it to be daemonic.
+    Good example of it would be concurent.futures.thread.ThreadPoolExecutor
+    Mostly this code do not pass daemon=True to __init__ and
+    therefore threading.Thread pick up value of this flag from current_thread
+    This code is to change this flag to True to make all threads daemonic by default
+    @return:
+    @rtype:
+    """
+    threading.current_thread()._daemonic = True
