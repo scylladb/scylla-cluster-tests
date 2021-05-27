@@ -206,7 +206,7 @@ class EksTokenUpdateThread(TokenUpdateThread):
 
 class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
     POOL_LABEL_NAME = 'eks.amazonaws.com/nodegroup'
-    USE_MONITORING_EXPOSE_SERVICE = True
+    USE_MONITORING_EXPOSE_SERVICE = False
     USE_POD_RESOLVER = True
     pools: Dict[str, EksNodePool]
     short_cluster_name: str
@@ -339,7 +339,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
 
 class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
     parent_cluster: 'EksScyllaPodCluster'
-    public_ip_via_service = True
+    public_ip_via_service = False
 
     pod_readiness_delay = 30  # seconds
     pod_readiness_timeout = 30  # minutes
@@ -360,6 +360,17 @@ class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
     @property
     def ec2_instance_id(self):
         return self._node.spec.provider_id.split('/')[-1]
+
+    def set_security_groups(self):
+        # NOTE: EKS doesn't apply nodeGroup's security groups to nodes
+        # So, we add it for each network interface of a scylla node
+        # to be able to run CQL and other commands from test runner machines.
+        for network_interface in self.ec2_host.network_interfaces:
+            security_groups = self.parent_cluster.k8s_cluster.ec2_security_group_ids[0]
+            for security_group in network_interface.groups:
+                if security_group["GroupId"] not in security_groups:
+                    security_groups.append(security_group["GroupId"])
+            network_interface.modify_attribute(Groups=security_groups)
 
     def terminate_k8s_host(self):
         self.log.info('terminate_k8s_host: EC2 instance of kubernetes node will be terminated, '
@@ -452,6 +463,8 @@ class EksScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
                                       dc_idx=dc_idx,
                                       rack=rack,
                                       enable_auto_bootstrap=enable_auto_bootstrap)
+        for node in new_nodes:
+            node.set_security_groups()
         self.add_hydra_iptables_rules(nodes=new_nodes)
         self.update_nodes_iptables_redirect_rules(nodes=new_nodes, loaders=False)
         return new_nodes
