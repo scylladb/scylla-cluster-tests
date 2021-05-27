@@ -157,14 +157,14 @@ class KubernetesCmdRunner(RemoteCmdRunnerBase):
     # pylint: disable=too-many-arguments,unused-argument
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException, ))
     def receive_files(self, src, dst, delete_dst=False, preserve_perm=True, preserve_symlinks=False, timeout=300):
-        KubernetesOps.copy_file(self, f"{self.namespace}/{self.pod}:{src}", dst,
+        KubernetesOps.copy_file(self.kluster, f"{self.namespace}/{self.pod}:{src}", dst,
                                 container=self.container, timeout=timeout)
         return True
 
     # pylint: disable=too-many-arguments,unused-argument
     @retrying(n=3, sleep_time=5, allowed_exceptions=(RetryableNetworkException, ))
     def send_files(self, src, dst, delete_dst=False, preserve_symlinks=False, verbose=False, timeout=300):
-        KubernetesOps.copy_file(self, src, f"{self.namespace}/{self.pod}:{dst}",
+        KubernetesOps.copy_file(self.kluster, src, f"{self.namespace}/{self.pod}:{dst}",
                                 container=self.container, timeout=timeout)
         return True
 
