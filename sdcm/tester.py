@@ -54,7 +54,7 @@ from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_netwo
     get_common_params, init_db_info_from_params, ec2_ami_get_root_device_name
 from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, update_certificates, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, PageFetcher, \
-    rows_to_list
+    rows_to_list, make_threads_be_daemonic_by_default
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT
@@ -481,7 +481,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         self.monitors = None
         self.k8s_cluster = None
         self.connections = []
-
+        make_threads_be_daemonic_by_default()
         self.update_certificates()
 
         # download rpms for update_db_packages

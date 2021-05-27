@@ -2344,3 +2344,16 @@ def change_default_password(node, user='cassandra', password='cassandra'):
     """
     node.run_cqlsh(f"ALTER ROLE '{user}' with password='{password}{DEFAULT_PWD_SUFFIX}'")
     node.parent_cluster.added_password_suffix = True
+
+
+def make_threads_be_daemonic_by_default():
+    """
+    There is a problem with some code that uses Thread with no option to tweak it to be daemonic.
+    Good example of it would be concurent.futures.thread.ThreadPoolExecutor
+    Mostly this code do not pass daemon=True to __init__ and
+    therefore threading.Thread pick up value of this flag from current_thread
+    This code is to change this flag to True to make all threads daemonic by default
+    @return:
+    @rtype:
+    """
+    threading.current_thread()._daemonic = True
