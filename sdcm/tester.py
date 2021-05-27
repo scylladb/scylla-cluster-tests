@@ -516,7 +516,10 @@ class ClusterTester(db_stats.TestStatsMixin,
 
         # cs_db_cluster is created in case MIXED_CLUSTER. For example, gemini test
         if self.cs_db_cluster:
+            init_value = self.params["use_mgmt"]
+            self.params["use_mgmt"] = False
             self.init_nodes(db_cluster=self.cs_db_cluster)
+            self.params["use_mgmt"] = init_value
 
         if self.create_stats:
             self.create_test_stats()
