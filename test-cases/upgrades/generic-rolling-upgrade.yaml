@@ -28,6 +28,8 @@ append_scylla_args: '--blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1 
 use_legacy_cluster_init: false
 internode_compression: 'all'
 
+use_mgmt: false
+
 # those are needed to be give by the job, via environment variable
 # for the base version
 # SCT_SCYLLA_VERSION=3.0 or SCT_SCYLLA_REPO=
