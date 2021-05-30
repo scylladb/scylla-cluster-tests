@@ -2271,6 +2271,28 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for node in self.cluster.nodes:
             self.cluster.check_nodes_up_and_normal(verification_node=node)
 
+    def _remove_node(self):
+        # node_to_remove must not be the only seed in cluster
+        if self.target_node.is_seed and len(self.cluster.seed_nodes) < 2:
+            raise UnsupportedNemesis("Removing the only seed node is not yet supported")
+
+        node_to_remove = self.target_node
+        # node_to_remove must be different than node
+        verification_node = random.choice([node for node in self.cluster.nodes if node is not node_to_remove])
+
+        # get node's host_id
+        removed_node_status = self.cluster.get_node_status_dictionary(
+            ip_address=node_to_remove.ip_address, verification_node=verification_node)
+        assert removed_node_status is not None, "failed to get host_id using nodetool status"
+
+        # node stop and make sure its "DN"
+        node_to_remove.stop_scylla_server(verify_up=True, verify_down=True)
+
+        # terminate node
+        self._terminate_cluster_node(node_to_remove)
+
+        return removed_node_status["host_id"]
+
     def disrupt_remove_node_then_add_node(self):
         """
         https://docs.scylladb.com/operating-scylla/procedures/cluster-management/remove_node/
@@ -2286,25 +2308,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('TerminateAndRemoveNodeMonkey')
         node_to_remove = self.target_node
         up_normal_nodes = self.cluster.get_nodes_up_and_normal(verification_node=node_to_remove)
-        # node_to_remove must be different than node
-        verification_node = random.choice([n for n in self.cluster.nodes if n is not node_to_remove])
-
-        # node_to_remove must not be the only seed in cluster
-        num_of_seed_nodes = len(self.cluster.seed_nodes)
-        if node_to_remove.is_seed and num_of_seed_nodes < 2:
-            raise UnsupportedNemesis("Removing the only seed node is not yet supported")
-
-        # get node's host_id
-        removed_node_status = self.cluster.get_node_status_dictionary(
-            ip_address=node_to_remove.ip_address, verification_node=verification_node)
-        assert removed_node_status is not None, "failed to get host_id using nodetool status"
-        host_id = removed_node_status["host_id"]
-
-        # node stop and make sure its "DN"
-        node_to_remove.stop_scylla_server(verify_up=True, verify_down=True)
-
-        # terminate node
-        self._terminate_cluster_node(node_to_remove)
+        verification_node = random.choice([node for node in self.cluster.nodes if node is not node_to_remove])
+        host_id = self._remove_node()
 
         def remove_node():
             # nodetool removenode 'host_id'
@@ -2937,6 +2942,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         else:
             assert actual_cdc_settings == cdc_settings, \
                 f"CDC extension settings are differs. Current: {actual_cdc_settings} expected: {cdc_settings}"
+
+
+class SirenadaNemesis(Nemesis):
+    def disrupt_add_node(self):
+        self._add_and_init_new_cluster_node(rack=self.target_node.rack)
+
+    def disrupt_remove_node(self):
+        if len(self.cluster.nodes) < 3:
+            raise UnsupportedNemesis("The cluster contains less than 4 nodes")
+
+        self._set_current_disruption("SirenRemoveNode")
+        self._remove_node()
 
 
 def log_time_elapsed_and_status(method):  # pylint: disable=too-many-statements
@@ -4035,3 +4052,28 @@ class ResetLocalSchemaMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_resetlocalschema()
+
+
+class SirenadaAddNode(SirenadaNemesis):
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_add_node()
+
+
+class SirenadaRemoveNode(SirenadaNemesis):
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        self.disrupt_remove_node()
+
+
+class SirenChaosMonkey(SirenadaNemesis):
+    @log_time_elapsed_and_status
+    def disrupt(self):
+        # Limit the nemesis scope:
+        #  - SirenadaAddNode
+        #  - DecommissionMonkey
+        #  - DecommissionMonkey
+        self.call_random_disrupt_method(disrupt_methods=[
+            "disrupt_add_node",
+            "disrupt_remove_node",
+            "disrupt_nodetool_decommission"])
