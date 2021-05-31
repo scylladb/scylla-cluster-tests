@@ -46,6 +46,4 @@ append_scylla_args: ''
 docker_image: ''
 mgmt_docker_image: 'scylladb/scylla-manager:2.3.0'
 
-# TODO: create 'manager-on-k8s-backup-tests-eu-north-1' in the 'eu-north-1' region
-#       when limits stop being exceeded.
-backup_bucket_location: 'manager-backup-tests-eu-west-1'
+backup_bucket_location: 'manager-backup-tests-eu-north-1'
