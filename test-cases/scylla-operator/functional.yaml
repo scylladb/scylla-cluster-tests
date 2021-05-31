@@ -1,0 +1,30 @@
+test_duration: 300
+
+n_db_nodes: 3
+n_loaders: 0
+n_monitor_nodes: 0
+k8s_deploy_monitoring: false
+use_mgmt: true
+
+user_prefix: 'operator-functional'
+
+# Following configurations does not currently work on kubernetes, due to the lack of ssl certificate support.
+# could be enabled after https://github.com/scylladb/scylla-cluster-tests/issues/2744
+#
+#server_encrypt: true
+#authenticator: 'PasswordAuthenticator'
+#authenticator_user: 'cassandra'
+#authenticator_password: 'cassandra'
+#authorization_in_upgrade: 'CassandraAuthorizer'
+#remove_authorization_in_rollback: true
+#recover_system_tables: true
+
+# Does not work due to the lack of support, could be anabled after - https://github.com/scylladb/scylla-cluster-tests/issues/2747
+#append_scylla_args: '--blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1'
+
+
+# those are needed to be give by the job, via environment variable
+# for the base version
+# SCT_SCYLLA_VERSION=3.0 or SCT_SCYLLA_REPO=
+# for the upgrading version you need:
+# SCT_NEW_SCYLLA_REPO=https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/e438e3e3ce41f6c878b111f5c19bf2b28aa51098-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1-e616363bdc0e7a0d193a157851d7c15d952a0aad-a6b2b2355c666b1893f702a587287da978aeec22/53/scylla.repo

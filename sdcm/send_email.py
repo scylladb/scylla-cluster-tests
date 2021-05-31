@@ -460,6 +460,16 @@ class GeminiEmailReporter(LongevityEmailReporter):
     email_template_file = "results_gemini.html"
 
 
+class FunctionalEmailReporter(LongevityEmailReporter):
+    _fields = (
+        "test_statuses",
+        "results",
+        "scylla_ami_id",
+        "status"
+    )
+    email_template_file = "results_functional.html"
+
+
 class UpgradeEmailReporter(BaseEmailReporter):
     _fields = (
         "grafana_screenshots",
@@ -538,6 +548,8 @@ def build_reporter(name: str,
         return CDCReplicationReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Jepsen" in name:
         return JepsenEmailReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "Functional" in name:
+        return FunctionalEmailReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
 
