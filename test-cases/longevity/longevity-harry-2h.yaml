@@ -12,6 +12,6 @@ nemesis_seed: '111'
 nemesis_interval: 2
 ssh_transport: 'libssh2'
 
-user_prefix: 'longevity-10gb-3h'
+user_prefix: 'longevity-harry-2h'
 space_node_threshold: 64424
 use_mgmt: false
