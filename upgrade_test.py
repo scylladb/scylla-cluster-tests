@@ -877,7 +877,11 @@ class UpgradeTest(FillDatabaseData):
     def wait_till_scylla_is_upgraded_on_all_nodes(self, target_version):
         def _is_cluster_upgraded():
             for node in self.db_cluster.nodes:
-                if target_version != node.get_scylla_version() or not node.db_up:
+                # NOTE: node.get_scylla_version() returns following structure of a scylla version:
+                #       4.4.1-0.20210406.00da6b5e9
+                full_version = node.get_scylla_version()
+                short_version = full_version.split("-")[0]
+                if target_version not in (full_version, short_version) or not node.db_up:
                     return False
             return True
         wait.wait_for(func=_is_cluster_upgraded, step=30, timeout=900, throw_exc=True,
