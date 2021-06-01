@@ -100,7 +100,10 @@ class TestSctEvent(SctEventTestCase):
         class Y(SctEvent):
             pass
 
-        self.assertEqual(str(Y()), "(Y Severity.UNKNOWN)")
+        y = Y()
+        y.event_id = "d81c016f-2333-4047-8c91-7cde98c38a15"
+        self.assertEqual(str(y),
+                         "(Y Severity.UNKNOWN) period_type=not-set event_id=d81c016f-2333-4047-8c91-7cde98c38a15")
 
     def test_equal(self):
         class Y(SctEvent):
@@ -111,6 +114,7 @@ class TestSctEvent(SctEventTestCase):
 
         y, y_other, z = Y(), Y(), Z()
         z.timestamp = y_other.timestamp = y.timestamp
+        y.event_id = y_other.event_id = z.event_id = "d81c016f-2333-4047-8c91-7cde98c38a15"
         self.assertEqual(y, y)
         self.assertEqual(y, y_other)
         self.assertEqual(y_other, y)
@@ -144,9 +148,11 @@ class TestSctEvent(SctEventTestCase):
             pass
 
         y = Y()
+        y.event_id = "fa4a84a2-968b-474c-b188-b3bac4be8527"
         self.assertEqual(
             y.to_json(),
-            f'{{"base": "Y", "type": null, "subtype": null, "timestamp": {y.timestamp}, "severity": "UNKNOWN"}}'
+            f'{{"base": "Y", "type": null, "subtype": null, "timestamp": {y.timestamp}, "severity": "UNKNOWN", '
+            f'"event_id": "fa4a84a2-968b-474c-b188-b3bac4be8527"}}'
         )
 
     def test_publish(self):
@@ -549,13 +555,21 @@ class TestLogEvent(SctEventTestCase):
         Y.add_subevent_type("T", regex="r1")
 
         y = Y.T()
-        self.assertEqual(str(y), "(Y Severity.ERROR): type=T regex=r1 line_number=0")
+        y.event_id = "04ace3fb-b9bc-4c86-bfb2-2ffae18bb72e"
+        self.assertEqual(str(y), "(Y Severity.ERROR) period_type=one-time "
+                                 "event_id=04ace3fb-b9bc-4c86-bfb2-2ffae18bb72e: type=T regex=r1 line_number=0")
 
         y.add_info(node="n1", line="l1", line_number=1)
-        self.assertEqual(str(y), "(Y Severity.ERROR): type=T regex=r1 line_number=1 node=n1\nl1")
+        self.assertEqual(str(y), "(Y Severity.ERROR) period_type=one-time "
+                                 "event_id=04ace3fb-b9bc-4c86-bfb2-2ffae18bb72e: type=T regex=r1 line_number=1 "
+                                 "node=n1\nl1")
 
         y.raw_backtrace = "rb1"
-        self.assertEqual(str(y), "(Y Severity.ERROR): type=T regex=r1 line_number=1 node=n1\nl1\nrb1")
+        self.assertEqual(str(y), "(Y Severity.ERROR) period_type=one-time "
+                                 "event_id=04ace3fb-b9bc-4c86-bfb2-2ffae18bb72e: type=T regex=r1 line_number=1 "
+                                 "node=n1\nl1\nrb1")
 
         y.backtrace = "b1"
-        self.assertEqual(str(y), "(Y Severity.ERROR): type=T regex=r1 line_number=1 node=n1\nl1\nb1")
+        self.assertEqual(str(y), "(Y Severity.ERROR) period_type=one-time "
+                                 "event_id=04ace3fb-b9bc-4c86-bfb2-2ffae18bb72e: type=T regex=r1 line_number=1 "
+                                 "node=n1\nl1\nb1")

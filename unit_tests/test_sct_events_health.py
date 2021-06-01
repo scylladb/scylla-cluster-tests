@@ -35,45 +35,57 @@ class TestValidators(unittest.TestCase):
 
     def test_cluster_health_validator_event_msgfmt(self):
         critical_event = ClusterHealthValidatorEvent.NodeStatus(severity=Severity.CRITICAL, node="n1", error="e1")
+        critical_event.event_id = "712128d0-4837-4213-8a60-d6e2ec106c52"
         self.assertEqual(
             str(critical_event),
-            "(ClusterHealthValidatorEvent Severity.CRITICAL): type=NodeStatus node=n1 error=e1"
+            "(ClusterHealthValidatorEvent Severity.CRITICAL) period_type=not-set "
+            "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=NodeStatus node=n1 error=e1"
         )
         self.assertEqual(critical_event, pickle.loads(pickle.dumps(critical_event)))
 
         error_event = ClusterHealthValidatorEvent.NodePeersNulls(severity=Severity.ERROR, node="n2", error="e2")
+        error_event.event_id = "712128d0-4837-4213-8a60-d6e2ec106c52"
         self.assertEqual(
             str(error_event),
-            "(ClusterHealthValidatorEvent Severity.ERROR): type=NodePeersNulls node=n2 error=e2"
+            "(ClusterHealthValidatorEvent Severity.ERROR) period_type=not-set "
+            "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=NodePeersNulls node=n2 error=e2"
         )
         self.assertEqual(error_event, pickle.loads(pickle.dumps(error_event)))
 
         warning_event = ClusterHealthValidatorEvent.NodeSchemaVersion(
             severity=Severity.WARNING, node="n3", message="m3")
+        warning_event.event_id = "712128d0-4837-4213-8a60-d6e2ec106c52"
         self.assertEqual(
             str(warning_event),
-            "(ClusterHealthValidatorEvent Severity.WARNING): type=NodeSchemaVersion node=n3 message=m3"
+            "(ClusterHealthValidatorEvent Severity.WARNING) period_type=not-set "
+            "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=NodeSchemaVersion node=n3 message=m3"
         )
         self.assertEqual(warning_event, pickle.loads(pickle.dumps(warning_event)))
 
         info_event = ClusterHealthValidatorEvent.NodesNemesis(severity=Severity.WARNING, node="n4", message="m4")
+        info_event.event_id = "712128d0-4837-4213-8a60-d6e2ec106c52"
         self.assertEqual(
             str(info_event),
-            "(ClusterHealthValidatorEvent Severity.WARNING): type=NodesNemesis node=n4 message=m4"
+            "(ClusterHealthValidatorEvent Severity.WARNING) period_type=not-set "
+            "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=NodesNemesis node=n4 message=m4"
         )
         self.assertEqual(info_event, pickle.loads(pickle.dumps(info_event)))
 
         info_event = ClusterHealthValidatorEvent.Info(node="n4", message="m4")
+        info_event.event_id = "712128d0-4837-4213-8a60-d6e2ec106c52"
         self.assertEqual(
             str(info_event),
-            "(ClusterHealthValidatorEvent Severity.NORMAL): type=Info node=n4 message=m4"
+            "(ClusterHealthValidatorEvent Severity.NORMAL) period_type=not-set "
+            "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=Info node=n4 message=m4"
         )
         self.assertEqual(info_event, pickle.loads(pickle.dumps(info_event)))
 
         info_event = ClusterHealthValidatorEvent.Done(node="n4", message="m4")
+        info_event.event_id = "712128d0-4837-4213-8a60-d6e2ec106c52"
         self.assertEqual(
             str(info_event),
-            "(ClusterHealthValidatorEvent Severity.NORMAL): type=Done node=n4 message=m4"
+            "(ClusterHealthValidatorEvent Severity.NORMAL) period_type=not-set "
+            "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=Done node=n4 message=m4"
         )
         self.assertEqual(info_event, pickle.loads(pickle.dumps(info_event)))
 
@@ -89,29 +101,37 @@ class TestValidators(unittest.TestCase):
 
     def test_data_validator_event_msgfmt(self):
         critical_event = DataValidatorEvent.DataValidator(severity=Severity.ERROR, error="e1")
+        critical_event.event_id = "3916da00-643c-4886-bdd0-963d3ebac536"
         self.assertEqual(
             str(critical_event),
-            "(DataValidatorEvent Severity.ERROR): type=DataValidator error=e1"
+            "(DataValidatorEvent Severity.ERROR) period_type=not-set "
+            "event_id=3916da00-643c-4886-bdd0-963d3ebac536: type=DataValidator error=e1"
         )
         self.assertEqual(critical_event, pickle.loads(pickle.dumps(critical_event)))
 
         error_event = DataValidatorEvent.ImmutableRowsValidator(severity=Severity.ERROR, error="e2")
+        error_event.event_id = "3916da00-643c-4886-bdd0-963d3ebac536"
         self.assertEqual(
             str(error_event),
-            "(DataValidatorEvent Severity.ERROR): type=ImmutableRowsValidator error=e2"
+            "(DataValidatorEvent Severity.ERROR) period_type=not-set "
+            "event_id=3916da00-643c-4886-bdd0-963d3ebac536: type=ImmutableRowsValidator error=e2"
         )
         self.assertEqual(error_event, pickle.loads(pickle.dumps(error_event)))
 
         warning_event = DataValidatorEvent.UpdatedRowsValidator(severity=Severity.WARNING, message="m3")
+        warning_event.event_id = "3916da00-643c-4886-bdd0-963d3ebac536"
         self.assertEqual(
             str(warning_event),
-            "(DataValidatorEvent Severity.WARNING): type=UpdatedRowsValidator message=m3"
+            "(DataValidatorEvent Severity.WARNING) period_type=not-set "
+            "event_id=3916da00-643c-4886-bdd0-963d3ebac536: type=UpdatedRowsValidator message=m3"
         )
         self.assertEqual(warning_event, pickle.loads(pickle.dumps(warning_event)))
 
         info_event = DataValidatorEvent.DeletedRowsValidator(severity=Severity.NORMAL, message="m4")
+        info_event.event_id = "3916da00-643c-4886-bdd0-963d3ebac536"
         self.assertEqual(
             str(info_event),
-            "(DataValidatorEvent Severity.NORMAL): type=DeletedRowsValidator message=m4"
+            "(DataValidatorEvent Severity.NORMAL) period_type=not-set "
+            "event_id=3916da00-643c-4886-bdd0-963d3ebac536: type=DeletedRowsValidator message=m4"
         )
         self.assertEqual(info_event, pickle.loads(pickle.dumps(info_event)))

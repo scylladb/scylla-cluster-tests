@@ -15,10 +15,12 @@ from __future__ import annotations
 
 import json
 import time
+import traceback
 import uuid
 import pickle
 import fnmatch
 import logging
+from enum import Enum
 from types import new_class
 from typing import \
     Any, Optional, Type, Dict, List, Tuple, Callable, Generic, TypeVar, Protocol, runtime_checkable, cast
@@ -33,7 +35,6 @@ import dateutil.parser
 from sdcm import sct_abs_path
 from sdcm.sct_events import Severity, SctEventProtocol
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
-
 
 DEFAULT_SEVERITIES = sct_abs_path("defaults/severities.yaml")
 
@@ -56,6 +57,13 @@ class SctEventTypesRegistry(Dict[str, Type["SctEvent"]]):
         self[owner.__name__] = owner  # add owner class to the registry.
 
 
+class EventPeriod(Enum):
+    Begin = "begin"
+    End = "end"
+    Informational = "one-time"  # this is not interval event. It's for one point of time event
+    NotDefined = "not-set"
+
+
 class SctEvent:
     _sct_event_types_registry: SctEventTypesRegistry = SctEventTypesRegistry()
     _events_processes_registry: Optional[EventsProcessesRegistry] = None
@@ -65,8 +73,10 @@ class SctEvent:
     type: Optional[str] = None  # this attribute set by add_subevent_type()
     subtype: Optional[str] = None  # this attribute set by add_subevent_type()
 
+    period_type: str = EventPeriod.NotDefined.value  # attribute possible values are from EventTypes enum
+
     formatter: Callable[[str, SctEvent], str] = staticmethod(str.format)
-    msgfmt: str = "({0.base} {0.severity})"
+    msgfmt: str = "({0.base} {0.severity}) period_type={0.period_type} event_id={0.event_id}"
 
     timestamp: Optional[float] = None  # actual value should be set using __init__()
     severity: Severity = Severity.UNKNOWN  # actual value should be set using __init__()
@@ -91,6 +101,7 @@ class SctEvent:
         self.timestamp = time.time()
         self.severity = severity
         self._ready_to_publish = True
+        self.event_id = str(uuid.uuid4())
 
     @classmethod
     def is_abstract(cls) -> bool:
@@ -140,7 +151,7 @@ class SctEvent:
     def formatted_timestamp(self) -> str:
         try:
             return datetime.fromtimestamp(self.timestamp).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        except (TypeError, OverflowError, OSError, ):
+        except (TypeError, OverflowError, OSError,):
             LOGGER.exception("Failed to format a timestamp: %r", self.timestamp)
             return "0000-00-00 <UnknownTimestamp>"
 
@@ -208,6 +219,60 @@ class SctEvent:
                 LOGGER.warning(warning)
             except:
                 print(warning)
+
+
+class InformationalEvent(SctEvent, abstract=True):
+
+    def __init__(self, severity: Severity = Severity.UNKNOWN):
+        super(InformationalEvent, self).__init__(severity=severity)
+        self.period_type = EventPeriod.Informational.value
+
+
+class ContinuousEvent(SctEvent, abstract=True):
+
+    def __init__(self,
+                 severity: Severity = Severity.UNKNOWN):
+        super().__init__(severity=severity)
+        self.log_file_name = None
+        self.errors = []
+
+    def __enter__(self):
+        event = self.begin_event()
+        return event
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_tb is not None:
+            if not isinstance(self.errors, list):
+                self.errors = []
+
+            self.errors.append(traceback.format_exc(limit=None, chain=True))
+        self.end_event()
+        return self
+
+    @property
+    def errors_formatted(self):
+        return "\n".join(self.errors) if self.errors is not None else ""
+
+    # TODO: rename function to "begin" after the refactor will be done
+    def begin_event(self, publish: bool = True) -> ContinuousEvent:
+        self.timestamp = time.time()
+        self.period_type = EventPeriod.Begin.value
+        self.severity = Severity.NORMAL
+        if publish:
+            self._ready_to_publish = True
+            self.publish()
+        return self
+
+    # TODO: rename function to "end" after the refactor will be done
+    def end_event(self, publish: bool = True) -> None:
+        self.timestamp = time.time()
+        self.period_type = EventPeriod.End.value
+        if publish:
+            self._ready_to_publish = True
+            self.publish()
+
+    def add_error(self, errors: Optional[List[str]]) -> None:
+        self.errors = errors
 
 
 def add_severity_limit_rules(rules: List[str]) -> None:
@@ -296,7 +361,7 @@ class LogEventProtocol(SctEventProtocol, Protocol[T_log_event]):
         ...
 
 
-class LogEvent(Generic[T_log_event], SctEvent, abstract=True):
+class LogEvent(Generic[T_log_event], InformationalEvent, abstract=True):
     def __init__(self, regex: str, severity=Severity.ERROR):
         super().__init__(severity=severity)
 
@@ -363,7 +428,7 @@ class LogEvent(Generic[T_log_event], SctEvent, abstract=True):
         return fmt
 
 
-class BaseStressEvent(SctEvent, abstract=True):
+class BaseStressEvent(ContinuousEvent, abstract=True):
     @classmethod
     def add_stress_subevents(cls,
                              failure: Optional[Severity] = None,
@@ -412,14 +477,13 @@ class StressEvent(BaseStressEvent, abstract=True):
         self.errors = errors
 
     @property
-    def errors_formatted(self):
-        return "\n".join(self.errors)
-
-    @property
     def msgfmt(self):
-        fmt = super().msgfmt + ": type={0.type} node={0.node}\nstress_cmd={0.stress_cmd}"
+        fmt = super().msgfmt + ":"
+        if self.type:
+            fmt += " type={0.type}"
+        fmt += " node={0.node}\nstress_cmd={0.stress_cmd}"
         if self.errors:
-            return fmt + "\nerrors:\n\n{0.errors_formatted}"
+            fmt += "\nerrors:\n\n{0.errors_formatted}"
         return fmt
 
 

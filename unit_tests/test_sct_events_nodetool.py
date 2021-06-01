@@ -28,9 +28,11 @@ class TestNodetoolEvent(unittest.TestCase):
                               severity=Severity.NORMAL,
                               node='1.0.0.121',
                               options="")
+        event.event_id = "3c8e2362-a987-4eff-953f-9cd1ad2017e5"
         self.assertEqual(
             str(event),
-            "(NodetoolEvent Severity.NORMAL): type=scrub subtype=start node=1.0.0.121 options=--skip-corrupted "
+            "(NodetoolEvent Severity.NORMAL) period_type=not-set event_id=3c8e2362-a987-4eff-953f-9cd1ad2017e5: "
+            "type=scrub subtype=start node=1.0.0.121 options=--skip-corrupted "
             "drop_table_during_repair_ks_0"
         )
 
@@ -40,9 +42,11 @@ class TestNodetoolEvent(unittest.TestCase):
                               node='1.0.0.121',
                               duration="20s",
                               options="")
+        event.event_id = "3c8e2362-a987-4eff-953f-9cd1ad2017e5"
         self.assertEqual(
             str(event),
-            '(NodetoolEvent Severity.NORMAL): type=scrub subtype=end node=1.0.0.121 '
+            '(NodetoolEvent Severity.NORMAL) period_type=not-set event_id=3c8e2362-a987-4eff-953f-9cd1ad2017e5: '
+            'type=scrub subtype=end node=1.0.0.121 '
             'options=--skip-corrupted drop_table_during_repair_ks_0 duration=20s'
         )
 
@@ -52,9 +56,11 @@ class TestNodetoolEvent(unittest.TestCase):
                               severity=Severity.NORMAL,
                               node='1.0.0.121',
                               options="more options")
+        event.event_id = "ef4aeb1a-c004-40e4-af14-9d87a0526408"
         self.assertEqual(
             str(event),
-            '(NodetoolEvent Severity.NORMAL): type=scrub subtype=start node=1.0.0.121 options=--skip-corrupted '
+            '(NodetoolEvent Severity.NORMAL) period_type=not-set event_id=ef4aeb1a-c004-40e4-af14-9d87a0526408: '
+            'type=scrub subtype=start node=1.0.0.121 options=--skip-corrupted '
             'drop_table_during_repair_ks_0 more options'
         )
 
@@ -65,8 +71,10 @@ class TestNodetoolEvent(unittest.TestCase):
                               node='1.0.0.121',
                               error="Failed with status 1",
                               full_traceback="Traceback:")
+        event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
         self.assertEqual(
             str(event),
-            '(NodetoolEvent Severity.ERROR): type=scrub subtype=end node=1.0.0.121 options=--skip-corrupted '
+            '(NodetoolEvent Severity.ERROR) period_type=not-set event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318: '
+            'type=scrub subtype=end node=1.0.0.121 options=--skip-corrupted '
             'drop_table_during_repair_ks_0 error=Failed with status 1\nTraceback:'
         )
