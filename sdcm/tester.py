@@ -22,6 +22,7 @@ import time
 import random
 import unittest
 import warnings
+from typing import Union
 from uuid import uuid4
 from functools import wraps, cached_property
 import threading
@@ -214,9 +215,10 @@ class ClusterTester(db_stats.TestStatsMixin,
     log = None
     localhost = None
     events_processes_registry = None
-    monitors: BaseMonitorSet
-    loaders: BaseLoaderSet
-    db_cluster: BaseScyllaCluster
+    monitors: BaseMonitorSet = None
+    loaders: BaseLoaderSet = None
+    db_cluster: BaseScyllaCluster = None
+    k8s_cluster: Union[None, gke.GkeCluster, eks.EksCluster, minikube.GceMinikubeCluster] = None
 
     def __init__(self, *args):  # pylint: disable=too-many-statements
         super(ClusterTester, self).__init__(*args)
@@ -512,7 +514,8 @@ class ClusterTester(db_stats.TestStatsMixin,
                 self.params['are_ldap_users_on_scylla'] = True
 
             db_node_address = self.db_cluster.nodes[0].ip_address
-            self.loaders.wait_for_init(db_node_address=db_node_address)
+            if self.loaders:
+                self.loaders.wait_for_init(db_node_address=db_node_address)
 
         # cs_db_cluster is created in case MIXED_CLUSTER. For example, gemini test
         if self.cs_db_cluster:
@@ -998,12 +1001,14 @@ class ClusterTester(db_stats.TestStatsMixin,
         if self.params.get('use_mgmt'):
             self.k8s_cluster.deploy_scylla_manager()
 
-        loader_pool = gke.GkeNodePool(
-            name=self.k8s_cluster.LOADER_POOL_NAME,
-            instance_type=self.params.get("gce_instance_type_loader"),
-            num_nodes=self.params.get("n_loaders"),
-            k8s_cluster=self.k8s_cluster)
-        self.k8s_cluster.deploy_node_pool(loader_pool, wait_till_ready=False)
+        loader_pool = None
+        if self.params.get("n_loaders"):
+            loader_pool = gke.GkeNodePool(
+                name=self.k8s_cluster.LOADER_POOL_NAME,
+                instance_type=self.params.get("gce_instance_type_loader"),
+                num_nodes=self.params.get("n_loaders"),
+                k8s_cluster=self.k8s_cluster)
+            self.k8s_cluster.deploy_node_pool(loader_pool, wait_till_ready=False)
 
         monitor_pool = None
         if self.params.get('k8s_deploy_monitoring'):
@@ -1043,13 +1048,14 @@ class ClusterTester(db_stats.TestStatsMixin,
                 node_pool=monitor_pool
             )
 
-        self.loaders = cluster_k8s.LoaderPodCluster(k8s_cluster=self.k8s_cluster,
-                                                    loader_cluster_config=LOADER_CLUSTER_CONFIG,
-                                                    loader_cluster_name=self.params.get("k8s_loader_cluster_name"),
-                                                    user_prefix=self.params.get("user_prefix"),
-                                                    n_nodes=self.params.get("n_loaders"),
-                                                    params=self.params,
-                                                    node_pool=loader_pool)
+        if self.params.get("n_loaders"):
+            self.loaders = cluster_k8s.LoaderPodCluster(k8s_cluster=self.k8s_cluster,
+                                                        loader_cluster_config=LOADER_CLUSTER_CONFIG,
+                                                        loader_cluster_name=self.params.get("k8s_loader_cluster_name"),
+                                                        user_prefix=self.params.get("user_prefix"),
+                                                        n_nodes=self.params.get("n_loaders"),
+                                                        params=self.params,
+                                                        node_pool=loader_pool)
 
         if self.params.get("n_monitor_nodes") > 0:
             self.log.debug("Update startup script with iptables rules")
@@ -1131,14 +1137,16 @@ class ClusterTester(db_stats.TestStatsMixin,
         )
         self.k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
 
-        loader_pool = eks.EksNodePool(
-            name=self.k8s_cluster.LOADER_POOL_NAME,
-            num_nodes=self.params.get("n_loaders"),
-            instance_type=self.params.get("instance_type_monitor"),
-            role_arn=self.params.get('eks_nodegroup_role_arn'),
-            disk_size=self.params.get('aws_root_disk_size_monitor'),
-            k8s_cluster=self.k8s_cluster)
-        self.k8s_cluster.deploy_node_pool(loader_pool, wait_till_ready=False)
+        loader_pool = None
+        if self.params.get("n_loaders"):
+            loader_pool = eks.EksNodePool(
+                name=self.k8s_cluster.LOADER_POOL_NAME,
+                num_nodes=self.params.get("n_loaders"),
+                instance_type=self.params.get("instance_type_monitor"),
+                role_arn=self.params.get('eks_nodegroup_role_arn'),
+                disk_size=self.params.get('aws_root_disk_size_monitor'),
+                k8s_cluster=self.k8s_cluster)
+            self.k8s_cluster.deploy_node_pool(loader_pool, wait_till_ready=False)
 
         monitor_pool = None
         if self.params.get('k8s_deploy_monitoring'):
@@ -1174,13 +1182,14 @@ class ClusterTester(db_stats.TestStatsMixin,
                 node_pool=monitor_pool
             )
 
-        self.loaders = cluster_k8s.LoaderPodCluster(k8s_cluster=self.k8s_cluster,
-                                                    loader_cluster_config=LOADER_CLUSTER_CONFIG,
-                                                    loader_cluster_name=self.params.get("k8s_loader_cluster_name"),
-                                                    user_prefix=self.params.get("user_prefix"),
-                                                    n_nodes=self.params.get("n_loaders"),
-                                                    params=self.params,
-                                                    node_pool=loader_pool)
+        if self.params.get("n_loaders"):
+            self.loaders = cluster_k8s.LoaderPodCluster(k8s_cluster=self.k8s_cluster,
+                                                        loader_cluster_config=LOADER_CLUSTER_CONFIG,
+                                                        loader_cluster_name=self.params.get("k8s_loader_cluster_name"),
+                                                        user_prefix=self.params.get("user_prefix"),
+                                                        n_nodes=self.params.get("n_loaders"),
+                                                        params=self.params,
+                                                        node_pool=loader_pool)
 
         if monitor_info['n_nodes']:
             self.log.debug("Update startup script with iptables rules")
@@ -2834,7 +2843,11 @@ class ClusterTester(db_stats.TestStatsMixin,
             scylla_instance_type = "N/A"
 
         job_name = os.environ.get('JOB_NAME').split("/")[-1] if os.environ.get('JOB_NAME') else config_file_name
-        nodes_shards = self.all_nodes_scylla_shards()
+
+        if self.db_cluster:
+            nodes_shards = self.all_nodes_scylla_shards()
+        else:
+            nodes_shards = defaultdict(list)
 
         return {"backend": backend,
                 "build_id": os.environ.get('BUILD_NUMBER', ''),
