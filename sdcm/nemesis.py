@@ -36,6 +36,7 @@ from cassandra import ConsistencyLevel
 
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady
 from sdcm.cluster import NodeStayInClusterAfterDecommission
+from sdcm.cluster_k8s.minikube import MinikubeScyllaPodCluster
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR
 from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_string, \
@@ -59,10 +60,7 @@ from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.group_common_events import ignore_alternator_client_errors, ignore_no_space_errors, ignore_scrub_invalid_errors
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
-from sdcm.cluster_k8s import PodCluster
-from sdcm.cluster_k8s.minikube import MinikubeScyllaPodCluster
-from sdcm.cluster_k8s.eks import EksScyllaPodCluster
-from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
+from sdcm.cluster_k8s import PodCluster, ScyllaPodCluster
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
@@ -753,17 +751,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return new_node
 
     def _get_kubernetes_node_break_methods(self):
-        if isinstance(self.cluster, (GkeScyllaPodCluster, EksScyllaPodCluster)):
-            return [
-                'drain_k8s_node',
-                # NOTE: enable below methods when it's support fully implemented
-                # https://trello.com/c/LrAObHPC/3119-fix-gce-node-termination-nemesis-on-k8s
-                # https://github.com/scylladb/scylla-operator/issues/524
-                # https://github.com/scylladb/scylla-operator/issues/507
-                # 'terminate_k8s_host',
-                # 'terminate_k8s_node',
-            ]
-        raise UnsupportedNemesis("Only GKE and EKS backends support this nemesis")
+        if isinstance(self.cluster, ScyllaPodCluster) and self.cluster.node_terminate_methods:
+            return self.cluster.node_terminate_methods
+        raise UnsupportedNemesis(f"Backend {self.cluster.params.get('cluster_backend')} "
+                                 f"does not support node termination")
 
     def _terminate_cluster_node(self, node):
         with DbEventsFilter(db_event=DatabaseLogEvent.POWER_OFF, node=node):
