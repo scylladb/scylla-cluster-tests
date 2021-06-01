@@ -2270,8 +2270,10 @@ class ClusterTester(db_stats.TestStatsMixin,
         if final_event.test_status == 'SUCCESS':
             self.log.info(str(final_event))
             return
-        self._remove_errors_from_unittest_results(self._outcome)
-        self._outcome.errors.append((self, (TestResultEvent, final_event, None)))
+        if self._outcome is not None:
+            # If there is not self._outcome, it means tests running in non-unittest environment
+            self._remove_errors_from_unittest_results(self._outcome)
+            self._outcome.errors.append((self, (TestResultEvent, final_event, None)))
 
     @silence()
     def destroy_localhost(self):
