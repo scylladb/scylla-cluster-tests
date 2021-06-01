@@ -43,11 +43,6 @@ CassandraStressEvent.failure: CRITICAL
 CassandraStressEvent.error: ERROR
 CassandraStressEvent.start: NORMAL
 CassandraStressEvent.finish: NORMAL
-ScyllaBenchEvent.failure: CRITICAL
-ScyllaBenchEvent.error: ERROR
-ScyllaBenchEvent.timeout: ERROR
-ScyllaBenchEvent.start: NORMAL
-ScyllaBenchEvent.finish: NORMAL
 YcsbStressEvent.failure: CRITICAL
 YcsbStressEvent.error: ERROR
 YcsbStressEvent.start: NORMAL
@@ -92,3 +87,4 @@ DbEventsFilter: NORMAL
 EventsFilter: NORMAL
 EventsSeverityChangerFilter: NORMAL
 NodetoolEvent: ERROR
+ScyllaBenchEvent: CRITICAL

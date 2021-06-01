@@ -15,7 +15,7 @@ import re
 import json
 import time
 import logging
-from typing import Type, Optional, List, Tuple
+from typing import Type, Optional, List, Tuple, Any
 
 import dateutil.parser
 from invoke.runners import Result
@@ -24,7 +24,6 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.base import \
     SctEvent, SctEventProtocol, LogEvent, LogEventProtocol, T_log_event, \
     BaseStressEvent, StressEvent, StressEventProtocol
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -76,22 +75,8 @@ class CassandraStressEvent(StressEvent, abstract=True):
 CassandraStressEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR)
 
 
-class ScyllaBenchEvent(StressEvent, abstract=True):
-    failure: Type[StressEventProtocol]
-    error: Type[SctEventProtocol]
-    timeout: Type[StressEventProtocol]
-    start: Type[StressEventProtocol]
-    finish: Type[StressEventProtocol]
-
-    @property
-    def msgfmt(self):
-        fmt = super(StressEvent, self).msgfmt + ": type={0.type} node={0.node} stress_cmd={0.stress_cmd}"
-        if self.errors:
-            return fmt + " error={0.errors_formatted}"
-        return fmt
-
-
-ScyllaBenchEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR, timeout=Severity.ERROR)
+class ScyllaBenchEvent(StressEvent):
+    ...
 
 
 class BaseYcsbStressEvent(StressEvent, abstract=True):

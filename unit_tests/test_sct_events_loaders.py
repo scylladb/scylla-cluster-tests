@@ -37,7 +37,10 @@ class TestGeminiEvent(unittest.TestCase):
         self.assertEqual(event.severity, Severity.NORMAL)
         self.assertEqual(event.cmd, "cat")
         self.assertEqual(event.result, "")
-        self.assertEqual(str(event), "(GeminiEvent Severity.NORMAL): type=start gemini_cmd=cat")
+        event.event_id = "8628037b-ddb8-4e24-a595-4ecbc024b786"
+        self.assertEqual(str(event),
+                         "(GeminiEvent Severity.NORMAL) period_type=not-set "
+                         "event_id=8628037b-ddb8-4e24-a595-4ecbc024b786: type=start gemini_cmd=cat")
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
     def test_with_result(self):
@@ -48,7 +51,10 @@ class TestGeminiEvent(unittest.TestCase):
 
         result = "Exit code: 1\nCommand output: ['  line2  ', 'line3']\nCommand error: \terr\t\n"
         self.assertEqual(event.result, result)
-        self.assertEqual(str(event), "(GeminiEvent Severity.CRITICAL): type=error gemini_cmd=cat\n" + result)
+        event.event_id = "23a03d37-ec69-4629-a2e8-a8d787ce7bd8"
+        self.assertEqual(str(event),
+                         "(GeminiEvent Severity.CRITICAL) period_type=not-set "
+                         "event_id=23a03d37-ec69-4629-a2e8-a8d787ce7bd8: type=error gemini_cmd=cat\n" + result)
 
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
@@ -68,7 +74,10 @@ class TestCassandraStressEvent(unittest.TestCase):
         self.assertEqual(event.stress_cmd, "c-s")
         self.assertEqual(event.log_file_name, "1.log")
         self.assertIsNone(event.errors)
-        self.assertEqual(str(event), "(CassandraStressEvent Severity.ERROR): type=error node=[]\nstress_cmd=c-s")
+        event.event_id = "b8c1fc49-d5e0-4e98-80cc-e6bab0906e53"
+        self.assertEqual(str(event),
+                         "(CassandraStressEvent Severity.ERROR) period_type=not-set "
+                         "event_id=b8c1fc49-d5e0-4e98-80cc-e6bab0906e53: type=error node=[]\nstress_cmd=c-s")
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
     def test_with_errors(self):
@@ -78,43 +87,68 @@ class TestCassandraStressEvent(unittest.TestCase):
         self.assertIsNone(event.stress_cmd)
         self.assertIsNone(event.log_file_name)
         self.assertEqual(event.errors, ["e1", "e2"])
+        event.event_id = "a2a587ea-bb7c-41bd-b252-961bbf050255"
         self.assertEqual(
             str(event),
-            "(CassandraStressEvent Severity.CRITICAL): type=failure node=node1\ne1\ne2"
+            "(CassandraStressEvent Severity.CRITICAL) period_type=not-set "
+            "event_id=a2a587ea-bb7c-41bd-b252-961bbf050255: type=failure node=node1\ne1\ne2"
         )
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
 
 class TestScyllaBenchEvent(unittest.TestCase):
-    def test_subevents(self):
-        self.assertTrue(issubclass(ScyllaBenchEvent.failure, ScyllaBenchEvent))
-        self.assertTrue(issubclass(ScyllaBenchEvent.error, ScyllaBenchEvent))
-        self.assertTrue(issubclass(ScyllaBenchEvent.timeout, ScyllaBenchEvent))
-        self.assertTrue(issubclass(ScyllaBenchEvent.start, ScyllaBenchEvent))
-        self.assertTrue(issubclass(ScyllaBenchEvent.finish, ScyllaBenchEvent))
+    def test_continuous_event_with_error(self):
+        begin_event_timestamp = 1623596860.1202102
+        scylla_bench_event = ScyllaBenchEvent(node="node",
+                                              stress_cmd="stress_cmd",
+                                              log_file_name="log_file_name")
+        scylla_bench_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
+        begin_event = scylla_bench_event.begin_event(publish=False)
+        begin_event.timestamp = begin_event_timestamp
+        self.assertEqual(str(begin_event),
+                         "(ScyllaBenchEvent Severity.NORMAL) period_type=begin "
+                         "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd")
+        self.assertEqual(begin_event.timestamp, begin_event_timestamp)
+        self.assertEqual(begin_event, pickle.loads(pickle.dumps(begin_event)))
 
-    def test_without_errors(self):
-        event = ScyllaBenchEvent.timeout(node=[], stress_cmd="c-s", log_file_name="1.log")
-        self.assertEqual(event.severity, Severity.ERROR)
-        self.assertEqual(event.node, "[]")
-        self.assertEqual(event.stress_cmd, "c-s")
-        self.assertEqual(event.log_file_name, "1.log")
-        self.assertIsNone(event.errors)
-        self.assertEqual(str(event), "(ScyllaBenchEvent Severity.ERROR): type=timeout node=[] stress_cmd=c-s")
-        self.assertEqual(event, pickle.loads(pickle.dumps(event)))
+        try:
+            raise ValueError('Stress command completed with bad status 1')
+        except Exception as e:
+            scylla_bench_event.severity = Severity.ERROR
+            scylla_bench_event.add_error([str(e)])
 
-    def test_with_errors(self):
-        event = ScyllaBenchEvent.failure(node="node1", errors=["e1", "e2"])
-        self.assertEqual(event.severity, Severity.CRITICAL)
-        self.assertEqual(event.node, "node1")
-        self.assertIsNone(event.stress_cmd)
-        self.assertIsNone(event.log_file_name)
-        self.assertEqual(event.errors, ["e1", "e2"])
-        self.assertEqual(
-            str(event),
-            "(ScyllaBenchEvent Severity.CRITICAL): type=failure node=node1 stress_cmd=None error=e1\ne2"
-        )
-        self.assertEqual(event, pickle.loads(pickle.dumps(event)))
+        scylla_bench_event.end_event(publish=False)
+
+        self.assertEqual(str(scylla_bench_event),
+                         '(ScyllaBenchEvent Severity.ERROR) period_type=end '
+                         'event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: '
+                         'node=node\nstress_cmd=stress_cmd\nerrors:\n\nStress command completed with bad status 1'
+                         )
+        scylla_bench_event.log_file_name = "log_file_name"
+        self.assertEqual(scylla_bench_event, pickle.loads(pickle.dumps(scylla_bench_event)))
+
+    def test_continuous_event_without_error(self):
+        begin_event_timestamp = 1623596860.1202102
+        scylla_bench_event = ScyllaBenchEvent(node="node",
+                                              stress_cmd="stress_cmd",
+                                              log_file_name="log_file_name")
+        scylla_bench_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
+        begin_event = scylla_bench_event.begin_event(publish=False)
+        begin_event.timestamp = begin_event_timestamp
+        self.assertEqual(str(begin_event),
+                         "(ScyllaBenchEvent Severity.NORMAL) period_type=begin "
+                         "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd")
+        self.assertEqual(begin_event.timestamp, begin_event_timestamp)
+        self.assertEqual(begin_event, pickle.loads(pickle.dumps(begin_event)))
+
+        scylla_bench_event.end_event(publish=False)
+
+        self.assertEqual(str(scylla_bench_event),
+                         '(ScyllaBenchEvent Severity.NORMAL) period_type=end '
+                         'event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: '
+                         'node=node\nstress_cmd=stress_cmd')
+        scylla_bench_event.log_file_name = "log_file_name"
+        self.assertEqual(scylla_bench_event, pickle.loads(pickle.dumps(scylla_bench_event)))
 
 
 class TestYcsbStressEvent(unittest.TestCase):
@@ -132,7 +166,10 @@ class TestYcsbStressEvent(unittest.TestCase):
         self.assertEqual(event.stress_cmd, "c-s")
         self.assertEqual(event.log_file_name, "1.log")
         self.assertIsNone(event.errors)
-        self.assertEqual(str(event), "(YcsbStressEvent Severity.ERROR): type=error node=[]\nstress_cmd=c-s")
+        event.event_id = "68067fe2-4c9e-421c-97b5-12db8d7ba71d"
+        self.assertEqual(str(event),
+                         "(YcsbStressEvent Severity.ERROR) period_type=not-set "
+                         "event_id=68067fe2-4c9e-421c-97b5-12db8d7ba71d: type=error node=[]\nstress_cmd=c-s")
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
     def test_with_errors(self):
@@ -142,9 +179,12 @@ class TestYcsbStressEvent(unittest.TestCase):
         self.assertIsNone(event.stress_cmd)
         self.assertIsNone(event.log_file_name)
         self.assertEqual(event.errors, ["e1", "e2"])
+        event.event_id = "225676a7-ddd1-4f4d-bae8-1cf5b35d0955"
         self.assertEqual(
             str(event),
-            "(YcsbStressEvent Severity.CRITICAL): type=failure node=node1\nstress_cmd=None\nerrors:\n\ne1\ne2"
+            "(YcsbStressEvent Severity.CRITICAL) period_type=not-set "
+            "event_id=225676a7-ddd1-4f4d-bae8-1cf5b35d0955:"
+            " type=failure node=node1\nstress_cmd=None\nerrors:\n\ne1\ne2"
         )
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
@@ -164,7 +204,10 @@ class TestCDCReaderStressEvent(unittest.TestCase):
         self.assertEqual(event.stress_cmd, "c-s")
         self.assertEqual(event.log_file_name, "1.log")
         self.assertIsNone(event.errors)
-        self.assertEqual(str(event), "(CDCReaderStressEvent Severity.NORMAL): type=start node=[]\nstress_cmd=c-s")
+        event.event_id = "aed3946d-33a8-4f68-b56c-1d09f71f5da9"
+        self.assertEqual(str(event),
+                         "(CDCReaderStressEvent Severity.NORMAL) period_type=not-set "
+                         "event_id=aed3946d-33a8-4f68-b56c-1d09f71f5da9: type=start node=[]\nstress_cmd=c-s")
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
     def test_with_errors(self):
@@ -174,9 +217,12 @@ class TestCDCReaderStressEvent(unittest.TestCase):
         self.assertIsNone(event.stress_cmd)
         self.assertIsNone(event.log_file_name)
         self.assertEqual(event.errors, ["e1", "e2"])
+        event.event_id = "3c5deb9e-7a67-49ee-9295-c7e986b015a9"
         self.assertEqual(
             str(event),
-            "(CDCReaderStressEvent Severity.CRITICAL): type=failure node=node1\nstress_cmd=None\nerrors:\n\ne1\ne2"
+            "(CDCReaderStressEvent Severity.CRITICAL) period_type=not-set "
+            "event_id=3c5deb9e-7a67-49ee-9295-c7e986b015a9: type=failure node=node1\nstress_cmd=None"
+            "\nerrors:\n\ne1\ne2"
         )
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
@@ -196,7 +242,10 @@ class TestNdbenchStressEvent(unittest.TestCase):
         self.assertEqual(event.stress_cmd, "c-s")
         self.assertEqual(event.log_file_name, "1.log")
         self.assertIsNone(event.errors)
-        self.assertEqual(str(event), "(NdbenchStressEvent Severity.ERROR): type=error node=[]\nstress_cmd=c-s")
+        event.event_id = "a07b48fa-2706-465b-b139-698d35909cfa"
+        self.assertEqual(str(event),
+                         "(NdbenchStressEvent Severity.ERROR) period_type=not-set "
+                         "event_id=a07b48fa-2706-465b-b139-698d35909cfa: type=error node=[]\nstress_cmd=c-s")
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
     def test_with_errors(self):
@@ -206,9 +255,12 @@ class TestNdbenchStressEvent(unittest.TestCase):
         self.assertIsNone(event.stress_cmd)
         self.assertIsNone(event.log_file_name)
         self.assertEqual(event.errors, ["e1", "e2"])
+        event.event_id = "e45b347e-c395-4583-9f19-6e1fcdf31fab"
         self.assertEqual(
             str(event),
-            "(NdbenchStressEvent Severity.CRITICAL): type=failure node=node1\nstress_cmd=None\nerrors:\n\ne1\ne2"
+            "(NdbenchStressEvent Severity.CRITICAL) period_type=not-set "
+            "event_id=e45b347e-c395-4583-9f19-6e1fcdf31fab: type=failure "
+            "node=node1\nstress_cmd=None\nerrors:\n\ne1\ne2"
         )
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
@@ -228,7 +280,10 @@ class TestKclStressEvent(unittest.TestCase):
         self.assertEqual(event.stress_cmd, "c-s")
         self.assertEqual(event.log_file_name, "1.log")
         self.assertIsNone(event.errors)
-        self.assertEqual(str(event), "(KclStressEvent Severity.ERROR): type=failure node=[]\nstress_cmd=c-s")
+        event.event_id = "1acd4202-3a38-4b0d-9464-62f4825ee148"
+        self.assertEqual(str(event),
+                         "(KclStressEvent Severity.ERROR) period_type=not-set "
+                         "event_id=1acd4202-3a38-4b0d-9464-62f4825ee148: type=failure node=[]\nstress_cmd=c-s")
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
     def test_with_errors(self):
@@ -238,9 +293,11 @@ class TestKclStressEvent(unittest.TestCase):
         self.assertIsNone(event.stress_cmd)
         self.assertIsNone(event.log_file_name)
         self.assertEqual(event.errors, ["e1", "e2"])
+        event.event_id = "d169ca02-c119-49f2-9eb7-23f152098cb7"
         self.assertEqual(
             str(event),
-            "(KclStressEvent Severity.ERROR): type=failure node=node1\nstress_cmd=None\nerrors:\n\ne1\ne2"
+            "(KclStressEvent Severity.ERROR) period_type=not-set event_id=d169ca02-c119-49f2-9eb7-23f152098cb7: "
+            "type=failure node=node1\nstress_cmd=None\nerrors:\n\ne1\ne2"
         )
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
@@ -325,9 +382,11 @@ class TestGeminiLogEvent(unittest.TestCase):
         self.assertIsNone(event.backtrace)
         self.assertIsNone(event.raw_backtrace)
         self.assertTrue(event._ready_to_publish)
+        event.event_id = "3eaf9cb2-b54b-43f5-8472-d0fbf5c25f72"
         self.assertEqual(
             str(event),
-            '(GeminiLogEvent Severity.NORMAL): type=geminievent line_number=1 node=node1\n'
+            '(GeminiLogEvent Severity.NORMAL) period_type=one-time event_id=3eaf9cb2-b54b-43f5-8472-d0fbf5c25f72: '
+            'type=geminievent line_number=1 node=node1\n'
             'Test run stopped. Exiting. (N="pump")',
         )
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
@@ -344,8 +403,10 @@ class TestGeminiLogEvent(unittest.TestCase):
         self.assertIsNone(event.backtrace)
         self.assertIsNone(event.raw_backtrace)
         self.assertFalse(event._ready_to_publish)
+        event.event_id = "3ce0cdeb-0866-40ce-9a20-25ea3ae08be2"
         self.assertEqual(
             str(event),
-            "(GeminiLogEvent Severity.CRITICAL): type=geminievent line_number=0 node=None\nNone",
+            "(GeminiLogEvent Severity.CRITICAL) period_type=one-time event_id=3ce0cdeb-0866-40ce-9a20-25ea3ae08be2: "
+            "type=geminievent line_number=0 node=None\nNone",
         )
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))

@@ -39,9 +39,11 @@ RAW_ALERT = dict(
 class TestPrometheusAlertManagerEvent(unittest.TestCase):
     def test_msgfmt(self):
         event = PrometheusAlertManagerEvent.start(raw_alert=RAW_ALERT)
+        event.event_id = "536eaf22-3d8f-418a-9381-fe0bcdce7ad9"
         self.assertEqual(
             str(event),
-            "(PrometheusAlertManagerEvent Severity.WARNING): alert_name=InstanceDown type=start"
+            "(PrometheusAlertManagerEvent Severity.WARNING) period_type=not-set "
+            "event_id=536eaf22-3d8f-418a-9381-fe0bcdce7ad9: alert_name=InstanceDown type=start"
             " start=2019-12-24T17:00:09.591Z end=2019-12-26T06:21:09.591Z"
             " description=[10.0.201.178] has been down for more than 30 seconds. updated=2019-12-26T06:18:09.593Z"
             " state= fingerprint=None labels={'alertname': 'InstanceDown', 'instance': '[10.0.201.178]',"

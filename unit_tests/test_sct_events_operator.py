@@ -23,9 +23,11 @@ class TestOperatorEvents(unittest.TestCase):
     def test_scylla_operator_log_event(self):
         event = ScyllaOperatorLogEvent(
             namespace="scylla", cluster="c1", message="m1", error="e1", trace_id="tid1")
+        event.event_id = "9bb2980a-5940-49a7-8b08-d5c323b46aa9"
         self.assertEqual(
             str(event),
-            "(ScyllaOperatorLogEvent Severity.ERROR): line_number=0 tid1 scylla/c1: m1, e1",
+            "(ScyllaOperatorLogEvent Severity.ERROR) period_type=one-time "
+            "event_id=9bb2980a-5940-49a7-8b08-d5c323b46aa9: line_number=0 tid1 scylla/c1: m1, e1",
         )
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
         self.assertTrue(hasattr(event, "TLS_HANDSHAKE_ERROR"))
@@ -41,8 +43,10 @@ class TestOperatorEvents(unittest.TestCase):
         event.add_info(node="N/A", line=log_record, line_number=0)
 
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
+        event.event_id = "9bb2980a-5940-49a7-8b08-d5c323b46aa9"
         self.assertEqual(
-            "(ScyllaOperatorLogEvent Severity.WARNING): "
+            "(ScyllaOperatorLogEvent Severity.WARNING) period_type=one-time "
+            "event_id=9bb2980a-5940-49a7-8b08-d5c323b46aa9: "
             "type=TLS_HANDSHAKE_ERROR regex=TLS handshake error from .*: EOF "
             f"line_number=0 node=N/A\n{log_record} None None: None, None",
             str(event),
@@ -61,8 +65,10 @@ class TestOperatorEvents(unittest.TestCase):
         event.add_info(node="N/A", line=log_record, line_number=0)
 
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
+        event.event_id = "9bb2980a-5940-49a7-8b08-d5c323b46aa9"
         self.assertEqual(
-            "(ScyllaOperatorLogEvent Severity.NORMAL): "
+            "(ScyllaOperatorLogEvent Severity.NORMAL) period_type=one-time "
+            "event_id=9bb2980a-5940-49a7-8b08-d5c323b46aa9: "
             "type=OPERATOR_STARTED_INFO regex=Starting the operator... "
             f"line_number=0 node=N/A\n{log_record} None None: None, None",
             str(event),

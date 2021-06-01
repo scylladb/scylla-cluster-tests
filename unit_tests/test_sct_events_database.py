@@ -72,18 +72,27 @@ class TestFullScanEvent(unittest.TestCase):
     def test_no_message(self):
         event = FullScanEvent.start(db_node_ip="127.0.0.1", ks_cf="ks")
         self.assertFalse(hasattr(event, "message"))
-        self.assertEqual(str(event), "(FullScanEvent Severity.NORMAL): type=start select_from=ks on db_node=127.0.0.1")
+        event.event_id = "743c4ad7-7d83-4b07-9602-120bb6c98fd6"
+        self.assertEqual(str(event),
+                         "(FullScanEvent Severity.NORMAL) period_type=not-set "
+                         "event_id=743c4ad7-7d83-4b07-9602-120bb6c98fd6: type=start select_from=ks on "
+                         "db_node=127.0.0.1")
 
     def test_with_message(self):
         event = FullScanEvent.finish(db_node_ip="127.0.0.1", ks_cf="ks", message="m1")
         self.assertEqual(event.message, "m1")
+        event.event_id = "743c4ad7-7d83-4b07-9602-120bb6c98fd6"
         self.assertEqual(
             str(event),
-            "(FullScanEvent Severity.NORMAL): type=finish select_from=ks on db_node=127.0.0.1 message=m1"
+            "(FullScanEvent Severity.NORMAL) period_type=not-set event_id=743c4ad7-7d83-4b07-9602-120bb6c98fd6: "
+            "type=finish select_from=ks on db_node=127.0.0.1 message=m1"
         )
 
 
 class TestIndexSpecialColumnErrorEvent(unittest.TestCase):
     def test_msgfmt(self):
         event = IndexSpecialColumnErrorEvent(message="m1")
-        self.assertEqual(str(event), "(IndexSpecialColumnErrorEvent Severity.ERROR): message=m1")
+        event.event_id = "ac449879-485a-4b06-8596-3fbe58881093"
+        self.assertEqual(str(event),
+                         "(IndexSpecialColumnErrorEvent Severity.ERROR) period_type=not-set "
+                         "event_id=ac449879-485a-4b06-8596-3fbe58881093: message=m1")
