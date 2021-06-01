@@ -3043,7 +3043,11 @@ class FillDatabaseData(ClusterTester):
         node = self.db_cluster.nodes[0]
         if not node.scylla_version:
             node.get_scylla_version()
-        return node.scylla_version, node.is_enterprise
+        # NOTE: node.get_scylla_version() returns following structure of a scylla version:
+        #       4.4.1-0.20210406.00da6b5e9
+        #       And 'parse_version' behaves differently for full and short scylla versions
+        #       So, keep status quo and use short scylla version here.
+        return node.scylla_version.split("-")[0], node.is_enterprise
 
     def version_null_values_support(self):
         scylla_version, is_enterprise = self.get_scylla_version()
