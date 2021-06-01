@@ -1,0 +1,4 @@
+nemesis_class_name: 'ScyllaCloudLimitedChaosMonkey'
+user_prefix: 'alternator-streams-limited-nemesis'
+nemesis_interval: 30
+nemesis_during_prepare: true
