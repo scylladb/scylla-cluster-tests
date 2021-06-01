@@ -1013,7 +1013,7 @@ class ClusterTester(db_stats.TestStatsMixin,
                 disk_size=self.params.get("gce_root_disk_size_monitor"),
                 disk_type=self.params.get("gce_root_disk_type_monitor"),
                 instance_type=self.params.get("gce_instance_type_monitor"),
-                num_nodes=self.params.get("n_monitor_nodes"),
+                num_nodes=1,
                 k8s_cluster=self.k8s_cluster)
             self.k8s_cluster.deploy_node_pool(monitor_pool, wait_till_ready=False)
 
@@ -1144,7 +1144,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         if self.params.get('k8s_deploy_monitoring'):
             monitor_pool = eks.EksNodePool(
                 name=self.k8s_cluster.MONITORING_POOL_NAME,
-                num_nodes=self.params.get("n_monitor_nodes"),
+                num_nodes=1,
                 instance_type=self.params.get("instance_type_monitor"),
                 role_arn=self.params.get('eks_nodegroup_role_arn'),
                 disk_size=self.params.get('aws_root_disk_size_monitor'),
