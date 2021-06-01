@@ -724,6 +724,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             finally:
                 if has_enospc_been_reached:
                     clean_enospc_on_node(target_node=target_node, sleep_time=30)
+        self.log.info('finishing test_enospc_during_backup')
 
     def _delete_keyspace_directory(self, db_node, keyspace_name):
         # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
