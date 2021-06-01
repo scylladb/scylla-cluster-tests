@@ -22,7 +22,7 @@ import time
 import random
 import unittest
 import warnings
-from typing import Union, Dict, Any, Optional
+from typing import NamedTuple, Optional, Union, List, Dict, Any
 from uuid import uuid4
 from functools import wraps, cached_property
 import threading
@@ -208,6 +208,18 @@ def critical_failure_handler(signum, frame):  # pylint: disable=unused-argument
 
 
 signal.signal(signal.SIGUSR2, critical_failure_handler)
+
+
+class SchemaVersion(NamedTuple):
+    schema_id: str
+    node_ips: List[str]
+
+
+class ClusterInformation(NamedTuple):
+    name: str
+    snitch: str
+    partitioner: str
+    schema_versions: List[SchemaVersion]
 
 
 class ClusterTester(db_stats.TestStatsMixin,
@@ -2051,6 +2063,55 @@ class ClusterTester(db_stats.TestStatsMixin,
         query = "SELECT truncated_at FROM system.truncated WHERE table_uuid={}".format(table_id)
         truncated_time = self.rows_to_list(session.execute(query))
         return truncated_time[0]
+
+    def get_describecluster_info(self) -> Optional[ClusterInformation]:
+        """
+        Runs the 'nodetool describecluster' command on a node.
+
+        Example output:
+
+        nodetool describecluster
+
+        Cluster Information:
+             Name: Test Cluster
+             Snitch: org.apache.cassandra.locator.SimpleSnitch
+             Partitioner: org.apache.cassandra.dht.Murmur3Partitioner
+             Schema versions:
+                     86a67fc7-1d7c-3dc3-9be9-9c86b27e2506: [172.17.0.2]
+
+        The output is then packaged into a ClusterInformation
+        namedtuple, for easier access to the fields.
+        """
+        node = self.db_cluster.get_node()
+        describecluster_output = node.run_nodetool(sub_cmd="describecluster")
+
+        if describecluster_output.ok:
+            desc_stdout = describecluster_output.stdout
+            name_pattern = re.compile("((?<=Name: )[\w _-]*)")
+            snitch_pattern = re.compile("((?<=Snitch: )[\w.]*)")
+            partitioner_pattern = re.compile("((?<=Partitioner: )[\w.]*)")
+            schema_versions_pattern = re.compile("([a-z0-9-]{36}: \[[\d., ]*\])")
+
+            name = name_pattern.search(desc_stdout).group()
+            snitch = snitch_pattern.search(desc_stdout).group()
+            partitioner = partitioner_pattern.search(desc_stdout).group()
+            schemas = schema_versions_pattern.findall(desc_stdout)
+            schema_versions = []
+            if schemas:
+                for item in schemas:
+                    split = item.split(":")
+                    schema_id = split[0].strip()
+                    node_ips = split[-1].strip()
+                    schema_versions.append(SchemaVersion(schema_id=schema_id, node_ips=node_ips))
+
+            return ClusterInformation(
+                name=name,
+                snitch=snitch,
+                partitioner=partitioner,
+                schema_versions=schema_versions
+            )
+
+        return None
 
     def get_nemesis_report(self, cluster):
         for current_nemesis in cluster.nemesis:

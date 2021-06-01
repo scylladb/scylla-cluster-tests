@@ -21,6 +21,13 @@ from sdcm.tester import ClusterTester
 STRESS_CMD: str = "/usr/bin/cassandra-stress"
 
 
+BACKENDS = {
+    "aws": ["Ec2Snitch", "Ec2MultiRegionSnitch"],
+    "gce": ["GoogleCloudSnitch"],
+    "docker": ["GossipingPropertyFileSnitch", "SimpleSnitch"]
+}
+
+
 class ArtifactsTest(ClusterTester):
     @property
     def node(self):
@@ -74,17 +81,55 @@ class ArtifactsTest(ClusterTester):
                 raise AssertionError(f"Unable to parse/find timestamp of the user {user} creation in {line}")
         self.log.info("All users except image user 'centos' were created after the boot.")
 
+    def verify_node_health(self):
+        self.node.check_node_health()
+
+    def verify_snitch(self, backend_name: str):
+        """
+        Verify that the snitch used in the cluster is appropriate for
+        the backend used.
+        """
+        describecluster_snitch = self.get_describecluster_info().snitch
+        with self.node.remote_manager_yaml(SCYLLA_YAML_PATH) as scylla_yaml:
+            scylla_yaml_snitch = scylla_yaml['endpoint_snitch']
+        expected_snitches = BACKENDS[backend_name]
+
+        snitch_patterns = [re.compile(f"({snitch})") for snitch in expected_snitches]
+        snitch_matches_describecluster = [pattern.search(describecluster_snitch) for pattern in snitch_patterns]
+        snitch_matches_scylla_yaml = [pattern.search(scylla_yaml_snitch) for pattern in snitch_patterns]
+
+        with self.subTest('verify snitch against describecluster output'):
+            self.assertTrue(any(snitch_matches_describecluster),
+                            msg=f"Expected snitch matches for describecluster to not be empty, but was. Snitch "
+                                f"matches: {snitch_matches_describecluster}"
+                            )
+
+        with self.subTest('verify snitch against scylla.yaml configuration'):
+            self.assertTrue(any(snitch_matches_scylla_yaml),
+                            msg=f"Expected snitch matches for scylla yaml to not be empty, but was. Snitch "
+                                f"matches: {snitch_matches_scylla_yaml}"
+                            )
+
     def test_scylla_service(self):
-        if self.params["cluster_backend"] == "aws":
+        backend = self.params["cluster_backend"]
+
+        if backend == "aws":
             with self.subTest("check ENA support"):
                 assert self.node.ena_support, "ENA support is not enabled"
 
-        if self.params["cluster_backend"] == "gce":
-            self.verify_users()
+        if backend == "gce":
+            with self.subTest("verify users"):
+                self.verify_users()
 
-        if self.params["use_preinstalled_scylla"] and "docker" not in self.params["cluster_backend"]:
+        if self.params["use_preinstalled_scylla"] and backend != "docker":
             with self.subTest("check the cluster name"):
                 self.check_cluster_name()
+
+        with self.subTest('verify snitch'):
+            self.verify_snitch(backend_name=backend)
+
+        with self.subTest('verify node health'):
+            self.verify_node_health()
 
         with self.subTest("check Scylla server after installation"):
             self.check_scylla()
