@@ -165,6 +165,8 @@ def latency_calculator_decorator(func):
         all_nodes_list = list(set(start_node_list + end_node_list))
         end = time.time()
         test_name = args[0].tester.__repr__().split('testMethod=')[-1].split('>')[0]
+        if not args[0].monitoring_set or not args[0].monitoring_set.nodes:
+            return res
         monitor = args[0].monitoring_set.nodes[0]
         if 'read' in test_name:
             workload = 'read'
