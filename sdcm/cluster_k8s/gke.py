@@ -380,6 +380,15 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
 
 class GkeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
     NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/gke/scylla-node-prepare.yaml")
+    node_terminate_methods = [
+        'drain_k8s_node',
+        # NOTE: enable below methods when it's support fully implemented
+        # https://trello.com/c/LrAObHPC/3119-fix-gce-node-termination-nemesis-on-k8s
+        # https://github.com/scylladb/scylla-operator/issues/524
+        # https://github.com/scylladb/scylla-operator/issues/507
+        # 'terminate_k8s_host',
+        # 'terminate_k8s_node',
+    ]
 
     k8s_cluster: 'GkeCluster'
     node_pool: 'GkeNodePool'
