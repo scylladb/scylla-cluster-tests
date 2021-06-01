@@ -46,4 +46,4 @@ append_scylla_args: ''
 docker_image: ''
 mgmt_docker_image: 'scylladb/scylla-manager:2.3.0'
 
-backup_bucket_location: 'manager-backup-tests-eu-north-1'
+backup_bucket_location: 'minio-bucket'

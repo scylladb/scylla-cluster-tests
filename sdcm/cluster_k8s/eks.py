@@ -29,8 +29,12 @@ from sdcm.localhost import LocalHost
 from sdcm.utils.aws_utils import tags_as_ec2_tags, EksClusterCleanupMixin
 from sdcm.utils.k8s import TokenUpdateThread
 from sdcm.wait import wait_for
-from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BaseScyllaPodContainer, CloudK8sNodePool, \
-    SCYLLA_NAMESPACE
+from sdcm.cluster_k8s import (
+    BaseScyllaPodContainer,
+    CloudK8sNodePool,
+    KubernetesCluster,
+    ScyllaPodCluster,
+)
 from sdcm.cluster_k8s.iptables import IptablesPodIpRedirectMixin, IptablesClusterOpsMixin
 from sdcm.remote import LOCALRUNNER
 
@@ -303,9 +307,6 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         LOGGER.info("Patch kubectl config")
         self.patch_kubectl_config()
 
-    def aws_cli(self, cmd) -> str:
-        return LOCALRUNNER.run(cmd).stdout
-
     def deploy_node_pool(self, pool: EksNodePool, wait_till_ready=True) -> None:
         self._add_pool(pool)
         if pool.is_deployed:
@@ -327,14 +328,9 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
     def get_ec2_instance_by_id(self, instance_id):
         return boto3.resource('ec2', region_name=self.region_name).Instance(id=instance_id)
 
-    def create_scylla_manager_agent_config(self):
-        self.update_secret_from_data('scylla-agent-config', SCYLLA_NAMESPACE, {
-            'scylla-manager-agent.yaml': {
-                's3': {
-                    'region': self.region_name
-                }
-            }
-        })
+    def deploy_scylla_manager(self, pool_name: str = None) -> None:
+        self.deploy_minio_s3_backend()
+        super().deploy_scylla_manager(pool_name=pool_name)
 
 
 class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
