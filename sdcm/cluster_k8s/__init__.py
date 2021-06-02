@@ -1833,6 +1833,19 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
     def install_scylla_manager(self, node):
         pass
 
+    def node_setup(self, node: BaseScyllaPodContainer, verbose: bool = False, timeout: int = 3600):
+        self.get_scylla_version()
+        if Setup.BACKTRACE_DECODING:
+            node.install_scylla_debuginfo()
+
+        if Setup.MULTI_REGION:
+            node.datacenter_setup(self.datacenter)  # pylint: disable=no-member
+        self.node_config_setup(
+            node,
+            seed_address=','.join(self.seed_nodes_ips),
+            endpoint_snitch=self.get_endpoint_snitch(),
+        )
+
     @cached_property
     def scylla_manager_cluster_name(self):
         return f"{self.namespace}/{self.scylla_cluster_name}"
