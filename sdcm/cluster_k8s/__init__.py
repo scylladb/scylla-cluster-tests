@@ -723,6 +723,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                 scylla_operator_dir, "examples", "common", "monitoring", "values.yaml")
             with open(values_filepath, "r") as values_stream:
                 values_data = yaml.safe_load(values_stream)
+                # NOTE: we need to unset all the tags because latest chart version may be
+                # incompatible with old versions of apps.
+                # for example 'prometheus-operator' v0.48.0 compatible with
+                # 'kube-prometheus-stack' v16.1.2+
+                for values_key in values_data.keys():
+                    values_data[values_key].get("image", {}).pop("tag", "")
             if node_pool:
                 self.deploy_node_pool(node_pool)
                 monitoring_affinity_rules = get_helm_pool_affinity_values(
@@ -737,11 +743,21 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             #   alertmanager.alertmanagerSpec.affinity
             #   prometheusOperator.affinity
             #   prometheus.prometheusSpec.affinity
+            #   prometheus.prometheusSpec.service
             #   grafana.affinity
             helm_values.set('nodeExporter.enabled', False)
             helm_values.set('alertmanager.alertmanagerSpec', monitoring_affinity_rules)
             helm_values.set('prometheusOperator', monitoring_affinity_rules)
-            helm_values.set('prometheus.prometheusSpec', monitoring_affinity_rules)
+            prometheus_values = {
+                'prometheusSpec': monitoring_affinity_rules,
+                'service': {
+                    # NOTE: required for out-of-K8S-cluster access
+                    # nodeIp:30090 will redirect traffic to prometheusPod:9090
+                    'type': 'NodePort',
+                    'nodePort': 30090,
+                },
+            }
+            helm_values.set('prometheus', prometheus_values)
             helm_values.set('grafana', monitoring_affinity_rules)
             LOGGER.debug(f"Monitoring helm chart values are following: {helm_values.as_dict()}")
 
@@ -1010,6 +1026,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             return self.k8s_monitoring_prometheus_expose_service.service_ip
         else:
             return self.k8s_monitoring_prometheus_pod.status.pod_ip
+
+    @property
+    def k8s_monitoring_external_port(self) -> int:
+        return 9090
 
     def patch_kubectl_config(self):
         """
@@ -1999,12 +2019,18 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         self.log.debug('Check kubernetes monitoring health')
 
         kubernetes_prometheus_host = None
+        kubernetes_prometheus_port = None
         try:
             kubernetes_prometheus_host = self.k8s_cluster.k8s_monitoring_external_ip
-            kubernetes_prometheus = PrometheusDBStats(host=kubernetes_prometheus_host)
+            kubernetes_prometheus_port = self.k8s_cluster.k8s_monitoring_external_port
+            kubernetes_prometheus = PrometheusDBStats(
+                host=kubernetes_prometheus_host,
+                port=kubernetes_prometheus_port,
+            )
         except Exception as exc:
             ClusterHealthValidatorEvent.MonitoringStatus(
-                error=f'Failed to connect to kubernetes prometheus server at {kubernetes_prometheus_host},'
+                error=f'Failed to connect to kubernetes prometheus server at '
+                      f'{kubernetes_prometheus_host}:{kubernetes_prometheus_port},'
                       f' due to the: \n'
                       ''.join(traceback.format_exception(type(exc), exc, exc.__traceback__))).publish()
 
