@@ -1915,7 +1915,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                   rack: int = 0,
                   enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
         self._create_k8s_rack_if_not_exists(rack)
-        current_members = self.scylla_cluster_spec.datacenter.racks[rack].members
+        current_members = len(self.get_rack_nodes(rack))
         self.replace_scylla_cluster_value(f"/spec/datacenter/racks/{rack}/members", current_members + count)
 
         return super().add_nodes(count=count,
@@ -1965,8 +1965,9 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
 
     def decommission(self, node):
         rack = node.rack
-        assert self.get_rack_nodes(rack)[-1] == node, "Can withdraw the last node only"
-        current_members = self.scylla_cluster_spec.datacenter.racks[rack].members
+        rack_nodes = self.get_rack_nodes(rack)
+        assert rack_nodes[-1] == node, "Can withdraw the last node only"
+        current_members = len(rack_nodes)
 
         # NOTE: "scylla_shards" property uses remoter calls and we save it's result before
         # the target scylla node gets killed using kubectl command which precedes the target GCE
