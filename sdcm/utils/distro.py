@@ -161,6 +161,10 @@ class Distro(enum.Enum):
         return self.value[0] == "debian"  # pylint: disable=unsubscriptable-object
 
     @property
+    def is_debian_like(self):
+        return self.value[0].lower() in ("debian", "ubuntu")  # pylint: disable=unsubscriptable-object
+
+    @property
     def uses_systemd(self):
         # Debian uses systemd as a default init system since 8.0, Ubuntu since 15.04, and RedHat-based since 7.0
         return self not in (self.UNKNOWN, self.UBUNTU14, )
