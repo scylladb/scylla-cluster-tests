@@ -324,6 +324,32 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         EksClusterCleanupMixin.destroy(self)
         self.stop_token_update_thread()
 
+    @property
+    def k8s_monitoring_external_ip(self) -> str:
+        if self.USE_MONITORING_EXPOSE_SERVICE:
+            return self.k8s_monitoring_prometheus_expose_service.service_ip
+        # Return any IP of the monitoring pod's hosting node
+        for ip_type in ("ExternalIP", "InternalIP"):
+            cmd = (
+                f"get node --no-headers "
+                f"-l {self.POOL_LABEL_NAME}={self.MONITORING_POOL_NAME} "
+                "-o jsonpath='{.items[*].status.addresses[?(@.type==\"" + ip_type + "\")].address}'"
+            )
+            if ip := self.kubectl(cmd, namespace="monitoring").stdout:
+                return ip
+        # Must not be reached but exists for safety of code logic
+        # the only comsumer which is '_check_kubernetes_monitoring_health'
+        # will reuse this value in it's error event reporting.
+        return "no_ip_detected"
+
+    @property
+    def k8s_monitoring_external_port(self) -> int:
+        if self.USE_MONITORING_EXPOSE_SERVICE:
+            # NOTE: direct connection to a prometheus pod via ELB service
+            return 9090
+        # NOTE: '30090' is node's port that redirects traffic to pod's port 9090
+        return 30090
+
     def get_ec2_instance_by_id(self, instance_id):
         return boto3.resource('ec2', region_name=self.region_name).Instance(id=instance_id)
 
@@ -335,6 +361,30 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
                 }
             }
         })
+
+    def set_security_groups(self, instance):
+        for network_interface in instance.network_interfaces:
+            security_groups = [g["GroupId"] for g in network_interface.groups]
+            # NOTE: Make API call only if it is needed
+            if self.ec2_security_group_ids[0][0] not in security_groups:
+                security_groups.append(self.ec2_security_group_ids[0][0])
+                network_interface.modify_attribute(Groups=security_groups)
+
+    def set_security_groups_on_all_instances(self):
+        # NOTE: EKS doesn't apply nodeGroup's security groups to nodes
+        # So, we add it for each network interface of a node explicitly.
+        cmd = "get node --no-headers -o custom-columns=:.spec.providerID"
+        instance_ids = [name.split("/")[-1] for name in self.kubectl(cmd).stdout.split()]
+        for instance_id in instance_ids:
+            self.set_security_groups(self.get_ec2_instance_by_id(instance_id))
+
+    def deploy_scylla_cluster(self, *args, **kwargs) -> None:
+        super().deploy_scylla_cluster(*args, **kwargs)
+        self.set_security_groups_on_all_instances()
+
+    def deploy_monitoring_cluster(self, *args, **kwargs) -> None:
+        super().deploy_monitoring_cluster(*args, **kwargs)
+        self.set_security_groups_on_all_instances()
 
 
 class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
@@ -361,17 +411,6 @@ class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
     def ec2_instance_id(self):
         return self._node.spec.provider_id.split('/')[-1]
 
-    def set_security_groups(self):
-        # NOTE: EKS doesn't apply nodeGroup's security groups to nodes
-        # So, we add it for each network interface of a scylla node
-        # to be able to run CQL and other commands from test runner machines.
-        for network_interface in self.ec2_host.network_interfaces:
-            security_groups = self.parent_cluster.k8s_cluster.ec2_security_group_ids[0]
-            for security_group in network_interface.groups:
-                if security_group["GroupId"] not in security_groups:
-                    security_groups.append(security_group["GroupId"])
-            network_interface.modify_attribute(Groups=security_groups)
-
     def terminate_k8s_host(self):
         self.log.info('terminate_k8s_host: EC2 instance of kubernetes node will be terminated, '
                       'the following is affected :\n' + dedent('''
@@ -382,6 +421,7 @@ class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
             '''))
         self._instance_wait_safe(self.ec2_instance_destroy)
         self.wait_for_k8s_node_readiness()
+        self.parent_cluster.k8s_cluster.set_security_groups_on_all_instances()
 
     def ec2_instance_destroy(self):
         if self.ec2_host:
@@ -431,6 +471,7 @@ class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
 
         self.ec2_instance_destroy()
         self.wait_for_k8s_node_readiness()
+        self.parent_cluster.k8s_cluster.set_security_groups_on_all_instances()
         self.wait_for_pod_readiness()
 
 
@@ -472,7 +513,7 @@ class EksScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
                                       rack=rack,
                                       enable_auto_bootstrap=enable_auto_bootstrap)
         for node in new_nodes:
-            node.set_security_groups()
+            self.k8s_cluster.set_security_groups(node.ec2_host)
         self.add_hydra_iptables_rules(nodes=new_nodes)
         self.update_nodes_iptables_redirect_rules(nodes=new_nodes, loaders=False)
         return new_nodes
