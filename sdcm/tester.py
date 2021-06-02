@@ -22,7 +22,7 @@ import time
 import random
 import unittest
 import warnings
-from typing import Union
+from typing import Union, Dict, Any, Optional
 from uuid import uuid4
 from functools import wraps, cached_property
 import threading
@@ -40,7 +40,7 @@ from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR, Setup, UserRemoteCredentials, set_duration as set_cluster_duration, \
-    set_ip_ssh_connections as set_cluster_ip_ssh_connections, BaseLoaderSet, BaseMonitorSet, BaseScyllaCluster
+    set_ip_ssh_connections as set_cluster_ip_ssh_connections, BaseLoaderSet, BaseMonitorSet, BaseScyllaCluster, BaseNode
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_gce import LoaderSetGCE
 from sdcm.cluster_gce import MonitorSetGCE
@@ -55,7 +55,7 @@ from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_netwo
     get_common_params, init_db_info_from_params, ec2_ami_get_root_device_name
 from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, update_certificates, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, PageFetcher, \
-    rows_to_list, make_threads_be_daemonic_by_default
+    rows_to_list, make_threads_be_daemonic_by_default, ParallelObject
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT
@@ -2756,7 +2756,13 @@ class ClusterTester(db_stats.TestStatsMixin,
 
     @silence()
     def save_email_data(self):
-        email_data = self.get_email_data()
+        email_data = {}
+
+        try:
+            email_data = self.get_email_data()
+        except Exception as e:
+            self.log.error(f"Error while saving email data. Error: {e}")
+
         json_file_path = os.path.join(self.logdir, "email_data.json")
 
         if email_data:
@@ -2820,8 +2826,15 @@ class ClusterTester(db_stats.TestStatsMixin,
 
         return all_nodes_shards
 
-    def _get_common_email_data(self) -> dict:
+    def _get_common_email_data(self) -> Dict[str, Any]:
         """Helper for subclasses which extracts common data for email."""
+
+        if self.db_cluster:
+            nodes_shards = self.all_nodes_scylla_shards()
+        else:
+            nodes_shards = defaultdict(list)
+
+        alive_node = self._get_live_node() or None
 
         start_time = format_timestamp(self.start_time)
         config_file_name = ";".join(os.path.splitext(os.path.basename(cfg))[0] for cfg in self.params["config_files"])
@@ -2829,8 +2842,8 @@ class ClusterTester(db_stats.TestStatsMixin,
         backend = self.params.get("cluster_backend")
         region_name = self.params.get('region_name') or self.params.get('gce_datacenter')
         build_id = f'#{os.environ.get("BUILD_NUMBER")}' if os.environ.get('BUILD_NUMBER', '') else ''
-        scylla_version = self.db_cluster.nodes[0].scylla_version_detailed if self.db_cluster else "N/A"
-        kernel_version = self.db_cluster.nodes[0].kernel_version if self.db_cluster else "N/A"
+        scylla_version = alive_node.scylla_version_detailed if alive_node else "N/A"
+        kernel_version = alive_node.kernel_version if alive_node else "N/A"
 
         if backend in ("aws", "aws-siren", "k8s-eks"):
             scylla_instance_type = self.params.get("instance_type_db") or "Unknown"
@@ -2845,11 +2858,6 @@ class ClusterTester(db_stats.TestStatsMixin,
             scylla_instance_type = "N/A"
 
         job_name = os.environ.get('JOB_NAME').split("/")[-1] if os.environ.get('JOB_NAME') else config_file_name
-
-        if self.db_cluster:
-            nodes_shards = self.all_nodes_scylla_shards()
-        else:
-            nodes_shards = defaultdict(list)
 
         return {"backend": backend,
                 "build_id": os.environ.get('BUILD_NUMBER', ''),
@@ -2894,3 +2902,18 @@ class ClusterTester(db_stats.TestStatsMixin,
                 continue
             output.append(result['message'])
         return output
+
+    def _get_live_node(self) -> Optional[BaseNode]:
+        parallel_obj = ParallelObject(objects=self.db_cluster.nodes)
+        parallel_obj_results = parallel_obj.run(self._check_ssh_node_connectivity,
+                                                ignore_exceptions=True)
+
+        for result in parallel_obj_results:
+            if not result.exc:
+                return result.result
+
+    @staticmethod
+    def _check_ssh_node_connectivity(node: BaseNode) -> Optional[BaseNode]:
+        node.wait_ssh_up(verbose=False, timeout=50)
+
+        return node
