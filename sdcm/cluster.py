@@ -4808,7 +4808,7 @@ class BaseLoaderSet():
         """))
 
 
-class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-instance-attributes
+class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instance-attributes
     # This is a Mixin for monitoring cluster and should not be inherited
     DB_NODES_IP_ADDRESS = 'ip_address'
     json_file_params_for_replace = {"$test_name": get_test_name()}

@@ -555,9 +555,20 @@ class LongevityTest(ClusterTester):
 
     def get_email_data(self):
         self.log.info("Prepare data for email")
+        email_data = {}
+        grafana_dataset = {}
 
-        email_data = self._get_common_email_data()
-        grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(self.start_time) if self.monitors else {}
+        try:
+            email_data = self._get_common_email_data()
+        except Exception as e:
+            self.log.error(f"Error in gathering common email data: Error:\n{e}")
+
+        try:
+            grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(
+                self.start_time) if self.monitors else {}
+        except Exception as e:
+            self.log.error(f"Error in gathering Grafana screenshots and snapshots. Error:\n{e}")
+
         email_data.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
                            "grafana_snapshots": grafana_dataset.get("snapshots", []),
                            "nemesis_details": self.get_nemesises_stats(),
