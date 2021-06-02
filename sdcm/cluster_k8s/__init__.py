@@ -342,23 +342,25 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
 
     @log_run_info
     def deploy_cert_manager(self, pool_name: str = None) -> None:
-        if pool_name is None:
-            pool_name = self.AUXILIARY_POOL_NAME
-        LOGGER.info("Deploy cert-manager")
-        self.kubectl("create namespace cert-manager", ignore_status=True)
-        LOGGER.debug(self.helm("repo add jetstack https://charts.jetstack.io"))
+        if not self.params.get('reuse_cluster'):
+            if pool_name is None:
+                pool_name = self.AUXILIARY_POOL_NAME
 
-        if pool_name:
-            helm_values = HelmValues(get_helm_pool_affinity_values(self.POOL_LABEL_NAME, pool_name))
-        else:
-            helm_values = HelmValues()
+            LOGGER.info("Deploy cert-manager")
+            self.kubectl("create namespace cert-manager", ignore_status=True)
+            LOGGER.debug(self.helm("repo add jetstack https://charts.jetstack.io"))
 
-        helm_values.set('installCRDs', True)
+            if pool_name:
+                helm_values = HelmValues(get_helm_pool_affinity_values(self.POOL_LABEL_NAME, pool_name))
+            else:
+                helm_values = HelmValues()
 
-        LOGGER.debug(self.helm(
-            f"install cert-manager jetstack/cert-manager --version v{self.params.get('k8s_cert_manager_version')}",
-            namespace="cert-manager", values=helm_values))
-        time.sleep(10)
+            helm_values.set('installCRDs', True)
+
+            LOGGER.debug(self.helm(
+                f"install cert-manager jetstack/cert-manager --version v{self.params.get('k8s_cert_manager_version')}",
+                namespace="cert-manager", values=helm_values))
+            time.sleep(10)
 
         self.kubectl("wait --timeout=10m --all --for=condition=Ready pod", namespace="cert-manager")
         wait_for(
@@ -404,47 +406,47 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         #                                   'k8s_scylla_operator_docker_image').split('/')[0]
         # controllerImage.tag        -> self.params.get(
         #                                   'k8s_scylla_operator_docker_image').split(':')[-1]
+        if not self.params.get('reuse_cluster'):
+            if pool_name is None:
+                pool_name = self.AUXILIARY_POOL_NAME
+            LOGGER.info("Deploy scylla-manager")
 
-        if pool_name is None:
-            pool_name = self.AUXILIARY_POOL_NAME
-        LOGGER.info("Deploy scylla-manager")
+            helm_affinity = get_helm_pool_affinity_values(self.POOL_LABEL_NAME, pool_name) if pool_name else {}
+            values = HelmValues(**helm_affinity)
 
-        helm_affinity = get_helm_pool_affinity_values(self.POOL_LABEL_NAME, pool_name) if pool_name else {}
-        values = HelmValues(**helm_affinity)
+            mgmt_docker_image_tag = self.params.get('mgmt_docker_image').split(':')[-1]
+            if mgmt_docker_image_tag:
+                values.set('image.tag', mgmt_docker_image_tag)
 
-        mgmt_docker_image_tag = self.params.get('mgmt_docker_image').split(':')[-1]
-        if mgmt_docker_image_tag:
-            values.set('image.tag', mgmt_docker_image_tag)
+            scylla_operator_repo_base = self.params.get(
+                'k8s_scylla_operator_docker_image').split('/')[0]
+            if scylla_operator_repo_base:
+                values.set('controllerImage.repository', scylla_operator_repo_base)
 
-        scylla_operator_repo_base = self.params.get(
-            'k8s_scylla_operator_docker_image').split('/')[0]
-        if scylla_operator_repo_base:
-            values.set('controllerImage.repository', scylla_operator_repo_base)
+            scylla_operator_image_tag = self.params.get(
+                'k8s_scylla_operator_docker_image').split(':')[-1]
+            if scylla_operator_image_tag:
+                values.set('controllerImage.tag', scylla_operator_image_tag)
 
-        scylla_operator_image_tag = self.params.get(
-            'k8s_scylla_operator_docker_image').split(':')[-1]
-        if scylla_operator_image_tag:
-            values.set('controllerImage.tag', scylla_operator_image_tag)
+            # Install and wait for initialization of the Scylla Manager chart
+            LOGGER.info("Deploy scylla-manager")
+            self.kubectl(f'create namespace {SCYLLA_MANAGER_NAMESPACE}')
 
-        # Install and wait for initialization of the Scylla Manager chart
-        LOGGER.info("Deploy scylla-manager")
-        self.kubectl(f'create namespace {SCYLLA_MANAGER_NAMESPACE}')
+            # TODO: usage of 'cordon' feature below is a workaround for the scylla-operator issue #496
+            # where it is not possible to provide node/pod affinity for the scylla server
+            # which gets installed for the scylla-manager deployed by scylla-operator.
+            to_cordon = ", ".join(['loader-pool', 'monitoring-pool', 'scylla-pool'])
+            with CordonNodes(self.kubectl, f"{self.POOL_LABEL_NAME} in ({to_cordon})"):
+                LOGGER.debug(self.helm_install(
+                    target_chart_name="scylla-manager",
+                    source_chart_name="scylla-operator/scylla-manager",
+                    version=self._scylla_operator_chart_version,
+                    use_devel=True,
+                    values=values,
+                    namespace=SCYLLA_MANAGER_NAMESPACE,
+                ))
 
-        # TODO: usage of 'cordon' feature below is a workaround for the scylla-operator issue #496
-        # where it is not possible to provide node/pod affinity for the scylla server
-        # which gets installed for the scylla-manager deployed by scylla-operator.
-        to_cordon = ", ".join(['loader-pool', 'monitoring-pool', 'scylla-pool'])
-        with CordonNodes(self.kubectl, f"{self.POOL_LABEL_NAME} in ({to_cordon})"):
-            LOGGER.debug(self.helm_install(
-                target_chart_name="scylla-manager",
-                source_chart_name="scylla-operator/scylla-manager",
-                version=self._scylla_operator_chart_version,
-                use_devel=True,
-                values=values,
-                namespace=SCYLLA_MANAGER_NAMESPACE,
-            ))
-
-        time.sleep(10)
+            time.sleep(10)
 
         self.kubectl("wait --timeout=10m --all --for=condition=Ready pod",
                      namespace=SCYLLA_MANAGER_NAMESPACE)
@@ -479,59 +481,61 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
 
     @log_run_info
     def deploy_scylla_operator(self, pool_name: str = None) -> None:
-        if pool_name is None:
-            pool_name = self.AUXILIARY_POOL_NAME
+        if not self.params.get('reuse_cluster'):
+            if pool_name is None:
+                pool_name = self.AUXILIARY_POOL_NAME
 
-        values = HelmValues(**get_helm_pool_affinity_values(self.POOL_LABEL_NAME, pool_name) if pool_name else {})
+            values = HelmValues(**get_helm_pool_affinity_values(self.POOL_LABEL_NAME, pool_name) if pool_name else {})
 
-        # Calculate options values which must be set
-        #
-        # image.repository -> self.params.get('k8s_scylla_operator_docker_image').split('/')[0]
-        # image.tag        -> self.params.get('k8s_scylla_operator_docker_image').split(':')[-1]
+            # Calculate options values which must be set
+            #
+            # image.repository -> self.params.get('k8s_scylla_operator_docker_image').split('/')[0]
+            # image.tag        -> self.params.get('k8s_scylla_operator_docker_image').split(':')[-1]
 
-        scylla_operator_repo_base = self.params.get(
-            'k8s_scylla_operator_docker_image').split('/')[0]
-        if scylla_operator_repo_base:
-            values.set('image.repository', scylla_operator_repo_base)
+            scylla_operator_repo_base = self.params.get(
+                'k8s_scylla_operator_docker_image').split('/')[0]
+            if scylla_operator_repo_base:
+                values.set('image.repository', scylla_operator_repo_base)
 
-        scylla_operator_image_tag = self.params.get(
-            'k8s_scylla_operator_docker_image').split(':')[-1]
-        if scylla_operator_image_tag:
-            values.set('image.tag', scylla_operator_image_tag)
+            scylla_operator_image_tag = self.params.get(
+                'k8s_scylla_operator_docker_image').split(':')[-1]
+            if scylla_operator_image_tag:
+                values.set('image.tag', scylla_operator_image_tag)
 
-        # Install and wait for initialization of the Scylla Operator chart
-        LOGGER.info("Deploy Scylla Operator")
-        self.kubectl(f'create namespace {SCYLLA_OPERATOR_NAMESPACE}')
-        LOGGER.debug(self.helm_install(
-            target_chart_name="scylla-operator",
-            source_chart_name="scylla-operator/scylla-operator",
-            version=self._scylla_operator_chart_version,
-            use_devel=True,
-            namespace=SCYLLA_OPERATOR_NAMESPACE,
-            values=values
-        ))
+            # Install and wait for initialization of the Scylla Operator chart
+            LOGGER.info("Deploy Scylla Operator")
+            self.kubectl(f'create namespace {SCYLLA_OPERATOR_NAMESPACE}')
+            LOGGER.debug(self.helm_install(
+                target_chart_name="scylla-operator",
+                source_chart_name="scylla-operator/scylla-operator",
+                version=self._scylla_operator_chart_version,
+                use_devel=True,
+                namespace=SCYLLA_OPERATOR_NAMESPACE,
+                values=values
+            ))
 
-        time.sleep(10)
-        KubernetesOps.wait_for_pods_readiness(
-            kluster=self,
-            total_pods=lambda pods: pods > 0,
-            readiness_timeout=5*60,
-            namespace=SCYLLA_OPERATOR_NAMESPACE
-        )
+            time.sleep(10)
+            KubernetesOps.wait_for_pods_readiness(
+                kluster=self,
+                total_pods=lambda pods: pods > 0,
+                readiness_timeout=5*60,
+                namespace=SCYLLA_OPERATOR_NAMESPACE
+            )
         # Start the Scylla Operator logging thread
         self.start_scylla_operator_journal_thread()
 
     @log_run_info
     def deploy_minio_s3_backend(self):
-        LOGGER.info('Deploy minio s3-like backend server')
-        self.helm('repo add minio https://helm.min.io/')
+        if not self.params.get('reuse_cluster'):
+            LOGGER.info('Deploy minio s3-like backend server')
+            self.helm('repo add minio https://helm.min.io/')
 
-        self.kubectl(f"create namespace {MINIO_NAMESPACE}")
-        self.helm(
-            'install --set accessKey=minio_access_key,secretKey=minio_access_key,'
-            f'defaultBucket.enabled=true,defaultBucket.name={self.manager_bucket_name},'
-            'defaultBucket.policy=public --generate-name minio/minio',
-            namespace=MINIO_NAMESPACE)
+            self.kubectl(f"create namespace {MINIO_NAMESPACE}")
+            self.helm(
+                'install --set accessKey=minio_access_key,secretKey=minio_access_key,'
+                f'defaultBucket.enabled=true,defaultBucket.name={self.manager_bucket_name},'
+                'defaultBucket.policy=public --generate-name minio/minio',
+                namespace=MINIO_NAMESPACE)
 
         wait_for(lambda: self.minio_ip_address, text='Waiting for minio pod to popup', timeout=120, throw_exc=True)
         self.kubectl("wait --timeout=10m -l app=minio --for=condition=Ready pod",
@@ -615,6 +619,15 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
 
     @log_run_info
     def deploy_scylla_cluster(self,  node_pool: CloudK8sNodePool = None, node_prepare_config: str = None) -> None:
+        if self.params.get('reuse_cluster'):
+            try:
+                self.wait_till_cluster_is_operational()
+                LOGGER.debug("Check Scylla cluster")
+                self.kubectl("get scyllaclusters.scylla.scylladb.com", namespace=SCYLLA_NAMESPACE)
+                self.start_scylla_cluster_events_thread()
+                return
+            except:
+                raise RuntimeError("SCT_REUSE_CLUSTER is set, but target scylla cluster is unhealthy")
         LOGGER.info("Create and initialize a Scylla cluster")
         self.kubectl(f"create namespace {SCYLLA_NAMESPACE}")
 
@@ -698,8 +711,11 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
 
         If it fails please consider reporting and fixing issue in scylla-operator repo too
         """
+        if self.params.get('reuse_cluster'):
+            LOGGER.info("Reusing existing monitoring cluster")
+            self.check_k8s_monitoring_cluster_health(namespace=namespace)
+            return
         LOGGER.info("Create and initialize a monitoring cluster")
-
         if scylla_operator_tag in ('nightly', 'latest'):
             scylla_operator_tag = 'master'
         elif scylla_operator_tag == '':
@@ -782,9 +798,11 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                     "patch configmap scylla-manager-dashboards "
                     "-p '{\"metadata\":{\"labels\":{\"grafana_dashboard\": \"1\"}}}'",
                     namespace=namespace)
-
-        LOGGER.info("Check the monitoring cluster")
         time.sleep(10)
+        self.check_k8s_monitoring_cluster_health(namespace=namespace)
+
+    def check_k8s_monitoring_cluster_health(self, namespace: str):
+        LOGGER.info("Check the monitoring cluster")
         self.kubectl("wait --timeout=15m --all --for=condition=Ready pod", timeout=1000, namespace=namespace)
         if self.USE_MONITORING_EXPOSE_SERVICE:
             LOGGER.info("Expose ports for prometheus of the monitoring cluster")
@@ -1237,7 +1255,8 @@ class BasePodContainer(cluster.BaseNode):
             namespace='scylla',
             selector_value=self.k8s_pod_name,
             core_v1_api=self.parent_cluster.k8s_cluster.k8s_core_v1_api,
-            resolver=self.parent_cluster.k8s_cluster.resolve_dns_to_ip)
+            resolver=self.parent_cluster.k8s_cluster.resolve_dns_to_ip,
+        )
         self.expose_ports_service.deploy()
 
     def wait_till_k8s_pod_get_uid(self, timeout: int = None, ignore_uid=None) -> str:
