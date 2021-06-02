@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from sdcm.utils.k8s import HelmValues
 
 
@@ -72,13 +74,25 @@ def test_helm_values_get_list():
     assert helm_values.get("nested_list") == [1, 2, 3]
 
 
-def test_helm_values_try_get_by_list_index():
+def test_helm_values_get_by_list_index():
     helm_values = HelmValues(BASE_HELM_VALUES)
-    try:
-        helm_values.get("nested_list[0]")
-    except ValueError:
-        return
-    assert False, "expected 'ValueError' exception was not raised"
+    assert helm_values.get("nested_list.[0]") == 1
+
+
+def test_helm_delete_from_list():
+    helm_values = HelmValues(deepcopy(BASE_HELM_VALUES))
+    match = deepcopy(BASE_HELM_VALUES)
+    del match['nested_list'][0]
+    helm_values.delete("nested_list.[0]")
+    assert helm_values == match
+
+
+def test_helm_delete_from_dict():
+    helm_values = HelmValues(deepcopy(BASE_HELM_VALUES))
+    match = deepcopy(BASE_HELM_VALUES)
+    del match['nested_dict']['first_nested_dict_key']
+    helm_values.delete("nested_dict.first_nested_dict_key")
+    assert helm_values == match
 
 
 def test_helm_values_try_set_by_list_index():

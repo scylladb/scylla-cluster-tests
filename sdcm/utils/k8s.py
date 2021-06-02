@@ -801,12 +801,12 @@ class HelmValues:
             self._data = dict(**kwargs)
 
     def get(self, path):
-        if "[" in path or "]" in path:
-            raise ValueError("List items ref is not supported. Only dict keys ref is allowed")
         current = self._data
         for name in path.split('.'):
             if current is None:
                 return None
+            if name[0] == '[' and name[-1] == ']':
+                name = name[1:-1]
             if name.isalnum() and isinstance(current, (list, tuple, set)):
                 try:
                     current = current[int(name)]
@@ -836,5 +836,30 @@ class HelmValues:
         patch_d = self._path_to_dict(path, value)
         self._merge_dicts(self._data, patch_d)
 
+    def delete(self, path):
+        path = path.split('.')
+        last = path.pop()
+        parent = '.'.join(path)
+        if not parent:
+            parent = self._data
+        else:
+            parent = self.get(parent)
+        if parent is None:
+            return
+        if last[0] == '[' and last[-1] == ']':
+            last = int(last[1:-1])
+        try:
+            del parent[last]
+        except:
+            pass
+
     def as_dict(self):
         return self._data
+
+    def __eq__(self, other: Union['HelmValues', dict]):
+        if isinstance(other, HelmValues):
+            return self._data == other._data
+        return self._data == other
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
