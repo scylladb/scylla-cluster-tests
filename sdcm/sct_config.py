@@ -90,7 +90,8 @@ class SCTConfiguration(dict):
     Class the hold the SCT configuration
     """
     available_backends = [
-        'aws', 'gce', 'docker', 'baremetal', 'aws-siren', 'k8s-gce-minikube', 'k8s-gke', 'gce-siren', 'k8s-eks']
+        'aws', 'gce', 'docker', 'baremetal', 'aws-siren', 'k8s-gce-minikube', 'k8s-local-minikube', 'k8s-local-kind', 'k8s-gke',
+        'gce-siren', 'k8s-eks']
 
     config_options = [
         dict(name="config_files", env="SCT_CONFIG_FILES", type=str_or_list,
@@ -1156,6 +1157,16 @@ class SCTConfiguration(dict):
                       'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'gce_root_disk_size_monitor',
                       'gce_n_local_ssd_disk_monitor', 'gce_datacenter'],
 
+        'k8s-local-minikube': ['user_credentials_path', 'scylla_version', 'scylla_mgmt_agent_version',
+                               'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter', 'k8s_scylla_rack',
+                               'k8s_scylla_cluster_name', 'k8s_scylla_disk_gi', 'minikube_version',
+                               'mgmt_docker_image'],
+
+        'k8s-local-kind': ['user_credentials_path', 'scylla_version', 'scylla_mgmt_agent_version',
+                           'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter', 'k8s_scylla_rack',
+                           'k8s_scylla_cluster_name', 'k8s_scylla_disk_gi', 'minikube_version',
+                           'mgmt_docker_image'],
+
         'k8s-gce-minikube': ['gce_image_minikube', 'gce_instance_type_minikube', 'gce_root_disk_type_minikube',
                              'gce_root_disk_size_minikube', 'user_credentials_path', 'scylla_version',
                              'scylla_mgmt_agent_version', 'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter',
@@ -1191,6 +1202,8 @@ class SCTConfiguration(dict):
         "aws-siren": [sct_abs_path('defaults/aws_config.yaml')],
         "gce-siren": [sct_abs_path('defaults/gce_config.yaml')],
         "k8s-gce-minikube": [sct_abs_path('defaults/k8s_gce_minikube_config.yaml')],
+        "k8s-local-minikube": [sct_abs_path('defaults/k8s_local_minikube_config.yaml')],
+        "k8s-local-kind": [sct_abs_path('defaults/k8s_local_kind_config.yaml')],
         "k8s-gke": [sct_abs_path('defaults/k8s_gke_config.yaml')],
         "k8s-eks": [sct_abs_path('defaults/aws_config.yaml'), sct_abs_path('defaults/k8s_eks_config.yaml')],
     }

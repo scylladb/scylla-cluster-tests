@@ -36,7 +36,7 @@ from cassandra import ConsistencyLevel
 
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady
 from sdcm.cluster import NodeStayInClusterAfterDecommission
-from sdcm.cluster_k8s.minikube import MinikubeScyllaPodCluster
+from sdcm.cluster_k8s.minikube import MinikubeK8sMixin
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR
 from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_string, \
@@ -1049,7 +1049,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             assert '(1 rows)' in result.stdout, 'The key is not loaded by `nodetool refresh`'
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
-        if isinstance(self.cluster, MinikubeScyllaPodCluster):
+        if isinstance(self.cluster, MinikubeK8sMixin):
             # Minikube cluster has shared file system, it is shared not only between cluster nodes
             # but also between kubernetes services too, which make kubernetes inoperational once enospc is reached
             raise UnsupportedNemesis('disrupt_nodetool_enospc is not supported on minikube cluster')
