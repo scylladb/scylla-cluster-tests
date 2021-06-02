@@ -1573,6 +1573,10 @@ class PodCluster(cluster.BaseCluster):
     def pool_name(self):
         return self.node_pool.get('name', None)
 
+    @property
+    def statefulsets(self):
+        return KubernetesOps.list_statefulsets(self.k8s_cluster, namespace=self.namespace)
+
     def _create_node(self, node_index: int, pod_name: str, dc_idx: int, rack: int) -> BasePodContainer:
         node = self.PodContainerClass(parent_cluster=self,
                                       name=pod_name,
@@ -2130,7 +2134,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         # other backends.
         self.k8s_cluster.kubectl("rollout restart statefulset", namespace=self.namespace)
         readiness_timeout = self.get_nodes_reboot_timeout(len(self.nodes))
-        statefulsets = KubernetesOps.list_statefulsets(self.k8s_cluster, namespace=self.namespace)
+        statefulsets = self.statefulsets
         if random:
             statefulsets = librandom.sample(statefulsets, len(statefulsets))
         for statefulset in statefulsets:
