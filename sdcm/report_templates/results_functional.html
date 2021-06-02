@@ -1,0 +1,60 @@
+{% extends 'results_base.html' %}
+{% block body %}
+    <h3>
+        <span>System under test </span>
+    </h3>
+    <div>
+        <ul>
+            <li>ScyllaDB version: {{ scylla_version }}</li>
+            {% if scylla_repo -%}
+                <li>ScyllaDB repo: {{ scylla_repo }}</li>
+            {% endif -%}
+            <li>Instance type: {{ scylla_instance_type }}</li>
+            <li>Number of ScyllaDB nodes: {{ number_of_db_nodes }}</li>
+        </ul>
+    </div>
+
+    {% if test_statuses %}
+    <h3>
+        <span>Test statuses</span>
+    </h3>
+    <div>
+        <ul>
+        {% set errors = [] %}
+        {% for test_name, test_data in test_statuses.items() %}
+            <li> {{ test_name }} -
+                {% if test_data[0] == "SUCCESS" %}
+                    <span class='green'>{{ test_data[0] }}</span>
+                {% else %}
+                    {{ errors.append((test_name, test_data[1])) or '' }}
+                    <span class='red'>{{ test_data[0] }}</span>
+                {% endif %}
+            </li>
+        {% endfor %}
+        </ul>
+        {% if errors %}
+        <h3>
+            <span>Test errors</span>
+        </h3>
+        <ul>
+            {% for test_name, test_error in errors %}
+            <li>
+                <h4> {{ test_name }} </h4>
+                <ul>
+                    <h5>
+                        {% for line in test_error.split('\n') %}
+                            {{ line }} <br/>
+                        {% endfor %}
+                    </h5>
+                </ul>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+    {% endif %}
+
+{% endblock %}
+
+{% block events_summary %}
+{% endblock %}
