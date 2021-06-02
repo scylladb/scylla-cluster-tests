@@ -874,10 +874,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
         self._set_current_disruption('TerminateAndReplaceNode %s' % self.target_node)
         old_node_ip = self.target_node.ip_address
+        old_node_is_seed = self.target_node.is_seed
         InfoEvent(message='StartEvent - Terminate node and wait 5 minutes').publish()
         self._terminate_and_wait(target_node=self.target_node)
         InfoEvent(message='FinishEvent - target_node was terminated').publish()
         new_node = self.replace_node(old_node_ip, rack=self.target_node.rack)
+        if old_node_is_seed:
+            new_node.set_seed_flag(True)
+            self.cluster.update_seed_provider()
         try:
             if new_node.get_scylla_config_param("enable_repair_based_node_ops") == 'false':
                 InfoEvent(message='StartEvent - Run repair on new node').publish()
