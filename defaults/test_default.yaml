@@ -5,6 +5,7 @@ ip_ssh_connections: 'private'
 mgmt_port: 10090
 scylla_repo_m: 'http://downloads.scylladb.com/rpm/centos/scylla-2020.1.repo'
 scylla_mgmt_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.3.repo'
+mgmt_segments_per_repair: 10
 
 experimental: true
 round_robin: false
