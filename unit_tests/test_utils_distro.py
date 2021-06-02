@@ -323,3 +323,10 @@ class TestDistro(unittest.TestCase):
 
     def test_parsing_error(self):
         self.assertRaises(DistroError, Distro.from_os_release, DISTROS_OS_RELEASE["Garbage"])
+
+    def test_debian_like(self):
+        self.assertTrue(Distro.DEBIAN10.is_debian10)
+        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 10"])
+        invalid_distro = Distro.from_os_release(DISTROS_OS_RELEASE["Amazon Linux 2"])
+        self.assertTrue(distro.is_debian_like)
+        self.assertFalse(invalid_distro.is_debian_like)
