@@ -22,7 +22,7 @@ import time
 import random
 import unittest
 import warnings
-from typing import NamedTuple, Optional, Union, List, Dict, Any
+from typing import NamedTuple, Optional, Union, List, Dict, Any, Type
 from uuid import uuid4
 from functools import wraps, cached_property
 import threading
@@ -230,7 +230,8 @@ class ClusterTester(db_stats.TestStatsMixin,
     monitors: BaseMonitorSet = None
     loaders: BaseLoaderSet = None
     db_cluster: BaseScyllaCluster = None
-    k8s_cluster: Union[None, gke.GkeCluster, eks.EksCluster, minikube.GceMinikubeCluster] = None
+    k8s_cluster: Union[None, gke.GkeCluster, eks.EksCluster, minikube.GceMinikubeCluster,
+                       minikube.LocalMinikubeCluster] = None
 
     def __init__(self, *args):  # pylint: disable=too-many-statements
         super(ClusterTester, self).__init__(*args)
@@ -908,6 +909,61 @@ class ClusterTester(db_stats.TestStatsMixin,
         params['private_ips'] = self.params.get('monitor_nodes_private_ip')
         self.monitors = cluster_baremetal.MonitorSetPhysical(**params)
 
+    def get_cluster_k8s_local_minimal_cluster(
+            self,
+            cluster_type: Union[Type[minikube.LocalMinikubeCluster], Type[minikube.LocalKindCluster]]):
+        self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
+
+        container_node_params = dict(
+            docker_image=self.params.get('docker_image'),
+            docker_image_tag=self.params.get('scylla_version'),
+            node_key_file=self.credentials[0].key_file,
+        )
+        self.k8s_cluster = cluster_type(
+            software_version=self.params.get("minikube_version"),
+            params=self.params,
+        )
+        self.k8s_cluster.deploy()
+        self.k8s_cluster.deploy_cert_manager(pool_name='')
+        self.k8s_cluster.deploy_scylla_operator(pool_name='')
+        if self.params.get('use_mgmt'):
+            self.k8s_cluster.deploy_scylla_manager(pool_name='')
+        # This should remove some of the unpredictability of pods startup time.
+        self.k8s_cluster.docker_pull(f"{self.params.get('docker_image')}:{self.params.get('scylla_version')}")
+
+        self.db_cluster = minikube.LocalMinimalScyllaPodCluster(
+            k8s_cluster=self.k8s_cluster,
+            scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
+            user_prefix=self.params.get("user_prefix"),
+            n_nodes=self.params.get("n_db_nodes"),
+            params=self.params,
+        )
+
+        if self.params.get('k8s_deploy_monitoring'):
+            self.k8s_cluster.deploy_monitoring_cluster(
+                scylla_operator_tag=self.params.get('k8s_scylla_operator_docker_image').split(':')[-1],
+                is_manager_deployed=self.params.get('use_mgmt')
+            )
+        if self.params.get("n_loaders"):
+            self.loaders = cluster_docker.LoaderSetDocker(
+                **container_node_params,
+                n_nodes=self.params.get("n_loaders"),
+                user_prefix=self.params.get("user_prefix"),
+                params=self.params,
+            )
+
+        if self.params.get("n_monitor_nodes") > 0:
+            self.monitors = cluster_docker.MonitorSetDocker(
+                n_nodes=self.params.get("n_monitor_nodes"),
+                targets=dict(
+                    db_cluster=self.db_cluster,
+                    loaders=self.loaders),
+                user_prefix=self.params.get("user_prefix"),
+                params=self.params,
+            )
+        else:
+            self.monitors = NoMonitorSet()
+
     def get_cluster_k8s_gce_minikube(self):
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
 
@@ -945,12 +1001,12 @@ class ClusterTester(db_stats.TestStatsMixin,
         # This should remove some of the unpredictability of pods startup time.
         self.k8s_cluster.docker_pull(f"{self.params.get('docker_image')}:{self.params.get('scylla_version')}")
 
-        self.db_cluster = \
-            minikube.MinikubeScyllaPodCluster(k8s_cluster=self.k8s_cluster,
-                                              scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
-                                              user_prefix=self.params.get("user_prefix"),
-                                              n_nodes=self.params.get("n_db_nodes"),
-                                              params=self.params)
+        self.db_cluster = minikube.RemoteMinimalScyllaPodCluster(
+            k8s_cluster=self.k8s_cluster,
+            scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
+            user_prefix=self.params.get("user_prefix"),
+            n_nodes=self.params.get("n_db_nodes"),
+            params=self.params)
 
         self.log.debug("Update startup script with iptables rules")
         startup_script = "\n".join((Setup.get_startup_script(), *self.db_cluster.nodes_iptables_redirect_rules(),))
@@ -1258,6 +1314,10 @@ class ClusterTester(db_stats.TestStatsMixin,
             self.get_cluster_baremetal()
         elif cluster_backend == 'k8s-gce-minikube':
             self.get_cluster_k8s_gce_minikube()
+        elif cluster_backend == 'k8s-local-minikube':
+            self.get_cluster_k8s_local_minimal_cluster(minikube.LocalMinikubeCluster)
+        elif cluster_backend == 'k8s-local-kind':
+            self.get_cluster_k8s_local_minimal_cluster(minikube.LocalKindCluster)
         elif cluster_backend == 'k8s-gke':
             self.get_cluster_k8s_gke()
         elif cluster_backend == 'k8s-eks':

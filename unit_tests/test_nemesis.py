@@ -1,8 +1,10 @@
 from collections import namedtuple
 import sdcm.utils.cloud_monitor  # pylint: disable=unused-import # import only to avoid cyclic dependency
 from sdcm.nemesis import Nemesis, ChaosMonkey, CategoricalMonkey
-from sdcm.cluster_k8s.minikube import MinikubeScyllaPodCluster
+from sdcm.cluster_k8s.minikube import LocalMinimalScyllaPodCluster
+from sdcm.cluster_k8s.minikube import RemoteMinimalScyllaPodCluster
 from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
+from sdcm.cluster_k8s.eks import EksScyllaPodCluster
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_docker import ScyllaDockerCluster
@@ -30,11 +32,19 @@ def test_list_nemesis_of_added_disrupt_methods():
 
 
 def test_is_it_on_kubernetes():
-    class FakeMinikubeScyllaPodCluster(MinikubeScyllaPodCluster):
+    class FakeLocalMinimalScyllaPodCluster(LocalMinimalScyllaPodCluster):
+        def __init__(self, params: dict = None):
+            self.params = params
+
+    class FakeRemoteMinimalScyllaPodCluster(RemoteMinimalScyllaPodCluster):
         def __init__(self, params: dict = None):
             self.params = params
 
     class FakeGkeScyllaPodCluster(GkeScyllaPodCluster):
+        def __init__(self, params: dict = None):
+            self.params = params
+
+    class FakeEksScyllaPodCluster(EksScyllaPodCluster):
         def __init__(self, params: dict = None):
             self.params = params
 
@@ -58,8 +68,10 @@ def test_is_it_on_kubernetes():
             self.loaders = None
             self.monitors = None
 
-    assert Nemesis(FakeTester(FakeMinikubeScyllaPodCluster()), None)._is_it_on_kubernetes()
+    assert Nemesis(FakeTester(FakeLocalMinimalScyllaPodCluster()), None)._is_it_on_kubernetes()
+    assert Nemesis(FakeTester(FakeRemoteMinimalScyllaPodCluster()), None)._is_it_on_kubernetes()
     assert Nemesis(FakeTester(FakeGkeScyllaPodCluster()), None)._is_it_on_kubernetes()
+    assert Nemesis(FakeTester(FakeEksScyllaPodCluster()), None)._is_it_on_kubernetes()
 
     assert not Nemesis(FakeTester(FakeScyllaGCECluster()), None)._is_it_on_kubernetes()
     assert not Nemesis(FakeTester(FakeScyllaAWSCluster()), None)._is_it_on_kubernetes()
