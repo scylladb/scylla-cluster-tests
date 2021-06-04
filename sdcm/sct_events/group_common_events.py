@@ -10,7 +10,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-
 from contextlib import contextmanager, ExitStack
 
 from sdcm.sct_events import Severity
@@ -102,15 +101,18 @@ def ignore_upgrade_schema_errors():
 
 
 @contextmanager
-def ignore_upgrade_cdc_errors(version=None):
+def ignore_upgrade_cdc_errors():
     with ExitStack() as stack:
-        if version and '2020.1' in version:
-            stack.enter_context(EventsSeverityChangerFilter(
-                new_severity=Severity.WARNING,
-                event_class=LogEvent,
-                regex="Could not retrieve CDC streams with timestamp",
-                extra_time_to_expiration=60
-            ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.RUNTIME_ERROR,
+            line="Could not retrieve CDC streams with timestamp",
+        ))
+        stack.enter_context(EventsSeverityChangerFilter(
+            new_severity=Severity.WARNING,
+            event_class=DatabaseLogEvent,
+            regex=r".*Could not retrieve CDC streams with timestamp*",
+            extra_time_to_expiration=60
+        ))
         yield
 
 

@@ -123,7 +123,7 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
 
     def test_search_cdc_invalid_request_2021_1(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_cdc_invalid_request.log')
-        with ignore_upgrade_cdc_errors('2021.1'):
+        with ignore_upgrade_cdc_errors():
             self.node._read_system_log_and_publish_events(start_from_beginning=True)
 
         retry_max = 20
@@ -139,7 +139,7 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
 
     def test_search_cdc_invalid_request_2020_1(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_cdc_invalid_request.log')
-        with ignore_upgrade_cdc_errors('2020.1'):
+        with ignore_upgrade_cdc_errors():
             self.node._read_system_log_and_publish_events(start_from_beginning=True)
 
         with self.get_events_logger().events_logs_by_severity[Severity.ERROR].open() as events_file:
