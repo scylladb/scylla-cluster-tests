@@ -238,8 +238,7 @@ class UpgradeTest(FillDatabaseData):
         check_reload_systemd_config(node)
         # Current default 300s aren't enough for upgrade test of Debian 9.
         # Related issue: https://github.com/scylladb/scylla-cluster-tests/issues/1726
-        with ignore_upgrade_cdc_errors(self.orig_ver):
-            node.start_scylla_server(verify_up_timeout=500)
+        node.start_scylla_server(verify_up_timeout=500)
         result = node.remoter.run('scylla --version')
         new_ver = result.stdout
         assert self.orig_ver != self.new_ver, "scylla-server version isn't changed"
@@ -526,12 +525,15 @@ class UpgradeTest(FillDatabaseData):
             # upgrade first node
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[0]]
             self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
-            self.upgrade_node(self.db_cluster.node_to_upgrade)
-            self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
-            self.db_cluster.node_to_upgrade.check_node_health()
+            result = self.db_cluster.node_to_upgrade.remoter.run('scylla --version')
+            self.orig_ver = result.stdout
+            with ignore_upgrade_cdc_errors():
+                self.upgrade_node(self.db_cluster.node_to_upgrade)
+                self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+                self.db_cluster.node_to_upgrade.check_node_health()
 
-            # wait for the prepare write workload to finish
-            self.verify_stress_thread(prepare_write_cs_thread_pool)
+                # wait for the prepare write workload to finish
+                self.verify_stress_thread(prepare_write_cs_thread_pool)
 
             # read workload (cl=QUORUM)
             self.log.info('Starting c-s read workload (cl=QUORUM n=10000000)')
@@ -556,13 +558,15 @@ class UpgradeTest(FillDatabaseData):
             # upgrade second node
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[1]]
             self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
-            self.upgrade_node(self.db_cluster.node_to_upgrade)
-            self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
-            self.db_cluster.node_to_upgrade.check_node_health()
+            with ignore_upgrade_cdc_errors():
+                self.upgrade_node(self.db_cluster.node_to_upgrade)
+                self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+                self.db_cluster.node_to_upgrade.check_node_health()
 
-            # wait for the 10m read workload to finish
-            self.verify_stress_thread(read_10m_cs_thread_pool)
-            self.fill_and_verify_db_data('after upgraded two nodes')
+                # wait for the 10m read workload to finish
+                self.verify_stress_thread(read_10m_cs_thread_pool)
+                self.fill_and_verify_db_data('after upgraded two nodes')
+
             self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                           step=step+' - after upgraded two nodes')
 
@@ -588,7 +592,7 @@ class UpgradeTest(FillDatabaseData):
         self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                       step=step)
 
-        with ignore_upgrade_schema_errors():
+        with ignore_upgrade_schema_errors(), ignore_upgrade_cdc_errors():
 
             step = 'Step5 - Upgrade rest of the Nodes '
             self.log.info(step)
