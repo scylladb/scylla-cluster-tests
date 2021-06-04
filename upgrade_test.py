@@ -27,6 +27,7 @@ from pkg_resources import parse_version
 from sdcm import wait
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm.utils.version_utils import is_enterprise, get_node_supported_sstable_versions
+from sdcm.utils.jepsen import general_jepsen_setup, get_jepsen_cmd
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.database import IndexSpecialColumnErrorEvent
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused
@@ -95,7 +96,7 @@ def recover_conf(node):
             r'sudo cp -v $conf.backup $conf; done')
 
 
-class UpgradeTest(FillDatabaseData):
+class UpgradeTest(FillDatabaseData):  # pylint: disable=too-many-public-methods
     """
     Test a Scylla cluster upgrade.
     """
@@ -461,6 +462,23 @@ class UpgradeTest(FillDatabaseData):
             self.log.info('Re-Populate DB with many types of tables and data')
             self.fill_db_data()
 
+    def jepsen_setup(self):
+        if not self.params.get('enable_jepsen_in_upgrade'):
+            return
+        jepsen_node = self.loaders.nodes[0]
+        if not jepsen_node.distro.is_debian10:
+            raise Exception('Jepsen can only run on Debian 10')
+        general_jepsen_setup(jepsen_node, self.db_cluster.nodes,
+                             jepsen_scylla_repo=self.params.get('jepsen_scylla_repo'))
+
+    def jepsen_test(self):
+        if not self.params.get('enable_jepsen_in_upgrade'):
+            return
+        jepsen_cmd = get_jepsen_cmd(db_nodes=self.db_cluster.nodes, test='test',
+                                    additional_option=' -w list-append --time-limit 200 --concurrency 2n -r 2 ')
+        jepsen_node = self.loaders.nodes[0]
+        jepsen_node.remoter.run(jepsen_cmd)
+
     # Added to cover the issue #5621: upgrade from 3.1 to 3.2 fails on std::logic_error (Column idx_token doesn't exist
     # in base and this view is not backing a secondary index)
     # @staticmethod
@@ -735,6 +753,9 @@ class UpgradeTest(FillDatabaseData):
             self.verify_cdclog_reader_results(cdc_reader_thread)
 
         self.log.info('all nodes were upgraded, and last workaround is verified.')
+        # Jepsen test will break the cluster, so let's do it in the end.
+        self.jepsen_setup()
+        self.jepsen_test()
 
     def test_generic_cluster_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
         """

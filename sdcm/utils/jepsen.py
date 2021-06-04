@@ -11,17 +11,20 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
+import os
 import uuid
 import logging
 from typing import Optional
 from functools import cached_property
 
+from sdcm.remote import shell_script_cmd
 from sdcm.utils.common import list_logs_by_test_id, get_free_port
 from sdcm.utils.docker_utils import ContainerManager, Container, DockerException
 
 
 JEPSEN_IMAGE = "tjake/jepsen"
 JEPSEN_RESULTS_PORT = 8080
+DB_SSH_KEY = "db_node_ssh_key"
 
 LOGGER = logging.getLogger(__name__)
 
@@ -80,3 +83,26 @@ class JepsenResults:
 
     def __del__(self):
         ContainerManager.destroy_all_containers(self)
+
+
+def general_jepsen_setup(jepsen_node, db_nodes, jepsen_scylla_repo):
+    remoter = jepsen_node.remoter
+    remoter.sudo("apt-get install -y libjna-java gnuplot graphviz git")
+    remoter.run(shell_script_cmd(f"""\
+        curl -O https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein
+        chmod +x lein
+        ./lein
+        git clone {jepsen_scylla_repo} jepsen-scylla
+    """))
+    for db_node in db_nodes:
+        remoter.run(f"ssh-keyscan -t rsa {db_node.ip_address} >> ~/.ssh/known_hosts")
+    remoter.send_files(os.path.expanduser(db_nodes[0].ssh_login_info["key_file"]), DB_SSH_KEY)
+
+
+def get_jepsen_cmd(db_nodes, test='test', additional_option=''):
+    """
+    Generate a general jepsen commandline
+    """
+    nodes = " ".join(f"--node {node.ip_address}" for node in db_nodes)
+    creds = f"--username {db_nodes[0].ssh_login_info['user']} --ssh-private-key ~/{DB_SSH_KEY}"
+    return f"cd ~/jepsen-scylla && ~/lein run {test} {additional_option} {nodes} {creds} --no-install-scylla"

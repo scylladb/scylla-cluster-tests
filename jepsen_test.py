@@ -19,10 +19,10 @@ import requests
 from sdcm.remote import shell_script_cmd
 from sdcm.tester import ClusterTester, teardown_on_exception
 from sdcm.utils.decorators import log_run_info
+from sdcm.utils.jepsen import general_jepsen_setup, get_jepsen_cmd
 
 
 JEPSEN_WEB_SERVER_START_DELAY = 15  # seconds
-DB_SSH_KEY = "db_node_ssh_key"
 
 
 class JepsenTest(ClusterTester):
@@ -33,17 +33,8 @@ class JepsenTest(ClusterTester):
     @teardown_on_exception
     @log_run_info
     def setup_jepsen(self):
-        remoter = self.jepsen_node.remoter
-        remoter.sudo("apt-get install -y libjna-java gnuplot graphviz git")
-        remoter.run(shell_script_cmd(f"""\
-            curl -O https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein
-            chmod +x lein
-            ./lein
-            git clone {self.params.get('jepsen_scylla_repo')} jepsen-scylla
-        """))
-        for db_node in self.db_cluster.nodes:
-            remoter.run(f"ssh-keyscan -t rsa {db_node.ip_address} >> ~/.ssh/known_hosts")
-        remoter.send_files(os.path.expanduser(self.db_cluster.nodes[0].ssh_login_info["key_file"]), DB_SSH_KEY)
+        general_jepsen_setup(self.jepsen_node, self.db_cluster.nodes,
+                             jepsen_scylla_repo=self.params.get('jepsen_scylla_repo'))
 
     def setUp(self):
         super().setUp()
@@ -64,15 +55,13 @@ class JepsenTest(ClusterTester):
         return all(self.iter_jepsen_cmd(jepsen_cmd, ntimes))
 
     def test_jepsen(self):
-        nodes = " ".join(f"--node {node.ip_address}" for node in self.db_cluster.nodes)
-        creds = f"--username {self.db_cluster.nodes[0].ssh_login_info['user']} --ssh-private-key ~/{DB_SSH_KEY}"
         run_jepsen_cmd = partial(
             getattr(self, f"run_jepsen_cmd_{self.params.get('jepsen_test_run_policy')}"),
             ntimes=self.params.get("jepsen_test_count")
         )
         passed = True
         for test in self.params.get("jepsen_test_cmd"):
-            jepsen_cmd = f"cd ~/jepsen-scylla && ~/lein run {test} {nodes} {creds} --no-install-scylla"
+            jepsen_cmd = get_jepsen_cmd(db_nodes=self.db_cluster.nodes, test=test)
             passed &= run_jepsen_cmd(jepsen_cmd)
         self.assertTrue(passed, "Some of Jepsen tests were failed")
 

@@ -1,0 +1,7 @@
+# jepsen can only run on Debian 10
+gce_image_db: 'https://www.googleapis.com/compute/v1/projects/debian-cloud/global/images/family/debian-10'
+gce_image_loader: 'https://www.googleapis.com/compute/v1/projects/debian-cloud/global/images/family/debian-10'
+scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/debian/scylla-4.4-buster.list'
+jepsen_scylla_repo: 'https://github.com/scylladb/jepsen.git'
+enable_jepsen_in_upgrade: true
+gce_image_username: 'sct'  # jepsen will kill wrong processes if username is scylla-test

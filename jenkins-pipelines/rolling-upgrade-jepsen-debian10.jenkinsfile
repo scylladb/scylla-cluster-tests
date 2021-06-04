@@ -1,0 +1,17 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+rollingUpgradePipeline(
+    backend: 'gce',
+    base_versions: ['2020.1', '4.5', '2021.1'],
+    linux_distro: 'debian-buster',
+    gce_image_db: 'https://www.googleapis.com/compute/v1/projects/debian-cloud/global/images/family/debian-10',
+
+    test_name: 'upgrade_test.UpgradeTest.test_rolling_upgrade',
+    test_config: '''["test-cases/upgrades/rolling-upgrade.yaml", "configurations/jepsen.yaml"]''',
+    workaround_kernel_bug_for_iotune: false,
+
+    timeout: [time: 360, unit: 'MINUTES']
+)
