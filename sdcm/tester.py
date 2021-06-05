@@ -1142,7 +1142,7 @@ class ClusterTester(db_stats.TestStatsMixin,
             loader_pool = eks.EksNodePool(
                 name=self.k8s_cluster.LOADER_POOL_NAME,
                 num_nodes=self.params.get("n_loaders"),
-                instance_type=self.params.get("instance_type_monitor"),
+                instance_type=self.params.get("instance_type_loader"),
                 role_arn=self.params.get('eks_nodegroup_role_arn'),
                 disk_size=self.params.get('aws_root_disk_size_monitor'),
                 k8s_cluster=self.k8s_cluster)
