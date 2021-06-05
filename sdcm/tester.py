@@ -1013,7 +1013,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         self.k8s_cluster.deploy_cert_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
         self.k8s_cluster.deploy_scylla_operator()
         if self.params.get('use_mgmt'):
-            self.k8s_cluster.deploy_scylla_manager()
+            self.k8s_cluster.deploy_scylla_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
 
         loader_pool = None
         if self.params.get("n_loaders"):
@@ -1180,7 +1180,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         self.k8s_cluster.deploy_cert_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
         self.k8s_cluster.deploy_scylla_operator()
         if self.params.get('use_mgmt'):
-            self.k8s_cluster.deploy_scylla_manager()
+            self.k8s_cluster.deploy_scylla_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
 
         self.db_cluster = eks.EksScyllaPodCluster(
             k8s_cluster=self.k8s_cluster,
