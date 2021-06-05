@@ -407,13 +407,29 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         #                                   'k8s_scylla_operator_docker_image').split('/')[0]
         # controllerImage.tag        -> self.params.get(
         #                                   'k8s_scylla_operator_docker_image').split(':')[-1]
-
-        if pool_name is None:
-            pool_name = self.AUXILIARY_POOL_NAME
         LOGGER.info("Deploy scylla-manager")
 
-        helm_affinity = get_helm_pool_affinity_values(self.POOL_LABEL_NAME, pool_name) if pool_name else {}
+        helm_affinity = get_helm_pool_affinity_values(
+            self.POOL_LABEL_NAME, pool_name) if pool_name else {}
         values = HelmValues(**helm_affinity)
+        values.set("controllerAffinity", helm_affinity.get("affinity", {}))
+        values.set("scylla", {
+            "developerMode": True,
+            "datacenter": "manager-dc",
+            "racks": [{
+                "name": "manager-rack",
+                "members": 1,
+                # TODO: uncomment 'placement' field when it is allowed to be provided
+                #       as part of the scylla-manager helm chart.
+                #       https://github.com/scylladb/scylla-operator/issues/631
+                # "placement": {"nodeAffinity": helm_affinity["affinity"]},
+                "storage": {"capacity": "10Gi"},
+                "resources": {
+                    "limits": {"cpu": 1, "memory": "200Mi"},
+                    "requests": {"cpu": 1, "memory": "200Mi"},
+                },
+            }],
+        })
 
         mgmt_docker_image_tag = self.params.get('mgmt_docker_image').split(':')[-1]
         if mgmt_docker_image_tag:
@@ -429,15 +445,15 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         if scylla_operator_image_tag:
             values.set('controllerImage.tag', scylla_operator_image_tag)
 
-        # Install and wait for initialization of the Scylla Manager chart
-        LOGGER.info("Deploy scylla-manager")
         self.kubectl(f'create namespace {SCYLLA_MANAGER_NAMESPACE}')
 
-        # TODO: usage of 'cordon' feature below is a workaround for the scylla-operator issue #496
-        # where it is not possible to provide node/pod affinity for the scylla server
-        # which gets installed for the scylla-manager deployed by scylla-operator.
+        # TODO: usage of 'cordon' feature below is a workaround for the scylla-operator issue
+        #       https://github.com/scylladb/scylla-operator/issues/631
+        #       where it is not possible to provide node/pod affinity for the scylla server
+        #       which gets installed for the scylla-manager deployed by scylla-operator.
         to_cordon = ", ".join(['loader-pool', 'monitoring-pool', 'scylla-pool'])
         with CordonNodes(self.kubectl, f"{self.POOL_LABEL_NAME} in ({to_cordon})"):
+            # Install and wait for initialization of the Scylla Manager chart
             LOGGER.debug(self.helm_install(
                 target_chart_name="scylla-manager",
                 source_chart_name="scylla-operator/scylla-manager",
@@ -446,9 +462,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                 values=values,
                 namespace=SCYLLA_MANAGER_NAMESPACE,
             ))
-
-        time.sleep(10)
-
         self.kubectl("wait --timeout=10m --all --for=condition=Ready pod",
                      namespace=SCYLLA_MANAGER_NAMESPACE)
         self.start_scylla_manager_journal_thread()
