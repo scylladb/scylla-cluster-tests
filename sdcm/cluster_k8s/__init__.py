@@ -349,7 +349,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         LOGGER.debug(self.helm("repo add jetstack https://charts.jetstack.io"))
 
         if pool_name:
-            helm_values = HelmValues(get_helm_pool_affinity_values(self.POOL_LABEL_NAME, pool_name))
+            values_dict = get_helm_pool_affinity_values(self.POOL_LABEL_NAME, pool_name)
+            values_dict["cainjector"] = {"affinity": values_dict["affinity"]}
+            values_dict["webhook"] = {"affinity": values_dict["affinity"]}
+            helm_values = HelmValues(values_dict)
         else:
             helm_values = HelmValues()
 
