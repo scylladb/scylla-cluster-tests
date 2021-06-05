@@ -1117,11 +1117,13 @@ class ClusterTester(db_stats.TestStatsMixin,
                                           )
 
         self.k8s_cluster.deploy()
+        self.k8s_cluster.tune_network()
+
         self.k8s_cluster.deploy_node_pool(
             eks.EksNodePool(
                 name=self.k8s_cluster.AUXILIARY_POOL_NAME,
-                num_nodes=1,
-                instance_type="t3.xlarge",
+                num_nodes=2,
+                instance_type="t3.large",
                 # It should have at least 3 vCPU to be able to hold all the pods
                 disk_size=40,
                 role_arn=self.k8s_cluster.nodegroup_role_arn,
