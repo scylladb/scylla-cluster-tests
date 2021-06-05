@@ -361,9 +361,14 @@ class CordonNodes:
         self.cordon_cmd = f"cordon -l '{selector}'"
 
     def __enter__(self):
-        return self.kubectl(self.cordon_cmd)
+        result = self.kubectl(self.cordon_cmd)
+        # NOTE: sleep for some time to make kube scheduler fit the cordon nodes time range
+        time.sleep(5)
+        return result
 
     def __exit__(self, *exc):
+        # NOTE: sleep for some time to make kube scheduler fit the cordon nodes time range
+        time.sleep(5)
         self.kubectl(f"un{self.cordon_cmd}")
 
 
