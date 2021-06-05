@@ -340,6 +340,18 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         self._scylla_manager_journal_thread = ScyllaManagerLogger(self, self.scylla_manager_log)
         self._scylla_manager_journal_thread.start()
 
+    def set_nodeselector_for_kubedns(self, pool_name):
+        # EKS and GKE deploy kube-dns pods, so make it be deployed on default nodes, not any other
+        data = {"spec": {"template": {"spec": {"nodeSelector": {
+            self.POOL_LABEL_NAME: pool_name,
+        }}}}}
+        deployment_name = self.kubectl(
+            "get deployments -l k8s-app=kube-dns --no-headers -o custom-columns=:.metadata.name",
+            namespace="kube-system").stdout.strip()
+        self.kubectl(
+            f"patch deployments {deployment_name} -p '{json.dumps(data)}'",
+            namespace="kube-system")
+
     @log_run_info
     def deploy_cert_manager(self, pool_name: str = None) -> None:
         if pool_name is None:
