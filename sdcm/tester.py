@@ -1010,6 +1010,8 @@ class ClusterTester(db_stats.TestStatsMixin,
         # NOTE: between GKE cluster creation and addition of new node pools we need
         # several minutes gap to avoid "repair" status of a cluster when API server goes down.
         # So, deploy apps specific to default-pool in between above mentioned deployment steps.
+        self.k8s_cluster.set_nodeselector_for_kubedns(
+            pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
         self.k8s_cluster.deploy_cert_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
         self.k8s_cluster.deploy_scylla_operator()
         if self.params.get('use_mgmt'):
@@ -1131,6 +1133,8 @@ class ClusterTester(db_stats.TestStatsMixin,
 
         self.k8s_cluster.deploy()
         self.k8s_cluster.tune_network()
+        self.k8s_cluster.set_nodeselector_for_kubedns(
+            pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
 
         self.k8s_cluster.deploy_node_pool(
             eks.EksNodePool(
