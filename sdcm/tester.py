@@ -1010,7 +1010,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         # NOTE: between GKE cluster creation and addition of new node pools we need
         # several minutes gap to avoid "repair" status of a cluster when API server goes down.
         # So, deploy apps specific to default-pool in between above mentioned deployment steps.
-        self.k8s_cluster.deploy_cert_manager()
+        self.k8s_cluster.deploy_cert_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
         self.k8s_cluster.deploy_scylla_operator()
         if self.params.get('use_mgmt'):
             self.k8s_cluster.deploy_scylla_manager()
@@ -1177,7 +1177,7 @@ class ClusterTester(db_stats.TestStatsMixin,
             self.k8s_cluster.deploy_node_pool(monitor_pool, wait_till_ready=False)
         self.k8s_cluster.wait_all_node_pools_to_be_ready()
 
-        self.k8s_cluster.deploy_cert_manager()
+        self.k8s_cluster.deploy_cert_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
         self.k8s_cluster.deploy_scylla_operator()
         if self.params.get('use_mgmt'):
             self.k8s_cluster.deploy_scylla_manager()
