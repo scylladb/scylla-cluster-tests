@@ -307,6 +307,39 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         LOGGER.info("Patch kubectl config")
         self.patch_kubectl_config()
 
+    def tune_network(self):
+        """Tune networking on all nodes of an EKS cluster to reduce number of reserved IPs.
+
+        Set following special EKS-specific env vars to 'aws-node' daemonset:
+
+            WARM_ENI_TARGET (default is 1) - number of 'ready-to-use' additional
+                network interfaces which in our case almost always stay idle.
+                Setting this one to 0 means we have 1 network interface at start,
+                and new ones will be added (expensive API calls) only when needed automatically.
+            MINIMUM_IP_TARGET (no default) - minimum number of IP addresses that must be
+                dedicated to an EC2 instance. If not set then number of reserved IPs equal
+                to number of IP capacity of a network interface.
+            WARM_IP_TARGET (no default) - how many unused IP must be kept as 'ready-to-use'.
+                if not set then depend on the available IPs of ENIs.
+
+        General idea behind it: reduce number of 'reserved' IP addresses by each of
+        EC2 instances used in an EKS cluster.
+        Without such tweaking one cluster we create uses more than 300 IP addresses
+        and having /22 subnet (<1024 IP addresses) we can run just 3 EKS clusters at once.
+
+        Env vars details:
+            https://github.com/aws/amazon-vpc-cni-k8s/blob/master/docs/eni-and-ip-target.md
+        IPs per network interface per node type details:
+            https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-eni.html
+        """
+        LOGGER.info("Tune network of the EKS cluster")
+        env_vars = (
+            "WARM_ENI_TARGET=0",
+            "MINIMUM_IP_TARGET=8",
+            "WARM_IP_TARGET=2",
+        )
+        self.kubectl(f"set env daemonset aws-node {' '.join(env_vars)}", namespace="kube-system")
+
     def deploy_node_pool(self, pool: EksNodePool, wait_till_ready=True) -> None:
         self._add_pool(pool)
         if pool.is_deployed:
