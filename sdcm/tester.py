@@ -920,7 +920,7 @@ class ClusterTester(db_stats.TestStatsMixin,
             node_key_file=self.credentials[0].key_file,
         )
         self.k8s_cluster = cluster_type(
-            software_version=self.params.get("minikube_version"),
+            software_version=self.params.get("mini_k8s_version"),
             params=self.params,
         )
         self.k8s_cluster.deploy()
@@ -972,19 +972,20 @@ class ClusterTester(db_stats.TestStatsMixin,
 
         services, gce_datacenter = list(services.values()), list(services.keys())
 
-        self.k8s_cluster = \
-            minikube.GceMinikubeCluster(minikube_version=self.params.get("minikube_version"),
-                                        gce_image=self.params.get("gce_image_minikube"),
-                                        gce_image_type=self.params.get("gce_root_disk_type_minikube"),
-                                        gce_image_size=self.params.get("gce_root_disk_size_minikube"),
-                                        gce_network=self.params.get("gce_network"),
-                                        services=services,
-                                        credentials=self.credentials,
-                                        gce_instance_type=self.params.get("gce_instance_type_minikube"),
-                                        gce_image_username=self.params.get("gce_image_username"),
-                                        user_prefix=self.params.get("user_prefix"),
-                                        params=self.params,
-                                        gce_datacenter=gce_datacenter)
+        self.k8s_cluster = minikube.GceMinikubeCluster(
+            mini_k8s_version=self.params.get("mini_k8s_version"),
+            gce_image=self.params.get("gce_image_minikube"),
+            gce_image_type=self.params.get("gce_root_disk_type_minikube"),
+            gce_image_size=self.params.get("gce_root_disk_size_minikube"),
+            gce_network=self.params.get("gce_network"),
+            services=services,
+            credentials=self.credentials,
+            gce_instance_type=self.params.get("gce_instance_type_minikube"),
+            gce_image_username=self.params.get("gce_image_username"),
+            user_prefix=self.params.get("user_prefix"),
+            params=self.params,
+            gce_datacenter=gce_datacenter,
+        )
         self.k8s_cluster.wait_for_init()
 
         if self.params.get('k8s_deploy_monitoring'):
