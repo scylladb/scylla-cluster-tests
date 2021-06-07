@@ -1280,7 +1280,8 @@ class SCTConfiguration(dict):
 
                     amis = get_scylla_ami_versions(region)
                     for ami in amis:
-                        if scylla_version in ami['Name']:
+                        # ami['Name'] format example: ScyllaDB 4.4.0
+                        if f" {scylla_version}" in ami['Name']:
                             ami_list.append(ami['ImageId'])
                             break
                     else:
