@@ -854,9 +854,10 @@ class FillDatabaseData(ClusterTester):
             'queries': ["SELECT id FROM nameless_index_test_old_version WHERE birth_year = 42"],
             # Due the issue https://github.com/scylladb/scylla/issues/7443, the result of the query changed
             # from "[['Bob'], ['Tom']]" to "[['Tom'], ['Bob']]" from versions Scylla 4.4 and above
-            'results': [[['Bob'], ['Tom']]],
+            # Issue were fixed. Results from 4.5 is changed:
+            'results': [[['Tom'], ['Bob']]],
             'min_version': '3.0',
-            'max_version': '4.3',
+            'max_version': '4.5.rc2',
             'skip_condition': 'not self.version_new_sorting_order_with_secondary_indexes()',
             'skip': ''},
         # deletion_test: Test simple deletion and in particular check for CASSANDRA-4193 bug
