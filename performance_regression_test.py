@@ -440,6 +440,8 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.create_test_stats(doc_id_with_timestamp=True)
         # run a read workload
         self.run_fstrim_on_all_db_nodes()
+        # In order to get cleaner results of the measured stage, it must wait for the compactions to settle
+        self.wait_no_compactions_running()
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=2, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
 
@@ -464,6 +466,8 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         # allow to correctly save results for future compare
         self.create_test_stats(doc_id_with_timestamp=True)
         self.run_fstrim_on_all_db_nodes()
+        # In order to get cleaner results of the measured stage, it must wait for the compactions to settle
+        self.wait_no_compactions_running()
         stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=2, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
 
