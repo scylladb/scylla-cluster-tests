@@ -141,7 +141,7 @@ class QAonlyTimeDistributionReport(BaseReport):
 
     def to_html(self):
         for instance in self.cloud_instances.all:
-            if instance.owner not in self.qa_users or instance.state != "running":
+            if self._is_user_be_skipped(instance) or self._is_instance_be_skipped(instance):
                 continue
             if self._is_older_than_3days(instance.create_time):
                 self.report[3][instance.owner].append(instance)
@@ -170,3 +170,9 @@ class QAonlyTimeDistributionReport(BaseReport):
     @staticmethod
     def _is_older_than_7days(create_time):
         return create_time < pytz.utc.localize(datetime.utcnow() - timedelta(days=7))
+
+    def _is_user_be_skipped(self, instance):
+        return instance.owner == "qa" or instance.owner not in self.qa_users
+
+    def _is_instance_be_skipped(self, instance):
+        return instance.state != "running"
