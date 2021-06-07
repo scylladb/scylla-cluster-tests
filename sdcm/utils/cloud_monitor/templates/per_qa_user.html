@@ -1,4 +1,4 @@
-    <h2>Instances</h2>
+    <h2>Instances that are running</h2>
     {% for day, rep in report|dictsort(reverse=True) %}
         <h2> Older than {{ day }} days </h2>
         {% if rep %}
