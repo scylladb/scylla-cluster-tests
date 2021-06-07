@@ -703,7 +703,7 @@ class SCTConfiguration(dict):
         dict(name="k8s_loader_cluster_name", env="SCT_K8S_LOADER_CLUSTER_NAME", type=str,
              help=""),
 
-        dict(name="minikube_version", env="SCT_MINIKUBE_VERSION", type=str,
+        dict(name="mini_k8s_version", env="SCT_MINI_K8S_VERSION", type=str,
              help=""),
 
         dict(name="k8s_cert_manager_version", env="SCT_K8S_CERT_MANAGER_VERSION", type=str,
@@ -1159,12 +1159,12 @@ class SCTConfiguration(dict):
 
         'k8s-local-minikube': ['user_credentials_path', 'scylla_version', 'scylla_mgmt_agent_version',
                                'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter', 'k8s_scylla_rack',
-                               'k8s_scylla_cluster_name', 'k8s_scylla_disk_gi', 'minikube_version',
+                               'k8s_scylla_cluster_name', 'k8s_scylla_disk_gi', 'mini_k8s_version',
                                'mgmt_docker_image'],
 
         'k8s-local-kind': ['user_credentials_path', 'scylla_version', 'scylla_mgmt_agent_version',
                            'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter', 'k8s_scylla_rack',
-                           'k8s_scylla_cluster_name', 'k8s_scylla_disk_gi', 'minikube_version',
+                           'k8s_scylla_cluster_name', 'k8s_scylla_disk_gi', 'mini_k8s_version',
                            'mgmt_docker_image'],
 
         'k8s-gce-minikube': ['gce_image_minikube', 'gce_instance_type_minikube', 'gce_root_disk_type_minikube',
@@ -1173,7 +1173,7 @@ class SCTConfiguration(dict):
                              'k8s_scylla_rack', 'k8s_scylla_cluster_name',
                              'k8s_scylla_disk_gi', 'gce_image', 'gce_instance_type_loader', 'gce_root_disk_type_loader',
                              'gce_n_local_ssd_disk_loader', 'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
-                             'gce_root_disk_size_monitor', 'gce_n_local_ssd_disk_monitor', 'minikube_version',
+                             'gce_root_disk_size_monitor', 'gce_n_local_ssd_disk_monitor', 'mini_k8s_version',
                              'mgmt_docker_image'],
 
         'k8s-gke': ['gke_cluster_version', 'gce_instance_type_db', 'gce_root_disk_type_db',

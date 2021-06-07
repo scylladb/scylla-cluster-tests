@@ -239,9 +239,9 @@ class MinikubeK8sMixin:
 
 
 class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
-    def __init__(self, minikube_version, params: dict, user_prefix: str = '', region_name: str = None,
+    def __init__(self, mini_k8s_version, params: dict, user_prefix: str = '', region_name: str = None,
                  cluster_uuid: str = None, **kwargs):
-        self.software_version = minikube_version
+        self.software_version = mini_k8s_version
         super().__init__(params=params, user_prefix=user_prefix, region_name=region_name, cluster_uuid=cluster_uuid)
 
     @property
@@ -287,13 +287,13 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
     @property
     def software_version(self):
         try:
-            return self._minikube_version
+            return self._mini_k8s_version
         except AttributeError:
             raise ValueError("You should set `software_version' first.") from None
 
     @software_version.setter
     def software_version(self, value):
-        self._minikube_version = value
+        self._mini_k8s_version = value
 
     @cached_property
     def local_kubectl_version(self):  # pylint: disable=no-self-use
@@ -384,7 +384,7 @@ class LocalMinimalClusterBase(MinimalClusterBase):
         self.software_version = software_version
         self.node_prefix = cluster.prepend_user_prefix(user_prefix, "node")
         super().__init__(
-            minikube_version=software_version,
+            mini_k8s_version=software_version,
             params=params)
 
     @cached_property
@@ -452,14 +452,14 @@ class RemoteMinimalClusterBase(MinimalClusterBase, metaclass=abc.ABCMeta):
 
 
 class GceMinikubeCluster(MinikubeK8sMixin, RemoteMinimalClusterBase, cluster_gce.GCECluster):
-    def __init__(self, minikube_version, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, mini_k8s_version, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,  # pylint: disable=too-many-arguments
                  gce_instance_type="n1-highmem-8", gce_image_username="centos", user_prefix=None, params=None,
                  gce_datacenter=None):
         # pylint: disable=too-many-locals
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, "k8s-minikube")
         node_prefix = cluster.prepend_user_prefix(user_prefix, "node")
         # pylint: disable=unexpected-keyword-arg,no-value-for-parameter
-        super().__init__(minikube_version=minikube_version,
+        super().__init__(mini_k8s_version=mini_k8s_version,
                          gce_image=gce_image,
                          gce_image_type=gce_image_type,
                          gce_image_size=gce_image_size,
