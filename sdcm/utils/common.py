@@ -41,7 +41,7 @@ from urllib.parse import urlparse
 from unittest.mock import Mock
 from textwrap import dedent
 
-from functools import wraps, cached_property
+from functools import wraps, cached_property, lru_cache
 from collections import defaultdict, namedtuple
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
@@ -1444,12 +1444,14 @@ def get_branched_ami(ami_version, region_name):
         return amis[:1]
 
 
+@lru_cache()
 def ami_built_by_scylla(ami_id: str, region_name: str) -> bool:
     ec2_resource = boto3.resource("ec2", region_name=region_name)
     image = ec2_resource.Image(ami_id)
     return image.owner_id == SCYLLA_AMI_OWNER_ID
 
 
+@lru_cache()
 def get_ami_tags(ami_id, region_name):
     """
     Get a list of tags of a specific AMI
