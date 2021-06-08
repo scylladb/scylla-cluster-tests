@@ -203,8 +203,11 @@ class SctEvent:
 
     def __del__(self):
         if self._ready_to_publish:
-            LOGGER.warning(
-                "[SCT internal warning] %s has not been published or dumped, maybe you missed .publish()", self)
+            warning = f"[SCT internal warning] {self} has not been published or dumped, maybe you missed .publish()"
+            try:
+                LOGGER.warning(warning)
+            except:
+                print(warning)
 
 
 def add_severity_limit_rules(rules: List[str]) -> None:
