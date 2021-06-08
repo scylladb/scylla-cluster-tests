@@ -14,6 +14,7 @@
 # Copyright (c) 2021 ScyllaDB
 
 import os
+import re
 import sys
 import unittest
 import logging
@@ -21,6 +22,7 @@ import glob
 import time
 import subprocess
 import traceback
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from functools import partial
 
@@ -439,6 +441,79 @@ def output_conf(config_files, backend):
     config = SCTConfiguration()
     click.secho(config.dump_config(), fg='green')
     sys.exit(0)
+
+
+def _run_yaml_test(backend, full_path, env):
+    output = []
+    error = False
+    output.append(f'---- linting: {full_path} -----')
+    while os.environ:
+        os.environ.popitem()
+    for key, value in env.items():
+        os.environ[key] = value
+    os.environ['SCT_CLUSTER_BACKEND'] = backend
+    os.environ['SCT_CONFIG_FILES'] = full_path
+    logging.getLogger().handlers = []
+    logging.getLogger().disabled = True
+    config = SCTConfiguration()
+    try:
+        config.verify_configuration()
+        config.check_required_files()
+    except Exception as exc:
+        output.append(''.join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
+        error = True
+    return error, output
+
+
+@cli.command(help="Test yaml in test-cases directory")
+@click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), default='aws')
+@click.option('-i', '--include', type=str, default='')
+@click.option('-e', '--exclude', type=str, default='')
+def lint_yamls(backend, exclude: str, include: str):
+    if not include:
+        raise ValueError('You did not provide include filters')
+
+    exclude_filters = []
+    for flt in exclude.split(','):
+        if not flt:
+            continue
+        try:
+            exclude_filters.append(re.compile(flt))
+        except Exception as exc:
+            raise ValueError(f'Exclude filter "{flt}" compiling failed with: {exc}')
+
+    include_filters = []
+    for flt in include.split(','):
+        if not flt:
+            continue
+        try:
+            include_filters.append(re.compile(flt))
+        except Exception as exc:
+            raise ValueError(f'Include filter "{flt}" compiling failed with: {exc}')
+
+    original_env = {**os.environ}
+    pp = ProcessPoolExecutor(max_workers=5)
+
+    features = []
+    for root, base, files in os.walk('./test-cases'):
+        for file in files:
+            full_path = os.path.join(root, file)
+            if not any((flt.search(file) or flt.search(full_path) for flt in include_filters)):
+                continue
+            if any((flt.search(file) or flt.search(full_path) for flt in exclude_filters)):
+                continue
+            features.append(pp.submit(_run_yaml_test, backend, full_path, original_env))
+
+    failed = False
+    for pp_feature in features:
+        error, pp_output = pp_feature.result()
+        if error:
+            failed = True
+            click.secho('\n'.join(pp_output), fg='red')
+        else:
+            click.secho('\n'.join(pp_output), fg='green')
+    print()
+    sys.exit(1 if failed else 0)
 
 
 @cli.command(help="Check test configuration file")
