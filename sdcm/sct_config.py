@@ -1590,9 +1590,9 @@ class SCTConfiguration(dict):
 
         # For each Scylla repo file we will check that there is at least one valid URL through which to download a
         # version of SCYLLA, otherwise we will get an error.
-        get_branch_version_for_multiple_repositories(urls=[self.get(url) for url in [
+        get_branch_version_for_multiple_repositories(urls=(self.get(url) for url in [
             'new_scylla_repo', 'scylla_repo_m', 'scylla_repo_loader', 'scylla_mgmt_repo', 'scylla_mgmt_agent_repo',
-            'scylla_mgmt_agent_repo'] if self.get(url)])
+            'scylla_mgmt_agent_repo'] if self.get(url)))
 
     def dump_config(self):
         """
