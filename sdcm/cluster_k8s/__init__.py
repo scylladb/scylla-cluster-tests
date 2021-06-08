@@ -84,6 +84,7 @@ ANY_KUBERNETES_RESOURCE = Union[Resource, ResourceField, ResourceInstance, Resou
 CERT_MANAGER_TEST_CONFIG = sct_abs_path("sdcm/k8s_configs/cert-manager-test.yaml")
 LOADER_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/loaders.yaml")
 LOCAL_PROVISIONER_DIR = sct_abs_path("sdcm/k8s_configs/provisioner")
+LOCAL_MINIO_DIR = sct_abs_path("sdcm/k8s_configs/minio")
 
 SCYLLA_API_VERSION = "scylla.scylladb.com/v1"
 SCYLLA_CLUSTER_RESOURCE_KIND = "ScyllaCluster"
@@ -522,17 +523,17 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
 
     @log_run_info
     def deploy_minio_s3_backend(self):
-        LOGGER.info('Deploy minio s3-like backend server')
-        self.helm('repo add minio https://helm.min.io/')
+        if not self.params.get('reuse_cluster'):
+            LOGGER.info('Deploy minio s3-like backend server')
+            self.kubectl(f"create namespace {MINIO_NAMESPACE}")
+            LOGGER.debug(self.helm_install(
+                target_chart_name="minio",
+                source_chart_name=LOCAL_MINIO_DIR,
+                namespace=MINIO_NAMESPACE,
+            ))
 
-        self.kubectl(f"create namespace {MINIO_NAMESPACE}")
-        self.helm(
-            'install --set accessKey=minio_access_key,secretKey=minio_access_key,'
-            f'defaultBucket.enabled=true,defaultBucket.name={self.manager_bucket_name},'
-            'defaultBucket.policy=public --generate-name minio/minio',
-            namespace=MINIO_NAMESPACE)
-
-        wait_for(lambda: self.minio_ip_address, text='Waiting for minio pod to popup', timeout=120, throw_exc=True)
+        wait_for(lambda: self.minio_ip_address, text='Waiting for minio pod to popup',
+                 timeout=120, throw_exc=True)
         self.kubectl("wait --timeout=10m -l app=minio --for=condition=Ready pod",
                      timeout=605, namespace=MINIO_NAMESPACE)
 
@@ -607,7 +608,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                     'provider': 'Minio',
                     'endpoint': self.s3_provider_endpoint,
                     'access_key_id': 'minio_access_key',
-                    'secret_access_key': 'minio_access_key'
+                    'secret_access_key': 'minio_secret_key'
                 }
             }
         })
