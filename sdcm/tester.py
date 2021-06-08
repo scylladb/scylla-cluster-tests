@@ -282,7 +282,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         self.left_processes_log = os.path.join(self.logdir, 'left_processes.log')
         self.scylla_hints_dir = os.path.join(self.scylla_dir, "hints")
         self._logs = {}
-        self.timeout_thread = self._init_test_timeout_thread()
+        self.timeout_thread = None
         self.email_reporter = build_reporter(self.__class__.__name__,
                                              self.params.get('email_recipients'),
                                              self.logdir)
@@ -537,6 +537,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         if self.monitors and self.monitors.nodes:
             self.prometheus_db = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
         self.start_time = time.time()
+        self.timeout_thread = self._init_test_timeout_thread()
 
         if self.db_cluster:
             self.db_cluster.validate_seeds_on_all_nodes()
@@ -2295,7 +2296,8 @@ class ClusterTester(db_stats.TestStatsMixin,
 
     @silence()
     def stop_timeout_thread(self):
-        self.timeout_thread.cancel()
+        if self.timeout_thread:
+            self.timeout_thread.cancel()
 
     @silence()
     def collect_sct_logs(self):
