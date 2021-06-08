@@ -404,22 +404,22 @@ class ParallelObject:
 
         for obj in self.objects:
             if unpack_objects and isinstance(obj, (list, tuple)):
-                futures.append(self._thread_pool.submit(func, *obj))
+                futures.append((self._thread_pool.submit(func, *obj), obj))
             elif unpack_objects and isinstance(obj, dict):
-                futures.append(self._thread_pool.submit(func, **obj))
+                futures.append((self._thread_pool.submit(func, **obj), obj))
             else:
-                futures.append(self._thread_pool.submit(func, obj))
+                futures.append((self._thread_pool.submit(func, obj), obj))
         time_out = self.timeout
-        for obj_idx, future in enumerate(futures):
+        for future, target_obj in futures:
             try:
                 result = future.result(time_out)
             except FuturesTimeoutError as exception:
-                results.append(ParallelObjectResult(obj=self.objects[obj_idx], exc=exception, result=None))
+                results.append(ParallelObjectResult(obj=target_obj, exc=exception, result=None))
                 time_out = 0.001  # if there was a timeout on one of the futures there is no need to wait for all
             except Exception as exception:  # pylint: disable=broad-except
-                results.append(ParallelObjectResult(obj=self.objects[obj_idx], exc=exception, result=None))
+                results.append(ParallelObjectResult(obj=target_obj, exc=exception, result=None))
             else:
-                results.append(ParallelObjectResult(obj=self.objects[obj_idx], exc=None, result=result))
+                results.append(ParallelObjectResult(obj=target_obj, exc=None, result=result))
 
         self.clean_up(futures)
 
@@ -436,7 +436,7 @@ class ParallelObject:
 
     def clean_up(self, futures):
         # if there are futures that didn't run  we cancel them
-        for future in futures:
+        for future, _ in futures:
             future.cancel()
         self._thread_pool.shutdown(wait=False)
         # we need to unregister internal function that waits for all threads to finish when interpreter exits
