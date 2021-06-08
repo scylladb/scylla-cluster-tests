@@ -1,0 +1,204 @@
+## Provide a name in place of minio for `app:` labels
+nameOverride: ""
+
+## Provide a name to substitute for the full names of resources
+fullnameOverride: ""
+
+image:
+  repository: minio/minio
+  tag: RELEASE.2021-02-14T04-01-33Z
+  pullPolicy: IfNotPresent
+
+##  `mc` is the minio client used to create a default bucket
+mcImage:
+  repository: minio/mc
+  tag: RELEASE.2021-02-14T04-28-06Z
+  pullPolicy: IfNotPresent
+
+## Additional labels to include with deployment
+additionalLabels: []
+
+## Additional annotations to include with deployment
+additionalAnnotations: []
+
+## Additional arguments to pass to minio binary
+extraArgs: []
+
+## Set default accesskey, secretkey, Minio config file path, volume mount path and
+## number of nodes (only used for Minio distributed mode)
+## AccessKey and secretKey is generated when not set
+## Distributed Minio ref: https://docs.minio.io/docs/distributed-minio-quickstart-guide
+##
+accessKey: "minio_access_key"
+secretKey: "minio_secret_key"
+certsPath: "/etc/minio/certs/"
+configPathmc: "/etc/minio/mc/"
+mountPath: "/export"
+
+## Use existing Secret that store following variables:
+##
+## | Chart var             | .data.<key> in Secret    |
+## |:----------------------|:-------------------------|
+## | accessKey             | accesskey                |
+## | secretKey             | secretkey                |
+##
+## All mentioned variables will be ignored in values file.
+existingSecret: ""
+
+## Override the root directory which the minio server should serve from.
+## If left empty, it defaults to the value of {{ .Values.mountPath }}
+## If defined, it must be a sub-directory of the path specified in {{ .Values.mountPath }}
+bucketRoot: ""
+
+## Enable persistence using Persistent Volume Claims
+## ref: http://kubernetes.io/docs/user-guide/persistent-volumes/
+##
+persistence:
+  enabled: true
+  annotations: {}
+
+  ## A manually managed Persistent Volume and Claim
+  ## Requires persistence.enabled: true
+  ## If defined, PVC must be created manually before volume will be bound
+  existingClaim: ""
+
+  ## minio data Persistent Volume Storage Class
+  ## If defined, storageClassName: <storageClass>
+  ## If set to "-", storageClassName: "", which disables dynamic provisioning
+  ## If undefined (the default) or set to null, no storageClassName spec is
+  ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
+  ##   GKE, AWS & OpenStack)
+  ##
+  ## Storage class of PV to bind. By default it looks for standard storage class.
+  ## If the PV uses a different storage class, specify that here.
+  storageClass: ""
+  VolumeName: ""
+  accessMode: ReadWriteOnce
+  size: 10Gi
+
+  ## If subPath is set mount a sub folder of a volume instead of the root of the volume.
+  ## This is especially handy for volume plugins that don't natively support sub mounting (like glusterfs).
+  ##
+  subPath: ""
+
+## Expose the Minio service to be accessed from outside the cluster (LoadBalancer service).
+## or access it from within the cluster (ClusterIP service). Set the service type and the port to serve it.
+## ref: http://kubernetes.io/docs/user-guide/services/
+##
+service:
+  type: ClusterIP
+  clusterIP: ~
+  port: 9000
+  nodePort: 32000
+
+  ## List of IP addresses at which the Prometheus server service is available
+  ## Ref: https://kubernetes.io/docs/user-guide/services/#external-ips
+  ##
+  externalIPs: []
+  annotations: {}
+    # prometheus.io/scrape: 'true'
+    # prometheus.io/path:   '/minio/prometheus/metrics'
+    # prometheus.io/port:   '9000'
+
+imagePullSecrets: []
+# - name: "image-pull-secret"
+
+## Node labels for pod assignment
+## Ref: https://kubernetes.io/docs/user-guide/node-selection/
+##
+nodeSelector: {}
+tolerations: []
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      # EKS
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: eks.amazonaws.com/nodegroup
+            operator: In
+            values:
+            - auxiliary-pool
+            - default-pool
+      # GKE
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: cloud.google.com/gke-nodepool
+            operator: In
+            values:
+            - auxiliary-pool
+            - default-pool
+
+## Add stateful containers to have security context, if enabled MinIO will run as this
+## user and group NOTE: securityContext is only enabled if persistence.enabled=true
+securityContext:
+  enabled: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+# Additational pod annotations
+podAnnotations: {}
+
+# Additional pod labels
+podLabels: {}
+
+## Configure resource requests and limits
+## ref: http://kubernetes.io/docs/user-guide/compute-resources/
+##
+resources:
+  requests:
+    memory: 1Gi
+
+## Create a bucket after minio install
+##
+defaultBucket:
+  enabled: true
+  ## If enabled, must be a string with length > 0
+  name: minio-bucket
+  ## Can be one of none|download|upload|public
+  policy: public
+  ## Purge if bucket exists already
+  purge: false
+  ## set versioning for bucket true|false
+  # versioning: false
+
+## Create multiple buckets after minio install
+## Enabling `defaultBucket` will take priority over this list
+##
+buckets: []
+  # - name: bucket1
+  #   policy: none
+  #   purge: false
+  # - name: bucket2
+  #   policy: none
+  #   purge: false
+
+## Additional Annotations for the Kubernetes Batch (make-bucket-job)
+makeBucketJob:
+  podAnnotations:
+  annotations:
+  securityContext:
+    enabled: false
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  resources:
+    requests:
+      memory: 128Mi
+
+## Use this field to add environment variables relevant to Minio server. These fields will be passed on to Minio container(s)
+## when Chart is deployed
+environment: {}
+  ## Please refer for comprehensive list https://docs.minio.io/docs/minio-server-configuration-guide.html
+  ## MINIO_DOMAIN: "chart-example.local"
+  ## MINIO_BROWSER: "off"
+
+## Specify the service account to use for the Minio pods. If 'create' is set to 'false'
+## and 'name' is left unspecified, the account 'default' will be used.
+serviceAccount:
+  create: true
+  ## The name of the service account to use. If 'create' is 'true', a service account with that name
+  ## will be created. Otherwise, a name will be auto-generated.
+  name:
