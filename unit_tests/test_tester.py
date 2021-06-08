@@ -15,6 +15,7 @@ import os
 import shutil
 import logging
 import tempfile
+import time
 import unittest.mock
 from time import sleep
 
@@ -159,6 +160,10 @@ class ClusterTesterForTests(ClusterTester):
             return self._events
         self._events = get_events_grouped_by_category(_registry=self.events_processes_registry)
         return self._events
+
+    def stop_event_device(self):
+        time.sleep(0.5)
+        super().stop_event_device()
 
 
 class SubtestAndTeardownFailsTest(ClusterTesterForTests):
