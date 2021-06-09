@@ -108,6 +108,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     run_with_gemini = True
     networking = False
     kubernetes = False
+    limited = False
     MINUTE_IN_SEC = 60
     HOUR_IN_SEC = 60 * MINUTE_IN_SEC
     disruptions_list = []
@@ -298,12 +299,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self,
             disruptive: Optional[bool] = None,
             run_with_gemini: Optional[bool] = None,
-            networking: Optional[bool] = None) -> List[str]:
+            networking: Optional[bool] = None,
+            limited: Optional[bool] = None) -> List[str]:
         return self.get_list_of_methods_by_flags(
             disruptive=disruptive,
             run_with_gemini=run_with_gemini,
             networking=networking,
-            kubernetes=True if self._is_it_on_kubernetes() else None
+            kubernetes=self._is_it_on_kubernetes() or None,
+            limited=limited
         )
 
     def _is_it_on_kubernetes(self) -> bool:
@@ -314,10 +317,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             disruptive: Optional[bool] = None,
             run_with_gemini: Optional[bool] = None,
             networking: Optional[bool] = None,
-            kubernetes: Optional[bool] = None) -> List[str]:
+            kubernetes: Optional[bool] = None,
+            limited: Optional[bool] = None) -> List[str]:
         attributes = locals()
         flags = {flag_name: attributes[flag_name] for flag_name in
-                 ['disruptive', 'run_with_gemini', 'networking', 'kubernetes'] if attributes[flag_name] is not None}
+                 ['disruptive', 'run_with_gemini', 'networking', 'kubernetes', 'limited'] if attributes[flag_name] is not None}
         subclasses_list = self._get_subclasses(**flags)
         disrupt_methods_list = []
         for subclass in subclasses_list:
@@ -3031,6 +3035,7 @@ class SslHotReloadingNemesis(Nemesis):
 
 class PauseLdapNemesis(Nemesis):
     disruptive = False
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3039,6 +3044,7 @@ class PauseLdapNemesis(Nemesis):
 
 class ToggleLdapConfiguration(Nemesis):
     disruptive = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3074,6 +3080,7 @@ class AddRemoveRackNemesis(Nemesis):
 class StopWaitStartMonkey(Nemesis):
     disruptive = True
     kubernetes = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3083,6 +3090,7 @@ class StopWaitStartMonkey(Nemesis):
 class StopStartMonkey(Nemesis):
     disruptive = True
     kubernetes = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3110,6 +3118,7 @@ class MultipleHardRebootNodeMonkey(Nemesis):
 class HardRebootNodeMonkey(Nemesis):
     disruptive = True
     kubernetes = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3119,6 +3128,7 @@ class HardRebootNodeMonkey(Nemesis):
 class SoftRebootNodeMonkey(Nemesis):
     disruptive = True
     kubernetes = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3128,6 +3138,7 @@ class SoftRebootNodeMonkey(Nemesis):
 class DrainerMonkey(Nemesis):
     disruptive = True
     kubernetes = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3154,6 +3165,7 @@ class CorruptThenRebuildMonkey(Nemesis):
 
 class DecommissionMonkey(Nemesis):
     disruptive = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3171,6 +3183,7 @@ class DecommissionSeedNode(Nemesis):
 class NoCorruptRepairMonkey(Nemesis):
     disruptive = False
     kubernetes = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3180,6 +3193,7 @@ class NoCorruptRepairMonkey(Nemesis):
 class MajorCompactionMonkey(Nemesis):
     disruptive = False
     kubernetes = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3190,6 +3204,7 @@ class RefreshMonkey(Nemesis):
     disruptive = False
     run_with_gemini = False
     kubernetes = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3209,6 +3224,7 @@ class RefreshBigMonkey(Nemesis):
 class EnospcMonkey(Nemesis):
     disruptive = True
     kubernetes = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3227,6 +3243,7 @@ class EnospcAllNodesMonkey(Nemesis):
 class NodeToolCleanupMonkey(Nemesis):
     disruptive = False
     kubernetes = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3236,6 +3253,7 @@ class NodeToolCleanupMonkey(Nemesis):
 class TruncateMonkey(Nemesis):
     disruptive = False
     kubernetes = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3364,6 +3382,10 @@ class CategoricalMonkey(Nemesis):
 
 class LimitedChaosMonkey(Nemesis):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.disrupt_methods_list = self.get_list_of_methods_compatible_with_backend(limited=True)
+
     @log_time_elapsed_and_status
     def disrupt(self):
         # Limit the nemesis scope:
@@ -3376,10 +3398,10 @@ class LimitedChaosMonkey(Nemesis):
         #  - ModifyTableMonkey
         #  - EnospcMonkey
         #  - StopWaitStartMonkey
-        #  - HardRebootMonkey
-        #  - SoftRebootMonkey
+        #  - HardRebootNodeMonkey
+        #  - SoftRebootNodeMonkey
         #  - TruncateMonkey
-        #  - ToppartitionsMonkey
+        #  - TopPartitions
         #  - MgmtRepair
         #  - NoCorruptRepairMonkey
         #  - SnapshotOperations
@@ -3387,19 +3409,9 @@ class LimitedChaosMonkey(Nemesis):
         #  - MgmtBackup
         #  - MgmtBackupSpecificKeyspaces
         #  - AddDropColumnMonkey
-        self.call_random_disrupt_method(disrupt_methods=['disrupt_nodetool_cleanup', 'disrupt_nodetool_decommission',
-                                                         'disrupt_nodetool_drain', 'disrupt_nodetool_refresh',
-                                                         'disrupt_stop_start_scylla_server', 'disrupt_major_compaction',
-                                                         'disrupt_modify_table', 'disrupt_nodetool_enospc',
-                                                         'disrupt_stop_wait_start_scylla_server',
-                                                         'disrupt_hard_reboot_node', 'disrupt_soft_reboot_node',
-                                                         'disrupt_truncate', 'disrupt_show_toppartitions',
-                                                         'disrupt_mgmt_repair_cli', 'disrupt_no_corrupt_repair',
-                                                         'disrupt_snapshot_operations', 'disrupt_abort_repair',
-                                                         'disrupt_mgmt_backup',
-                                                         'disrupt_mgmt_backup_specific_keyspaces',
-                                                         'disrupt_add_drop_column', 'disrupt_ldap_connection_toggle',
-                                                         'disrupt_disable_enable_ldap_authorization'])
+        #  - PauseLdapNemesis
+        #  - ToggleLdapConfiguration
+        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
 
 
 class ScyllaCloudLimitedChaosMonkey(Nemesis):
@@ -3554,6 +3566,7 @@ class RollbackNemesis(Nemesis):
 class ModifyTableMonkey(Nemesis):
     disruptive = False
     kubernetes = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3565,6 +3578,7 @@ class AddDropColumnMonkey(Nemesis):
     run_with_gemini = False
     networking = False
     kubernetes = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3581,6 +3595,7 @@ class ToggleTableIcsMonkey(Nemesis):
 
 class MgmtBackup(Nemesis):
     disruptive = False
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3589,6 +3604,7 @@ class MgmtBackup(Nemesis):
 
 class MgmtBackupSpecificKeyspaces(Nemesis):
     disruptive = False
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3598,6 +3614,7 @@ class MgmtBackupSpecificKeyspaces(Nemesis):
 class MgmtRepair(Nemesis):
     disruptive = False
     kubernetes = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3610,6 +3627,7 @@ class MgmtRepair(Nemesis):
 class AbortRepairMonkey(Nemesis):
     disruptive = False
     kubernetes = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3675,6 +3693,7 @@ class ValidateHintedHandoffShortDowntime(Nemesis):
 class SnapshotOperations(Nemesis):
     disruptive = False
     kubernetes = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
@@ -3728,6 +3747,7 @@ class SwitchBetweenPasswordAuthAndSaslauthdAuth(Nemesis):
 class TopPartitions(Nemesis):
     disruptive = False
     kubernetes = True
+    limited = True
 
     @log_time_elapsed_and_status
     def disrupt(self):
