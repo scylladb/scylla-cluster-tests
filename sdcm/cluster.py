@@ -2296,7 +2296,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             time.sleep(5)
 
     # pylint: disable=too-many-branches,too-many-statements
-    def install_mgmt(self, scylla_mgmt_repo, auth_token, segments_per_repair, package_url=None):
+    def install_mgmt(self, scylla_mgmt_repo, auth_token, package_url=None):
         self.log.debug('Install scylla-manager')
         rsa_id_dst = '/tmp/scylla-test'
         rsa_id_dst_pub = '/tmp/scylla-test-pub'
@@ -2345,8 +2345,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         """.format(mgmt_user=mgmt_user, rsa_id_dst=rsa_id_dst, rsa_id_dst_pub=rsa_id_dst_pub))  # generate ssh public key from private key.
         self.remoter.run('sudo bash -cxe "%s"' % ssh_config_script)
 
-        self.config_scylla_manager_yaml(segments_per_repair=segments_per_repair)
-
         if self.is_docker():
             self.remoter.run('sudo supervisorctl restart scylla-manager')
             res = self.remoter.run('sudo supervisorctl status scylla-manager')
@@ -2389,10 +2387,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.remoter.run(cmd, ignore_status=True, verbose=True)
         self._scylla_manager_journal_thread.join(timeout)
         self._scylla_manager_journal_thread = None
-
-    def config_scylla_manager_yaml(self, segments_per_repair):
-        yaml_attr = "repair:\n  segments_per_repair: %d\n" % segments_per_repair
-        self.remoter.run("""sudo sh -c 'echo "{}" >> {}'""".format(yaml_attr, SCYLLA_MANAGER_YAML_PATH))
 
     def config_scylla_manager(self, mgmt_port, db_hosts):
         """
@@ -4380,7 +4374,6 @@ class BaseMonitorSet():  # pylint: disable=too-many-public-methods,too-many-inst
                 node.remoter.run('mkdir -p {}'.format(package_path))
                 node.remoter.send_files(src='{}*.rpm'.format(package_path), dst=package_path)
             node.install_mgmt(scylla_mgmt_repo=self.params.get('scylla_mgmt_repo'), auth_token=auth_token,
-                              segments_per_repair=self.params.get('mgmt_segments_per_repair'),
                               package_url=package_path)
             self.nodes[0].wait_manager_server_up()
 

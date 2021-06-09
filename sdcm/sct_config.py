@@ -255,9 +255,6 @@ class SCTConfiguration(dict):
         dict(name="mgmt_port", env="SCT_MGMT_PORT", type=int,
              help="The port of scylla management"),
 
-        dict(name="mgmt_segments_per_repair", env="MGMT_SEGMENTS_PER_REPAIR", type=int,
-             help="the number of segments per repair used for the manager's repair"),
-
         dict(name="manager_prometheus_port", env="SCT_MANAGER_PROMETHEUS_PORT", type=int,
              help="Port to be used by the manager to contact Prometheus"),
 
