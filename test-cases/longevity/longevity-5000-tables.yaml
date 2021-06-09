@@ -40,7 +40,7 @@ regions_data:
 
 cluster_health_check: false
 
-nemesis_class_name: 'ChaosMonkey'
+nemesis_class_name: 'SisyphusMonkey'
 nemesis_interval: 60
 
 
