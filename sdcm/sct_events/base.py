@@ -212,6 +212,8 @@ class SctEvent:
 
 def add_severity_limit_rules(rules: List[str]) -> None:
     for rule in rules:
+        if not rule:
+            continue
         try:
             pattern, severity = rule.split("=", 1)
             severity = Severity[severity.strip()]
