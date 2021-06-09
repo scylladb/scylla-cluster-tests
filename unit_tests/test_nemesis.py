@@ -1,8 +1,8 @@
 from collections import namedtuple
 import sdcm.utils.cloud_monitor  # pylint: disable=unused-import # import only to avoid cyclic dependency
 from sdcm.nemesis import Nemesis, ChaosMonkey, CategoricalMonkey
-from sdcm.cluster_k8s.minikube import LocalMinimalScyllaPodCluster
-from sdcm.cluster_k8s.minikube import RemoteMinimalScyllaPodCluster
+from sdcm.cluster_k8s.mini_k8s import LocalMinimalScyllaPodCluster
+from sdcm.cluster_k8s.mini_k8s import RemoteMinimalScyllaPodCluster
 from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
 from sdcm.cluster_k8s.eks import EksScyllaPodCluster
 from sdcm.cluster_gce import ScyllaGCECluster

@@ -48,7 +48,7 @@ from sdcm.cluster_aws import CassandraAWSCluster
 from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
-from sdcm.cluster_k8s import minikube, gke, eks, LOADER_CLUSTER_CONFIG
+from sdcm.cluster_k8s import mini_k8s, gke, eks, LOADER_CLUSTER_CONFIG
 from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.scylla_bench_thread import ScyllaBenchThread
 from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_network_configuration, get_ec2_services, \
@@ -230,8 +230,8 @@ class ClusterTester(db_stats.TestStatsMixin,
     monitors: BaseMonitorSet = None
     loaders: BaseLoaderSet = None
     db_cluster: BaseScyllaCluster = None
-    k8s_cluster: Union[None, gke.GkeCluster, eks.EksCluster, minikube.GceMinikubeCluster,
-                       minikube.LocalMinikubeCluster] = None
+    k8s_cluster: Union[None, gke.GkeCluster, eks.EksCluster, mini_k8s.GceMinikubeCluster,
+                       mini_k8s.LocalMinikubeCluster] = None
 
     def __init__(self, *args):  # pylint: disable=too-many-statements
         super(ClusterTester, self).__init__(*args)
@@ -911,7 +911,7 @@ class ClusterTester(db_stats.TestStatsMixin,
 
     def get_cluster_k8s_local_minimal_cluster(
             self,
-            cluster_type: Union[Type[minikube.LocalMinikubeCluster], Type[minikube.LocalKindCluster]]):
+            cluster_type: Union[Type[mini_k8s.LocalMinikubeCluster], Type[mini_k8s.LocalKindCluster]]):
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
 
         container_node_params = dict(
@@ -931,7 +931,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         # This should remove some of the unpredictability of pods startup time.
         self.k8s_cluster.docker_pull(f"{self.params.get('docker_image')}:{self.params.get('scylla_version')}")
 
-        self.db_cluster = minikube.LocalMinimalScyllaPodCluster(
+        self.db_cluster = mini_k8s.LocalMinimalScyllaPodCluster(
             k8s_cluster=self.k8s_cluster,
             scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
             user_prefix=self.params.get("user_prefix"),
@@ -972,20 +972,19 @@ class ClusterTester(db_stats.TestStatsMixin,
 
         services, gce_datacenter = list(services.values()), list(services.keys())
 
-        self.k8s_cluster = minikube.GceMinikubeCluster(
-            mini_k8s_version=self.params.get("mini_k8s_version"),
-            gce_image=self.params.get("gce_image_minikube"),
-            gce_image_type=self.params.get("gce_root_disk_type_minikube"),
-            gce_image_size=self.params.get("gce_root_disk_size_minikube"),
-            gce_network=self.params.get("gce_network"),
-            services=services,
-            credentials=self.credentials,
-            gce_instance_type=self.params.get("gce_instance_type_minikube"),
-            gce_image_username=self.params.get("gce_image_username"),
-            user_prefix=self.params.get("user_prefix"),
-            params=self.params,
-            gce_datacenter=gce_datacenter,
-        )
+        self.k8s_cluster = \
+            mini_k8s.GceMinikubeCluster(mini_k8s_version=self.params.get("mini_k8s_version"),
+                                        gce_image=self.params.get("gce_image_minikube"),
+                                        gce_image_type=self.params.get("gce_root_disk_type_minikube"),
+                                        gce_image_size=self.params.get("gce_root_disk_size_minikube"),
+                                        gce_network=self.params.get("gce_network"),
+                                        services=services,
+                                        credentials=self.credentials,
+                                        gce_instance_type=self.params.get("gce_instance_type_minikube"),
+                                        gce_image_username=self.params.get("gce_image_username"),
+                                        user_prefix=self.params.get("user_prefix"),
+                                        params=self.params,
+                                        gce_datacenter=gce_datacenter)
         self.k8s_cluster.wait_for_init()
 
         if self.params.get('k8s_deploy_monitoring'):
@@ -1002,7 +1001,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         # This should remove some of the unpredictability of pods startup time.
         self.k8s_cluster.docker_pull(f"{self.params.get('docker_image')}:{self.params.get('scylla_version')}")
 
-        self.db_cluster = minikube.RemoteMinimalScyllaPodCluster(
+        self.db_cluster = mini_k8s.RemoteMinimalScyllaPodCluster(
             k8s_cluster=self.k8s_cluster,
             scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
             user_prefix=self.params.get("user_prefix"),
@@ -1027,7 +1026,7 @@ class ClusterTester(db_stats.TestStatsMixin,
                                     params=self.params,
                                     gce_datacenter=gce_datacenter)
         if self.params.get("n_monitor_nodes") > 0:
-            self.monitors = minikube.MonitorSetMinikube(
+            self.monitors = mini_k8s.MonitorSetMinikube(
                 gce_image=self.params.get("gce_image"),
                 gce_image_type=self.params.get("gce_root_disk_type_monitor"),
                 gce_image_size=self.params.get('gce_root_disk_size_monitor'),
@@ -1316,9 +1315,9 @@ class ClusterTester(db_stats.TestStatsMixin,
         elif cluster_backend == 'k8s-gce-minikube':
             self.get_cluster_k8s_gce_minikube()
         elif cluster_backend == 'k8s-local-minikube':
-            self.get_cluster_k8s_local_minimal_cluster(minikube.LocalMinikubeCluster)
+            self.get_cluster_k8s_local_minimal_cluster(mini_k8s.LocalMinikubeCluster)
         elif cluster_backend == 'k8s-local-kind':
-            self.get_cluster_k8s_local_minimal_cluster(minikube.LocalKindCluster)
+            self.get_cluster_k8s_local_minimal_cluster(mini_k8s.LocalKindCluster)
         elif cluster_backend == 'k8s-gke':
             self.get_cluster_k8s_gke()
         elif cluster_backend == 'k8s-eks':
