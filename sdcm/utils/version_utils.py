@@ -18,6 +18,7 @@ from string import Template
 from typing import List, Optional
 from collections import namedtuple
 from urllib.parse import urlparse
+from functools import lru_cache
 
 import boto3
 import requests
@@ -88,6 +89,7 @@ FILE_REGEX_DICT = {
 RepositoryDetails = namedtuple("RepositoryDetails", ["type", "urls"])
 
 
+@lru_cache(maxsize=1024)
 def get_url_content(url, return_url_data=True):
     response = requests.get(url=url)
     if response.status_code != 200:
