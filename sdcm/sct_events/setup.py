@@ -62,6 +62,8 @@ def start_events_device(log_dir: Optional[Union[str, Path]] = None,
                                       r'error occurred while retrieving configuration').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: supressed').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: suppressed').publish()
+    DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,
+                   line="update_from_distributed_data: failed to update configuration").publish()
 
     atexit.register(stop_events_device, _registry=_registry)
 
