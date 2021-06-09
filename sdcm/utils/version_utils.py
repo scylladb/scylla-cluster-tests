@@ -31,6 +31,7 @@ from repodataParser.RepoParser import Parser
 
 from sdcm.utils.common import ParallelObject, DEFAULT_AWS_REGION
 from sdcm.sct_events.system import ScyllaRepoEvent
+from sdcm.utils.decorators import retrying
 
 
 # Examples of ScyllaDB version strings:
@@ -90,6 +91,7 @@ RepositoryDetails = namedtuple("RepositoryDetails", ["type", "urls"])
 
 
 @lru_cache(maxsize=1024)
+@retrying(n=10, sleep_time=0.1)
 def get_url_content(url, return_url_data=True):
     response = requests.get(url=url)
     if response.status_code != 200:
