@@ -391,6 +391,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         self.params = SCTConfiguration()
         self.params.log_config()
         self.params.verify_configuration()
+        self.params.verify_configuration_urls_validity()
         self.params.check_required_files()
 
     def _init_logging(self):
