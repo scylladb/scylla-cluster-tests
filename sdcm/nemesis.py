@@ -36,7 +36,7 @@ from cassandra import ConsistencyLevel
 
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady
 from sdcm.cluster import NodeStayInClusterAfterDecommission
-from sdcm.cluster_k8s.minikube import MinikubeK8sMixin
+from sdcm.cluster_k8s.mini_k8s import MinikubeK8sMixin
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR
 from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_string, \
