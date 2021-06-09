@@ -1,4 +1,4 @@
-test_duration: 4320
+test_duration: 1500
 
 cs_duration: '55m'
 cs_user_profiles:
@@ -7,7 +7,7 @@ cs_user_profiles:
 pre_create_schema: true
 
 user_profile_table_count: 5000
-batch_size: 200
+batch_size: 100
 
 n_loaders: 5
 n_monitor_nodes: 1
