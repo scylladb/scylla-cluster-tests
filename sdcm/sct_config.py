@@ -1347,11 +1347,6 @@ class SCTConfiguration(dict):
 
             self['user_prefix'] = "{}-{}".format(user_prefix, version_tag)[:35]
 
-        # 10) update target_upgrade_version automatically
-        new_scylla_repo = self.get('new_scylla_repo')
-        if new_scylla_repo and not self.get('target_upgrade_version'):
-            self['target_upgrade_version'] = get_branch_version(new_scylla_repo)
-
         # 11) validate that supported instance_provision selected
         if self.get('instance_provision') not in ['spot', 'on_demand', 'spot_fleet', 'spot_low_price', 'spot_duration']:
             raise ValueError(f"Selected instance_provision type '{self.get('instance_provision')}' is not supported!")
@@ -1483,7 +1478,7 @@ class SCTConfiguration(dict):
                             raise ValueError(f"Stress command parameter '{param_name}' contains profile "
                                              f"'{profile_path}' that does not exists under data_dir/")
 
-    def verify_configuration(self):  # pylint: disable=too-many-statements
+    def verify_configuration(self):
         """
         Check that all required values are set, and validated each value to be of correct type or value
         also check required options per backend
@@ -1492,9 +1487,24 @@ class SCTConfiguration(dict):
         :raises ValueError: on failures in validations
         :raise Exception: on unsupported backends
         """
+        self._check_unexpected_sct_variables()
+        self._validate_sct_variable_values()
+        backend = self.get('cluster_backend')
+        self._check_per_backend_required_values(backend)
+        if backend in ['aws']:
+            self._check_aws_multi_region_params()
+        self._validate_seeds_number()
+        if 'extra_network_interface' in self and len(self.region_names) >= 2:
+            raise ValueError("extra_network_interface isn't supported for multi region use cases")
+        self._check_partition_range_with_data_validation_correctness()
 
-        # pylint: disable=too-many-locals,too-many-branches
+    def _get_target_upgrade_version(self):
+        # 10) update target_upgrade_version automatically
+        new_scylla_repo = self.get('new_scylla_repo')
+        if new_scylla_repo and not self.get('target_upgrade_version'):
+            self['target_upgrade_version'] = get_branch_version(new_scylla_repo)
 
+    def _check_unexpected_sct_variables(self):
         # check if there are SCT_* environment variable which aren't documented
         config_keys = {opt['env'] for opt in self.config_options}
         env_keys = {o for o in os.environ.keys() if o.startswith('SCT_')}
@@ -1513,41 +1523,25 @@ class SCTConfiguration(dict):
                 res += "\t * '{}: {}'\n".format(option, self[option])
             raise ValueError(res)
 
-        # validate passed configuration
+    def _validate_sct_variable_values(self):
         for opt in self.config_options:
             if opt['name'] in self:
                 self._validate_value(opt)
 
-        # validated per backend
-        def _check_backend_defaults(backend, required_params):
-            opts = [o for o in self.config_options if o['name'] in required_params]
-            for _opt in opts:
-                assert _opt['name'] in self, "{} missing from config for {}".format(_opt['name'], backend)
+    def _check_aws_multi_region_params(self):
+        region_count = {}
+        for opt in self.multi_region_params:
+            val = self.get(opt)
+            if isinstance(val, str):
+                region_count[opt] = len(self.get(opt).split())
+            elif isinstance(val, list):
+                region_count[opt] = len(val)
+            else:
+                region_count[opt] = 1
+        if not all(region_count['region_name'] == x for x in region_count.values()):
+            raise ValueError("not all multi region values are equal: \n\t{}".format(region_count))
 
-        backend = self.get('cluster_backend')
-        if backend in self.available_backends:
-            _check_backend_defaults(backend, self.backend_required_params[backend])
-        else:
-            raise ValueError("Unsupported backend [{}]".format(backend))
-
-        # verify multi-region aws params
-        if backend in ['aws']:
-            region_count = {}
-            for opt in self.multi_region_params:
-                val = self.get(opt)
-                if isinstance(val, str):
-                    region_count[opt] = len(self.get(opt).split())
-                elif isinstance(val, list):
-                    region_count[opt] = len(val)
-                else:
-                    region_count[opt] = 1
-            if not all(region_count['region_name'] == x for x in region_count.values()):
-                raise ValueError("not all multi region values are equal: \n\t{}".format(region_count))
-
-        if 'extra_network_interface' in self and len(self.region_names) >= 2:
-            raise ValueError("extra_network_interface isn't supported for multi region use cases")
-
-        # validate seeds number
+    def _validate_seeds_number(self):
         seeds_num = self.get('seeds_num')
         assert seeds_num > 0, "Seed number should be at least one"
 
@@ -1555,6 +1549,18 @@ class SCTConfiguration(dict):
         assert not num_of_db_nodes or seeds_num <= num_of_db_nodes, \
             f"Seeds number ({seeds_num}) should be not more then nodes number ({num_of_db_nodes})"
 
+    def _check_per_backend_required_values(self, backend: str):
+        if backend in self.available_backends:
+            self._check_backend_defaults(backend, self.backend_required_params[backend])
+        else:
+            raise ValueError("Unsupported backend [{}]".format(backend))
+
+    def _check_backend_defaults(self, backend, required_params):
+        opts = [o for o in self.config_options if o['name'] in required_params]
+        for _opt in opts:
+            assert _opt['name'] in self, "{} missing from config for {}".format(_opt['name'], backend)
+
+    def _check_partition_range_with_data_validation_correctness(self):
         partition_range_with_data_validation = self.get('partition_range_with_data_validation')
         if partition_range_with_data_validation:
             error_message_template = "Expected format of 'partition_range_with_data_validation' parameter is: " \
@@ -1572,8 +1578,13 @@ class SCTConfiguration(dict):
             if int(partition_range_splitted[1]) < int(partition_range_splitted[0]):
                 raise ValueError(error_message_template.format('<max PK value> should be bigger then <min PK value>. '))
 
+    def verify_configuration_urls_validity(self):
+        """
+        Check if ami_id and repo urls are valid
+        """
+        self._get_target_upgrade_version()
         # verify that the AMIs used all have 'user_data_format_version' tag
-        if 'aws' in backend:
+        if 'aws' in self.get('cluster_backend'):
             ami_id_db_scylla = self.get('ami_id_db_scylla').split()
             region_names = self.region_names
             ami_id_db_oracle = self.get('ami_id_db_oracle').split()
