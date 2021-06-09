@@ -120,7 +120,6 @@ def get_scylla_urls_from_repository(repo_details):
             # We found the correct regex and we can continue to next URL
             break
 
-    urls = list(urls)
     ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=lambda _url: get_url_content(
         url=_url, return_url_data=False))
     return urls
