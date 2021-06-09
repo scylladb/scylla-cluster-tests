@@ -4096,7 +4096,17 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             if install_scylla:
                 self._scylla_install(node)
             else:
+                self.log.info("Waiting for preinstalled Scylla")
                 self._wait_for_preinstalled_scylla(node)
+                self.log.info("Done waiting for preinstalled Scylla")
+
+                if self.params.get('workaround_kernel_bug_for_iotune'):
+                    self.log.info("This AMI need to be tweaked for io.conf and properties")
+                    for conf in ['io.conf', 'io_properties.yaml']:
+                        node.remoter.send_files(src=os.path.join('./configurations/', conf),
+                                                # pylint: disable=not-callable
+                                                dst='/tmp/')
+                        node.remoter.run('sudo mv /tmp/{0} /etc/scylla.d/{0}'.format(conf))
             if node.is_nonroot_install:
                 node.stop_scylla_server(verify_down=False)
                 node.remoter.run(f'{INSTALL_DIR}/sbin/scylla_setup --nic {devname} --no-raid-setup --no-io-setup',
