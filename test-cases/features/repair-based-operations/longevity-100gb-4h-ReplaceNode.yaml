@@ -18,6 +18,7 @@ instance_type_db: 'i3.4xlarge'
 
 nemesis_class_name: 'NodeTerminateAndReplace'
 nemesis_interval: 1
+nemesis_during_prepare: false
 nemesis_filter_seeds: false
 seeds_num: 1
 
