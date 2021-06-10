@@ -15,6 +15,7 @@ repos:
             (?x)^(
                 tests/.*|
                 data_dir/scylla.yaml|
+                sdcm/k8s_configs/minio/templates/.*|
                 sdcm/k8s_configs/provisioner/templates/.*
             )$
     -   id: check-added-large-files
