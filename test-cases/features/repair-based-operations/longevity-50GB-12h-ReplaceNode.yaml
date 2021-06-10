@@ -18,6 +18,7 @@ instance_type_loader: 'c5.2xlarge'
 
 nemesis_class_name: 'NodeTerminateAndReplace'
 nemesis_interval: 5
+nemesis_during_prepare: false
 
 user_prefix: 'longevity-tls-50gb-3d'
 

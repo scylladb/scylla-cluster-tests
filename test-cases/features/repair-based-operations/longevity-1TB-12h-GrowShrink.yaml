@@ -24,6 +24,7 @@ scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/
 nemesis_class_name: 'GrowShrinkClusterNemesis'
 nemesis_add_node_cnt: 5
 nemesis_interval: 30
+nemesis_during_prepare: false
 nemesis_filter_seeds: false
 seeds_num: 2
 
