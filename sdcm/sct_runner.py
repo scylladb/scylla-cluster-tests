@@ -3,12 +3,14 @@ import random
 import sys
 import tempfile
 import time
+import datetime
 from enum import Enum
 from functools import lru_cache, cached_property
 from math import ceil
 from textwrap import dedent
 from typing import Optional
 from abc import ABC, abstractmethod
+import pytz
 
 import boto3
 from libcloud.common.google import ResourceNotFoundError
@@ -159,6 +161,7 @@ class SctRunner(ABC):
             LOGGER.error(f"SCT Runner image was not found in {self.region_name}! "
                          f"Use hydra create-runner-image --cloud-privider {self.cloud_provider} --region {self.region_name}")
             sys.exit(1)
+        lt_datetime = datetime.datetime.now(tz=pytz.utc)
         return self._create_instance(
             instance_type=self.instance_type(test_duration=test_duration),
             base_image=self._get_base_image(self.image),
@@ -169,6 +172,7 @@ class SctRunner(ABC):
                 {"Key": "RunByUser", "Value": get_username()},
                 {"Key": "keep", "Value": str(ceil(test_duration / 60) + 6)},
                 {"Key": "keep_action", "Value": "terminate"},
+                {"Key": "launch_time", "Value": lt_datetime.strftime("%B %d, %Y, %H:%M:%S")},
             ],
             instance_name=f"{self.image_name}-instance-{test_id[:8]}",
             region_az=region_az,
@@ -392,6 +396,7 @@ class GceSctRunner(SctRunner):
                 region_az = f"{self.SOURCE_IMAGE_REGION}-{self.availability_zone}"
             else:
                 region_az = self.SOURCE_IMAGE_REGION
+            lt_datetime = datetime.datetime.now(tz=pytz.utc)
             instance = self._create_instance(
                 instance_type="e2-standard-2",
                 base_image=self.BASE_IMAGE,
@@ -399,6 +404,7 @@ class GceSctRunner(SctRunner):
                            {"Key": "keep", "Value": "1"},
                            {"Key": "keep_action", "Value": "terminate"},
                            {"Key": "Version", "Value": str(self.VERSION)},
+                           {"Key": "launch_time", "Value": lt_datetime.strftime("%B %d, %Y, %H:%M:%S")},
                            ],
                 instance_name=instance_name,
                 region_az=region_az
