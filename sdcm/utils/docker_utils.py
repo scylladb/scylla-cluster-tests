@@ -14,6 +14,7 @@
 import os
 import re
 import logging
+import warnings
 from pprint import pformat
 from types import SimpleNamespace
 from typing import List, Optional, Union, Any, Tuple
@@ -25,7 +26,6 @@ from docker.models.containers import Container
 
 from sdcm.remote import LOCALRUNNER
 from sdcm.keystore import pub_key_from_private_key_file
-from sdcm.utils.common import deprecation
 from sdcm.utils.decorators import retrying, Retry
 from sdcm.wait import wait_for
 
@@ -36,6 +36,10 @@ LOGGER = logging.getLogger(__name__)
 
 # Monkey-patch `Container' class in `docker' module for prettier output.
 setattr(docker.models.containers.Container, "__str__", lambda self: f"<{self.short_id} {self.name}>")
+
+
+def deprecation(message):
+    warnings.warn(message, DeprecationWarning, stacklevel=3)
 
 
 class ContainerAlreadyRegistered(DockerException):

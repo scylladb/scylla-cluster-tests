@@ -48,6 +48,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from concurrent.futures.thread import _python_exit
 import hashlib
 from pathlib import Path
+import pytz
 
 import boto3
 from mypy_boto3_s3 import S3Client, S3ServiceResource
@@ -65,6 +66,7 @@ from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
 from sdcm import wait
 from sdcm.utils.ldap import LDAP_PASSWORD, LDAP_USERS, DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR
+from sdcm.utils.gce_utils import get_gce_service
 
 
 LOGGER = logging.getLogger('utils')
@@ -707,32 +709,64 @@ def clean_instances_aws(tags_dict, dry_run=False):
 
 def clean_sct_runners():
     LOGGER.info("Looking for SCT runner instances...")
-    all_instances = list_instances_aws(verbose=True)
     sct_runners = []
-
+    all_instances = list_instances_aws(verbose=True)
     for instance in all_instances:
         tags = aws_tags_to_dict(instance.get('Tags'))
         node_type = tags.get("NodeType", "")
         if node_type == "sct-runner":
-            sct_runners.append(instance)
+            sct_runners.append([instance, "aws"])
     if sct_runners:
         runners_info = []
-        for i in sct_runners:
+        for i, backend in sct_runners:
             runners_info.append((i['Placement']['AvailabilityZone'], i['InstanceId'], i['LaunchTime']))
+
         LOGGER.info("%s SCT Runners found:\n%s", len(sct_runners),
                     "\n".join(["[%s] (%s), launched at %s UTC" % i for i in runners_info]))
         LOGGER.info("Checking if there are expired/orphaned Runners...")
     else:
         LOGGER.info("No SCT runner instances found! Nothing to clean.")
 
+    gce_runner_instances = list_instances_gce(tags_dict={"NodeType": "sct-runner"})
+    for instance in gce_runner_instances:
+        sct_runners.append([instance, "gce"])
+
     utc_now = datetime.datetime.now(tz=datetime.timezone.utc)
     LOGGER.info("UTC now: %s", utc_now)
     runners_cleaned = []
-    for sct_runner in sct_runners:
-        tags = aws_tags_to_dict(sct_runner.get('Tags'))
-        keep = tags.get("keep", "")
-        region = sct_runner['Placement']['AvailabilityZone'][:-1]
-        instance_id = sct_runner['InstanceId']
+
+    def terminate_runner_instance(backend, region, sct_runner):
+        if backend == 'aws':
+            client = boto3.client('ec2', region_name=region)
+            instance_id = sct_runner['InstanceId']
+            response = client.terminate_instances(InstanceIds=[instance_id])
+            LOGGER.debug("Result: %s\n", response['TerminatingInstances'])
+        elif backend == 'gce':
+            driver = get_gce_service(region)
+            LOGGER.debug(f"Destroy Node: {sct_runner.name}")
+            driver.destroy_node(sct_runner)
+        LOGGER.info("Done.")
+
+    for sct_runner, backend in sct_runners:
+        if backend == 'aws':
+            tags = aws_tags_to_dict(sct_runner.get('Tags'))
+            keep = tags.get("keep", "")
+            region = sct_runner['Placement']['AvailabilityZone'][:-1]
+            instance_id = sct_runner['InstanceId']
+            launch_time = sct_runner['LaunchTime']
+        else:
+            tags = gce_meta_to_dict(sct_runner.extra['metadata'])
+            keep = tags.get("keep", "")
+            region = sct_runner.extra['zone'].name
+            instance_id = sct_runner.id
+            if tags.get("launch_time") is None:
+                LOGGER.warning(f"Skipping gce instance ({sct_runner.name}) without launch_time!")
+                continue
+            launch_time = datetime.datetime.strptime(tags.get("launch_time"), "%B %d, %Y, %H:%M:%S")
+            launch_time = launch_time.replace(tzinfo=pytz.utc)
+            LOGGER.info(f"[{region}] {sct_runner.name}, launched at {tags.get('launch_time')} UTC")
+
+        seconds_running = (utc_now - launch_time).total_seconds()
         keep_hours = 0
         if "alive" in keep:
             LOGGER.warning(f"Skipping {instance_id} in {region}: keep={keep}")
@@ -743,15 +777,10 @@ def clean_sct_runners():
             except ValueError:
                 LOGGER.warning(f"keep value <{keep}> is invalid: should be a number or 'alive'!")
 
-        launch_time = sct_runner['LaunchTime']
-        seconds_running = (utc_now - launch_time).total_seconds()
         if not keep or seconds_running > keep_hours * 3600:
             LOGGER.info(f"[{region}] Runner instance '{instance_id}'<keep={keep}> that launched at '{launch_time}' UTC "
                         f"is unused/expired, cleaning ...")
-            client = boto3.client('ec2', region_name=region)
-            response = client.terminate_instances(InstanceIds=[sct_runner['InstanceId']])
-            LOGGER.info("Done.")
-            LOGGER.debug("Result: %s\n", response['TerminatingInstances'])
+            terminate_runner_instance(backend, region, sct_runner)
             runners_cleaned.append(sct_runner)
     if runners_cleaned:
         LOGGER.info("Cleaned '%s' runners.", len(runners_cleaned))
