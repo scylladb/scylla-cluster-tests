@@ -873,6 +873,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_terminate_and_replace_node(self):  # pylint: disable=invalid-name
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
         self._set_current_disruption('TerminateAndReplaceNode %s' % self.target_node)
+        # node_to_terminate and replace must not be the only seed in cluster
+        num_of_seed_nodes = len(self.cluster.seed_nodes)
+        if self.target_node.is_seed and num_of_seed_nodes < 2:
+            raise UnsupportedNemesis(
+                "Removing the only seed node is not yet supported. At least one node should be in cluster")
         old_node_ip = self.target_node.ip_address
         old_node_is_seed = self.target_node.is_seed
         InfoEvent(message='StartEvent - Terminate node and wait 5 minutes').publish()
