@@ -2711,7 +2711,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         status : expected values: "start" or "finish"
         """
         patt = re.compile('RESHARD|RESHAP')
-        result = self.run_nodetool("compactionstats")
+        result = self.run_nodetool("compactionstats", publish_event=False)
         found = patt.search(result.stdout)
         # wait_for_status=='finish': If 'RESHARD' is not found in the compactionstats output, return True -
         # means resharding was finished
