@@ -5437,11 +5437,14 @@ class LocalNode(BaseNode):
         super().__init__(name=name, parent_cluster=parent_cluster, ssh_login_info=ssh_login_info,
                          base_logdir=base_logdir, node_prefix=node_prefix, dc_idx=dc_idx, rack=rack)
 
+    def _init_port_mapping(self):
+        pass
+
     def _init_remoter(self, ssh_login_info):
         self.remoter = LOCALRUNNER
 
     def _refresh_instance_state(self):
-        return '127.0.0.1', '127.0.0.1'
+        return ['127.0.0.1'], ['127.0.0.1']
 
     def set_keep_alive(self):
         pass
