@@ -2025,7 +2025,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         See https://docs.scylladb.com/operating-scylla/procedures/cluster-management/clear_data/
         """
         clean_commands_list = [
-            "sudo rm -rf /var/lib/scylla/data",
+            "sudo rm -rf /var/lib/scylla/data/*",
             "sudo find /var/lib/scylla/commitlog -type f -delete",
             "sudo find /var/lib/scylla/hints -type f -delete",
             "sudo find /var/lib/scylla/view_hints -type f -delete"
