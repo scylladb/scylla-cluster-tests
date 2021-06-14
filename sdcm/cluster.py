@@ -4783,6 +4783,7 @@ class BaseLoaderSet():
                     self.log.warning('Terminate gemini on node %s:\n%s', loader, kill_result)
 
     @staticmethod
+    @retrying(n=5)
     def install_scylla_bench(node):
         if node.distro.is_rhel_like:
             node.remoter.sudo("yum install -y git")
@@ -4798,7 +4799,7 @@ class BaseLoaderSet():
             echo 'export GOPATH=$HOME/go' >> $HOME/.bash_profile
             echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bash_profile
             source $HOME/.bash_profile
-            go get -u github.com/scylladb/scylla-bench
+            go get -v -u github.com/scylladb/scylla-bench
         """))
 
 
