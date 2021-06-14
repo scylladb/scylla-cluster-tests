@@ -579,7 +579,6 @@ class GrafanaSnapshot(GrafanaEntity):
                     snapshots.append(dashboard.get_snapshot(self.remote_browser.browser))
                 except Exception as details:  # pylint: disable=broad-except
                     LOGGER.error("Error get snapshot %s: %s", dashboard.name, details)
-
             LOGGER.info(snapshots)
             return snapshots
 
