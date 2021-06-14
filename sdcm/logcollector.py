@@ -552,6 +552,9 @@ class GrafanaSnapshot(GrafanaEntity):
             return snapshots
         try:
             self.remote_browser = RemoteBrowser(node)
+            monitoring_ui.Login(self.remote_browser.browser,
+                                ip=normalize_ipv6_url(node.grafana_address),
+                                port=self.grafana_port).use_default_creds()
             for dashboard in self.grafana_dashboards:
                 dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=normalize_ipv6_url(node.grafana_address),
                                                                     uid="-".join([dashboard.name, version]))

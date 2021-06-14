@@ -13,6 +13,45 @@ from sdcm.utils.common import get_test_name
 
 LOGGER = logging.getLogger(__name__)
 UI_ELEMENT_LOAD_TIMEOUT = 180
+GRAFANA_USERNAME = "admin"
+GRAFANA_PASSWORD = "admin"
+
+
+class Login:
+    path = "http://{ip}:{port}/login"
+    username_locator = (By.XPATH, "//input[@name='user']")
+    password_locator = (By.XPATH, "//input[@name='password']")
+    login_button = (By.XPATH, "//button/span[contains(text(), 'Log in')]")
+    skip_button = (By.XPATH, "//button/span[contains(text(), 'Skip')]")
+
+    def __init__(self, remote_browser, ip, port):
+        self.browser = remote_browser
+        LOGGER.info(f"open url: {self.path.format(ip=ip, port=port)}")
+        self.browser.get(self.path.format(ip=ip, port=port))
+
+    def use_default_creds(self):
+        LOGGER.info(f"Login to grafana with default credentials")
+        try:
+            WebDriverWait(self.browser, UI_ELEMENT_LOAD_TIMEOUT).until(
+                EC.visibility_of_element_located(self.username_locator))
+            username_element: WebElement = self.browser.find_element(*self.username_locator)
+            password_element: WebElement = self.browser.find_element(*self.password_locator)
+            username_element.clear()
+            username_element.send_keys(GRAFANA_USERNAME)
+            password_element.clear()
+            password_element.send_keys(GRAFANA_PASSWORD)
+            login_button: WebElement = self.browser.find_element(*self.login_button)
+            login_button.click()
+            self.skip_set_new_password()
+            LOGGER.info(f"Logged in succesful")
+        except Exception as details:  # pylint: disable=broad-except
+            LOGGER.error(f"Authentication failed: {details}")
+
+    def skip_set_new_password(self):
+        WebDriverWait(self.browser, UI_ELEMENT_LOAD_TIMEOUT).until(
+            EC.visibility_of_element_located(self.skip_button))
+        skip_element: WebElement = self.browser.find_element(*self.skip_button)
+        skip_element.click()
 
 
 class Panel:
@@ -44,7 +83,8 @@ class Panel:
 
 class Snapshot:
     locators_sequence = [
-        (By.XPATH, """//div[contains(@class, "navbar-buttons--actions")]"""),
+        (By.XPATH,
+         """/html/body/grafana-app/div/div/react-container/div/div[1]/div[1]/div[4]/div/button"""),  # full xpath is set, no any explicit ids.
         (By.XPATH, """//ul/li[contains(text(), "Snapshot")]"""),
         (By.XPATH, """//button//span[contains(text(), "Publish to snapshot.raintank.io")]"""),
         (By.XPATH, """//a[contains(@href, "https://snapshot.raintank.io")]""")
@@ -63,6 +103,7 @@ class Snapshot:
         :rtype: {str}
         """
         for element in self.locators_sequence[:-1]:
+            LOGGER.debug(f"Search element '{element}'")
             WebDriverWait(remote_browser, UI_ELEMENT_LOAD_TIMEOUT).until(EC.visibility_of_element_located(element))
             found_element = remote_browser.find_element(*element)
             found_element.click()
@@ -79,7 +120,7 @@ class Dashboard:
     name: str
     path: str
     resolution: str
-    scroll_ready_locator: Tuple[By, str]
+    scroll_ready_locator: Tuple[By, str] = (By.XPATH, "//div[@class='scrollbar-view']")
     panels: List[Panel]
     scroll_step: int = 1000
 
@@ -107,7 +148,6 @@ class OverviewDashboard(Dashboard):
     name = 'overview'
     path = 'd/overview-{version}/scylla-{dashboard_name}'
     resolution = '1920px*4000px'
-    scroll_ready_locator = (By.XPATH, "//div[@class='view']")
     panels = [Panel("Writes"),
               Panel("Write Latencies"),
               Panel("Read/Write Timeouts by DC")]
@@ -120,7 +160,6 @@ class ServerMetricsNemesisDashboard(Dashboard):
     name = f'{test_name}scylla-per-server-metrics-nemesis'
     path = 'dashboard/db/{dashboard_name}-{version}'
     resolution = '1920px*7000px'
-    scroll_ready_locator = (By.XPATH, "//div[@class='view']")
     panels = [Panel("Total Requests"),
               Panel("Load per Instance"),
               Panel("Requests Served per Instance"),
@@ -135,7 +174,6 @@ class AlternatorDashboard(Dashboard):
     name = 'alternator'
     path = 'd/alternator-{version}/{dashboard_name}'
     resolution = '1920px*4000px'
-    scroll_ready_locator = (By.XPATH, "//div[@class='view']")
     panels = [Panel("Total Actions"),
               Panel("Scan by Instance"),
               Panel("Completed GetItem"),
