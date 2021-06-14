@@ -6,6 +6,7 @@ def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCl
 def call(Map pipelineParams) {
 
     def builder = getJenkinsLabels(params.backend, params.aws_region)
+    def functional_test = pipelineParams.functional_test
 
     pipeline {
         agent {
@@ -173,7 +174,7 @@ def call(Map pipelineParams) {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: testRunTimeout, unit: 'MINUTES') {
-                                        runSctTest(params, builder.region)
+                                        runSctTest(params, builder.region, functional_test)
                                     }
                                 }
                             }
