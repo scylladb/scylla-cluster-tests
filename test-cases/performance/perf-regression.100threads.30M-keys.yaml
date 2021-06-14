@@ -1,6 +1,6 @@
 test_duration: 300
 
-stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=70 -pop seq=1..30000000"
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=80 -pop seq=1..30000000"
 prepare_write_cmd: "cassandra-stress write no-warmup cl=QUORUM n=30000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=100 -pop seq=1..30000000"
 stress_cmd_r: "cassandra-stress read no-warmup cl=QUORUM duration=50m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=70 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
 stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=50m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=70 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
@@ -22,3 +22,10 @@ store_perf_results: true
 use_mgmt: false
 send_email: true
 email_recipients: ['roy@scylladb.com']
+
+regions_data:
+  us-east-1: # US East (N. Virginia)
+    ami_id_loader: 'ami-0a14770b684e1a0cd' # Loader dedicated AMI v16-temp by Roy to test non-shard-aware driver
+    ami_id_monitor: 'ami-02eac2c0129f6376b' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
+    backup_bucket_location: 'manager-backup-tests-us-east-1'
+
