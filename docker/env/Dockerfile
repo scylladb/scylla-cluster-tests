@@ -39,6 +39,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
         sudo \
         unzip \
         wget \
+        psmisc \
+        procps \
         docker-ce-cli && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
