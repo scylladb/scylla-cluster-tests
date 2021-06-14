@@ -358,32 +358,6 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         EksClusterCleanupMixin.destroy(self)
         self.stop_token_update_thread()
 
-    @property
-    def k8s_monitoring_external_ip(self) -> str:
-        if self.USE_MONITORING_EXPOSE_SERVICE:
-            return self.k8s_monitoring_prometheus_expose_service.service_ip
-        # Return any IP of the monitoring pod's hosting node
-        for ip_type in ("ExternalIP", "InternalIP"):
-            cmd = (
-                f"get node --no-headers "
-                f"-l {self.POOL_LABEL_NAME}={self.MONITORING_POOL_NAME} "
-                "-o jsonpath='{.items[*].status.addresses[?(@.type==\"" + ip_type + "\")].address}'"
-            )
-            if ip := self.kubectl(cmd, namespace="monitoring").stdout:
-                return ip
-        # Must not be reached but exists for safety of code logic
-        # the only comsumer which is '_check_kubernetes_monitoring_health'
-        # will reuse this value in it's error event reporting.
-        return "no_ip_detected"
-
-    @property
-    def k8s_monitoring_external_port(self) -> int:
-        if self.USE_MONITORING_EXPOSE_SERVICE:
-            # NOTE: direct connection to a prometheus pod via ELB service
-            return 9090
-        # NOTE: '30090' is node's port that redirects traffic to pod's port 9090
-        return 30090
-
     def get_ec2_instance_by_id(self, instance_id):
         return boto3.resource('ec2', region_name=self.region_name).Instance(id=instance_id)
 
