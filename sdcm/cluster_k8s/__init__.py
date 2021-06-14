@@ -766,7 +766,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             helm_values.set('alertmanager.alertmanagerSpec', monitoring_affinity_rules)
             helm_values.set('prometheusOperator', monitoring_affinity_rules)
             prometheus_values = {
-                'prometheusSpec': monitoring_affinity_rules,
+                'prometheusSpec': {
+                    'affinity': monitoring_affinity_rules.get('affinity', {}),
+                    # NOTE: set following values the same as in SCT (standalone) monitoring
+                    'scrapeInterval': '20s',
+                    'scrapeTimeout': '15s',
+                },
                 'service': {
                     # NOTE: required for out-of-K8S-cluster access
                     # nodeIp:30090 will redirect traffic to prometheusPod:9090
