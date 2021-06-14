@@ -2135,88 +2135,23 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
             self._check_kubernetes_monitoring_health()
         super().check_cluster_health()
 
-    def _check_kubernetes_monitoring_health(self, max_diff=0.1):
-        from sdcm.cluster import Setup
-
+    def _check_kubernetes_monitoring_health(self):
         self.log.debug('Check kubernetes monitoring health')
-
-        kubernetes_prometheus_host = None
-        kubernetes_prometheus_port = None
         try:
-            kubernetes_prometheus_host = self.k8s_cluster.k8s_monitoring_node_ip
-            kubernetes_prometheus_port = self.k8s_cluster.k8s_prometheus_external_port
             kubernetes_prometheus = PrometheusDBStats(
-                host=kubernetes_prometheus_host,
-                port=kubernetes_prometheus_port,
+                host=self.k8s_cluster.k8s_monitoring_node_ip,
+                port=self.k8s_cluster.k8s_prometheus_external_port,
             )
         except Exception as exc:
             ClusterHealthValidatorEvent.MonitoringStatus(
                 error=f'Failed to connect to kubernetes prometheus server at '
-                      f'{kubernetes_prometheus_host}:{kubernetes_prometheus_port},'
+                      f'{self.k8s_cluster.k8s_monitoring_node_ip}:'
+                      f'{self.k8s_cluster.k8s_prometheus_external_port},'
                       f' due to the: \n'
-                      ''.join(traceback.format_exception(type(exc), exc, exc.__traceback__))).publish()
-
-            ClusterHealthValidatorEvent.Done(message="Kubernetes monitoring health check finished").publish()
-            return
-
-        monitoring_prometheus_host = None
-        try:
-            monitoring_prometheus_host = Setup.tester_obj().monitors.nodes[0].external_address
-            monitoring_prometheus = PrometheusDBStats(host=monitoring_prometheus_host)
-        except Exception as exc:
-            ClusterHealthValidatorEvent.MonitoringStatus(
-                error=f'Failed to connect to monitoring prometheus server at {monitoring_prometheus_host},'
-                      f' due to the: {exc}').publish()
-
-            ClusterHealthValidatorEvent.Done(message="Kubernetes monitoring health check finished").publish()
-            return
-
-        end_time = time.time()
-        start_time = end_time - 60 * 30
-
-        @timeout(timeout=10, message='Getting stats from prometheus')
-        def average(stat_method, params):
-            data = stat_method(*params)
-            if not data:
-                return 0
-            return sum([int(val) for _, val in data if val.isdigit()]) / len(data)
-
-        def get_stat(name, source, method_name, params):
-            try:
-                return average(getattr(source, method_name), params)
-            except Exception as exc:
-                ClusterHealthValidatorEvent.MonitoringStatus(
-                    error=f'Failed to get data from {name}: {exc}').publish()
-                ClusterHealthValidatorEvent.Done(message="Kubernetes monitoring health check finished").publish()
-                return
-
-        errors = []
-        for method_name, metric_params in {
-            'get_latency': [start_time, end_time, "read"],
-            'get_throughput': [start_time, end_time],
-        }.items():
-            val1 = kubernetes_data = get_stat(
-                'kubernetes monitoring', kubernetes_prometheus, method_name, metric_params)
-            val2 = monitoring_data = get_stat('sct monitoring', monitoring_prometheus, method_name, metric_params)
-
-            if val2 is None or val1 is None:
-                return
-
-            if val2 == 0:
-                if val1 == 0:
-                    continue
-                else:
-                    val2, val1 = val1, val2
-
-            if (val2 - val1) / val2 > val2 * max_diff:
-                errors.append(
-                    f'Metric {method_name} on sct monitoring {monitoring_data}, '
-                    f'which is more than 1% different from kubernetes monitoring result {kubernetes_data}')
-
-        for error in errors:
-            ClusterHealthValidatorEvent.MonitoringStatus(error=error).publish()
-
-        ClusterHealthValidatorEvent.Done(message="Kubernetes monitoring health check finished").publish()
+                      ''.join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+            ).publish()
+        ClusterHealthValidatorEvent.Done(
+            message="Kubernetes monitoring health check finished").publish()
 
     def restart_scylla(self, nodes=None, random=False):
         # TODO: add support for the "nodes" param to have compatible logic with
