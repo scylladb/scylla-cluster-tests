@@ -806,11 +806,27 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                     # NOTE: required for out-of-K8S-cluster access
                     # nodeIp:30090 will redirect traffic to prometheusPod:9090
                     'type': 'NodePort',
-                    'nodePort': 30090,
+                    'nodePort': self.k8s_prometheus_external_port,
                 },
             }
             helm_values.set('prometheus', prometheus_values)
-            helm_values.set('grafana', monitoring_affinity_rules)
+            grafana_values = {
+                'affinity': monitoring_affinity_rules.get('affinity', {}),
+                'service': {
+                    # NOTE: required for out-of-K8S-cluster access
+                    # k8sMonitoringNodeIp:30000 (30 thousands) will redirect traffic to
+                    # grafanaPod:3000 (3 thousands).
+                    'type': 'NodePort',
+                    'nodePort': self.k8s_grafana_external_port,
+                    'port': self.k8s_grafana_external_port,
+                },
+                'grafana.ini': {
+                    'users': {'viewers_can_edit': True},
+                    'auth': {'disable_login_form': True, 'disable_signout_menu': True},
+                    'auth.anonymous': {'enabled': True, 'org_role': 'Editor'},
+                },
+            }
+            helm_values.set('grafana', grafana_values)
             LOGGER.debug(f"Monitoring helm chart values are following: {helm_values.as_dict()}")
 
             repo_name = "prometheus-community"
@@ -851,6 +867,33 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                     namespace=namespace)
         time.sleep(10)
         self.check_k8s_monitoring_cluster_health(namespace=namespace)
+        LOGGER.info("K8S Prometheus is available at "
+                    f"{self.k8s_monitoring_node_ip}:{self.k8s_prometheus_external_port}")
+        LOGGER.info("K8S Grafana is available at "
+                    f"{self.k8s_monitoring_node_ip}:{self.k8s_grafana_external_port}")
+
+    @property
+    def k8s_monitoring_node_ip(self):
+        for ip_type in ("ExternalIP", "InternalIP"):
+            cmd = (
+                f"get node --no-headers "
+                f"-l {self.POOL_LABEL_NAME}={self.MONITORING_POOL_NAME} "
+                "-o jsonpath='{.items[*].status.addresses[?(@.type==\"" + ip_type + "\")].address}'"
+            )
+            if ip := self.kubectl(cmd, namespace="monitoring").stdout.strip():
+                return ip
+        # Must not be reached but exists for safety of code logic
+        return "no_ip_detected"
+
+    @property
+    def k8s_prometheus_external_port(self) -> int:
+        # NOTE: '30090' is node's port that redirects traffic to pod's port 9090
+        return 30090
+
+    @property
+    def k8s_grafana_external_port(self) -> int:
+        # NOTE: '30000' is node's port that redirects traffic to pod's port 3000
+        return 30000
 
     def check_k8s_monitoring_cluster_health(self, namespace: str):
         LOGGER.info("Check the monitoring cluster")
@@ -1066,24 +1109,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         cmd = f'create secret {secret_type} {secret_name} ' + \
               ' '.join([f'--from-file={fname}={os.path.join(path, fname)}' for fname in files])
         self.kubectl(cmd, namespace=namespace)
-
-    @property
-    def k8s_monitoring_prometheus_pod(self):
-        for pod in KubernetesOps.list_pods(self, namespace='monitoring'):
-            if pod.metadata.labels.get('operator.prometheus.io/name', None) == 'monitoring-kube-prometheus-prometheus':
-                return pod
-        return None
-
-    @property
-    def k8s_monitoring_external_ip(self) -> str:
-        if self.USE_MONITORING_EXPOSE_SERVICE:
-            return self.k8s_monitoring_prometheus_expose_service.service_ip
-        else:
-            return self.k8s_monitoring_prometheus_pod.status.pod_ip
-
-    @property
-    def k8s_monitoring_external_port(self) -> int:
-        return 9090
 
     def patch_kubectl_config(self):
         """
@@ -2148,8 +2173,8 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         kubernetes_prometheus_host = None
         kubernetes_prometheus_port = None
         try:
-            kubernetes_prometheus_host = self.k8s_cluster.k8s_monitoring_external_ip
-            kubernetes_prometheus_port = self.k8s_cluster.k8s_monitoring_external_port
+            kubernetes_prometheus_host = self.k8s_cluster.k8s_monitoring_node_ip
+            kubernetes_prometheus_port = self.k8s_cluster.k8s_prometheus_external_port
             kubernetes_prometheus = PrometheusDBStats(
                 host=kubernetes_prometheus_host,
                 port=kubernetes_prometheus_port,
