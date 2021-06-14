@@ -1749,22 +1749,29 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._mgmt_backup(backup_specific_tables=False)
 
     def _mgmt_backup(self, backup_specific_tables):
-        # TODO: When cloud backup is supported - add this to the below 'if' statement:
-        #  and not self.cluster.params.get('use_cloud_manager')
-        if not self.cluster.params.get('use_mgmt'):
+        if not self.cluster.params.get('use_mgmt') and not self.cluster.params.get('use_cloud_manager'):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
-        if not self.cluster.params.get('backup_bucket_location'):
-            raise UnsupportedNemesis('backup bucket location configuration is not defined!')
-
         mgr_cluster = self.cluster.get_cluster_manager()
-        backup_bucket_backend = self.cluster.params.get("backup_bucket_backend")
-        backup_bucket_location = self.cluster.params.get("backup_bucket_location")
-        bucket_name = f"{backup_bucket_backend}:{backup_bucket_location.split()[0]}"
+        if self.cluster.params.get('use_cloud_manager'):
+            auto_backup_task = mgr_cluster.backup_task_list[0]
+            #  An example of the auto generated backup task of cloud manager is:
+            #  │ backup/8e40b8b4-5394-42d3-9884-a4ce8ab69687
+            #  │ --dc 'AWS_US_EAST_1' -L AWS_US_EAST_1:s3:scylla-cloud-backup-9952-10120-4q4w4d --retention 14
+            #  --rate-limit AWS_US_EAST_1:100 --snapshot-parallel '<nil>' --upload-parallel '<nil>'
+            #  │ 06 Jun 21 18:10:05 UTC (+1d)  │ NEW
+            location = auto_backup_task.arguments.split('-L')[1].split()[0]
+        else:
+            if not self.cluster.params.get('backup_bucket_location'):
+                raise UnsupportedNemesis('backup bucket location configuration is not defined!')
+
+            backup_bucket_backend = self.cluster.params.get("backup_bucket_backend")
+            backup_bucket_location = self.cluster.params.get("backup_bucket_location")
+            location = f"{backup_bucket_backend}:{backup_bucket_location.split()[0]}"
         if backup_specific_tables:
             non_test_keyspaces = self.cluster.get_test_keyspaces()
-            mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ], keyspace_list=non_test_keyspaces)
+            mgr_task = mgr_cluster.create_backup_task(location_list=[location, ], keyspace_list=non_test_keyspaces)
         else:
-            mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ])
+            mgr_task = mgr_cluster.create_backup_task(location_list=[location, ])
 
         assert mgr_task is not None, "Backup task wasn't created"
 
