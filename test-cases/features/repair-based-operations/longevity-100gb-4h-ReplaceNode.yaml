@@ -20,7 +20,7 @@ nemesis_class_name: 'NodeTerminateAndReplace'
 nemesis_interval: 1
 nemesis_during_prepare: false
 nemesis_filter_seeds: false
-seeds_num: 1
+seeds_num: 3
 
 user_prefix: 'longevity-100gb-4h'
 space_node_threshold: 64424
