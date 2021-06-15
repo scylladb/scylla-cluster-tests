@@ -4753,7 +4753,7 @@ class BaseLoaderSet():
             key = line[:split_idx].strip().lower()
             value = line[split_idx + 1:].split()[0].replace(",", "")
             results[key] = value
-            match = re.findall(r'.*READ:(\d+), WRITE:(\d+)]', line)
+            match = re.findall(r'\[READ:\s([\d,]+\.\d+)\sms,\sWRITE:\s([\d,]+\.\d)\sms\]', line)
             if match:  # parse results for mixed workload
                 results['%s read' % key] = match[0][0]
                 results['%s write' % key] = match[0][1]

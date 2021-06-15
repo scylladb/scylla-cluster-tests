@@ -16,6 +16,7 @@
 
 import os
 import time
+
 import yaml
 
 from sdcm.tester import ClusterTester
@@ -34,6 +35,9 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
     str_pattern = '%8s%16s%10s%14s%16s%12s%12s%14s%16s%16s'
     ops_threshold_prc = 200
+    start_ops = 10_000
+    throttle_step = 10_000
+    max_ops = 200_000
 
     def __init__(self, *args):
         # need to remove the email_data.json file, as in the builders, it will accumulate and it will send multiple
@@ -166,7 +170,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
                                          extra_time_to_expiration=60):
             self.loaders.kill_cassandra_stress_thread()
 
-    def preload_data(self):
+    def preload_data(self, compaction_strategy=None):
         # if test require a pre-population of data
         prepare_write_cmd = self.params.get('prepare_write_cmd')
         if prepare_write_cmd:
@@ -184,6 +188,9 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
                 if self.params.get('round_robin'):
                     self.log.debug('Populating data using round_robin')
                     params.update({'stress_num': 1, 'round_robin': True})
+                if compaction_strategy:
+                    self.log.debug('Next compaction strategy will be used %s', compaction_strategy)
+                    params['compaction_strategy'] = compaction_strategy
 
                 for stress_cmd in prepare_write_cmd:
                     params.update({'stress_cmd': stress_cmd})

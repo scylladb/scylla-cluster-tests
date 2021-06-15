@@ -1660,7 +1660,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
 
     # pylint: disable=too-many-arguments,too-many-return-statements
-    def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='', # pylint: disable=too-many-arguments
+    def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',  # pylint: disable=too-many-arguments
                           round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, compaction_strategy='',
                           use_single_loader=False,
                           stop_test_on_failure=True):
@@ -1670,7 +1670,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         params = dict(stress_cmd=stress_cmd, duration=duration, stress_num=stress_num, keyspace_num=keyspace_num,
                       keyspace_name=keyspace_name, profile=profile, prefix=prefix, round_robin=round_robin,
-                      stats_aggregate_cmds=stats_aggregate_cmds)
+                      stats_aggregate_cmds=stats_aggregate_cmds, use_single_loader=use_single_loader)
 
         if 'cassandra-stress' in stress_cmd:  # cs cmdline might started with JVM_OPTION
             params['stop_test_on_failure'] = stop_test_on_failure
@@ -1696,7 +1696,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         else:
             raise ValueError(f'Unsupported stress command: "{stress_cmd[:50]}..."')
 
-    def run_stress_cassandra_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None,  # pylint: disable=too-many-arguments
+    def run_stress_cassandra_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None,  # pylint: disable=too-many-arguments,too-many-locals
                                     prefix='',
                                     round_robin=False, stats_aggregate_cmds=True, keyspace_name=None,
                                     compaction_strategy='',

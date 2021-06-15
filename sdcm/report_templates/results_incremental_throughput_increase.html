@@ -1,0 +1,58 @@
+{% extends 'results_base_custom.html' %}
+{% block body %}
+    {% block title %}
+    <h3>Test: {{ test_name }}</h3>
+    {% endblock %}
+    <h3>
+        <span>Test start time: </span>
+        <span class="blue">{{ test_details.pop('start_time') }}</span>
+        <br>
+        <span>Scylla Server Version: </span>
+        <span class="blue">{{ test_details.pop('scylla_version') }}</span>
+    </h3>
+    <div>
+        <span> Setup Details: </span>
+        <ul>
+        {% for key, val in test_details.items()%}
+            <li>
+                {{ key }}: <span class="blue"> {{ val }} </span>
+            </li>
+        {% endfor %}
+        </ul>
+    </div>
+    <div>
+        <table id="results_table">
+            <th> Operation per seconds (KOps) </th>
+            <th> Latency 95th percintile (ms) </th>
+            {% if "latency 95th percentile read" in stats[0] %}
+                <th> Latency 95th percintile read (ms) </th>
+            {% endif %}
+            {% if "latency 95th percentile write" in stats[0] %}
+                <th> Latency 95th percintile write (ms) </th>
+            {% endif %}
+
+            {% for round_stat in stats %}
+            <tr>
+                <td>{{ round_stat['ops'] }}</td>
+                <td>{{ round_stat['latency 95th percentile'] }}</td>
+                {% if "latency 95th percentile read" in round_stat %}
+                    <td>{{ round_stat['latency 95th percentile read'] }}</td>
+                {% endif %}
+                {% if "latency 95th percentile write" in round_stat %}
+                    <td>{{ round_stat['latency 95th percentile write'] }}</td>
+                {% endif %}
+
+            </tr>
+            {% endfor %}
+        </table>
+
+    </div>
+    <div>
+        {% if screenshots %}
+            <h3>Grafana Screenshots:</h3>
+            {% for screenshot in screenshots %}
+                <img src="{{ screenshot }}"  height="50%" width="50%">
+            {% endfor %}
+        {% endif %}
+    </div>
+{% endblock %}

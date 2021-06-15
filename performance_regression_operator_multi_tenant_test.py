@@ -104,7 +104,7 @@ class PerformanceRegressionOperatorMultiTenantTest(PerformanceRegressionTest):
                           scylla_cluster_stats.db_cluster.name)
             scylla_cluster_stats.wait_no_compactions_running(*args, **kwargs)
 
-    def preload_data(self):
+    def preload_data(self, compaction_strategy=None):
         def _preload_data(scylla_cluster_stats):
             prepare_write_cmd = scylla_cluster_stats.params.get('prepare_write_cmd')
             db_cluster_name = scylla_cluster_stats.db_cluster.name
