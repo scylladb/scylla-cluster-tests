@@ -138,6 +138,10 @@ class KclStressEvent(StressEvent, abstract=True):
 KclStressEvent.add_stress_subevents(failure=Severity.ERROR)
 
 
+class NoSQLBenchStressEvent(StressEvent):
+    ...
+
+
 class CassandraStressLogEvent(LogEvent, abstract=True):
     IOException: Type[LogEventProtocol]
     ConsistencyError: Type[LogEventProtocol]

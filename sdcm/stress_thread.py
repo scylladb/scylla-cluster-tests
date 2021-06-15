@@ -290,8 +290,8 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
 class DockerBasedStressThread:
     # pylint: disable=too-many-instance-attributes
     def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, node_list=None,  # pylint: disable=too-many-arguments
-                 round_robin=False, params=None):
-        self.loader_set = loader_set
+                 round_robin=False, params=None, stop_test_on_failure=True):
+        self.loader_set: BaseLoaderSet = loader_set
         self.stress_cmd = stress_cmd
         self.timeout = timeout
         self.stress_num = stress_num
@@ -305,6 +305,7 @@ class DockerBasedStressThread:
         self.max_workers = 0
         self.shell_marker = generate_random_string(20)
         self.shutdown_timeout = 180  # extra 3 minutes
+        self.stop_test_on_failure = stop_test_on_failure
 
     def run(self):
         if self.round_robin:
