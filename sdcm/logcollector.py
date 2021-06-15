@@ -121,15 +121,20 @@ class BaseMonitoringEntity(BaseLogEntity):
         return BaseMonitorSet
 
     def get_monitoring_version(self, node):
-        basedir = self.get_monitoring_base_dir(node)
-        result = node.remoter.run(
-            f'ls {basedir} | grep scylla-monitoring-src', ignore_status=True, verbose=False)
-        name = result.stdout.strip()
-        if not name:
-            LOGGER.error("Dir with scylla monitoring stack was not found")
+        try:
+            basedir = self.get_monitoring_base_dir(node)
+            result = node.remoter.run(
+                f'ls {basedir} | grep scylla-monitoring-src', ignore_status=True, verbose=False)
+            name = result.stdout.strip()
+            if not name:
+                LOGGER.error("Dir with scylla monitoring stack was not found")
+                return None, None, None
+            result = node.remoter.run(
+                f"cat {basedir}/scylla-monitoring-src/monitor_version", ignore_status=True, verbose=False)
+        except Exception as details:
+            LOGGER.error(f"Failed to get monitoring version: {details}")
             return None, None, None
-        result = node.remoter.run(
-            f"cat {basedir}/scylla-monitoring-src/monitor_version", ignore_status=True, verbose=False)
+
         try:
             monitor_version, scylla_version = result.stdout.strip().split(':')
         except ValueError:
