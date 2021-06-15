@@ -23,6 +23,7 @@ from typing import Any
 from sdcm.loader import CassandraStressExporter
 from sdcm.cluster import BaseLoaderSet
 from sdcm.prometheus import nemesis_metrics_obj
+from sdcm.sct_events import Severity
 from sdcm.utils.common import FileFollowerThread, generate_random_string, get_profile_content
 from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS
 
@@ -39,11 +40,12 @@ def format_stress_cmd_error(exc: Exception) -> str:
 
 
 class CassandraStressEventsPublisher(FileFollowerThread):
-    def __init__(self, node: Any, cs_log_filename: str):
+    def __init__(self, node: Any, cs_log_filename: str, event_id: str = None):
         super().__init__()
 
         self.node = str(node)
         self.cs_log_filename = cs_log_filename
+        self.event_id = event_id
 
     def run(self) -> None:
         while not self.stopped():
@@ -56,6 +58,10 @@ class CassandraStressEventsPublisher(FileFollowerThread):
                     break
 
                 for pattern, event in CS_ERROR_EVENTS_PATTERNS:
+                    if self.event_id:
+                        # Connect the event to the stress load
+                        event.event_id = self.event_id
+
                     if pattern.search(line):
                         event.add_info(node=self.node, line=line, line_number=line_number).publish()
                         break  # Stop iterating patterns to avoid creating two events for one line of the log
@@ -178,24 +184,22 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
 
         result = None
 
-        CassandraStressEvent.start(node=node, stress_cmd=stress_cmd).publish()
         with CassandraStressExporter(instance_name=node.ip_address,
                                      metrics=nemesis_metrics_obj(),
                                      stress_operation=stress_cmd_opt,
                                      stress_log_filename=log_file_name,
                                      loader_idx=loader_idx, cpu_idx=cpu_idx), \
-                CassandraStressEventsPublisher(node=node, cs_log_filename=log_file_name):
+                CassandraStressEventsPublisher(node=node, cs_log_filename=log_file_name) as publisher, \
+                CassandraStressEvent(node=node, stress_cmd=self.stress_cmd,
+                                     log_file_name=log_file_name) as cs_stress_event:
+            publisher.event_id = cs_stress_event.event_id
             try:
                 result = node.remoter.run(cmd=node_cmd, timeout=self.timeout, log_file=log_file_name)
             except Exception as exc:
-                event_type = CassandraStressEvent.failure if self.stop_test_on_failure else CassandraStressEvent.error
-                event_type(node=node,
-                           stress_cmd=stress_cmd,
-                           log_file_name=log_file_name,
-                           errors=[format_stress_cmd_error(exc), ]).publish()
-        CassandraStressEvent.finish(node=node, stress_cmd=stress_cmd, log_file_name=log_file_name).publish()
+                cs_stress_event.severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR
+                cs_stress_event.add_error(errors=[format_stress_cmd_error(exc)])
 
-        return node, result
+        return node, result, cs_stress_event
 
     def run(self):
         if self.round_robin:
@@ -240,7 +244,7 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
         for future in concurrent.futures.as_completed(self.results_futures, timeout=self.timeout):
             results.append(future.result())
 
-        for _, result in results:
+        for _, result, event in results:
             if not result:
                 # Silently skip if stress command threw error, since it was already reported in _run_stress
                 continue
@@ -251,7 +255,9 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
                 if node_cs_res:
                     ret.append(node_cs_res)
             except Exception as exc:  # pylint: disable=broad-except
-                CassandraStressEvent.failure(node="", errors=[f"Failed to process stress summary due to {exc}", ])
+                event.add_error([f"Failed to process stress summary due to {exc}"])
+                event.severity = Severity.CRITICAL
+                event.event_error()
 
         return ret
 
@@ -264,7 +270,7 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
         for future in concurrent.futures.as_completed(self.results_futures, timeout=self.timeout):
             results.append(future.result())
 
-        for node, result in results:
+        for node, result, _ in results:
             if not result:
                 # Silently skip if stress command threw error, since it was already reported in _run_stress
                 continue

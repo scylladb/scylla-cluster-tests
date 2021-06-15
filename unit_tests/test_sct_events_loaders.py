@@ -60,40 +60,65 @@ class TestGeminiEvent(unittest.TestCase):
 
 
 class TestCassandraStressEvent(unittest.TestCase):
-    def test_subevents(self):
-        self.assertTrue(issubclass(CassandraStressEvent.failure, CassandraStressEvent))
-        self.assertTrue(issubclass(CassandraStressEvent.error, CassandraStressEvent))
-        self.assertFalse(hasattr(CassandraStressEvent, "timeout"))
-        self.assertTrue(issubclass(CassandraStressEvent.start, CassandraStressEvent))
-        self.assertTrue(issubclass(CassandraStressEvent.finish, CassandraStressEvent))
+    def test_continuous_event_with_errors(self):
+        begin_event_timestamp = 1623596860.1202102
+        cs_event = CassandraStressEvent(node="node", stress_cmd="stress_cmd",
+                                        log_file_name="log_file_name")
+        cs_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
+        begin_event = cs_event.begin_event(publish=False)
+        begin_event.timestamp = begin_event_timestamp
+        self.assertEqual(str(begin_event),
+                         "(CassandraStressEvent Severity.NORMAL) period_type=begin "
+                         "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd")
+        self.assertEqual(begin_event.timestamp, begin_event_timestamp)
+        self.assertEqual(begin_event, pickle.loads(pickle.dumps(begin_event)))
 
-    def test_without_errors(self):
-        event = CassandraStressEvent.error(node=[], stress_cmd="c-s", log_file_name="1.log")
-        self.assertEqual(event.severity, Severity.ERROR)
-        self.assertEqual(event.node, "[]")
-        self.assertEqual(event.stress_cmd, "c-s")
-        self.assertEqual(event.log_file_name, "1.log")
-        self.assertIsNone(event.errors)
-        event.event_id = "b8c1fc49-d5e0-4e98-80cc-e6bab0906e53"
-        self.assertEqual(str(event),
-                         "(CassandraStressEvent Severity.ERROR) period_type=not-set "
-                         "event_id=b8c1fc49-d5e0-4e98-80cc-e6bab0906e53: type=error node=[]\nstress_cmd=c-s")
-        self.assertEqual(event, pickle.loads(pickle.dumps(event)))
+        cs_event.add_error(errors=["error1", "error2"])
+        cs_event.severity = Severity.ERROR
 
-    def test_with_errors(self):
-        event = CassandraStressEvent.failure(node="node1", errors=["e1", "e2"])
-        self.assertEqual(event.severity, Severity.CRITICAL)
-        self.assertEqual(event.node, "node1")
-        self.assertIsNone(event.stress_cmd)
-        self.assertIsNone(event.log_file_name)
-        self.assertEqual(event.errors, ["e1", "e2"])
-        event.event_id = "a2a587ea-bb7c-41bd-b252-961bbf050255"
-        self.assertEqual(
-            str(event),
-            "(CassandraStressEvent Severity.CRITICAL) period_type=not-set "
-            "event_id=a2a587ea-bb7c-41bd-b252-961bbf050255: type=failure node=node1\ne1\ne2"
-        )
-        self.assertEqual(event, pickle.loads(pickle.dumps(event)))
+        cs_event.end_event(publish=False)
+        end_event_timestamp = 1623596860.1202102
+        cs_event.timestamp = end_event_timestamp
+        self.assertEqual(str(cs_event),
+                         "(CassandraStressEvent Severity.ERROR) period_type=end "
+                         "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd\nerrors:"
+                         "\n\nerror1\nerror2")
+        self.assertEqual(cs_event.timestamp, end_event_timestamp)
+
+        cs_event.add_error(["One more error"])
+        cs_event.severity = Severity.CRITICAL
+        cs_event.event_error(publish=False)
+        error_event_timestamp = 1623596860.1202102
+        cs_event.timestamp = error_event_timestamp
+        self.assertEqual(str(cs_event),
+                         "(CassandraStressEvent Severity.CRITICAL) period_type=one-time "
+                         "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd\n"
+                         "errors:\n\nerror1\nerror2\nOne more error")
+        self.assertEqual(cs_event.log_file_name, "log_file_name")
+        self.assertEqual(cs_event.timestamp, error_event_timestamp)
+        self.assertEqual(cs_event, pickle.loads(pickle.dumps(cs_event)))
+
+    def test_continuous_event_without_errors(self):
+        begin_event_timestamp = 1623596860.1202102
+        cs_event = CassandraStressEvent(node="node", stress_cmd="stress_cmd",
+                                        log_file_name="log_file_name")
+        cs_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
+        begin_event = cs_event.begin_event(publish=False)
+        begin_event.timestamp = begin_event_timestamp
+        self.assertEqual(str(begin_event),
+                         "(CassandraStressEvent Severity.NORMAL) period_type=begin "
+                         "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd")
+        self.assertEqual(begin_event.timestamp, begin_event_timestamp)
+        self.assertEqual(begin_event, pickle.loads(pickle.dumps(begin_event)))
+
+        cs_event.end_event(publish=False)
+        end_event_timestamp = 1623596860.1202102
+        cs_event.timestamp = end_event_timestamp
+        self.assertEqual(str(cs_event),
+                         "(CassandraStressEvent Severity.NORMAL) period_type=end "
+                         "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd")
+        self.assertEqual(cs_event.timestamp, end_event_timestamp)
+        self.assertEqual(cs_event, pickle.loads(pickle.dumps(cs_event)))
 
 
 class TestScyllaBenchEvent(unittest.TestCase):
