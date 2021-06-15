@@ -272,7 +272,18 @@ class ContinuousEvent(SctEvent, abstract=True):
             self.publish()
 
     def add_error(self, errors: Optional[List[str]]) -> None:
-        self.errors = errors
+        if not isinstance(self.errors, list):
+            self.errors = []
+
+        self.errors.extend(errors)
+
+    # TODO: rename function to "error" after the refactor will be done
+    def event_error(self, publish: bool = True):
+        self.timestamp = time.time()
+        self.period_type = EventPeriod.Informational.value
+        if publish:
+            self._ready_to_publish = True
+            self.publish()
 
 
 def add_severity_limit_rules(rules: List[str]) -> None:

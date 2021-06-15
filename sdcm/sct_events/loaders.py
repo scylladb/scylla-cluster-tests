@@ -58,21 +58,8 @@ class GeminiEvent(BaseStressEvent, abstract=True):
 GeminiEvent.add_stress_subevents(error=Severity.CRITICAL, warning=Severity.WARNING)
 
 
-class CassandraStressEvent(StressEvent, abstract=True):
-    failure: Type[StressEventProtocol]
-    error: Type[StressEventProtocol]
-    start: Type[StressEventProtocol]
-    finish: Type[StressEventProtocol]
-
-    @property
-    def msgfmt(self):
-        fmt = super(StressEvent, self).msgfmt + ": type={0.type} node={0.node}\n"
-        if self.errors:
-            return fmt + "{0.errors_formatted}"
-        return fmt + "stress_cmd={0.stress_cmd}"
-
-
-CassandraStressEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR)
+class CassandraStressEvent(StressEvent):
+    ...
 
 
 class ScyllaBenchEvent(StressEvent):
