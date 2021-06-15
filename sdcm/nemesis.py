@@ -2289,10 +2289,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # node_to_remove must be different than node
         verification_node = random.choice([n for n in self.cluster.nodes if n is not node_to_remove])
 
-        # node_to_remove must not be the only seed in cluster
+        # node_to_remove is single/last seed in cluster, before
+        # it will be terminated, choose new seed node
         num_of_seed_nodes = len(self.cluster.seed_nodes)
         if node_to_remove.is_seed and num_of_seed_nodes < 2:
-            raise UnsupportedNemesis("Removing the only seed node is not yet supported")
+            new_seed_node = random.choice([n for n in self.cluster.nodes if n is not node_to_remove])
+            new_seed_node.set_seed_flag(True)
+            self.cluster.update_seed_provider()
 
         # get node's host_id
         removed_node_status = self.cluster.get_node_status_dictionary(
@@ -2353,8 +2356,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
             # add new node
             new_node = self._add_and_init_new_cluster_node(rack=self.target_node.rack)
-            # in case the removed node was a seed
-            if node_to_remove.is_seed:
+            # in case the removed node was not last seed.
+            if node_to_remove.is_seed and num_of_seed_nodes > 1:
                 new_node.set_seed_flag(True)
                 self.cluster.update_seed_provider()
             # after add_node, the left nodes have data that isn't part of their tokens anymore.
