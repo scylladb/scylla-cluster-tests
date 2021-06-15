@@ -39,7 +39,7 @@ from typing import Optional, Union, List, Dict, Any, ContextManager, Type, Tuple
 import json
 import yaml
 import kubernetes as k8s
-from kubernetes.client import V1Container, V1ResourceRequirements
+from kubernetes.client import V1Container, V1ResourceRequirements, V1ConfigMap
 from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance, ResourceList, Subresource
 
 from invoke.exceptions import CommandTimedOut
@@ -1866,15 +1866,21 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
             changed = changed_bare.splitlines(keepends=True)
             diff = "".join(unified_diff(original, changed))
             LOGGER.debug("%s: cassandra-rackdc.properties has been updated:\n%s", self, diff)
-            config_map = self.k8s_cluster.k8s_core_v1_api.read_namespaced_config_map(
-                name='scylla-config',
-                namespace=self.namespace)
-            config_map.data.get('scylla.yaml')
-            config_map.data['cassandra-rackdc.properties'] = changed_bare
-            self.k8s_cluster.k8s_core_v1_api.patch_namespaced_config_map(
-                name='scylla-config',
-                namespace='scylla',
-                body=config_map)
+            config_map = self.scylla_config_map
+            if config_map:
+                config_map.data['cassandra-rackdc.properties'] = changed_bare
+                self.k8s_cluster.k8s_core_v1_api.patch_namespaced_config_map(
+                    name='scylla-config',
+                    namespace=self.namespace,
+                    body=config_map)
+            else:
+                self.k8s_cluster.k8s_core_v1_api.create_namespaced_config_map(
+                    namespace=self.namespace,
+                    body=V1ConfigMap(
+                        data={'cassandra-rackdc.properties': changed_bare},
+                        metadata={'name': 'scylla-config'}
+                    )
+                )
             self.restart_scylla()
             self.wait_for_nodes_up_and_normal()
 
