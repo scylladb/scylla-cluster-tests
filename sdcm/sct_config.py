@@ -1335,12 +1335,15 @@ class SCTConfiguration(dict):
 
         dict(name="bare_loaders", env="SCT_BARE_LOADERS", type=boolean,
              help="Don't install anything but collectd to the loaders during cluster setup"),
-
         dict(name="stress_image", env="SCT_STRESS_IMAGE", type=dict_or_str,
              help="Dict of the images to use for the stress tools"),
 
         dict(name="enable_argus", env="SCT_ENABLE_ARGUS", type=boolean,
              help="Control reporting to argus"),
+
+        dict(name="cs_populating_distribution", env="SCT_CS_POPULATING_DISTRIBUTION", type=str,
+             help="""set c-s parameter '-pop' with gauss/uniform distribution for
+             performance gradual throughtput grow tests"""),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',

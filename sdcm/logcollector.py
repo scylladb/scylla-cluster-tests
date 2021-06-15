@@ -960,6 +960,7 @@ class SCTLogCollector(LogCollector):
                 search_locally=True),
         FileLog(name=r'*debug.json',
                 search_locally=True),
+        FileLog(name='result_gradual_increase.log'),
     ]
     cluster_log_type = 'sct-runner'
     cluster_dir_prefix = 'sct-runner'

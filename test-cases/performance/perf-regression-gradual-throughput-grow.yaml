@@ -1,0 +1,35 @@
+test_duration: 1580
+
+
+
+
+prepare_write_cmd: "cassandra-stress write no-warmup cl=ALL n=$ROW_NUMBER -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=$SEQUENCE"
+
+stress_cmd_m: ["cassandra-stress mixed 'ratio(write=1,read=1)' no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=$threads throttle=$throttle/s' -pop 'dist=$DIST_PARAMS' "]
+stress_cmd_w: ["cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=$threads throttle=$throttle/s' -pop 'dist=$DIST_PARAMS' "]
+stress_cmd_r: ["cassandra-stress read no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=$threads throttle=$throttle/s' -pop 'dist=$DIST_PARAMS' "]
+
+compaction_strategy: "LeveledCompactionStrategy"
+
+
+n_db_nodes: 3
+n_loaders: 3
+n_monitor_nodes: 1
+
+instance_type_loader: 'c5n.9xlarge'
+instance_type_monitor: 't3.large'
+instance_type_db: 'i3.4xlarge'
+
+user_prefix: 'perf-1tb-scylla-gradual-grow-throughput'
+space_node_threshold: 644245094
+ami_id_db_scylla_desc: 'VERSION_DESC'
+
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 5'
+backtrace_decoding: false
+
+use_mgmt: false
+
+store_perf_results: false
+send_email: true
+email_recipients: ['scylla-perf-results@scylladb.com']

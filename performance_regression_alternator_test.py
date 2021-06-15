@@ -68,7 +68,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                                 y_id varchar primary key,
                                 {fields});""")
 
-    def preload_data(self):
+    def preload_data(self, compaction_strategy=None):
         # if test require a pre-population of data
         prepare_write_cmd = self.params.get('prepare_write_cmd')
         if prepare_write_cmd:

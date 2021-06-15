@@ -31,6 +31,7 @@ from sdcm.send_email import Email, BaseEmailReporter
 from sdcm.sct_events import Severity
 from sdcm.utils.es_queries import QueryFilter, PerformanceFilterYCSB, PerformanceFilterScyllaBench, \
     PerformanceFilterCS, CDCQueryFilterCS, LatencyWithNemesisQueryFilter
+from sdcm.utils.common import format_timestamp
 from test_lib.utils import MagicList, get_data_by_path
 from .test import TestResultClass
 
@@ -1309,6 +1310,30 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         email_data = {'email_body': results,
                       'attachments': (),
                       'template': template}
+        self.save_email_data_file(subject, email_data, file_path='email_data.json')
+
+        return True
+
+
+class ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(BaseResultsAnalyzer):
+    """
+    Performance Analyzer for results with throughput and latency of gradual payload increase
+    """
+
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+        super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
+                         email_template_fp="results_incremental_throughput_increase.html", logger=logger, events=events)
+
+    def check_regression(self, test_name, test_results, test_details):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+        results = dict(
+            stats=test_results,
+            test_name=test_name,
+            test_details=test_details,
+            screenshots=test_details.pop("screenshots"),
+        )
+        subject = f"Performance Regression: {test_name} - {format_timestamp(test_details['start_time'])}"
+        email_data = {'email_body': results,
+                      'template': self._email_template_fp}
         self.save_email_data_file(subject, email_data, file_path='email_data.json')
 
         return True
