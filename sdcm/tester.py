@@ -46,6 +46,7 @@ from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.cluster_k8s import mini_k8s, gke, eks, LOADER_CLUSTER_CONFIG
 from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.full_scan_thread import FullScanThread
+from sdcm.nosql_thread import NoSQLBenchStressThread
 from sdcm.scylla_bench_thread import ScyllaBenchThread
 from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_network_configuration, get_ec2_services, \
     get_common_params, init_db_info_from_params, ec2_ami_get_root_device_name
@@ -1391,6 +1392,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             return self.run_ndbench_thread(**params)
         elif stress_cmd.startswith('hydra-kcl'):
             return self.run_hydra_kcl_thread(**params)
+        elif stress_cmd.startswith('nosqlbench'):
+            params['stop_test_on_failure'] = stop_test_on_failure
+            return self.run_nosqlbench_thread(**params)
         elif stress_cmd.startswith('table_compare'):
             return self.run_table_compare_thread(**params)
         else:
@@ -1484,6 +1488,26 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                stress_num=stress_num,
                                node_list=self.db_cluster.nodes,
                                round_robin=round_robin, params=self.params).run()
+
+    # pylint: disable=too-many-arguments
+    def run_nosqlbench_thread(self, stress_cmd, duration=None, stress_num=1, prefix='', round_robin=False,
+                              stats_aggregate_cmds=True, stop_test_on_failure=True, **_):
+
+        timeout = self.get_duration(duration)
+
+        if self.create_stats:
+            self.update_stress_cmd_details(stress_cmd, prefix, stresser="nosqlbench", aggregate=stats_aggregate_cmds)
+
+        stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
+        return NoSQLBenchStressThread(
+            loader_set=self.loaders,
+            stress_cmd=stress_cmd,
+            timeout=timeout,
+            stress_num=stress_num,
+            node_list=self.db_cluster.nodes,
+            round_robin=round_robin,
+            stop_test_on_failure=stop_test_on_failure,
+            params=self.params).run()
 
     # pylint: disable=too-many-arguments
     def run_table_compare_thread(self, stress_cmd, duration=None, stress_num=1, round_robin=False, **_):
