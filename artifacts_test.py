@@ -90,7 +90,7 @@ class ArtifactsTest(ClusterTester):
         the backend used.
         """
         describecluster_snitch = self.get_describecluster_info().snitch
-        with self.node.remote_manager_yaml(SCYLLA_YAML_PATH) as scylla_yaml:
+        with self.node.remote_scylla_yaml(SCYLLA_YAML_PATH) as scylla_yaml:
             scylla_yaml_snitch = scylla_yaml['endpoint_snitch']
         expected_snitches = BACKENDS[backend_name]
 
