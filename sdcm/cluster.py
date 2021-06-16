@@ -120,7 +120,6 @@ SCYLLA_DIR = "/var/lib/scylla"
 TEST_USER = 'scylla-test'
 INSTALL_DIR = f"/home/{TEST_USER}/scylladb"
 
-INSTANCE_PROVISION_ON_DEMAND = 'on_demand'
 SPOT_TERMINATION_CHECK_DELAY = 5
 
 LOGGER = logging.getLogger(__name__)

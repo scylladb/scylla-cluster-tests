@@ -37,7 +37,6 @@ from botocore.exceptions import WaiterError
 
 from sdcm import ec2_client, cluster
 from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
-from sdcm.cluster import INSTANCE_PROVISION_ON_DEMAND
 from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
 from sdcm.utils.common import list_instances_aws, get_ami_tags, MAX_SPOT_DURATION_TIME
@@ -49,6 +48,7 @@ from sdcm.test_config import TestConfig
 
 LOGGER = logging.getLogger(__name__)
 
+INSTANCE_PROVISION_ON_DEMAND = 'on_demand'
 INSTANCE_PROVISION_SPOT_FLEET = 'spot_fleet'
 INSTANCE_PROVISION_SPOT_LOW_PRICE = 'spot_low_price'
 INSTANCE_PROVISION_SPOT_DURATION = 'spot_duration'
