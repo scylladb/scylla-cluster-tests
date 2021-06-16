@@ -1680,3 +1680,12 @@ class SCTConfiguration(dict):
             ret += "{help_text}{name}: {default}\n\n".format(help_text=help_text, default=default, **opt)
 
         return ret
+
+
+def init_and_verify_sct_config() -> SCTConfiguration:
+    sct_config = SCTConfiguration()
+    sct_config.log_config()
+    sct_config.verify_configuration()
+    sct_config.verify_configuration_urls_validity()
+    sct_config.check_required_files()
+    return sct_config

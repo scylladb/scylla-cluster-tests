@@ -63,7 +63,7 @@ from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer, \
     LatencyDuringOperationsPerformanceAnalyzer
-from sdcm.sct_config import SCTConfiguration
+from sdcm.sct_config import init_and_verify_sct_config
 from sdcm.sct_events import Severity
 from sdcm.sct_events.setup import start_events_device, stop_events_device
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEvent, TestTimeoutEvent
@@ -400,11 +400,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         return os.path.join(os.path.expanduser(self.logdir), '.helm')
 
     def _init_params(self):
-        self.params = SCTConfiguration()
-        self.params.log_config()
-        self.params.verify_configuration()
-        self.params.verify_configuration_urls_validity()
-        self.params.check_required_files()
+        self.params = init_and_verify_sct_config()
 
     def _init_logging(self):
         self.log = logging.getLogger(self.__class__.__name__)
