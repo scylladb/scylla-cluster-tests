@@ -109,13 +109,9 @@ from sdcm.paths import (
 )
 
 
-CREDENTIALS = []
 DEFAULT_USER_PREFIX = getpass.getuser()
 # Test duration (min). Parameter used to keep instances produced by tests that
 # are supposed to run longer than 24 hours from being killed
-TASK_QUEUE = 'task_queue'
-RES_QUEUE = 'res_queue'
-WORKSPACE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 SCYLLA_DIR = "/var/lib/scylla"
 TEST_USER = 'scylla-test'
 INSTALL_DIR = f"/home/{TEST_USER}/scylladb"

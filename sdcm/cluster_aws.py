@@ -76,10 +76,6 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         region_names = params.region_names
         if len(credentials) > 1 or len(region_names) > 1:
             assert len(credentials) == len(region_names)
-        for idx, _ in enumerate(region_names):
-            credential = credentials[idx]
-            cluster.CREDENTIALS.append(credential)
-
         self._ec2_ami_id = ec2_ami_id
         self._ec2_subnet_id = ec2_subnet_id
         self._ec2_security_group_ids = ec2_security_group_ids
