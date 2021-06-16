@@ -13,6 +13,8 @@ nemesis_filter_seeds: false
 
 user_prefix: 'PR-provision-docker'
 
-scylla_version: 4.0.0
+scylla_version: 4.4.1
+scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/branch-2.0/latest/scylla-manager.repo'
+
 system_auth_rf: 0
 monitor_swap_size: 0
