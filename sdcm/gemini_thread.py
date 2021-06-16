@@ -19,14 +19,15 @@ import random
 import json
 import time
 
+from sdcm.sct_events import Severity
 from sdcm.utils.common import FileFollowerThread
-from sdcm.sct_events.loaders import GeminiEvent, GeminiLogEvent
+from sdcm.sct_events.loaders import GeminiStressEvent, GeminiStressLogEvent
 
 
 LOGGER = logging.getLogger(__name__)
 
 
-class NotGeminiErrorResult():  # pylint: disable=too-few-public-methods
+class NotGeminiErrorResult:  # pylint: disable=too-few-public-methods
     def __init__(self, error):
         self.exited = 1
         self.stdout = "n/a"
@@ -34,11 +35,12 @@ class NotGeminiErrorResult():  # pylint: disable=too-few-public-methods
 
 
 class GeminiEventsPublisher(FileFollowerThread):
-    def __init__(self, node, gemini_log_filename, verbose=False):
+    def __init__(self, node, gemini_log_filename, verbose=False, event_id=None):
         super().__init__()
         self.gemini_log_filename = gemini_log_filename
         self.node = str(node)
         self.verbose = verbose
+        self.event_id = event_id
 
     def run(self):
         while not self.stopped():
@@ -46,16 +48,16 @@ class GeminiEventsPublisher(FileFollowerThread):
                 time.sleep(0.5)
                 continue
             for line_number, line in enumerate(self.follow_file(self.gemini_log_filename), start=1):
-                GeminiLogEvent.geminievent(verbose=self.verbose).add_info(
-                    node=self.node,
-                    line=line,
-                    line_number=line_number,
-                ).publish(warn_not_ready=False)
+                gemini_event = GeminiStressLogEvent.GeminiEvent(verbose=self.verbose)
+                gemini_event.add_info(node=self.node, line=line, line_number=line_number)
+                gemini_event.event_id = self.event_id
+                gemini_event.publish(warn_not_ready=False)
+
                 if self.stopped():
                     break
 
 
-class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
+class GeminiStressThread:  # pylint: disable=too-many-instance-attributes
 
     def __init__(self, test_cluster, oracle_cluster, loaders, gemini_cmd, timeout=None, outputdir=None, params=None):  # pylint: disable=too-many-arguments
         self.loaders = loaders
@@ -112,27 +114,28 @@ class GeminiStressThread():  # pylint: disable=too-many-instance-attributes
                                      'gemini-l%s-%s.log' %
                                      (loader_idx, uuid.uuid4()))
         gemini_cmd = self._generate_gemini_command()
-
-        GeminiEvent.start(cmd=gemini_cmd).publish()
-        try:
-            with GeminiEventsPublisher(node=node, gemini_log_filename=log_file_name):
-
+        with GeminiEventsPublisher(node=node, gemini_log_filename=log_file_name) as publisher, \
+                GeminiStressEvent(node=node, cmd=gemini_cmd, log_file_name=log_file_name) as gemini_stress_event:
+            try:
+                publisher.event_id = gemini_stress_event.event_id
+                gemini_stress_event.log_file_name = log_file_name
                 result = node.remoter.run(cmd=gemini_cmd,
                                           timeout=self.timeout,
                                           ignore_status=False,
                                           log_file=log_file_name)
                 # sleep to gather all latest log messages
                 time.sleep(5)
-        except Exception as details:  # pylint: disable=broad-except
-            LOGGER.error(details)
-            result = getattr(details, "result", NotGeminiErrorResult(details))
+            except Exception as details:  # pylint: disable=broad-except
+                LOGGER.error(details)
+                result = getattr(details, "result", NotGeminiErrorResult(details))
 
-        if result.exited:
-            GeminiEvent.error(cmd=gemini_cmd, result=result).publish()
-        else:
-            if result.stderr:
-                GeminiEvent.warning(cmd=gemini_cmd, result=result).publish()
-            GeminiEvent.finish(cmd=gemini_cmd, result=result).publish()
+            if result.exited:
+                gemini_stress_event.add_result(result=result)
+                gemini_stress_event.severity = Severity.ERROR
+            else:
+                if result.stderr:
+                    gemini_stress_event.add_result(result=result)
+                    gemini_stress_event.severity = Severity.WARNING
 
         return node, result, self.gemini_result_file
 
