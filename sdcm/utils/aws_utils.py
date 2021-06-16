@@ -294,7 +294,7 @@ class PublicIpNotReady(Exception):
     pass
 
 
-@retrying(n=7, sleep_time=10, allowed_exceptions=(PublicIpNotReady,),
+@retrying(n=90, sleep_time=10, allowed_exceptions=(PublicIpNotReady,),
           message="Waiting for instance to get public ip")
 def ec2_instance_wait_public_ip(instance):
     instance.reload()
