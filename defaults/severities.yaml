@@ -35,10 +35,6 @@ DatabaseLogEvent.SUPPRESSED_MESSAGES: WARNING
 DatabaseLogEvent.stream_exception: ERROR
 DatabaseLogEvent.POWER_OFF: CRITICAL
 IndexSpecialColumnErrorEvent: ERROR
-GeminiEvent.error: CRITICAL
-GeminiEvent.warning: WARNING
-GeminiEvent.start: NORMAL
-GeminiEvent.finish: NORMAL
 YcsbStressEvent.failure: CRITICAL
 YcsbStressEvent.error: ERROR
 YcsbStressEvent.start: NORMAL
@@ -61,7 +57,7 @@ CassandraStressLogEvent.OperationOnKey: CRITICAL
 # TODO: mechanism.
 CassandraStressLogEvent.TooManyHintsInFlight: ERROR
 ScyllaBenchLogEvent.ConsistencyError: ERROR
-GeminiLogEvent.geminievent: CRITICAL
+GeminiStressLogEvent.GeminiEvent: CRITICAL
 PrometheusAlertManagerEvent.start: WARNING
 PrometheusAlertManagerEvent.end: WARNING
 ScyllaOperatorLogEvent: ERROR
@@ -85,3 +81,4 @@ EventsSeverityChangerFilter: NORMAL
 NodetoolEvent: ERROR
 ScyllaBenchEvent: CRITICAL
 CassandraStressEvent: CRITICAL
+GeminiStressEvent: CRITICAL
