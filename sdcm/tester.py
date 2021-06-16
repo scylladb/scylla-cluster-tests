@@ -490,6 +490,22 @@ class ClusterTester(db_stats.TestStatsMixin,
         self.result.addFailure(Setup.tester_obj(), backtrace_with_reason)
         os.kill(test_pid, signal.SIGUSR2)
 
+    def download_db_packages(self):
+        # download rpms for update_db_packages
+        self.params['update_db_packages'] = download_dir_from_cloud(self.params.get('update_db_packages'))
+
+    def download_encrypt_keys(self):
+        download_encrypt_keys()
+
+    @property
+    def is_encrypt_keys_needed(self):
+        append_scylla_yaml = self.params.get('append_scylla_yaml')
+        return append_scylla_yaml and (
+                'system_key_directory' in append_scylla_yaml or
+                'system_info_encryption' in append_scylla_yaml or
+                'kmip_hosts:' in append_scylla_yaml
+        )
+
     @teardown_on_exception
     @log_run_info
     def setUp(self):
@@ -504,13 +520,10 @@ class ClusterTester(db_stats.TestStatsMixin,
         self.update_certificates()
 
         # download rpms for update_db_packages
-        update_db_packages = self.params.get('update_db_packages')
-        self.params['update_db_packages'] = download_dir_from_cloud(update_db_packages)
-
-        append_scylla_yaml = self.params.get('append_scylla_yaml')
-        if append_scylla_yaml and (
-                'system_key_directory' in append_scylla_yaml or 'system_info_encryption' in append_scylla_yaml or 'kmip_hosts:' in append_scylla_yaml):
-            download_encrypt_keys()
+        if self.params.get('update_db_packages'):
+            self.download_db_packages()
+        if self.is_encrypt_keys_needed:
+            self.download_encrypt_keys()
 
         self.init_resources()
 
