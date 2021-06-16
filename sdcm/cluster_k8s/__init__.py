@@ -43,7 +43,8 @@ from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstanc
 from invoke.exceptions import CommandTimedOut
 
 from sdcm import sct_abs_path, cluster, cluster_docker
-from sdcm.cluster import Setup, DeadNode, IP_SSH_CONNECTIONS
+from sdcm.cluster import DeadNode
+from sdcm.test_config import TestConfig
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import NETWORK_EXCEPTIONS
 from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
@@ -261,7 +262,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
     def __init__(self, params: dict, user_prefix: str = '', region_name: str = None, cluster_uuid: str = None):
         self.pools = {}
         if cluster_uuid is None:
-            self.uuid = Setup.test_id()
+            self.uuid = TestConfig.test_id()
         else:
             self.uuid = cluster_uuid
         self.region_name = region_name
@@ -310,13 +311,13 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
     def helm(self):
         if self.api_call_rate_limiter:
             self.api_call_rate_limiter.wait()
-        return partial(cluster.Setup.tester_obj().localhost.helm, self)
+        return partial(cluster.TestConfig.tester_obj().localhost.helm, self)
 
     @property
     def helm_install(self):
         if self.api_call_rate_limiter:
             self.api_call_rate_limiter.wait()
-        return partial(cluster.Setup.tester_obj().localhost.helm_install, self)
+        return partial(cluster.TestConfig.tester_obj().localhost.helm_install, self)
 
     @cached_property
     def kubectl_token_path(self):
@@ -1920,10 +1921,10 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
 
     def node_setup(self, node: BaseScyllaPodContainer, verbose: bool = False, timeout: int = 3600):
         self.get_scylla_version()
-        if Setup.BACKTRACE_DECODING:
+        if TestConfig.BACKTRACE_DECODING:
             node.install_scylla_debuginfo()
 
-        if Setup.MULTI_REGION:
+        if TestConfig.MULTI_REGION:
             node.datacenter_setup(self.datacenter)  # pylint: disable=no-member
         self.node_config_setup(
             node,
@@ -2038,7 +2039,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                 name=node.name,
                 public_ip=node.public_ip_address,
                 private_ip=node.private_ip_address,
-                ipv6_ip=node.ipv6_ip_address if IP_SSH_CONNECTIONS == "ipv6" else '',
+                ipv6_ip=node.ipv6_ip_address if TestConfig.IP_SSH_CONNECTIONS == "ipv6" else '',
                 ip_address=node.ip_address,
                 shards=scylla_shards or node.scylla_shards,
                 termination_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
@@ -2068,7 +2069,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         # if current_members - 1 == 0:
         #     self.delete_rack(rack)
 
-        if monitors := cluster.Setup.tester_obj().monitors:
+        if monitors := cluster.TestConfig.tester_obj().monitors:
             monitors.reconfigure_scylla_monitoring()
 
     def upgrade_scylla_cluster(self, new_version: str) -> None:
@@ -2277,4 +2278,4 @@ def get_tags_from_params(params: dict) -> Dict[str, str]:
         post_behavior_idx = behaviors.index(params.get(f"post_behavior_{node_type}_nodes").lower())
         picked_behavior_idx = min(post_behavior_idx, picked_behavior_idx)
     picked_behavior = behaviors[picked_behavior_idx]
-    return {**Setup.common_tags(), "keep_action": "terminate" if picked_behavior == "destroy" else "", }
+    return {**TestConfig.common_tags(), "keep_action": "terminate" if picked_behavior == "destroy" else "", }

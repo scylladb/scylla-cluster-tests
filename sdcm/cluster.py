@@ -61,7 +61,6 @@ from sdcm.utils.common import (
     deprecation,
     get_data_dir_path,
     verify_scylla_repo_file,
-    get_my_ip,
     get_latest_gemini_version,
     normalize_ipv6_url,
     download_dir_from_cloud,
@@ -77,8 +76,8 @@ from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_g
     check_schema_version, check_nulls_in_peers, check_schema_agreement_in_gossip_and_peers, \
     CHECK_NODE_HEALTH_RETRIES, CHECK_NODE_HEALTH_RETRY_DELAY
 from sdcm.utils.decorators import retrying, log_run_info
-from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
+from sdcm.test_config import TestConfig
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version, get_systemd_version
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
@@ -90,11 +89,10 @@ from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, BACKTRACE_RE,
 from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
-from sdcm.utils.rsyslog import RSYSLOG_SSH_TUNNEL_LOCAL_PORT
 from sdcm.monitorstack.ui import AlternatorDashboard
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3
 from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LDAP_BASE_OBJECT, LDAP_PASSWORD, LDAP_USERS, LDAP_ROLE, \
-    LdapServerNotReady, LDAP_PORT, DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR
+    LDAP_PORT, DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR
 from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
@@ -115,8 +113,6 @@ CREDENTIALS = []
 DEFAULT_USER_PREFIX = getpass.getuser()
 # Test duration (min). Parameter used to keep instances produced by tests that
 # are supposed to run longer than 24 hours from being killed
-TEST_DURATION = 60
-IP_SSH_CONNECTIONS = 'private'
 TASK_QUEUE = 'task_queue'
 RES_QUEUE = 'res_queue'
 WORKSPACE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -130,227 +126,9 @@ SPOT_TERMINATION_CHECK_DELAY = 5
 LOGGER = logging.getLogger(__name__)
 
 
-def set_ip_ssh_connections(ip_type):
-    # pylint: disable=global-statement
-    global IP_SSH_CONNECTIONS
-    IP_SSH_CONNECTIONS = ip_type
-
-
-def set_duration(duration):
-    # pylint: disable=global-statement
-    global TEST_DURATION
-    TEST_DURATION = duration
-
-
 def remove_if_exists(file_path):
     if os.path.exists(file_path):
         os.remove(file_path)
-
-
-class Setup:
-    KEEP_ALIVE_DB_NODES = False
-    KEEP_ALIVE_LOADER_NODES = False
-    KEEP_ALIVE_MONITOR_NODES = False
-
-    REUSE_CLUSTER = False
-    MIXED_CLUSTER = False
-    MULTI_REGION = False
-    BACKTRACE_DECODING = False
-    INTRA_NODE_COMM_PUBLIC = False
-    RSYSLOG_ADDRESS = None
-    LDAP_ADDRESS = None
-    DECODING_QUEUE = None
-
-    _test_id = None
-    _test_name = None
-    _logdir = None
-    _tester_obj = None
-
-    backup_azure_blob_credentials = {}
-
-    @classmethod
-    def test_id(cls):
-        return cls._test_id
-
-    @classmethod
-    def set_test_id(cls, test_id):
-        if not cls._test_id:
-            cls._test_id = str(test_id)
-            test_id_file_path = os.path.join(cls.logdir(), "test_id")
-            with open(test_id_file_path, "w") as test_id_file:
-                test_id_file.write(str(test_id))
-        else:
-            LOGGER.warning("TestID already set!")
-
-    @classmethod
-    def tester_obj(cls):
-        return cls._tester_obj
-
-    @classmethod
-    def set_tester_obj(cls, tester_obj):
-        if not cls._tester_obj:
-            cls._tester_obj = tester_obj
-
-    @classmethod
-    def base_logdir(cls) -> str:
-        return os.path.expanduser(os.environ.get("_SCT_LOGDIR", "~/sct-results"))
-
-    @classmethod
-    def make_new_logdir(cls, update_latest_symlink: bool, postfix: str = "") -> str:
-        base = cls.base_logdir()
-        logdir = os.path.join(base, datetime.now().strftime("%Y%m%d-%H%M%S-%f") + postfix)
-        os.makedirs(logdir, exist_ok=True)
-        LOGGER.info("New directory created: %s", logdir)
-        if update_latest_symlink:
-            latest_symlink = os.path.join(base, "latest")
-            if os.path.islink(latest_symlink):
-                os.remove(latest_symlink)
-            os.symlink(os.path.relpath(logdir, base), latest_symlink)
-            LOGGER.info("Symlink `%s' updated to `%s'", latest_symlink, logdir)
-        return logdir
-
-    @classmethod
-    def logdir(cls) -> str:
-        if not cls._logdir:
-            cls._logdir = cls.make_new_logdir(update_latest_symlink=True)
-            os.environ['_SCT_TEST_LOGDIR'] = cls._logdir
-        return cls._logdir
-
-    @classmethod
-    def test_name(cls):
-        return cls._test_name
-
-    @classmethod
-    def set_test_name(cls, test_name):
-        cls._test_name = test_name
-
-    @classmethod
-    def set_multi_region(cls, multi_region):
-        cls.MULTI_REGION = multi_region
-
-    @classmethod
-    def set_decoding_queue(cls):
-        cls.DECODING_QUEUE = queue.Queue()
-
-    @classmethod
-    def set_intra_node_comm_public(cls, intra_node_comm_public):
-        cls.INTRA_NODE_COMM_PUBLIC = intra_node_comm_public
-
-    @classmethod
-    def set_backup_azure_blob_credentials(cls) -> None:
-        cls.backup_azure_blob_credentials = KeyStore().get_backup_azure_blob_credentials()
-
-    @classmethod
-    def reuse_cluster(cls, val=False):
-        cls.REUSE_CLUSTER = val
-
-    @classmethod
-    def keep_cluster(cls, node_type, val='destroy'):
-        if "db_nodes" in node_type:
-            cls.KEEP_ALIVE_DB_NODES = bool(val == 'keep')
-        elif "loader_nodes" in node_type:
-            cls.KEEP_ALIVE_LOADER_NODES = bool(val == 'keep')
-        elif "monitor_nodes" in node_type:
-            cls.KEEP_ALIVE_MONITOR_NODES = bool(val == 'keep')
-
-    @classmethod
-    def should_keep_alive(cls, node_type: Optional[str]) -> bool:
-        if TEST_DURATION >= 11 * 60:
-            return True
-        if node_type is None:
-            return False
-        if "db" in node_type:
-            return cls.KEEP_ALIVE_DB_NODES
-        if "loader" in node_type:
-            return cls.KEEP_ALIVE_LOADER_NODES
-        if "monitor" in node_type:
-            return cls.KEEP_ALIVE_MONITOR_NODES
-        return False
-
-    @classmethod
-    def mixed_cluster(cls, val=False):
-        cls.MIXED_CLUSTER = val
-
-    @classmethod
-    def common_tags(cls) -> Dict[str, str]:
-        job_name = os.environ.get('JOB_NAME')
-        tags = dict(RunByUser=get_username(),
-                    TestName=str(cls.test_name()),
-                    TestId=str(cls.test_id()),
-                    version=job_name.split('/', 1)[0] if job_name else "unknown")
-
-        build_tag = os.environ.get('BUILD_TAG')
-        if build_tag:
-            tags["JenkinsJobTag"] = build_tag
-
-        return tags
-
-    @classmethod
-    @retrying(n=20, sleep_time=6, allowed_exceptions=LdapServerNotReady)
-    def configure_ldap(cls, node, use_ssl=False):
-        ContainerManager.run_container(node, "ldap")
-        if use_ssl:
-            port = node.ldap_ports['ldap_ssl_port']
-        else:
-            port = node.ldap_ports['ldap_port']
-        address = get_my_ip()
-        cls.LDAP_ADDRESS = (address, port)
-        if ContainerManager.get_container(node, 'ldap').exec_run("timeout 30s container/tool/wait-process")[0] != 0:
-            raise LdapServerNotReady("LDAP server didn't finish its startup yet...")
-
-    @classmethod
-    def configure_rsyslog(cls, node, enable_ngrok=False):
-        ContainerManager.run_container(node, "rsyslog", logdir=cls.logdir())
-        port = node.rsyslog_port
-        LOGGER.info("rsyslog listen on port %s (config: %s)", port, node.rsyslog_confpath)
-
-        if enable_ngrok:
-            requests.delete('http://localhost:4040/api/tunnels/rsyslogd')
-
-            tunnel = {
-                "addr": port,
-                "proto": "tcp",
-                "name": "rsyslogd",
-                "bind_tls": False
-            }
-            res = requests.post('http://localhost:4040/api/tunnels', json=tunnel)
-            assert res.ok, "failed to add a ngrok tunnel [{}, {}]".format(res, res.text)
-            ngrok_address = res.json()['public_url'].replace('tcp://', '')
-
-            address, port = ngrok_address.split(':')
-        else:
-            address = get_my_ip()
-
-        cls.RSYSLOG_ADDRESS = (address, port)
-
-    @classmethod
-    def get_startup_script(cls):
-        post_boot_script = '#!/bin/bash'
-        post_boot_script += dedent(r'''
-               sudo sed -i 's/#MaxSessions \(.*\)$/MaxSessions 1000/' /etc/ssh/sshd_config
-               sudo sed -i 's/#MaxStartups \(.*\)$/MaxStartups 60/' /etc/ssh/sshd_config
-               sudo sed -i 's/#LoginGraceTime \(.*\)$/LoginGraceTime 15s/' /etc/ssh/sshd_config
-               sudo systemctl restart sshd
-               ''')
-        if cls.RSYSLOG_ADDRESS:
-
-            if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION:
-                post_boot_script += dedent('''
-                       sudo echo 'action(type="omfwd" Target="{0}" Port="{1}" Protocol="tcp")'>> /etc/rsyslog.conf
-                       sudo systemctl restart rsyslog
-                       '''.format('127.0.0.1', RSYSLOG_SSH_TUNNEL_LOCAL_PORT))
-            else:
-                post_boot_script += dedent('''
-                       sudo echo 'action(type="omfwd" Target="{0}" Port="{1}" Protocol="tcp")'>> /etc/rsyslog.conf
-                       sudo systemctl restart rsyslog
-                       '''.format(*cls.RSYSLOG_ADDRESS))  # pylint: disable=not-an-iterable
-
-        post_boot_script += dedent(r'''
-               sed -i -e 's/^\*[[:blank:]]*soft[[:blank:]]*nproc[[:blank:]]*4096/*\t\tsoft\tnproc\t\tunlimited/' \
-               /etc/security/limits.d/20-nproc.conf
-               echo -e '*\t\thard\tnproc\t\tunlimited' >> /etc/security/limits.d/20-nproc.conf
-               ''')
-        return post_boot_script
 
 
 class NodeError(Exception):
@@ -489,7 +267,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # Start task threads after ssh is up, otherwise the dense ssh attempts from task
         # threads will make SCT builder to be blocked by sshguard of gce instance.
         self.wait_ssh_up(verbose=True)
-        if not Setup.REUSE_CLUSTER:
+        if not TestConfig.REUSE_CLUSTER:
             self.set_hostname()
 
         self.start_task_threads()
@@ -502,22 +280,22 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.log.debug(self.remoter.ssh_debug_cmd())
 
     def _init_port_mapping(self):
-        if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION:
-            if Setup.RSYSLOG_ADDRESS:
+        if TestConfig.IP_SSH_CONNECTIONS == 'public' or TestConfig.MULTI_REGION:
+            if TestConfig.RSYSLOG_ADDRESS:
                 try:
                     ContainerManager.destroy_container(self, "auto_ssh:rsyslog", ignore_keepalive=True)
                 except NotFound:
                     pass
                 ContainerManager.run_container(self, "auto_ssh:rsyslog",
-                                               local_port=Setup.RSYSLOG_ADDRESS[1],
-                                               remote_port=RSYSLOG_SSH_TUNNEL_LOCAL_PORT)
-            if Setup.LDAP_ADDRESS and self.parent_cluster.node_type == "scylla-db":
+                                               local_port=TestConfig.RSYSLOG_ADDRESS[1],
+                                               remote_port=TestConfig.RSYSLOG_SSH_TUNNEL_LOCAL_PORT)
+            if TestConfig.LDAP_ADDRESS and self.parent_cluster.node_type == "scylla-db":
                 try:
                     ContainerManager.destroy_container(self, "auto_ssh:ldap", ignore_keepalive=True)
                 except NotFound:
                     pass
                 ContainerManager.run_container(self, "auto_ssh:ldap",
-                                               local_port=Setup.LDAP_ADDRESS[1],
+                                               local_port=TestConfig.LDAP_ADDRESS[1],
                                                remote_port=LDAP_SSH_TUNNEL_LOCAL_PORT)
 
     @property
@@ -555,7 +333,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def set_keep_alive(self):
         node_type = None if self.parent_cluster is None else self.parent_cluster.node_type
-        if Setup.should_keep_alive(node_type) and self._set_keep_alive():
+        if TestConfig.should_keep_alive(node_type) and self._set_keep_alive():
             self.log.info("Keep this node alive")
 
     @property
@@ -571,8 +349,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def system_log(self):
         orig_log_path = os.path.join(self.logdir, 'system.log')
 
-        if Setup.RSYSLOG_ADDRESS:
-            rsys_log_path = os.path.join(Setup.logdir(), 'hosts', self.short_hostname, 'messages.log')
+        if TestConfig.RSYSLOG_ADDRESS:
+            rsys_log_path = os.path.join(TestConfig.logdir(), 'hosts', self.short_hostname, 'messages.log')
             if os.path.exists(rsys_log_path) and (not os.path.islink(orig_log_path)):
                 os.symlink(os.path.relpath(rsys_log_path, self.logdir), orig_log_path)
             return rsys_log_path
@@ -915,9 +693,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @property
     def ip_address(self):
-        if IP_SSH_CONNECTIONS == "ipv6":
+        if TestConfig.IP_SSH_CONNECTIONS == "ipv6":
             return self.ipv6_ip_address
-        elif Setup.INTRA_NODE_COMM_PUBLIC:
+        elif TestConfig.INTRA_NODE_COMM_PUBLIC:
             return self.public_ip_address
         else:
             return self.private_ip_address
@@ -928,9 +706,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         the communication address for usage between the test and the nodes
         :return:
         """
-        if IP_SSH_CONNECTIONS == "ipv6":
+        if TestConfig.IP_SSH_CONNECTIONS == "ipv6":
             return self.ipv6_ip_address
-        elif IP_SSH_CONNECTIONS == 'public' or Setup.INTRA_NODE_COMM_PUBLIC:
+        elif TestConfig.IP_SSH_CONNECTIONS == 'public' or TestConfig.INTRA_NODE_COMM_PUBLIC:
             return self.public_ip_address
         else:
             return self.private_ip_address
@@ -1052,11 +830,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return AlertSilencer(self._alert_manager, alert_name, duration, start, end)
 
     def __str__(self):
-        return 'Node %s [%s | %s%s] (seed: %s)' % (self.name,
-                                                   self.public_ip_address,
-                                                   self.private_ip_address,
-                                                   " | %s" % self.ipv6_ip_address if IP_SSH_CONNECTIONS == "ipv6" else "",
-                                                   self.is_seed)
+        return 'Node %s [%s | %s%s] (seed: %s)' % (
+            self.name,
+            self.public_ip_address,
+            self.private_ip_address,
+            " | %s" % self.ipv6_ip_address if TestConfig.IP_SSH_CONNECTIONS == "ipv6" else "",
+            self.is_seed)
 
     def restart(self):
         raise NotImplementedError('Derived classes must implement restart')
@@ -1144,7 +923,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         elif self.node_type == 'monitor':
             # TODO: start alert manager thread here when start_task_threads will be run after node setup
             # self.start_alert_manager_thread()
-            if Setup.BACKTRACE_DECODING:
+            if TestConfig.BACKTRACE_DECODING:
                 self.start_decode_on_monitor_node_thread()
 
     def get_backtraces(self):
@@ -1517,7 +1296,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                         json_log = json.loads(line)
                     except Exception:
                         pass
-                if not start_from_beginning and Setup.RSYSLOG_ADDRESS:
+                if not start_from_beginning and TestConfig.RSYSLOG_ADDRESS:
                     line = line.strip()
                     if not exclude_from_logging:
                         LOGGER.debug(line)
@@ -1596,10 +1375,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             backtraces = list(filter(filter_backtraces, backtraces))
 
         for backtrace in backtraces:
-            if Setup.BACKTRACE_DECODING and backtrace["event"].raw_backtrace:
+            if TestConfig.BACKTRACE_DECODING and backtrace["event"].raw_backtrace:
                 scylla_debug_info = self.get_scylla_debuginfo_file()
                 self.log.debug("Debug info file %s", scylla_debug_info)
-                Setup.DECODING_QUEUE.put({
+                TestConfig.DECODING_QUEUE.put({
                     "node": self,
                     "debug_file": scylla_debug_info,
                     "event": backtrace["event"],
@@ -1619,16 +1398,16 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             event = None
             obj = None
             try:
-                obj = Setup.DECODING_QUEUE.get(timeout=5)
+                obj = TestConfig.DECODING_QUEUE.get(timeout=5)
                 if obj is None:
-                    Setup.DECODING_QUEUE.task_done()
+                    TestConfig.DECODING_QUEUE.task_done()
                     break
                 event = obj["event"]
                 if not scylla_debug_file:
                     scylla_debug_file = self.copy_scylla_debug_info(obj["node"], obj["debug_file"])
                 output = self.decode_raw_backtrace(scylla_debug_file, " ".join(event.raw_backtrace.split('\n')))
                 event.backtrace = output.stdout
-                Setup.DECODING_QUEUE.task_done()
+                TestConfig.DECODING_QUEUE.task_done()
             except queue.Empty:
                 pass
             except Exception as details:  # pylint: disable=broad-except
@@ -1637,7 +1416,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 if event:
                     event.publish()
 
-            if self.termination_event.isSet() and Setup.DECODING_QUEUE.empty():
+            if self.termination_event.isSet() and TestConfig.DECODING_QUEUE.empty():
                 break
 
     def copy_scylla_debug_info(self, node, debug_file):
@@ -1757,11 +1536,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @staticmethod
     def get_openldap_config():
-        if Setup.LDAP_ADDRESS is None:
+        if TestConfig.LDAP_ADDRESS is None:
             return {}
-        ldap_server_ip = '127.0.0.1' if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION else Setup.LDAP_ADDRESS[0]
-        ldap_port = LDAP_SSH_TUNNEL_LOCAL_PORT if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION else \
-            Setup.LDAP_ADDRESS[1]
+        ldap_server_ip = '127.0.0.1' if TestConfig.IP_SSH_CONNECTIONS == 'public' \
+            or TestConfig.MULTI_REGION else TestConfig.LDAP_ADDRESS[0]
+        ldap_port = LDAP_SSH_TUNNEL_LOCAL_PORT if TestConfig.IP_SSH_CONNECTIONS == 'public' or TestConfig.MULTI_REGION else \
+            TestConfig.LDAP_ADDRESS[1]
         return {'role_manager': 'com.scylladb.auth.LDAPRoleManager',
                 'ldap_url_template': f'ldap://{ldap_server_ip}:{ldap_port}/'
                                      f'{LDAP_BASE_OBJECT}?cn?sub?(uniqueMember='
@@ -1772,7 +1552,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @staticmethod
     def get_ldap_ms_ad_config():
-        if Setup.LDAP_ADDRESS is None:
+        if TestConfig.LDAP_ADDRESS is None:
             return {}
         ldap_ms_ad_credentials = KeyStore().get_ldap_ms_ad_credentials()
         return {'ldap_attr_role': 'cn',
@@ -1785,11 +1565,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @staticmethod
     def get_saslauthd_config():
-        if Setup.LDAP_ADDRESS is None:
+        if TestConfig.LDAP_ADDRESS is None:
             return {}
-        ldap_server_ip = '127.0.0.1' if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION else Setup.LDAP_ADDRESS[0]
-        ldap_port = LDAP_SSH_TUNNEL_LOCAL_PORT if IP_SSH_CONNECTIONS == 'public' or Setup.MULTI_REGION else \
-            Setup.LDAP_ADDRESS[1]
+        ldap_server_ip = '127.0.0.1' if TestConfig.IP_SSH_CONNECTIONS == 'public' or TestConfig.MULTI_REGION else TestConfig.LDAP_ADDRESS[
+            0]
+        ldap_port = LDAP_SSH_TUNNEL_LOCAL_PORT if TestConfig.IP_SSH_CONNECTIONS == 'public' or TestConfig.MULTI_REGION else \
+            TestConfig.LDAP_ADDRESS[1]
         return {'ldap_servers': f'ldap://{ldap_server_ip}:{ldap_port}/',
                 'ldap_search_base': f'ou=Person,{LDAP_BASE_OBJECT}',
                 'ldap_bind_dn': f'cn=admin,{LDAP_BASE_OBJECT}',
@@ -2073,7 +1854,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             tls_key_file = SCYLLA_MANAGER_TLS_KEY_FILE
 
         with self.remote_manager_agent_yaml() as manager_agent_yaml:
-            manager_agent_yaml["auth_token"] = Setup.test_id()
+            manager_agent_yaml["auth_token"] = TestConfig.test_id()
             manager_agent_yaml["tls_cert_file"] = tls_cert_file
             manager_agent_yaml["tls_key_file"] = tls_key_file
             manager_agent_yaml["prometheus"] = f":{self.parent_cluster.params.get('manager_prometheus_port')}"
@@ -2095,8 +1876,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         elif backup_backend == "gcs":
             pass
         elif backup_backend == "azure":
-            backup_backend_config["account"] = Setup.backup_azure_blob_credentials["account"]
-            backup_backend_config["key"] = Setup.backup_azure_blob_credentials["key"]
+            backup_backend_config["account"] = TestConfig.backup_azure_blob_credentials["account"]
+            backup_backend_config["key"] = TestConfig.backup_azure_blob_credentials["key"]
         else:
             raise ValueError(f"{backup_backend=} is not supported")
 
@@ -2405,7 +2186,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     @log_run_info
     def scylla_setup(self, disks, devname: str):
         """
-        Setup scylla
+        TestConfig scylla
         :param disks: list of disk names
         """
         extra_setup_args = self.parent_cluster.params.get('append_scylla_setup_args')
@@ -3018,7 +2799,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         startup_script_remote_path = '/tmp/sct-startup.sh'
 
         with tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='utf-8') as tmp_file:
-            tmp_file.write(Setup.get_startup_script())
+            tmp_file.write(TestConfig.get_startup_script())
             tmp_file.flush()
             self.remoter.send_files(src=tmp_file.name, dst=startup_script_remote_path)  # pylint: disable=not-callable
 
@@ -3207,7 +2988,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         if params is None:
             params = {}
         if cluster_uuid is None:
-            self.uuid = Setup.test_id()
+            self.uuid = TestConfig.test_id()
         else:
             self.uuid = cluster_uuid
         self.node_type = node_type
@@ -3231,7 +3012,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         # default 'cassandra' password is weak password, MS AD doesn't allow to use it.
         self.added_password_suffix = False
 
-        if Setup.REUSE_CLUSTER:
+        if TestConfig.REUSE_CLUSTER:
             # get_node_ips_param should be defined in child
             self._node_public_ips = self.params.get(self.get_node_ips_param(public_ip=True)) or []
             self._node_private_ips = self.params.get(self.get_node_ips_param(public_ip=False)) or []
@@ -3259,7 +3040,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def tags(self) -> Dict[str, str]:
         key = self.node_type if "db" not in self.node_type else "db"
         action = self.params.get(f"post_behavior_{key}_nodes")
-        return {**Setup.common_tags(),
+        return {**TestConfig.common_tags(),
                 "NodeType": str(self.node_type),
                 "keep_action": "terminate" if action == "destroy" else "", }
 
@@ -3356,14 +3137,16 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
     def terminate_node(self, node):
         if node.ip_address not in self.dead_nodes_ip_address_list:
-            self.dead_nodes_list.append(DeadNode(name=node.name,
-                                                 public_ip=node.public_ip_address,
-                                                 private_ip=node.private_ip_address,
-                                                 ipv6_ip=node.ipv6_ip_address if IP_SSH_CONNECTIONS == "ipv6" else '',
-                                                 ip_address=node.ip_address,
-                                                 shards=node.scylla_shards,
-                                                 termination_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
-                                                 terminated_by_nemesis=node.running_nemesis))
+            self.dead_nodes_list.append(DeadNode(
+                name=node.name,
+                public_ip=node.public_ip_address,
+                private_ip=node.private_ip_address,
+                ipv6_ip=node.ipv6_ip_address if TestConfig.IP_SSH_CONNECTIONS == "ipv6" else '',
+                ip_address=node.ip_address,
+                shards=node.scylla_shards,
+                termination_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
+                terminated_by_nemesis=node.running_nemesis))
+
         if node in self.nodes:
             self.nodes.remove(node)
         node.destroy()
@@ -3686,7 +3469,7 @@ def wait_for_init_wrap(method):
             cl_inst.wait_for_nodes_up_and_normal(nodes=node_list, verification_node=node_list[0])
 
         time_elapsed = time.perf_counter() - start_time
-        cl_inst.log.debug('Setup duration -> %s s', int(time_elapsed))
+        cl_inst.log.debug('TestConfig duration -> %s s', int(time_elapsed))
 
         method(*args, **kwargs)
     return wrapper
@@ -3713,7 +3496,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     @staticmethod
     def get_node_ips_param(public_ip=True):
-        if Setup.MIXED_CLUSTER:
+        if TestConfig.MIXED_CLUSTER:
             return 'oracle_db_nodes_public_ip' if public_ip else 'oracle_db_nodes_private_ip'
         return 'db_nodes_public_ip' if public_ip else 'db_nodes_private_ip'
 
@@ -3740,7 +3523,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.wait_ssh_up()
             seed_nodes_ips = [node.ip_address]
 
-        elif seeds_selector == 'reflector' or Setup.REUSE_CLUSTER or cluster_backend == 'aws-siren':
+        elif seeds_selector == 'reflector' or TestConfig.REUSE_CLUSTER or cluster_backend == 'aws-siren':
             node = self.nodes[0]
             node.wait_ssh_up()
             # When cluster just started, seed IP in the scylla.yaml may be like '127.0.0.1'
@@ -4257,7 +4040,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             else:
                 raise Exception("There is no pre-installed ScyllaDB")
 
-        if not Setup.REUSE_CLUSTER:
+        if not TestConfig.REUSE_CLUSTER:
             node.disable_daily_triggered_services()
 
             result = node.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
@@ -4303,10 +4086,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 return
 
             self.get_scylla_version()
-            if Setup.BACKTRACE_DECODING:
+            if TestConfig.BACKTRACE_DECODING:
                 node.install_scylla_debuginfo()
 
-            if Setup.MULTI_REGION:
+            if TestConfig.MULTI_REGION:
                 node.datacenter_setup(self.datacenter)  # pylint: disable=no-member
             self.node_config_setup(node, ','.join(self.seed_nodes_ips), self.get_endpoint_snitch())
 
@@ -4379,7 +4162,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     def get_endpoint_snitch(self, default_multi_region="GossipingPropertyFileSnitch"):
         endpoint_snitch = self.params.get('endpoint_snitch')
-        if Setup.MULTI_REGION:
+        if TestConfig.MULTI_REGION:
             if not endpoint_snitch:
                 endpoint_snitch = default_multi_region
         return endpoint_snitch
@@ -4523,7 +4306,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         LOGGER.info('Decommission %s PASS', node)
         with DbEventsFilter(db_event=DatabaseLogEvent.POWER_OFF, node=node):
             self.terminate_node(node)  # pylint: disable=no-member
-        Setup.tester_obj().monitors.reconfigure_scylla_monitoring()
+        TestConfig.tester_obj().monitors.reconfigure_scylla_monitoring()
 
     def decommission(self, node):
         node.run_nodetool("decommission")
@@ -4531,11 +4314,11 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     @property
     def scylla_manager_node(self) -> BaseNode:
-        return Setup.tester_obj().monitors.nodes[0]
+        return TestConfig.tester_obj().monitors.nodes[0]
 
     @property
     def scylla_manager_auth_token(self) -> str:
-        return Setup.tester_obj().monitors.mgmt_auth_token
+        return TestConfig.tester_obj().monitors.mgmt_auth_token
 
     @property
     def scylla_manager_cluster_name(self):
@@ -4617,7 +4400,7 @@ class BaseLoaderSet():
         self.log.info('Setup in BaseLoaderSet')
         node.wait_ssh_up(verbose=verbose)
         # add swap file
-        if not Setup.REUSE_CLUSTER:
+        if not TestConfig.REUSE_CLUSTER:
             swap_size = self.params.get("loader_swap_size")
             if not swap_size:
                 self.log.info("Swap file for the loader is not configured")
@@ -4626,7 +4409,7 @@ class BaseLoaderSet():
         # update repo cache and system after system is up
         node.update_repo_cache()
 
-        if Setup.REUSE_CLUSTER:
+        if TestConfig.REUSE_CLUSTER:
             self.kill_stress_thread()
             return
 
@@ -4973,10 +4756,10 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             json.dump(json.loads(json_data), file, indent=2)
 
     def node_setup(self, node, **kwargs):  # pylint: disable=unused-argument
-        self.log.info('Setup in BaseMonitorSet')
+        self.log.info('TestConfig in BaseMonitorSet')
         node.wait_ssh_up()
         # add swap file
-        if not Setup.REUSE_CLUSTER:
+        if not TestConfig.REUSE_CLUSTER:
             monitor_swap_size = self.params.get("monitor_swap_size")
             if not monitor_swap_size:
                 self.log.info("Swap file for the monitor is not configured")
@@ -4984,9 +4767,9 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                 node.create_swap_file(monitor_swap_size)
         # update repo cache and system after system is up
         node.update_repo_cache()
-        self.mgmt_auth_token = Setup.test_id()  # pylint: disable=attribute-defined-outside-init
+        self.mgmt_auth_token = TestConfig.test_id()  # pylint: disable=attribute-defined-outside-init
 
-        if Setup.REUSE_CLUSTER:
+        if TestConfig.REUSE_CLUSTER:
             self.configure_scylla_monitoring(node)
             self.restart_scylla_monitoring(sct_metrics=True)
             set_grafana_url(f"http://{normalize_ipv6_url(node.external_address)}:{self.grafana_port}")
@@ -5383,7 +5166,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                                                      extra_entities=grafana_extra_dashboards)
             screenshot_files = screenshot_collector.collect(node, self.logdir)
             for screenshot in screenshot_files:
-                s3_path = "{test_id}/{date}".format(test_id=Setup.test_id(), date=date_time)
+                s3_path = "{test_id}/{date}".format(test_id=TestConfig.test_id(), date=date_time)
                 screenshot_links.append(S3Storage().upload_file(screenshot, s3_path))
 
             snapshots_collector = GrafanaSnapshot(name="grafana-snapshot",
@@ -5400,7 +5183,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         try:
             annotations = self.get_grafana_annotations(self.nodes[0])
             if annotations:
-                annotations_url = S3Storage().generate_url('annotations.json', Setup.test_id())
+                annotations_url = S3Storage().generate_url('annotations.json', TestConfig.test_id())
                 self.log.info("Uploading 'annotations.json' to {s3_url}".format(
                     s3_url=annotations_url))
                 response = requests.put(annotations_url, data=annotations, headers={
@@ -5418,7 +5201,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         try:
             if snapshot_archive := PrometheusSnapshots(name='prometheus_snapshot').collect(self.nodes[0], self.logdir):
                 self.log.debug("Snapshot local path: %s", snapshot_archive)
-                return upload_archive_to_s3(snapshot_archive, Setup.test_id())
+                return upload_archive_to_s3(snapshot_archive, TestConfig.test_id())
         except Exception as details:
             self.log.error("Error downloading prometheus data dir: %s", details)
         return ""

@@ -17,7 +17,7 @@ import threading
 from typing import Tuple, Any, Optional
 from functools import partial
 
-from sdcm.cluster import Setup
+from sdcm.cluster import TestConfig
 from sdcm.sct_events import Severity
 from sdcm.sct_events.events_processes import \
     EVENTS_ANALYZER_ID, EventsProcessesRegistry, BaseEventsProcess,\
@@ -53,10 +53,10 @@ class EventsAnalyzer(BaseEventsProcess[Tuple[str, Any], None], threading.Thread)
 
     def kill_test(self, backtrace_with_reason) -> None:
         self.terminate()
-        if tester := Setup.tester_obj():
+        if tester := TestConfig.tester_obj():
             tester.kill_test(backtrace_with_reason)
         else:
-            LOGGER.error("No test was registered using `Setup.set_tester_obj()', do not kill")
+            LOGGER.error("No test was registered using `TestConfig.set_tester_obj()', do not kill")
 
 
 start_events_analyzer = partial(start_events_process, EVENTS_ANALYZER_ID, EventsAnalyzer)

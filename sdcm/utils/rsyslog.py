@@ -19,7 +19,6 @@ from tempfile import mkstemp
 
 RSYSLOG_IMAGE = "rsyslog/syslog_appliance_alpine:latest"
 RSYSLOG_PORT = 514
-RSYSLOG_SSH_TUNNEL_LOCAL_PORT = 5000
 
 LOGGER = logging.getLogger(__name__)
 

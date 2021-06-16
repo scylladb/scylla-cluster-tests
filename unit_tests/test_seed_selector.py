@@ -90,7 +90,7 @@ class TestSeedSelector(unittest.TestCase):
         self.setup_cluster(nodes_number=3)
         self.cluster.set_test_params(seeds_selector='first', seeds_num=2, db_type='scylla')
         sdcm.cluster.SCYLLA_YAML_PATH = os.path.join(os.path.dirname(__file__), 'test_data', 'scylla.yaml')
-        sdcm.cluster.Setup.reuse_cluster(True)
+        sdcm.cluster.TestConfig.reuse_cluster(True)
         self.cluster.set_seeds()
         self.assertTrue(self.cluster.seed_nodes == [self.cluster.nodes[1]])
         self.assertTrue(self.cluster.non_seed_nodes == [self.cluster.nodes[0], self.cluster.nodes[2]])

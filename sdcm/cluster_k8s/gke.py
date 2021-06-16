@@ -26,7 +26,7 @@ from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BaseScyllaPodC
 
 from sdcm.cluster_k8s.iptables import IptablesPodIpRedirectMixin, IptablesClusterOpsMixin
 from sdcm.cluster_gce import MonitorSetGCE
-
+from sdcm.test_config import TestConfig
 
 GKE_API_CALL_RATE_LIMIT = 5  # ops/s
 GKE_API_CALL_QUEUE_SIZE = 1000  # ops
@@ -224,7 +224,7 @@ class GkeCluster(KubernetesCluster):
 
     @cached_property
     def gcloud(self) -> GcloudContextManager:
-        return cluster.Setup.tester_obj().localhost.gcloud
+        return cluster.TestConfig.tester_obj().localhost.gcloud
 
     def deploy_node_pool(self, pool: GkeNodePool, wait_till_ready=True) -> None:
         self._add_pool(pool)
@@ -295,13 +295,13 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
 
     @cached_property
     def hydra_dest_ip(self) -> str:
-        if cluster.IP_SSH_CONNECTIONS == "public" or cluster.Setup.INTRA_NODE_COMM_PUBLIC:
+        if TestConfig.IP_SSH_CONNECTIONS == "public" or TestConfig.INTRA_NODE_COMM_PUBLIC:
             return self.gce_node_ips[0][0]
         return self.gce_node_ips[1][0]
 
     @cached_property
     def nodes_dest_ip(self) -> str:
-        if cluster.Setup.INTRA_NODE_COMM_PUBLIC:
+        if cluster.TestConfig.INTRA_NODE_COMM_PUBLIC:
             return self.gce_node_ips[0][0]
         return self.gce_node_ips[1][0]
 

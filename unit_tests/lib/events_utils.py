@@ -31,7 +31,7 @@ class EventsUtilsMixin:
 
     @classmethod
     def setup_events_processes(cls, events_device: bool, events_main_device: bool, registry_patcher: bool):
-        """Setup own copy of Events Device machinery."""
+        """TestConfig own copy of Events Device machinery."""
 
         cls.temp_dir = tempfile.mkdtemp()
         cls.events_processes_registry = EventsProcessesRegistry(log_dir=cls.temp_dir)
