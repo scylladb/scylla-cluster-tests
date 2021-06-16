@@ -742,7 +742,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.cluster.wait_for_init(node_list=[new_node], timeout=timeout, check_node_health=False)
             self.cluster.clean_replacement_node_ip(new_node)
         except (NodeSetupFailed, NodeSetupTimeout):
-            self.log.warning("Setup of the '%s' failed, removing it from list of nodes" % new_node)
+            self.log.warning("TestConfig of the '%s' failed, removing it from list of nodes" % new_node)
             self.cluster.nodes.remove(new_node)
             self.log.warning("Node will not be terminated. Please terminate manually!!!")
             raise

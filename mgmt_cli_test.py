@@ -28,7 +28,7 @@ from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostR
 from sdcm.mgmt.cli import ScyllaManagerTool
 from sdcm.remote import shell_script_cmd
 from sdcm.tester import ClusterTester
-from sdcm.cluster import Setup
+from sdcm.cluster import TestConfig
 from sdcm.nemesis import MgmtRepair
 from sdcm.utils.common import reach_enospc_on_node, clean_enospc_on_node
 from sdcm.sct_events.system import InfoEvent
@@ -78,8 +78,8 @@ class BackupFunctionsMixIn:
                 tar xz -C /usr/local/bin --strip-components 1 --wildcards '*/azcopy'
         """))
         self.backup_azure_blob_service = \
-            f"https://{Setup.backup_azure_blob_credentials['account']}.blob.core.windows.net/"
-        self.backup_azure_blob_sas = Setup.backup_azure_blob_credentials["download_sas"]
+            f"https://{TestConfig.backup_azure_blob_credentials['account']}.blob.core.windows.net/"
+        self.backup_azure_blob_sas = TestConfig.backup_azure_blob_credentials["download_sas"]
 
     @staticmethod
     def download_from_s3(node, source, destination):

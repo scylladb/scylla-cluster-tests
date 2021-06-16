@@ -440,8 +440,8 @@ class TestStatsMixin(Stats):
         :rtype: {str}
         """
         # avoid cyclic-decencies between cluster and db_stats
-        from sdcm.cluster import Setup
-        doc_id = Setup.test_id()
+        from sdcm.cluster import TestConfig
+        doc_id = TestConfig.test_id()
         if doc_id_with_timestamp:
             doc_id += "_{}".format(datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
         return doc_id
@@ -511,7 +511,7 @@ class TestStatsMixin(Stats):
 
     def get_test_details(self):
         # avoid cyclic-decencies between cluster and db_stats
-        from sdcm.cluster import Setup
+        from sdcm.cluster import TestConfig
 
         test_details = {}
         test_details['sct_git_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
@@ -524,7 +524,7 @@ class TestStatsMixin(Stats):
         test_details['grafana_screenshots'] = []
         test_details['grafana_annotations'] = []
         test_details['prometheus_data'] = ""
-        test_details['test_id'] = Setup.test_id()
+        test_details['test_id'] = TestConfig.test_id()
         test_details['log_files'] = {}
         return test_details
 
@@ -669,7 +669,7 @@ class TestStatsMixin(Stats):
             return
 
         if not self._stats:
-            self.log.error("Stats was not initialized. Could be error during Setup")
+            self.log.error("Stats was not initialized. Could be error during TestConfig")
             return
 
         if extra_stats is None:

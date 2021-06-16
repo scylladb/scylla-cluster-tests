@@ -83,7 +83,7 @@ class IptablesClusterOpsMixin:
                                              loaders: bool = True,
                                              monitors: bool = True) -> None:
         nodes_to_update = []
-        if tester := cluster.Setup.tester_obj():
+        if tester := cluster.TestConfig.tester_obj():
             if loaders and tester.loaders:
                 nodes_to_update.extend(tester.loaders.nodes)
             if monitors and tester.monitors:

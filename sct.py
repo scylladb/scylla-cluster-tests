@@ -45,7 +45,7 @@ from sdcm.utils.common import (list_instances_aws, list_instances_gce, list_reso
 from sdcm.utils.jepsen import JepsenResults
 from sdcm.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
                                kill_running_monitoring_stack_services)
-from sdcm.cluster import Setup
+from sdcm.cluster import TestConfig
 from sdcm.utils.log import setup_stdout_logger
 from sdcm.utils.prepare_region import AwsRegion
 from sdcm.utils.get_username import get_username
@@ -80,7 +80,7 @@ def install_package_from_dir(ctx, _, directories):
 
 def add_file_logger(level: int = logging.DEBUG) -> None:
     cmd_path = "-".join(click.get_current_context().command_path.split()[1:])
-    logdir = Setup.make_new_logdir(update_latest_symlink=False, postfix=f"-{cmd_path}")
+    logdir = TestConfig.make_new_logdir(update_latest_symlink=False, postfix=f"-{cmd_path}")
     handler = logging.FileHandler(os.path.join(logdir, "hydra.log"))
     handler.setLevel(level)
     LOGGER.addHandler(handler)
@@ -156,7 +156,7 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
         params = (user_param, )
     else:
         if not logdir and (post_behavior or not test_id):
-            logdir = Setup.base_logdir()
+            logdir = TestConfig.base_logdir()
 
         if not test_id and (latest_test_id := search_test_id_in_latest(logdir)):
             click.echo(f"Latest TestId in {logdir} is {latest_test_id}")
@@ -744,7 +744,7 @@ def run_test(argv, backend, config, logdir):
     if logdir:
         os.environ['_SCT_LOGDIR'] = logdir
 
-    logfile = os.path.join(Setup.logdir(), 'output.log')
+    logfile = os.path.join(TestConfig.logdir(), 'output.log')
     sys.stdout = OutputLogger(logfile, sys.stdout)
     sys.stderr = OutputLogger(logfile, sys.stderr)
 
@@ -766,7 +766,7 @@ def run_pytest(target, backend, config, logdir):
     if logdir:
         os.environ['_SCT_LOGDIR'] = logdir
 
-    logfile = os.path.join(Setup.logdir(), 'output.log')
+    logfile = os.path.join(TestConfig.logdir(), 'output.log')
     sys.stdout = OutputLogger(logfile, sys.stdout)
     sys.stderr = OutputLogger(logfile, sys.stderr)
     if not target:
