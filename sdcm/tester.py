@@ -288,8 +288,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         Setup.set_intra_node_comm_public(self.params.get(
             'intra_node_comm_public') or Setup.MULTI_REGION)
 
-        Setup.USE_LEGACY_CLUSTER_INIT = self.params.get('use_legacy_cluster_init')
-        if Setup.USE_LEGACY_CLUSTER_INIT:
+        if self.params.get('use_legacy_cluster_init'):
             Setup.AUTO_BOOTSTRAP = False
 
         # for saving test details in DB
@@ -528,7 +527,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         self.init_resources()
 
         if self.db_cluster and self.db_cluster.nodes:
-            if Setup.USE_LEGACY_CLUSTER_INIT:
+            if self.params.get('use_legacy_cluster_init'):
                 self.legacy_init_nodes(db_cluster=self.db_cluster)
             else:
                 self.init_nodes(db_cluster=self.db_cluster)

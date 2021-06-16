@@ -160,7 +160,6 @@ class Setup:
     RSYSLOG_ADDRESS = None
     LDAP_ADDRESS = None
     DECODING_QUEUE = None
-    USE_LEGACY_CLUSTER_INIT = False
     AUTO_BOOTSTRAP = True
 
     _test_id = None
@@ -3662,7 +3661,8 @@ def wait_for_init_wrap(method):
             cl_inst.update_db_packages(node_list, start_service=False)
 
         for node in node_list:
-            if isinstance(cl_inst, BaseScyllaCluster) and not Setup.USE_LEGACY_CLUSTER_INIT:
+            if isinstance(cl_inst, BaseScyllaCluster) \
+                    and not getattr(cl_inst, 'params', {}).get('use_legacy_cluster_init'):
                 init_nodes.append(node)
                 start_time = time.perf_counter()
                 node_setup(node)
