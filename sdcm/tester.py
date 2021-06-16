@@ -288,9 +288,6 @@ class ClusterTester(db_stats.TestStatsMixin,
         Setup.set_intra_node_comm_public(self.params.get(
             'intra_node_comm_public') or Setup.MULTI_REGION)
 
-        if self.params.get('use_legacy_cluster_init'):
-            Setup.AUTO_BOOTSTRAP = False
-
         # for saving test details in DB
         self.create_stats = self.params.get(key='store_perf_results')
         self.scylla_dir = SCYLLA_DIR

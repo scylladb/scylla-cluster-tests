@@ -160,7 +160,6 @@ class Setup:
     RSYSLOG_ADDRESS = None
     LDAP_ADDRESS = None
     DECODING_QUEUE = None
-    AUTO_BOOTSTRAP = True
 
     _test_id = None
     _test_name = None
@@ -3240,14 +3239,21 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
         if isinstance(n_nodes, list):
             for dc_idx, num in enumerate(n_nodes):
-                self.add_nodes(num, dc_idx=dc_idx, enable_auto_bootstrap=Setup.AUTO_BOOTSTRAP)
+                self.add_nodes(num, dc_idx=dc_idx, enable_auto_bootstrap=self.auto_bootstrap)
         elif isinstance(n_nodes, int):  # legacy type
-            self.add_nodes(n_nodes, enable_auto_bootstrap=Setup.AUTO_BOOTSTRAP)
+            self.add_nodes(n_nodes, enable_auto_bootstrap=self.auto_bootstrap)
         else:
             raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
         self.coredumps = dict()
         self.latency_results = dict()
         super(BaseCluster, self).__init__()
+
+    @property
+    def auto_bootstrap(self):
+        """
+        When enabled scylla nodes will be bootstraped automatically on first boot
+        """
+        return not self.params.get('use_legacy_cluster_init')
 
     @cached_property
     def tags(self) -> Dict[str, str]:
