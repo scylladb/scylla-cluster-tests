@@ -17,9 +17,11 @@ import logging
 import os
 from pathlib import Path
 import shutil
+import logging
+import datetime
+import tarfile
 import tempfile
 import time
-import zipfile
 import fnmatch
 import traceback
 from typing import Optional
@@ -708,7 +710,7 @@ class LogCollector:
             LOGGER.warning('Directory %s is empty', self.local_dir)
             return None
 
-        final_archive = self.archive_dir_with_zip64(self.local_dir)
+        final_archive = self.archive_dir_to_tarfile(self.local_dir)
         if not final_archive:
             return None
         s3_link = upload_archive_to_s3(final_archive, f"{self.test_id}/{self.current_run}")
@@ -737,23 +739,16 @@ class LogCollector:
         pass
 
     @staticmethod
-    def archive_dir_with_zip64(logdir):
-        archive_base_name = os.path.basename(logdir)
-        archive_storage_dir = os.path.dirname(logdir)
-        archive_full_name = os.path.join(archive_storage_dir, archive_base_name + ".zip")
-        cur_dir = os.getcwd()
+    def archive_dir_to_tarfile(logdir):
+        logdir_name = os.path.basename(logdir)
+        archive_name = f"{logdir_name}.tar.gz"
         try:
-            with zipfile.ZipFile(archive_full_name, "w", allowZip64=True) as arch:
-                os.chdir(logdir)
-                for root, _, files in os.walk(logdir):
-                    for log_file in files:
-                        full_path = os.path.join(root, log_file)
-                        arch.write(full_path, full_path.replace(logdir, ""))
-                os.chdir(cur_dir)
-        except Exception as details:  # pylint: disable=broad-except
-            LOGGER.error("Error during creating archive. Error details: \n%s", details)
-            archive_full_name = None
-        return archive_full_name
+            with tarfile.open(archive_name, "w:gz") as tar:
+                tar.add(logdir, arcname=logdir_name)
+        except Exception as details:
+            LOGGER.error("Error during archive creation. Details: \n%s", details)
+            return None
+        return archive_name
 
 
 class ScyllaLogCollector(LogCollector):
@@ -939,7 +934,7 @@ class SCTLogCollector(LogCollector):
                 LOGGER.warning('Nothing found')
                 return None
 
-        final_archive = self.archive_dir_with_zip64(self.local_dir)
+        final_archive = self.archive_dir_to_tarfile(self.local_dir)
 
         s3_link = upload_archive_to_s3(final_archive, f"{self.test_id}/{self.current_run}")
         remove_files(self.local_dir)
