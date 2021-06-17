@@ -23,7 +23,7 @@ instance_provision: 'spot'
 gce_image_db: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
 
 scylla_version: 4.4.1
-scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/branch-2.0/latest/scylla-manager.repo'
+scylla_mgmt_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.3.repo'
 
 workaround_kernel_bug_for_iotune: true
 
