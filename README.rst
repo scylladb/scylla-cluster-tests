@@ -539,6 +539,73 @@ FAQ
     SCT_CLUSTER_BACKEND=aws hydra conf-docs -o markdown > docs/configuration_options.md
 
 
+
+Run a functional test
+====
+
+Functional tests are stored in ``function_tests/`` directory
+You can use any configuration file for them, but in general you need ``test-cases/scylla-operator/functional.yaml``
+You can use any backend, but for scylla_operator tests it needs to be any kubernetes backend, such as ``k8s-eks, k8s-gke, k8s-local-minikube, k8s-local-kind``
+
+Hardware requirements:
+    You need to have at least **16Gb** of RAM and **120Gb** of disk to get it running
+
+After the run tests logs are stored in the directory you passed to --logdir, or to ``~/sct-results`` if you did not
+
+Running in hydra
+----------
+
+on EKS::
+
+    hydra "run-pytest function_tests.scylla_operator --backend k8s-eks --config test-cases/scylla-operator/functional.yaml" --logdir"`pwd`"
+
+on Local kind cluster::
+
+    hydra "run-pytest function_tests.scylla_operator --backend k8s-local-kind --config test-cases/scylla-operator/functional.yaml"  --logdir"`pwd`"
+
+Running via sct.py
+----------
+
+The benefit of running in this mode, is that you can reuse your local kind/minikube binary
+
+on EKS::
+
+    sct.py run-pytest function_tests.scylla_operator --backend k8s-eks --config test-cases/scylla-operator/functional.yaml" --logdir"`pwd`"
+
+on Local kind cluster::
+
+    sct.py run-pytest function_tests.scylla_operator --backend k8s-local-kind --config test-cases/scylla-operator/functional.yaml" --logdir"`pwd`"
+
+Running via python
+----------
+
+The benefit of running in this mode, is that not only you can reuse your local kind/minikube binary
+But you also can use breakpoints to debug tests
+
+on EKS::
+
+    SCT_CLUSTER_BACKEND=k8s-eks SCT_CONFIG_FILES=test-cases/scylla-operator/functional.yaml python -m pytest functional_tests/scylla_operator
+
+on Local kind cluster::
+
+    SCT_CLUSTER_BACKEND=k8s-local-kind SCT_CONFIG_FILES=test-cases/scylla-operator/functional.yaml python -m pytest functional_tests/scylla_operator
+
+Reuse cluster
+----------
+
+You can reuse cluster in any mode you are running by populating "SCT_REUSE_CLUSTER" env variable.
+There is only difference for local mini kubernetes cluster, in such case it won't respect SCT_REUSE_CLUSTER value
+ and will reuse any cluster it find
+
+on EKS::
+
+    SCT_REUSE_CLUSTER=<test_id> SCT_CLUSTER_BACKEND=k8s-eks SCT_CONFIG_FILES=test-cases/scylla-operator/functional.yaml python -m pytest functional_tests/scylla_operator
+
+on Local kind cluster::
+
+    SCT_REUSE_CLUSTER=1 SCT_CLUSTER_BACKEND=k8s-local-kind SCT_CONFIG_FILES=test-cases/scylla-operator/functional.yaml python -m pytest functional_tests/scylla_operator
+
+
 TODO
 ====
 
