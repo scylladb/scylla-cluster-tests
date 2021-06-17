@@ -69,7 +69,7 @@ class CassandraStressEventsPublisher(FileFollowerThread):
 
 
 class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
-    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='',  # pylint: disable=too-many-arguments
+    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='', compaction_strategy='',  # pylint: disable=too-many-arguments
                  profile=None, node_list=None, round_robin=False, client_encrypt=False, stop_test_on_failure=True):
         if not node_list:
             node_list = []
@@ -84,6 +84,7 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
         self.round_robin = round_robin
         self.client_encrypt = client_encrypt
         self.stop_test_on_failure = stop_test_on_failure
+        self.compaction_strategy = compaction_strategy
 
         self.executor = None
         self.results_futures = []
@@ -109,6 +110,9 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace={} ".format(self.keyspace_name))
         elif 'keyspace=' not in stress_cmd:  # if keyspace is defined in the command respect that
             stress_cmd = stress_cmd.replace(" -schema ", " -schema keyspace=keyspace{} ".format(keyspace_idx))
+
+        if self.compaction_strategy and "compaction(" not in stress_cmd:
+            stress_cmd = stress_cmd.replace(" -schema ", f" -schema 'compaction(strategy={self.compaction_strategy})' ")
 
         credentials = self.loader_set.get_db_auth()
         if credentials and 'user=' not in stress_cmd:

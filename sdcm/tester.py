@@ -1668,8 +1668,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
 
     # pylint: disable=too-many-arguments,too-many-return-statements
-    def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',
-                          round_robin=False, stats_aggregate_cmds=True, keyspace_name=None,
+    def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='', # pylint: disable=too-many-arguments
+                          round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, compaction_strategy='',
+                          use_single_loader=False,
                           stop_test_on_failure=True):
         # We want to prevent situation when stress command starts on not ready cluster (no all nodes are UP).
         # It may cause to stress failure and as result the test will be stopped and failed
@@ -1681,6 +1682,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if 'cassandra-stress' in stress_cmd:  # cs cmdline might started with JVM_OPTION
             params['stop_test_on_failure'] = stop_test_on_failure
+            params['compaction_strategy'] = compaction_strategy
             return self.run_stress_cassandra_thread(**params)
         elif stress_cmd.startswith('scylla-bench'):
             params['stop_test_on_failure'] = stop_test_on_failure
@@ -1702,10 +1704,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         else:
             raise ValueError(f'Unsupported stress command: "{stress_cmd[:50]}..."')
 
-    # pylint: disable=too-many-arguments
-    def run_stress_cassandra_thread(
-            self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='', round_robin=False,
-            stats_aggregate_cmds=True, keyspace_name=None, stop_test_on_failure=True, **_):
+    def run_stress_cassandra_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None,  # pylint: disable=too-many-arguments
+                                    prefix='',
+                                    round_robin=False, stats_aggregate_cmds=True, keyspace_name=None,
+                                    compaction_strategy='',
+                                    use_single_loader=False,  # pylint: disable=too-many-arguments,unused-argument
+                                    stop_test_on_failure=True):  # pylint: disable=too-many-arguments,unused-argument
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
         if duration:
             timeout = self.get_duration(duration)
@@ -1721,6 +1725,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                           timeout=timeout,
                                           stress_num=stress_num,
                                           keyspace_num=keyspace_num,
+                                          compaction_strategy=compaction_strategy,
                                           profile=profile,
                                           node_list=self.db_cluster.nodes,
                                           round_robin=round_robin,
