@@ -33,9 +33,7 @@ spec:
             - mountPath: /var/run/docker.sock
               name: docker-socket
           resources:
-            limits:
-              cpu: ${CPU_LIMIT}
-              memory: ${MEMORY_LIMIT}
+            # NOTE: set only 'requests' and not 'limits' to reuse as many resources as possible
             requests:
               cpu: ${CPU_LIMIT}
               memory: ${MEMORY_LIMIT}
