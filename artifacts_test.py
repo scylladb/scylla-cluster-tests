@@ -88,6 +88,10 @@ class ArtifactsTest(ClusterTester):
         Verify that the snitch used in the cluster is appropriate for
         the backend used.
         """
+        if not self.params["use_preinstalled_scylla"]:
+            self.log.info(f"Skipping verifying the snitch due to the 'use_preinstalled_scylla' being set to False")
+            return
+
         describecluster_snitch = self.get_describecluster_info().snitch
         with self.node.remote_scylla_yaml() as scylla_yaml:
             scylla_yaml_snitch = scylla_yaml['endpoint_snitch']
