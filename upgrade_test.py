@@ -495,6 +495,7 @@ class UpgradeTest(FillDatabaseData):
                 DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
                 DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'), \
                 DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'), \
+                DbEventsFilter(type='DATABASE_ERROR', line='Can\'t find a column family with UUID'), \
                 DbEventsFilter(type='RUNTIME_ERROR', line='Could not retrieve CDC streams with timestamp'), \
                 DbEventsFilter(type='DATABASE_ERROR', line="cql_server - exception while processing connection: "
                                                            "seastar::nested_exception (seastar::nested_exception)"):
@@ -570,6 +571,7 @@ class UpgradeTest(FillDatabaseData):
                 DbEventsFilter(type='SCHEMA_FAILURE', line='Failed to load schema'), \
                 DbEventsFilter(type='DATABASE_ERROR', line='Failed to pull schema'), \
                 DbEventsFilter(type='RUNTIME_ERROR', line='Failed to load schema'), \
+                DbEventsFilter(type='DATABASE_ERROR', line='Can\'t find a column family with UUID'), \
                 DbEventsFilter(type='RUNTIME_ERROR', line='Could not retrieve CDC streams with timestamp'), \
                 DbEventsFilter(type='DATABASE_ERROR', line="cql_server - exception while processing connection: "
                                                            "seastar::nested_exception (seastar::nested_exception)"):
