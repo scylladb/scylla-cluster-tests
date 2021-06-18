@@ -1964,23 +1964,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         # full cluster repair
         up_normal_nodes.remove(node_to_remove)
-        # Repairing the first node will result in a best effort repair due to the terminated node,
-        # and as a result requires ignoring repair errors
-        first_node_to_repair = up_normal_nodes[0]
-        with DbEventsFilter(type='RUNTIME_ERROR',
-                            line="failed to repair",
-                            node=first_node_to_repair):
-            try:
-                self.repair_nodetool_repair(node=first_node_to_repair)
-            except Exception as details:  # pylint: disable=broad-except
-                self.log.error(f"failed to execute repair command "
-                               f"on node {first_node_to_repair} due to the following error: {str(details)}")
-        for node in up_normal_nodes[1:]:
-            try:
-                self.repair_nodetool_repair(node=node)
-            except Exception as details:  # pylint: disable=broad-except
-                self.log.error(f"failed to execute repair command "
-                               f"on node {node} due to the following error: {str(details)}")
 
         def remove_node():
             # nodetool removenode 'host_id'
@@ -1990,30 +1973,49 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             res = rnd_node.run_nodetool("removenode {}".format(host_id), ignore_status=True, verbose=True)
             return res.exit_status
 
-        exit_status = remove_node()
-        assert exit_status == 0, "nodetool removenode command exited with status {}".format(exit_status)
+        with DbEventsFilter(type='RUNTIME_ERROR',
+                            line="failed to repair"):
+            for node in up_normal_nodes:
+                try:
+                    self.repair_nodetool_repair(node=node, )
+                except Exception as details:  # pylint: disable=broad-except
+                    self.log.error(f"failed to execute repair command "
+                                   f"on node {node} due to the following error: {str(details)}")
 
-        # verify node is removed by nodetool status
-        removed_node_status = self.cluster.get_node_status_dictionary(
-            ip_address=node_to_remove.ip_address, verification_node=verification_node)
-        assert removed_node_status is None, "Node was not removed properly (Node status:{})".format(removed_node_status)
+            exit_status = remove_node()
 
-        # add new node
-        new_node = self._add_and_init_new_cluster_node()
-        # in case the removed node was a seed
-        if node_to_remove.is_seed:
-            new_node.is_seed = True
-            self.cluster.update_seed_provider()
-        # after add_node, the left nodes have data that isn't part of their tokens anymore.
-        # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
-        # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
-        try:
-            test_keyspaces = self.cluster.get_test_keyspaces()
-            for node in self.cluster.nodes:
-                for keyspace in test_keyspaces:
-                    node.run_nodetool(sub_cmd='cleanup', args=keyspace)
-        finally:
-            new_node.running_nemesis = None
+            if exit_status != 0:
+                self.log.error(f"nodetool removenode command exited with status {exit_status}")
+                self.log.debug(
+                    f"Remove failed node {node_to_remove} from dead node list {self.cluster.dead_nodes_list}")
+                node = next((n for n in self.cluster.dead_nodes_list if n.ip_address == node_to_remove.ip_address), None)
+                if node:
+                    self.cluster.dead_nodes_list.remove(node)
+                else:
+                    self.log.debug(f"Node {node.name} with ip {node.ip_address} was not found in dead_nodes_list")
+
+            # verify node is removed by nodetool status
+            removed_node_status = self.cluster.get_node_status_dictionary(
+                ip_address=node_to_remove.ip_address, verification_node=verification_node)
+            assert removed_node_status is None, "Node was not removed properly (Node status:{})".format(
+                removed_node_status)
+
+            # add new node
+            new_node = self._add_and_init_new_cluster_node()
+            # in case the removed node was a seed
+            if node_to_remove.is_seed:
+                new_node.is_seed = True
+                self.cluster.update_seed_provider()
+            # after add_node, the left nodes have data that isn't part of their tokens anymore.
+            # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
+            # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
+            try:
+                test_keyspaces = self.cluster.get_test_keyspaces()
+                for node in self.cluster.nodes:
+                    for keyspace in test_keyspaces:
+                        node.run_nodetool(sub_cmd='cleanup', args=keyspace)
+            finally:
+                new_node.running_nemesis = None
 
     # Temporary disable due to  https://github.com/scylladb/scylla/issues/6522
     def _disrupt_network_reject_inter_node_communication(self):
