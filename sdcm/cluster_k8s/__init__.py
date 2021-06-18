@@ -96,15 +96,24 @@ MINIO_NAMESPACE = "minio"
 
 # Resources that are used by container deployed by scylla-operator on scylla nodes
 OPERATOR_CONTAINERS_RESOURCES = {
-    'cpu': 2,
-    'memory': 0.4
+    'cpu': 0.05,
+    'memory': 0.01,
 }
 
 # Resources that are used by side-car injected by sct into scylla-operator statefulset
 # Look at ScyllaPodCluster.add_sidecar_injection()
 SIDECAR_CONTAINERS_RESOURCES = {
-    'cpu': 0.1,
-    'memory': 0.1
+    'cpu': 0.01,
+    'memory': 0.05,
+}
+
+# Other common resources which get deployed on each scylla node such as 'kube-proxy'
+# EKS: between 100m-200m CPU
+# GKE: between 200m-300m CPU and 250Mi RAM
+# Above numbers are "explicit" reservations. So, reserve a bit more for other common pods.
+COMMON_CONTAINERS_RESOURCES = {
+    'cpu': 0.51,
+    'memory': 0.51,
 }
 
 LOGGER = logging.getLogger(__name__)
@@ -677,9 +686,18 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             # Calculate cpu and memory limits to occupy all available amounts by scylla pods
             cpu_limit, memory_limit = node_pool.cpu_and_memory_capacity
             # TBD: Remove reduction logic after https://github.com/scylladb/scylla-operator/issues/384 is fixed
-            cpu_limit = int(cpu_limit - OPERATOR_CONTAINERS_RESOURCES['cpu'] - SIDECAR_CONTAINERS_RESOURCES['cpu'])
+            cpu_limit = int(
+                cpu_limit
+                - OPERATOR_CONTAINERS_RESOURCES['cpu']
+                - SIDECAR_CONTAINERS_RESOURCES['cpu']
+                - COMMON_CONTAINERS_RESOURCES['cpu']
+            )
             memory_limit = int(
-                memory_limit - OPERATOR_CONTAINERS_RESOURCES['memory'] - SIDECAR_CONTAINERS_RESOURCES['memory'])
+                memory_limit
+                - OPERATOR_CONTAINERS_RESOURCES['memory']
+                - SIDECAR_CONTAINERS_RESOURCES['memory']
+                - COMMON_CONTAINERS_RESOURCES['memory']
+            )
         else:
             cpu_limit = 1
             memory_limit = 2
@@ -2135,12 +2153,12 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                     name='injected-busybox-sidecar',
                     resources=V1ResourceRequirements(
                         limits={
-                            'cpu': '100m',
-                            'memory': '100Mi'
+                            'cpu': f"{int(SIDECAR_CONTAINERS_RESOURCES['cpu'] * 1000)}m",
+                            'memory': f"{int(SIDECAR_CONTAINERS_RESOURCES['memory'] * 1000)}Mi",
                         },
                         requests={
-                            'cpu': '100m',
-                            'memory': '100Mi'
+                            'cpu': f"{int(SIDECAR_CONTAINERS_RESOURCES['cpu'] * 1000)}m",
+                            'memory': f"{int(SIDECAR_CONTAINERS_RESOURCES['memory'] * 1000)}Mi",
                         }
                     )
                 )
