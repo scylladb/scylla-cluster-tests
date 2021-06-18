@@ -66,9 +66,6 @@ from sdcm.utils.common import (
     download_dir_from_cloud,
     generate_random_string,
     get_test_name,
-    update_authenticator,
-    prepare_and_start_saslauthd_service,
-    change_default_password,
 )
 from sdcm.utils.distro import Distro
 from sdcm.utils.docker_utils import ContainerManager, NotFound
@@ -91,14 +88,14 @@ from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.monitorstack.ui import AlternatorDashboard
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3
-from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LDAP_BASE_OBJECT, LDAP_PASSWORD, LDAP_USERS, LDAP_ROLE, \
-    LDAP_PORT, DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR
+from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LDAP_PASSWORD, LDAP_USERS, LDAP_ROLE, \
+    DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR, get_ldap_ms_ad_config, get_openldap_config, \
+    prepare_and_start_saslauthd_service, update_authenticator, change_default_password
 from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
 from sdcm.utils import cdc
 from sdcm.coredump import CoredumpExportSystemdThread
-from sdcm.keystore import KeyStore
 from sdcm.paths import (
     SCYLLA_YAML_PATH,
     SCYLLA_PROPERTIES_PATH,
@@ -290,7 +287,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 except NotFound:
                     pass
                 ContainerManager.run_container(self, "auto_ssh:ldap",
-                                               local_port=TestConfig.LDAP_ADDRESS[1],
+                                               local_port=TestConfig.LDAP_PORT,
                                                remote_port=LDAP_SSH_TUNNEL_LOCAL_PORT)
 
     @property
@@ -1529,63 +1526,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def remote_manager_agent_yaml(self):
         return self._remote_yaml(path=SCYLLA_MANAGER_AGENT_YAML_PATH)
 
-    @staticmethod
-    def get_openldap_config():
-        if TestConfig.LDAP_ADDRESS is None:
-            return {}
-        ldap_server_ip = '127.0.0.1' if TestConfig.IP_SSH_CONNECTIONS == 'public' \
-            or TestConfig.MULTI_REGION else TestConfig.LDAP_ADDRESS[0]
-        ldap_port = LDAP_SSH_TUNNEL_LOCAL_PORT if TestConfig.IP_SSH_CONNECTIONS == 'public' or TestConfig.MULTI_REGION else \
-            TestConfig.LDAP_ADDRESS[1]
-        return {'role_manager': 'com.scylladb.auth.LDAPRoleManager',
-                'ldap_url_template': f'ldap://{ldap_server_ip}:{ldap_port}/'
-                                     f'{LDAP_BASE_OBJECT}?cn?sub?(uniqueMember='
-                                     f'uid={{USER}},ou=Person,{LDAP_BASE_OBJECT})',
-                'ldap_attr_role': 'cn',
-                'ldap_bind_dn': f'cn=admin,{LDAP_BASE_OBJECT}',
-                'ldap_bind_passwd': LDAP_PASSWORD}
-
-    @staticmethod
-    def get_ldap_ms_ad_config():
-        if TestConfig.LDAP_ADDRESS is None:
-            return {}
-        ldap_ms_ad_credentials = KeyStore().get_ldap_ms_ad_credentials()
-        return {'ldap_attr_role': 'cn',
-                'ldap_bind_dn': ldap_ms_ad_credentials['ldap_bind_dn'],
-                'ldap_bind_passwd': ldap_ms_ad_credentials['admin_password'],
-                'ldap_url_template':
-                    f'ldap://{ldap_ms_ad_credentials["server_address"]}:{LDAP_PORT}/{LDAP_BASE_OBJECT}?cn?sub?'
-                    f'(member=CN={{USER}},DC=scylla-qa,DC=com)',
-                'role_manager': 'com.scylladb.auth.LDAPRoleManager'}
-
-    @staticmethod
-    def get_saslauthd_config():
-        if TestConfig.LDAP_ADDRESS is None:
-            return {}
-        ldap_server_ip = '127.0.0.1' if TestConfig.IP_SSH_CONNECTIONS == 'public' or TestConfig.MULTI_REGION else TestConfig.LDAP_ADDRESS[
-            0]
-        ldap_port = LDAP_SSH_TUNNEL_LOCAL_PORT if TestConfig.IP_SSH_CONNECTIONS == 'public' or TestConfig.MULTI_REGION else \
-            TestConfig.LDAP_ADDRESS[1]
-        return {'ldap_servers': f'ldap://{ldap_server_ip}:{ldap_port}/',
-                'ldap_search_base': f'ou=Person,{LDAP_BASE_OBJECT}',
-                'ldap_bind_dn': f'cn=admin,{LDAP_BASE_OBJECT}',
-                'ldap_bind_pw': LDAP_PASSWORD}
-
-    @staticmethod
-    def get_saslauthd_ms_ad_config():
-        ldap_ms_ad_credentials = KeyStore().get_ldap_ms_ad_credentials()
-        ldap_server_ip = ldap_ms_ad_credentials["server_address"]
-        ldap_port = LDAP_PORT
-        ldap_search_base = f'OU=People,{LDAP_BASE_OBJECT}'
-        ldap_bind_dn = ldap_ms_ad_credentials['ldap_bind_dn']
-        ldap_bind_pw = ldap_ms_ad_credentials['admin_password']
-
-        return {'ldap_servers': f'ldap://{ldap_server_ip}:{ldap_port}/',
-                'ldap_search_base': ldap_search_base,
-                'ldap_filter': '(cn=%u)',
-                'ldap_bind_dn': ldap_bind_dn,
-                'ldap_bind_pw': ldap_bind_pw}
-
     def create_ldap_users_on_scylla(self):
         self.run_cqlsh(f'CREATE ROLE \'{LDAP_ROLE}\' WITH SUPERUSER=true')
         for user in LDAP_USERS:
@@ -1733,9 +1673,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 scylla_yml['internode_compression'] = internode_compression
 
             if ldap and ms_ad_ldap:
-                scylla_yml.update(self.get_ldap_ms_ad_config())
+                scylla_yml.update(get_ldap_ms_ad_config())
             elif ldap:
-                scylla_yml.update(self.get_openldap_config())
+                scylla_yml.update(get_openldap_config())
 
             if append_scylla_yaml:
                 scylla_yml.update(yaml.safe_load(append_scylla_yaml))

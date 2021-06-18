@@ -40,10 +40,10 @@ from sdcm.cluster import NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady
 from sdcm.cluster import NodeStayInClusterAfterDecommission
 from sdcm.cluster_k8s.mini_k8s import MinikubeK8sMixin
 from sdcm.mgmt import TaskStatus
-from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR
+from sdcm.test_config import TestConfig
+from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, update_authenticator
 from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_string, \
-    update_certificates, reach_enospc_on_node, clean_enospc_on_node, parse_nodetool_listsnapshots, \
-    update_authenticator
+    update_certificates, reach_enospc_on_node, clean_enospc_on_node, parse_nodetool_listsnapshots
 from sdcm.utils import cdc
 from sdcm.utils.decorators import retrying, latency_calculator_decorator, timeout
 from sdcm.utils.docker_utils import ContainerManager
@@ -713,7 +713,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         time.sleep(600)
 
         def create_ldap_container():
-            self.tester.configure_ldap(self.tester.localhost)
+            TestConfig.set_ldap_address_and_port(*self.tester.localhost.start_and_configure_ldap(use_ssl=False))
 
         def add_ldap_configuration_to_node(node):
             node.refresh_ip_address()

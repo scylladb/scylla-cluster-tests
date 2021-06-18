@@ -10,10 +10,8 @@ from typing import Optional, Dict
 
 from sdcm.keystore import KeyStore
 from sdcm.utils.common import get_my_ip
-from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.get_username import get_username
-from sdcm.utils.ldap import LdapServerNotReady
 
 
 LOGGER = logging.getLogger(__name__)
@@ -34,6 +32,7 @@ class TestConfig:
     INTRA_NODE_COMM_PUBLIC = False
     RSYSLOG_ADDRESS = None
     LDAP_ADDRESS = None
+    LDAP_PORT = None
     DECODING_QUEUE = None
 
     _test_id = None
@@ -161,19 +160,6 @@ class TestConfig:
         return tags
 
     @classmethod
-    @retrying(n=20, sleep_time=6, allowed_exceptions=LdapServerNotReady)
-    def configure_ldap(cls, node, use_ssl=False):
-        ContainerManager.run_container(node, "ldap")
-        if use_ssl:
-            port = node.ldap_ports['ldap_ssl_port']
-        else:
-            port = node.ldap_ports['ldap_port']
-        address = get_my_ip()
-        cls.LDAP_ADDRESS = (address, port)
-        if ContainerManager.get_container(node, 'ldap').exec_run("timeout 30s container/tool/wait-process")[0] != 0:
-            raise LdapServerNotReady("LDAP server didn't finish its startup yet...")
-
-    @classmethod
     def configure_rsyslog(cls, node, enable_ngrok=False):
         ContainerManager.run_container(node, "rsyslog", logdir=cls.logdir())
         port = node.rsyslog_port
@@ -234,3 +220,11 @@ class TestConfig:
     @classmethod
     def set_duration(cls, duration):
         cls.TEST_DURATION = duration
+
+    @classmethod
+    def set_ldap_address_and_port(cls, address, port):
+        cls.LDAP_ADDRESS, cls.LDAP_PORT = address, port
+
+    @classmethod
+    def set_ldap_address(cls, address):
+        cls.LDAP_ADDRESS = address

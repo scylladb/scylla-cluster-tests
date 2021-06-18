@@ -58,7 +58,6 @@ from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, upd
     rows_to_list, make_threads_be_daemonic_by_default, ParallelObject
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
-from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT
 from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer, \
@@ -306,58 +305,27 @@ class ClusterTester(db_stats.TestStatsMixin,
         self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
         if self.params.get("use_ms_ad_ldap"):
             ldap_ms_ad_credentials = KeyStore().get_ldap_ms_ad_credentials()
-            TestConfig.LDAP_ADDRESS = ldap_ms_ad_credentials["server_address"]
+            TestConfig.set_ldap_address(ldap_ms_ad_credentials["server_address"])
         elif self.params.get("use_ldap_authorization") or self.params.get("prepare_saslauthd") or self.params.get(
                 "use_saslauthd_authenticator"):
-            self.configure_ldap(node=self.localhost, use_ssl=False)
+            TestConfig.set_ldap_address_and_port(*self.localhost.start_and_configure_ldap(use_ssl=False))
 
-        ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
         if self.params.get("use_ldap_authorization") and not self.params.get("use_ms_ad_ldap"):
             self.params['are_ldap_users_on_scylla'] = False
-            ldap_role = LDAP_ROLE
-            ldap_users = LDAP_USERS.copy()
-            ldap_address = list(TestConfig.LDAP_ADDRESS).copy()
-            unique_members_list = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}' for user in ldap_users]
-            user_password = LDAP_PASSWORD  # not in use not for authorization, but must be in the config
-            ldap_entry = [f'cn={ldap_role},{LDAP_BASE_OBJECT}',
-                          ['groupOfUniqueNames', 'simpleSecurityObject', 'top'],
-                          {'uniqueMember': unique_members_list, 'userPassword': user_password}]
-            self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
-                                          user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
-        if (self.params.get("prepare_saslauthd") or self.params.get("use_saslauthd_authenticator")) and not self.params.get("use_ms_ad_ldap"):
-            ldap_users = LDAP_USERS.copy()
-            ldap_address = list(TestConfig.LDAP_ADDRESS).copy()
-            ldap_entry = [f'ou=Person,{LDAP_BASE_OBJECT}',
-                          ['organizationalUnit', 'top'],
-                          {'ou': 'Person'}]
-            self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
-                                          user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
-            # Buildin user also need to be added in ldap server, otherwise it can't login to create LDAP_USERS
-            for user in [self.params.get('authenticator_user')] + LDAP_USERS:
-                password = LDAP_PASSWORD if user in LDAP_USERS else self.params.get("authenticator_password")
-                ldap_entry = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}',
-                              ['uidObject', 'organizationalPerson', 'top'],
-                              {'userPassword': password, 'sn': 'PersonSn', 'cn': 'PersonCn'}]
-                self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
-                                              user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
+
+        if (self.params.get("prepare_saslauthd") or self.params.get(
+                "use_saslauthd_authenticator")) and not self.params.get("use_ms_ad_ldap"):
+            self.localhost.populate_ldap_person_bucket()
+            self.localhost.populate_ldap_person(
+                person_name=self.params.get('authenticator_user'),
+                person_password=self.params.get("authenticator_password")
+            )
+            self.localhost.populate_ldap_builtin_persons()
+
         self.alternator = alternator.api.Alternator(sct_params=self.params)
         start_events_device(log_dir=self.logdir, _registry=self.events_processes_registry)
         time.sleep(0.5)
         InfoEvent(message=f"TEST_START test_id={TestConfig.test_id()}").publish()
-
-    def configure_ldap(self, node, use_ssl=False):
-        TestConfig.configure_ldap(node=node, use_ssl=use_ssl)
-        ldap_role = LDAP_ROLE
-        ldap_users = LDAP_USERS.copy()
-        ldap_address = list(TestConfig.LDAP_ADDRESS).copy()
-        unique_members_list = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}' for user in ldap_users]
-        ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
-        user_password = LDAP_PASSWORD  # not in use not for authorization, but must be in the config
-        ldap_entry = [f'cn={ldap_role},{LDAP_BASE_OBJECT}',
-                      ['groupOfUniqueNames', 'simpleSecurityObject', 'top'],
-                      {'uniqueMember': unique_members_list, 'userPassword': user_password}]
-        self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
-                                      user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
 
     def _init_test_timeout_thread(self) -> threading.Timer:
         start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
