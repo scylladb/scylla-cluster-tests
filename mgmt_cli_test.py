@@ -332,6 +332,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         3) test_mgmt_cluster_healthcheck
         4) test_client_encryption
         """
+        self.generate_load_and_wait_for_results()
         with self.subTest('Basic Backup Test'):
             self.test_basic_backup()
         with self.subTest('Repair Multiple Keyspace Types'):
@@ -423,6 +424,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         return email_data
 
     def test_backup_feature(self):
+        self.generate_load_and_wait_for_results()
         with self.subTest('Backup Multiple KS\' and Tables'):
             self.test_backup_multiple_ks_tables()
         with self.subTest('Backup to Location with path'):
@@ -456,7 +458,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
-        self.generate_load_and_wait_for_results()
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
         backup_task.wait_for_status(list_status=[TaskStatus.DONE])
         self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
@@ -471,7 +472,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
         tables = self.create_ks_and_tables(10, 100)
-        self.generate_load_and_wait_for_results()
         self.log.debug('tables list = {}'.format(tables))
         # TODO: insert data to those tables
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
@@ -485,7 +485,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
-        self.generate_load_and_wait_for_results()
         try:
             mgr_cluster.create_backup_task(location_list=[f'{location}/path_testing/' for location in self.locations])
         except ScyllaManagerError as error:
@@ -498,7 +497,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
-        self.generate_load_and_wait_for_results()
         rate_limit_list = [f'{dc}:{randint(1, 10)}' for dc in self.get_all_dcs_names()]
         self.log.info('rate limit will be {}'.format(rate_limit_list))
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=rate_limit_list)
@@ -560,7 +558,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
-        self.generate_load_and_wait_for_results()
         snapshot_file_list_pre_test = self._get_all_snapshot_files(cluster_id=mgr_cluster.id)
 
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, retention=1)
@@ -589,7 +586,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
-        self.generate_load_and_wait_for_results()
         repair_task = mgr_cluster.create_repair_task(fail_fast=True)
         dict_host_health = mgr_cluster.get_hosts_health()
         for host_health in dict_host_health.values():
@@ -774,10 +770,13 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
+        # deleting previous snapshots so that the current backup will last longer
+        previous_backup_tasks = mgr_cluster.backup_task_list
+        for backup_task in previous_backup_tasks:
+            backup_task.delete_backup_snapshot()
 
         target_node = self.db_cluster.nodes[1]
 
-        self.generate_load_and_wait_for_results()
         has_enospc_been_reached = False
         with ignore_no_space_errors(node=target_node):
             try:
@@ -912,7 +911,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         InfoEvent(message='finishing test_intensity_and_parallel').publish()
 
     def test_suspend_and_resume(self):
-        self.generate_load_and_wait_for_results()
         with self.subTest('Suspend and resume backup task'):
             self._suspend_and_resume_task_template(task_type="backup")
         with self.subTest('Suspend and resume repair task'):

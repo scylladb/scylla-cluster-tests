@@ -361,6 +361,15 @@ class BackupTask(ManagerTask):
                                           text=text, timeout=timeout, throw_exc=True)
         return is_status_reached
 
+    def delete_backup_snapshot(self):
+        if self.status == TaskStatus.DONE:
+            snapshot_tag = self.get_snapshot_tag()
+            command = f" -c {self.cluster_id} backup delete --snapshot-tag {snapshot_tag}"
+            self.sctool.run(command, parse_table_res=False, is_verify_errorless_result=True)
+        else:
+            LOGGER.warning("Did not delete the snapshot of task {}, since the status of said task is {}, and the "
+                           "manager can only delete snapshots of finished tasks".format(self.id, str(self.status)))
+
 
 class ManagerCluster(ScyllaManagerBase):
 
