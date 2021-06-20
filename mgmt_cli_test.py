@@ -150,9 +150,9 @@ class BackupFunctionsMixIn:
                                              keyspace_and_table_list=per_keyspace_tables_dict)
 
     def _generate_load(self):
-        self.log.info('Starting c-s write workload for 1m')
+        self.log.info('Starting c-s write workload')
         stress_cmd = self.params.get('stress_cmd')
-        stress_thread = self.run_stress_thread(stress_cmd=stress_cmd, duration=5)
+        stress_thread = self.run_stress_thread(stress_cmd=stress_cmd)
         self.log.info('Sleeping for 15s to let cassandra-stress run...')
         time.sleep(15)
         return stress_thread
