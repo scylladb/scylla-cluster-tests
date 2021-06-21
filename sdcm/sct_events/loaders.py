@@ -22,8 +22,7 @@ from invoke.runners import Result
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import \
-    SctEvent, SctEventProtocol, LogEvent, LogEventProtocol, T_log_event, \
-    BaseStressEvent, StressEvent, StressEventProtocol
+    SctEvent, LogEvent, LogEventProtocol, T_log_event, BaseStressEvent, StressEvent, StressEventProtocol
 
 LOGGER = logging.getLogger(__name__)
 
@@ -33,8 +32,9 @@ class GeminiStressEvent(BaseStressEvent):
     def __init__(self, node: Any,
                  cmd: str,
                  log_file_name: Optional[str] = None,
-                 severity: Severity = Severity.NORMAL):
-        super().__init__(severity=severity)
+                 severity: Severity = Severity.NORMAL,
+                 publish_event: bool = True):
+        super().__init__(severity=severity, publish_event=publish_event)
 
         self.node = str(node)
         self.cmd = cmd
@@ -54,7 +54,9 @@ class GeminiStressEvent(BaseStressEvent):
         fmt = super().msgfmt + ":"
         if self.type:
             fmt += " type={0.type}"
-        fmt += " node={0.node} gemini_cmd={0.cmd}"
+        fmt += " node={0.node}"
+
+        fmt += " gemini_cmd={0.cmd}"
 
         if self.result:
             fmt += "\nresult={0.result}"

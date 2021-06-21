@@ -12,52 +12,39 @@
 # Copyright (c) 2021 ScyllaDB
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import SctEvent
+from sdcm.sct_events.base import ContinuousEvent
 
 
-class NodetoolEvent(SctEvent):
-    def __init__(self,
-                 type,
-                 subtype,
-                 severity,
-                 options=None,
+class NodetoolEvent(ContinuousEvent):
+    def __init__(self,  # pylint: disable=too-many-arguments
+                 nodetool_command,
+                 severity=Severity.NORMAL,
                  node=None,
-                 start=None,
-                 end=None,
-                 duration=None,
-                 error=None,
-                 full_traceback=None):  # pylint: disable=redefined-builtin,too-many-arguments
-        super().__init__(severity=severity)
+                 options=None,
+                 publish_event=True):
+        super().__init__(severity=severity, publish_event=publish_event)
 
         # handle the case if command is like "snapshot -kc keyspace1"
-        nodetool_cmd = type.split()[0]
-        if len(type.split()) > 1:
+        cmd_splitted = nodetool_command.split()
+        if len(cmd_splitted) > 1:
             options_to_list = [options] if options else []
-            options = ' '.join(type.split()[1:] + options_to_list)
+            options = ' '.join(cmd_splitted[1:] + options_to_list)
 
-        self.type = nodetool_cmd
-        self.subtype = subtype
+        if cmd_splitted:
+            self.nodetool_command = cmd_splitted[0]
         self.options = options
         self.node = str(node)
-        self.start = start
-        self.end = end
-        self.duration = duration
-
-        self.error = None
-        self.full_traceback = ""
-        if error:
-            self.error = error
-            self.full_traceback = str(full_traceback)
+        self.full_traceback = None
 
     @property
     def msgfmt(self) -> str:
-        fmt = super().msgfmt + ": type={0.type} subtype={0.subtype} node={0.node}"
+        fmt = super().msgfmt + ": nodetool_command={0.nodetool_command}"
+        if self.node:
+            fmt += " node={0.node}"
         if self.options:
             fmt += " options={0.options}"
-        if self.duration:
-            fmt += " duration={0.duration}"
-        if self.error:
-            fmt += " error={0.error}"
+        if self.errors:
+            fmt += " errors={0.errors}"
         if self.full_traceback:
             fmt += "\n{0.full_traceback}"
         return fmt

@@ -2609,35 +2609,28 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         :param publish_event: publish event or not
         :return: Remoter result object
         """
-        def _publish_event(subtype, severity, duration=None, error=None, full_traceback=None):
-            if publish_event:
-                NodetoolEvent(type=sub_cmd, subtype=subtype, severity=severity, node=self.name,
-                              duration=duration, options=options, error=error,
-                              full_traceback=full_traceback).publish()
-
         cmd = self._gen_nodetool_cmd(sub_cmd, args, options)
-        start_time = time.time()
-        try:
-            _publish_event(subtype='start', severity=Severity.NORMAL)
 
-            result = self.remoter.run(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose)
-            self.log.debug("Command '%s' duration -> %s s" % (result.command, result.duration))
+        with NodetoolEvent(nodetool_command=sub_cmd,
+                           node=self.name,
+                           options=options,
+                           publish_event=publish_event) as nodetool_event:
+            try:
+                result = self.remoter.run(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose)
+                self.log.debug("Command '%s' duration -> %s s" % (result.command, result.duration))
 
-            _publish_event(subtype='end', severity=Severity.NORMAL, duration=f"{result.duration}s")
-            return result
-        except Exception as details:  # pylint: disable=broad-except
-            event_severity_on_failure = Severity.ERROR
-            if warning_event_on_exception and isinstance(details, warning_event_on_exception):
-                event_severity_on_failure = Severity.WARNING
+                nodetool_event.duration = result.duration
+                return result
+            except Exception as details:  # pylint: disable=broad-except
+                if warning_event_on_exception and isinstance(details, warning_event_on_exception):
+                    nodetool_event.severity = Severity.WARNING
 
-            self.log.critical(f"Command '{cmd}' error: {details}")
-            if coredump_on_timeout and isinstance(details, CommandTimedOut):
-                self.generate_coredump_file()
+                if coredump_on_timeout and isinstance(details, CommandTimedOut):
+                    self.generate_coredump_file()
 
-            duration = int(time.time() - start_time)
-            _publish_event(subtype='end', severity=event_severity_on_failure, duration=f"{duration}s",
-                           error=f"{error_message}{str(details)}", full_traceback=traceback.format_exc())
-            raise
+                nodetool_event.add_error([f"{error_message}{str(details)}"])
+                nodetool_event.full_traceback = traceback.format_exc()
+                raise
 
     def check_node_health(self, retries: int = CHECK_NODE_HEALTH_RETRIES) -> None:
         # Task 1443: ClusterHealthCheck is bottle neck in scale test and create a lot of noise in 5000 tables test.
