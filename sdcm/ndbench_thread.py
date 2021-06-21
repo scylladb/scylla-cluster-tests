@@ -123,6 +123,7 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
             node_cmd = self.stress_cmd
 
         docker = RemoteDocker(loader, 'scylladb/hydra-loaders:ndbench-jdk8-20200209',
+                              ports=[8080, 7001],
                               extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
 
         node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; cd /ndbench && {node_cmd}'

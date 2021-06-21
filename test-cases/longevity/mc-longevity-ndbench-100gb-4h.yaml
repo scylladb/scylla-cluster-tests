@@ -1,0 +1,29 @@
+test_duration: 120
+
+prepare_write_cmd:  >-
+  ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=10485760 ; numValues=10 ; dataSize=512 ; cass.colsPerRow=10;
+  readEnabled=false; numReaders=0; numWriters=10 ; cass.writeConsistencyLevel=QUORUM ; generateChecksum=true;  cli
+  .timeoutMillis=1800000; writeRateLimit=30000
+
+stress_cmd:
+  - >-
+    ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=10485760 ; numValues=10 ; dataSize=512 ; cass.colsPerRow=10;
+    readEnabled=false; numReaders=0; numWriters=10 ; cass.writeConsistencyLevel=QUORUM ; generateChecksum=true; cli
+    .timeoutMillis=14400000; writeRateLimit=60000
+
+  - >-
+    ndbench cli.clientName=CassJavaDriverGeneric ; numKeys=10485760 ; numValues=10 ; dataSize=512 ; cass.colsPerRow=10;
+    writeEnabled=false; numReaders=10; numWriters=0 ; cass.readConsistencyLevel=QUORUM ; validateChecksum=true; cli
+    .timeoutMillis=14400000; readRateLimit=60000
+
+n_db_nodes: 6
+n_loaders: 2
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.4xlarge'
+
+nemesis_class_name: 'NoOpMonkey'
+nemesis_interval: 10
+
+user_prefix: 'longevity-ndbench-100gb-4h'
+space_node_threshold: 64424
