@@ -31,6 +31,7 @@ from functools import partialmethod
 
 import yaml
 import dateutil.parser
+from dateutil.relativedelta import relativedelta
 
 from sdcm import sct_abs_path
 from sdcm.sct_events import Severity, SctEventProtocol
@@ -229,12 +230,20 @@ class InformationalEvent(SctEvent, abstract=True):
 
 
 class ContinuousEvent(SctEvent, abstract=True):
+    # Event filter does not create object of the class (not initialize it), so "_duration" attribute should
+    # exist without initialization
+    _duration: Optional[int] = None
 
     def __init__(self,
-                 severity: Severity = Severity.UNKNOWN):
+                 severity: Severity = Severity.UNKNOWN,
+                 publish_event: bool = True):
         super().__init__(severity=severity)
         self.log_file_name = None
         self.errors = []
+        self.publish_event = publish_event
+        self._ready_to_publish = publish_event
+        self.begin_timestamp = None
+        self.end_timestamp = None
 
     def __enter__(self):
         event = self.begin_event()
@@ -246,28 +255,71 @@ class ContinuousEvent(SctEvent, abstract=True):
                 self.errors = []
 
             self.errors.append(traceback.format_exc(limit=None, chain=True))
+            self.severity = Severity.ERROR if self.severity.value <= Severity.ERROR.value else self.severity
+
         self.end_event()
         return self
+
+    @property
+    def msgfmt(self):
+        fmt = super().msgfmt
+        if self.duration is not None:
+            fmt += " duration={0.duration_formatted}"
+        return fmt
 
     @property
     def errors_formatted(self):
         return "\n".join(self.errors) if self.errors is not None else ""
 
+    @property
+    def duration(self):
+        if self._duration is None:
+            if self.begin_timestamp is not None and self.end_timestamp is not None:
+                self._duration = int(self.end_timestamp - self.begin_timestamp)
+        return self._duration
+
+    @duration.setter
+    def duration(self, duration: int):
+        self._duration = duration
+
+    @property
+    def duration_formatted(self):
+        duration = ''
+        if self.duration is None:
+            return duration
+
+        rt = relativedelta(seconds=self.duration)
+        days, hours, minutes, sec = (int(rt.days), int(rt.hours), int(rt.minutes), rt.seconds)
+        if days:
+            duration += f"{days}d"
+
+        if days or hours:
+            duration += f"{hours}h"
+
+        if (hours or days) or (not hours and minutes > 0):
+            duration += f"{minutes}m"
+
+        duration += f"{sec}s"
+
+        return duration
+
     # TODO: rename function to "begin" after the refactor will be done
-    def begin_event(self, publish: bool = True) -> ContinuousEvent:
+    def begin_event(self) -> ContinuousEvent:
         self.timestamp = time.time()
+        self.begin_timestamp = self.timestamp
         self.period_type = EventPeriod.Begin.value
         self.severity = Severity.NORMAL
-        if publish:
+        if self.publish_event:
             self._ready_to_publish = True
             self.publish()
         return self
 
     # TODO: rename function to "end" after the refactor will be done
-    def end_event(self, publish: bool = True) -> None:
+    def end_event(self) -> None:
         self.timestamp = time.time()
+        self.end_timestamp = self.timestamp
         self.period_type = EventPeriod.End.value
-        if publish:
+        if self.publish_event:
             self._ready_to_publish = True
             self.publish()
 
@@ -278,10 +330,11 @@ class ContinuousEvent(SctEvent, abstract=True):
         self.errors.extend(errors)
 
     # TODO: rename function to "error" after the refactor will be done
-    def event_error(self, publish: bool = True):
+    def event_error(self):
         self.timestamp = time.time()
         self.period_type = EventPeriod.Informational.value
-        if publish:
+        self.duration = None
+        if self.publish_event:
             self._ready_to_publish = True
             self.publish()
 
@@ -479,8 +532,9 @@ class StressEvent(BaseStressEvent, abstract=True):
                  stress_cmd: Optional[str] = None,
                  log_file_name: Optional[str] = None,
                  errors: Optional[List[str]] = None,
-                 severity: Severity = Severity.NORMAL):
-        super().__init__(severity=severity)
+                 severity: Severity = Severity.NORMAL,
+                 publish_event: bool = True):
+        super().__init__(severity=severity, publish_event=publish_event)
 
         self.node = str(node)
         self.stress_cmd = stress_cmd
@@ -492,7 +546,10 @@ class StressEvent(BaseStressEvent, abstract=True):
         fmt = super().msgfmt + ":"
         if self.type:
             fmt += " type={0.type}"
-        fmt += " node={0.node}\nstress_cmd={0.stress_cmd}"
+        if self.node:
+            fmt += " node={0.node}"
+        if self.stress_cmd:
+            fmt += "\nstress_cmd={0.stress_cmd}"
         if self.errors:
             fmt += "\nerrors:\n\n{0.errors_formatted}"
         return fmt
@@ -501,4 +558,5 @@ class StressEvent(BaseStressEvent, abstract=True):
 __all__ = ("SctEvent", "SctEventProtocol", "SystemEvent", "BaseFilter",
            "LogEvent", "LogEventProtocol", "T_log_event",
            "BaseStressEvent", "StressEvent", "StressEventProtocol",
-           "add_severity_limit_rules", "max_severity", "print_critical_events", )
+           "add_severity_limit_rules", "max_severity", "print_critical_events",
+           "ContinuousEvent", "InformationalEvent")

@@ -18,8 +18,12 @@ import traceback
 import multiprocessing
 from pathlib import Path
 from datetime import datetime
+from unittest import mock
+
+from parameterized import parameterized
 
 from sdcm.prometheus import start_metrics_server
+from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.utils.decorators import timeout
 from sdcm.sct_events import Severity
 from sdcm.sct_events.system import CoreDumpEvent, TestFrameworkEvent
@@ -130,7 +134,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
 
     def test_general_filter_regex(self):
         with self.wait_for_n_events(self.get_events_logger(), count=4, timeout=3):
-            with EventsFilter(regex=".*1234567890.*") as filter:
+            with EventsFilter(regex=".*1234567890.*"):
                 CoreDumpEvent(corefile_url="http://",
                               backtrace="asfasdfsdf",
                               node="node xy",
@@ -338,3 +342,31 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                                line="[99.80.124.204] [stdout] Mar 31 09:08:10 warning|  reactor stall 20").publish()
 
         self.assertEqual(event.severity, Severity.DEBUG)
+
+    @parameterized.expand([(None, ''),
+                           (2, '2s'),
+                           (2.52, '2.52s'),
+                           (326, '5m26s'),
+                           (4598, '1h16m38s'),
+                           (87400, '1d0h16m40s'),
+                           ])
+    def test_duration_format(self, duration_input, duration_formatted):
+        event = NodetoolEvent(nodetool_command="scrub --skip-corrupted drop_table_during_repair_ks_0",
+                              node='1.0.0.121', options="more options", publish_event=False)
+
+        event.duration = duration_input
+        self.assertEqual(duration_formatted, event.duration_formatted)
+
+    @mock.patch('sdcm.sct_events.base.SctEvent.publish')
+    def test_publish_called(self, publish):
+        event = NodetoolEvent(nodetool_command="scrub", node='1.0.0.121',
+                              options="", publish_event=True)
+        event.begin_event()
+        self.assertTrue(publish.called, "Publish function was not called unexpectedly")
+
+    @mock.patch('sdcm.sct_events.base.SctEvent.publish')
+    def test_publish_not_called(self, publish):
+        event = NodetoolEvent(nodetool_command="scrub", node='1.0.0.121',
+                              options="", publish_event=False)
+        event.begin_event()
+        self.assertFalse(publish.called, "Publish function was called unexpectedly")
