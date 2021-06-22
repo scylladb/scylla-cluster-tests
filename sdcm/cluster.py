@@ -4061,9 +4061,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node.remoter.send_files(src='./configurations/io.conf', dst=f'{INSTALL_DIR}/etc/scylla.d/')
                 node.remoter.send_files(src='./configurations/io_properties.yaml', dst=f'{INSTALL_DIR}/etc/scylla.d/')
                 node.remoter.run(
-                    f"sed -ie 's/io-properties-file=/io-properties-file=\/home\/{TEST_USER}\/scylladb/g' {INSTALL_DIR}/etc/scylla.d/io.conf")
+                    fr"sed -ie 's/io-properties-file=/io-properties-file=\/home\/{TEST_USER}\/scylladb/g' {INSTALL_DIR}/etc/scylla.d/io.conf")
                 node.remoter.run(
-                    f"sed -ie 's/mountpoint: .*/mountpoint: \/home\/{TEST_USER}\/scylladb/g' {INSTALL_DIR}/etc/scylla.d/io_properties.yaml")
+                    fr"sed -ie 's/mountpoint: .*/mountpoint: \/home\/{TEST_USER}\/scylladb/g' {INSTALL_DIR}/etc/scylla.d/io_properties.yaml")
 
                 # simple config
                 node.remoter.run(
