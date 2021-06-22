@@ -4512,8 +4512,9 @@ class BaseLoaderSet():
                 apt-get install -y git
             """))
         node.remoter.sudo(shell_script_cmd("""\
-            curl -LO https://storage.googleapis.com/golang/go1.13.linux-amd64.tar.gz
-            tar -C /usr/local -xvzf go1.13.linux-amd64.tar.gz
+            rm -rf /usr/local/go
+            curl -LO https://storage.googleapis.com/golang/go1.16.3.linux-amd64.tar.gz
+            tar -C /usr/local -xvzf go1.16.3.linux-amd64.tar.gz
             echo 'export GOPATH=$HOME/go' >> $HOME/.bash_profile
             echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bash_profile
             source $HOME/.bash_profile
