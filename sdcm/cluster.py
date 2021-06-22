@@ -519,7 +519,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             else:
                 raise Exception('Seeds not found in the scylla.yaml')
 
-    def is_kubernetes(self) -> bool:
+    @staticmethod
+    def is_kubernetes() -> bool:
         return False
 
     def is_centos7(self):
