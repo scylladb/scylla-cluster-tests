@@ -2563,9 +2563,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 raise Exception('Resharding was not finished! '
                                 f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits}) '
                                 'Check the log for the details')
-            else:
-                self.log.debug('Resharding has been finished successfully '
-                               f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits})')
+            self.log.debug('Resharding has been finished successfully '
+                           f'(murmur3_partitioner_ignore_msb_bits={murmur3_partitioner_ignore_msb_bits})')
 
     def _gen_nodetool_cmd(self, sub_cmd, args, options):
         credentials = self.parent_cluster.get_db_auth()
