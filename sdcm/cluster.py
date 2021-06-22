@@ -3249,7 +3249,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                                     connect_timeout=connect_timeout, verbose=verbose)
 
     @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
-    def cql_connection_patient(self, node, keyspace=None,  # pylint: disable=too-many-arguments
+    def cql_connection_patient(self, node, keyspace=None,
+                               # pylint: disable=too-many-arguments,unused-argument
                                user=None, password=None,
                                compression=True, protocol_version=None,
                                port=None, ssl_opts=None, connect_timeout=100, verbose=True):
