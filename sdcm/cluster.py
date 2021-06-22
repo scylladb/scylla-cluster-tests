@@ -129,7 +129,7 @@ def remove_if_exists(file_path):
 class NodeError(Exception):
 
     def __init__(self, msg=None):
-        super(NodeError, self).__init__()
+        super().__init__()
         self.msg = msg
 
     def __str__(self):
@@ -3022,7 +3022,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
         self.coredumps = dict()
         self.latency_results = dict()
-        super(BaseCluster, self).__init__()
+        super().__init__()
 
     @property
     def auto_bootstrap(self):
@@ -3374,7 +3374,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
 class NodeSetupFailed(Exception):
     def __init__(self, node, error_msg, traceback_str=""):
-        super(NodeSetupFailed, self).__init__(error_msg)
+        super().__init__(error_msg)
         self.node = node
         self.error_msg = error_msg
         self.traceback_str = "\n" + traceback_str if traceback_str else ""
@@ -3487,7 +3487,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.nemesis_threads = []
         self.nemesis_count = 0
         self._node_cycle = None
-        super(BaseScyllaCluster, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     @staticmethod
     def get_node_ips_param(public_ip=True):
