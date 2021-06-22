@@ -2889,21 +2889,21 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         wait.wait_for(self.is_machine_image_configured, step=10, timeout=300)
 
     def get_sysctl_output(self) -> Dict[str, str]:
-        properties = {}
+        sysctl_properties = {}
         result = self.remoter.sudo("sysctl -a", ignore_status=True)
 
         if not result.ok:
             self.log.error(f"sysctl command failed: {result}")
-            return properties
+            return sysctl_properties
 
         for line in result.stdout.strip().split("\n"):
             try:
                 name, value = line.strip().split("=", 1)
-                properties.update({name.strip(): value.strip()})
+                sysctl_properties.update({name.strip(): value.strip()})
             except ValueError:
                 self.log.error(f"Could not parse sysctl line: {line}")
 
-        return properties
+        return sysctl_properties
 
     def set_seed_flag(self, is_seed):
         self.is_seed = is_seed
