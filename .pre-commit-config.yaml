@@ -34,7 +34,7 @@ repos:
 
     -   id: pylint
         name: pylint
-        entry: env PYTHONPATH=. pylint -j 2 -E --load-plugins pylint_plugin
+        entry: pylint -j 2
         language: system
         exclude: docker/alternator-dns/*
         types: [python]
