@@ -14,6 +14,7 @@
 import logging
 from datetime import datetime
 from functools import cached_property
+import sys
 
 from elasticsearch import Elasticsearch
 
@@ -25,6 +26,7 @@ LOGGER = logging.getLogger(__name__)
 class NemesisElasticSearchPublisher:
     index_name = 'nemesis_data'
     es: Elasticsearch
+    error_message_size_limit_mb = 100
 
     def __init__(self, tester):
         self.tester = tester
@@ -77,6 +79,18 @@ class NemesisElasticSearchPublisher:
                 new_nemesis_data['skip_reason'] = data['skip_reason']
 
         else:
+            error_message_size_mb = sys.getsizeof(data["error"]) / 1024**2
+            diff = error_message_size_mb / self.error_message_size_limit_mb
+            if diff > 1.0:
+                # NOTE: useful for cases when loader nodes fail to connect to
+                # terminated K8S host machines. It may provide very huge output up to 1Gb.
+                LOGGER.warning(
+                    f"Got too big error message running '{disrupt_name}' nemesis: "
+                    f"{error_message_size_mb}Mb.\n"
+                    f"The limit is '{self.error_message_size_limit_mb}Mb'. "
+                    "Trimming the error message...")
+                # NOTE: we are satisfied making rough rounding here
+                data["error"] = data["error"][:int(len(data["error"]) / diff)]
             new_nemesis_data.update(dict(
                 nemesis_name=disrupt_name,
                 nemesis_duration=data['duration'],
