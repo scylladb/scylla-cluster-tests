@@ -286,6 +286,8 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         :return:
         """
 
+        assert self.params.get('stress_cmd').startswith('scylla-bench'), "This test supports only scylla-bench"
+
         node3 = self.db_cluster.nodes[-1]
         self._disable_hinted_handoff()
         self.print_nodes_used_capacity()
@@ -297,9 +299,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         clustering_row_size = 2048
         partition_count_per_node = partition_count // 10 // 3
         clustering_row_count_per_node = clustering_row_count // 100 * 3
-        scylla_bench_base_cmd = "scylla-bench -workload=sequential -mode=write -max-rate=300 " \
-                                "-replication-factor=3 -clustering-row-size={} -concurrency=10 -rows-per-request=30".format(
-                                    clustering_row_size)
+        scylla_bench_base_cmd = self.params.get('stress_cmd') + f" -clustering-row-size={clustering_row_size}"
         self._populate_scylla_bench_data_in_parallel(base_cmd=scylla_bench_base_cmd, partition_count=partition_count,
                                                      clustering_row_count=clustering_row_count)
 
