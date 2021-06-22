@@ -1901,7 +1901,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if ldap and ms_ad_ldap:
                 scylla_yml.update(self.get_ldap_ms_ad_config())
             elif ldap:
-                scylla_yml.update(self.get_ldap_config())
+                scylla_yml.update(self.get_openldap_config())
 
             if append_scylla_yaml:
                 scylla_yml.update(yaml.safe_load(append_scylla_yaml))
@@ -4743,7 +4743,7 @@ class BaseLoaderSet():
             echo 'export GOPATH=$HOME/go' >> $HOME/.bash_profile
             echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bash_profile
             source $HOME/.bash_profile
-            go get -u github.com/scylladb/scylla-bench
+            GO111MODULE=on go get -v -u github.com/scylladb/scylla-bench
         """))
 
 
