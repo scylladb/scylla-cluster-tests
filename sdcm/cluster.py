@@ -2957,6 +2957,7 @@ class FlakyRetryPolicy(RetryPolicy):
         return self._retry_message(msg="Retrying request after UE", retry_num=retry_num)
 
 
+# pylint: disable=too-many-instance-attributes
 @dataclass
 class DeadNode:
     name: str
