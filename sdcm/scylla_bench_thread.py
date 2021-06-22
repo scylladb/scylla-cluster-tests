@@ -152,6 +152,10 @@ class ScyllaBenchThread:
             loaders = self.loader_set.nodes if not self.use_single_loader else [self.loader_set.nodes[0]]
         LOGGER.debug("Round-Robin through loaders, Selected loader is {} ".format(loaders))
 
+        for loader in loaders:
+            if not self.loader_set.is_scylla_bench_installed(loader):
+                self.loader_set.install_scylla_bench(loader)
+
         self.max_workers = (os.cpu_count() or 1) * 5
         LOGGER.debug("Starting %d scylla-bench Worker threads", self.max_workers)
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers)
