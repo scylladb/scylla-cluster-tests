@@ -21,7 +21,7 @@ import ast
 import logging
 import getpass
 import pathlib
-from typing import List, Union
+from typing import List, Union, Set
 
 from distutils.util import strtobool  # pylint: disable=import-error,no-name-in-module
 
@@ -1199,6 +1199,22 @@ class SCTConfiguration(dict):
         'region_name', 'n_db_nodes', 'ami_id_db_scylla', 'ami_id_loader'
     ]
 
+    stress_cmd_params = [
+        # this list is used for variouse checks against stress commands, such as:
+        # 1. Check if all c-s profile files existing that are referred in the commands
+        # 2. Check what stress tools test is needed when loader is prepared
+        'gemini_cmd', 'stress_cmd', 'stress_read_cmd', 'stress_cmd_w', 'stress_cmd_r', 'stress_cmd_m',
+        'prepare_write_cmd', 'stress_cmd_no_mv', 'stress_cmd_no_mv_profile',
+        'prepare_stress_cmd', 'stress_cmd_1', 'stress_cmd_complex_prepare', 'prepare_write_stress',
+        'stress_cmd_read_10m', 'stress_cmd_read_cl_one', 'stress_cmd_read_80m',
+        'stress_cmd_complex_verify_read', 'stress_cmd_complex_verify_more',
+        'write_stress_during_entire_test', 'verify_data_after_entire_test',
+        'stress_cmd_read_cl_quorum', 'verify_stress_after_cluster_upgrade',
+        'stress_cmd_complex_verify_delete', 'stress_cmd_lwt_mixed', 'stress_cmd_lwt_de',
+        'stress_cmd_lwt_dc', 'stress_cmd_lwt_ue', 'stress_cmd_lwt_uc', 'stress_cmd_lwt_ine',
+        'stress_cmd_lwt_d', 'stress_cmd_lwt_u', 'stress_cmd_lwt_i'
+    ]
+
     def __init__(self):
         # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         super().__init__()
@@ -1445,18 +1461,18 @@ class SCTConfiguration(dict):
             cur_val = self.get(opt['name'])
             assert cur_val in choices, "failed to validate '{}': {} not in {}".format(opt['name'], cur_val, choices)
 
+    @property
+    def list_of_stress_tools(self) -> Set[str]:
+        stress_tools = set()
+        for param_name in self.stress_cmd_params:
+            if stress_cmd := self.get(param_name):
+                if stress_tool := stress_cmd.split(maxsplit=2)[0]:
+                    stress_tools.add(stress_tool)
+        return stress_tools
+
     def check_required_files(self):
         # pylint: disable=too-many-nested-blocks
-        for param_name in ['stress_cmd', 'stress_read_cmd', 'stress_cmd_w', 'stress_cmd_r', 'stress_cmd_m',
-                           'prepare_write_cmd', 'stress_cmd_no_mv', 'stress_cmd_no_mv_profile',
-                           'prepare_stress_cmd', 'stress_cmd_1', 'stress_cmd_complex_prepare', 'prepare_write_stress',
-                           'stress_cmd_read_10m', 'stress_cmd_read_cl_one', 'stress_cmd_read_80m',
-                           'stress_cmd_complex_verify_read', 'stress_cmd_complex_verify_more',
-                           'write_stress_during_entire_test', 'verify_data_after_entire_test',
-                           'stress_cmd_read_cl_quorum', 'verify_stress_after_cluster_upgrade',
-                           'stress_cmd_complex_verify_delete', 'stress_cmd_lwt_mixed', 'stress_cmd_lwt_de',
-                           'stress_cmd_lwt_dc', 'stress_cmd_lwt_ue', 'stress_cmd_lwt_uc', 'stress_cmd_lwt_ine',
-                           'stress_cmd_lwt_d', 'stress_cmd_lwt_u', 'stress_cmd_lwt_i']:
+        for param_name in self.stress_cmd_params:
             stress_cmds = self.get(param_name)
             if stress_cmds is None:
                 continue
