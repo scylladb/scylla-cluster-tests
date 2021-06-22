@@ -1469,7 +1469,8 @@ class BasePodContainer(cluster.BaseNode):
         """
         raise NotImplementedError("To be overridden in child class")
 
-    def is_kubernetes(self) -> bool:
+    @staticmethod
+    def is_kubernetes() -> bool:
         return True
 
 
