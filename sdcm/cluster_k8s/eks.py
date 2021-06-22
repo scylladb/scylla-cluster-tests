@@ -426,9 +426,10 @@ class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
         self.wait_for_k8s_node_readiness()
         self.parent_cluster.k8s_cluster.set_security_groups_on_all_instances()
 
-    def ec2_instance_destroy(self):
-        if self.ec2_host:
-            self.ec2_host.terminate()
+    def ec2_instance_destroy(self, ec2_host=None):
+        ec2_host = ec2_host or self.ec2_host
+        if ec2_host:
+            ec2_host.terminate()
 
     def _instance_wait_safe(self, instance_method, *args, **kwargs):
         """
@@ -467,25 +468,20 @@ class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
             Scylla Pod      X
             Scylla node     X
             '''))
+        ec2_host = self.ec2_host
         super().terminate_k8s_node()
 
         # EKS does not clean up instance automatically, in order to let pool to recover it self
         # instance that holds node should be terminated
-
-        self.ec2_instance_destroy()
-        self.wait_for_k8s_node_readiness()
-        self.parent_cluster.k8s_cluster.set_security_groups_on_all_instances()
-        self.wait_for_pod_readiness()
+        self.ec2_instance_destroy(ec2_host=ec2_host)
 
 
 class EksScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
     NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/eks/scylla-node-prepare.yaml")
     node_terminate_methods = [
         'drain_k8s_node',
-        # NOTE: enable below methods when it's support fully implemented
-        # https://trello.com/c/LrAObHPC/3119-fix-gce-node-termination-nemesis-on-k8s
-        # https://github.com/scylladb/scylla-operator/issues/524
-        # https://github.com/scylladb/scylla-operator/issues/507
+        # NOTE: uncomment below when following scylla-operator bug is fixed:
+        #       https://github.com/scylladb/scylla-operator/issues/643
         # 'terminate_k8s_host',
         # 'terminate_k8s_node',
     ]

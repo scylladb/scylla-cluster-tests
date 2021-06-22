@@ -123,8 +123,9 @@ class GkeNodePool(CloudK8sNodePool):
             raise RuntimeError(f"Can't get instance group name due to the: {exc}")
 
     def remove_instance(self, instance_name: str):
-        self.k8s_cluster.gcloud.run(f'compute instance-groups managed delete-instances {self.name} '
-                                    f'--zone={self.gce_zone} --instances={instance_name}')
+        self.k8s_cluster.gcloud.run(
+            f'compute instance-groups managed delete-instances {self.instance_group_name} '
+            f'--zone={self.gce_zone} --instances={instance_name}')
 
 
 class GcloudTokenUpdateThread(TokenUpdateThread):
@@ -366,15 +367,15 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
             Scylla Pod      X
             Scylla node     X
             '''))
+        node_name = self.node_name
         super().terminate_k8s_node()
 
         # Removing GKE instance and adding one node back to the cluster
         # TBD: Remove below lines when https://issuetracker.google.com/issues/178302655 is fixed
-
-        self.parent_cluster.node_pool.remove_instance(instance_name=self.node_name)
+        self.parent_cluster.node_pool.remove_instance(instance_name=node_name)
         self.parent_cluster.k8s_cluster.resize_node_pool(
-            self.parent_cluster.pool_name,
-            self.parent_cluster.node_pool.num_nodes
+            self.parent_cluster.node_pool.name,
+            self.parent_cluster.node_pool.num_nodes,
         )
 
 
@@ -382,10 +383,9 @@ class GkeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
     NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/gke/scylla-node-prepare.yaml")
     node_terminate_methods = [
         'drain_k8s_node',
-        # NOTE: enable below methods when it's support fully implemented
-        # https://trello.com/c/LrAObHPC/3119-fix-gce-node-termination-nemesis-on-k8s
-        # https://github.com/scylladb/scylla-operator/issues/524
-        # https://github.com/scylladb/scylla-operator/issues/507
+        # NOTE: uncomment below when following scylla-operator bug is fixed:
+        #       https://github.com/scylladb/scylla-operator/issues/643
+        #       Also, need to add check that there are no PV duplicates
         # 'terminate_k8s_host',
         # 'terminate_k8s_node',
     ]
