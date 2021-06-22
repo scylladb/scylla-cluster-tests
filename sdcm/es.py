@@ -1,5 +1,4 @@
 import logging
-from typing import Any
 
 import elasticsearch
 
@@ -15,8 +14,8 @@ class ES(elasticsearch.Elasticsearch):
 
     def __init__(self):
         self._conf = self.get_conf()
-        super(ES, self).__init__(hosts=[self._conf["es_url"]], verify_certs=False,
-                                 http_auth=(self._conf["es_user"], self._conf["es_password"]))
+        super().__init__(hosts=[self._conf["es_url"]], verify_certs=False,
+                         http_auth=(self._conf["es_user"], self._conf["es_password"]))
 
     def get_conf(self):
         self.key_store = KeyStore()
@@ -70,7 +69,3 @@ class ES(elasticsearch.Elasticsearch):
         """
         if self.get_doc(index, doc_id, doc_type):
             self.delete(index=index, doc_type=doc_type, id=doc_id)
-
-    def search(self, **kwargs) -> Any:
-        # Needed to make pre-commit happy
-        return super().search(**kwargs)
