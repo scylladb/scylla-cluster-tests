@@ -2647,12 +2647,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def decommission_node(self, node):
         self.cluster.decommission(node)
 
-    def decommission_nodes(self, add_nodes_number, rack, is_seed: Optional[Union[bool, DefaultValue]] = DefaultValue):
+    def decommission_nodes(self, add_nodes_number, rack, is_seed: Optional[Union[bool, DefaultValue]] = DefaultValue, dc_idx: Optional[int] = None):
         for _ in range(add_nodes_number):
             if self._is_it_on_kubernetes():
                 self.set_target_node(rack=rack, is_seed=is_seed, allow_only_last_node_in_rack=True)
             else:
-                self.set_target_node(is_seed=is_seed)
+                self.set_target_node(is_seed=is_seed, dc_idx=dc_idx)
             self.log.info("Next node will be removed %s", self.target_node)
 
             try:
@@ -2681,6 +2681,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
         self.log.info("Start grow cluster on %s nodes", add_nodes_number)
+        InfoEvent(message=f"Start grow cluster on {add_nodes_number} nodes").publish()
         for _ in range(add_nodes_number):
             InfoEvent(message=f'GrowCluster - Add New node to {rack} rack').publish()
             added_node = self.add_new_node(rack=rack)
@@ -2691,16 +2692,38 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _shrink_cluster(self, rack=0):
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
-        if int(add_nodes_number + self.tester.params.get('n_db_nodes')) != len(self.cluster.nodes):
-            raise UnsupportedNemesis(f"The nemesis {self.current_disruption} can't be started as previous Grow nemesis "
-                                     f"was not completed successfully")
+        self.log.info("Start shrink cluster by %s nodes", add_nodes_number)
+        InfoEvent(message=f'Start shrink cluster by {add_nodes_number} nodes').publish()
+        start_time = time.time()
+        # Check that number of nodes is enough for decommission:
+        cur_num_nodes_in_dc = len([n for n in self.cluster.nodes if n.dc_idx == self.target_node.dc_idx])
+        initial_db_size = self.tester.params.get("n_db_nodes")
+        if isinstance(initial_db_size, int):
+            decommission_nodes_number = min(cur_num_nodes_in_dc - initial_db_size, add_nodes_number)
+        else:
+            initial_db_size_in_dc = int(initial_db_size.split(" ")[self.target_node.dc_idx])
+            decommission_nodes_number = min(cur_num_nodes_in_dc - initial_db_size_in_dc, add_nodes_number)
 
-        self.log.info("Start shrink cluster on %s nodes", add_nodes_number)
+        if decommission_nodes_number < 1:
+            end_time = time.time()
+            time_elapsed = int(time.time() - start_time)
+            log_info = {"error": "Not enough nodes for decommission"}
+            DisruptionEvent(type=self.get_disrupt_name(), subtype="end", status=False, node=self.target_node,
+                            end=end_time, duration=time_elapsed, **log_info).publish()
+            self.log.warning(f"Shrink cluster skipped. Error: {log_info['error']}")
+            return
+
+        self.log.info("Start shrink cluster by %s nodes", decommission_nodes_number)
         # Currently on kubernetes first two nodes of each rack are getting seed status
         # Because of such behavior only way to get them decommission is to enable decommissioning
         # TBD: After https://github.com/scylladb/scylla-operator/issues/292 is fixed remove is_seed parameter
-        self.decommission_nodes(add_nodes_number, rack, is_seed=None if self._is_it_on_kubernetes() else DefaultValue)
-        self.log.info("Finish cluster shrink. Current number of nodes %s", len(self.cluster.nodes))
+        self.decommission_nodes(
+            decommission_nodes_number,
+            rack,
+            is_seed=None if self._is_it_on_kubernetes() else DefaultValue,
+            dc_idx=self.target_node.dc_idx)
+        self.log.info("Cluster shrink finished. Current number of nodes %s", len(self.cluster.nodes))
+        InfoEvent(message='Cluster shrink finished. Current number of nodes %s').publish()
 
     def disrupt_hot_reloading_internode_certificate(self):
         """
