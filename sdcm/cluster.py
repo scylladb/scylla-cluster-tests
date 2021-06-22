@@ -5259,5 +5259,18 @@ class LocalNode(BaseNode):
     def _refresh_instance_state(self):
         return ['127.0.0.1'], ['127.0.0.1']
 
+    @property
+    def region(self):
+        pass
+
     def set_keep_alive(self):
+        pass
+
+    def restart(self):
+        pass
+
+    def _get_ipv6_ip_address(self):
+        pass
+
+    def check_spot_termination(self):
         pass
