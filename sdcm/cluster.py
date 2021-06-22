@@ -433,7 +433,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         try:
             grep_result = self.remoter.run('grep "^CPUSET" /etc/scylla.d/cpuset.conf')
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             self.log.error(f"Failed to get CPUSET. Error: {exc}")
             return ''
 
@@ -465,7 +465,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         try:
             grep_result = self.remoter.run(f'grep "^SCYLLA_ARGS=" {self.scylla_server_sysconfig_path}')
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             self.log.error(f"Failed to get SCYLLA_ARGS. Error: {exc}")
             return ''
 
@@ -1289,7 +1289,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 if line[0] == '{':
                     try:
                         json_log = json.loads(line)
-                    except Exception:
+                    except Exception:  # pylint: disable=broad-except
                         pass
                 if not start_from_beginning and TestConfig.RSYSLOG_ADDRESS:
                     line = line.strip()
@@ -2684,7 +2684,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 for node_ip, node_properties in dc_status.items():
                     nodes_status[node_ip] = {'status': node_properties['state'], 'dc': dc}
 
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             ClusterHealthValidatorEvent.NodeStatus(
                 severity=Severity.WARNING,
                 node=self.name,
@@ -2776,7 +2776,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 cqlsh_out = self.remoter.run(cmd, timeout=timeout + 30,  # we give 30 seconds to cqlsh timeout mechanism to work
                                              verbose=verbose)
                 break
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 num_retry_on_failure -= 1
                 if not num_retry_on_failure:
                     raise
@@ -5203,7 +5203,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             if snapshot_archive := PrometheusSnapshots(name='prometheus_snapshot').collect(self.nodes[0], self.logdir):
                 self.log.debug("Snapshot local path: %s", snapshot_archive)
                 return upload_archive_to_s3(snapshot_archive, TestConfig.test_id())
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             self.log.error("Error downloading prometheus data dir: %s", details)
         return ""
 
