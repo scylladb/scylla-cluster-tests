@@ -512,7 +512,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 node_seeds = conf_dict['seed_provider'][0]['parameters'][0].get('seeds')
             except Exception as details:
                 self.log.debug('Loaded YAML data structure: %s', conf_dict)
-                raise ValueError('Exception determining seed node ips: %s' % details)
+                raise ValueError('Exception determining seed node ips') from details
 
             if node_seeds:
                 return node_seeds.split(',')
