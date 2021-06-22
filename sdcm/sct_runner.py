@@ -27,7 +27,7 @@ class ImageType(Enum):
 
 class SctRunner:
     """Provisions and configures the SCT runner"""
-    VERSION = 1.2  # Version of the Image
+    VERSION = 1.4  # Version of the Image
     IMAGE_NAME = f"sct-runner-{VERSION}"
     NODE_TYPE = "sct-runner"
     RUNNER_NAME = "SCT-Runner"
@@ -92,6 +92,9 @@ class SctRunner:
             apt update
             apt install -y docker-ce docker-ce-cli containerd.io
             usermod -aG docker {self.LOGIN_USER}
+            # add kubectl
+            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
             # configure Jenkins user
             apt install -y openjdk-14-jre-headless
             adduser --disabled-password --gecos "" jenkins
@@ -104,7 +107,6 @@ class SctRunner:
             # Jenkins pipelines run /bin/sh for some reason
             unlink /bin/sh
             ln -s /bin/bash /bin/sh
-
         """)
         remoter = self.get_remoter(host=public_ip)
         result = remoter.run(f"sudo bash -cxe '{prereqs_script}'", ignore_status=True)
