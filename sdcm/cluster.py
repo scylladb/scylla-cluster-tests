@@ -2942,14 +2942,17 @@ class FlakyRetryPolicy(RetryPolicy):
             return self.RETRY, None
         return self.RETHROW, None
 
+    # pylint: disable=too-many-arguments
     def on_read_timeout(self, query, consistency, required_responses,
                         received_responses, data_retrieved, retry_num):
         return self._retry_message(msg="Retrying read after timeout", retry_num=retry_num)
 
+    # pylint: disable=too-many-arguments
     def on_write_timeout(self, query, consistency, write_type,
                          required_responses, received_responses, retry_num):
         return self._retry_message(msg="Retrying write after timeout", retry_num=retry_num)
 
+    # pylint: disable=too-many-arguments
     def on_unavailable(self, query, consistency, required_replicas, alive_replicas, retry_num):
         return self._retry_message(msg="Retrying request after UE", retry_num=retry_num)
 
