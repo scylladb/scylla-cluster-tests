@@ -156,3 +156,4 @@ mgmt_docker_image: ''
 k8s_deploy_monitoring: false
 
 scylla_rsyslog_setup: false
+events_limit_in_email: 10
