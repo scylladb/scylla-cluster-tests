@@ -432,7 +432,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return ''
 
         try:
-            grep_result = self.remoter.run(f'grep "^CPUSET" /etc/scylla.d/cpuset.conf')
+            grep_result = self.remoter.run('grep "^CPUSET" /etc/scylla.d/cpuset.conf')
         except Exception as exc:
             self.log.error(f"Failed to get CPUSET. Error: {exc}")
             return ''
@@ -2076,7 +2076,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 # Reload the env variables by ssh reconnect
                 self.remoter.run('env', verbose=True, change_context=True)
                 assert 'XDG_RUNTIME_DIR' in self.remoter.run('env', verbose=True).stdout
-            install_cmds = dedent(f"""
+            install_cmds = dedent("""
                 tar xvfz ./unified_package.tar.gz
                 ./install.sh --nonroot
                 sudo rm -f /tmp/scylla.yaml
@@ -2084,7 +2084,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             # Known issue: https://github.com/scylladb/scylla/issues/7071
             self.remoter.run('bash -cxe "%s"' % install_cmds)
         else:
-            install_cmds = dedent(f"""
+            install_cmds = dedent("""
                 tar xvfz ./unified_package.tar.gz
                 ./install.sh --housekeeping
                 rm -f /tmp/scylla.yaml
@@ -4908,7 +4908,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
 
     @staticmethod
     def start_node_exporter(node):
-        start_node_exporter_script = dedent(f'''
+        start_node_exporter_script = dedent('''
             docker run --restart=always -d --net="host" --pid="host" -v "/:/host:ro,rslave" --cap-add=SYS_TIME \
             quay.io/prometheus/node-exporter --path.rootfs=/host
         ''')
