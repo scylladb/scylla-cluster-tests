@@ -1464,9 +1464,18 @@ class SCTConfiguration(dict):
     def list_of_stress_tools(self) -> Set[str]:
         stress_tools = set()
         for param_name in self.stress_cmd_params:
-            if stress_cmd := self.get(param_name):
+            stress_cmds = self.get(param_name)
+            if not (isinstance(stress_cmds, (list, str)) and stress_cmds):
+                continue
+            if isinstance(stress_cmds, str):
+                stress_cmds = [stress_cmds]
+
+            for stress_cmd in stress_cmds:
+                if not stress_cmd:
+                    continue
                 if stress_tool := stress_cmd.split(maxsplit=2)[0]:
                     stress_tools.add(stress_tool)
+
         return stress_tools
 
     def check_required_files(self):
