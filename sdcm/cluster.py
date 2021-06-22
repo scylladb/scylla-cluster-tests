@@ -3510,7 +3510,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     @property
     def racks(self) -> Set[int]:
-        return set([node.rack for node in self.nodes])
+        return {node.rack for node in self.nodes}
 
     def set_seeds(self, wait_for_timeout=300, first_only=False):
         seeds_selector = self.params.get('seeds_selector')
