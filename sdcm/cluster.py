@@ -2103,14 +2103,19 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run(r'sudo apt-get install -y {0}-server-dbg={1}\*'
                              .format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
 
-    def is_scylla_installed(self):
+    def is_scylla_installed(self, raise_if_not_installed=False):
         if self.distro.is_rhel_like:
             result = self.remoter.run(f'rpm -q {self.scylla_pkg()}', verbose=False, ignore_status=True)
         elif self.distro.is_ubuntu or self.distro.is_debian:
             result = self.remoter.run(f'dpkg-query --show {self.scylla_pkg()}', verbose=False, ignore_status=True)
         else:
             raise ValueError(f"Unsupported Linux distribution: {self.distro}")
-        return result.exit_status == 0
+        if result.exit_status == 0:
+            return True
+        elif raise_if_not_installed:
+            raise Exception(f"There is no pre-installed ScyllaDB on {self}")
+        else:
+            return False
 
     def get_scylla_version(self) -> str:
         self.scylla_version = self.scylla_version_detailed = ""
@@ -2928,6 +2933,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.sudo('rm -f /etc/apt/apt.conf.d/*update-notifier', ignore_status=True)
             self.remoter.sudo('apt-get remove -y unattended-upgrades', ignore_status=True)
             self.remoter.sudo('apt-get remove -y update-manager', ignore_status=True)
+
+    def get_nic_devices(self) -> List:
+        """Returns list of ethernet network interfaces"""
+        result = self.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
+        return result.stdout.strip().split()
 
 
 class FlakyRetryPolicy(RetryPolicy):
@@ -4023,6 +4033,39 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                           ldap=self.params.get('use_ldap_authorization'),
                           ms_ad_ldap=self.params.get('use_ms_ad_ldap'))
 
+    def scylla_configure_non_root_installation(self, node, devname, verbose, timeout):
+        node.stop_scylla_server(verify_down=False)
+        node.remoter.run(f'{INSTALL_DIR}/sbin/scylla_setup --nic {devname} --no-raid-setup --no-io-setup',
+                         verbose=True, ignore_status=True)
+        node.remoter.send_files(src='./configurations/io.conf', dst=f'{INSTALL_DIR}/etc/scylla.d/')
+        node.remoter.send_files(src='./configurations/io_properties.yaml', dst=f'{INSTALL_DIR}/etc/scylla.d/')
+        node.remoter.run(
+            fr"sed -ie 's/io-properties-file=/io-properties-file=\/home\/{TEST_USER}\/scylladb/g' {INSTALL_DIR}/etc/scylla.d/io.conf")
+        node.remoter.run(
+            fr"sed -ie 's/mountpoint: .*/mountpoint: \/home\/{TEST_USER}\/scylladb/g' {INSTALL_DIR}/etc/scylla.d/io_properties.yaml")
+
+        # simple config
+        node.remoter.run(
+            f"echo 'cluster_name: \"{self.name}\"' >> {INSTALL_DIR}/etc/scylla/scylla.yaml")  # pylint: disable=no-member
+        node.remoter.run(
+            f"sed -ie 's/- seeds: .*/- seeds: {node.ip_address}/g' {INSTALL_DIR}/etc/scylla/scylla.yaml")
+        node.remoter.run(
+            f"sed -ie 's/^listen_address: .*/listen_address: {node.ip_address}/g' {INSTALL_DIR}/etc/scylla/scylla.yaml")
+        node.remoter.run(
+            f"sed -ie 's/^rpc_address: .*/rpc_address: {node.ip_address}/g' {INSTALL_DIR}/etc/scylla/scylla.yaml")
+
+        node.start_scylla_server(verify_up=False, verify_up_timeout=timeout)
+        node.wait_db_up(verbose=verbose, timeout=timeout)
+        node.wait_jmx_up(verbose=verbose, timeout=200)
+
+    def copy_preconfigured_iotune_files(self, node):
+        self.log.info("This AMI need to be tweaked for io.conf and properties")
+        for conf in ['io.conf', 'io_properties.yaml']:
+            node.remoter.send_files(src=os.path.join('./configurations/', conf),
+                                    # pylint: disable=not-callable
+                                    dst='/tmp/')
+            node.remoter.run('sudo mv /tmp/{0} /etc/scylla.d/{0}'.format(conf))
+
     def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # pylint: disable=too-many-branches
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
         if node.distro.is_centos8 or node.distro.is_rhel8 or node.distro.is_oel8:
@@ -4034,55 +4077,23 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         install_scylla = True
 
-        if self.params.get("use_preinstalled_scylla"):
-            if node.is_scylla_installed():
-                install_scylla = False
-            else:
-                raise Exception("There is no pre-installed ScyllaDB")
+        if self.params.get("use_preinstalled_scylla") and node.is_scylla_installed(raise_if_not_installed=True):
+            install_scylla = False
 
         if not TestConfig.REUSE_CLUSTER:
             node.disable_daily_triggered_services()
-
-            result = node.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
-            devname = result.stdout.strip()
+            nic_devname = node.get_nic_devices()[0]
             if install_scylla:
                 self._scylla_install(node)
             else:
                 self.log.info("Waiting for preinstalled Scylla")
                 self._wait_for_preinstalled_scylla(node)
                 self.log.info("Done waiting for preinstalled Scylla")
-
                 if self.params.get('workaround_kernel_bug_for_iotune'):
-                    self.log.info("This AMI need to be tweaked for io.conf and properties")
-                    for conf in ['io.conf', 'io_properties.yaml']:
-                        node.remoter.send_files(src=os.path.join('./configurations/', conf),
-                                                # pylint: disable=not-callable
-                                                dst='/tmp/')
-                        node.remoter.run('sudo mv /tmp/{0} /etc/scylla.d/{0}'.format(conf))
+                    self.copy_preconfigured_iotune_files(node)
             if node.is_nonroot_install:
-                node.stop_scylla_server(verify_down=False)
-                node.remoter.run(f'{INSTALL_DIR}/sbin/scylla_setup --nic {devname} --no-raid-setup --no-io-setup',
-                                 verbose=True, ignore_status=True)
-                node.remoter.send_files(src='./configurations/io.conf', dst=f'{INSTALL_DIR}/etc/scylla.d/')
-                node.remoter.send_files(src='./configurations/io_properties.yaml', dst=f'{INSTALL_DIR}/etc/scylla.d/')
-                node.remoter.run(
-                    fr"sed -ie 's/io-properties-file=/io-properties-file=\/home\/{TEST_USER}\/scylladb/g' {INSTALL_DIR}/etc/scylla.d/io.conf")
-                node.remoter.run(
-                    fr"sed -ie 's/mountpoint: .*/mountpoint: \/home\/{TEST_USER}\/scylladb/g' {INSTALL_DIR}/etc/scylla.d/io_properties.yaml")
-
-                # simple config
-                node.remoter.run(
-                    f"echo 'cluster_name: \"{self.name}\"' >> {INSTALL_DIR}/etc/scylla/scylla.yaml")  # pylint: disable=no-member
-                node.remoter.run(
-                    f"sed -ie 's/- seeds: .*/- seeds: {node.ip_address}/g' {INSTALL_DIR}/etc/scylla/scylla.yaml")
-                node.remoter.run(
-                    f"sed -ie 's/^listen_address: .*/listen_address: {node.ip_address}/g' {INSTALL_DIR}/etc/scylla/scylla.yaml")
-                node.remoter.run(
-                    f"sed -ie 's/^rpc_address: .*/rpc_address: {node.ip_address}/g' {INSTALL_DIR}/etc/scylla/scylla.yaml")
-
-                node.start_scylla_server(verify_up=False, verify_up_timeout=timeout)
-                node.wait_db_up(verbose=verbose, timeout=timeout)
-                node.wait_jmx_up(verbose=verbose, timeout=200)
+                self.scylla_configure_non_root_installation(node=node, devname=nic_devname,
+                                                            verbose=verbose, timeout=timeout)
                 return
 
             self.get_scylla_version()
@@ -4093,7 +4104,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node.datacenter_setup(self.datacenter)  # pylint: disable=no-member
             self.node_config_setup(node, ','.join(self.seed_nodes_ips), self.get_endpoint_snitch())
 
-            self._scylla_post_install(node, install_scylla, devname)
+            self._scylla_post_install(node, install_scylla, nic_devname)
 
             # prepare and start saslauthd service
             if self.params.get('prepare_saslauthd'):
@@ -4106,13 +4117,11 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node.start_scylla_server(verify_up=False)
 
             # code to increase java heap memory to scylla-jmx (because of #7609)
-            jmx_memory = self.params.get("jmx_heap_memory")
-            if jmx_memory:
+            if jmx_memory := self.params.get("jmx_heap_memory"):
                 node.increase_jmx_heap_memory(jmx_memory)
                 node.restart_scylla_jmx()
 
-            self.log.info('io.conf right after reboot')
-            node.remoter.sudo('cat /etc/scylla.d/io.conf')
+            self.log.info('io.conf right after reboot: %s', node.remoter.sudo('cat /etc/scylla.d/io.conf').stdout)
 
             if self.params.get('use_mgmt'):
                 self.install_scylla_manager(node)
@@ -4395,7 +4404,7 @@ class BaseLoaderSet():
             self.log.debug('Gemini version {}'.format(self.gemini_version))
 
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):  # pylint: disable=unused-argument
-        # pylint: disable=too-many-statements
+        # pylint: disable=too-many-statements,too-many-branches
 
         self.log.info('Setup in BaseLoaderSet')
         node.wait_ssh_up(verbose=verbose)
