@@ -2613,7 +2613,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                       send_email=self.params.get('send_email'),
                                                       email_recipients=self.params.get('email_recipients'),
                                                       events=get_events_grouped_by_category(
-                                                          _registry=self.events_processes_registry))
+                                                          _registry=self.events_processes_registry, limit=self.params.get('events_limit_in_email'))
+                                                      )
         is_gce = bool(self.params.get('cluster_backend') == 'gce')
         try:
             results_analyzer.check_regression(self._test_id, is_gce,
@@ -2627,7 +2628,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                       send_email=self.params.get('send_email'),
                                                       email_recipients=self.params.get('email_recipients'),
                                                       events=get_events_grouped_by_category(
-                                                          _registry=self.events_processes_registry))
+                                                          _registry=self.events_processes_registry, limit=self.params.get('events_limit_in_email'))
+                                                      )
         is_gce = bool(self.params.get('cluster_backend') == 'gce')
         try:
             results_analyzer.check_regression_with_subtest_baseline(self._test_id,
@@ -2643,7 +2645,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                       send_email=self.params.get('send_email'),
                                                       email_recipients=self.params.get('email_recipients'),
                                                       events=get_events_grouped_by_category(
-                                                          _registry=self.events_processes_registry))
+                                                          _registry=self.events_processes_registry, limit=self.params.get('events_limit_in_email'))
+                                                      )
         if email_subject is None:
             email_subject = ('Performance Regression Compare Results - {test.test_name} - '
                              '{test.software.scylla_server_any.version.as_string}')

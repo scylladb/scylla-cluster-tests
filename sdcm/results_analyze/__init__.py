@@ -571,7 +571,8 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         ycsb = doc['_source']['test_details'].get('ycsb')
         dashboard_path = "app/kibana#/dashboard/03414b70-0e89-11e9-a976-2fe0f5890cd0?_g=()"
 
-        last_events, events_summary = self.get_events()
+        last_events, events_summary = self.get_events(event_severity=[
+            Severity.CRITICAL.name, Severity.ERROR.name, Severity.DEBUG.name])
 
         results = dict(test_name=full_test_name,
                        test_start_time=str(test_start_time),
