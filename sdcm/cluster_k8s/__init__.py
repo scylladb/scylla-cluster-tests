@@ -2245,7 +2245,8 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
                    db_node_address: Optional[str] = None,
                    **kwargs) -> None:
 
-        self.install_scylla_bench(node)
+        if 'scylla-bench' in self.params.list_of_stress_tools:
+            self.install_scylla_bench(node)
 
         if self.params.get('client_encrypt'):
             node.config_client_encrypt()
