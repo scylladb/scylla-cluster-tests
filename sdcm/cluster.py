@@ -4503,6 +4503,11 @@ class BaseLoaderSet():
                     self.log.warning('Terminate gemini on node %s:\n%s', loader, kill_result)
 
     @staticmethod
+    def is_scylla_bench_installed(node: BaseNode):
+        return node.remoter.run('ls /$HOME/go/bin/scylla-bench', ignore_status=True).ok
+
+    @staticmethod
+    @retrying(n=5)
     def install_scylla_bench(node):
         if node.distro.is_rhel_like:
             node.remoter.sudo("yum install -y git")
