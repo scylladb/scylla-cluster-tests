@@ -1367,6 +1367,7 @@ class BasePodContainer(cluster.BaseNode):
         wait_for(self._wait_for_k8s_node_readiness,
                  text=f"Wait for k8s host {self.node_name} to be ready...",
                  timeout=self.pod_readiness_timeout * 60,
+                 step=5,
                  throw_exc=True)
 
     def _wait_for_k8s_node_readiness(self):
