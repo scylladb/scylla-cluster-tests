@@ -207,18 +207,18 @@ class BaseEmailReporter:
 
     def send_email(self, email):
         if not self.email_recipients:
-            self.log.warning(f'Email recipient is not set, not sending report')
+            self.log.warning('Email recipient is not set, not sending report')
             return
         try:
             Email().send_email(recipients=self.email_recipients, email=email)
         except Exception as details:  # pylint: disable=broad-except
             self.log.error("Error during sending email: %s", details, exc_info=True)
         finally:
-            self.log.info(f'Send email with results to {self.email_recipients}')
+            self.log.info('Send email with results to %s', self.email_recipients)
 
     def send_report(self, results):
         if not self.email_recipients:
-            self.log.warning(f'Email recipient is not set, not sending report')
+            self.log.warning('Email recipient is not set, not sending report')
             return
         report_data = self.build_data_for_report(results)
         attachments_data = self.build_data_for_attachments(results)
@@ -417,7 +417,8 @@ class LongevityEmailReporter(BaseEmailReporter):
         self.save_html_to_file(attachments_data, report_file, template_file=template_file)
         return report_file
 
-    def get_config_file_link(self, attachments_data):
+    @staticmethod
+    def get_config_file_link(attachments_data):
         config_files = []
 
         if "N/A" in attachments_data["config_files"]:
@@ -433,7 +434,7 @@ class LongevityEmailReporter(BaseEmailReporter):
                 continue
 
             last_commit = subprocess.run(['git', 'rev-list', 'HEAD', '-1', config_file], capture_output=True,
-                                         text=True)
+                                         text=True, check=True)
             config_files.append({"file": f"[{config_file.split('/')[-1]}]",
                                  "link": f"https://github.com/scylladb/scylla-cluster-tests/blob"
                                  f"/{last_commit.stdout.strip()}/{config_file}"})
