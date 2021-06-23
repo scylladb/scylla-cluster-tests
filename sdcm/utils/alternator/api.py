@@ -110,8 +110,8 @@ class Alternator:
             LOGGER.debug("Adding new {} items to table '{}'.\n{}..".format(
                 len(new_items), table_name, pformat(new_items)))
         if delete_items:
-            LOGGER.debug("Deleting {} items from table '{table_name}'.\n{}..".format(
-                len(delete_items), table_name, pformat(delete_items)))
+            LOGGER.debug("Deleting %s items from table '%s'.\nDeleted: %s..",
+                         len(delete_items), table_name, pformat(delete_items))
 
         table = dynamodb_api.resource.Table(name=table_name)
         with table.batch_writer() as batch:
