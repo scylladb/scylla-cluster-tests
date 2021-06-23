@@ -22,7 +22,7 @@ n_monitor_nodes: 1
 
 instance_type_db: 'i3.4xlarge'
 gce_instance_type_db: 'n1-highmem-16'
-gce_n_local_ssd_disk_db: 6
+gce_n_local_ssd_disk_db: 16
 
 instance_type_loader: 'c5.4xlarge'
 gce_instance_type_loader: 'c2-standard-16'
