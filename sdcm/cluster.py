@@ -4805,7 +4805,7 @@ class BaseLoaderSet():
             echo 'export GOPATH=$HOME/go' >> $HOME/.bash_profile
             echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bash_profile
             source $HOME/.bash_profile
-            GO111MODULE=on go get -v -u github.com/scylladb/scylla-bench
+            GO111MODULE=on go get -v github.com/scylladb/scylla-bench
         """))
 
 
