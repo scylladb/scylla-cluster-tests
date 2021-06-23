@@ -29,7 +29,7 @@ import traceback
 import json
 from typing import List, Optional, Type, Callable, Tuple, Dict, Set, Union
 from functools import wraps, partial
-from collections import OrderedDict, defaultdict, Counter, namedtuple
+from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 
@@ -62,6 +62,7 @@ from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.group_common_events import ignore_alternator_client_errors, ignore_no_space_errors, ignore_scrub_invalid_errors
 from sdcm.db_stats import PrometheusDBStats
+from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.cluster_k8s import PodCluster, ScyllaPodCluster
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
@@ -2067,118 +2068,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.debug(result)
 
     def disrupt_show_toppartitions(self):
-        def _parse_toppartitions_output(output):
-            """parsing output of toppartitions
-
-            input format stored in output parameter:
-            WRITES Sampler:
-              Cardinality: ~10 (15 capacity)
-              Top 10 partitions:
-                Partition     Count       +/-
-                9        11         0
-                0         1         0
-                1         1         0
-
-            READS Sampler:
-              Cardinality: ~10 (256 capacity)
-              Top 3 partitions:
-                Partition     Count       +/-
-                0         3         0
-                1         3         0
-                2         3         0
-                3         2         0
-
-            return Dict:
-            {
-                'READS': {
-                    'toppartitions': '10',
-                    'partitions': OrderedDict('0': {'count': '1', 'margin': '0'},
-                                              '1': {'count': '1', 'margin': '0'},
-                                              '2': {'count': '1', 'margin': '0'}),
-                    'cardinality': '10',
-                    'capacity': '256',
-                },
-                'WRITES': {
-                    'toppartitions': '10',
-                    'partitions': OrderedDict('10': {'count': '1', 'margin': '0'},
-                                              '11': {'count': '1', 'margin': '0'},
-                                              '21': {'count': '1', 'margin': '0'}),
-                    'cardinality': '10',
-                    'capacity': '256',
-                    'sampler': 'WRITES'
-                }
-            }
-
-
-            Arguments:
-                output {str} -- stdout of nodetool topparitions command
-
-            Returns:
-                dict -- result of parsing
-            """
-
-            pattern1 = r"(?P<sampler>[A-Z]+)\sSampler:\W+Cardinality:\s~(?P<cardinality>[0-9]+)\s" \
-                       r"\((?P<capacity>[0-9]+)\scapacity\)\W+Top\s(?P<toppartitions>[0-9]+)\spartitions:"
-            pattern2 = r"(?P<partition>[\w:]+)\s+(?P<count>[\d]+)\s+(?P<margin>[\d]+)"
-            toppartitions = {}
-            for out in output.strip().split('\n\n'):
-                partition = OrderedDict()
-                sampler_data = re.search(pattern1, out, re.MULTILINE)
-                assert sampler_data, f"Pattern:{pattern1} are not matched on string:\n {out}"
-                sampler_data = sampler_data.groupdict()
-                partitions = re.findall(pattern2, out, re.MULTILINE)
-                self.log.debug(f"Next list of top partitions are found {partitions}")
-                for val in partitions:
-                    partition.update({val[0]: {'count': val[1], 'margin': val[2]}})
-                sampler_data.update({'partitions': partition})
-                toppartitions[sampler_data.pop('sampler')] = sampler_data
-            return toppartitions
-
-        def generate_random_parameters_values():  # pylint: disable=invalid-name
-            ks_cf_list = self.cluster.get_non_system_ks_cf_list(self.target_node)
-            if not ks_cf_list:
-                raise UnsupportedNemesis('User-defined Keyspace and ColumnFamily are not found.')
-            try:
-                ks, cf = random.choice(ks_cf_list).split('.')
-            except IndexError as details:
-                err_msg = "User-defined Keyspace and ColumnFamily are not found"
-                self.log.error('%s: %s.', err_msg, ks_cf_list)
-                self.log.debug('Error during choosing keyspace and columnfamily %s', details)
-                raise Exception(f"{err_msg}. \n{details}") from details
-            return {
-                'toppartition': str(random.randint(5, 20)),
-                'samplers': random.choice(['writes', 'reads', 'writes,reads']),
-                'capacity': str(random.randint(100, 1024)),
-                'ks': ks,
-                'cf': cf,
-                'duration': str(random.randint(1000, 10000))
-            }
-
         result = self.target_node.run_nodetool(sub_cmd='help', args='toppartitions')
         if 'Unknown command toppartitions' in result.stdout:
             raise UnsupportedNemesis("nodetool doesn't support toppartitions")
-
+        ks_cf_list = self.cluster.get_any_ks_cf_list(self.target_node)
+        if not ks_cf_list:
+            raise UnsupportedNemesis('User-defined Keyspace and ColumnFamily are not found.')
+        top_partition_api = random.choice([NewApiTopPartitionCmd, OldApiTopPartitionCmd])(ks_cf_list)
         # workaround for issue #4519
         self.target_node.run_nodetool('cfstats')
+        top_partition_api.generate_cmd_arg_values()
+        result = self.target_node.run_nodetool(sub_cmd='toppartitions', args=top_partition_api.get_cmd_args())
 
-        args = generate_random_parameters_values()
-        sub_cmd_args = "{ks} {cf} {duration} -s {capacity} -k {toppartition} -a {samplers}".format(**args)
-
-        result = self.target_node.run_nodetool(sub_cmd='toppartitions', args=sub_cmd_args)
-
-        toppartition_result = _parse_toppartitions_output(result.stdout)
-        for sampler in args['samplers'].split(','):
-            sampler = sampler.upper()
-            self.tester.assertIn(sampler, toppartition_result,
-                                 msg="{} sampler not found in result".format(sampler))
-            self.tester.assertTrue(toppartition_result[sampler]['toppartitions'] == args['toppartition'],
-                                   msg="Wrong expected and actual top partitions number for {} sampler".format(sampler))
-            self.tester.assertTrue(toppartition_result[sampler]['capacity'] == args['capacity'],
-                                   msg="Wrong expected and actual capacity number for {} sampler".format(sampler))
-            self.tester.assertLessEqual(len(toppartition_result[sampler]['partitions'].keys()),
-                                        int(args['toppartition']),
-                                        msg="Wrong number of requested and expected toppartitions for {} sampler".format(
-                                            sampler))
+        top_partition_api.verify_output(result.stdout)
 
     def get_rate_limit_for_network_disruption(self) -> Optional[str]:
         if not self.monitoring_set.nodes:
