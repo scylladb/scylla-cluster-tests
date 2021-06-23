@@ -16,8 +16,6 @@ import datetime
 import logging
 import os
 import shutil
-import logging
-import datetime
 import tarfile
 import tempfile
 import time
