@@ -722,7 +722,7 @@ class TestStatsMixin(Stats):
                                       "io_conf": output("grep -v ^# /etc/scylla.d/io.conf"),
                                       "cpuset_conf": output("grep -v ^# /etc/scylla.d/cpuset.conf"), })
             for node in self.db_cluster.nodes:
-                result = node.get_sysctl_output()
+                result = node.get_sysctl_properties()
                 if result:
                     setup_details["sysctl_output"].append(result)
 
