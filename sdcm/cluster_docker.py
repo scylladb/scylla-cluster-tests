@@ -153,12 +153,12 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
         self.node_container_image_tag = f"scylla-sct:{node_type}-{str(cluster.TestConfig.test_id())[:8]}"
         self.node_container_key_file = node_key_file
 
-        super(DockerCluster, self).__init__(cluster_prefix=cluster_prefix,
-                                            node_prefix=node_prefix,
-                                            n_nodes=n_nodes,
-                                            params=params,
-                                            region_names=["localhost-dc", ],  # Multi DC is not supported currently.
-                                            node_type=node_type)
+        super().__init__(cluster_prefix=cluster_prefix,
+                         node_prefix=node_prefix,
+                         n_nodes=n_nodes,
+                         params=params,
+                         region_names=["localhost-dc", ],  # Multi DC is not supported currently.
+                         node_type=node_type)
 
     def _create_node(self, node_index, container=None):
         node = DockerNode(parent_cluster=self,
