@@ -93,6 +93,7 @@ SCYLLA_OPERATOR_NAMESPACE = "scylla-operator-system"
 SCYLLA_MANAGER_NAMESPACE = "scylla-manager-system"
 SCYLLA_NAMESPACE = "scylla"
 MINIO_NAMESPACE = "minio"
+SCYLLA_CONFIG_NAME = "scylla-config"
 
 # Resources that are used by container deployed by scylla-operator on scylla nodes
 OPERATOR_CONTAINERS_RESOURCES = {
@@ -608,7 +609,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             'racks': [
                 {
                     'name': self.params.get('k8s_scylla_rack'),
-                    'scyllaConfig': 'scylla-confing',
+                    'scyllaConfig': SCYLLA_CONFIG_NAME,
                     'scyllaAgentConfig': 'scylla-agent-config',
                     'members': 0,
                     'storage': {
@@ -1994,8 +1995,8 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                 tmp.write(yaml.safe_dump(self.scylla_yaml))
                 tmp.flush()
                 self.k8s_cluster.kubectl_multi_cmd(
-                    f'kubectl create configmap scylla-config --from-file=scylla.yaml={tmp.name} ||'
-                    f'kubectl create configmap scylla-config --from-file=scylla.yaml={tmp.name} -o yaml '
+                    f'kubectl create configmap {SCYLLA_CONFIG_NAME} --from-file=scylla.yaml={tmp.name} ||'
+                    f'kubectl create configmap {SCYLLA_CONFIG_NAME} --from-file=scylla.yaml={tmp.name} -o yaml '
                     '--dry-run=client | kubectl replace -f -',
                     namespace=self.namespace
                 )
