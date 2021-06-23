@@ -155,6 +155,28 @@ SYSTEM_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
 BACKTRACE_RE = re.compile(r'(?P<other_bt>/lib.*?\+0x[0-f]*\n)|(?P<scylla_bt>0x[0-f]*\n)', re.IGNORECASE)
 
 
+class ScyllaHelpErrorEvent(SctEvent, abstract=True):
+    duplicate: Type[SctEventProtocol]
+    message: str
+
+    def __init__(self, message: Optional[str] = None, severity=Severity.ERROR):
+        super().__init__(severity=severity)
+
+        # Don't include `message' to the state if it's None.
+        if message is not None:
+            self.message = message
+
+    @property
+    def msgfmt(self):
+        fmt = super().msgfmt + ": type={0.type}"
+        if hasattr(self, "message"):
+            fmt += " message={0.message}"
+        return fmt
+
+
+ScyllaHelpErrorEvent.add_subevent_type("duplicate")
+
+
 class FullScanEvent(SctEvent, abstract=True):
     start: Type[SctEventProtocol]
     finish: Type[SctEventProtocol]

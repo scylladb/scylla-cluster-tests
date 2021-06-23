@@ -26,6 +26,8 @@ from typing import Text, NoReturn
 # ...
 #   -W [ --workdir ] arg                  The directory in which Scylla will put
 # ...
+from sdcm.sct_events.database import ScyllaHelpErrorEvent
+
 SCYLLA_ARG = \
     re.compile(r"^  (?:(?:(?P<short_arg>-\w) \[ (?P<long_arg>--[\w-]+) \])|(?P<arg>--[\w-]+))(?P<val> arg)?", re.M)
 
@@ -47,8 +49,17 @@ class ScyllaArgParser(argparse.ArgumentParser):
     @classmethod
     def from_scylla_help(cls, help: Text) -> "ScyllaArgParser":
         parser = cls(prog="scylla")
+        duplicates = set()
         for *args, val in SCYLLA_ARG.findall(help):
-            parser.add_argument(*filter(bool, args), action="store" if val else "store_false")
+            try:
+                parser.add_argument(*filter(bool, args), action="store" if val else "store_false")
+            except argparse.ArgumentError:
+                arg_name = args[0] if len(args) == 1 else args[1]
+                duplicates.add(arg_name)
+        if duplicates:
+            ScyllaHelpErrorEvent.duplicate(
+                message=f"Scylla help contains duplicate for the following arguments: {','.join(duplicates)}"
+            ).publish()
         return parser
 
     def filter_args(self, args: str) -> str:
