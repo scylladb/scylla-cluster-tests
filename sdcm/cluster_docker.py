@@ -265,7 +265,7 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
                 f"is less than recommended value ({recommended_value})")
 
     @cluster.wait_for_init_wrap
-    def wait_for_init(self, node_list=None, verbose=False, timeout=None, *_, **__):
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):
         node_list = node_list if node_list else self.nodes
         self.wait_for_nodes_up_and_normal(nodes=node_list)
 
