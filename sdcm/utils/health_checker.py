@@ -103,7 +103,7 @@ def check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, c
         is_target = current_node.print_node_running_nemesis(ip)
         if ip not in nodes_status:
             if node_info['status'] not in current_node.GOSSIP_STATUSES_FILTER_OUT:
-                LOGGER.debug(f"Gossip info: {gossip_info}\nnodetool.status info: {nodes_status}")
+                LOGGER.debug("Gossip info: %s\nnodetool.status info: %s", gossip_info, nodes_status)
                 yield ClusterHealthValidatorEvent.NodeStatus(
                     severity=Severity.ERROR,
                     node=current_node.name,
@@ -126,7 +126,7 @@ def check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, c
     for ip in not_in_gossip:
         if nodes_status[ip]['status'] == 'UN':
             is_target = current_node.print_node_running_nemesis(ip)
-            LOGGER.debug(f"Gossip info: {gossip_info}\nnodetool.status info: {nodes_status}")
+            LOGGER.debug("Gossip info: %s\nnodetool.status info: %s", gossip_info, nodes_status)
             yield ClusterHealthValidatorEvent.NodeSchemaVersion(
                 severity=Severity.ERROR,
                 node=current_node.name,
