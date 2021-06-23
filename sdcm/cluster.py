@@ -85,7 +85,7 @@ from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.grafana import set_grafana_url
-from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, BACKTRACE_RE, DatabaseLogEvent
+from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, BACKTRACE_RE, DatabaseLogEvent, ScyllaHelpErrorEvent
 from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
@@ -1757,9 +1757,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if append_scylla_args:
             scylla_help = self.remoter.run(
                 f"{self.add_install_prefix('/usr/bin/scylla')} --help", ignore_status=True).stdout
-            scylla_arg_parser = ScyllaArgParser.from_scylla_help(scylla_help)
+            scylla_arg_parser = ScyllaArgParser.from_scylla_help(
+                scylla_help,
+                duplicate_cb=lambda dups: ScyllaHelpErrorEvent.duplicate(
+                    message=f"Scylla help contains duplicate for the following arguments: {','.join(dups)}"
+                ).publish()
+            )
             append_scylla_args = scylla_arg_parser.filter_args(append_scylla_args)
-
         if self.parent_cluster.params.get('db_nodes_shards_selection') == 'random':
             append_scylla_args += f" --smp {self.scylla_random_shards()}"
 
