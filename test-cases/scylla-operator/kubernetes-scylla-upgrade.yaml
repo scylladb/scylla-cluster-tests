@@ -8,6 +8,8 @@ n_db_nodes: 3
 n_loaders: 1
 n_monitor_nodes: 1
 
+use_mgmt: false
+
 user_prefix: 'kubernetes-scylla-upgrade'
 
 # Following configurations does not currently work on kubernetes, due to the lack of ssl certificate support.

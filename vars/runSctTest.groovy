@@ -36,11 +36,20 @@ def call(Map params, String region, functional_test = false){
     if [[ -n "${params.k8s_scylla_operator_docker_image ? params.k8s_scylla_operator_docker_image : ''}" ]] ; then
         export SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE=${params.k8s_scylla_operator_docker_image}
     fi
+    if [[ -n "${params.k8s_scylla_operator_upgrade_docker_image ? params.k8s_scylla_operator_upgrade_docker_image : ''}" ]] ; then
+        export SCT_K8S_SCYLLA_OPERATOR_UPGRADE_DOCKER_IMAGE=${params.k8s_scylla_operator_upgrade_docker_image}
+    fi
     if [[ -n "${params.k8s_scylla_operator_helm_repo ? params.k8s_scylla_operator_helm_repo : ''}" ]] ; then
         export SCT_K8S_SCYLLA_OPERATOR_HELM_REPO=${params.k8s_scylla_operator_helm_repo}
     fi
+    if [[ -n "${params.k8s_scylla_operator_upgrade_helm_repo ? params.k8s_scylla_operator_upgrade_helm_repo : ''}" ]] ; then
+        export SCT_K8S_SCYLLA_OPERATOR_UPGRADE_HELM_REPO=${params.k8s_scylla_operator_upgrade_helm_repo}
+    fi
     if [[ -n "${params.k8s_scylla_operator_chart_version ? params.k8s_scylla_operator_chart_version : ''}" ]] ; then
         export SCT_K8S_SCYLLA_OPERATOR_CHART_VERSION=${params.k8s_scylla_operator_chart_version}
+    fi
+    if [[ -n "${params.k8s_scylla_operator_upgrade_chart_version ? params.k8s_scylla_operator_upgrade_chart_version : ''}" ]] ; then
+        export SCT_K8S_SCYLLA_OPERATOR_UPGRADE_CHART_VERSION=${params.k8s_scylla_operator_upgrade_chart_version}
     fi
 
     if [[ -n "${params.scylla_mgmt_agent_version ? params.scylla_mgmt_agent_version : ''}" ]] ; then

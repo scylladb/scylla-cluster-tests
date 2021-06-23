@@ -24,7 +24,7 @@ import multiprocessing
 import contextlib
 from tempfile import NamedTemporaryFile
 from typing import Optional, Union, Callable, List
-from functools import cached_property
+from functools import cached_property, partialmethod
 from pathlib import Path
 
 import kubernetes as k8s
@@ -664,19 +664,24 @@ class HelmContainerMixin:
             if values_file:
                 values_file.close()
 
-    def helm_install(self, kluster,
-                     target_chart_name: str,
-                     source_chart_name: str,
-                     version: str = "",
-                     use_devel: bool = False,
-                     values: 'HelmValues' = None,
-                     namespace: Optional[str] = None) -> str:
-        command = ["install", target_chart_name, source_chart_name]
+    def _helm_install_or_upgrade(self,
+                                 operation_type: str,
+                                 kluster,
+                                 target_chart_name: str,
+                                 source_chart_name: str,
+                                 version: str = "",
+                                 use_devel: bool = False,
+                                 debug: bool = True,
+                                 values: 'HelmValues' = None,
+                                 namespace: Optional[str] = None) -> str:
+        command = [operation_type, target_chart_name, source_chart_name]
         prepend_command = []
         if version:
             command.extend(("--version", version))
         if use_devel:
             command.extend(("--devel",))
+        if debug:
+            command.extend(("--debug",))
 
         return self.helm(
             kluster,
@@ -685,6 +690,9 @@ class HelmContainerMixin:
             namespace=namespace,
             values=values
         )
+
+    helm_install = partialmethod(_helm_install_or_upgrade, "install")
+    helm_upgrade = partialmethod(_helm_install_or_upgrade, "upgrade")
 
 
 class TokenUpdateThread(threading.Thread, metaclass=abc.ABCMeta):

@@ -158,9 +158,12 @@
 | **<a href="#user-content-gke_cluster_version" name="gke_cluster_version">gke_cluster_version</a>**  |  | N/A | SCT_GKE_CLUSTER_VERSION
 | **<a href="#user-content-gke_k8s_release_channel" name="gke_k8s_release_channel">gke_k8s_release_channel</a>**  |  | N/A | SCT_GKE_K8S_RELEASE_CHANNEL
 | **<a href="#user-content-k8s_deploy_monitoring" name="k8s_deploy_monitoring">k8s_deploy_monitoring</a>**  |  | N/A | SCT_K8S_DEPLOY_MONITORING
-| **<a href="#user-content-k8s_scylla_operator_docker_image" name="k8s_scylla_operator_docker_image">k8s_scylla_operator_docker_image</a>**  |  | N/A | SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE
 | **<a href="#user-content-k8s_scylla_operator_helm_repo" name="k8s_scylla_operator_helm_repo">k8s_scylla_operator_helm_repo</a>**  |  | N/A | SCT_K8S_SCYLLA_OPERATOR_HELM_REPO
 | **<a href="#user-content-k8s_scylla_operator_chart_version" name="k8s_scylla_operator_chart_version">k8s_scylla_operator_chart_version</a>**  |  | N/A | SCT_K8S_SCYLLA_OPERATOR_CHART_VERSION
+| **<a href="#user-content-k8s_scylla_operator_docker_image" name="k8s_scylla_operator_docker_image">k8s_scylla_operator_docker_image</a>**  |  | N/A | SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE
+| **<a href="#user-content-k8s_scylla_operator_upgrade_helm_repo" name="k8s_scylla_operator_upgrade_helm_repo">k8s_scylla_operator_upgrade_helm_repo</a>**  |  | N/A | SCT_K8S_SCYLLA_OPERATOR_UPGRADE_HELM_REPO
+| **<a href="#user-content-k8s_scylla_operator_upgrade_chart_version" name="k8s_scylla_operator_upgrade_chart_version">k8s_scylla_operator_upgrade_chart_version</a>**  |  | N/A | SCT_K8S_SCYLLA_OPERATOR_UPGRADE_CHART_VERSION
+| **<a href="#user-content-k8s_scylla_operator_upgrade_docker_image" name="k8s_scylla_operator_upgrade_docker_image">k8s_scylla_operator_upgrade_docker_image</a>**  |  | N/A | SCT_K8S_SCYLLA_OPERATOR_UPGRADE_DOCKER_IMAGE
 | **<a href="#user-content-k8s_scylla_datacenter" name="k8s_scylla_datacenter">k8s_scylla_datacenter</a>**  |  | N/A | SCT_K8S_SCYLLA_DATACENTER
 | **<a href="#user-content-k8s_scylla_rack" name="k8s_scylla_rack">k8s_scylla_rack</a>**  |  | N/A | SCT_K8S_SCYLLA_RACK
 | **<a href="#user-content-k8s_scylla_cluster_name" name="k8s_scylla_cluster_name">k8s_scylla_cluster_name</a>**  |  | N/A | SCT_K8S_SCYLLA_CLUSTER_NAME

@@ -333,6 +333,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             self.api_call_rate_limiter.wait()
         return partial(cluster.TestConfig.tester_obj().localhost.helm_install, self)
 
+    @property
+    def helm_upgrade(self):
+        if self.api_call_rate_limiter:
+            self.api_call_rate_limiter.wait()
+        return partial(cluster.TestConfig.tester_obj().localhost.helm_upgrade, self)
+
     @cached_property
     def kubectl_token_path(self):  # pylint: disable=no-self-use
         return os.path.join(os.path.dirname(
@@ -566,6 +572,51 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             )
         # Start the Scylla Operator logging thread
         self.start_scylla_operator_journal_thread()
+
+    @log_run_info
+    def upgrade_scylla_operator(self, new_helm_repo: str,
+                                new_chart_version: str,
+                                new_docker_image: str = '') -> None:
+        LOGGER.info("Upgrade Scylla Operator using '%s' helm chart and '%s' docker image\n"
+                    "Helm repo: %s", new_chart_version, new_docker_image, new_helm_repo)
+
+        local_repo_name = "scylla-operator-upgrade"
+        LOGGER.debug(self.helm(f"repo add {local_repo_name} {new_helm_repo}"))
+        self.helm('repo update')
+
+        # Calculate new chart name if it is not specific
+        if new_chart_version in ("", "latest"):
+            new_chart_version = self.get_latest_chart_version(f"{local_repo_name}/scylla-operator")
+            LOGGER.info(
+                "Using automatically found following latest scylla-operator "
+                "upgrade chart version: %s", new_chart_version)
+        else:
+            LOGGER.info("Using following predefined scylla-operator upgrade chart version: %s",
+                        new_chart_version)
+
+        # Get existing scylla-operator helm chart values
+        values = HelmValues(json.loads(self.helm(
+            "get values scylla-operator -o json", namespace=SCYLLA_OPERATOR_NAMESPACE)))
+
+        # NOTE: Apply new image repo if provided or set default one redefining base value
+        #       example structure: scylladb/scylla-operator:latest
+        values.set('image.repository', new_docker_image.split('/')[0].strip() or 'scylladb')
+
+        # NOTE: Set operator_image_tag even if it is empty, we need to redefine base operator image
+        values.set('image.tag', new_docker_image.split(':')[-1].strip())
+
+        # Upgrade Scylla Operator using Helm chart
+        LOGGER.debug(self.helm_upgrade(
+            target_chart_name="scylla-operator",
+            source_chart_name=f"{local_repo_name}/scylla-operator",
+            version=new_chart_version,
+            use_devel=True,
+            namespace=SCYLLA_OPERATOR_NAMESPACE,
+            values=values,
+        ))
+        time.sleep(5)
+        self.kubectl("rollout status deployment scylla-operator",
+                     namespace=SCYLLA_OPERATOR_NAMESPACE)
 
     @log_run_info
     def deploy_minio_s3_backend(self):
