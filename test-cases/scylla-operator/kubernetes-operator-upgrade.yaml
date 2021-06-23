@@ -1,0 +1,20 @@
+test_duration: 300
+
+# workloads
+stress_cmd_r: cassandra-stress read no-warmup cl=QUORUM n=2010020 -schema 'keyspace=keyspace_entire_test replication(factor=3) compression=LZ4Compressor' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=100 -pop seq=1..2010020 -log interval=5
+stress_cmd_w: cassandra-stress write no-warmup cl=QUORUM n=2010020 -schema 'keyspace=keyspace_entire_test replication(factor=3) compression=LZ4Compressor' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=100 -pop seq=1..2010020 -log interval=5
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/stable'
+k8s_scylla_operator_chart_version: 'latest'  # will pick up the latest stable version, i.e. 'v1.3.0'
+k8s_scylla_operator_docker_image: ''  # default value from the Helm chart will be used
+
+k8s_scylla_operator_upgrade_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/latest'
+k8s_scylla_operator_upgrade_chart_version: 'latest'  # never the same as above. Latest dev-version
+k8s_scylla_operator_upgrade_docker_image: ''  # default value from the Helm chart will be used
+
+use_mgmt: false
+user_prefix: 'kubernetes-operator-upgrade'

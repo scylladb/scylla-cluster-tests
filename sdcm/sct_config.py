@@ -676,17 +676,29 @@ class SCTConfiguration(dict):
         dict(name="k8s_deploy_monitoring", env="SCT_K8S_DEPLOY_MONITORING", type=str,
              help=""),
 
-        dict(name="k8s_scylla_operator_docker_image", env="SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE", type=str,
-             help=""),
+        dict(name="k8s_scylla_operator_docker_image",
+             env="SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE", type=str,
+             help="Docker image to be used for installation of scylla operator."),
+        dict(name="k8s_scylla_operator_upgrade_docker_image",
+             env="SCT_K8S_SCYLLA_OPERATOR_UPGRADE_DOCKER_IMAGE", type=str,
+             help="Docker image to be used for upgrade of scylla operator."),
 
         dict(name="k8s_scylla_operator_helm_repo", env="SCT_K8S_SCYLLA_OPERATOR_HELM_REPO",
              type=str,
              help="Link to the Helm repository where to get 'scylla-operator' charts from."),
+        dict(name="k8s_scylla_operator_upgrade_helm_repo", env="SCT_K8S_SCYLLA_OPERATOR_UPGRADE_HELM_REPO",
+             type=str,
+             help="Link to the Helm repository where to get 'scylla-operator' charts for upgrade."),
 
-        dict(name="k8s_scylla_operator_chart_version", env="SCT_K8S_SCYLLA_OPERATOR_CHART_VERSION",
+        dict(name="k8s_scylla_operator_chart_version",
+             env="SCT_K8S_SCYLLA_OPERATOR_CHART_VERSION",
              type=str,
              help=("Version of 'scylla-operator' Helm chart to use. "
                    "If not set then latest one will be used.")),
+        dict(name="k8s_scylla_operator_upgrade_chart_version",
+             env="SCT_K8S_SCYLLA_OPERATOR_UPGRADE_CHART_VERSION",
+             type=str,
+             help="Version of 'scylla-operator' Helm chart to use for upgrade."),
 
         dict(name="k8s_scylla_datacenter", env="SCT_K8S_SCYLLA_DATACENTER", type=str,
              help=""),

@@ -13,6 +13,9 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+# pylint: disable=too-many-lines
+
+import json
 from pathlib import Path
 import random
 import time
@@ -907,6 +910,74 @@ class UpgradeTest(FillDatabaseData):
             len(self.db_cluster.nodes), 'Only allowing shards_num * %d schema load errors per host during the ' \
                                         'entire test, actual: %d' % (
                 error_factor, schema_load_error_num)
+
+    def _get_current_operator_image_tag(self):
+        return self.k8s_cluster.kubectl(
+            "get deployment scylla-operator -o custom-columns=:..image --no-headers",
+            namespace=self.k8s_cluster._scylla_operator_namespace  # pylint: disable=protected-access
+        ).stdout.strip().split(":")[-1]
+
+    def test_kubernetes_operator_upgrade(self):
+        self.log.info('Step1 - Populate DB with data')
+        self.prepare_keyspaces_and_tables()
+        self.fill_and_verify_db_data('', pre_fill=True)
+
+        self.log.info('Step2 - Run c-s write workload')
+        self.verify_stress_thread(self.run_stress_thread(
+            stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_w'))))
+
+        self.log.info('Step3 - Run c-s read workload')
+        self.verify_stress_thread(self.run_stress_thread(
+            stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))))
+
+        self.log.info('Step4 - Upgrade scylla-operator')
+        base_docker_image_tag = self._get_current_operator_image_tag()
+        upgrade_docker_image = self.params.get('k8s_scylla_operator_upgrade_docker_image') or ''
+        self.k8s_cluster.upgrade_scylla_operator(
+            self.params.get('k8s_scylla_operator_upgrade_helm_repo') or self.params.get(
+                'k8s_scylla_operator_helm_repo'),
+            self.params.get('k8s_scylla_operator_upgrade_chart_version') or 'latest',
+            upgrade_docker_image)
+
+        self.log.info('Step5 - Validate scylla-operator version after upgrade')
+        actual_docker_image_tag = self._get_current_operator_image_tag()
+        self.assertNotEqual(base_docker_image_tag, actual_docker_image_tag)
+        expected_docker_image_tag = upgrade_docker_image.split(':')[-1]
+        if not expected_docker_image_tag:
+            operator_chart_info = self.k8s_cluster.helm(
+                f"ls -n {self.k8s_cluster._scylla_operator_namespace} -o json")  # pylint: disable=protected-access
+            expected_docker_image_tag = json.loads(operator_chart_info)[0]["app_version"]
+        self.assertEqual(expected_docker_image_tag, actual_docker_image_tag)
+
+        self.log.info('Step6 - Wait for the update of Scylla cluster')
+        # NOTE: rollout starts with some delay which may take even 20 seconds.
+        #       Also rollout itself takes more than 10 minutes for 3 Scylla members.
+        #       So, sleep for some time to avoid race with presence of existing rollout process.
+        time.sleep(60)
+        self.k8s_cluster.kubectl(
+            f"rollout status statefulset/{self.params.get('k8s_scylla_cluster_name')}-"
+            f"{self.params.get('k8s_scylla_datacenter')}-{self.params.get('k8s_scylla_rack')}"
+            " --watch=true --timeout=20m",
+            timeout=1205,
+            namespace=self.k8s_cluster._scylla_namespace)  # pylint: disable=protected-access
+
+        self.log.info('Step7 - Add new member to the Scylla cluster')
+        peer_db_node = self.db_cluster.nodes[0]
+        new_nodes = self.db_cluster.add_nodes(
+            count=1,
+            dc_idx=peer_db_node.dc_idx,
+            rack=peer_db_node.rack,
+            enable_auto_bootstrap=True)
+        self.db_cluster.wait_for_init(node_list=new_nodes, timeout=40 * 60)
+        self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
+        self.monitors.reconfigure_scylla_monitoring()
+
+        self.log.info('Step8 - Verify data in the Scylla cluster')
+        self.fill_and_verify_db_data(note='after operator upgrade and scylla member addition')
+
+        self.log.info('Step9 - Run c-s read workload')
+        self.verify_stress_thread(self.run_stress_thread(
+            stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))))
 
     def wait_till_scylla_is_upgraded_on_all_nodes(self, target_version):
         def _is_cluster_upgraded():

@@ -27,12 +27,24 @@ def call(Map pipelineParams) {
                    name: 'new_version')
             string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_version', '')}",
                    name: 'scylla_mgmt_agent_version')
-            string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_docker_image', '')}",
-                   name: 'k8s_scylla_operator_docker_image')
             string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_helm_repo', '')}",
+                   description: 'Example: https://storage.googleapis.com/scylla-operator-charts/latest',
                    name: 'k8s_scylla_operator_helm_repo')
             string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_chart_version', '')}",
+                   description: 'Example: v1.4.0-alpha.0-45-g5adf54a',
                    name: 'k8s_scylla_operator_chart_version')
+            string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_docker_image', '')}",
+                   description: 'Example: scylladb/scylla-operator:latest or scylladb/scylla-operator:1.3.0',
+                   name: 'k8s_scylla_operator_docker_image')
+            string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_upgrade_helm_repo', '')}",
+                   description: 'Example: https://storage.googleapis.com/scylla-operator-charts/latest',
+                   name: 'k8s_scylla_operator_upgrade_helm_repo')
+            string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_upgrade_chart_version', '')}",
+                   description: 'Example: v1.4.0-alpha.0-34-gf13771d',
+                   name: 'k8s_scylla_operator_upgrade_chart_version')
+            string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_upgrade_docker_image', '')}",
+                   description: 'Example: scylladb/scylla-operator:latest or scylladb/scylla-operator:1.3.0',
+                   name: 'k8s_scylla_operator_upgrade_docker_image')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot_low_price')}",
                    description: 'spot_low_price|on_demand|spot_fleet|spot_low_price|spot_duration',
                    name: 'provision_type')
