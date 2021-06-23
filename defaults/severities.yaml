@@ -9,6 +9,7 @@ DataValidatorEvent.DataValidator: ERROR
 DataValidatorEvent.ImmutableRowsValidator: ERROR
 DataValidatorEvent.UpdatedRowsValidator: WARNING
 DataValidatorEvent.DeletedRowsValidator: ERROR
+ScyllaHelpErrorEvent.duplicate: ERROR
 FullScanEvent.start: NORMAL
 FullScanEvent.finish: ERROR
 DatabaseLogEvent.NO_SPACE_ERROR: ERROR

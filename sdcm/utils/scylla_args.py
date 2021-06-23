@@ -9,12 +9,12 @@
 #
 # See LICENSE for more details.
 #
-# Copyright (c) 2020 ScyllaDB
+# Copyright (c) 2021 ScyllaDB
 
 import re
 import logging
 import argparse
-from typing import Text, NoReturn
+from typing import Text, NoReturn, Callable
 
 
 # Regexp for parsing arguments from the output of `scylla --help' command:
@@ -45,10 +45,18 @@ class ScyllaArgParser(argparse.ArgumentParser):
         raise ScyllaArgError(message)
 
     @classmethod
-    def from_scylla_help(cls, help: Text) -> "ScyllaArgParser":
+    def from_scylla_help(cls, help: Text, duplicate_cb: Callable = None) -> "ScyllaArgParser":
         parser = cls(prog="scylla")
+        duplicates = set()
         for *args, val in SCYLLA_ARG.findall(help):
-            parser.add_argument(*filter(bool, args), action="store" if val else "store_false")
+            try:
+                parser.add_argument(*filter(bool, args), action="store" if val else "store_false")
+            except argparse.ArgumentError:
+                if arg_names := list(filter(bool, args)):
+                    duplicates.add(arg_names[-1])
+        if duplicates and duplicate_cb:
+            duplicate_cb(duplicates)
+
         return parser
 
     def filter_args(self, args: str) -> str:
