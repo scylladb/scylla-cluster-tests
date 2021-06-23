@@ -2114,8 +2114,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return True
         elif raise_if_not_installed:
             raise Exception(f"There is no pre-installed ScyllaDB on {self}")
-        else:
-            return False
+        return False
 
     def get_scylla_version(self) -> str:
         self.scylla_version = self.scylla_version_detailed = ""
