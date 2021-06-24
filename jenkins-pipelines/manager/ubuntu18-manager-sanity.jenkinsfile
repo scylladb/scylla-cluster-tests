@@ -9,8 +9,8 @@ managerPipeline(
     aws_region: '''["us-east-1", "us-west-2"]''',
     test_name: 'mgmt_cli_test.MgmtCliTest.test_manager_sanity',
     test_config: '''["test-cases/manager/manager-regression-multiDC-set-distro.yaml", "configurations/manager/ubuntu18.yaml"]''',
-    scylla_mgmt_repo: 'http://downloads.scylladb.com/manager/deb/unstable/xenial/master/latest/scylla-manager-master/scylla-manager.list',
-    scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo',
+    scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/deb/ubuntu/scylladb-manager-2.4-bionic.list',
+    scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylladb-manager-2.4.repo',
     scylla_version: '4.4',
 
     timeout: [time: 120, unit: 'MINUTES'],
