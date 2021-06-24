@@ -1,5 +1,6 @@
 import logging
 import os
+import tarfile
 import zipfile
 import tempfile
 import json
@@ -172,16 +173,24 @@ def create_monitoring_stack_dir(base_dir, archive):
 
 def extract_monitoring_stack_archive(downloaded_monitor_set_archive, monitoring_stack_base_dir):
 
-    return extract_file_from_zip_archive('monitoring_data_stack',
-                                         downloaded_monitor_set_archive,
-                                         monitoring_stack_base_dir)
+    return extract_file_from_archive('monitoring_data_stack',
+                                     downloaded_monitor_set_archive,
+                                     monitoring_stack_base_dir)
 
 
 def extract_monitoring_data_archive(downloaded_monitor_set_archive, monitoring_stack_base_dir):
 
-    return extract_file_from_zip_archive('prometheus_data',
-                                         downloaded_monitor_set_archive,
-                                         monitoring_stack_base_dir)
+    return extract_file_from_archive('prometheus_data',
+                                     downloaded_monitor_set_archive,
+                                     monitoring_stack_base_dir)
+
+
+def extract_file_from_archive(pattern, archive, extract_dir):
+    if archive.endswith('.zip'):
+        return extract_file_from_zip_archive(pattern, archive, extract_dir)
+    if archive.endswith('.tar.gz'):
+        return extract_file_from_tar_archive(pattern, archive, extract_dir)
+    raise ValueError(f"Not supported archive type{archive.split('.')[-1]}")
 
 
 def extract_file_from_zip_archive(pattern, archive, extract_dir):
@@ -190,6 +199,17 @@ def extract_file_from_zip_archive(pattern, archive, extract_dir):
         for name in zfile.namelist():
             if pattern in name:
                 zfile.extract(name, extract_dir)
+                found_file = os.path.join(extract_dir, name)
+                break
+    return found_file
+
+
+def extract_file_from_tar_archive(pattern, archive, extract_dir):
+    found_file = None
+    with tarfile.open(archive) as tar_file:
+        for name in tar_file.getnames():
+            if pattern in name:
+                tar_file.extract(name, extract_dir)
                 found_file = os.path.join(extract_dir, name)
                 break
     return found_file
