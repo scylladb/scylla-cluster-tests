@@ -1099,7 +1099,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                                               kwargs={'tcpdump_id': tcpdump_id}, daemon=True)
             tcpdump_thread.start()
         wait.wait_for(keyspace_available, timeout=120, step=60,
-                      text='Waiting until keyspace {} is available'.format(keyspace))
+                      text='Waiting until keyspace {} is available'.format(keyspace), throw_exc=False)
         try:
             result = self.run_nodetool(sub_cmd='cfstats', args=keyspace, timeout=60,
                                        warning_event_on_exception=(Failure, UnexpectedExit))
@@ -1214,7 +1214,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if verbose:
             text = '%s: Waiting for apt to finish running in the background' % self
         wait.wait_for(func=lambda: not self.apt_running(), step=60,
-                      text=text)
+                      text=text, throw_exc=False)
 
     def wait_db_down(self, verbose=True, timeout=3600, check_interval=60):
         text = None
@@ -1227,7 +1227,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if verbose:
             text = '%s: Waiting for cassandra-stress' % self
         wait.wait_for(func=self.cs_installed, step=60,
-                      text=text)
+                      text=text, throw_exc=False)
 
     def mark_log(self):
         """
@@ -1826,7 +1826,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     @retrying(n=30, sleep_time=15, allowed_exceptions=UnexpectedExit)
     def install_package(self, package_name: str) -> None:
         if self.distro.is_ubuntu:
-            wait.wait_for(func=self.is_apt_lock_free, step=30, timeout=60, text='Checking if package manager is free')
+            wait.wait_for(func=self.is_apt_lock_free, step=30, timeout=60, text='Checking if package manager is free',
+                          throw_exc=False)
         self.remoter.sudo(f'{"yum" if self.distro.is_rhel_like else "apt-get"} install -y {package_name}')
 
     def is_apt_lock_free(self) -> bool:
@@ -2540,7 +2541,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         search_reshard = self._restart_node_with_resharding(murmur3_partitioner_ignore_msb_bits)
 
         resharding_started = wait.wait_for(func=self._resharding_status, step=5, timeout=180,
-                                           text="Wait for re-sharding to be started", status='start')
+                                           text="Wait for re-sharding to be started", status='start', throw_exc=False)
         if not resharding_started:
             resharding_started = list(search_reshard)
             if resharding_started:
@@ -2555,7 +2556,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return
         else:
             # Decrease nodetool compactionstats calls from 5sec to 1min to avoid the noise
-            resharding_finished = wait.wait_for(func=self._resharding_status, step=60,
+            resharding_finished = wait.wait_for(func=self._resharding_status, step=60, throw_exc=False,
                                                 text="Wait for re-sharding to be finished", status='finish')
 
             if not resharding_finished:
@@ -2886,7 +2887,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def wait_for_machine_image_configured(self):
         self.log.info("Waiting for Scylla Machine Image setup to finish...")
-        wait.wait_for(self.is_machine_image_configured, step=10, timeout=300)
+        wait.wait_for(self.is_machine_image_configured, step=10, timeout=300, throw_exc=False)
 
     def get_sysctl_output(self) -> Dict[str, str]:
         properties = {}
@@ -3966,7 +3967,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             key = 'Space used (total)'
             wait.wait_for(func=self.cfstat_reached_threshold, step=10, timeout=300,
                           text="Waiting until cfstat '%s' reaches value '%s'" % (key, size),
-                          key=key, threshold=size, keyspaces=keyspace)
+                          key=key, threshold=size, keyspaces=keyspace, throw_exc=False)
 
     def add_nemesis(self, nemesis, tester_obj):
         for nem in nemesis:
@@ -5106,7 +5107,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
 
         wait.wait_for(_register_grafana_json, step=10,
                       text="Waiting to register '%s'..." % self.sct_dashboard_json_file,
-                      json_filename=self.sct_dashboard_json_file)
+                      json_filename=self.sct_dashboard_json_file, throw_exc=False)
 
     def save_sct_dashboards_config(self, node):
         sct_monitoring_addons_dir = os.path.join(self.monitor_install_path, 'sct_monitoring_addons')

@@ -303,7 +303,8 @@ class ApiCallRateLimiter(threading.Thread):
             self.check_if_api_not_operational,
             timeout=max_waiting_time,
             kluster=kluster,
-            num_requests=num_requests
+            num_requests=num_requests,
+            throw_exc=False
         )
 
     def wait_till_api_become_stable(self, kluster, num_requests=20, max_waiting_time=1200):

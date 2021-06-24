@@ -1360,7 +1360,7 @@ class BasePodContainer(cluster.BaseNode):
         if timeout is None:
             timeout = self.pod_replace_timeout
         wait_for(lambda: self.k8s_pod_uid and self.k8s_pod_uid != ignore_uid, timeout=timeout,
-                 text=f"Wait till host {self} get uid")
+                 text=f"Wait till host {self} get uid", throw_exc=False)
         return self.k8s_pod_uid
 
     def wait_for_k8s_node_readiness(self):

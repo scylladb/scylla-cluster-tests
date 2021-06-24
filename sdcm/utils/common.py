@@ -2110,6 +2110,7 @@ def reach_enospc_on_node(target_node):
                   timeout=300,
                   step=5,
                   text='Wait for new ENOSPC error occurs in database',
+                  throw_exc=False
                   )
 
 

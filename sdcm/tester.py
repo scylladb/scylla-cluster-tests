@@ -1697,7 +1697,7 @@ class ClusterTester(db_stats.TestStatsMixin,
                                          step=5):  # pylint: disable=invalid-name
         text = 'waiting for the keyspace "{}" to be created in the cluster'.format(keyspace_name)
         does_keyspace_exist = wait.wait_for(func=self.is_keyspace_in_cluster, step=step, text=text, timeout=timeout,
-                                            session=session, keyspace_name=keyspace_name)
+                                            session=session, keyspace_name=keyspace_name, throw_exc=False)
         return does_keyspace_exist
 
     def create_keyspace(self, keyspace_name, replication_factor, replication_strategy=None):
