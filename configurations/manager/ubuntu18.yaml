@@ -1,4 +1,4 @@
 ami_id_monitor: 'ami-08b314ce48a790a19'  # Canonical, Ubuntu, 18.04 LTS, amd64 bionic image build on 2019-07-22
 ami_monitor_user: 'ubuntu'
 
-scylla_repo_m: 'http://downloads.scylladb.com.s3.amazonaws.com/deb/ubuntu/scylla-2020.1.list'  # Notice: Uses 2020.1, while other (newer deb) use 2021, since we support both
+scylla_repo_m: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-2020.1-bionic.list'  # Notice: Uses 2020.1, while other (newer deb) use 2021, since we support both
