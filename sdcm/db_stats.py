@@ -39,7 +39,7 @@ LOGGER = logging.getLogger(__name__)
 
 class CassandraStressCmdParseError(Exception):
     def __init__(self, cmd, ex):
-        super(CassandraStressCmdParseError, self).__init__()
+        super().__init__()
         self.command = cmd
         self.exception = repr(ex)
 
@@ -115,7 +115,7 @@ def get_stress_cmd_params(cmd):
 
         return cmd_params
     except Exception as ex:
-        raise CassandraStressCmdParseError(cmd=cmd, ex=ex)
+        raise CassandraStressCmdParseError(cmd=cmd, ex=ex) from None
 
 
 def get_stress_bench_cmd_params(cmd):
@@ -357,9 +357,10 @@ class Stats:
     def elasticsearch(self) -> Optional[ES]:
         try:
             return ES()
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             LOGGER.exception("Failed to create ES connection (doc_id=%s)", self._test_id)
             ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
+            return None
 
     def create(self) -> None:
         if not self.elasticsearch:
@@ -372,7 +373,7 @@ class Stats:
                 doc_id=self._test_id,
                 body=self._stats,
             )
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             LOGGER.exception("Failed to create test stats (doc_id=%s)", self._test_id)
             ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
 
@@ -387,7 +388,7 @@ class Stats:
                 doc_id=self._test_id,
                 body=data,
             )
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             LOGGER.exception("Failed to update test stats (doc_id=%s)", self._test_id)
             ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
 
@@ -402,7 +403,7 @@ class Stats:
                 doc_type=self._es_doc_type,
                 id=self._test_id,
             )
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             LOGGER.exception("Failed to check for test stats existence (doc_id=%s)", self._test_id)
             ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
         return None
@@ -440,7 +441,7 @@ class TestStatsMixin(Stats):
         :rtype: {str}
         """
         # avoid cyclic-decencies between cluster and db_stats
-        from sdcm.cluster import TestConfig
+        from sdcm.cluster import TestConfig  # pylint: disable=import-outside-toplevel
         doc_id = TestConfig.test_id()
         if doc_id_with_timestamp:
             doc_id += "_{}".format(datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
@@ -511,7 +512,7 @@ class TestStatsMixin(Stats):
 
     def get_test_details(self):
         # avoid cyclic-decencies between cluster and db_stats
-        from sdcm.cluster import TestConfig
+        from sdcm.cluster import TestConfig  # pylint: disable=import-outside-toplevel
 
         test_details = {}
         test_details['sct_git_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
@@ -663,6 +664,7 @@ class TestStatsMixin(Stats):
                 total_stats[stat] = total
         self._stats['results']['stats_total'] = total_stats
 
+    # pylint: disable=too-many-arguments,too-many-locals
     def update_test_details(self, errors=None, coredumps=None, scylla_conf=False, extra_stats=None, alternator=False,
                             scrap_metrics_step=None):
         if not self.create_stats:
@@ -739,7 +741,7 @@ class TestStatsMixin(Stats):
                     doc_type=self._es_doc_type,
                     doc_id=self._test_id,
                 )
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.exception("Failed to get test stats (doc_id=%s)", self._test_id)
                 ElasticsearchEvent(doc_id=self._test_id, error=str(exc)).publish()
             else:
