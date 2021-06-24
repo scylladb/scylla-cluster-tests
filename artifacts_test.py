@@ -89,7 +89,7 @@ class ArtifactsTest(ClusterTester):
         the backend used.
         """
         if not self.params["use_preinstalled_scylla"]:
-            self.log.info(f"Skipping verifying the snitch due to the 'use_preinstalled_scylla' being set to False")
+            self.log.info("Skipping verifying the snitch due to the 'use_preinstalled_scylla' being set to False")
             return
 
         describecluster_snitch = self.get_describecluster_info().snitch
