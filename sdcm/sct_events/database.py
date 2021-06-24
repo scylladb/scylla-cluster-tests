@@ -16,8 +16,7 @@ import logging
 from typing import Type, List, Tuple, Generic, Optional
 
 from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event
-
+from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event, InformationalEvent
 
 TOLERABLE_REACTOR_STALL: int = 1000  # ms
 
@@ -208,7 +207,7 @@ FullScanEvent.add_subevent_type("start")
 FullScanEvent.add_subevent_type("finish")
 
 
-class IndexSpecialColumnErrorEvent(SctEvent):
+class IndexSpecialColumnErrorEvent(InformationalEvent):
     def __init__(self, message: str, severity: Severity = Severity.ERROR):
         super().__init__(severity=severity)
 

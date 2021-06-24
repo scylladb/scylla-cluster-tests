@@ -16,7 +16,7 @@ from typing import Any, Optional, Sequence
 from traceback import format_stack
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import SctEvent, SystemEvent
+from sdcm.sct_events.base import SctEvent, SystemEvent, InformationalEvent
 
 
 class StartupTestEvent(SystemEvent):
@@ -36,7 +36,7 @@ class TestTimeoutEvent(SctEvent):
         return f"{super().msgfmt}, Test started at {start_time}, reached it's timeout ({self.duration} minute)"
 
 
-class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attributes
+class TestFrameworkEvent(InformationalEvent):  # pylint: disable=too-many-instance-attributes
     __test__ = False  # Mark this class to be not collected by pytest.
 
     def __init__(self,
@@ -83,7 +83,7 @@ class TestFrameworkEvent(SctEvent):  # pylint: disable=too-many-instance-attribu
         return fmt
 
 
-class ElasticsearchEvent(SctEvent):
+class ElasticsearchEvent(InformationalEvent):
     def __init__(self, doc_id: str, error: str):
         super().__init__(severity=Severity.ERROR)
 
@@ -95,7 +95,7 @@ class ElasticsearchEvent(SctEvent):
         return super().msgfmt + ": doc_id={0.doc_id} error={0.error}"
 
 
-class SpotTerminationEvent(SctEvent):
+class SpotTerminationEvent(InformationalEvent):
     def __init__(self, node: Any, message: str):
         super().__init__(severity=Severity.CRITICAL)
 
@@ -107,7 +107,7 @@ class SpotTerminationEvent(SctEvent):
         return super().msgfmt + ": node={0.node} message={0.message}"
 
 
-class ScyllaRepoEvent(SctEvent):
+class ScyllaRepoEvent(InformationalEvent):
     def __init__(self, url: str, error: str):
         super().__init__(severity=Severity.WARNING)
 
@@ -130,7 +130,7 @@ class InfoEvent(SctEvent):
         return super().msgfmt + ": message={0.message}"
 
 
-class ThreadFailedEvent(SctEvent):
+class ThreadFailedEvent(InformationalEvent):
     def __init__(self, message: str, traceback: Any):
         super().__init__(severity=Severity.ERROR)
 
@@ -142,7 +142,7 @@ class ThreadFailedEvent(SctEvent):
         return super().msgfmt + ": message={0.message}\n{0.traceback}"
 
 
-class CoreDumpEvent(SctEvent):
+class CoreDumpEvent(InformationalEvent):
     def __init__(self,
                  node: Any,
                  corefile_url: str,
@@ -176,7 +176,7 @@ class CoreDumpEvent(SctEvent):
         return fmt
 
 
-class TestResultEvent(SctEvent, Exception):
+class TestResultEvent(InformationalEvent, Exception):
     """An event that is published and raised at the end of the test.
 
     It holds and displays all errors of the tests and framework happened.

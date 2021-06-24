@@ -38,7 +38,7 @@ class TestValidators(unittest.TestCase):
         critical_event.event_id = "712128d0-4837-4213-8a60-d6e2ec106c52"
         self.assertEqual(
             str(critical_event),
-            "(ClusterHealthValidatorEvent Severity.CRITICAL) period_type=not-set "
+            "(ClusterHealthValidatorEvent Severity.CRITICAL) period_type=one-time "
             "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=NodeStatus node=n1 error=e1"
         )
         self.assertEqual(critical_event, pickle.loads(pickle.dumps(critical_event)))
@@ -47,7 +47,7 @@ class TestValidators(unittest.TestCase):
         error_event.event_id = "712128d0-4837-4213-8a60-d6e2ec106c52"
         self.assertEqual(
             str(error_event),
-            "(ClusterHealthValidatorEvent Severity.ERROR) period_type=not-set "
+            "(ClusterHealthValidatorEvent Severity.ERROR) period_type=one-time "
             "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=NodePeersNulls node=n2 error=e2"
         )
         self.assertEqual(error_event, pickle.loads(pickle.dumps(error_event)))
@@ -57,7 +57,7 @@ class TestValidators(unittest.TestCase):
         warning_event.event_id = "712128d0-4837-4213-8a60-d6e2ec106c52"
         self.assertEqual(
             str(warning_event),
-            "(ClusterHealthValidatorEvent Severity.WARNING) period_type=not-set "
+            "(ClusterHealthValidatorEvent Severity.WARNING) period_type=one-time "
             "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=NodeSchemaVersion node=n3 message=m3"
         )
         self.assertEqual(warning_event, pickle.loads(pickle.dumps(warning_event)))
@@ -66,7 +66,7 @@ class TestValidators(unittest.TestCase):
         info_event.event_id = "712128d0-4837-4213-8a60-d6e2ec106c52"
         self.assertEqual(
             str(info_event),
-            "(ClusterHealthValidatorEvent Severity.WARNING) period_type=not-set "
+            "(ClusterHealthValidatorEvent Severity.WARNING) period_type=one-time "
             "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=NodesNemesis node=n4 message=m4"
         )
         self.assertEqual(info_event, pickle.loads(pickle.dumps(info_event)))
@@ -75,7 +75,7 @@ class TestValidators(unittest.TestCase):
         info_event.event_id = "712128d0-4837-4213-8a60-d6e2ec106c52"
         self.assertEqual(
             str(info_event),
-            "(ClusterHealthValidatorEvent Severity.NORMAL) period_type=not-set "
+            "(ClusterHealthValidatorEvent Severity.NORMAL) period_type=one-time "
             "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=Info node=n4 message=m4"
         )
         self.assertEqual(info_event, pickle.loads(pickle.dumps(info_event)))
@@ -84,7 +84,7 @@ class TestValidators(unittest.TestCase):
         info_event.event_id = "712128d0-4837-4213-8a60-d6e2ec106c52"
         self.assertEqual(
             str(info_event),
-            "(ClusterHealthValidatorEvent Severity.NORMAL) period_type=not-set "
+            "(ClusterHealthValidatorEvent Severity.NORMAL) period_type=one-time "
             "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=Done node=n4 message=m4"
         )
         self.assertEqual(info_event, pickle.loads(pickle.dumps(info_event)))
@@ -104,7 +104,7 @@ class TestValidators(unittest.TestCase):
         critical_event.event_id = "3916da00-643c-4886-bdd0-963d3ebac536"
         self.assertEqual(
             str(critical_event),
-            "(DataValidatorEvent Severity.ERROR) period_type=not-set "
+            "(DataValidatorEvent Severity.ERROR) period_type=one-time "
             "event_id=3916da00-643c-4886-bdd0-963d3ebac536: type=DataValidator error=e1"
         )
         self.assertEqual(critical_event, pickle.loads(pickle.dumps(critical_event)))
@@ -113,7 +113,7 @@ class TestValidators(unittest.TestCase):
         error_event.event_id = "3916da00-643c-4886-bdd0-963d3ebac536"
         self.assertEqual(
             str(error_event),
-            "(DataValidatorEvent Severity.ERROR) period_type=not-set "
+            "(DataValidatorEvent Severity.ERROR) period_type=one-time "
             "event_id=3916da00-643c-4886-bdd0-963d3ebac536: type=ImmutableRowsValidator error=e2"
         )
         self.assertEqual(error_event, pickle.loads(pickle.dumps(error_event)))
@@ -122,7 +122,7 @@ class TestValidators(unittest.TestCase):
         warning_event.event_id = "3916da00-643c-4886-bdd0-963d3ebac536"
         self.assertEqual(
             str(warning_event),
-            "(DataValidatorEvent Severity.WARNING) period_type=not-set "
+            "(DataValidatorEvent Severity.WARNING) period_type=one-time "
             "event_id=3916da00-643c-4886-bdd0-963d3ebac536: type=UpdatedRowsValidator message=m3"
         )
         self.assertEqual(warning_event, pickle.loads(pickle.dumps(warning_event)))
@@ -131,7 +131,7 @@ class TestValidators(unittest.TestCase):
         info_event.event_id = "3916da00-643c-4886-bdd0-963d3ebac536"
         self.assertEqual(
             str(info_event),
-            "(DataValidatorEvent Severity.NORMAL) period_type=not-set "
+            "(DataValidatorEvent Severity.NORMAL) period_type=one-time "
             "event_id=3916da00-643c-4886-bdd0-963d3ebac536: type=DeletedRowsValidator message=m4"
         )
         self.assertEqual(info_event, pickle.loads(pickle.dumps(info_event)))

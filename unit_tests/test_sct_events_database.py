@@ -94,5 +94,5 @@ class TestIndexSpecialColumnErrorEvent(unittest.TestCase):
         event = IndexSpecialColumnErrorEvent(message="m1")
         event.event_id = "ac449879-485a-4b06-8596-3fbe58881093"
         self.assertEqual(str(event),
-                         "(IndexSpecialColumnErrorEvent Severity.ERROR) period_type=not-set "
+                         "(IndexSpecialColumnErrorEvent Severity.ERROR) period_type=one-time "
                          "event_id=ac449879-485a-4b06-8596-3fbe58881093: message=m1")
