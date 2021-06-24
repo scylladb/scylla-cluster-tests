@@ -14,7 +14,7 @@
 from typing import Type, Protocol, Optional, runtime_checkable
 
 from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import SctEvent
+from sdcm.sct_events.base import SctEvent, InformationalEvent
 
 
 @runtime_checkable
@@ -23,7 +23,7 @@ class ClusterHealthValidatorEventClusterHealthCheck(SctEventProtocol, Protocol):
     done: Type[SctEventProtocol]
 
 
-class ClusterHealthValidatorEvent(SctEvent, abstract=True):
+class ClusterHealthValidatorEvent(InformationalEvent, abstract=True):
     MonitoringStatus: Type[SctEventProtocol]
     NodeStatus: Type[SctEventProtocol]
     NodePeersNulls: Type[SctEventProtocol]
@@ -61,7 +61,7 @@ ClusterHealthValidatorEvent.add_subevent_type("Done", severity=Severity.NORMAL)
 ClusterHealthValidatorEvent.add_subevent_type("Info", severity=Severity.NORMAL)
 
 
-class DataValidatorEvent(SctEvent, abstract=True):
+class DataValidatorEvent(InformationalEvent, abstract=True):
     DataValidator: Type[SctEventProtocol]
     ImmutableRowsValidator: Type[SctEventProtocol]
     UpdatedRowsValidator: Type[SctEventProtocol]

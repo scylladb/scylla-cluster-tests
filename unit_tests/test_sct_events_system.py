@@ -39,7 +39,7 @@ class TestSystemEvents(unittest.TestCase):
         event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
         self.assertEqual(
             str(event),
-            "(TestFrameworkEvent Severity.ERROR) period_type=not-set "
+            "(TestFrameworkEvent Severity.ERROR) period_type=one-time "
             "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e, source=s1.m1(args=('a1', 'a2'), "
             "kwargs={'k1': 'v1', 'k2': 'v2'})"
             " message=msg1\nexception=e1",
@@ -50,7 +50,7 @@ class TestSystemEvents(unittest.TestCase):
         event = ElasticsearchEvent(doc_id="d1", error="e1")
         event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
         self.assertEqual(str(event),
-                         "(ElasticsearchEvent Severity.ERROR) period_type=not-set "
+                         "(ElasticsearchEvent Severity.ERROR) period_type=one-time "
                          "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e: doc_id=d1 error=e1")
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
@@ -58,7 +58,7 @@ class TestSystemEvents(unittest.TestCase):
         event = SpotTerminationEvent(node="node1", message="m1")
         event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
         self.assertEqual(str(event),
-                         "(SpotTerminationEvent Severity.CRITICAL) period_type=not-set "
+                         "(SpotTerminationEvent Severity.CRITICAL) period_type=one-time "
                          "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e: node=node1 message=m1")
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
@@ -66,7 +66,7 @@ class TestSystemEvents(unittest.TestCase):
         event = ScyllaRepoEvent(url="u1", error="e1")
         event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
         self.assertEqual(str(event),
-                         "(ScyllaRepoEvent Severity.WARNING) period_type=not-set "
+                         "(ScyllaRepoEvent Severity.WARNING) period_type=one-time "
                          "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e: url=u1 error=e1")
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
@@ -82,7 +82,7 @@ class TestSystemEvents(unittest.TestCase):
         event = ThreadFailedEvent(message="m1", traceback="t1")
         event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
         self.assertEqual(str(event),
-                         "(ThreadFailedEvent Severity.ERROR) period_type=not-set "
+                         "(ThreadFailedEvent Severity.ERROR) period_type=one-time "
                          "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e: message=m1\nt1")
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
@@ -91,7 +91,7 @@ class TestSystemEvents(unittest.TestCase):
         event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
         self.assertEqual(
             str(event),
-            "(CoreDumpEvent Severity.ERROR) period_type=not-set "
+            "(CoreDumpEvent Severity.ERROR) period_type=one-time "
             "event_id=aff29bce-d75c-4f86-9890-c6d9c1c25d3e node=node1\ncorefile_url=url1\nbacktrace=b1\n"
             "download_instructions=d1\n",
         )
