@@ -17,4 +17,5 @@ scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/debian/scylla-
 test_duration: 60
 user_prefix: 'artifacts-debian9'
 system_auth_rf: 1
-scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/deb/unstable/stretch/master/latest/scylladb-manager-master/scylla-manager.list'
+
+scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/deb/debian/scylladb-manager-2.4-stretch.list'

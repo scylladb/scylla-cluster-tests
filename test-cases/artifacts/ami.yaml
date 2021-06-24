@@ -15,3 +15,5 @@ scylla_linux_distro: 'centos'
 test_duration: 60
 user_prefix: 'artifacts-ami'
 system_auth_rf: 1
+
+scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/deb/ubuntu/scylladb-manager-2.4-focal.list'

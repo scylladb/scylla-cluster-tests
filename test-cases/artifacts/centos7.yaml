@@ -17,4 +17,5 @@ scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-
 test_duration: 60
 user_prefix: 'artifacts-centos7'
 system_auth_rf: 1
-scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo'
+
+scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylladb-manager-2.4.repo'
