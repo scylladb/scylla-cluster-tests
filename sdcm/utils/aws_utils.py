@@ -170,7 +170,8 @@ class EksClusterCleanupMixin:
             return wait_for(lambda: not self._get_attached_nodegroup_names(status='DELETING'),
                             text='Waiting till target nodegroups are deleted',
                             step=10,
-                            timeout=300)
+                            timeout=300,
+                            throw_exc=False)
 
         wait_for(_destroy_attached_nodegroups, timeout=400, throw_exc=False)
 
