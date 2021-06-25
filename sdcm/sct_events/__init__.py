@@ -34,6 +34,7 @@ class SctEventProtocol(Protocol):
     timestamp: Optional[float]
     severity: Severity
 
+    # pylint: disable=super-init-not-called
     def __init__(self, *args, **kwargs):
         ...
 
