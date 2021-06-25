@@ -389,6 +389,7 @@ def verify_dockers_are_running():
 
 
 def verify_grafana_is_available(version):  # pylint: disable=no-member
+    # pylint: disable=import-outside-toplevel
     from sdcm.logcollector import GrafanaEntity
     grafana_statuses = []
     for dashboard in GrafanaEntity.base_grafana_dashboards:
@@ -415,6 +416,7 @@ def verify_prometheus_is_available():
     :rtype: {bool}
     """
 
+    # pylint: disable=import-outside-toplevel
     from sdcm.db_stats import PrometheusDBStats
 
     time_end = time.time()
