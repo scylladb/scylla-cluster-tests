@@ -45,10 +45,10 @@ class ScyllaArgParser(argparse.ArgumentParser):
         raise ScyllaArgError(message)
 
     @classmethod
-    def from_scylla_help(cls, help: Text, duplicate_cb: Callable = None) -> "ScyllaArgParser":
+    def from_scylla_help(cls, help_text: Text, duplicate_cb: Callable = None) -> "ScyllaArgParser":
         parser = cls(prog="scylla")
         duplicates = set()
-        for *args, val in SCYLLA_ARG.findall(help):
+        for *args, val in SCYLLA_ARG.findall(help_text):
             try:
                 parser.add_argument(*filter(bool, args), action="store" if val else "store_false")
             except argparse.ArgumentError:

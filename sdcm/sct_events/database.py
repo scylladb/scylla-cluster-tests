@@ -55,6 +55,7 @@ class DatabaseLogEvent(LogEvent, abstract=True):
 MILLI_RE = re.compile(r"(\d+) ms")
 
 
+# pylint: disable=too-few-public-methods
 class ReactorStalledMixin(Generic[T_log_event]):
     tolerable_reactor_stall: int = TOLERABLE_REACTOR_STALL
 
