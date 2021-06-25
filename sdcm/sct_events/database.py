@@ -157,6 +157,7 @@ BACKTRACE_RE = re.compile(r'(?P<other_bt>/lib.*?\+0x[0-f]*\n)|(?P<scylla_bt>0x[0
 
 class ScyllaHelpErrorEvent(SctEvent, abstract=True):
     duplicate: Type[SctEventProtocol]
+    filtered: Type[SctEventProtocol]
     message: str
 
     def __init__(self, message: Optional[str] = None, severity=Severity.ERROR):
@@ -175,6 +176,7 @@ class ScyllaHelpErrorEvent(SctEvent, abstract=True):
 
 
 ScyllaHelpErrorEvent.add_subevent_type("duplicate")
+ScyllaHelpErrorEvent.add_subevent_type("filtered")
 
 
 class FullScanEvent(SctEvent, abstract=True):

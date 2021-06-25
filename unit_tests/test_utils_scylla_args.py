@@ -44,8 +44,13 @@ class TestScyllaArgParser(unittest.TestCase):
         )
 
     def test_filter_args(self):
-        self.assertEqual(self.parser.filter_args("--arg1 arg --version -W arg --arg2 -h --options-file arg"),
-                         "--version --workdir arg --help --options-file arg")
+        self.assertEqual(
+            self.parser.filter_args(
+                "--arg1 arg --version -W arg --arg2 -h --options-file arg",
+                unknown_args_cb=lambda args: self.assertEqual(['--arg1', 'arg', '--arg2'], args)
+            ),
+            "--version --workdir arg --help --options-file arg",
+        )
 
     def test_filter_args_unchanged(self):
         args = "--version --workdir arg --help --options-file arg"

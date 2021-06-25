@@ -59,10 +59,10 @@ class ScyllaArgParser(argparse.ArgumentParser):
 
         return parser
 
-    def filter_args(self, args: str) -> str:
+    def filter_args(self, args: str, unknown_args_cb: Callable = None) -> str:
         parsed_args, unknown_args = self.parse_known_args(args.split())
-        if unknown_args:
-            LOGGER.warning("Following arguments are filtered out: %s", unknown_args)
+        if unknown_args and unknown_args_cb:
+            unknown_args_cb(unknown_args)
         filtered_args = []
         for arg, val in vars(parsed_args).items():
             filtered_args.append(f"--{arg.replace('_', '-')}")
