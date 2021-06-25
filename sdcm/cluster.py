@@ -1763,7 +1763,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     message=f"Scylla help contains duplicate for the following arguments: {','.join(dups)}"
                 ).publish()
             )
-            append_scylla_args = scylla_arg_parser.filter_args(append_scylla_args)
+            append_scylla_args = scylla_arg_parser.filter_args(
+                append_scylla_args,
+                unknown_args_cb=lambda args: ScyllaHelpErrorEvent.filtered(
+                    message="Following arguments are filtered out: " + ','.join(args)
+                ).publish()
+            )
         if self.parent_cluster.params.get('db_nodes_shards_selection') == 'random':
             append_scylla_args += f" --smp {self.scylla_random_shards()}"
 
