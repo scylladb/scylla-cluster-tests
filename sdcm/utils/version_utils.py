@@ -157,7 +157,7 @@ def get_branch_version_from_centos_repository(urls):
 
 
 def get_repository_details(url):
-    urls = list({line for line in get_url_content(url=url)})
+    urls = get_url_content(url=url)
 
     for file_type, regex_list in FILE_REGEX_DICT.items():
         for _url in urls:
@@ -236,7 +236,7 @@ def _list_repo_file_etag(s3_client: S3Client, prefix: str) -> Optional[dict]:
     return repo_file["Contents"][0]["ETag"]
 
 
-def resolve_latest_repo_symlink(url: str) -> str:
+def resolve_latest_repo_symlink(url: str) -> str:  # pylint: disable=too-many-branches
     """Resolve `url' to the actual repo link if it contains `latest' substring, otherwise, return `url' as is.
 
     If `url' doesn't point to the latest repo file then raise ScyllaRepoEvent (warning severity).
@@ -336,7 +336,7 @@ def get_git_tag_from_helm_chart_version(chart_version: str) -> str:
     | v1.0.0-rc0-51-ga52c206-latest     | v1.0.0-rc0     |
     +-----------------------------------+----------------+
     """
-    pattern = "^(v[a-z0-9.-]+)-[\d]{1,3}-g[0-9a-z]{7}|(v[a-z0-9.-]+){1}$"
+    pattern = r"^(v[a-z0-9.-]+)-[\d]{1,3}-g[0-9a-z]{7}|(v[a-z0-9.-]+){1}$"
     search_result = re.search(pattern, chart_version)
     if search_result:
         git_tag = search_result.group(1) or search_result.group(2)
