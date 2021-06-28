@@ -26,11 +26,11 @@ class Login:
 
     def __init__(self, remote_browser, ip, port):
         self.browser = remote_browser
-        LOGGER.info(f"open url: {self.path.format(ip=ip, port=port)}")
+        LOGGER.info("open url: %s", self.path.format(ip=ip, port=port))
         self.browser.get(self.path.format(ip=ip, port=port))
 
     def use_default_creds(self):
-        LOGGER.info(f"Login to grafana with default credentials")
+        LOGGER.info("Login to grafana with default credentials")
         try:
             WebDriverWait(self.browser, UI_ELEMENT_LOAD_TIMEOUT).until(
                 EC.visibility_of_element_located(self.username_locator))
@@ -43,9 +43,9 @@ class Login:
             login_button: WebElement = self.browser.find_element(*self.login_button)
             login_button.click()
             self.skip_set_new_password()
-            LOGGER.info(f"Logged in succesful")
+            LOGGER.info("Logged in succesful")
         except Exception as details:  # pylint: disable=broad-except
-            LOGGER.error(f"Authentication failed: {details}")
+            LOGGER.error("Authentication failed: %s", details)
 
     def skip_set_new_password(self):
         WebDriverWait(self.browser, UI_ELEMENT_LOAD_TIMEOUT).until(
@@ -65,23 +65,29 @@ class Panel:
         return (By.XPATH, self.xpath_tmpl.format(name=self.name))
 
     def wait_loading(self, remote_browser):
-        LOGGER.info(f"Waiting panel {self.name} loading")
+        LOGGER.info("Waiting panel %s loading", self.name)
         WebDriverWait(remote_browser, UI_ELEMENT_LOAD_TIMEOUT).until(
             EC.visibility_of_element_located(self.xpath_locator))
-        el: WebElement = remote_browser.find_element(*self.xpath_locator)
-        parent_el: WebElement = el.find_element_by_xpath("parent::*//parent::*")
-        remote_browser.execute_script("arguments[0].style.border='10px solid red'", parent_el)
+        panel_title: WebElement = remote_browser.find_element(*self.xpath_locator)
+        panel_elem: WebElement = panel_title.find_element_by_xpath("parent::*//parent::*")
         try:
-            loading = parent_el.find_element_by_xpath("div[contains(@class, 'panel-loading')]")
+            loading = panel_elem.find_element_by_xpath("div[contains(@class, 'panel-loading')]")
             WebDriverWait(remote_browser, UI_ELEMENT_LOAD_TIMEOUT).until(EC.invisibility_of_element(loading))
+            LOGGER.debug("Panel %s could be without data", self.name)
         except exceptions.NoSuchElementException:
-            LOGGER.debug(f"Check panel is loaded")
-        list_of_childs = parent_el.find_elements_by_xpath("child::*")
-        assert len(list_of_childs) == 2, f"num of elements {len(list_of_childs)}"
-        LOGGER.info(f"Panel {self.name} loaded")
+            LOGGER.debug("Check panel is loaded %s", self.name)
+            list_of_childs = panel_elem.find_elements_by_xpath("child::*")
+            assert len(list_of_childs) == 2, f"num of elements {len(list_of_childs)}"
+            LOGGER.debug("Panel %s loaded", self.name)
+        except exceptions.TimeoutException:
+            LOGGER.warning("Panel %s is still loading. Data on panel could displayed with delay", self.name)
+            list_of_childs = panel_elem.find_elements_by_xpath("child::*")
+            assert len(list_of_childs) == 3, f"num of elements {len(list_of_childs)}"
+            LOGGER.debug("Panel %s was not fully loaded", self.name)
+        LOGGER.info("Work with panel %s done", self.name)
 
 
-class Snapshot:
+class Snapshot:  # pylint: disable=too-few-public-methods
     locators_sequence = [
         (By.XPATH,
          """/html/body/grafana-app/div/div/react-container/div/div[1]/div[1]/div[4]/div/button"""),  # full xpath is set, no any explicit ids.
@@ -103,7 +109,7 @@ class Snapshot:
         :rtype: {str}
         """
         for element in self.locators_sequence[:-1]:
-            LOGGER.debug(f"Search element '{element}'")
+            LOGGER.debug("Search element '%s'", element)
             WebDriverWait(remote_browser, UI_ELEMENT_LOAD_TIMEOUT).until(EC.visibility_of_element_located(element))
             found_element = remote_browser.find_element(*element)
             found_element.click()
@@ -131,7 +137,7 @@ class Dashboard:
         scroll_height = remote_browser.execute_script("return arguments[0].scrollHeight", scroll_element)
 
         for scroll_size in range(0, scroll_height, self.scroll_step):
-            LOGGER.debug(f"Scrolling next {self.scroll_step}")
+            LOGGER.debug("Scrolling next %s", self.scroll_step)
             remote_browser.execute_script(f'arguments[0].scrollTop = {scroll_size}', scroll_element)
 
     def wait_panels_loading(self, remote_browser):
@@ -140,7 +146,8 @@ class Dashboard:
             panel.wait_loading(remote_browser)
         LOGGER.info("All panels have loaded data")
 
-    def get_snapshot(self, remote_browser):
+    @staticmethod
+    def get_snapshot(remote_browser):
         return Snapshot().get_shared_link(remote_browser)
 
 
@@ -148,7 +155,9 @@ class OverviewDashboard(Dashboard):
     name = 'overview'
     path = 'd/overview-{version}/scylla-{dashboard_name}'
     resolution = '1920px*4000px'
-    panels = [Panel("Writes"),
+    panels = [Panel("Disk Size by DC"),
+              Panel("Running Compactions"),
+              Panel("Writes"),
               Panel("Write Latencies"),
               Panel("Read/Write Timeouts by DC")]
 

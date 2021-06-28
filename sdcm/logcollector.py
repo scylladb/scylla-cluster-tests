@@ -114,18 +114,18 @@ class BaseMonitoringEntity(BaseLogEntity):
     @staticmethod
     def get_monitoring_stack(backend):
         if backend == 'aws':
-            from sdcm.cluster_aws import MonitorSetAWS
+            from sdcm.cluster_aws import MonitorSetAWS  # pylint: disable=import-outside-toplevel
             return MonitorSetAWS
         elif backend == 'docker':
-            from sdcm.cluster_docker import MonitorSetDocker
+            from sdcm.cluster_docker import MonitorSetDocker  # pylint: disable=import-outside-toplevel
             return MonitorSetDocker
         elif backend == 'gce':
-            from sdcm.cluster_gce import MonitorSetGCE
+            from sdcm.cluster_gce import MonitorSetGCE  # pylint: disable=import-outside-toplevel
             return MonitorSetGCE
         elif backend == 'baremetal':
-            from sdcm.cluster_baremetal import MonitorSetPhysical
+            from sdcm.cluster_baremetal import MonitorSetPhysical  # pylint: disable=import-outside-toplevel
             return MonitorSetPhysical
-        from sdcm.cluster import BaseMonitorSet
+        from sdcm.cluster import BaseMonitorSet  # pylint: disable=import-outside-toplevel
         return BaseMonitorSet
 
     def get_monitoring_version(self, node):
@@ -139,8 +139,8 @@ class BaseMonitoringEntity(BaseLogEntity):
                 return None, None, None
             result = node.remoter.run(
                 f"cat {basedir}/scylla-monitoring-src/monitor_version", ignore_status=True, verbose=False)
-        except Exception as details:
-            LOGGER.error(f"Failed to get monitoring version: {details}")
+        except Exception as details:  # pylint: disable=broad-except
+            LOGGER.error("Failed to get monitoring version: %s", details)
             return None, None, None
 
         try:
@@ -226,7 +226,7 @@ class FileLog(CommandLog):
                 shutil.copy(src=logfile, dst=local_dst)
 
         if self.cmd and not self._is_file_collected(local_dst):
-            super(FileLog, self).collect(node, local_dst, remote_dst)
+            super().collect(node, local_dst, remote_dst)
 
         return local_dst
 
@@ -263,7 +263,7 @@ class DirLog(FileLog):
         # TODO: implement it to be able to gather whole dirs on remote nodes
         LOGGER.warning(
             "'DirLog' class doesn't support 'collect_from_builder' method. "
-            f"It is to be implemented. Ignoring gathering following logs: '{self.name}'")
+            "It is to be implemented. Ignoring gathering following logs: '%s'", self.name)
 
 
 class PrometheusSnapshots(BaseMonitoringEntity):
@@ -280,7 +280,7 @@ class PrometheusSnapshots(BaseMonitoringEntity):
 
     def __init__(self, *args, **kwargs):
         self.monitoring_data_dir = kwargs.pop('monitoring_data_dir', None)
-        super(PrometheusSnapshots, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         self.current_datetime = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -379,7 +379,7 @@ class MonitoringStack(BaseMonitoringEntity):
             res = requests.get(f"http://{grafana_ip}:{self.grafana_port}/api/annotations")
             if res.ok:
                 return res.text
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             LOGGER.warning("Unable to get Grafana annotations [%s]", details)
         return ""
 
@@ -400,7 +400,7 @@ class MonitoringStack(BaseMonitoringEntity):
         checked_dashboard_url = "http://{grafana_ip}:{grafana_port}/api/dashboards/db/{uid}"
         try:
             LOGGER.info(
-                f"Check dashbaord: {checked_dashboard_url.format(grafana_ip=grafana_ip, grafana_port=MonitoringStack.grafana_port, uid=uid)}")
+                "Check dashbaord: %s", checked_dashboard_url.format(grafana_ip=grafana_ip, grafana_port=MonitoringStack.grafana_port, uid=uid))
             res = requests.get(checked_dashboard_url.format(grafana_ip=grafana_ip,
                                                             grafana_port=MonitoringStack.grafana_port,
                                                             uid=uid))
@@ -437,7 +437,7 @@ class GrafanaEntity(BaseMonitoringEntity):  # pylint: disable=too-few-public-met
     ]
 
     grafana_port = 3000
-    grafana_entity_url_tmpl = "http://{node_ip}:{grafana_port}/{path}?from={st}&to=now"
+    grafana_entity_url_tmpl = "http://{node_ip}:{grafana_port}/{path}?from={st}&to=now&refresh=1d"
     sct_base_path = get_sct_root_path()
 
     def __init__(self, *args, **kwargs):
@@ -448,7 +448,7 @@ class GrafanaEntity(BaseMonitoringEntity):  # pylint: disable=too-few-public-met
         self.start_time = str(test_start_time).split('.')[0] + '000'
         self.grafana_dashboards = self.base_grafana_dashboards + kwargs.pop("extra_entities", [])
         self.remote_browser = None
-        super(GrafanaEntity, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def close_browser(self):
         if self.remote_browser:
@@ -465,6 +465,7 @@ class GrafanaEntity(BaseMonitoringEntity):  # pylint: disable=too-few-public-met
             version = version.replace('.', '-')
             return version
         LOGGER.warning("Monitoring version was not found")
+        return None
 
 
 class GrafanaScreenShot(GrafanaEntity):
@@ -516,13 +517,13 @@ class GrafanaScreenShot(GrafanaEntity):
                     LOGGER.debug("Get screenshot for url %s, save to %s", grafana_url, screenshot_path)
                     self.remote_browser.get_screenshot(grafana_url, screenshot_path)
                     screenshots.append(screenshot_path)
-                except Exception as details:
-                    LOGGER.error(f"{details}")
+                except Exception as details:  # pylint: disable=broad-except
+                    LOGGER.error("Error get screenshot %s: %s", dashboard.name, details)
 
             return screenshots
 
         except Exception as details:  # pylint: disable=broad-except
-            LOGGER.error(f'Error taking monitor screenshot: {str(details)}, traceback: {traceback.format_exc()}')
+            LOGGER.error("Error taking monitor screenshot: %s, traceback: %s", details, traceback.format_exc())
             return []
         finally:
             self.close_browser()
@@ -556,29 +557,34 @@ class GrafanaSnapshot(GrafanaEntity):
                                 ip=normalize_ipv6_url(node.grafana_address),
                                 port=self.grafana_port).use_default_creds()
             for dashboard in self.grafana_dashboards:
-                dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=normalize_ipv6_url(node.grafana_address),
-                                                                    uid="-".join([dashboard.name, version]))
-                if not dashboard_exists:
-                    version = "master"
+                try:
+                    dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=normalize_ipv6_url(node.grafana_address),
+                                                                        uid="-".join([dashboard.name, version]))
+                    if not dashboard_exists:
+                        version = "master"
 
-                path = dashboard.path.format(
-                    version=version,
-                    dashboard_name=dashboard.name)
-                grafana_url = self.grafana_entity_url_tmpl.format(
-                    node_ip=normalize_ipv6_url(node.grafana_address),
-                    grafana_port=self.grafana_port,
-                    path=path,
-                    st=self.start_time)
-                LOGGER.info("Get snapshot link for url %s", grafana_url)
-                self.remote_browser.open(grafana_url, dashboard.resolution)
-                dashboard.scroll_to_bottom(self.remote_browser.browser)
-                dashboard.wait_panels_loading(self.remote_browser.browser)
+                    path = dashboard.path.format(
+                        version=version,
+                        dashboard_name=dashboard.name)
+                    grafana_url = self.grafana_entity_url_tmpl.format(
+                        node_ip=normalize_ipv6_url(node.grafana_address),
+                        grafana_port=self.grafana_port,
+                        path=path,
+                        st=self.start_time)
+                    LOGGER.info("Get snapshot link for url %s", grafana_url)
+                    self.remote_browser.open(grafana_url, dashboard.resolution)
+                    dashboard.scroll_to_bottom(self.remote_browser.browser)
+                    dashboard.wait_panels_loading(self.remote_browser.browser)
 
-                snapshots.append(dashboard.get_snapshot(self.remote_browser.browser))
+                    snapshots.append(dashboard.get_snapshot(self.remote_browser.browser))
+                except Exception as details:  # pylint: disable=broad-except
+                    LOGGER.error("Error get snapshot %s: %s", dashboard.name, details)
+
+            LOGGER.info(snapshots)
             return snapshots
 
         except Exception as details:  # pylint: disable=broad-except
-            LOGGER.error(f'Error taking monitor snapshot: {str(details)}, traceback: {traceback.format_exc()}')
+            LOGGER.error("Error taking monitor snapshot: %s, traceback: %s", details, traceback.format_exc())
             return []
         finally:
             self.close_browser()
@@ -705,7 +711,7 @@ class LogCollector:
         LOGGER.debug("Nodes list %s", [node.name for node in self.nodes])
 
         if not self.nodes and not os.listdir(self.local_dir):
-            LOGGER.warning(f'No nodes found for {self.cluster_log_type} cluster. Logs will not be collected')
+            LOGGER.warning('No nodes found for %s cluster. Logs will not be collected', self.cluster_log_type)
             return None
         if self.nodes:
             try:
@@ -755,7 +761,7 @@ class LogCollector:
         try:
             with tarfile.open(archive_name, "w:gz") as tar:
                 tar.add(logdir, arcname=logdir_name)
-        except Exception as details:
+        except Exception as details:  # pylint: disable=broad-except
             LOGGER.error("Error during archive creation. Details: \n%s", details)
             return None
         return archive_name
@@ -800,7 +806,7 @@ class ScyllaLogCollector(LogCollector):
 
     def collect_logs(self, local_search_path=None):
         self.collect_logs_for_inactive_nodes(local_search_path)
-        return super(ScyllaLogCollector, self).collect_logs(local_search_path)
+        return super().collect_logs(local_search_path)
 
 
 class LoaderLogCollector(LogCollector):
@@ -1074,7 +1080,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                                                    tags={**self.tags, "NodeType": "monitor", }))
         if self.params["use_cloud_manager"]:
             try:
-                from cluster_cloud import get_manager_instance_by_cluster_id
+                from cluster_cloud import get_manager_instance_by_cluster_id  # pylint: disable=import-outside-toplevel
             except ImportError:
                 LOGGER.error("Couldn't collect Siren manager logs, cluster_cloud module isn't installed")
             else:
@@ -1187,7 +1193,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         elif backend == 'docker':
             self.get_docker_instances_by_testid()
         else:
-            LOGGER.debug(f"get_running_cluster_sets: unknown backend type: {backend}")
+            LOGGER.debug("get_running_cluster_sets: unknown backend type: %s", backend)
 
     def run(self):
         """Run collect logs process as standalone operation
