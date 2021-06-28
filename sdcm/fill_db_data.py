@@ -16,6 +16,7 @@ __author__ = 'Roy Dahan'
 # Copyright (c) 2016 ScyllaDB
 
 # pylint: disable=too-many-lines,eval-used
+import contextlib
 import logging
 import random
 import time
@@ -55,8 +56,8 @@ class FillDatabaseData(ClusterTester):
     base_ks = "keyspace_fill_db_data"
     # List of dictionaries for all items tables and their data
     all_verification_items = [
-        # order_by_with_in_test: Check that order-by works with IN
         {
+            'name': 'order_by_with_in_test: Check that order-by works with IN',
             'create_tables': ["""
                               CREATE TABLE order_by_with_in_test(
                                   my_id varchar,
@@ -80,8 +81,8 @@ class FillDatabaseData(ClusterTester):
             'max_version': '',
             'skip': '',
             'disable_paging': True},
-        # static_cf_test: Test static CF syntax
         {
+            'name': 'static_cf_test: Test static CF syntax',
             'create_tables': ["""CREATE TABLE static_cf_test (
                                 userid uuid PRIMARY KEY,
                                 firstname text,
@@ -103,8 +104,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '1.0',
             'max_version': '',
             'skip': ''},
-        # static_cf_test_batch: Test static CF syntax with batch
         {
+            'name': 'static_cf_test_batch: Test static CF syntax with batch',
             'create_tables': ["""CREATE TABLE static_cf_test_batch (
                             userid uuid PRIMARY KEY,
                             firstname text,
@@ -129,8 +130,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '1.0',
             'max_version': '',
             'skip': ''},
-        # noncomposite_static_cf_test: Test non-composite static CF syntax
         {
+            'name': 'noncomposite_static_cf_test: Test non-composite static CF syntax',
             'create_tables': ["""CREATE TABLE noncomposite_static_cf_test (
                                 userid uuid PRIMARY KEY,
                                 firstname ascii,
@@ -155,8 +156,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '1.0',
             'max_version': '',
             'skip': ''},
-        # noncomposite_static_cf_test_batch: Test non-composite static CF syntax with batch
         {
+            'name': 'noncomposite_static_cf_test_batch: Test non-composite static CF syntax with batch',
             'create_tables': ["""CREATE TABLE noncomposite_static_cf_test_batch (
                                 userid uuid PRIMARY KEY,
                                 firstname ascii,
@@ -181,8 +182,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '1.0',
             'max_version': '',
             'skip': ''},
-        # dynamic_cf_test: Test non-composite dynamic CF syntax
         {
+            'name': 'dynamic_cf_test: Test non-composite dynamic CF syntax',
             'create_tables': ["""CREATE TABLE dynamic_cf_test (
                                 userid uuid,
                                 url text,
@@ -212,8 +213,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '1.0',
             'max_version': '',
             'skip': ''},
-        # dense_cf_test: Test composite 'dense' CF syntax
         {
+            'name': 'dense_cf_test: Test composite "dense" CF syntax',
             'create_tables': ["""CREATE TABLE dense_cf_test (
                                       userid uuid,
                                       ip text,
@@ -261,8 +262,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # sparse_cf_test: Test composite 'sparse' CF syntax
         {
+            'name': 'sparse_cf_test: Test composite "sparse" CF syntax',
             'create_tables': ["""CREATE TABLE sparse_cf_test (
                                 userid uuid,
                                 posted_month int,
@@ -292,8 +293,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # limit_ranges_test: Validate LIMIT option for 'range queries' in SELECT statements
         {
+            'name': 'limit_ranges_test: Validate LIMIT option for "range queries" in SELECT statements',
             'create_tables': ["""CREATE TABLE limit_ranges_test (
                                 userid int,
                                 url text,
@@ -313,8 +314,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '3.0',
             'max_version': '',
             'skip': ''},
-        # limit_multiget_test: issue ##2574 Validate LIMIT option for 'multiget' in SELECT statements
         {
+            'name': 'limit_multiget_test: issue ##2574 Validate LIMIT option for "multiget" in SELECT statements',
             'create_tables': ["""CREATE TABLE limit_multiget_test (
                                 userid int,
                                 url text,
@@ -334,8 +335,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '3.0',
             'max_version': '',
             'skip': ''},
-        # simple_tuple_query_test: CASSANDRA-8613
         {
+            'name': 'simple_tuple_query_test: CASSANDRA-8613',
             'create_tables': [
                 "create table simple_tuple_query_test (a int, b int, c int, d int , e int, PRIMARY KEY (a, b, c, d, e))"],
             'truncates': ['TRUNCATE simple_tuple_query_test'],
@@ -356,8 +357,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': '#64 Clustering columns may not be skipped in multi-column relations. They should appear in the PRIMARY KEY order. Got (c, d, e) > (1, 1, 1)'},
-        # limit_sparse_test: Validate LIMIT option for sparse table in SELECT statements
         {
+            'name': 'limit_sparse_test: Validate LIMIT option for sparse table in SELECT statements',
             'create_tables': [
                 """CREATE TABLE limit_sparse_test (
                 userid int,
@@ -380,8 +381,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # counters_test: Validate counter support
         {
+            'name': 'counters_test: Validate counter support',
             'create_tables': [
                 """CREATE TABLE counters_test (
                 userid int,
@@ -414,8 +415,8 @@ class FillDatabaseData(ClusterTester):
             'skip_condition': "self.params.get('experimental')",
             'max_version': '',
             'skip': ''},
-        # indexed_with_eq_test: Check that you can query for an indexed column even with a key EQ clause
         {
+            'name': 'indexed_with_eq_test: Check that you can query for an indexed column even with a key EQ clause',
             'create_tables': ["""
                                 CREATE TABLE indexed_with_eq_test (
                                   userid uuid PRIMARY KEY,
@@ -438,8 +439,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '3.0',
             'max_version': '',
             'skip': ''},
-        # mv_with_eq_test: Check that you can query from materialized view
         {
+            'name': 'mv_with_eq_test: Check that you can query from materialized view',
             'create_tables': ["""
                                 CREATE TABLE mv_with_eq_test (
                                   userid uuid PRIMARY KEY,
@@ -462,8 +463,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '3.0',
             'max_version': '',
             'skip': ''},
-        # select_key_in_test: Query for KEY IN (...)
         {
+            'name': 'select_key_in_test: Query for KEY IN (...)',
             'create_tables': ["""CREATE TABLE select_key_in_test (
                                   userid uuid,
                                   firstname text,
@@ -484,8 +485,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # exclusive_slice_test: Test SELECT respects inclusive and exclusive bounds
         {
+            'name': 'exclusive_slice_test: Test SELECT respects inclusive and exclusive bounds',
             'create_tables': ["""CREATE TABLE exclusive_slice_test (
                                   k int,
                                   c int,
@@ -528,8 +529,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # in_clause_wide_rows_test: Check IN support for 'wide rows' in SELECT statement
         {
+            'name': 'in_clause_wide_rows_test: Check IN support for "wide rows" in SELECT statement',
             'create_tables': ["""CREATE TABLE in_clause_wide_rows_test1 (
                                                         k int,
                                                         c int,
@@ -578,8 +579,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # order_by_test: Check ORDER BY support in SELECT statement
         {
+            'name': 'order_by_test: Check ORDER BY support in SELECT statement',
             'create_tables': ["""CREATE TABLE order_by_test1 (
                                 k int,
                                 c int,
@@ -633,8 +634,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # more_order_by_test: More ORDER BY checks CASSANDRA-4160
         {
+            'name': 'more_order_by_test: More ORDER BY checks CASSANDRA-4160',
             'create_tables': ["""CREATE COLUMNFAMILY more_order_by_test1 (
                                 row text,
                                 number int,
@@ -692,8 +693,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # order_by_validation_test:  Check we don't allow order by on row key CASSANDRA-4246
         {
+            'name': "order_by_validation_test:  Check we don't allow order by on row key CASSANDRA-4246",
             'create_tables': ["""CREATE TABLE order_by_validation_test (
                                 k1 int,
                                 k2 int,
@@ -713,8 +714,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # reversed_comparator_test
         {
+            'name': 'reversed_comparator_test',
             'create_tables': ["""CREATE TABLE reversed_comparator_test1 (
                                 k int,
                                 c int,
@@ -753,8 +754,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # null_support_test:  Test support for nulls on new versions
         {
+            'name': 'null_support_test:  Test support for nulls on new versions',
             'create_tables': ["""CREATE TABLE null_support_test (
                                 k int,
                                 c int,
@@ -785,8 +786,8 @@ class FillDatabaseData(ClusterTester):
             'max_version': '',
             'skip_condition': 'self.version_null_values_support()',
             'skip': ''},
-        # null_support_test_old_version:  Test support for nulls on old versions
         {
+            'name': 'null_support_test_old_version:  Test support for nulls on old versions',
             # NOTE: Useful for scylla-operator's scylla upgrade tests
             # while https://github.com/scylladb/scylla/issues/8032 is not fixed
             'create_tables': ["""CREATE TABLE null_support_test_old_version (
@@ -819,8 +820,8 @@ class FillDatabaseData(ClusterTester):
             'max_version': '4.3',
             'skip_condition': 'not self.version_null_values_support()',
             'skip': ''},
-        # nameless_index_test:  Test CREATE INDEX without name and validate the index can be dropped
         {
+            'name': 'nameless_index_test:  Test CREATE INDEX without name and validate the index can be dropped',
             'create_tables': ["""CREATE TABLE nameless_index_test (
                                 id text PRIMARY KEY,
                                 birth_year int,
@@ -839,8 +840,9 @@ class FillDatabaseData(ClusterTester):
             'max_version': '',
             'skip_condition': 'self.version_new_sorting_order_with_secondary_indexes()',
             'skip': ''},
-        # nameless_index_test_old_version:  Test CREATE INDEX without name and validate the index can be dropped
         {
+            'name': 'nameless_index_test_old_version:  Test CREATE INDEX without name and validate the index can '
+                    'be dropped',
             'create_tables': ["""CREATE TABLE nameless_index_test_old_version (
                                 id text PRIMARY KEY,
                                 birth_year int,
@@ -859,8 +861,8 @@ class FillDatabaseData(ClusterTester):
             'max_version': '4.3',
             'skip_condition': 'not self.version_new_sorting_order_with_secondary_indexes()',
             'skip': ''},
-        # deletion_test: Test simple deletion and in particular check for CASSANDRA-4193 bug
         {
+            'name': 'deletion_test: Test simple deletion and in particular check for CASSANDRA-4193 bug',
             'create_tables': ["""CREATE TABLE deletion_test1 (
                                 username varchar,
                                 id int,
@@ -905,8 +907,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # count_test
         {
+            'name': 'count_test',
             'create_tables': ["""CREATE TABLE count_test (
                                 kind text,
                                 time int,
@@ -930,8 +932,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # batch_test
         {
+            'name': 'batch_test',
             'create_tables': ["""CREATE TABLE batch_test (
                                 userid text PRIMARY KEY,
                                 name text,
@@ -950,8 +952,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # table_options_test
         {
+            'name': 'table_options_test',
             'create_tables': ["""CREATE TABLE table_options_test (
                                 k int PRIMARY KEY,
                                 c int
@@ -981,8 +983,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # timestamp_and_ttl_test
         {
+            'name': 'timestamp_and_ttl_test',
             'create_tables': ["""CREATE TABLE timestamp_and_ttl_test(
                                 k int PRIMARY KEY,
                                 c text,
@@ -1000,8 +1002,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # no_range_ghost_test
         {
+            'name': 'no_range_ghost_test',
             'create_tables': ["CREATE TABLE no_range_ghost_test (k int PRIMARY KEY, v int)",
                               "CREATE KEYSPACE ks_no_range_ghost_test with replication = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };",
                               """CREATE COLUMNFAMILY ks_no_range_ghost_test.users (
@@ -1035,8 +1037,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # undefined_column_handling_test
         {
+            'name': 'undefined_column_handling_test',
             'create_tables': ["""CREATE TABLE undefined_column_handling_test (
                                 k int PRIMARY KEY,
                                 v1 int,
@@ -1053,8 +1055,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # range_tombstones_test: Test deletion by 'composite prefix' (range tombstones)
         {
+            'name': "range_tombstones_test: Test deletion by 'composite prefix' (range tombstones)",
             'create_tables': ["""CREATE TABLE range_tombstones_test (
                             k int,
                             c1 int,
@@ -1113,8 +1115,9 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # range_tombstones_compaction_test: Test deletion by 'composite prefix' (range tombstones) with compaction
         {
+            'name': "range_tombstones_compaction_test: Test deletion by 'composite prefix' "
+                    "(range tombstones) with compaction",
             'create_tables': ["""CREATE TABLE range_tombstones_compaction_test (
                             k int,
                             c1 int,
@@ -1138,8 +1141,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # delete_row_test: Test deletion of rows
         {
+            'name': 'delete_row_test: Test deletion of rows',
             'create_tables': ["""CREATE TABLE delete_row_test (
                              k int,
                              c1 int,
@@ -1160,8 +1163,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # range_query_2ndary_test: Test range queries with 2ndary indexes CASSANDRA-4257
         {
+            'name': 'range_query_2ndary_test: Test range queries with 2ndary indexes CASSANDRA-4257',
             'create_tables': ["CREATE TABLE range_query_2ndary_test (id int primary key, row int, setid int)",
                               "CREATE INDEX indextest_setid_idx ON range_query_2ndary_test (setid)"],
             'truncates': ["TRUNCATE range_query_2ndary_test"],
@@ -1176,8 +1179,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '3.0',
             'max_version': '',
             'skip': ''},
-        # set_test
         {
+            'name': 'set test',
             'create_tables': ["""CREATE TABLE set_test (
                             fn text,
                             ln text,
@@ -1211,8 +1214,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # map_test
         {
+            'name': 'map test',
             'create_tables': ["""CREATE TABLE map_test (
                         fn text,
                         ln text,
@@ -1244,8 +1247,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # list_test
         {
+            'name': 'list test',
             'create_tables': ["""CREATE TABLE list_test (
                             fn text,
                             ln text,
@@ -1284,8 +1287,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # multi_collection_test
         {
+            'name': 'multi_collection_test',
             'create_tables': ["""CREATE TABLE multi_collection_test(
                             k uuid PRIMARY KEY,
                             L list<int>,
@@ -1309,8 +1312,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # range_query_test : Range test query from CASSANDRA-4372
         {
+            'name': 'range_query_test : Range test query from CASSANDRA-4372',
             'create_tables': [
                 "CREATE TABLE range_query_test (a int, b int, c int, d int, e int, f text, PRIMARY KEY (a, b, c, d, e) )"],
             'truncates': ["TRUNCATE range_query_test"],
@@ -1329,8 +1332,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # composite_row_key_test
         {
+            'name': 'composite_row_key_test',
             'create_tables': [
                 """CREATE TABLE composite_row_key_test (
                 k1 int,
@@ -1359,8 +1362,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # row_existence_test: Check the semantic of CQL row existence CASSANDRA-4361
         {
+            'name': 'row_existence_test: Check the semantic of CQL row existence CASSANDRA-4361',
             'create_tables': [
                 """CREATE TABLE row_existence_test (
                 k int,
@@ -1395,9 +1398,9 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # only_pk_test
-        # disabled temprorary due to issue #8410
         {
+            # disabled temporarily due to issue #8410
+            'name': 'only pk test',
             'create_tables': [
                 """CREATE TABLE only_pk_test1 (
                 k int,
@@ -1430,8 +1433,8 @@ class FillDatabaseData(ClusterTester):
             'max_version': '',
             'skip': '',
             'no_cdc': "require #8410"},
-        # no_clustering_test
         {
+            'name': 'no_clustering_test',
             'create_tables': ["CREATE TABLE no_clustering_test (k int PRIMARY KEY, v int)"],
             'truncates': [],
             'inserts': ["INSERT INTO no_clustering_test (k, v) VALUES (%s, %s)" % (i, i) for i in range(10)],
@@ -1441,8 +1444,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # date_test
         {
+            'name': 'date_test',
             'create_tables': ["CREATE TABLE date_test (k int PRIMARY KEY, t timestamp)"],
             'truncates': ["TRUNCATE date_test"],
             'inserts': ["INSERT INTO date_test (k, t) VALUES (0, '2011-02-03')"],
@@ -1452,8 +1455,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # range_slice_test: Test a regression from CASSANDRA-1337
         {
+            'name': 'range_slice_test: Test a regression from CASSANDRA-1337',
             'create_tables': ["""
                     CREATE TABLE range_slice_test (
                         k text PRIMARY KEY,
@@ -1468,8 +1471,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # composite_index_with_pk_test
         {
+            'name': 'composite_index_with_pk_test',
             'create_tables': ["""CREATE TABLE composite_index_with_pk_test (
                                 blog_id int,
                                 time1 int,
@@ -1512,8 +1515,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '3.0',
             'max_version': '',
             'skip': ''},
-        # limit_bugs_test: Test for LIMIT bugs from CASSANDRA-4579
         {
+            'name': 'limit_bugs_test: Test for LIMIT bugs from CASSANDRA-4579',
             'create_tables': ["""CREATE TABLE limit_bugs_test1 (
                         a int,
                         b int,
@@ -1561,8 +1564,9 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # npe_composite_table_slice_test: Test for NPE when trying to select a slice from a composite table CASSANDRA-4532
         {
+            'name': 'npe_composite_table_slice_test: Test for NPE when trying to select a slice from a composite '
+                    'table CASSANDRA-4532',
             'create_tables': ["""CREATE TABLE npe_composite_table_slice_test(
                         status ascii,
                         ctime bigint,
@@ -1586,8 +1590,9 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # order_by_multikey_test: Test for #CASSANDRA-4612 bug and more generally order by when multiple C* rows are queried
         {
+            'name': 'order_by_multikey_test: Test for #CASSANDRA-4612 bug and more generally order by when '
+                    'multiple C* rows are queried',
             'create_tables': ["""CREATE TABLE order_by_multikey_test(
                         my_id varchar,
                         col1 int,
@@ -1614,8 +1619,8 @@ class FillDatabaseData(ClusterTester):
             'max_version': '',
             'disable_paging': True,
             'skip': ''},
-        # remove_range_slice_test
         {
+            'name': 'remove_range_slice_test',
             'create_tables': ["""CREATE TABLE remove_range_slice_test (
                         k int PRIMARY KEY,
                         v int
@@ -1629,8 +1634,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # indexes_composite_test
         {
+            'name': 'indexes_composite_test',
             'create_tables': ["""CREATE TABLE indexes_composite_test (
                         blog_id int,
                         timestamp int,
@@ -1671,8 +1676,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # refuse_in_with_indexes_test: Test for the validation bug of CASSANDRA-4709
         {
+            'name': 'refuse_in_with_indexes_test: Test for the validation bug of CASSANDRA-4709',
             'create_tables': [
                 """create table refuse_in_with_indexes_test (pk varchar primary key, col1 varchar, col2 varchar)""",
                 "create index refuse_in_with_indexes_test1 on refuse_in_with_indexes_test(col1);",
@@ -1693,8 +1698,9 @@ class FillDatabaseData(ClusterTester):
             'min_version': '3.0',
             'max_version': '',
             'skip': ''},
-        # reversed_compact_test: Test for CASSANDRA-4716 bug and more generally for good behavior of ordering
         {
+            'name': 'reversed_compact_test: Test for CASSANDRA-4716 bug and more generally for good '
+                    'behavior of ordering',
             'create_tables': [
                 """ CREATE TABLE reversed_compact_test1 (
                 k text,
@@ -1743,8 +1749,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # reversed_compact_multikey_test: Test for the bug from CASSANDRA-4760 and CASSANDRA-4759
         {
+            'name': 'reversed_compact_multikey_test: Test for the bug from CASSANDRA-4760 and CASSANDRA-4759',
             'create_tables': [
                 """CREATE TABLE reversed_compact_multikey_test (
                 key text,
@@ -1798,8 +1804,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # collection_and_regular_test
         {
+            'name': 'collection_and_regular_test',
             'create_tables': [
                 """CREATE TABLE collection_and_regular_test (
             k int PRIMARY KEY,
@@ -1815,8 +1821,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # batch_and_list_test
         {
+            'name': 'batch_and_list_test',
             'create_tables': ["""
                   CREATE TABLE batch_and_list_test (
                     k int PRIMARY KEY,
@@ -1846,8 +1852,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # boolean_test
         {
+            'name': 'boolean_test',
             'create_tables': [
                 """
           CREATE TABLE boolean_test (
@@ -1863,8 +1869,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # multiordering_test
         {
+            'name': 'multiordering_test',
             'create_tables': [
                 """CREATE TABLE multiordering_test (
                 k text,
@@ -1890,11 +1896,11 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # returned_null_test
-        # Test for returned null.
-        # StorageProxy short read protection hadn't been updated after the changes made by CASSANDRA-3647,
-        # namely the fact that SliceQueryFilter groups columns by prefix before counting them. CASSANDRA-4882
         {
+            # Test for returned null.
+            # StorageProxy short read protection hadn't been updated after the changes made by CASSANDRA-3647,
+            # namely the fact that SliceQueryFilter groups columns by prefix before counting them. CASSANDRA-4882
+            'name': 'returned_null_test: ',
             'create_tables': [
                 """CREATE TABLE returned_null_test (
                 k int,
@@ -1914,8 +1920,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # multi_list_set_test
         {
+            'name': 'multi_list_set_test',
             'create_tables': [
                 """ CREATE TABLE multi_list_set_test (
                 k int PRIMARY KEY,
@@ -1930,8 +1936,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # composite_index_collections_test
         {
+            'name': 'composite_index_collections_test',
             'create_tables': [
                 """
             CREATE TABLE composite_index_collections_test (
@@ -1958,8 +1964,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '3.0',
             'max_version': '',
             'skip': ''},
-        # truncate_clean_cache_test
         {
+            'name': 'truncate_clean_cache_test',
             'create_tables': [
                 """CREATE TABLE truncate_clean_cache_test (
                     k int PRIMARY KEY,
@@ -1980,8 +1986,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # range_with_deletes_test
         {
+            'name': 'range_with_deletes_test',
             'create_tables': [
                 """CREATE TABLE range_with_deletes_test (
                 k int PRIMARY KEY,
@@ -1998,8 +2004,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # collection_function_test
         {
+            'name': 'collection_function_test',
             'create_tables': [
                 """CREATE TABLE collection_function_test (
                 k int PRIMARY KEY,
@@ -2014,8 +2020,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # composite_partition_key_validation_test: Test for bug from CASSANDRA-5122
         {
+            'name': 'composite_partition_key_validation_test: Test for bug from CASSANDRA-5122',
             'create_tables': [
                 "CREATE TABLE composite_partition_key_validation_test (a int, b text, c uuid, PRIMARY KEY ((a, b)))"],
             'truncates': ["TRUNCATE composite_partition_key_validation_test"],
@@ -2029,8 +2035,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # multi_in_test
         {
+            'name': 'multi_in_test',
             'create_tables': [
                 """
             CREATE TABLE multi_in_test (
@@ -2087,8 +2093,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '3.0',
             'max_version': '',
             'skip': ''},
-        # multi_in_test
         {
+            'name': 'multi_in_test',
             'create_tables': [
                 """
             CREATE TABLE multi_in_compact_test (
@@ -2145,8 +2151,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '3.0',
             'max_version': '',
             'skip': ''},
-        # multi_in_compact_non_composite_test
         {
+            'name': 'multi_in_compact_non_composite_test',
             'create_tables': [
                 """CREATE TABLE multi_in_compact_non_composite_test (
                 key int,
@@ -2164,8 +2170,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # float_with_exponent_test
         {
+            'name': 'float_with_exponent_test',
             'create_tables': [
                 """CREATE TABLE float_with_exponent_test (
                 k int PRIMARY KEY,
@@ -2182,8 +2188,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # compact_metadata_test
         {
+            'name': 'compact_metadata_test',
             'create_tables': [
                 """CREATE TABLE compact_metadata_test (
                 id int primary key,
@@ -2196,8 +2202,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # ticket_5230_test
         {
+            'name': 'ticket_5230_test',
             'create_tables': [
                 """CREATE TABLE ticket_5230_test (
                 key text,
@@ -2214,8 +2220,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # conversion_functions_test
         {
+            'name': 'conversion_functions_test',
             'create_tables': [
                 """CREATE TABLE conversion_functions_test (
                 k int PRIMARY KEY,
@@ -2230,8 +2236,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # function_and_reverse_type_test: CASSANDRA-5386
         {
+            'name': 'function_and_reverse_type_test: CASSANDRA-5386',
             'create_tables': [
                 """ CREATE TABLE function_and_reverse_type_test (
                 k int,
@@ -2246,8 +2252,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # NPE_during_select_with_token_test: Test for NPE during CQL3 select with token() CASSANDRA-5404
         {
+            'name': 'NPE_during_select_with_token_test: Test for NPE during CQL3 select with token() CASSANDRA-5404',
             'create_tables': ["CREATE TABLE NPE_during_select_with_token_test (key text PRIMARY KEY)"],
             'truncates': [],
             'inserts': [],
@@ -2258,8 +2264,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # empty_blob_test
         {
+            'name': 'empty_blob_test',
             'create_tables': ["CREATE TABLE empty_blob_test (k int PRIMARY KEY, b blob)"],
             'truncates': ["TRUNCATE empty_blob_test"],
             'inserts': ["INSERT INTO empty_blob_test (k, b) VALUES (0, 0x)"],
@@ -2269,8 +2275,8 @@ class FillDatabaseData(ClusterTester):
             'max_version': '',
             'skip': ''},
 
-        # clustering_order_and_functions_test
         {
+            'name': 'clustering_order_and_functions_test',
             'create_tables': ["""CREATE TABLE clustering_order_and_functions_test (
                     k int,
                     t timeuuid,
@@ -2284,8 +2290,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # conditional_update_test
         {
+            'name': 'conditional_update_test',
             'create_tables': ["""CREATE TABLE conditional_update_test (
                     k int PRIMARY KEY,
                     v1 int,
@@ -2353,8 +2359,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': 'Not implemented: LWT'},
-        # non_eq_conditional_update_test
         {
+            'name': 'non_eq_conditional_update_test',
             'create_tables': ["""CREATE TABLE non_eq_conditional_update_test (
                     k int PRIMARY KEY,
                     v1 int,
@@ -2384,8 +2390,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': 'Not implemented: LWT + Segmentation fault on shard 6'},
-        # conditional_delete_test
         {
+            'name': 'conditional_delete_test',
             'create_tables': ["""CREATE TABLE conditional_delete_test1 (
                     k int PRIMARY KEY,
                     v1 int,
@@ -2444,8 +2450,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': 'Not implemented: LWT'},
-        # range_key_ordered_test
         {
+            'name': 'range_key_ordered_test',
             'create_tables': ["CREATE TABLE range_key_ordered_test ( k int PRIMARY KEY)"],
             'truncates': ["TRUNCATE range_key_ordered_test"],
             'inserts': ["INSERT INTO range_key_ordered_test(k) VALUES (-1)",
@@ -2457,8 +2463,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # nonpure_function_collection_test: CASSANDRA-5795
         {
+            'name': 'nonpure_function_collection_test: CASSANDRA-5795',
             'create_tables': [
                 "CREATE TABLE nonpure_function_collection_test (k int PRIMARY KEY, v list<timeuuid>)"],
             'truncates': [],
@@ -2468,8 +2474,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # empty_in_test
         {
+            'name': 'empty_in_test',
             'create_tables': [
                 "CREATE TABLE empty_in_test1 (k1 int, k2 int, v int, PRIMARY KEY (k1, k2))",
                 "CREATE TABLE empty_in_test2 (k1 int, k2 int, v int, PRIMARY KEY (k1, k2)) WITH COMPACT STORAGE"],
@@ -2507,8 +2513,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # collection_flush_test: CASSANDRA-5805
         {
+            'name': 'collection_flush_test: CASSANDRA-5805',
             'create_tables': [
                 "CREATE TABLE collection_flush_test (k int PRIMARY KEY, s set<int>)"],
             'truncates': ["TRUNCATE collection_flush_test"],
@@ -2521,8 +2527,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # select_distinct_test
         {
+            'name': 'select_distinct_test',
             'create_tables': [
                 "CREATE TABLE select_distinct_test1 (pk0 int, pk1 int, ck0 int, val int, PRIMARY KEY((pk0, pk1), ck0))",
                 "CREATE TABLE select_distinct_test2 (pk0 int, pk1 int, val int, PRIMARY KEY((pk0, pk1))) WITH COMPACT STORAGE",
@@ -2554,8 +2560,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # function_with_null_test
         {
+            'name': 'function_with_null_test',
             'create_tables': ["""
                 CREATE TABLE function_with_null_test (
                     k int PRIMARY KEY,
@@ -2568,8 +2574,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # cas_simple_test
         {
+            'name': 'cas_simple_test',
             'create_tables': ["CREATE TABLE cas_simple_test (tkn int, consumed boolean, PRIMARY KEY (tkn))"],
             'truncates': ["TRUNCATE cas_simple_test"],
             'inserts': [],
@@ -2583,9 +2589,9 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': 'Not implemented: LWT'},
-        # internal_application_error_on_select_test: Test for 'Internal application error' on
-        # SELECT .. WHERE col1=val AND col2 IN (1,2) CASSANDRA-6050
         {
+            # SELECT .. WHERE col1=val AND col2 IN (1,2) CASSANDRA-6050
+            'name': "internal_application_error_on_select_test: Test for 'Internal application error' on",
             'create_tables': ["""
                 CREATE TABLE internal_application_error_on_select_test (
                     k int PRIMARY KEY,
@@ -2602,8 +2608,9 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # store_sets_with_if_not_exists_test: Test to fix bug where sets are not stored by INSERT with IF NOT EXISTS CASSANDRA-6069
         {
+            'name': 'store_sets_with_if_not_exists_test: Test to fix bug where sets are not stored by INSERT with '
+                    'IF NOT EXISTS CASSANDRA-6069',
             'create_tables': ["""
                 CREATE TABLE store_sets_with_if_not_exists_test (
                     k int PRIMARY KEY,
@@ -2619,9 +2626,9 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': 'Not implemented: LWT'},
-        # add_deletion_info_in_unsorted_column_test: Test that UnsortedColumns.addAll(ColumnFamily)
-        # adds the deletion info of the CF in argument. CASSANDRA-6115
         {
+            # adds the deletion info of the CF in argument. CASSANDRA-6115
+            'name': 'add_deletion_info_in_unsorted_column_test: Test that UnsortedColumns.addAll(ColumnFamily)',
             'create_tables': [
                 "CREATE TABLE add_deletion_info_in_unsorted_column_test (k int, v int, PRIMARY KEY (k, v))"],
             'truncates': ["TRUNCATE add_deletion_info_in_unsorted_column_test"],
@@ -2632,8 +2639,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # column_name_validation_test
         {
+            'name': 'column_name_validation_test',
             'create_tables': ["""
                 CREATE TABLE column_name_validation_test (
                     k text,
@@ -2652,8 +2659,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # user_types_test
         {
+            'name': 'user_types_test',
             'create_tables': ["""
               CREATE TYPE address (
               street text,
@@ -2686,9 +2693,9 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # non-frozen user_types_test
-        # only tests normal non-frozen UDT. Non-frozen UDT isn't supported inside collection.
         {
+            # only tests normal non-frozen UDT. Non-frozen UDT isn't supported inside collection.
+            'name': 'non-frozen user_types_test',
             'create_tables': ["""
               CREATE TYPE home_address (
               street text,
@@ -2724,8 +2731,8 @@ class FillDatabaseData(ClusterTester):
             'max_version': '',
             'skip_condition': 'self.version_non_frozen_udt_support()',
             'skip': ''},
-        # more_user_types_test
         {
+            'name': 'more_user_types_test',
             'create_tables': ["""
             CREATE TYPE type1 (
                 s set<text>,
@@ -2746,8 +2753,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # intersection_logic_returns_empty_result_test
         {
+            'name': 'intersection_logic_returns_empty_result_test',
             'create_tables': ["""
             CREATE TABLE intersection_logic_returns_empty_result_test1 (
                 k int,
@@ -2790,8 +2797,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # nan_infinity_test
         {
+            'name': 'nan_infinity_test',
             'create_tables': ["CREATE TABLE nan_infinity_test (f float PRIMARY KEY)"],
             'truncates': ["TRUNCATE nan_infinity_test"],
             'inserts': ["INSERT INTO nan_infinity_test(f) VALUES (NaN)",
@@ -2803,8 +2810,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # static_columns_test
         {
+            'name': 'static_columns_test',
             'create_tables': ["""
             CREATE TABLE static_columns_test (
                 k int,
@@ -2860,8 +2867,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # select_count_paging_test: Test for the CASSANDRA-6579 'select count' paging bug
         {
+            'name': "select_count_paging_test: Test for the CASSANDRA-6579 'select count' paging bug",
             'create_tables': [
                 "create table select_count_paging_test(field1 text, field2 timeuuid, field3 boolean, primary key(field1, field2))",
                 "create index test_index on select_count_paging_test(field3);"],
@@ -2874,8 +2881,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '3.0',
             'max_version': '',
             'skip': ''},
-        # cas_and_ttl_test
         {
+            'name': 'cas_and_ttl_test',
             'create_tables': ["CREATE TABLE cas_and_ttl_test (k int PRIMARY KEY, v int, lock boolean)"],
             'truncates': ["TRUNCATE cas_and_ttl_test"],
             'inserts': ["INSERT INTO cas_and_ttl_test (k, v, lock) VALUES (0, 0, false)",
@@ -2885,8 +2892,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': 'Not implemented: LWT'},
-        # tuple_notation_test: Test the syntax introduced in CASSANDRA-4851
         {
+            'name': 'tuple_notation_test: Test the syntax introduced in CASSANDRA-4851',
             'create_tables': [
                 "CREATE TABLE tuple_notation_test (k int, v1 int, v2 int, v3 int, PRIMARY KEY (k, v1, v2, v3))"],
             'truncates': ["TRUNCATE tuple_notation_test"],
@@ -2912,9 +2919,9 @@ class FillDatabaseData(ClusterTester):
             'min_version': '',
             'max_version': '',
             'skip': ''},
-        # in_order_by_without_selecting_test: Test that columns don't need to be selected for ORDER BY when there is a IN
-        # CASSANDRA-4911
         {
+            'name': "in_order_by_without_selecting_test: Test that columns don't need to be selected for ORDER BY "
+                    "when there is a IN CASSANDRA-4911",
             'create_tables': [
                 "CREATE TABLE in_order_by_without_selecting_test (k int, c1 int, c2 int, v int, PRIMARY KEY (k, c1, c2))"],
             'truncates': ["TRUNCATE in_order_by_without_selecting_test"],
@@ -2944,8 +2951,8 @@ class FillDatabaseData(ClusterTester):
             'min_version': '3.0',
             'max_version': '',
             'skip': ''},
-        # cas_and_compact_test: Test for CAS with compact storage table, and CASSANDRA-6813 in particular
         {
+            'name': 'cas_and_compact_test: Test for CAS with compact storage table, and CASSANDRA-6813 in particular',
             'create_tables': ["""
             CREATE TABLE cas_and_compact_test (
                 partition text,
@@ -3041,13 +3048,15 @@ class FillDatabaseData(ClusterTester):
 
     def cql_create_tables(self, session):
         truncates = []
+        self.log.info('Start table creation')
         # Run through the list of items and create all tables
-        for i, item in enumerate(self.all_verification_items):
+        for test_num, item in enumerate(self.all_verification_items):
+            test_name = item.get('name', 'Test #' + str(test_num))
             # Check if current cluster version supports non-frozed UDT
             if 'skip_condition' in item and 'non_frozen_udt' in item['skip_condition'] \
                     and not eval(item['skip_condition']):
                 item['skip'] = 'skip'
-                self.all_verification_items[i]['skip'] = 'skip'
+                self.all_verification_items[test_num]['skip'] = 'skip'
                 self.log.debug(f"Version doesn't support the item, skip it: {item['create_tables']}.")
 
             # TODO: fix following condition to make "skip_condition" really skip stuff
@@ -3056,23 +3065,25 @@ class FillDatabaseData(ClusterTester):
             if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
                 # NOTE: skip condition may change during upgrade, nail down it
                 # to be able to run proper queries on target scylla version
-                self.all_verification_items[i]['skip_condition'] = True
-                for create_table in item['create_tables']:
-                    if self.version_cdc_support():
-                        create_table = self._enable_cdc(item, create_table)
-                    # wait a while before creating index, there is a delay of create table for waiting the schema agreement
-                    if 'CREATE INDEX' in create_table.upper():
-                        time.sleep(15)
-                    self.log.debug(f"create table: {create_table}")
-                    session.execute(create_table)
-                    # sleep for 15 seconds to wait creating cdc tables
-                    self.db_cluster.wait_for_schema_agreement()
-                    if 'CREATE TYPE' in create_table.upper():
-                        time.sleep(15)
-                for truncate in item['truncates']:
-                    truncates.append(truncate)
+                self.all_verification_items[test_num]['skip_condition'] = True
+                with self._execute_and_log(f'Created tables for test "{test_name}" in {{}} seconds'):
+                    for create_table in item['create_tables']:
+                        if self.version_cdc_support():
+                            create_table = self._enable_cdc(item, create_table)
+                        # wait a while before creating index, there is a delay of create table for
+                        # waiting the schema agreement
+                        if 'CREATE INDEX' in create_table.upper():
+                            time.sleep(15)
+                        self.log.debug(f"create table: {create_table}")
+                        session.execute(create_table)
+                        # sleep for 15 seconds to wait creating cdc tables
+                        self.db_cluster.wait_for_schema_agreement()
+                        if 'CREATE TYPE' in create_table.upper():
+                            time.sleep(15)
+                    for truncate in item['truncates']:
+                        truncates.append(truncate)
             else:
-                self.all_verification_items[i]['skip_condition'] = False
+                self.all_verification_items[test_num]['skip_condition'] = False
         # Sleep a while after creating test tables to avoid schema disagreement.
         # Refs: https://github.com/scylladb/scylla/issues/5235
         time.sleep(30)
@@ -3083,7 +3094,12 @@ class FillDatabaseData(ClusterTester):
         node = self.db_cluster.nodes[0]
         if not node.scylla_version:
             node.get_scylla_version()
-        return node.scylla_version, node.is_enterprise
+        # NOTE: node.get_scylla_version() returns following structure of a scylla version:
+        #       4.4.1-0.20210406.00da6b5e9
+        #       And 'parse_version' behaves differently for full and short scylla versions
+        #       And 'parse_version' behaves differently for full and short scylla versions
+        #       So, keep status quo and use short scylla version here.
+        return node.scylla_version.split("-")[0], node.is_enterprise
 
     def version_null_values_support(self):
         scylla_version, is_enterprise = self.get_scylla_version()
@@ -3133,16 +3149,27 @@ class FillDatabaseData(ClusterTester):
         LOGGER.debug(truncate)
         session.execute(truncate)
 
+    @contextlib.contextmanager
+    def _execute_and_log(self, message):
+        start_time = time.time()
+        yield
+        self.log.info(message.format(int(time.time() - start_time)))
+
     def truncate_tables(self, session):
         # Run through the list of items and create all tables
-        for item in self.all_verification_items:
+        self.log.info('Start table truncation')
+        for test_num, item in enumerate(self.all_verification_items):
+            test_name = item.get('name', 'Test #' + str(test_num))
             if not item['skip'] and ('skip_condition' not in item or eval(str(item['skip_condition']))):
                 for truncate in item['truncates']:
-                    self.truncate_table(session, truncate)
+                    with self._execute_and_log(f'Truncated table for test "{test_name}" in {{}} seconds'):
+                        self.truncate_table(session, truncate)
 
     def cql_insert_data_to_tables(self, session, default_fetch_size):
+        self.log.info('Start to populate data into tables')
         # pylint: disable=too-many-nested-blocks
-        for item in self.all_verification_items:
+        for test_num, item in enumerate(self.all_verification_items):
+            test_name = item.get('name', 'Test #' + str(test_num))
             # TODO: fix following condition to make "skip_condition" really skip stuff
             # when it is True, not False as it is now.
             # As of now it behaves as "run_condition".
@@ -3152,27 +3179,30 @@ class FillDatabaseData(ClusterTester):
                 else:
                     session.default_fetch_size = default_fetch_size
                 for insert in item['inserts']:
-                    try:
-                        if insert.startswith("#REMOTER_SUDO"):
-                            for node in self.db_cluster.nodes:
-                                node.remoter.sudo(insert.replace('#REMOTER_SUDO', ''))
-                        else:
-                            session.execute(insert)
-                    except Exception as ex:
-                        LOGGER.exception("failed to insert: %s", insert)
-                        raise ex
+                    with self._execute_and_log(f'Populated data for test "{test_name}" in {{}} seconds'):
+                        try:
+                            if insert.startswith("#REMOTER_SUDO"):
+                                for node in self.db_cluster.nodes:
+                                    node.remoter.sudo(insert.replace('#REMOTER_SUDO', ''))
+                            else:
+                                session.execute(insert)
+                        except Exception as ex:
+                            LOGGER.exception("failed to insert: %s", insert)
+                            raise ex
                     # Add delay on client side for inserts of list to avoid list order issue
                     # Referencing https://github.com/scylladb/scylla-enterprise/issues/1177#issuecomment-568762357
                     if 'list<' in item['create_tables'][0]:
                         time.sleep(1)
                 if item.get("cdc_tables"):
-                    for cdc_table in item["cdc_tables"]:
-                        item["cdc_tables"][cdc_table] = self.get_cdc_log_rows(session, cdc_table)
+                    with self._execute_and_log(f'Read CDC logs for test "{test_name}" in {{}} seconds'):
+                        for cdc_table in item["cdc_tables"]:
+                            item["cdc_tables"][cdc_table] = self.get_cdc_log_rows(session, cdc_table)
 
     def run_db_queries(self, session, default_fetch_size):
+        self.log.info('Start to running queries')
         # pylint: disable=too-many-branches,too-many-nested-blocks
-
-        for item in self.all_verification_items:
+        for test_num, item in enumerate(self.all_verification_items):
+            test_name = item.get('name', 'Test #' + str(test_num))
             # Some queries contains statement of switch keyspace, reset keyspace at the beginning
             session.set_keyspace(self.base_ks)
             # TODO: fix following condition to make "skip_condition" really skip stuff
@@ -3184,44 +3214,48 @@ class FillDatabaseData(ClusterTester):
                 else:
                     session.default_fetch_size = default_fetch_size
                 for i in range(len(item['queries'])):
-                    try:
-                        if item['queries'][i].startswith("#SORTED"):
-                            res = session.execute(item['queries'][i].replace('#SORTED', ''))
-                            self.assertEqual(sorted([list(row) for row in res]), item['results'][i])
-                        elif item['queries'][i].startswith("#REMOTER_SUDO"):
-                            for node in self.db_cluster.nodes:
-                                node.remoter.sudo(item['queries'][i].replace('#REMOTER_SUDO', ''))
-                        elif item['queries'][i].startswith("#LENGTH"):
-                            res = session.execute(item['queries'][i].replace('#LENGTH', ''))
-                            self.assertEqual(len([list(row) for row in res]), item['results'][i])
-                        elif item['queries'][i].startswith("#STR"):
-                            res = session.execute(item['queries'][i].replace('#STR', ''))
-                            self.assertEqual(str([list(row) for row in res]), item['results'][i])
-                        else:
-                            res = session.execute(item['queries'][i])
-                            self.assertEqual([list(row) for row in res], item['results'][i])
-                    except Exception as ex:
-                        LOGGER.exception(item['queries'][i])
-                        raise ex
-                if 'invalid_queries' in item:
-                    for i in range(len(item['invalid_queries'])):
+                    with self._execute_and_log(f'Ran queries for test "{test_name}" in {{}} seconds'):
                         try:
-                            session.execute(item['invalid_queries'][i])
-                            # self.fail("query '%s' is not valid" % item['invalid_queries'][i])
-                            LOGGER.error("query '%s' is valid", item['invalid_queries'][i])
-                        except InvalidRequest as ex:
-                            LOGGER.debug("Found error '%s' as expected", ex)
+                            if item['queries'][i].startswith("#SORTED"):
+                                res = session.execute(item['queries'][i].replace('#SORTED', ''))
+                                self.assertEqual(sorted([list(row) for row in res]), item['results'][i])
+                            elif item['queries'][i].startswith("#REMOTER_SUDO"):
+                                for node in self.db_cluster.nodes:
+                                    node.remoter.sudo(item['queries'][i].replace('#REMOTER_SUDO', ''))
+                            elif item['queries'][i].startswith("#LENGTH"):
+                                res = session.execute(item['queries'][i].replace('#LENGTH', ''))
+                                self.assertEqual(len([list(row) for row in res]), item['results'][i])
+                            elif item['queries'][i].startswith("#STR"):
+                                res = session.execute(item['queries'][i].replace('#STR', ''))
+                                self.assertEqual(str([list(row) for row in res]), item['results'][i])
+                            else:
+                                res = session.execute(item['queries'][i])
+                                self.assertEqual([list(row) for row in res], item['results'][i])
+                        except Exception as ex:
+                            LOGGER.exception(item['queries'][i])
+                            raise ex
+
+                if 'invalid_queries' in item:
+                    with self._execute_and_log(f'Ran invalid queries for test "{test_name}" in {{}} seconds'):
+                        for i in range(len(item['invalid_queries'])):
+                            try:
+                                session.execute(item['invalid_queries'][i])
+                                # self.fail("query '%s' is not valid" % item['invalid_queries'][i])
+                                LOGGER.error("query '%s' is valid", item['invalid_queries'][i])
+                            except InvalidRequest as ex:
+                                LOGGER.debug("Found error '%s' as expected", ex)
 
                 if item.get("cdc_tables"):
-                    for cdc_table in item["cdc_tables"]:
-                        actual_result = self.get_cdc_log_rows(session, cdc_table)
-                        # try..except mainly added to avoid test termination
-                        # because  Row(f=inf) in different select query is not equal
-                        try:
-                            assert all([row in actual_result for row in item["cdc_tables"][cdc_table]]), \
-                                f"cdc tables content are differes\n Initial:{item['cdc_tables'][cdc_table]}\nNew_result: {actual_result}"
-                        except AssertionError as err:
-                            LOGGER.error(f"content was differ {err}")
+                    with self._execute_and_log(f'Read CDC tables for test "{test_name}" in {{}} seconds'):
+                        for cdc_table in item["cdc_tables"]:
+                            actual_result = self.get_cdc_log_rows(session, cdc_table)
+                            # try..except mainly added to avoid test termination
+                            # because  Row(f=inf) in different select query is not equal
+                            try:
+                                assert all([row in actual_result for row in item["cdc_tables"][cdc_table]]), \
+                                    f"cdc tables content are differes\n Initial:{item['cdc_tables'][cdc_table]}\nNew_result: {actual_result}"
+                            except AssertionError as err:
+                                LOGGER.error(f"content was differ {err}")
 
                 # udpate cdc log tables after queries,
                 # which could change base table content
