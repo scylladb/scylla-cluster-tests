@@ -1,5 +1,37 @@
 #!groovy
 
+boolean jobEnabled (String jobName) {
+	echo "Checking if Job $jobName exists / enabled"
+	try {
+		if (Jenkins.instance.getItemByFullName(jobName).isBuildable()) {
+			echo "Job $jobName is enabled"
+			return true
+		} else {
+			echo "Job $jobName is disabled, Skipping"
+			return false
+		}
+	} catch (error) {
+		echo "Error: General error |$error| while checking if job |$jobName| enabled (job does not exist)"
+		return false
+	}
+}
+
+def triggerJob(String jobToTrigger, def parameterList = [], boolean propagate = false, boolean wait = false) {
+    if (jobEnabled(jobToTrigger)) {
+        echo "Triggering '$jobToTrigger'"
+        try {
+            jobResults=build job: jobToTrigger,
+                parameters: parameterList,
+                propagate: propagate,  // if true, the triggering test will fail/pass based on the status of the triggered/downstream job/s
+                wait: wait  // if true, the triggering job will not end until the triggered/downstream job/s will end
+        } catch(Exception ex) {
+            echo "Could not trigger jon $jobToTrigger due to"
+            println(ex.toString())
+        }
+    }
+}
+
+
 def completed_stages = [:]
 def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
@@ -92,6 +124,10 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('test_name', '')}",
                    description: 'Name of the test to run',
                    name: 'test_name')
+
+            string(defaultValue: "${pipelineParams.get('downstream_jobs_to_run', '')}",
+                   description: 'Comma separated list of downstream jobs to run when the job passes',
+                   name: 'downstream_jobs_to_run')
         }
         options {
             timestamps()
@@ -241,6 +277,34 @@ def call(Map pipelineParams) {
                     }
                 }
             }
+            stage('Running Downstream Jobs') {  // Specifically placed after test stage, since downstream jobs should still be triggered when stages like collect logs fail.
+                steps {
+                    script {
+                        if (currentBuild.currentResult == 'SUCCESS') {
+                            jobNamesToTrigger = params.downstream_jobs_to_run.split(',')
+                            currentJobDirectoryPath = JOB_NAME.substring(0, JOB_NAME.lastIndexOf('/'))
+                            for (downstreamJobName in jobNamesToTrigger) {
+                                fullJobPath = currentJobDirectoryPath + '/' + downstreamJobName.trim()
+                                def repoParams = []
+                                if (downstreamJobName.contains("upgrade")) {
+                                    repoParams = [
+                                        [$class: 'StringParameterValue', name: 'target_scylla_mgmt_server_repo', value: params.scylla_mgmt_repo],
+                                        [$class: 'StringParameterValue', name: 'target_scylla_mgmt_agent_repo', value: params.scylla_mgmt_agent_repo]
+                                    ]
+                                } else {
+                                    repoParams = [
+                                        [$class: 'StringParameterValue', name: 'scylla_mgmt_repo', value: params.scylla_mgmt_repo],
+                                        [$class: 'StringParameterValue', name: 'scylla_mgmt_agent_repo', value: params.scylla_mgmt_agent_repo]
+                                    ]
+                                }
+                                triggerJob(fullJobPath, repoParams)
+                            }
+                        } else {
+                            echo "Job failed. Will not run downstream jobs."
+                        }
+                    }
+                }
+            }
             stage("Collect log data") {
                 steps {
                     catchError(stageResult: 'FAILURE') {
@@ -345,5 +409,4 @@ def call(Map pipelineParams) {
             }
         }
     }
-
 }
