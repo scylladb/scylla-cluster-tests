@@ -2983,6 +2983,7 @@ class FillDatabaseData(ClusterTester):
         match = regexp.search(query)
         if match:
             return match.groupdict()["table_name"]
+        return None
 
     @staticmethod
     def cql_create_simple_tables(session, rows):
@@ -3029,7 +3030,7 @@ class FillDatabaseData(ClusterTester):
         cdc_properties = "cdc = {'enabled': true, 'preimage': true, 'postimage': true, 'ttl': 36000}"
 
         if item.get("no_cdc"):
-            self.log.warning(f"Skip adding cdc enabling properties due {item['no_cdc']}")
+            self.log.warning(f"Skip adding cdc enabling properties due %s", item['no_cdc'])
             return create_table
 
         if "CREATE TABLE" in create_table.upper() and "COUNTER" not in create_table.upper():
@@ -3057,7 +3058,7 @@ class FillDatabaseData(ClusterTester):
                     and not eval(item['skip_condition']):
                 item['skip'] = 'skip'
                 self.all_verification_items[test_num]['skip'] = 'skip'
-                self.log.debug(f"Version doesn't support the item, skip it: {item['create_tables']}.")
+                self.log.debug(f"Version doesn't support the item, skip it: %s.", item['create_tables'])
 
             # TODO: fix following condition to make "skip_condition" really skip stuff
             # when it is True, not False as it is now.
@@ -3074,7 +3075,7 @@ class FillDatabaseData(ClusterTester):
                         # waiting the schema agreement
                         if 'CREATE INDEX' in create_table.upper():
                             time.sleep(15)
-                        self.log.debug(f"create table: {create_table}")
+                        self.log.debug(f"create table: %s", create_table)
                         session.execute(create_table)
                         # sleep for 15 seconds to wait creating cdc tables
                         self.db_cluster.wait_for_schema_agreement()
@@ -3096,7 +3097,6 @@ class FillDatabaseData(ClusterTester):
             node.get_scylla_version()
         # NOTE: node.get_scylla_version() returns following structure of a scylla version:
         #       4.4.1-0.20210406.00da6b5e9
-        #       And 'parse_version' behaves differently for full and short scylla versions
         #       And 'parse_version' behaves differently for full and short scylla versions
         #       So, keep status quo and use short scylla version here.
         return node.scylla_version.split("-")[0], node.is_enterprise
@@ -3198,6 +3198,49 @@ class FillDatabaseData(ClusterTester):
                         for cdc_table in item["cdc_tables"]:
                             item["cdc_tables"][cdc_table] = self.get_cdc_log_rows(session, cdc_table)
 
+    def _run_db_queries(self, item, session):
+        for i in range(len(item['queries'])):
+            try:
+                if item['queries'][i].startswith("#SORTED"):
+                    res = session.execute(item['queries'][i].replace('#SORTED', ''))
+                    self.assertEqual(sorted([list(row) for row in res]), item['results'][i])
+                elif item['queries'][i].startswith("#REMOTER_SUDO"):
+                    for node in self.db_cluster.nodes:
+                        node.remoter.sudo(item['queries'][i].replace('#REMOTER_SUDO', ''))
+                elif item['queries'][i].startswith("#LENGTH"):
+                    res = session.execute(item['queries'][i].replace('#LENGTH', ''))
+                    self.assertEqual(len([list(row) for row in res]), item['results'][i])
+                elif item['queries'][i].startswith("#STR"):
+                    res = session.execute(item['queries'][i].replace('#STR', ''))
+                    self.assertEqual(str([list(row) for row in res]), item['results'][i])
+                else:
+                    res = session.execute(item['queries'][i])
+                    self.assertEqual([list(row) for row in res], item['results'][i])
+            except Exception as ex:
+                LOGGER.exception(item['queries'][i])
+                raise ex
+
+    def _run_invalid_queries(self, item, session):
+        for i in range(len(item['invalid_queries'])):
+            try:
+                session.execute(item['invalid_queries'][i])
+                # self.fail("query '%s' is not valid" % item['invalid_queries'][i])
+                LOGGER.error("query '%s' is valid", item['invalid_queries'][i])
+            except InvalidRequest as ex:
+                LOGGER.debug("Found error '%s' as expected", ex)
+
+    def _read_cdc_tables(self, item, session):
+        for cdc_table in item["cdc_tables"]:
+            actual_result = self.get_cdc_log_rows(session, cdc_table)
+            # try..except mainly added to avoid test termination
+            # because  Row(f=inf) in different select query is not equal
+            try:
+                assert all(row in actual_result for row in item["cdc_tables"][cdc_table]), \
+                    f"cdc tables content are differes\n Initial:{item['cdc_tables'][cdc_table]}\n" \
+                    f"New_result: {actual_result}"
+            except AssertionError as err:
+                LOGGER.error(f"content was differ {err}")
+
     def run_db_queries(self, session, default_fetch_size):
         self.log.info('Start to running queries')
         # pylint: disable=too-many-branches,too-many-nested-blocks
@@ -3213,56 +3256,22 @@ class FillDatabaseData(ClusterTester):
                     session.default_fetch_size = 0
                 else:
                     session.default_fetch_size = default_fetch_size
-                for i in range(len(item['queries'])):
-                    with self._execute_and_log(f'Ran queries for test "{test_name}" in {{}} seconds'):
-                        try:
-                            if item['queries'][i].startswith("#SORTED"):
-                                res = session.execute(item['queries'][i].replace('#SORTED', ''))
-                                self.assertEqual(sorted([list(row) for row in res]), item['results'][i])
-                            elif item['queries'][i].startswith("#REMOTER_SUDO"):
-                                for node in self.db_cluster.nodes:
-                                    node.remoter.sudo(item['queries'][i].replace('#REMOTER_SUDO', ''))
-                            elif item['queries'][i].startswith("#LENGTH"):
-                                res = session.execute(item['queries'][i].replace('#LENGTH', ''))
-                                self.assertEqual(len([list(row) for row in res]), item['results'][i])
-                            elif item['queries'][i].startswith("#STR"):
-                                res = session.execute(item['queries'][i].replace('#STR', ''))
-                                self.assertEqual(str([list(row) for row in res]), item['results'][i])
-                            else:
-                                res = session.execute(item['queries'][i])
-                                self.assertEqual([list(row) for row in res], item['results'][i])
-                        except Exception as ex:
-                            LOGGER.exception(item['queries'][i])
-                            raise ex
+                with self._execute_and_log(f'Ran queries for test "{test_name}" in {{}} seconds'):
+                    self._run_db_queries(item, session)
 
                 if 'invalid_queries' in item:
                     with self._execute_and_log(f'Ran invalid queries for test "{test_name}" in {{}} seconds'):
-                        for i in range(len(item['invalid_queries'])):
-                            try:
-                                session.execute(item['invalid_queries'][i])
-                                # self.fail("query '%s' is not valid" % item['invalid_queries'][i])
-                                LOGGER.error("query '%s' is valid", item['invalid_queries'][i])
-                            except InvalidRequest as ex:
-                                LOGGER.debug("Found error '%s' as expected", ex)
+                        self._run_invalid_queries(item, session)
 
                 if item.get("cdc_tables"):
                     with self._execute_and_log(f'Read CDC tables for test "{test_name}" in {{}} seconds'):
+                        self._read_cdc_tables(item, session)
+                    # udpate cdc log tables after queries,
+                    # which could change base table content
+                    with self._execute_and_log(f'Update CDC tables for test "{test_name}" in {{}} seconds'):
                         for cdc_table in item["cdc_tables"]:
-                            actual_result = self.get_cdc_log_rows(session, cdc_table)
-                            # try..except mainly added to avoid test termination
-                            # because  Row(f=inf) in different select query is not equal
-                            try:
-                                assert all([row in actual_result for row in item["cdc_tables"][cdc_table]]), \
-                                    f"cdc tables content are differes\n Initial:{item['cdc_tables'][cdc_table]}\nNew_result: {actual_result}"
-                            except AssertionError as err:
-                                LOGGER.error(f"content was differ {err}")
-
-                # udpate cdc log tables after queries,
-                # which could change base table content
-                if item.get("cdc_tables"):
-                    for cdc_table in item["cdc_tables"]:
-                        item["cdc_tables"][cdc_table] = self.get_cdc_log_rows(session, cdc_table)
-                        LOGGER.debug(item["cdc_tables"][cdc_table])
+                            item["cdc_tables"][cdc_table] = self.get_cdc_log_rows(session, cdc_table)
+                            LOGGER.debug(item["cdc_tables"][cdc_table])
 
     def get_cdc_log_rows(self, session, cdc_log_table):
         return list(session.execute(f"select * from {self.base_ks}.{cdc_log_table}"))
