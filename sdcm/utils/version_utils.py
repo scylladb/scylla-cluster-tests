@@ -108,19 +108,31 @@ def get_url_content(url, return_url_data=True):
 def get_scylla_urls_from_repository(repo_details):
     urls = set()
     for url in repo_details.urls:
+        match = None
+        url_format = None
         for (url_regex, url_format) in FILE_REGEX_DICT[repo_details.type]:
             match = url_regex.match(url)
-            if not match:
-                # Continue until find the correct Regex
-                continue
+            if match:
+                break
+        if not match or not url_format:
+            continue
+        url_details = {**match.groupdict()}
 
-            full_url = url_format.format(**match.groupdict())
+        archs = url_details.get('arch', None)
+        if archs is None:
+            archs = [None]
+        else:
+            archs = archs.split(',')
+
+        for arch in archs:
+            if arch == '':
+                continue
+            full_url = url_format.format(**{**url_details, 'arch': arch})
             # for scylla-manager we never used a noarch key
             basearch_list = ["x86_64"] if 'scylla-manager' in full_url else ["x86_64", "noarch"]
             for basearch in basearch_list:
                 urls.add(Template(full_url).substitute(basearch=basearch, releasever='7'))
             # We found the correct regex and we can continue to next URL
-            break
 
     ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=lambda _url: get_url_content(
         url=_url, return_url_data=False))
