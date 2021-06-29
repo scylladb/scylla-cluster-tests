@@ -169,7 +169,7 @@ def get_branch_version_from_centos_repository(urls):
 
 
 def get_repository_details(url):
-    urls = list({line for line in get_url_content(url=url)})
+    urls = list({*get_url_content(url=url)})
 
     for file_type, regex_list in FILE_REGEX_DICT.items():
         for _url in urls:
@@ -255,6 +255,7 @@ def resolve_latest_repo_symlink(url: str) -> str:
 
     Can raise ValueError if `url' is not a valid URL that points to a repo file stored in S3.
     """
+    # pylint: disable=too-many-branches
     base, sep, rest = url.partition(LATEST_SYMLINK_NAME)
     if sep != LATEST_SYMLINK_NAME:
         LOGGER.info("%s doesn't contain `%s' substring, use URL as is", url, LATEST_SYMLINK_NAME)
@@ -348,7 +349,7 @@ def get_git_tag_from_helm_chart_version(chart_version: str) -> str:
     | v1.0.0-rc0-51-ga52c206-latest     | v1.0.0-rc0     |
     +-----------------------------------+----------------+
     """
-    pattern = "^(v[a-z0-9.-]+)-[\d]{1,3}-g[0-9a-z]{7}|(v[a-z0-9.-]+){1}$"
+    pattern = "^(v[a-z0-9.-]+)-[0-9]{1,3}-g[0-9a-z]{7}|(v[a-z0-9.-]+){1}$"
     search_result = re.search(pattern, chart_version)
     if search_result:
         git_tag = search_result.group(1) or search_result.group(2)
