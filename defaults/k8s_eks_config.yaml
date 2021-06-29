@@ -12,7 +12,7 @@ instance_type_db: 'i3.4xlarge'
 eks_cluster_version: '1.19'
 eks_role_arn: 'arn:aws:iam::797456418907:role/eksServicePolicy'
 eks_service_ipv4_cidr: '172.20.0.0/16'
-eks_vpc_cni_version: 'v1.7.5-eksbuild.1'
+eks_vpc_cni_version: 'v1.8.0-eksbuild.1'
 eks_nodegroup_role_arn: 'arn:aws:iam::797456418907:role/helm-test-worker-nodes-NodeInstanceRole-6ACHDYEKNN3I'
 
 scylla_version: '4.4.1'
