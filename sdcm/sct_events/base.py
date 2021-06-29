@@ -555,8 +555,62 @@ class StressEvent(BaseStressEvent, abstract=True):
         return fmt
 
 
+class BaseDatabaseEvent(ContinuousEvent, abstract=True):
+    @classmethod
+    def add_database_subevents(cls,
+                               start: Optional[Severity] = Severity.NORMAL,
+                               failure: Optional[Severity] = None,
+                               error: Optional[Severity] = None,
+                               timeout: Optional[Severity] = None,
+                               warning: Optional[Severity] = None,
+                               finish: Optional[Severity] = Severity.NORMAL, ) -> None:
+        if failure is not None:
+            cls.add_subevent_type("failure", severity=failure)
+        if error is not None:
+            cls.add_subevent_type("error", severity=error)
+        if warning is not None:
+            cls.add_subevent_type("warning", severity=warning)
+        if timeout is not None:
+            cls.add_subevent_type("timeout", severity=timeout)
+        if start is not None:
+            cls.add_subevent_type("start", severity=start)
+        if finish is not None:
+            cls.add_subevent_type("finish", severity=finish)
+
+
+class DatabaseEvent(BaseDatabaseEvent, abstract=True):
+    def __init__(self,
+                 node: Any,
+                 log_file_name: Optional[str] = None,
+                 errors: Optional[List[str]] = None,
+                 severity: Severity = Severity.NORMAL,
+                 publish_event: bool = True):
+        super().__init__(severity=severity, publish_event=publish_event)
+
+        self.node = str(node)
+        self.log_file_name = log_file_name
+        self.errors = errors
+
+    @property
+    def msgfmt(self):
+        fmt = f"{super().msgfmt} node={self.node}"
+        fmt += f" errors={self.errors}" if self.errors else ""
+        return fmt
+
+
+class DatabaseEventProtocol(SctEventProtocol, Protocol):
+    node: str
+    log_file_name: Optional[str]
+    errors: Optional[List[str]]
+
+    @property
+    def errors_formatted(self):
+        ...
+
+
 __all__ = ("SctEvent", "SctEventProtocol", "SystemEvent", "BaseFilter",
            "LogEvent", "LogEventProtocol", "T_log_event",
            "BaseStressEvent", "StressEvent", "StressEventProtocol",
+           "BaseDatabaseEvent", "DatabaseEvent", "DatabaseEventProtocol",
            "add_severity_limit_rules", "max_severity", "print_critical_events",
            "ContinuousEvent", "InformationalEvent")
