@@ -21,8 +21,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ImageType(Enum):
-    source = "source"
-    general = "general"
+    SOURCE = "source"
+    GENERAL = "general"
 
 
 class SctRunner:
@@ -65,10 +65,11 @@ class SctRunner:
         return ks.get_ec2_ssh_key_pair()
 
     def get_remoter(self, host, connect_timeout: Optional[float] = None):
-        self._ssh_pkey_file = tempfile.NamedTemporaryFile(mode="w", delete=False)
+        self._ssh_pkey_file = tempfile.NamedTemporaryFile(mode="w", delete=False)  # pylint: disable=consider-using-with
         self._ssh_pkey_file.write(self.key_pair().private_key.decode())
         self._ssh_pkey_file.flush()
-        return RemoteCmdRunnerBase.create_remoter(hostname=host, user=self.LOGIN_USER, key_file=self._ssh_pkey_file.name, connect_timeout=connect_timeout)
+        return RemoteCmdRunnerBase.create_remoter(hostname=host, user=self.LOGIN_USER,
+                                                  key_file=self._ssh_pkey_file.name, connect_timeout=connect_timeout)
 
     def install_prereqs(self, public_ip):
         LOGGER.info("Installing required packages...")
@@ -117,17 +118,17 @@ class SctRunner:
         else:
             raise Exception("Unable to install required packages:\n%s" % (result.stdout + result.stderr))
 
-    def _image(self, image_type=ImageType.source):
-        if image_type == ImageType.source:
+    def _image(self, image_type=ImageType.SOURCE):
+        if image_type == ImageType.SOURCE:
             client = self.ec2_client_source
-        elif image_type == ImageType.general:
+        elif image_type == ImageType.GENERAL:
             client = self.ec2_client
         else:
             raise ValueError("Unknown Image type")
         amis = client.describe_images(Owners=["self"],
                                       Filters=[{"Name": "tag:Name", "Values": [self.IMAGE_NAME]},
                                                {"Name": "tag:Version", "Values": [str(self.VERSION)]}])
-        LOGGER.debug(f"Found SCT Runner AMIs: {amis}")
+        LOGGER.debug("Found SCT Runner AMIs: %s", amis)
         existing_amis = amis.get("Images", [])
         if len(existing_amis) == 0:
             return None
@@ -138,12 +139,13 @@ class SctRunner:
 
     @property
     def source_image(self):
-        return self._image(image_type=ImageType.source)
+        return self._image(image_type=ImageType.SOURCE)
 
     @property
     def image(self):
-        return self._image(image_type=ImageType.general)
+        return self._image(image_type=ImageType.GENERAL)
 
+    # pylint: disable=too-many-arguments
     def _create_instance(self, instance_type, image_id, tags_list, region_az="", test_duration=None):
         region = region_az[:-1]
         aws_region = AwsRegion(region_name=region)
@@ -184,9 +186,9 @@ class SctRunner:
         return instance
 
     def tag_image(self, image_id, image_type):
-        if image_type == ImageType.source:
+        if image_type == ImageType.SOURCE:
             ec2_resource = self.ec2_resource_source
-        elif image_type == ImageType.general:
+        elif image_type == ImageType.GENERAL:
             ec2_resource = self.ec2_resource
         image_tags = [
             {"Key": "Name", "Value": self.IMAGE_NAME},
@@ -205,10 +207,10 @@ class SctRunner:
             it will be copied to the destination region.
             Warning: this can't run in parallel!
         """
-        LOGGER.info(f"Looking for source SCT Runner Image in {self.SOURCE_IMAGE_REGION}...")
+        LOGGER.info("Looking for source SCT Runner Image in '%s'...", self.SOURCE_IMAGE_REGION)
         source_image = self.source_image
         if not source_image:
-            LOGGER.info(f"Source SCT Runner Image not found. Creating...")
+            LOGGER.info("Source SCT Runner Image not found. Creating...")
             instance = self._create_instance(
                 instance_type="t3.small",
                 image_id=self.BASE_IMAGE_ID,
@@ -230,20 +232,20 @@ class SctRunner:
                 Name=self.IMAGE_NAME,
                 NoReboot=False
             )
-            self.tag_image(image_id=result["ImageId"], image_type=ImageType.source)
+            self.tag_image(image_id=result["ImageId"], image_type=ImageType.SOURCE)
             try:
                 LOGGER.info("Terminating image builder instance '%s'...", instance.instance_id)
                 instance.terminate()
             except Exception as ex:  # pylint: disable=broad-except
-                LOGGER.warning(f"Was not able to terminate '{instance.instance_id}': {ex}\n"
-                               "Please terminate manually!!!")
+                LOGGER.warning("Was not able to terminate '%s': %s\n"
+                               "Please terminate manually!!!", instance.instance_id, ex)
 
         else:
-            LOGGER.info(f"SCT Runner image exists in the source region '{self.SOURCE_IMAGE_REGION}'! "
-                        f"ID: {source_image.image_id}")
+            LOGGER.info("SCT Runner image exists in the source region '%s'! "
+                        "ID: %s", self.SOURCE_IMAGE_REGION, source_image.image_id)
 
         if self.region_name != self.SOURCE_IMAGE_REGION and self.image is None:
-            LOGGER.info(f"Copying {self.IMAGE_NAME} to {self.region_name}...\nNote: It can take 5-15 minutes.")
+            LOGGER.info("Copying %s to %s...\nNote: It can take 5-15 minutes.", self.IMAGE_NAME, self.region_name)
             result = self.ec2_client.copy_image(  # pylint: disable=no-member
                 Description=self.IMAGE_DESCRIPTION,
                 Name=self.IMAGE_NAME,
@@ -251,7 +253,7 @@ class SctRunner:
                 SourceRegion=self.SOURCE_IMAGE_REGION
             )
             LOGGER.info("Image copied, id: '%s'.", result["ImageId"])
-            self.tag_image(image_id=result["ImageId"], image_type=ImageType.general)
+            self.tag_image(image_id=result["ImageId"], image_type=ImageType.GENERAL)
             LOGGER.info("Done.")
         else:
             LOGGER.info("No need to copy SCT Runner image since it  already exists in '%s'.", self.region_name)
@@ -263,8 +265,8 @@ class SctRunner:
         LOGGER.info("Creating SCT Runner instance...")
         image = self.image
         if not image:
-            LOGGER.error(f"SCT Runner image was not found in {self.region_name}! "
-                         f"Use hydra create-runner-image --cloud-privider aws --region {self.region_name}")
+            LOGGER.error("SCT Runner image was not found in %s! Use hydra create-runner-image "
+                         "--cloud-privider aws --region %s", self.region_name, self.region_name)
             sys.exit(1)
         return self._create_instance(
             instance_type=self.instance_type(test_duration=test_duration),
