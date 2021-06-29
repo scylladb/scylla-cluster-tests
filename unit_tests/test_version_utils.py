@@ -3,12 +3,14 @@ import unittest
 
 import pytest
 
+import sdcm
 from sdcm.utils.version_utils import (
+    get_scylla_urls_from_repository,
     get_branch_version,
     get_branch_version_for_multiple_repositories,
     get_git_tag_from_helm_chart_version,
     is_enterprise,
-    VERSION_NOT_FOUND_ERROR,
+    VERSION_NOT_FOUND_ERROR, RepositoryDetails, ScyllaFileType,
 )
 
 BASE_S3_DOWNLOAD_URL = 'https://s3.amazonaws.com/downloads.scylladb.com'
@@ -56,6 +58,71 @@ class TestVersionUtils(unittest.TestCase):
         self.assertEqual(is_enterprise('3.1'), False)
         self.assertEqual(is_enterprise('2.2'), False)
         self.assertEqual(is_enterprise('666.development'), False)
+
+    def test_06_get_scylla_urls_from_repository_rpm_one_arch(self):
+        with unittest.mock.patch.object(sdcm.utils.version_utils, 'get_url_content', return_value='', clear=True):
+            urls = get_scylla_urls_from_repository(
+                RepositoryDetails(
+                    type=ScyllaFileType.YUM,
+                    urls=[
+                        'baseurl=http://downloads.scylladb.com/unstable/scylla/master/rpm/centos/2021-06-29T00:59:00Z/scylla/$basearch/',
+                        '[scylla-generic]', 'enabled=1',
+                        'name=Scylla for centos $releasever',
+                        '[scylla]',
+                        'name=Scylla for Centos $releasever - $basearch',
+                        'baseurl=http://downloads.scylladb.com/unstable/scylla/master/rpm/centos/2021-06-29T00:59:00Z/scylla/noarch/',
+                        'gpgcheck=0'
+                    ]
+                )
+            )
+        self.assertEqual(
+            {
+                'http://downloads.scylladb.com/unstable/scylla/master/rpm/centos/2021-06-29T00:59:00Z/scylla/noarch'
+                '/repodata/repomd.xml',
+                'http://downloads.scylladb.com/unstable/scylla/master/rpm/centos/2021-06-29T00:59:00Z/scylla/x86_64'
+                '/repodata/repomd.xml',
+            },
+            urls)
+
+    def test_06_get_scylla_urls_from_repository_deb_one_arch(self):
+        with unittest.mock.patch.object(sdcm.utils.version_utils, 'get_url_content', return_value='', clear=True):
+            urls = get_scylla_urls_from_repository(RepositoryDetails(
+                type=ScyllaFileType.DEBIAN,
+                urls=['deb [arch=amd64] http://downloads.scylladb.com/unstable/scylla/master/deb/unified/'
+                      '2021-06-23T10:53:35Z/scylladb-master stable main'],
+            ))
+        self.assertEqual(
+            {
+                'http://downloads.scylladb.com/unstable/scylla/master/deb/unified/2021-06-23T10:53:35Z/scylladb-master/'
+                'dists/stable/main/binary-amd64/Packages',
+            },
+            urls)
+
+    def test_06_get_scylla_urls_from_repository_deb_two_archs(self):
+        with unittest.mock.patch.object(sdcm.utils.version_utils, 'get_url_content', return_value='', clear=True):
+            urls = get_scylla_urls_from_repository(RepositoryDetails(
+                type=ScyllaFileType.DEBIAN,
+                urls=['deb [arch=amd64,arm64] http://downloads.scylladb.com/unstable/scylla/master/deb/unified/'
+                      '2021-06-23T10:53:35Z/scylladb-master stable main'],
+            ))
+        self.assertEqual(
+            {
+                'http://downloads.scylladb.com/unstable/scylla/master/deb/unified/2021-06-23T10:53:35Z/scylladb-master/'
+                'dists/stable/main/binary-amd64/Packages',
+                'http://downloads.scylladb.com/unstable/scylla/master/deb/unified/2021-06-23T10:53:35Z/scylladb-master/'
+                'dists/stable/main/binary-arm64/Packages',
+            },
+            urls)
+
+    def test_06_get_scylla_urls_from_repository_no_urls(self):
+        with unittest.mock.patch.object(sdcm.utils.version_utils, 'get_url_content', return_value='', clear=True):
+            urls = get_scylla_urls_from_repository(RepositoryDetails(
+                type=ScyllaFileType.DEBIAN,
+                urls=[''],
+            ))
+        self.assertEqual(
+            set(),
+            urls)
 
 
 @pytest.mark.parametrize("chart_version,git_tag", [
