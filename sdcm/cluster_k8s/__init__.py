@@ -101,13 +101,6 @@ OPERATOR_CONTAINERS_RESOURCES = {
     'memory': 0.01,
 }
 
-# Resources that are used by side-car injected by sct into scylla-operator statefulset
-# Look at ScyllaPodCluster.add_sidecar_injection()
-SIDECAR_CONTAINERS_RESOURCES = {
-    'cpu': 0.01,
-    'memory': 0.05,
-}
-
 # Other common resources which get deployed on each scylla node such as 'kube-proxy'
 # EKS: between 100m-200m CPU
 # GKE: between 200m-300m CPU and 250Mi RAM
@@ -690,13 +683,11 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             cpu_limit = int(
                 cpu_limit
                 - OPERATOR_CONTAINERS_RESOURCES['cpu']
-                - SIDECAR_CONTAINERS_RESOURCES['cpu']
                 - COMMON_CONTAINERS_RESOURCES['cpu']
             )
             memory_limit = int(
                 memory_limit
                 - OPERATOR_CONTAINERS_RESOURCES['memory']
-                - SIDECAR_CONTAINERS_RESOURCES['memory']
                 - COMMON_CONTAINERS_RESOURCES['memory']
             )
         else:
@@ -1812,7 +1803,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         if self.scylla_yaml_update_required:
             self.update_scylla_config()
             time.sleep(30)
-            self.add_sidecar_injection()
             self.restart_scylla()
             self.scylla_yaml_update_required = False
             self.wait_for_nodes_up_and_normal(nodes=node_list)
@@ -2127,60 +2117,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                     namespace=self.namespace
                 )
             os.remove(tmp.name)
-
-    def add_sidecar_injection(self) -> bool:
-        result = False
-        for statefulset in self.k8s_apps_v1_api.list_namespaced_stateful_set(namespace=self.namespace).items:
-            is_owned_by_scylla_cluster = False
-            for owner_reference in statefulset.metadata.owner_references:
-                if owner_reference.kind == 'ScyllaCluster' and owner_reference.name == self.scylla_cluster_name:
-                    is_owned_by_scylla_cluster = True
-                    break
-
-            if not is_owned_by_scylla_cluster:
-                self.log.debug(f"add_sidecar_injection: statefulset {statefulset.metadata.name} skipped")
-                continue
-
-            if any([container for container in statefulset.spec.template.spec.containers if
-                    container.name == 'injected-busybox-sidecar']):
-                self.log.debug(
-                    f"add_sidecar_injection: statefulset {statefulset.metadata.name} sidecar is already injected")
-                continue
-
-            result = True
-            statefulset.spec.template.spec.containers.insert(
-                0,
-                V1Container(
-                    command=['/bin/sh', '-c', 'while true; do sleep 900 ; done'],
-                    image='busybox:1.32.0',
-                    name='injected-busybox-sidecar',
-                    resources=V1ResourceRequirements(
-                        limits={
-                            'cpu': f"{int(SIDECAR_CONTAINERS_RESOURCES['cpu'] * 1000)}m",
-                            'memory': f"{int(SIDECAR_CONTAINERS_RESOURCES['memory'] * 1000)}Mi",
-                        },
-                        requests={
-                            'cpu': f"{int(SIDECAR_CONTAINERS_RESOURCES['cpu'] * 1000)}m",
-                            'memory': f"{int(SIDECAR_CONTAINERS_RESOURCES['memory'] * 1000)}Mi",
-                        }
-                    )
-                )
-            )
-
-            self.k8s_apps_v1_api.patch_namespaced_stateful_set(
-                statefulset.metadata.name, self.namespace,
-                {
-                    'spec': {
-                        'template': {
-                            'spec': {
-                                'containers': statefulset.spec.template.spec.containers
-                            }
-                        }
-                    }
-                }
-            )
-            self.log.info(f"add_sidecar_injection: statefulset {statefulset.metadata.name} sidecar has been injected")
-        return result
 
     def check_cluster_health(self):
         if self.params.get('k8s_deploy_monitoring'):
