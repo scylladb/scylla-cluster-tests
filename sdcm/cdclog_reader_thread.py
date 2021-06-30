@@ -62,13 +62,6 @@ class CDCLogReaderThread(DockerBasedStressThread):
         docker = RemoteDocker(loader, CDCLOG_READER_IMAGE,
                               extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
 
-        # Update cdc-stressor with last changes.
-        docker.run(cmd="go get -u github.com/piodul/cdc-stressor",
-                   timeout=self.timeout,
-                   ignore_status=True,
-                   log_file=log_file_name,
-                   verbose=True)
-
         node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {self.stress_cmd}'
 
         CDCReaderStressEvent.start(node=loader, stress_cmd=self.stress_cmd).publish()
