@@ -28,7 +28,7 @@ Y = None  # define a global name for pickle.
 
 class TestSctEventDefaultRegistry(unittest.TestCase):
     def test_sct_event_is_in_registry(self):
-        self.assertIn("SctEvent", SctEvent._sct_event_types_registry)
+        self.assertIn("SctEvent", SctEvent.sct_event_types_registry)
 
 
 class SctEventTestCase(unittest.TestCase):
@@ -52,11 +52,11 @@ class SctEventTestCase(unittest.TestCase):
         os.unlink(cls.severities_conf)
 
     def setUp(self) -> None:
-        self._registry_bu = SctEvent._sct_event_types_registry
-        SctEvent._sct_event_types_registry = SctEventTypesRegistry(severities_conf=self.severities_conf)
+        self._registry_bu = SctEvent.sct_event_types_registry
+        SctEvent.sct_event_types_registry = SctEventTypesRegistry(severities_conf=self.severities_conf)
 
     def tearDown(self) -> None:
-        SctEvent._sct_event_types_registry = self._registry_bu
+        SctEvent.sct_event_types_registry = self._registry_bu
 
 
 class TestSctEvent(SctEventTestCase):
