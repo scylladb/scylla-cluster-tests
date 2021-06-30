@@ -10,13 +10,18 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-
+import time
 import unittest
+import uuid
+from pathlib import Path
+
+from parameterized import parameterized
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.database import \
-    DatabaseLogEvent, FullScanEvent, IndexSpecialColumnErrorEvent, TOLERABLE_REACTOR_STALL, SYSTEM_ERROR_EVENTS
+    DatabaseLogEvent, FullScanEvent, IndexSpecialColumnErrorEvent, TOLERABLE_REACTOR_STALL, SYSTEM_ERROR_EVENTS, \
+    BootstrapEvent, ScyllaServiceEvent
 
 
 class TestDatabaseLogEvent(unittest.TestCase):
@@ -96,3 +101,78 @@ class TestIndexSpecialColumnErrorEvent(unittest.TestCase):
         self.assertEqual(str(event),
                          "(IndexSpecialColumnErrorEvent Severity.ERROR) period_type=one-time "
                          "event_id=ac449879-485a-4b06-8596-3fbe58881093: message=m1")
+
+
+class TestDatabaseEvents(unittest.TestCase):
+    temp_log_file_path = Path(f"/tmp/{time.time()}.log")
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.temp_log_file_path.touch()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.temp_log_file_path.unlink()
+
+    def setUp(self) -> None:
+        self.event_id = uuid.uuid4()
+        self.node = "1.2.4.5.6"
+        self.bootstrap_event = BootstrapEvent(node=self.node,
+                                              log_file_name=str(self.temp_log_file_path),
+                                              publish_event=False)
+        self.scylla_service_event = ScyllaServiceEvent(node=self.node,
+                                                       log_file_name=str(self.temp_log_file_path),
+                                                       publish_event=False)
+        self.events = {"BootstrapEvent": self.bootstrap_event, "ScyllaServiceEvent": self.scylla_service_event}
+        for event in self.events.values():
+            event.event_id = self.event_id
+
+    @parameterized.expand(["BootstrapEvent", "ScyllaServiceEvent"])
+    def test_bootstrap_event_begin(self, event_name):
+        event = self.events[event_name]
+        event.begin_event()
+        actual = str(event)
+        expected = f"({event_name} Severity.NORMAL) period_type=begin event_id={self.event_id} " \
+                   f"node={self.node}"
+
+        self.assertEqual(actual, expected)
+
+    @parameterized.expand(["BootstrapEvent", "ScyllaServiceEvent"])
+    def test_bootstrap_event_duration(self, event_name):
+        event = self.events[event_name]
+        duration = 60
+        duration_fmt = "1m0s"
+        event.duration = duration
+        actual = str(event)
+        expected = f"({event_name} Severity.NORMAL) period_type=not-set " \
+                   f"event_id={self.event_id} duration={duration_fmt} node={self.node}"
+
+        self.assertEqual(actual, expected)
+
+    @parameterized.expand(["BootstrapEvent", "ScyllaServiceEvent"])
+    def test_bootstrap_as_ctx_manager(self, event_name):
+        event = self.events[event_name]
+        duration = 1
+
+        with event:
+            self.assertEqual(event.period_type, "begin")
+            time.sleep(duration)
+
+        self.assertEqual(event.duration, duration)
+        self.assertEqual(event.period_type, "end")
+
+    @parameterized.expand(["BootstrapEvent", "ScyllaServiceEvent"])
+    def test_bootstrap_event_failure(self, event_name):
+        event = self.events[event_name]
+        duration = 605
+        duration_fmt = "10m5s"
+        errors = ["Failed with status 1"]
+        event.add_error(errors)
+        event.duration = duration
+        event.end_event()
+
+        actual = str(event)
+        expected = f"({event_name} Severity.NORMAL) period_type=end event_id={self.event_id} " \
+                   f"duration={duration_fmt} node={self.node} errors=['{errors[0]}']"
+
+        self.assertEqual(actual, expected)

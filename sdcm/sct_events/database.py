@@ -221,3 +221,7 @@ class IndexSpecialColumnErrorEvent(InformationalEvent):
 
 class BootstrapEvent(DatabaseEvent):
     ...
+
+
+class ScyllaServiceEvent(DatabaseEvent):
+    ...
