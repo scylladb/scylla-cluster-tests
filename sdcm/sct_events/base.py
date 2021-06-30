@@ -34,6 +34,7 @@ import dateutil.parser
 from dateutil.relativedelta import relativedelta
 
 from sdcm import sct_abs_path
+from sdcm.nemesis import UnsupportedNemesis
 from sdcm.sct_events import Severity, SctEventProtocol
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
 
@@ -254,8 +255,11 @@ class ContinuousEvent(SctEvent, abstract=True):
             if not isinstance(self.errors, list):
                 self.errors = []
 
-            self.errors.append(traceback.format_exc(limit=None, chain=True))
-            self.severity = Severity.ERROR if self.severity.value <= Severity.ERROR.value else self.severity
+            if exc_type == UnsupportedNemesis:
+                self.severity = Severity.NORMAL
+            else:
+                self.severity = Severity.ERROR if self.severity.value <= Severity.ERROR.value else self.severity
+                self.errors.append(traceback.format_exc(limit=None, chain=True))
 
         self.end_event()
         return self
