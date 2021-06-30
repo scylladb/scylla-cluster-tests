@@ -10,43 +10,32 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import SctEvent
+from sdcm.sct_events.base import ContinuousEvent
 
 
-class DisruptionEvent(SctEvent):
+class DisruptionEvent(ContinuousEvent):
     def __init__(self,
-                 type,
-                 subtype,
-                 status,
-                 node=None,
-                 start=None,
-                 end=None,
-                 duration=None,
-                 error=None,
-                 full_traceback=None,
-                 **kwargs):  # pylint: disable=redefined-builtin,too-many-arguments
-        super().__init__(severity=Severity.NORMAL if status else Severity.ERROR)
+                 nemesis_name,
+                 node,
+                 severity=Severity.NORMAL,
+                 publish_event=True):  # pylint: disable=redefined-builtin,too-many-arguments
+        super().__init__(severity=severity, publish_event=publish_event)
 
-        self.type = type
-        self.subtype = subtype
+        self.nemesis_name = nemesis_name
         self.node = str(node)
-        self.start = start
-        self.end = end
-        self.duration = duration
-
-        self.error = None
+        self.duration = None
         self.full_traceback = ""
-        if error:
-            self.error = error
-            self.full_traceback = str(full_traceback)
-
-        self.__dict__.update(kwargs)
 
     @property
     def msgfmt(self) -> str:
-        fmt = super().msgfmt + ": type={0.type} subtype={0.subtype} target_node={0.node} duration={0.duration}"
-        if self.severity == Severity.ERROR:
-            fmt += " error={0.error}\n{0.full_traceback}"
+        fmt = super().msgfmt + ": nemesis_name={0.nemesis_name} target_node={0.node}"
+        if self.is_skipped:
+            fmt += " skipped"
+        if self.skip_reason:
+            fmt += " skip_reason={0.skip_reason}"
+        if self.errors:
+            fmt += " errors={0.errors_formatted}"
+        if self.full_traceback:
+            fmt += "\n{0.full_traceback}"
         return fmt

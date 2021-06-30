@@ -244,6 +244,8 @@ class ContinuousEvent(SctEvent, abstract=True):
         self._ready_to_publish = publish_event
         self.begin_timestamp = None
         self.end_timestamp = None
+        self.is_skipped = False
+        self.skip_reason = ""
 
     def __enter__(self):
         event = self.begin_event()
@@ -254,11 +256,18 @@ class ContinuousEvent(SctEvent, abstract=True):
             if not isinstance(self.errors, list):
                 self.errors = []
 
-            self.errors.append(traceback.format_exc(limit=None, chain=True))
-            self.severity = Severity.ERROR if self.severity.value <= Severity.ERROR.value else self.severity
+            if self.is_skipped:
+                self.severity = Severity.NORMAL
+            else:
+                self.severity = Severity.ERROR if self.severity.value <= Severity.ERROR.value else self.severity
+                self.errors.append(traceback.format_exc(limit=None, chain=True))
 
         self.end_event()
         return self
+
+    def skip(self, skip_reason):
+        self.is_skipped = True
+        self.skip_reason = skip_reason
 
     @property
     def msgfmt(self):
