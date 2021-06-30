@@ -77,12 +77,13 @@ class CDCLogReaderThread(DockerBasedStressThread):
                                            stress_cmd=self.stress_cmd,
                                            errors=result.stderr.split("\n")).publish()
             return result
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             CDCReaderStressEvent.failure(node=loader,
                                          stress_cmd=self.stress_cmd,
                                          errors=[format_stress_cmd_error(exc), ]).publish()
         finally:
             CDCReaderStressEvent.finish(node=loader, stress_cmd=self.stress_cmd).publish()
+        return None
 
     @staticmethod
     def _parse_cdcreaderstressor_results(lines: List[str]) -> Dict:
