@@ -10,6 +10,9 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+
+# pylint: disable=expression-not-assigned
+
 import time
 import unittest
 import uuid
