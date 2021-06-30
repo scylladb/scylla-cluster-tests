@@ -16,7 +16,7 @@ import logging
 from typing import Type, List, Tuple, Generic, Optional
 
 from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event, InformationalEvent, ContinuousEvent, \
+from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event, InformationalEvent, \
     DatabaseEvent
 
 TOLERABLE_REACTOR_STALL: int = 1000  # ms

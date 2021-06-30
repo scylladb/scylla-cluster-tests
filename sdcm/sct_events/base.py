@@ -11,6 +11,8 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+# pylint: disable=too-few-public-methods, too-many-arguments, too-many-instance-attributes
+
 from __future__ import annotations
 
 import json
@@ -23,7 +25,7 @@ import logging
 from enum import Enum
 from types import new_class
 from typing import \
-    Any, Optional, Type, Dict, List, Tuple, Callable, Generic, TypeVar, Protocol, runtime_checkable, cast
+    Any, Optional, Type, Dict, List, Tuple, Callable, Generic, TypeVar, Protocol, runtime_checkable
 from keyword import iskeyword
 from weakref import proxy as weakproxy
 from datetime import datetime
@@ -66,8 +68,8 @@ class EventPeriod(Enum):
 
 
 class SctEvent:
-    _sct_event_types_registry: SctEventTypesRegistry = SctEventTypesRegistry()
-    _events_processes_registry: Optional[EventsProcessesRegistry] = None
+    sct_event_types_registry: SctEventTypesRegistry = SctEventTypesRegistry()
+    events_processes_registry: Optional[EventsProcessesRegistry] = None
 
     _abstract: bool = True  # this attribute set by __init_subclass__()
     base: str = "SctEvent"  # this attribute set by __init_subclass__()
@@ -86,14 +88,14 @@ class SctEvent:
 
     def __init_subclass__(cls, abstract: bool = False):
         # pylint: disable=unsupported-membership-test; pylint doesn't know about Dict
-        if cls.__name__ in cls._sct_event_types_registry:
+        if cls.__name__ in cls.sct_event_types_registry:
             raise TypeError(f"Name {cls.__name__} is already used")
         cls.base = cls.__name__.split(".", 1)[0]
         cls._abstract = bool(abstract)
-        cls._sct_event_types_registry[cls.__name__] = cls
+        cls.sct_event_types_registry[cls.__name__] = cls
 
     # Do it this way because abc.ABC doesn't prevent the instantiation if there are no abstract methods or properties.
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args, **kwargs):  # pylint: disable=unused-argument
         if cls.is_abstract():
             raise TypeError(f"Class {cls.__name__} may not be instantiated directly")
         return super().__new__(cls)
@@ -164,7 +166,7 @@ class SctEvent:
             if warn_not_ready:
                 LOGGER.warning("[SCT internal warning] %s is not ready to be published", self)
             return
-        get_events_main_device(_registry=self._events_processes_registry).publish_event(self)
+        get_events_main_device(_registry=self.events_processes_registry).publish_event(self)
         self._ready_to_publish = False
 
     def publish_or_dump(self, default_logger: Optional[logging.Logger] = None, warn_not_ready: bool = True) -> None:
@@ -176,7 +178,7 @@ class SctEvent:
                 LOGGER.warning("[SCT internal warning] %s is not ready to be published", self)
             return
         try:
-            proc = get_events_main_device(_registry=self._events_processes_registry)
+            proc = get_events_main_device(_registry=self.events_processes_registry)
         except RuntimeError:
             LOGGER.exception("Unable to get events main device")
             proc = None
@@ -185,7 +187,7 @@ class SctEvent:
                 self.publish()
             else:
                 from sdcm.sct_events.file_logger import get_events_logger
-                get_events_logger(_registry=self._events_processes_registry).write_event(self)
+                get_events_logger(_registry=self.events_processes_registry).write_event(self)
         elif default_logger:
             default_logger.error(str(self))
         self._ready_to_publish = False
@@ -218,8 +220,8 @@ class SctEvent:
             warning = f"[SCT internal warning] {self} has not been published or dumped, maybe you missed .publish()"
             try:
                 LOGGER.warning(warning)
-            except:
-                print(warning)
+            except Exception as exc:  # pylint: disable=broad-except
+                print(f"{warning}: {exc}")
 
 
 class InformationalEvent(SctEvent, abstract=True):
@@ -288,8 +290,11 @@ class ContinuousEvent(SctEvent, abstract=True):
         if self.duration is None:
             return duration
 
-        rt = relativedelta(seconds=self.duration)
-        days, hours, minutes, sec = (int(rt.days), int(rt.hours), int(rt.minutes), rt.seconds)
+        relative_delta = relativedelta(seconds=self.duration)
+        days, hours, minutes, sec = (int(relative_delta.days),
+                                     int(relative_delta.hours),
+                                     int(relative_delta.minutes),
+                                     relative_delta.seconds)
         if days:
             duration += f"{days}d"
 
@@ -346,16 +351,16 @@ def add_severity_limit_rules(rules: List[str]) -> None:
         try:
             pattern, severity = rule.split("=", 1)
             severity = Severity[severity.strip()]
-            SctEvent._sct_event_types_registry.limit_rules.insert(0, (pattern.strip(), severity))  # keep it reversed
-        except Exception:
-            LOGGER.exception("Unable to add a max severity limit rule `%s'", rule)
+            SctEvent.sct_event_types_registry.limit_rules.insert(0, (pattern.strip(), severity))  # keep it reversed
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.exception("Unable to add a max severity limit rule `%s' Full exception: %s", rule, exc)
 
 
 def _max_severity(keys: Tuple[str, ...], name: str) -> Severity:
-    for pattern, severity in SctEvent._sct_event_types_registry.limit_rules:
+    for pattern, severity in SctEvent.sct_event_types_registry.limit_rules:
         if fnmatch.filter(keys, pattern):
             return severity
-    return SctEvent._sct_event_types_registry.max_severities[name]
+    return SctEvent.sct_event_types_registry.max_severities[name]
 
 
 def max_severity(event: SctEvent) -> Severity:
@@ -367,7 +372,7 @@ def max_severity(event: SctEvent) -> Severity:
 
 def print_critical_events() -> None:
     critical_event_lines = []
-    for event_name in SctEvent._sct_event_types_registry.max_severities:
+    for event_name in SctEvent.sct_event_types_registry.max_severities:
         if _max_severity(keys=(event_name, ), name=event_name) == Severity.CRITICAL:
             critical_event_lines.append(f"  * {event_name}")
     LOGGER.info("The run can be interrupted by following critical events:\n%s\n\n", "\n".join(critical_event_lines))
@@ -399,14 +404,14 @@ class BaseFilter(SystemEvent, abstract=True):
         self.publish()
         return self
 
-    def __exit__(self, exception_type, exception_value, traceback):
+    def __exit__(self, exception_type, exception_value, traceback):  # pylint: disable=redefined-outer-name
         self.cancel_filter()
 
     def eval_filter(self, event: SctEventProtocol) -> bool:
         raise NotImplementedError()
 
 
-T_log_event = TypeVar("T_log_event", bound="LogEvent")
+T_log_event = TypeVar("T_log_event", bound="LogEvent")  # pylint: disable=invalid-name
 
 
 @runtime_checkable

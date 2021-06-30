@@ -48,7 +48,7 @@ class ClusterTesterForTests(ClusterTester):
         self.logdir = tempfile.mkdtemp()
         self.events_processes_registry = EventsProcessesRegistry(log_dir=self.logdir)
         self.events_processes_registry_patcher = \
-            unittest.mock.patch("sdcm.sct_events.base.SctEvent._events_processes_registry",
+            unittest.mock.patch("sdcm.sct_events.base.SctEvent.events_processes_registry",
                                 self.events_processes_registry)
         self.events_processes_registry_patcher.start()
         configure_logging(
