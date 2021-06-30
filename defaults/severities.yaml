@@ -79,7 +79,7 @@ ScyllaOperatorLogEvent.TLS_HANDSHAKE_ERROR: WARNING
 ScyllaOperatorLogEvent.OPERATOR_STARTED_INFO: NORMAL
 StartupTestEvent: NORMAL
 TestTimeoutEvent: CRITICAL
-TestFrameworkEvent: ERROR
+TestFrameworkEvent: CRITICAL
 ElasticsearchEvent: ERROR
 SpotTerminationEvent: CRITICAL
 ScyllaRepoEvent: WARNING
