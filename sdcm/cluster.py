@@ -3672,6 +3672,16 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
     def _update_db_packages(self, new_scylla_bin, node_list, start_service=True):
         self.log.debug('User requested to update DB packages...')
 
+        def check_package_suites_distro(node, extension):
+            files_fit_extension = node.remoter.run(f'ls /tmp/scylla/*.{extension}', ignore_status=True, verbose=True)
+            if not files_fit_extension.ok:
+                TestFrameworkEvent(
+                    source=self.__class__.__name__,
+                    source_method='update_scylla_packages',
+                    message="Did not get the right packages for this distro",
+                    severity=Severity.CRITICAL
+                ).publish()
+
         def update_scylla_packages(node, _queue):
             node.log.info('Updating DB packages')
             node.remoter.run('mkdir /tmp/scylla')
@@ -3682,11 +3692,23 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.remoter.run('tar -xvf /tmp/scylla/*.tar.gz -C /tmp/scylla/', ignore_status=True, verbose=True)
 
             # replace the packages
-            logging.info("Installing rpms")
-            node.remoter.run('yum list installed | grep scylla')
-            node.remoter.sudo('rpm -URvh --replacepkgs --replacefiles /tmp/scylla/*.rpm',
-                              ignore_status=False, verbose=True)
-            node.remoter.run('yum list installed | grep scylla')
+            self.log.debug(f'Node distro is {node.distro}, will check the package suffix received')
+            if node.distro.is_rhel_like:
+                check_package_suites_distro(node, 'rpm')
+                self.log.info('Installed RPMs before replacing with new RPM files')
+                node.remoter.run('yum list installed | grep scylla', verbose=True)
+                self.log.debug('Will replace the RPM files with the ones provided as a parameter to the test')
+                node.remoter.sudo('rpm -URvh --replacefiles /tmp/scylla/*.rpm', ignore_status=False, verbose=True)
+                self.log.info('Installed RPMs after replacing with new RPM files')
+                node.remoter.run('yum list installed | grep scylla', verbose=True)
+            elif node.distro.is_ubuntu:
+                check_package_suites_distro(node, 'deb')
+                self.log.info('Installed .deb packages before replacing with new .DEB files')
+                node.remoter.run('apt list --installed | grep scylla', verbose=True)
+                node.remoter.sudo('sh -c \'yes Y | dpkg --force-depends -i /tmp/scylla/scylla*\'',
+                                  ignore_status=False, verbose=True)
+                self.log.info('Installed .deb packages after replacing with new .DEB files')
+                node.remoter.run('apt list --installed | grep scylla', verbose=True)
             _queue.put(node)
             _queue.task_done()
 
