@@ -72,7 +72,7 @@ ScyllaOperatorLogEvent.REAPPLY: WARNING
 ScyllaOperatorRestartEvent: ERROR
 StartupTestEvent: NORMAL
 TestTimeoutEvent: CRITICAL
-TestFrameworkEvent: ERROR
+TestFrameworkEvent: CRITICAL
 ElasticsearchEvent: ERROR
 SpotTerminationEvent: CRITICAL
 ScyllaRepoEvent: WARNING
