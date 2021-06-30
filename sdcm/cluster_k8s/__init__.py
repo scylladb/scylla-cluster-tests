@@ -2144,7 +2144,24 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
     def restart_scylla(self, nodes=None, random_order=False):
         # TODO: add support for the "nodes" param to have compatible logic with
         # other backends.
-        self.k8s_cluster.kubectl("rollout restart statefulset", namespace=self.namespace)
+
+        # NOTE: starting with operator-1.4 if we run rollout restart of a scylla statefulset object
+        # we cause update of it's annotations.
+        # And any update to a scylla statefulset unknown to the scylla operator
+        # will cause additional rollout on the member number change which we apply
+        # in our nemesis.
+        # So, while we do not have API to rollout restart by ScyllaCluster CRD
+        # do it in a hacky way by making harmless spec update to sysctls.
+        scyllacluster_name = self.params.get("k8s_scylla_cluster_name")
+        new_sysctls = self.k8s_cluster.kubectl(
+            f"get scyllacluster {scyllacluster_name} "
+            "--no-headers -o custom-columns=:.spec.sysctls[*]",
+            namespace=self.namespace).stdout.strip().split(',') + ['']
+        patch_data = {"spec": {"sysctls": new_sysctls}}
+        self.k8s_cluster.kubectl(
+            f"patch scyllacluster {scyllacluster_name} --type merge -p '{json.dumps(patch_data)}'",
+            namespace=self.namespace)
+
         readiness_timeout = self.get_nodes_reboot_timeout(len(self.nodes))
         statefulsets = self.statefulsets
         if random_order:
