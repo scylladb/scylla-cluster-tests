@@ -1128,6 +1128,8 @@ class SCTConfiguration(dict):
 
         dict(name="events_limit_in_email", env="SCT_EVENTS_LIMIT_IN_EMAIL", type=int,
              help="Limit number events in email reports"),
+        dict(name="collect_single_archive", env="SCT_COLLECT_SINGLE_ARCHIVE", type=boolean,
+             help="Collect all logs to a single archive"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
