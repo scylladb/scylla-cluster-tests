@@ -1458,7 +1458,7 @@ class SCTConfiguration(dict):
             if opt['env'] in os.environ:
                 try:
                     environment_vars[opt['name']] = opt['type'](os.environ[opt['env']])
-                except Exception as ex:
+                except Exception as ex:  # pylint: disable=broad-except
                     raise ValueError(
                         "failed to parse {} from environment variable".format(opt['env'])) from ex
         return environment_vars
@@ -1483,7 +1483,7 @@ class SCTConfiguration(dict):
     def _validate_value(self, opt):
         try:
             opt['type'](self.get(opt['name']))
-        except Exception as ex:
+        except Exception as ex:  # pylint: disable=broad-except
             raise ValueError("failed to validate {}".format(opt['name'])) from ex
         choices = opt.get('choices')
         if choices:
