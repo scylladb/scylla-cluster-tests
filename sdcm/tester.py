@@ -2858,8 +2858,8 @@ class ClusterTester(db_stats.TestStatsMixin,
                 "region_name": region_name,
                 "scylla_instance_type": scylla_instance_type,
                 "scylla_version": scylla_version,
-                "live_nodes_shards": nodes_shards['live_nodes'],
-                "dead_nodes_shards": nodes_shards['dead_nodes'],
+                "live_nodes_shards": nodes_shards.get('live_nodes'),
+                "dead_nodes_shards": nodes_shards.get('dead_nodes'),
                 "kernel_version": kernel_version,
                 "start_time": start_time,
                 "subject": f"{test_status}: {os.environ.get('JOB_NAME') or config_file_name}{build_id}: {start_time}",
@@ -2891,7 +2891,10 @@ class ClusterTester(db_stats.TestStatsMixin,
             output.append(result['message'])
         return output
 
-    def _get_live_node(self) -> Optional[BaseNode]:
+    def _get_live_node(self) -> Optional[BaseNode]:  # pylint: disable=inconsistent-return-statements
+        if not self.db_cluster or not self.db_cluster.nodes:
+            self.log.error("Cluster object was not initialized")
+            return None
         parallel_obj = ParallelObject(objects=self.db_cluster.nodes)
         parallel_obj_results = parallel_obj.run(self._check_ssh_node_connectivity,
                                                 ignore_exceptions=True)
