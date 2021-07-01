@@ -1986,6 +1986,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 self.log.debug('Create new table with cql: {}'.format(create_cql))
                 session.execute(create_cql)
                 return True
+            return False
 
     @retrying(n=4, sleep_time=5, message='Fetch all rows', raise_on_exceeded=False)
     def fetch_all_rows(self, session, default_fetch_size, statement, verbose=True):
@@ -2580,6 +2581,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             return int(re.search(r"n=(\d+) ", cs_cmd).group(1))
         except Exception:  # pylint: disable=broad-except
             self.fail("Unable to get data set size from cassandra-stress command: %s" % cs_cmd)
+            return None
 
     @retrying(n=60, sleep_time=60, allowed_exceptions=(AssertionError,))
     def wait_data_dir_reaching(self, size, node):
@@ -2661,6 +2663,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 email_subject=email_subject)
         except Exception as ex:  # pylint: disable=broad-except
             self.log.exception('Failed to check regression: %s', ex)
+            return False
 
     def check_specified_stats_regression(self, stats):
         perf_analyzer = SpecifiedStatsPerformanceAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
@@ -3062,6 +3065,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         for result in parallel_obj_results:
             if not result.exc:
                 return result.result
+        return None
 
     @staticmethod
     def _check_ssh_node_connectivity(node: BaseNode) -> Optional[BaseNode]:
