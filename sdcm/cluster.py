@@ -611,8 +611,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @property
     def cpu_cores(self):
-        result = self.remoter.run("nproc", ignore_status=True)
-        cores = result.stdout.lower()
+        try:
+            result = self.remoter.run("nproc", ignore_status=True)
+            cores = result.stdout.lower()
+        except Exception as details:  # pylint: disable=broad-except
+            self.log.error("Command 'nproc' error: %s", details)
+            cores = None
         cores = int(cores) if cores else None
         return cores
 
