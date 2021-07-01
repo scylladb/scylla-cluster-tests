@@ -82,7 +82,7 @@ class PrometheusSnapshotErrorException(Exception):
     pass
 
 
-class BaseLogEntity():  # pylint: disable=too-few-public-methods
+class BaseLogEntity:  # pylint: disable=too-few-public-methods
     """Base class for log entity
 
     LogEntity any file, command, operation, complex actions
@@ -699,7 +699,7 @@ class LogCollector:
                                        timeout=timeout)
         return local_dir
 
-    def collect_logs(self, local_search_path: Optional[str] = None) -> Optional[str]:
+    def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:
         def collect_logs_per_node(node):
             LOGGER.info('Collecting logs on host: %s', node.name)
             remote_node_dir = self.create_remote_storage_dir(node)
@@ -714,7 +714,7 @@ class LogCollector:
 
         if not self.nodes and not os.listdir(self.local_dir):
             LOGGER.warning('No nodes found for %s cluster. Logs will not be collected', self.cluster_log_type)
-            return None
+            return []
         if self.nodes:
             try:
                 workers_number = int(len(self.nodes) / 2)
@@ -726,15 +726,15 @@ class LogCollector:
 
         if not os.listdir(self.local_dir):
             LOGGER.warning('Directory %s is empty', self.local_dir)
-            return None
+            return []
 
-        final_archive = self.archive_dir_to_tarfile(self.local_dir)
+        final_archive = self.archive_to_tarfile(self.local_dir)
         if not final_archive:
-            return None
+            return []
         s3_link = upload_archive_to_s3(final_archive, f"{self.test_id}/{self.current_run}")
         remove_files(self.local_dir)
         remove_files(final_archive)
-        return s3_link
+        return [s3_link]
 
     def collect_logs_for_inactive_nodes(self, local_search_path=None):
         node_names = {node.name for node in self.nodes}
@@ -757,12 +757,12 @@ class LogCollector:
         pass
 
     @staticmethod
-    def archive_dir_to_tarfile(logdir):
-        logdir_name = os.path.basename(logdir)
-        archive_name = f"{logdir_name}.tar.gz"
+    def archive_to_tarfile(src_path: str) -> str:
+        src_name = os.path.basename(src_path)
+        archive_name = f"{src_name}.tar.gz"
         try:
             with tarfile.open(archive_name, "w:gz") as tar:
-                tar.add(logdir, arcname=logdir_name)
+                tar.add(src_path, arcname=src_name)
         except Exception as details:  # pylint: disable=broad-except
             LOGGER.error("Error during archive creation. Details: \n%s", details)
             return None
@@ -806,7 +806,7 @@ class ScyllaLogCollector(LogCollector):
     cluster_dir_prefix = "db-cluster"
     collect_timeout = 600
 
-    def collect_logs(self, local_search_path=None):
+    def collect_logs(self, local_search_path=None) -> list[str]:
         self.collect_logs_for_inactive_nodes(local_search_path)
         return super().collect_logs(local_search_path)
 
@@ -835,7 +835,7 @@ class LoaderLogCollector(LogCollector):
                 search_locally=True),
     ]
 
-    def collect_logs(self, local_search_path=None):
+    def collect_logs(self, local_search_path=None) -> list[str]:
         self.collect_logs_for_inactive_nodes(local_search_path)
         return super().collect_logs(local_search_path)
 
@@ -931,7 +931,7 @@ class SCTLogCollector(LogCollector):
     cluster_log_type = 'sct-runner'
     cluster_dir_prefix = 'sct-runner'
 
-    def collect_logs(self, local_search_path: Optional[str] = None) -> Optional[str]:
+    def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:
         for ent in self.log_entities:
             ent.collect(None, self.local_dir, None, local_search_path=local_search_path)
         if not os.listdir(self.local_dir):
@@ -952,14 +952,36 @@ class SCTLogCollector(LogCollector):
 
             if not os.listdir(self.local_dir):
                 LOGGER.warning('Nothing found')
-                return None
+                return []
 
-        final_archive = self.archive_dir_to_tarfile(self.local_dir)
+        if self.params.get("collect_single_archive"):
+            s3_links = self.create_single_archive_and_upload()
+        else:
+            s3_links = self.create_achive_per_file_and_upload()
+
+        return s3_links
+
+    def create_single_archive_and_upload(self) -> list[str]:
+        final_archive = self.archive_to_tarfile(self.local_dir)
 
         s3_link = upload_archive_to_s3(final_archive, f"{self.test_id}/{self.current_run}")
         remove_files(self.local_dir)
         remove_files(final_archive)
-        return s3_link
+        return [s3_link]
+
+    def create_achive_per_file_and_upload(self) -> list[str]:
+        s3_links = []
+        for root, _, files in os.walk(self.local_dir):
+            for current_file in files:
+                file_path = os.path.join(root, current_file)
+                LOGGER.info(file_path)
+                file_archive = self.archive_to_tarfile(file_path)
+                LOGGER.info(file_archive)
+                s3_link = upload_archive_to_s3(file_archive, f"{self.test_id}/{self.current_run}")
+                s3_links.append(s3_link)
+                remove_files(file_path)
+                remove_files(file_archive)
+        return s3_links
 
 
 class KubernetesLogCollector(SCTLogCollector):
@@ -982,16 +1004,16 @@ class JepsenLogCollector(LogCollector):
     cluster_log_type = "jepsen-data"
     cluster_dir_prefix = "jepsen-data"
 
-    def collect_logs(self, local_search_path: Optional[str] = None) -> Optional[str]:
-        s3_link = None
+    def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:
+        s3_link = []
         if self.nodes:
             jepsen_node = self.nodes[0]
             if jepsen_archive := self.archive_log_remotely(jepsen_node, "./jepsen-scylla", "jepsen-data"):
                 self.receive_log(jepsen_node, jepsen_archive, self.local_dir)
-                s3_link = upload_archive_to_s3(
+                s3_link.append(upload_archive_to_s3(
                     archive_path=os.path.join(self.local_dir, os.path.basename(jepsen_archive)),
                     storing_path=f"{self.test_id}/{self.current_run}",
-                )
+                ))
             remove_files(self.local_dir)
         return s3_link
 

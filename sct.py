@@ -825,8 +825,10 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 
     table = PrettyTable(['Cluster set', 'Link'])
     table.align = 'l'
-    for cluster_type, s3_link in collected_logs.items():
-        table.add_row([cluster_type, s3_link])
+    for cluster_type, s3_links in collected_logs.items():
+        for link in s3_links:
+            table.add_row([cluster_type, link])
+
     click.echo(table.get_string(title="Collected logs by test-id: {}".format(collector.test_id)))
 
 
