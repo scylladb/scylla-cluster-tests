@@ -67,6 +67,7 @@ email_recipients: ['qa@scylladb.com']
 email_subject_postfix: ''
 
 collect_logs: false
+collect_single_archive: false
 
 hinted_handoff: 'enabled'
 
