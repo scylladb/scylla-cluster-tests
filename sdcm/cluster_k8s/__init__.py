@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 # pylint: disable=too-many-arguments
+# pylint: disable=too-many-lines
 
 from __future__ import annotations
 
@@ -71,7 +72,8 @@ from sdcm.utils.k8s import (
     PortExposeService,
     TokenUpdateThread,
 )
-from sdcm.utils.decorators import log_run_info, retrying, timeout
+from sdcm.utils.decorators import log_run_info, retrying
+from sdcm.utils.decorators import timeout as timeout_wrapper
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \
     KubectlClusterEventsLogger, ScyllaManagerLogger
 from sdcm.utils.version_utils import get_git_tag_from_helm_chart_version
@@ -79,7 +81,9 @@ from sdcm.wait import wait_for
 from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring
 
 
-ANY_KUBERNETES_RESOURCE = Union[Resource, ResourceField, ResourceInstance, ResourceList, Subresource]
+ANY_KUBERNETES_RESOURCE = Union[  # pylint: disable=invalid-name
+    Resource, ResourceField, ResourceInstance, ResourceList, Subresource,
+]
 
 CERT_MANAGER_TEST_CONFIG = sct_abs_path("sdcm/k8s_configs/cert-manager-test.yaml")
 LOADER_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/loaders.yaml")
@@ -137,11 +141,11 @@ class DnsPodResolver:
         tmp = result.split()
         # result = self.k8s_cluster.kubectl(f'exec {self.pod_name} -- dig +short {hostname}').stdout.splitlines()
         if len(tmp) < 4:
-            raise RuntimeError("Got wrong result: %s", result)
+            raise RuntimeError(f"Got wrong result: {result}")
         return tmp[3]
 
 
-class CloudK8sNodePool(metaclass=abc.ABCMeta):
+class CloudK8sNodePool(metaclass=abc.ABCMeta):  # pylint: disable=too-many-instance-attributes
     def __init__(
             self,
             k8s_cluster: 'KubernetesCluster',
@@ -201,12 +205,12 @@ class CloudK8sNodePool(metaclass=abc.ABCMeta):
 
     @cached_property
     def cpu_and_memory_capacity(self) -> Tuple[float, float]:
-        for el in self.k8s_cluster.k8s_core_v1_api.list_node().items:
-            if el.metadata.labels.get(self.pool_label_name, '') == self.name:
-                capacity = el.status.allocatable
+        for item in self.k8s_cluster.k8s_core_v1_api.list_node().items:
+            if item.metadata.labels.get(self.pool_label_name, '') == self.name:
+                capacity = item.status.allocatable
                 return convert_cpu_value_from_k8s_to_units(capacity['cpu']), convert_memory_value_from_k8s_to_units(
                     capacity['memory'])
-        raise RuntimeError("Can't find any node for pool '%s'", self.name)
+        raise RuntimeError(f"Can't find any node for pool '{self.name}'")
 
     @property
     def cpu_capacity(self) -> float:
@@ -223,7 +227,7 @@ class CloudK8sNodePool(metaclass=abc.ABCMeta):
     def wait_for_nodes_readiness(self):
         readiness_timeout = self.readiness_timeout
 
-        @timeout(
+        @timeout_wrapper(
             message=f"Wait for {self.num_nodes} node(s) in pool {self.name} to be ready...",
             sleep_time=30,
             timeout=readiness_timeout * 60)
@@ -239,7 +243,7 @@ class CloudK8sNodePool(metaclass=abc.ABCMeta):
         wait_nodes_are_ready()
 
 
-class KubernetesCluster(metaclass=abc.ABCMeta):
+class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-public-methods,too-many-instance-attributes
     AUXILIARY_POOL_NAME = 'auxiliary-pool'
     SCYLLA_POOL_NAME = 'scylla-pool'
     MONITORING_POOL_NAME = 'monitoring-pool'
@@ -323,7 +327,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         return partial(cluster.TestConfig.tester_obj().localhost.helm_install, self)
 
     @cached_property
-    def kubectl_token_path(self):
+    def kubectl_token_path(self):  # pylint: disable=no-self-use
         return os.path.join(os.path.dirname(
             os.path.expanduser(os.environ.get('KUBECONFIG', '~/.kube/config'))), 'kubectl.token')
 
@@ -408,11 +412,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             assert len(latest_version) == 1, "Expected only one element in the list of versions"
             assert "version" in latest_version[0], "Expected presence of 'version' key"
             chart_version = latest_version[0]["version"].strip()
-            LOGGER.info(f"Using automatically found following "
-                        f"latest scylla-operator chart version: {chart_version}")
+            LOGGER.info(
+                "Using automatically found following latest scylla-operator chart version: %s",
+                chart_version)
         else:
-            LOGGER.info(f"Using following predefined scylla-operator "
-                        f"chart version: {chart_version}")
+            LOGGER.info(
+                "Using following predefined scylla-operator chart version: %s", chart_version)
         return chart_version
 
     @log_run_info
@@ -650,7 +655,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         })
 
     @log_run_info
-    def deploy_scylla_cluster(self,  node_pool: CloudK8sNodePool = None, node_prepare_config: str = None) -> None:
+    def deploy_scylla_cluster(self, node_pool: CloudK8sNodePool = None, node_prepare_config: str = None) -> None:
         if self.params.get('reuse_cluster'):
             try:
                 self.wait_till_cluster_is_operational()
@@ -658,8 +663,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                 self.kubectl("get scyllaclusters.scylla.scylladb.com", namespace=SCYLLA_NAMESPACE)
                 self.start_scylla_cluster_events_thread()
                 return
-            except:
-                raise RuntimeError("SCT_REUSE_CLUSTER is set, but target scylla cluster is unhealthy")
+            except Exception as exc:
+                raise RuntimeError(
+                    "SCT_REUSE_CLUSTER is set, but target scylla cluster is unhealthy") from exc
         LOGGER.info("Create and initialize a Scylla cluster")
         self.kubectl(f"create namespace {SCYLLA_NAMESPACE}")
 
@@ -775,9 +781,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                 tag='scylla-monitoring-3.6.0',
                 dst_dir=scylla_monitoring_dir)
 
-            values_filepath = os.path.join(
-                scylla_operator_dir, "examples", "common", "monitoring", "values.yaml")
-            with open(values_filepath, "r") as values_stream:
+            with open(os.path.join(scylla_operator_dir, "examples", "common",
+                                   "monitoring", "values.yaml"), "r") as values_stream:
                 values_data = yaml.safe_load(values_stream)
                 # NOTE: we need to unset all the tags because latest chart version may be
                 # incompatible with old versions of apps.
@@ -785,26 +790,17 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                 # 'kube-prometheus-stack' v16.1.2+
                 for values_key in values_data.keys():
                     values_data[values_key].get("image", {}).pop("tag", "")
+            monitoring_affinity_rules = {}
             if node_pool:
                 self.deploy_node_pool(node_pool)
                 monitoring_affinity_rules = get_helm_pool_affinity_values(
                     node_pool.pool_label_name, node_pool.name)
-            else:
-                monitoring_affinity_rules = {}
 
             helm_values = HelmValues(values_data)
-
-            # Additional values to be set:
-            #   nodeExporter.enabled = False
-            #   alertmanager.alertmanagerSpec.affinity
-            #   prometheusOperator.affinity
-            #   prometheus.prometheusSpec.affinity
-            #   prometheus.prometheusSpec.service
-            #   grafana.affinity
             helm_values.set('nodeExporter.enabled', False)
             helm_values.set('alertmanager.alertmanagerSpec', monitoring_affinity_rules)
             helm_values.set('prometheusOperator', monitoring_affinity_rules)
-            prometheus_values = {
+            helm_values.set('prometheus', {
                 'prometheusSpec': {
                     'affinity': monitoring_affinity_rules.get('affinity', {}),
                     # NOTE: set following values the same as in SCT (standalone) monitoring
@@ -817,9 +813,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                     'type': 'NodePort',
                     'nodePort': self.k8s_prometheus_external_port,
                 },
-            }
-            helm_values.set('prometheus', prometheus_values)
-            grafana_values = {
+            })
+            helm_values.set('grafana', {
                 'affinity': monitoring_affinity_rules.get('affinity', {}),
                 'service': {
                     # NOTE: required for out-of-K8S-cluster access
@@ -834,13 +829,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                     'auth': {'disable_login_form': True, 'disable_signout_menu': True},
                     'auth.anonymous': {'enabled': True, 'org_role': 'Editor'},
                 },
-            }
-            helm_values.set('grafana', grafana_values)
-            LOGGER.debug(f"Monitoring helm chart values are following: {helm_values.as_dict()}")
+            })
+            LOGGER.debug("Monitoring helm chart values are following: %s", helm_values.as_dict())
 
             repo_name = "prometheus-community"
             source_chart_name = f"{repo_name}/kube-prometheus-stack"
-            LOGGER.info(f"Install {source_chart_name} helm chart")
+            LOGGER.info("Install %s helm chart", source_chart_name)
             self.kubectl(f'create namespace {namespace}', ignore_status=True)
             self.helm(f'repo add {repo_name} https://prometheus-community.github.io/helm-charts')
             self.helm('repo update')
@@ -876,10 +870,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                     namespace=namespace)
         time.sleep(10)
         self.check_k8s_monitoring_cluster_health(namespace=namespace)
-        LOGGER.info("K8S Prometheus is available at "
-                    f"{self.k8s_monitoring_node_ip}:{self.k8s_prometheus_external_port}")
-        LOGGER.info("K8S Grafana is available at "
-                    f"{self.k8s_monitoring_node_ip}:{self.k8s_grafana_external_port}")
+        LOGGER.info("K8S Prometheus is available at %s:%s",
+                    self.k8s_monitoring_node_ip, self.k8s_prometheus_external_port)
+        LOGGER.info("K8S Grafana is available at %s:%s",
+                    self.k8s_monitoring_node_ip, self.k8s_grafana_external_port)
 
     @property
     def k8s_monitoring_node_ip(self):
@@ -941,18 +935,17 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         self.kubectl(f"describe nodes > {logdir / cluster_scope_dir / 'nodes.desc'}")
 
         # Read all the namespaces from already saved file
-        with open(logdir / cluster_scope_dir / "namespaces.wide", mode="r") as f:
+        with open(logdir / cluster_scope_dir / "namespaces.wide", mode="r") as namespaces_file:
             # Reverse order of namespaces because preferred once are there
-            namespaces = [n.split()[0] for n in f.readlines()[1:]][::-1]
+            namespaces = [n.split()[0] for n in namespaces_file.readlines()[1:]][::-1]
 
         # Gather namespace-scoped resources info
-        LOGGER.info("K8S-LOGS: gathering namespace scoped resources. "
-                    f"list of namespaces: {', '.join(namespaces)}")
+        LOGGER.info("K8S-LOGS: gathering namespace scoped resources. list of namespaces: %s",
+                    ', '.join(namespaces))
         os.makedirs(logdir / "namespaces", exist_ok=True)
-        namespaced_resource_types = self.kubectl(
-            "api-resources --namespaced=true --verbs=get,list -o name").stdout.split()
-        for resource_type in namespaced_resource_types:
-            LOGGER.info(f"K8S-LOGS: gathering '{resource_type}' resources")
+        for resource_type in self.kubectl(
+                "api-resources --namespaced=true --verbs=get,list -o name").stdout.split():
+            LOGGER.info("K8S-LOGS: gathering '%s' resources", resource_type)
             logfile = logdir / "namespaces" / f"{resource_type}.{output_format}"
             resources_wide = self.kubectl(
                 f"get {resource_type} -A -o wide 2>&1 | tee {logfile}").stdout
@@ -964,8 +957,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
                     # NOTE: move to the next namespace because such resources are absent here
                     continue
                 LOGGER.info(
-                    f"K8S-LOGS: gathering '{resource_type}' resources in the '{namespace}' "
-                    "namespace")
+                    "K8S-LOGS: gathering '%s' resources in the '%s' namespace",
+                    resource_type, namespace)
                 resource_dir = logdir / "namespaces" / namespace / resource_type
                 os.makedirs(resource_dir, exist_ok=True)
                 for res in resources_wide.split("\n"):
@@ -1009,14 +1002,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
     @property
     def minio_pod(self) -> Resource:
         for pod in KubernetesOps.list_pods(self, namespace=MINIO_NAMESPACE):
-            found = False
             for container in pod.spec.containers:
-                if any([portRec for portRec in container.ports
-                        if hasattr(portRec, 'container_port') and str(portRec.container_port) == '9000']):
-                    found = True
-                    break
-            if found:
-                return pod
+                for port in container.ports:
+                    if hasattr(port, 'container_port') and str(port.container_port) == '9000':
+                        return pod
         raise RuntimeError("Can't find minio pod")
 
     @property
@@ -1156,7 +1145,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             try:
                 return self._resolve_dns_to_ip(hostname)
             except Exception as exc:
-                raise RuntimeError("Failed to resolve %s due to the %s", hostname, exc) from None
+                raise RuntimeError(f"Failed to resolve {hostname} due to the {exc}") from None
 
         if not timeout:
             return resolve_ip()
@@ -1168,7 +1157,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
             return self._resolve_dns_to_ip_via_resolver(hostname)
         return self._resolve_dns_to_ip_directly(hostname)
 
-    def _resolve_dns_to_ip_directly(self, hostname: str) -> str:
+    def _resolve_dns_to_ip_directly(self, hostname: str) -> str:  # pylint: disable=no-self-use
         ip_address = socket.gethostbyname(hostname)
         if ip_address == '0.0.0.0':
             raise RuntimeError('Failed to resolve')
@@ -1204,7 +1193,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):
         pass
 
 
-class BasePodContainer(cluster.BaseNode):
+class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-methods
     parent_cluster: PodCluster
     expose_ports_service: Optional[PortExposeService] = None
     public_ip_via_service: bool = False
@@ -1327,7 +1316,7 @@ class BasePodContainer(cluster.BaseNode):
     def k8s_pod_uid(self) -> str:
         try:
             return str(self._pod.metadata.uid)
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             return ''
 
     @property
@@ -1467,7 +1456,7 @@ class BasePodContainer(cluster.BaseNode):
         return True
 
 
-class BaseScyllaPodContainer(BasePodContainer):
+class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-method
     parent_cluster: ScyllaPodCluster
 
     @contextlib.contextmanager
@@ -1520,7 +1509,7 @@ class BaseScyllaPodContainer(BasePodContainer):
         self.stop_scylla_server(verify_up=verify_up, verify_down=verify_down, timeout=timeout)
 
     @property
-    def node_name(self) -> str:
+    def node_name(self) -> str:  # pylint: disable=invalid-overridden-method
         return self._pod.spec.node_name
 
     def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=300, ignore_status=False):
@@ -1577,7 +1566,7 @@ class BaseScyllaPodContainer(BasePodContainer):
     def is_seed(self) -> bool:
         try:
             return 'scylla/seed' in self._svc.metadata.labels
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             return False
 
     @is_seed.setter
@@ -1763,7 +1752,7 @@ class PodCluster(cluster.BaseCluster):
             node.expose_ports()
 
 
-class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
+class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disable=too-many-public-methods
     NODE_PREPARE_FILE = None
     node_setup_requires_scylla_restart = False
     node_terminate_methods: List[str] = None
@@ -1797,7 +1786,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
     get_scylla_args = cluster_docker.ScyllaDockerCluster.get_scylla_args
 
     @cluster.wait_for_init_wrap
-    def wait_for_init(self, node_list=None, verbose=False, timeout=None, *_, **__):
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None, *_, **__):  # pylint: disable=signature-differs,keyword-arg-before-vararg
         node_list = node_list if node_list else self.nodes
         self.wait_for_nodes_up_and_normal(nodes=node_list)
         if self.scylla_yaml_update_required:
@@ -1842,17 +1831,16 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
             path = path[0:-1]
         if init:
             # You can't add to empty array, so you need to replace it
-            op = "replace"
-            path = path
+            operation = "replace"
             value = [element]
         else:
-            op = "add"
+            operation = "add"
             path = path + "/-"
             value = element
         self._k8s_scylla_cluster_api.patch(
             body=[
                 {
-                    "op": op,
+                    "op": operation,
                     "path": path,
                     "value": value
                 }
@@ -1867,7 +1855,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         try:
             return self.k8s_cluster.k8s_core_v1_api.read_namespaced_config_map(
                 name=SCYLLA_CONFIG_NAME, namespace=self.namespace)
-        except:
+        except:  # pylint: disable=bare-except
             return None
 
     @contextlib.contextmanager
@@ -1944,7 +1932,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         )
 
     @cached_property
-    def scylla_manager_cluster_name(self):
+    def scylla_manager_cluster_name(self):  # pylint: disable=invalid-overridden-method
         return f"{self.namespace}/{self.scylla_cluster_name}"
 
     @property
@@ -2031,13 +2019,13 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         self.add_scylla_cluster_value('/spec/datacenter/racks', new_rack)
 
     def _delete_k8s_rack(self, rack: int):
-        racks = self.get_scylla_cluster_plain_value(f'/spec/datacenter/racks/')
+        racks = self.get_scylla_cluster_plain_value('/spec/datacenter/racks/')
         if len(racks) == 1:
             return
         racks.pop(rack)
         self.replace_scylla_cluster_value('/spec/datacenter/racks', racks)
 
-    def terminate_node(self, node: BasePodContainer, scylla_shards=""):
+    def terminate_node(self, node: BasePodContainer, scylla_shards=""):  # pylint: disable=arguments-differ
         """Terminate node.
 
         :param node: 'node' object to be processed.
@@ -2090,7 +2078,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
         if not self.nodes:
             return True
 
-        @timeout(timeout=self.nodes[0].pod_replace_timeout * 2 * 60)
+        @timeout_wrapper(timeout=self.nodes[0].pod_replace_timeout * 2 * 60)
         def wait_till_any_node_get_new_image(nodes_with_old_image: list):
             for node in nodes_with_old_image.copy():
                 if node.image == new_image:
@@ -2126,11 +2114,11 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
     def _check_kubernetes_monitoring_health(self):
         self.log.debug('Check kubernetes monitoring health')
         try:
-            kubernetes_prometheus = PrometheusDBStats(
+            PrometheusDBStats(
                 host=self.k8s_cluster.k8s_monitoring_node_ip,
                 port=self.k8s_cluster.k8s_prometheus_external_port,
             )
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             ClusterHealthValidatorEvent.MonitoringStatus(
                 error=f'Failed to connect to kubernetes prometheus server at '
                       f'{self.k8s_cluster.k8s_monitoring_node_ip}:'
@@ -2174,7 +2162,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):
                 timeout=readiness_timeout * 60 + 10)
 
 
-class ManagerPodCluser(PodCluster):
+class ManagerPodCluser(PodCluster):  # pylint: disable=abstract-method
     def wait_for_pods_readiness(self, pods_to_wait: int, total_pods: int):
         time.sleep(self.get_nodes_readiness_delay)
         KubernetesOps.wait_for_pods_readiness(
