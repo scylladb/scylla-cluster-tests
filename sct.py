@@ -12,6 +12,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
+# pylint: disable=too-many-lines
 
 import os
 import sys
@@ -122,7 +123,7 @@ def cli():
 @click.option('--dry-run', is_flag=True, default=False, help='dry run')
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
 @click.pass_context
-def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend):
+def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend):  # pylint: disable=too-many-arguments,too-many-branches
     """Clean cloud resources.
 
     There are different options how to run clean up:
@@ -421,6 +422,82 @@ def output_conf(config_files, backend):
     sys.exit(0)
 
 
+<<<<<<< HEAD
+=======
+def _run_yaml_test(backend, full_path, env):
+    output = []
+    error = False
+    output.append(f'---- linting: {full_path} -----')
+    while os.environ:
+        os.environ.popitem()
+    for key, value in env.items():
+        os.environ[key] = value
+    os.environ['SCT_CLUSTER_BACKEND'] = backend
+    os.environ['SCT_CONFIG_FILES'] = full_path
+    logging.getLogger().handlers = []
+    logging.getLogger().disabled = True
+    config = SCTConfiguration()
+    try:
+        config.verify_configuration()
+        config.check_required_files()
+    except Exception as exc:  # pylint: disable=broad-except
+        output.append(''.join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
+        error = True
+    return error, output
+
+
+@cli.command(help="Test yaml in test-cases directory")
+@click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), default='aws')
+@click.option('-i', '--include', type=str, default='')
+@click.option('-e', '--exclude', type=str, default='')
+def lint_yamls(backend, exclude: str, include: str):  # pylint: disable=too-many-locals,too-many-branches
+    if not include:
+        raise ValueError('You did not provide include filters')
+
+    exclude_filters = []
+    for flt in exclude.split(','):
+        if not flt:
+            continue
+        try:
+            exclude_filters.append(re.compile(flt))
+        except Exception as exc:  # pylint: disable=broad-except
+            raise ValueError(f'Exclude filter "{flt}" compiling failed with: {exc}') from exc
+
+    include_filters = []
+    for flt in include.split(','):
+        if not flt:
+            continue
+        try:
+            include_filters.append(re.compile(flt))
+        except Exception as exc:  # pylint: disable=broad-except
+            raise ValueError(f'Include filter "{flt}" compiling failed with: {exc}') from exc
+
+    original_env = {**os.environ}
+    process_pool = ProcessPoolExecutor(max_workers=5)
+
+    features = []
+    for root, _, files in os.walk('./test-cases'):
+        for file in files:
+            full_path = os.path.join(root, file)
+            if not any((flt.search(file) or flt.search(full_path) for flt in include_filters)):
+                continue
+            if any((flt.search(file) or flt.search(full_path) for flt in exclude_filters)):
+                continue
+            features.append(process_pool.submit(_run_yaml_test, backend, full_path, original_env))
+
+    failed = False
+    for pp_feature in features:
+        error, pp_output = pp_feature.result()
+        if error:
+            failed = True
+            click.secho('\n'.join(pp_output), fg='red')
+        else:
+            click.secho('\n'.join(pp_output), fg='green')
+    print()
+    sys.exit(1 if failed else 0)
+
+
+>>>>>>> e2b351d0... fix(logcollector): pylint warning messages
 @cli.command(help="Check test configuration file")
 @click.argument('config_file', type=str, default='')
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), default='aws')
@@ -565,7 +642,8 @@ def search_builder(test_id):
 
 @investigate.command('show-events', help='Return content of file events_log/events for running job by test-id')
 @click.argument('test-id')
-@click.option("--follow", type=bool, required=False, is_flag=True, default=False, help="Follow job events log file (similar tail -f <file>)")
+@click.option("--follow", type=bool, required=False, is_flag=True, default=False,
+              help="Follow job events log file (similar tail -f <file>)")
 @click.option("--last-n", type=int, required=False, help="return last n lines from events.log file")
 @click.option("--save-to", type=str, required=False, help="Download events.log file and save to provided dir")
 def show_events(test_id: str, follow: bool = False, last_n: int = None, save_to: str = None):
@@ -574,11 +652,11 @@ def show_events(test_id: str, follow: bool = False, last_n: int = None, save_to:
     builders = get_builder_by_test_id(test_id)
 
     if not builders:
-        LOGGER.info(f"Builder was not found for provided test-id {test_id}")
+        LOGGER.info("Builder was not found for provided test-id %s", test_id)
 
     for builder in builders:
         LOGGER.info(
-            f"Applying action for events.log on builder {builder['builder']['name']}:{builder['builder']['public_ip']}...")
+            "Applying action for events.log on builder %s:%s...", builder['builder']['name'], builder['builder']['public_ip'])
         remoter = builder["builder"]["remoter"]
 
         if follow or last_n:
@@ -587,10 +665,10 @@ def show_events(test_id: str, follow: bool = False, last_n: int = None, save_to:
             try:
                 remoter.run(f"tail {options} {builder['path']}/events_log/events.log")
             except KeyboardInterrupt:
-                LOGGER.info(f'Monitoring events.log for test-id {test_id} stopped!')
+                LOGGER.info('Monitoring events.log for test-id %s stopped!', test_id)
         elif save_to:
             remoter.receive_files(f"{builder['path']}/events_log/events.log", save_to)
-            LOGGER.info(f"Events saved to {save_to}")
+            LOGGER.info("Events saved to %s", save_to)
         else:
             remoter.run(f"cat {builder['path']}/events_log/events.log")
     click.echo("Show events done.")
@@ -676,7 +754,7 @@ def cloud_usage_report(emails):
 def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
     add_file_logger()
 
-    from sdcm.logcollector import Collector
+    from sdcm.logcollector import Collector  # pylint: disable=import-outside-toplevel
     logging.getLogger("paramiko").setLevel(logging.CRITICAL)
     if backend is None:
         if os.environ.get('SCT_CLUSTER_BACKEND', None) is None:
@@ -709,12 +787,12 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 @click.option('--started-by', help='Default user that started the test')
 @click.option('--email-recipients', help="Send email to next recipients")
 @click.option('--logdir', help='Directory where to find testrun folder')
-def send_email(test_id=None, test_status=None, start_time=None, started_by=None, email_recipients=None, logdir=None):
+def send_email(test_id=None, test_status=None, start_time=None, started_by=None, email_recipients=None, logdir=None):  # pylint: disable=too-many-arguments,too-many-branches
     if started_by is None:
         started_by = get_username()
     add_file_logger()
 
-    from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter
+    from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter  # pylint: disable=import-outside-toplevel
 
     if not email_recipients:
         LOGGER.warning("No email recipients. Email will not be sent")
@@ -810,7 +888,7 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
 
     server.create_directory(name='artifacts-offline-install', display_name='SCT Artifacts Offline Install Tests')
     for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/artifacts-*.jenkinsfile'):
-        if any([f'-{i}.jenkinsfile' in jenkins_file for i in ['ami', 'amazon2', 'docker', 'gce-image']]):
+        if any((f'-{i}.jenkinsfile' in jenkins_file for i in ['ami', 'amazon2', 'docker', 'gce-image'])):
             continue
         server.create_pipeline_job(jenkins_file, 'artifacts-offline-install')
     for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/nonroot-offline-install/*.jenkinsfile'):
@@ -888,11 +966,11 @@ def create_runner_instance(cloud_provider, region, availability_zone, test_id, d
     remoter = sct_runner.get_remoter(host=instance.public_ip_address, connect_timeout=120)
     result = remoter.run("true", timeout=100, verbose=False, ignore_status=True)
     if result.exit_status == 0:
-        LOGGER.info(f"Successfully connected the SCT Runner. Public IP:  {instance.public_ip_address}")
+        LOGGER.info("Successfully connected the SCT Runner. Public IP: %s", instance.public_ip_address)
         with sct_runner_ip_path.open("w") as sct_runner_ip_file:
             sct_runner_ip_file.write(instance.public_ip_address)
     else:
-        LOGGER.error(f"Unable to SSH to {instance.public_ip_address}! Exiting...")
+        LOGGER.error("Unable to SSH to %s! Exiting...", instance.public_ip_address)
         sys.exit(1)
 
 
