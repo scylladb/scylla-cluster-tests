@@ -42,7 +42,7 @@ def str_or_list(value: Union[str, List[str]]) -> List[str]:
     if isinstance(value, str):
         try:
             return ast.literal_eval(value)
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             pass
         return [str(value), ]
 
@@ -1442,7 +1442,8 @@ class SCTConfiguration(dict):
                 try:
                     environment_vars[opt['name']] = opt['type'](os.environ[opt['env']])
                 except Exception as ex:
-                    raise ValueError("failed to parse {} from environment variable:\n\t\t{}".format(opt['env'], ex))
+                    raise ValueError(
+                        "failed to parse {} from environment variable".format(opt['env'])) from ex
         return environment_vars
 
     def _update_environment_variables(self, replace=False):
@@ -1455,7 +1456,7 @@ class SCTConfiguration(dict):
         get the value of test configuration parameter by the name
         """
 
-        ret_val = super(SCTConfiguration, self).get(key)
+        ret_val = super().get(key)
 
         if key in self.multi_region_params and isinstance(ret_val, list):
             ret_val = ' '.join(ret_val)
@@ -1466,7 +1467,7 @@ class SCTConfiguration(dict):
         try:
             opt['type'](self.get(opt['name']))
         except Exception as ex:
-            raise ValueError("failed to validate {}:\n\t\t{}".format(opt['name'], ex))
+            raise ValueError("failed to validate {}".format(opt['name'])) from ex
         choices = opt.get('choices')
         if choices:
             cur_val = self.get(opt['name'])
@@ -1548,7 +1549,7 @@ class SCTConfiguration(dict):
     def _check_unexpected_sct_variables(self):
         # check if there are SCT_* environment variable which aren't documented
         config_keys = {opt['env'] for opt in self.config_options}
-        env_keys = {o for o in os.environ.keys() if o.startswith('SCT_')}
+        env_keys = {o for o in os.environ if o.startswith('SCT_')}
         unknown_env_keys = env_keys.difference(config_keys)
         if unknown_env_keys:
             output = ["{}={}".format(key, os.environ.get(key)) for key in unknown_env_keys]
