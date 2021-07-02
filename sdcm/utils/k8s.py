@@ -36,7 +36,7 @@ from urllib3.util.retry import Retry
 
 from sdcm import sct_abs_path
 from sdcm.remote import LOCALRUNNER
-from sdcm.utils.decorators import timeout as timeout_decor, timeout, retrying
+from sdcm.utils.decorators import timeout as timeout_decor, retrying
 from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
 from sdcm.wait import wait_for
 
@@ -69,7 +69,7 @@ K8S_CPU_CONVERSION_MAP = {
 logging.getLogger("kubernetes.client.rest").setLevel(logging.INFO)
 
 
-class PortExposeService:
+class PortExposeService:  # pylint: disable=too-many-instance-attributes
     service_hostname: str = None
     service_ip: str = None
 
@@ -155,8 +155,8 @@ class PortExposeService:
         # Delete old service if it exists from predecessor node with same name
         self.delete()
 
-        LOGGER.debug(f"Trying to create '{self.name}' K8S service "
-                     f"in the '{self.namespace}' namespace")
+        LOGGER.debug("Trying to create '%s' K8S service in the '%s' namespace",
+                     self.name, self.namespace)
         self.core_v1_api.create_namespaced_service(namespace=self.namespace, body=self.service_definition)
         service_hostname = wait_for(self.get_service_hostname, timeout=300, throw_exc=False)
         if not service_hostname:
@@ -168,7 +168,8 @@ class PortExposeService:
             raise RuntimeError(error_message, self.name)
         service_ip = self.get_service_ip()
         if not service_ip:
-            raise RuntimeError("Failed to resolve hostname %s for load balancer %s", service_hostname, self.name)
+            raise RuntimeError(
+                f"Failed to resolve hostname {service_hostname} for load balancer {self.name}")
 
         self.service_hostname = service_hostname
         self.service_ip = service_ip
@@ -183,19 +184,20 @@ class PortExposeService:
 
     def delete(self):
         try:
-            LOGGER.debug(
-                f"Trying to delete '{self.name}' K8S service in the '{self.namespace}' namespace")
+            LOGGER.debug("Trying to delete '%s' K8S service in the '%s' namespace",
+                         self.name, self.namespace)
             self.core_v1_api.delete_namespaced_service(
                 name=self.name, namespace=self.namespace, async_req=False)
-        except k8s.client.exceptions.ApiException as e:
-            LOGGER.debug(f"Failed to delete '{self.name}' K8S service "
-                         f"in the '{self.namespace}' namespace, error:\n{str(e)}")
-            if getattr(e, 'body', None) is not None:
-                if isinstance(e.body, str):
-                    e.body = json.loads(e.body)
-                if e.body.get("reason") == "NotFound" or e.body.get("code") == 404:
-                    LOGGER.debug(f"Could not find '{self.name}' K8S service in the "
-                                 f"'{self.namespace}' namespace trying to delete it. Ignoring.")
+        except k8s.client.exceptions.ApiException as exc:
+            LOGGER.debug("Failed to delete '%s' K8S service in the '%s' namespace, error:\n%s",
+                         self.name, self.namespace, str(exc))
+            if getattr(exc, 'body', None) is not None:
+                if isinstance(exc.body, str):
+                    exc.body = json.loads(exc.body)
+                if exc.body.get("reason") == "NotFound" or exc.body.get("code") == 404:
+                    LOGGER.debug("Could not find '%s' K8S service in the '%s' namespace trying "
+                                 "to delete it. Ignoring.",
+                                 self.name, self.namespace)
                     return
             raise
 
@@ -207,13 +209,14 @@ class PortExposeService:
             namespace=self.namespace,
             field_selector=f"metadata.name={self.name}").items
         if not services:
-            raise RuntimeError(f"No service with name %s found under namespace %s", self.name, self.namespace)
+            raise RuntimeError(
+                f"No service with name {self.name} found under namespace {self.namespace}")
         return services[0]
 
     def get_service_hostname(self) -> str:
         try:
             return self.service.status.load_balancer.ingress[0].hostname
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             return ''
 
     def get_service_ip(self):
@@ -225,7 +228,7 @@ class PortExposeService:
 class ApiLimiterClient(k8s.client.ApiClient):
     _api_rate_limiter: 'ApiCallRateLimiter' = None
 
-    def call_api(self, *args, **kwargs):
+    def call_api(self, *args, **kwargs):  # pylint: disable=signature-differs
         if self._api_rate_limiter:
             self._api_rate_limiter.wait()
         return super().call_api(*args, **kwargs)
@@ -237,7 +240,7 @@ class ApiLimiterClient(k8s.client.ApiClient):
 class ApiLimiterRetry(Retry):
     _api_rate_limiter: 'ApiCallRateLimiter' = None
 
-    def sleep(self, *args, **kwargs):
+    def sleep(self, *args, **kwargs):  # pylint: disable=signature-differs
         super().sleep(*args, **kwargs)
         if self._api_rate_limiter:
             self._api_rate_limiter.wait()
@@ -289,7 +292,7 @@ class ApiCallRateLimiter(threading.Thread):
             LOGGER.error("k8s API call rate limiter queue size limit has been reached")
             raise queue.Full
 
-    def _api_test(self, kluster):
+    def _api_test(self, kluster):  # pylint: disable=no-self-use
         logging.getLogger('urllib3.connectionpool').disabled = True
         try:
             KubernetesOps.core_v1_api(
@@ -317,13 +320,13 @@ class ApiCallRateLimiter(threading.Thread):
         )
 
     def check_if_api_stable(self, kluster, num_requests=20):
-        for n in range(num_requests):
+        for _ in range(num_requests):
             self._api_test(kluster)
         return True
 
     def check_if_api_not_operational(self, kluster, num_requests=20):
         passed = 0
-        for n in range(num_requests):
+        for _ in range(num_requests):
             try:
                 self._api_test(kluster)
                 passed += 1
@@ -373,7 +376,7 @@ class CordonNodes:
         self.kubectl(f"un{self.cordon_cmd}")
 
 
-class KubernetesOps:
+class KubernetesOps:  # pylint: disable=too-many-public-methods
 
     @staticmethod
     def create_k8s_configuration(kluster) -> k8s.client.Configuration:
@@ -470,7 +473,8 @@ class KubernetesOps:
         return remoter.run(final_command, timeout=timeout, ignore_status=ignore_status, verbose=verbose)
 
     @classmethod
-    def apply_file(cls, kluster, config_path, namespace=None, timeout=KUBECTL_TIMEOUT, environ=None, envsubst=True,
+    def apply_file(cls, kluster, config_path, namespace=None,  # pylint: disable=too-many-locals
+                   timeout=KUBECTL_TIMEOUT, environ=None, envsubst=True,
                    modifiers: List[Callable] = None):
         if environ:
             environ_str = (' '.join([f'{name}="{value}"' for name, value in environ.items()])) + ' '
@@ -482,8 +486,8 @@ class KubernetesOps:
             if envsubst:
                 data = LOCALRUNNER.run(f'{environ_str}envsubst<{config_path}', verbose=False).stdout
             else:
-                with open(config_path, 'r') as file:
-                    data = file.read()
+                with open(config_path, 'r') as config_file_stream:
+                    data = config_file_stream.read()
             file_content = yaml.load_all(data)
 
             for doc in file_content:
@@ -497,12 +501,11 @@ class KubernetesOps:
             @retrying(n=0, sleep_time=5, timeout=timeout, allowed_exceptions=RuntimeError)
             def run_kubectl():
                 try:
-                    cls.kubectl(kluster, "apply", "-f",  temp_file.name, namespace=namespace, timeout=timeout)
+                    cls.kubectl(kluster, "apply", "-f", temp_file.name, namespace=namespace, timeout=timeout)
                 except invoke.exceptions.UnexpectedExit as exc:
                     if 'did you specify the right host or port' in exc.result.stderr:
                         raise RuntimeError(str(exc)) from None
-                    else:
-                        raise
+                    raise
 
             run_kubectl()
 
@@ -545,14 +548,14 @@ class KubernetesOps:
             config['config']['cmd-args'] = ' '.join(args)
             config['config']['cmd-path'] = cmd
         else:
-            raise ValueError('Unknown auth-type %s', auth_type)
+            raise ValueError(f'Unknown auth-type {auth_type}')
 
     @staticmethod
     def wait_for_pods_readiness(kluster, total_pods: Union[int, Callable], readiness_timeout: float, namespace: str,
                                 sleep: int = 10):
-        @timeout(message=f"Wait for {total_pods} pod(s) from {namespace} namespace to become ready...",
-                 timeout=readiness_timeout * 60,
-                 sleep_time=sleep)
+        @timeout_decor(message=f"Wait for {total_pods} pod(s) from {namespace} namespace to become ready...",
+                       timeout=readiness_timeout * 60,
+                       sleep_time=sleep)
         def wait_cluster_is_ready():
             # To make it more informative in worst case scenario made it repeat 5 times, by readiness_timeout // 5
             result = kluster.kubectl(
@@ -584,13 +587,14 @@ class KubernetesOps:
         auth_type, user_config = KubernetesOps.get_kubectl_auth_config_for_first_user(data)
 
         if user_config is None:
-            raise RuntimeError(f"Unable to find user configuration in ~/.kube/config")
+            raise RuntimeError("Unable to find user configuration in ~/.kube/config")
         KubernetesOps.patch_kubectl_auth_config(user_config, auth_type, "cat", [static_token_path])
 
         with open(kube_config_path, "w") as kube_config:
             yaml.safe_dump(data, kube_config)
 
-        LOGGER.debug(f'Patched kubectl config at {kube_config_path} with static kubectl token from {static_token_path}')
+        LOGGER.debug('Patched kubectl config at %s with static kubectl token from %s',
+                     kube_config_path, static_token_path)
 
     @classmethod
     def watch_events(cls, k8s_core_v1_api: k8s.client.CoreV1Api, name: str = None, namespace: str = None,
@@ -642,7 +646,7 @@ class HelmContainerMixin:
         cmd.extend(command)
 
         if values:
-            helm_values_file = NamedTemporaryFile(mode='tw')
+            helm_values_file = NamedTemporaryFile(mode='tw')  # pylint: disable=consider-using-with
             helm_values_file.write(yaml.safe_dump(values.as_dict()))
             helm_values_file.flush()
             cmd.extend(("-f", helm_values_file.name))
@@ -739,7 +743,7 @@ def convert_memory_value_from_k8s_to_units(memory: str) -> float:
         units = match[1].lower().rstrip('ib')
     convertor = K8S_MEM_CONVERSION_MAP.get(units)
     if convertor is None:
-        raise ValueError('Unknown memory units %s', units)
+        raise ValueError(f'Unknown memory units {units}')
     return float(convertor(value))
 
 
@@ -753,7 +757,7 @@ def convert_cpu_value_from_k8s_to_units(cpu: str) -> float:
         units = match[1].lower()
     convertor = K8S_CPU_CONVERSION_MAP.get(units)
     if convertor is None:
-        raise ValueError('Unknown cpu units %s', units)
+        raise ValueError(f'Unknown cpu units {units}')
     return float(convertor(value))
 
 
@@ -781,16 +785,16 @@ def get_helm_pool_affinity_values(pool_label_name, pool_name):
 
 
 def get_pool_affinity_modifiers(pool_label_name, pool_name):
-    def add_statefulset_or_daemonset_pool_affinity(x):
-        if x['kind'] in ['StatefulSet', 'DaemonSet']:
-            x['spec']['template']['spec']['affinity'] = add_pool_node_affinity(
-                x['spec']['template']['spec'].get('affinity', {}),
+    def add_statefulset_or_daemonset_pool_affinity(obj):
+        if obj['kind'] in ('StatefulSet', 'DaemonSet'):
+            obj['spec']['template']['spec']['affinity'] = add_pool_node_affinity(
+                obj['spec']['template']['spec'].get('affinity', {}),
                 pool_label_name,
                 pool_name)
 
-    def add_scylla_cluster_pool_affinity(x):
-        if x['kind'] == 'ScyllaCluster':
-            for rack in x['spec']['datacenter']['racks']:
+    def add_scylla_cluster_pool_affinity(obj):
+        if obj['kind'] == 'ScyllaCluster':
+            for rack in obj['spec']['datacenter']['racks']:
                 rack['placement'] = add_pool_node_affinity(
                     rack.get('placement', {}),
                     pool_label_name,
@@ -801,7 +805,7 @@ def get_pool_affinity_modifiers(pool_label_name, pool_name):
 
 class HelmValues:
     def __init__(self, *args, **kwargs):
-        if len(args) == 1 and type(args[0]) is dict:
+        if len(args) == 1 and isinstance(args[0], dict):
             self._data = args[0]
         else:
             self._data = dict(**kwargs)
@@ -816,7 +820,7 @@ class HelmValues:
             if name.isalnum() and isinstance(current, (list, tuple, set)):
                 try:
                     current = current[int(name)]
-                except Exception:
+                except Exception:  # pylint: disable=broad-except
                     current = None
                 continue
             current = current.get(name, None)
@@ -831,11 +835,11 @@ class HelmValues:
         return {keys[0]: value}
 
     def _merge_dicts(self, destination_dict, patch_dict):
-        for k, v in patch_dict.items():
-            if isinstance(v, dict):
-                destination_dict[k] = self._merge_dicts(destination_dict.get(k, {}), v)
+        for key, value in patch_dict.items():
+            if isinstance(value, dict):
+                destination_dict[key] = self._merge_dicts(destination_dict.get(key, {}), value)
             else:
-                destination_dict[k] = v
+                destination_dict[key] = value
         return destination_dict
 
     def set(self, path, value):
@@ -856,7 +860,7 @@ class HelmValues:
             last = int(last[1:-1])
         try:
             del parent[last]
-        except:
+        except:  # pylint: disable=bare-except
             pass
 
     def as_dict(self):
