@@ -543,7 +543,7 @@ FAQ
 Run a functional test
 ====
 
-Functional tests are stored in ``function_tests/`` directory
+Functional tests are stored in ``functional_tests/`` directory
 You can use any configuration file for them, but in general you need ``test-cases/scylla-operator/functional.yaml``
 You can use any backend, but for scylla_operator tests it needs to be any kubernetes backend, such as ``k8s-eks, k8s-gke, k8s-local-minikube, k8s-local-kind``
 
@@ -557,11 +557,11 @@ Running in hydra
 
 on EKS::
 
-    hydra "run-pytest function_tests.scylla_operator --backend k8s-eks --config test-cases/scylla-operator/functional.yaml" --logdir"`pwd`"
+    hydra "run-pytest functional_tests/scylla_operator --backend k8s-eks --config test-cases/scylla-operator/functional.yaml --logdir='`pwd`'"
 
 on Local kind cluster::
 
-    hydra "run-pytest function_tests.scylla_operator --backend k8s-local-kind --config test-cases/scylla-operator/functional.yaml"  --logdir"`pwd`"
+    hydra "run-pytest functional_tests/scylla_operator --backend k8s-local-kind --config test-cases/scylla-operator/functional.yaml  --logdir='`pwd`'"
 
 Running via sct.py
 ----------
@@ -570,11 +570,11 @@ The benefit of running in this mode, is that you can reuse your local kind/minik
 
 on EKS::
 
-    sct.py run-pytest function_tests.scylla_operator --backend k8s-eks --config test-cases/scylla-operator/functional.yaml" --logdir"`pwd`"
+    sct.py run-pytest functional_tests/scylla_operator --backend k8s-eks --config test-cases/scylla-operator/functional.yaml --logdir="`pwd`"
 
 on Local kind cluster::
 
-    sct.py run-pytest function_tests.scylla_operator --backend k8s-local-kind --config test-cases/scylla-operator/functional.yaml" --logdir"`pwd`"
+    sct.py run-pytest functional_tests/scylla_operator --backend k8s-local-kind --config test-cases/scylla-operator/functional.yaml --logdir="`pwd`"
 
 Running via python
 ----------
