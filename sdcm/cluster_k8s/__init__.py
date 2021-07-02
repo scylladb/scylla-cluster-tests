@@ -36,6 +36,7 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 from textwrap import dedent
 from threading import RLock
 from typing import Optional, Union, List, Dict, Any, ContextManager, Type, Tuple, Callable
+from packaging import version
 
 import yaml
 import kubernetes as k8s
@@ -400,6 +401,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
         self.start_cert_manager_journal_thread()
 
+    def get_latest_chart_version(self, local_chart_path: str) -> str:
+        all_versions = yaml.safe_load(self.helm(
+            f"search repo {local_chart_path} --devel --versions -o yaml"))
+        assert isinstance(all_versions, list), f"Expected list of data, got: {type(all_versions)}"
+        return str(max((version.parse(chart_data["version"]) for chart_data in all_versions)))
+
     @cached_property
     def _scylla_operator_chart_version(self):
         LOGGER.debug(self.helm(
@@ -407,17 +414,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
         # NOTE: 'scylla-operator' and 'scylla-manager' chart versions are always the same.
         #       So, we can reuse one for another.
-        chart_version = self.params.get(
-            "k8s_scylla_operator_chart_version").strip().lower()
+        chart_version = self.params.get("k8s_scylla_operator_chart_version").strip().lower()
         if chart_version in ("", "latest"):
-            latest_version_raw = self.helm(
-                "search repo scylla-operator/scylla-operator --devel -o yaml")
-            latest_version = yaml.safe_load(latest_version_raw)
-            assert isinstance(
-                latest_version, list), f"Expected list of data, got: {type(latest_version)}"
-            assert len(latest_version) == 1, "Expected only one element in the list of versions"
-            assert "version" in latest_version[0], "Expected presence of 'version' key"
-            chart_version = latest_version[0]["version"].strip()
+            chart_version = self.get_latest_chart_version("scylla-operator/scylla-operator")
             LOGGER.info(
                 "Using automatically found following latest scylla-operator chart version: %s",
                 chart_version)
