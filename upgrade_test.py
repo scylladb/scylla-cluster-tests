@@ -152,7 +152,10 @@ class UpgradeTest(FillDatabaseData):
             else:
                 node.remoter.run('sudo cp /etc/apt/sources.list.d/scylla.list ~/scylla.list-backup')
                 node.remoter.run(
-                    r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles /var/lib/dpkg/info/scylla-*conf.conffiles /var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do sudo cp -v $conf $conf.backup; done')
+                    r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles '
+                    r'/var/lib/dpkg/info/scylla-*conf.conffiles '
+                    r'/var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do '
+                    r'sudo cp -v $conf $conf.backup; done')
             assert new_scylla_repo.startswith('http')
             node.download_scylla_repo(new_scylla_repo)
             # flush all memtables to SSTables
@@ -185,7 +188,9 @@ class UpgradeTest(FillDatabaseData):
                     node.remoter.run(
                         r'sudo apt-get install {}{} -y '
                         r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '.format(scylla_pkg, ver_suffix))
-                    node.remoter.run(r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles /var/lib/dpkg/info/scylla-*conf.conffiles /var/lib/dpkg/info/scylla-*jmx.conffiles'
+                    node.remoter.run(r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles '
+                                     r'/var/lib/dpkg/info/scylla-*conf.conffiles '
+                                     r'/var/lib/dpkg/info/scylla-*jmx.conffiles'
                                      r' | grep -v init ); do sudo cp -v $conf $conf.backup-2.1; done')
             else:
                 if node.is_rhel_like():
@@ -256,7 +261,10 @@ class UpgradeTest(FillDatabaseData):
                     r'sudo apt-get install %s\* -y '
                     r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" ' % node.scylla_pkg())
                 node.remoter.run(
-                    r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles /var/lib/dpkg/info/scylla-*conf.conffiles /var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do sudo cp -v $conf.backup $conf; done')
+                    r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles '
+                    r'/var/lib/dpkg/info/scylla-*conf.conffiles '
+                    r'/var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do '
+                    r'sudo cp -v $conf.backup $conf; done')
 
             node.remoter.run('sudo systemctl daemon-reload')
 
@@ -273,14 +281,22 @@ class UpgradeTest(FillDatabaseData):
                     r'for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ); do sudo cp -v $conf.autobackup $conf; done')
             else:
                 node.remoter.run(
-                    r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles /var/lib/dpkg/info/scylla-*conf.conffiles /var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do sudo cp -v $conf.backup $conf; done')
+                    r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles '
+                    r'/var/lib/dpkg/info/scylla-*conf.conffiles '
+                    r'/var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do '
+                    r'sudo cp -v $conf.backup $conf; done')
 
             node.remoter.run('sudo systemctl daemon-reload')
 
         node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
         result = node.remoter.run('sudo find /var/lib/scylla/data/system')
         snapshot_name = re.findall(r"system/peers-[a-z0-9]+/snapshots/(\d+)\n", result.stdout)
-        # cmd = r"DIR='/var/lib/scylla/data/system'; for i in `sudo ls $DIR`;do sudo test -e $DIR/$i/snapshots/%s && sudo find $DIR/$i/snapshots/%s -type f -exec sudo /bin/cp {} $DIR/$i/ \;; done" % (snapshot_name[0], snapshot_name[0])
+        # cmd = (
+        #     r"DIR='/var/lib/scylla/data/system'; "
+        #     r"for i in `sudo ls $DIR`; do "
+        #     r"    sudo test -e $DIR/$i/snapshots/%s && sudo find $DIR/$i/snapshots/%s -type f -exec sudo /bin/cp {} $DIR/$i/ \;; "
+        #     r"done" % (snapshot_name[0], snapshot_name[0]))
+
         # recover the system tables
         if self.params.get('recover_system_tables'):
             node.remoter.send_files('./data_dir/recover_system_tables.sh', '/tmp/')
@@ -361,8 +377,9 @@ class UpgradeTest(FillDatabaseData):
                     1) for f in all_sstable_files if sstable_version_regex.search(f)}
 
                 assert len(sstable_versions) == 1, "expected all table format to be the same found {}".format(sstable_versions)
-                assert list(sstable_versions)[0] == self.expected_sstable_format_version, "expected to format version to be '{}', found '{}'".format(
-                    self.expected_sstable_format_version, list(sstable_versions)[0])
+                assert list(sstable_versions)[0] == self.expected_sstable_format_version, (
+                    "expected to format version to be '{}', found '{}'".format(
+                        self.expected_sstable_format_version, list(sstable_versions)[0]))
             except Exception as ex:  # pylint: disable=broad-except
                 self.log.warning(ex)
                 return False
@@ -695,8 +712,8 @@ class UpgradeTest(FillDatabaseData):
         workload_prioritization_error_num = self.count_log_errors(search_pattern='workload prioritization.*read_failure_exception',
                                                                   step=step, search_for_idx_token_error=False)
 
-        self.log.info(f'schema_load_error_num: {schema_load_error_num}; '
-                      f'workload_prioritization_error_num: {workload_prioritization_error_num}')
+        self.log.info('schema_load_error_num: %s; workload_prioritization_error_num: %s',
+                      schema_load_error_num, workload_prioritization_error_num)
 
         # Issue #https://github.com/scylladb/scylla-enterprise/issues/1391
         # By Eliran's comment: For 'Failed to load schema version' error which is expected and non offensive is
@@ -754,35 +771,35 @@ class UpgradeTest(FillDatabaseData):
             for i in range(num_nodes_to_rollback):
                 InfoEvent(message=f"Step{i + 1} - Upgrade node{i + 1}").publish()
                 self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[i]]
-                self.log.info(f'Upgrade Node {self.db_cluster.node_to_upgrade.name} begins')
+                self.log.info('Upgrade Node %s begins', self.db_cluster.node_to_upgrade.name)
                 with ignore_ycsb_connection_refused():
                     self.upgrade_node(self.db_cluster.node_to_upgrade, upgrade_sstables=upgrade_sstables)
-                self.log.info(f'Upgrade Node {self.db_cluster.node_to_upgrade.name} ended')
+                self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
                 self.db_cluster.node_to_upgrade.check_node_health()
                 upgraded_nodes.append(self.db_cluster.node_to_upgrade)
 
             # Rollback all nodes that where upgraded (not necessarily in the same order)
             random.shuffle(upgraded_nodes)
-            self.log.info(f'Upgraded Nodes to be rollback are: {upgraded_nodes}')
+            self.log.info('Upgraded Nodes to be rollback are: %s', upgraded_nodes)
             for node in upgraded_nodes:
                 InfoEvent(
                     message=f"Step{num_nodes_to_rollback + upgraded_nodes.index(node) + 1} - "
                             f"Rollback node{upgraded_nodes.index(node) + 1}"
                 ).publish()
-                self.log.info(f'Rollback Node {node} begin')
+                self.log.info('Rollback Node %s begin', node)
                 with ignore_ycsb_connection_refused():
                     self.rollback_node(node, upgrade_sstables=upgrade_sstables)
-                self.log.info(f'Rollback Node {node} ended')
+                self.log.info('Rollback Node %s ended', node)
                 node.check_node_health()
 
         # Upgrade all nodes
         for i in range(nodes_num):
             InfoEvent(message=f"Step{num_nodes_to_rollback * 2 + i + 1} - Upgrade node{i + 1}").publish()
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[i]]
-            self.log.info(f'Upgrade Node {self.db_cluster.node_to_upgrade.name} begins')
+            self.log.info('Upgrade Node %s begins', self.db_cluster.node_to_upgrade.name)
             with ignore_ycsb_connection_refused():
                 self.upgrade_node(self.db_cluster.node_to_upgrade, upgrade_sstables=upgrade_sstables)
-            self.log.info(f'Upgrade Node {self.db_cluster.node_to_upgrade.name} ended')
+            self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
             self.db_cluster.node_to_upgrade.check_node_health()
             upgraded_nodes.append(self.db_cluster.node_to_upgrade)
 
@@ -822,7 +839,7 @@ class UpgradeTest(FillDatabaseData):
                 stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))
             )
         )
-        self.log.info(f'Step5 - Upgrade cluster to {target_upgrade_version}')
+        self.log.info('Step5 - Upgrade cluster to %s', target_upgrade_version)
         self.db_cluster.upgrade_scylla_cluster(target_upgrade_version)
         self.log.info('Step6 - Wait till cluster got upgraded')
         self.wait_till_scylla_is_upgraded_on_all_nodes(target_upgrade_version)
@@ -879,8 +896,8 @@ class UpgradeTest(FillDatabaseData):
             step='AFTER UPGRADE',
             search_for_idx_token_error=False
         )
-        self.log.info(f'schema_load_error_num: {schema_load_error_num}; '
-                      f'workload_prioritization_error_num: {workload_prioritization_error_num}')
+        self.log.info('schema_load_error_num: %s; workload_prioritization_error_num: %s',
+                      schema_load_error_num, workload_prioritization_error_num)
 
         # Issue #https://github.com/scylladb/scylla-enterprise/issues/1391
         # By Eliran's comment: For 'Failed to load schema version' error which is expected and non offensive is
