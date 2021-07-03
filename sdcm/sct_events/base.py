@@ -23,7 +23,7 @@ import logging
 from enum import Enum
 from types import new_class
 from typing import \
-    Any, Optional, Type, Dict, List, Tuple, Callable, Generic, TypeVar, Protocol, runtime_checkable, cast
+    Any, Optional, Type, Dict, List, Tuple, Callable, Generic, TypeVar, Protocol, runtime_checkable, Union
 from keyword import iskeyword
 from weakref import proxy as weakproxy
 from datetime import datetime
@@ -40,6 +40,70 @@ from sdcm.sct_events.events_processes import EventsProcessesRegistry
 DEFAULT_SEVERITIES = sct_abs_path("defaults/severities.yaml")
 
 LOGGER = logging.getLogger(__name__)
+
+
+class Singleton(type):
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+
+class ContinuousEventRegistryError(BaseException):
+    pass
+
+
+class ContinuousEventsRegistry(metaclass=Singleton):
+    def __init__(self):
+        self._continuous_events: List[ContinuousEvent] = []
+
+    @property
+    def continuous_events(self):
+        return self._continuous_events
+
+    def add_event(self, event: ContinuousEvent):
+        if not issubclass(type(event), ContinuousEvent):
+            raise ContinuousEventRegistryError(f"Event: {event} is not a ContinuousEvent")
+
+        self.continuous_events.append(event)
+
+    def get_event(self):
+        if len(self.continuous_events):
+            return self.continuous_events[0]
+
+    def get_event_by_id(self, event_id: Union[uuid.UUID, str]) -> Optional[ContinuousEvent]:
+        found_event = [event for event in self.continuous_events if event.event_id == event_id]
+        if not found_event:
+            LOGGER.info(f"Couldn't find continuous event with id: {event_id} in registry.")
+            return
+
+        return found_event[0]
+
+    def get_events_by_type(self, event_type: Type[ContinuousEvent]) -> Optional[List[ContinuousEvent]]:
+        found_events = [event for event in self.continuous_events if isinstance(event, event_type)]
+        if not found_events:
+            LOGGER.info(f"No continuous events of type: {event_type} found in registry.")
+            return
+
+        return found_events
+
+    def get_events_by_period(self,
+                             period_type: EventPeriod) -> Optional[List[ContinuousEvent]]:
+        found_events = [event for event in self.continuous_events if event.period_type == period_type.value]
+        if not found_events:
+            LOGGER.info(f"No continuous events with period type: {period_type} found in registry.")
+            return
+
+        return found_events
+
+    @staticmethod
+    def _list_emptiness_check(event_registry: List[ContinuousEvent]):
+        if not event_registry:
+            LOGGER.debug(f"No events in the event registry.")
+
+        return bool(event_registry)
 
 
 class SctEventTypesRegistry(Dict[str, Type["SctEvent"]]):
@@ -568,4 +632,5 @@ __all__ = ("SctEvent", "SctEventProtocol", "SystemEvent", "BaseFilter",
            "LogEvent", "LogEventProtocol", "T_log_event",
            "BaseStressEvent", "StressEvent", "StressEventProtocol",
            "add_severity_limit_rules", "max_severity", "print_critical_events",
-           "ContinuousEvent", "InformationalEvent")
+           "ContinuousEvent", "InformationalEvent", "ContinuousEventsRegistry",
+           "ContinuousEventRegistryError", "EventPeriod")
