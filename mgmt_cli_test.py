@@ -35,6 +35,7 @@ from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.group_common_events import ignore_no_space_errors
+from sdcm.keystore import KeyStore
 
 
 class BackupFunctionsMixIn:
@@ -424,6 +425,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self.test_backup_location_with_path()
         with self.subTest('Test Backup Rate Limit'):
             self.test_backup_rate_limit()
+        with self.subTest('Test Backup Purge Removes Orphans Files'):
+            self.test_backup_purge_removes_orphan_files()
         with self.subTest('Test Backup end of space'):  # Preferably at the end
             self.test_enospc_during_backup()
 
@@ -500,6 +503,81 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         # TODO: verify that the rate limit is as set in the cmd
         self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
         self.log.info('finishing test_backup_rate_limit')
+
+    @staticmethod
+    def _get_all_snapshot_files_s3(cluster_id, bucket_name, region_name):
+        file_set = set()
+        s3_client = boto3.client('s3', region_name=region_name)
+        paginator = s3_client.get_paginator('list_objects')
+        pages = paginator.paginate(Bucket=bucket_name, Prefix=f'backup/sst/cluster/{cluster_id}')
+        for page in pages:
+            # No Contents key means that no snapshot file of the cluster exist,
+            # probably no backup ran before this function
+            if "Contents" in page:
+                content_list = page["Contents"]
+                file_set.update([item["Key"] for item in content_list])
+        return file_set
+
+    @staticmethod
+    def _get_all_snapshot_files_gce(cluster_id, bucket_name):
+        file_set = set()
+        gcp_credentials = KeyStore().get_gcp_credentials()
+        gce_driver = libcloud.storage.providers.get_driver(libcloud.storage.types.Provider.GOOGLE_STORAGE)
+        driver = gce_driver(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
+                            gcp_credentials["private_key"],
+                            project=gcp_credentials["project_id"])
+        container = driver.get_container(container_name=bucket_name)
+        dir_listing = driver.list_container_objects(container, ex_prefix=f'backup/sst/cluster/{cluster_id}')
+        for listing_object in dir_listing:
+            file_set.add(listing_object.name)
+        # Unlike S3, if no files match the prefix, no error will occur
+        return file_set
+
+    def _get_all_snapshot_files(self, cluster_id):
+        bucket_name = self.params.get('backup_bucket_location').split()[0]
+        if self.params.get('cluster_backend') == 'aws':
+            region_name = self.params.get("backup_bucket_region") or self.params.get("region_name").split()[0]
+            return self._get_all_snapshot_files_s3(cluster_id=cluster_id, bucket_name=bucket_name,
+                                                   region_name=region_name)
+        elif self.params.get('cluster_backend') == 'gce':
+            return self._get_all_snapshot_files_gce(cluster_id=cluster_id, bucket_name=bucket_name)
+        else:
+            raise ValueError(f'"{self.params.get("cluster_backend")}" not supported')
+
+    def test_backup_purge_removes_orphan_files(self):
+        """
+        The test stops a backup task mid-upload, so that orphan files will remain in the destination bucket.
+        Afterwards, the test reruns the backup task from scratch (with the --no-continue flag, so it's practically
+        a new task) and after the task concludes (successfully) the test makes sure the manager has deleted the
+        previously mentioned orphan files from the bucket.
+        """
+        self.log.info('starting test_backup_purge_removes_orphan_files')
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
+                                        auth_token=self.monitors.mgmt_auth_token)
+        self.generate_load_and_wait_for_results()
+        snapshot_file_list_pre_test = self._get_all_snapshot_files(cluster_id=mgr_cluster.id)
+
+        backup_task = mgr_cluster.create_backup_task(location_list=self.locations, retention=1)
+        backup_task.wait_for_uploading_stage(step=5)
+        backup_task.stop()
+        snapshot_file_list_post_task_stopping = self._get_all_snapshot_files(cluster_id=mgr_cluster.id)
+        orphan_files_pre_rerun = snapshot_file_list_post_task_stopping.difference(snapshot_file_list_pre_test)
+        assert orphan_files_pre_rerun, "SCT could not create orphan snapshots by stopping a backup task"
+
+        # So that the files' names will be different form the previous ones,
+        # and they won't simply replace the previous files in the bucket
+        for node in self.db_cluster.nodes:
+            node.run_nodetool("compact")
+
+        backup_task.start(continue_task=False)
+        backup_task.wait_and_get_final_status(step=10)
+        snapshot_file_list_post_purge = self._get_all_snapshot_files(cluster_id=mgr_cluster.id)
+        orphan_files_post_rerun = snapshot_file_list_post_purge.intersection(orphan_files_pre_rerun)
+        assert not orphan_files_post_rerun, "orphan files were not deleted!"
+
+        self.log.info('finishing test_backup_purge_removes_orphan_files')
 
     def test_client_encryption(self):
         self.log.info('starting test_client_encryption')
