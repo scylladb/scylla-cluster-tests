@@ -13,13 +13,16 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
-import os
-import re
-import time
 from random import randint
 from pathlib import Path
 from functools import cached_property
+import os
+import re
+import time
+import boto3
 
+import libcloud.storage.types
+import libcloud.storage.providers
 from invoke import exceptions
 from pkg_resources import parse_version
 
@@ -95,7 +98,7 @@ class BackupFunctionsMixIn:
         source = f"{source.replace('azure://', self.backup_azure_blob_service)}{self.backup_azure_blob_sas}"
         node.remoter.run(f"azcopy copy '{source}' '{destination}'")
 
-    def restore_backup(self, mgr_cluster, snapshot_tag, keyspace_and_table_list):
+    def restore_backup(self, mgr_cluster, snapshot_tag, keyspace_and_table_list):  # pylint: disable=too-many-locals
         backup_bucket_backend = self.params.get("backup_bucket_backend")
         if backup_bucket_backend == "s3":
             install_dependencies = self.install_awscli_dependencies
@@ -312,9 +315,10 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             dcs_names.add(data_center)
         return dcs_names
 
-    def _create_keyspace_and_basic_table(self, keyspace_name, strategy, table_name="example_table", rf=1):
+    def _create_keyspace_and_basic_table(self, keyspace_name, strategy, table_name="example_table",
+                                         replication_factor=1):
         self.log.info("creating keyspace {}".format(keyspace_name))
-        keyspace_existence = self.create_keyspace(keyspace_name, rf, strategy)
+        keyspace_existence = self.create_keyspace(keyspace_name, replication_factor, strategy)
         assert keyspace_existence, "keyspace creation failed"
         # Keyspaces without tables won't appear in the repair, so the must have one
         self.log.info("creating the table {} in the keyspace {}".format(table_name, keyspace_name))
@@ -361,7 +365,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         InfoEvent(message="Sleep ended - Starting tests").publish()
         self._create_repair_and_alter_it_with_repair_control()
         load_results = stress_read_thread.get_results()
-        self.log.info(f'load={load_results}')
+        self.log.info('load={}'.format(load_results))
 
     def _create_repair_and_alter_it_with_repair_control(self):
         keyspace_to_be_repaired = "keyspace2"
@@ -406,7 +410,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         with self.subTest('test_intensity_and_parallel'):
             self.test_intensity_and_parallel(fault_multiple_nodes=fault_multiple_nodes)
         load_results = stress_read_thread.get_results()
-        self.log.info(f'load={load_results}')
+        self.log.info('load={}'.format(load_results))
 
     def get_email_data(self):
         self.log.info("Prepare data for email")
@@ -468,7 +472,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                                         auth_token=self.monitors.mgmt_auth_token)
         tables = self.create_ks_and_tables(10, 100)
         self.generate_load_and_wait_for_results()
-        self.log.debug(f'tables list = {tables}')
+        self.log.debug('tables list = {}'.format(tables))
         # TODO: insert data to those tables
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations)
         backup_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=10800)
@@ -485,7 +489,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         try:
             mgr_cluster.create_backup_task(location_list=[f'{location}/path_testing/' for location in self.locations])
         except ScyllaManagerError as error:
-            self.log.info(f'Expected to fail - error: {error}')
+            self.log.info('Expected to fail - error: {}'.format(error))
         self.log.info('finishing test_backup_location_with_path')
 
     def test_backup_rate_limit(self):
@@ -496,10 +500,10 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                                         auth_token=self.monitors.mgmt_auth_token)
         self.generate_load_and_wait_for_results()
         rate_limit_list = [f'{dc}:{randint(1, 10)}' for dc in self.get_all_dcs_names()]
-        self.log.info(f'rate limit will be {rate_limit_list}')
+        self.log.info('rate limit will be {}'.format(rate_limit_list))
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=rate_limit_list)
         task_status = backup_task.wait_and_get_final_status()
-        self.log.info(f'backup task finished with status {task_status}')
+        self.log.info('backup task finished with status {}'.format(task_status))
         # TODO: verify that the rate limit is as set in the cmd
         self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
         self.log.info('finishing test_backup_rate_limit')
@@ -660,9 +664,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             node_ip=selected_host_ip, single_node=True, create_user=new_user)
         self.log.debug('res_ssh_setup: {}'.format(res_ssh_setup))
         new_user_login_message = "This account is currently not available"
-        # sudo ssh -i /root/.ssh/qa_user.pem -q -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -L 59164:0.0.0.0:10000 qa_user@54.163.180.81
-        new_user_login_cmd = "sudo ssh -i {} -q -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -L 59164:0.0.0.0:10000 {}@{}".format(
-            new_user_identity_file, new_user, selected_host_ip)
+        new_user_login_cmd = f"sudo ssh -i {new_user_identity_file} -q -o BatchMode=yes -o ConnectTimeout=5 -o " \
+                             f"StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -L 59164:0.0.0.0:10000" \
+                             f" {new_user}@{selected_host_ip}"
         self.log.debug("new_user_login_cmd command is: {}".format(new_user_login_cmd))
         res_new_user_login_cmd = manager_tool.manager_node.remoter.run(new_user_login_cmd, ignore_status=True)
         self.log.debug("res_new_user_login_cmd is: {}".format(res_new_user_login_cmd))
@@ -735,7 +739,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
-        self._create_keyspace_and_basic_table(self.SIMPLESTRATEGY_KEYSPACE_NAME, "SimpleStrategy", rf=2)
+        self._create_keyspace_and_basic_table(self.SIMPLESTRATEGY_KEYSPACE_NAME, "SimpleStrategy", replication_factor=2)
         self._create_keyspace_and_basic_table(self.LOCALSTRATEGY_KEYSPACE_NAME, "LocalStrategy")
         repair_task = mgr_cluster.create_repair_task()
         task_final_status = repair_task.wait_and_get_final_status(timeout=7200)
@@ -809,8 +813,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                                         'Error: {}'.format(result))
             if directory_size_result.stdout:
                 directory_size = directory_size_result.stdout[:directory_size_result.stdout.find("\t")]
-                self.log.debug(f"Removed the directory of keyspace {keyspace_name} from node "
-                               f"{db_node}\nThe size of the directory is {directory_size}")
+                self.log.debug("Removed the directory of keyspace {} from node {}\nThe size of the directory is {}".format(
+                    keyspace_name, db_node, directory_size))
 
         finally:
             db_node.start_scylla_server(verify_up=True, verify_down=False)
@@ -830,7 +834,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         # We can't shut down node 1 since it's the default contact point of the stress command, and we have no way
         # of changing that. As such, we skip it.
         for node in self.db_cluster.nodes[1:]:
-            self.log.info(f"inserting {num_of_rows_per_insertion} rows to every node except {node.name}")
+            self.log.info("inserting {} rows to every node except {}".format(num_of_rows_per_insertion, node.name))
             end_of_range = start_of_range + num_of_rows_per_insertion - 1
             node.stop_scylla_server(verify_up=False, verify_down=True)
             stress_thread = self.run_stress_thread(stress_cmd=stress_command_template.format(num_of_rows_per_insertion,
@@ -838,7 +842,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                                                                                              start_of_range,
                                                                                              end_of_range))
             time.sleep(15)
-            self.log.info(f'load={stress_thread.get_results()}')
+            self.log.info('load={}'.format(stress_thread.get_results()))
             node.start_scylla_server(verify_up=True, verify_down=False)
             start_of_range = end_of_range + 1
         with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
@@ -918,7 +922,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
     def _suspend_and_resume_task_template(self, task_type):
         # task types: backup/repair
-        self.log.info(f'starting test_suspend_and_resume_{task_type}')
+        self.log.info('starting test_suspend_and_resume_{}'.format(task_type))
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
@@ -937,10 +941,10 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         mgr_cluster.resume(start_tasks=True)
         assert suspendable_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=1200, step=10), \
             f"task {suspendable_task.id} failed to reach status {TaskStatus.DONE}"
-        self.log.info(f'finishing test_suspend_and_resume_{task_type}')
+        self.log.info('finishing test_suspend_and_resume_{}'.format(task_type))
 
     def test_suspend_and_resume_without_starting_tasks(self):
-        self.log.info(f'starting test_suspend_and_resume_without_starting_tasks')
+        self.log.info('starting test_suspend_and_resume_without_starting_tasks')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
@@ -958,4 +962,4 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         assert current_task_status == TaskStatus.STOPPED, \
             f'Task {current_task_status} did not remain in "{TaskStatus.STOPPED}" status, but instead ' \
             f'reached "{current_task_status}" status'
-        self.log.info(f'finishing test_suspend_and_resume_without_starting_tasks')
+        self.log.info('finishing test_suspend_and_resume_without_starting_tasks')
