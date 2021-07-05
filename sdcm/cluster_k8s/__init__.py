@@ -90,6 +90,12 @@ LOADER_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/loaders.yaml")
 LOCAL_PROVISIONER_DIR = sct_abs_path("sdcm/k8s_configs/provisioner")
 LOCAL_MINIO_DIR = sct_abs_path("sdcm/k8s_configs/minio")
 
+SCYLLA_MANAGER_SERVICE_MONITOR_CONFIG_PATH = sct_abs_path(
+    "sdcm/k8s_configs/monitoring/scylla-manager-service-monitor.yaml")
+SCYLLA_SERVICE_MONITOR_CONFIG_PATH = sct_abs_path(
+    "sdcm/k8s_configs/monitoring/scylla-service-monitor.yaml")
+KUBE_PROMETHEUS_STACK_CHART_VALUES_PATH = sct_abs_path("sdcm/k8s_configs/monitoring/values.yaml")
+
 SCYLLA_API_VERSION = "scylla.scylladb.com/v1"
 SCYLLA_CLUSTER_RESOURCE_KIND = "ScyllaCluster"
 DEPLOY_SCYLLA_CLUSTER_DELAY = 15  # seconds
@@ -747,9 +753,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.kubectl("get pods", namespace="sct-loaders")
 
     @log_run_info
-    def deploy_monitoring_cluster(
-            self, scylla_operator_tag: str, namespace: str = "monitoring", is_manager_deployed: bool = False,
-            node_pool: CloudK8sNodePool = None) -> None:
+    def deploy_monitoring_cluster(self, namespace: str = "monitoring",
+                                  is_manager_deployed: bool = False,
+                                  node_pool: CloudK8sNodePool = None) -> None:
         """
         This procedure comes from scylla-operator repo:
         https://github.com/scylladb/scylla-operator/blob/master/docs/source/generic.md#setting-up-monitoring
@@ -760,29 +766,17 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             LOGGER.info("Reusing existing monitoring cluster")
             self.check_k8s_monitoring_cluster_health(namespace=namespace)
             return
-        LOGGER.info("Create and initialize a monitoring cluster")
-        if scylla_operator_tag in ('nightly', 'latest'):
-            scylla_operator_tag = 'master'
-        elif scylla_operator_tag == '':
-            scylla_operator_tag = get_git_tag_from_helm_chart_version(
-                self._scylla_operator_chart_version)
 
+        LOGGER.info("Create and initialize a monitoring cluster")
         with TemporaryDirectory() as tmp_dir_name:
-            scylla_operator_dir = os.path.join(tmp_dir_name, 'scylla-operator')
             scylla_monitoring_dir = os.path.join(tmp_dir_name, 'scylla-monitoring')
-            LOGGER.info("Download scylla-operator sources")
-            download_from_github(
-                repo='scylladb/scylla-operator',
-                tag=scylla_operator_tag,
-                dst_dir=scylla_operator_dir)
             LOGGER.info("Download scylla-monitoring sources")
             download_from_github(
                 repo='scylladb/scylla-monitoring',
                 tag='scylla-monitoring-3.6.0',
                 dst_dir=scylla_monitoring_dir)
 
-            with open(os.path.join(scylla_operator_dir, "examples", "common",
-                                   "monitoring", "values.yaml"), "r") as values_stream:
+            with open(KUBE_PROMETHEUS_STACK_CHART_VALUES_PATH, "r") as values_stream:
                 values_data = yaml.safe_load(values_stream)
                 # NOTE: we need to unset all the tags because latest chart version may be
                 # incompatible with old versions of apps.
@@ -847,8 +841,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             ))
 
             LOGGER.info("Install scylla-monitoring dashboards and monitoring services for scylla")
-            self.apply_file(os.path.join(scylla_operator_dir, "examples", "common", "monitoring",
-                                         "scylla-service-monitor.yaml"))
+            self.apply_file(SCYLLA_SERVICE_MONITOR_CONFIG_PATH)
             self.kubectl(
                 f'create configmap scylla-dashboards --from-file={scylla_monitoring_dir}/grafana/build/ver_4.3',
                 namespace=namespace)
@@ -858,8 +851,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
             if is_manager_deployed:
                 LOGGER.info("Install monitoring services for scylla-manager")
-                self.apply_file(os.path.join(scylla_operator_dir, "examples", "common", "monitoring",
-                                             "scylla-manager-service-monitor.yaml"))
+                self.apply_file(SCYLLA_MANAGER_SERVICE_MONITOR_CONFIG_PATH)
                 self.kubectl(
                     f'create configmap scylla-manager-dashboards '
                     f'--from-file={scylla_monitoring_dir}/grafana/build/manager_2.2',
