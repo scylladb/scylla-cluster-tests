@@ -4,9 +4,9 @@ prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=62500000 -schema 
                     "cassandra-stress write no-warmup cl=ALL n=62500000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=125000001..187500000",
                     "cassandra-stress write no-warmup cl=ALL n=62500000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=187500001..250000000"]
 
-stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=350m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=50 throttle=5000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..250000000,125000000,12500000)' "
-stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=350m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=50 throttle=4000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..250000000,125000000,12500000)' "
-stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=350m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=50 throttle=3500/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..250000000,125000000,12500000)' "
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=350m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=50 fixed=5000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..250000000,125000000,12500000)' "
+stress_cmd_r: "cassandra-stress read no-warmup  cl=QUORUM duration=350m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=50 fixed=4000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..250000000,125000000,12500000)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=350m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate 'threads=50 fixed=3500/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..250000000,125000000,12500000)' "
 
 n_db_nodes: 3
 nemesis_add_node_cnt: 3
