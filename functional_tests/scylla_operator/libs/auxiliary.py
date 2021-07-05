@@ -12,10 +12,13 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-
+import os
 
 from sdcm.cluster_k8s import ScyllaPodCluster
 from sdcm.tester import ClusterTester
+
+
+SCT_ROOT = os.path.realpath(os.path.join(__file__, '..', '..', '..', '..'))
 
 
 class ScyllaOperatorFunctionalClusterTester(ClusterTester):
@@ -43,3 +46,7 @@ class ScyllaOperatorFunctionalClusterTester(ClusterTester):
             if test_data[0] != 'SUCCESS':
                 return 'FAILED'
         return 'SUCCESS'
+
+
+def sct_abs_path(relative_filename=""):
+    return os.path.join(SCT_ROOT, relative_filename)
