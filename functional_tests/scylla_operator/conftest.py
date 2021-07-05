@@ -13,13 +13,14 @@
 #
 # Copyright (c) 2021 ScyllaDB
 import logging
+import os
 import traceback
-from typing import Optional
 import contextlib
+from typing import Optional
 
 import pytest
 
-from functional_tests.scylla_operator.libs.auxiliary import ScyllaOperatorFunctionalClusterTester
+from functional_tests.scylla_operator.libs.auxiliary import ScyllaOperatorFunctionalClusterTester, sct_abs_path
 from sdcm.cluster_k8s import ScyllaPodCluster
 
 
@@ -50,15 +51,23 @@ def harvest_test_results(request, tester):
 
 
 @pytest.fixture(autouse=True, scope='package')
-def tester():
-    tester = ScyllaOperatorFunctionalClusterTester()
-    tester.setUpClass()
-    tester.setUp()
-    yield tester
+def tester() -> ScyllaOperatorFunctionalClusterTester:
+    os.chdir(sct_abs_path())
+    tester_inst = ScyllaOperatorFunctionalClusterTester()
+    tester_inst.setUpClass()
+    tester_inst.setUp()
+    yield tester_inst
     with contextlib.suppress(Exception):
         tester.tearDown()
     with contextlib.suppress(Exception):
         tester.tearDownClass()
+
+
+@pytest.fixture(scope="function")
+def change_test_dir(request):
+    os.chdir(sct_abs_path())
+    yield
+    os.chdir(request.config.invocation_dir)
 
 
 def skip_if_cluster_requirements_not_met(request, tester, db_cluster):
