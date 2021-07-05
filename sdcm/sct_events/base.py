@@ -11,6 +11,8 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+# pylint: disable=too-many-instance-attributes, broad-except, protected-access
+
 from __future__ import annotations
 
 import json
@@ -51,7 +53,7 @@ class Singleton(type):
         return cls._instances[cls]
 
 
-class ContinuousEventRegistryError(BaseException):
+class ContinuousEventRegistryException(BaseException):
     pass
 
 
@@ -65,48 +67,43 @@ class ContinuousEventsRegistry(metaclass=Singleton):
 
     def add_event(self, event: ContinuousEvent):
         if not issubclass(type(event), ContinuousEvent):
-            raise ContinuousEventRegistryError(f"Event: {event} is not a ContinuousEvent")
+            raise ContinuousEventRegistryException(f"Event: {event} is not a ContinuousEvent")
 
         self.continuous_events.append(event)
 
-    def get_event(self):
-        if len(self.continuous_events):
-            return self.continuous_events[0]
-
     def get_event_by_id(self, event_id: Union[uuid.UUID, str]) -> Optional[ContinuousEvent]:
-        found_event = [event for event in self.continuous_events if event.event_id == event_id]
-        if not found_event:
-            LOGGER.info(f"Couldn't find continuous event with id: {event_id} in registry.")
-            return
+        found_events = [event for event in self.continuous_events if event.event_id == event_id]
 
-        return found_event[0]
+        if len(found_events) > 1:
+            raise ContinuousEventRegistryException("More than one event with uuid = {event_id}. Found {event_count} "
+                                                   "events with the same id."
+                                                   .format(event_id=event_id, event_count=len(found_events)))
+        if not found_events:
+            LOGGER.warning("Couldn't find continuous event with id: {event_id} in registry.".format(event_id=event_id))
 
-    def get_events_by_type(self, event_type: Type[ContinuousEvent]) -> Optional[List[ContinuousEvent]]:
+            return None
+
+        return found_events[0]
+
+    def get_events_by_type(self, event_type: Type[ContinuousEvent]) -> List[ContinuousEvent]:
         found_events = [event for event in self.continuous_events if isinstance(event, event_type)]
         if not found_events:
-            LOGGER.info(f"No continuous events of type: {event_type} found in registry.")
-            return
+            LOGGER.warning("No continuous events of type: {event_type} found in registry."
+                           .format(event_type=event_type))
 
         return found_events
 
     def get_events_by_period(self,
-                             period_type: EventPeriod) -> Optional[List[ContinuousEvent]]:
+                             period_type: EventPeriod) -> List[ContinuousEvent]:
         found_events = [event for event in self.continuous_events if event.period_type == period_type.value]
         if not found_events:
-            LOGGER.info(f"No continuous events with period type: {period_type} found in registry.")
-            return
+            LOGGER.warning("No continuous events with period type: {period_type} found in registry."
+                           .format(period_type=period_type))
 
         return found_events
 
-    @staticmethod
-    def _list_emptiness_check(event_registry: List[ContinuousEvent]):
-        if not event_registry:
-            LOGGER.debug(f"No events in the event registry.")
 
-        return bool(event_registry)
-
-
-class SctEventTypesRegistry(Dict[str, Type["SctEvent"]]):
+class SctEventTypesRegistry(Dict[str, Type["SctEvent"]]):  # pylint: disable=too-few-public-methods
     def __init__(self, severities_conf: str = DEFAULT_SEVERITIES):
         super().__init__()
         with open(severities_conf) as fobj:
@@ -157,7 +154,7 @@ class SctEvent:
         cls._sct_event_types_registry[cls.__name__] = cls
 
     # Do it this way because abc.ABC doesn't prevent the instantiation if there are no abstract methods or properties.
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *_, **__):
         if cls.is_abstract():
             raise TypeError(f"Class {cls.__name__} may not be instantiated directly")
         return super().__new__(cls)
@@ -282,8 +279,8 @@ class SctEvent:
             warning = f"[SCT internal warning] {self} has not been published or dumped, maybe you missed .publish()"
             try:
                 LOGGER.warning(warning)
-            except:
-                print(warning)
+            except Exception as exc:  # pylint: disable=broad-except
+                print(f"Exception while printing {warning}. Full exception: {exc}")
 
 
 class InformationalEvent(SctEvent, abstract=True):
@@ -361,8 +358,8 @@ class ContinuousEvent(SctEvent, abstract=True):
         if self.duration is None:
             return duration
 
-        rt = relativedelta(seconds=self.duration)
-        days, hours, minutes, sec = (int(rt.days), int(rt.hours), int(rt.minutes), rt.seconds)
+        delta = relativedelta(seconds=self.duration)
+        days, hours, minutes, sec = (int(delta.days), int(delta.hours), int(delta.minutes), delta.seconds)
         if days:
             duration += f"{days}d"
 
@@ -472,14 +469,14 @@ class BaseFilter(SystemEvent, abstract=True):
         self.publish()
         return self
 
-    def __exit__(self, exception_type, exception_value, traceback):
+    def __exit__(self, exception_type, exception_value, exception_traceback):
         self.cancel_filter()
 
     def eval_filter(self, event: SctEventProtocol) -> bool:
         raise NotImplementedError()
 
 
-T_log_event = TypeVar("T_log_event", bound="LogEvent")
+T_log_event = TypeVar("T_log_event", bound="LogEvent")  # pylint: disable=invalid-name
 
 
 @runtime_checkable
@@ -566,6 +563,7 @@ class LogEvent(Generic[T_log_event], InformationalEvent, abstract=True):
 
 
 class BaseStressEvent(ContinuousEvent, abstract=True):
+    # pylint: disable=too-many-arguments
     @classmethod
     def add_stress_subevents(cls,
                              failure: Optional[Severity] = None,
@@ -600,6 +598,7 @@ class StressEventProtocol(SctEventProtocol, Protocol):
 
 
 class StressEvent(BaseStressEvent, abstract=True):
+    # pylint: disable=too-many-arguments
     def __init__(self,
                  node: Any,
                  stress_cmd: Optional[str] = None,
@@ -633,4 +632,4 @@ __all__ = ("SctEvent", "SctEventProtocol", "SystemEvent", "BaseFilter",
            "BaseStressEvent", "StressEvent", "StressEventProtocol",
            "add_severity_limit_rules", "max_severity", "print_critical_events",
            "ContinuousEvent", "InformationalEvent", "ContinuousEventsRegistry",
-           "ContinuousEventRegistryError", "EventPeriod")
+           "ContinuousEventRegistryException", "EventPeriod")

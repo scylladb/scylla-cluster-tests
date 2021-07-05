@@ -1,9 +1,11 @@
+# pylint: disable=no-self-use
+
 import random
 from typing import Generator
 
 import pytest
 
-from sdcm.sct_events.base import ContinuousEventsRegistry, ContinuousEventRegistryError, EventPeriod
+from sdcm.sct_events.base import ContinuousEventsRegistry, ContinuousEventRegistryException, EventPeriod
 from sdcm.sct_events.database import FullScanEvent
 from sdcm.sct_events.loaders import GeminiStressEvent
 from sdcm.sct_events.nodetool import NodetoolEvent
@@ -57,14 +59,8 @@ class TestContinuousEventsRegistry:
     def test_adding_a_non_continuous_event_raises_error(self,
                                                         registry: ContinuousEventsRegistry,
                                                         full_scan_event: FullScanEvent):
-        with pytest.raises(ContinuousEventRegistryError):
+        with pytest.raises(ContinuousEventRegistryException):
             registry.add_event(full_scan_event)
-
-    def test_get_event(self,
-                       populated_registry: ContinuousEventsRegistry):
-        first_event = populated_registry.get_event()
-
-        assert first_event == populated_registry.continuous_events[0]
 
     def test_get_event_by_id(self,
                              populated_registry: ContinuousEventsRegistry):
