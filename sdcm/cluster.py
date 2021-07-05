@@ -405,15 +405,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return 'true' in result.stdout.lower()
 
     @property
-    def cpu_cores(self):
+    def cpu_cores(self) -> Optional[int]:
         try:
             result = self.remoter.run("nproc", ignore_status=True)
-            cores = result.stdout.lower()
+            return int(result.stdout)
         except Exception as details:  # pylint: disable=broad-except
-            self.log.error("Command 'nproc' error: %s", details)
-            cores = None
-        cores = int(cores) if cores else None
-        return cores
+            self.log.error("Failed to get number of cores due to the %s", details)
+        return None
 
     @property
     def scylla_shards(self):
