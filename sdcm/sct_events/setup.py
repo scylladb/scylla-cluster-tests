@@ -60,6 +60,9 @@ def start_events_device(log_dir: Optional[Union[str, Path]] = None,
                                 event_class=DatabaseLogEvent.DATABASE_ERROR,
                                 regex=r'.*workload prioritization - update_service_levels_from_distributed_data: an '
                                       r'error occurred while retrieving configuration').publish()
+    EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                event_class=DatabaseLogEvent.DATABASE_ERROR,
+                                regex='cdc - Could not update CDC description table with generation').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: supressed').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: suppressed').publish()
 
