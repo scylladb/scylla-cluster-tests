@@ -949,7 +949,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if self.params.get('k8s_deploy_monitoring'):
             self.k8s_cluster.deploy_monitoring_cluster(
-                scylla_operator_tag=self.params.get('k8s_scylla_operator_docker_image').split(':')[-1],
                 is_manager_deployed=self.params.get('use_mgmt')
             )
         if self.params.get("n_loaders"):
@@ -997,7 +996,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if self.params.get('k8s_deploy_monitoring'):
             self.k8s_cluster.deploy_monitoring_cluster(
-                self.params.get('k8s_scylla_operator_docker_image').split(':')[-1],
                 is_manager_deployed=self.params.get('use_mgmt')
             )
 
@@ -1123,7 +1121,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if self.params.get('k8s_deploy_monitoring'):
             self.k8s_cluster.deploy_monitoring_cluster(
-                scylla_operator_tag=self.params.get('k8s_scylla_operator_docker_image').split(':')[-1],
                 is_manager_deployed=self.params.get('use_mgmt'),
                 node_pool=monitor_pool
             )
@@ -1262,7 +1259,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if self.params.get('k8s_deploy_monitoring'):
             self.k8s_cluster.deploy_monitoring_cluster(
-                scylla_operator_tag=self.params.get('k8s_scylla_operator_docker_image').split(':')[-1],
                 is_manager_deployed=self.params.get('use_mgmt'),
                 node_pool=monitor_pool
             )
