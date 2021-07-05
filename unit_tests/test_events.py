@@ -14,7 +14,6 @@
 import time
 import logging
 import unittest
-import traceback
 import multiprocessing
 from pathlib import Path
 from datetime import datetime
@@ -22,6 +21,7 @@ from unittest import mock
 
 from parameterized import parameterized
 
+from sdcm.nemesis import UnsupportedNemesis
 from sdcm.prometheus import start_metrics_server
 from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.utils.decorators import timeout
@@ -62,35 +62,113 @@ class BaseEventsTest(unittest.TestCase, EventsUtilsMixin):
 
 
 class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
-    @staticmethod
-    def test_disruption_event():
-        try:
-            1 / 0
-        except ZeroDivisionError:
-            _full_traceback = traceback.format_exc()
+    # increase the max length to see the full strings in the AssertionError which precedes the diff
+    maxDiff = None
 
-        str(DisruptionEvent(type="ChaosMonkeyLimited",
-                            subtype='end',
-                            status=False,
-                            error=str(Exception("long one")),
-                            full_traceback=_full_traceback,
-                            duration=20,
-                            start=1,
-                            end=2,
-                            node='test'))
+    def test_disruption_skipped_event(self):
+        with DisruptionEvent(nemesis_name="DeleteByRowsRange",
+                             node="target_node", publish_event=False) as nemesis_event:
+            try:
+                raise UnsupportedNemesis("This nemesis can run on scylla_bench test only")
+            except UnsupportedNemesis as exc:
+                nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
+                nemesis_event.skip(skip_reason=str(exc))
+                nemesis_event.duration = 15
+                raise
 
-        str(DisruptionEvent(type="ChaosMonkeyLimited",
-                            subtype='end',
-                            status=True,
-                            duration=20,
-                            start=1,
-                            end=2,
-                            node='test'))
+        self.assertEqual(
+            str(nemesis_event),
+            '(DisruptionEvent Severity.NORMAL) period_type=end event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318 '
+            'duration=15s: nemesis_name=DeleteByRowsRange target_node=target_node skipped skip_reason=This nemesis can '
+            'run on scylla_bench test only'
+        )
 
-        print(str(DisruptionEvent(type="ChaosMonkeyLimited",
-                                  subtype='start',
-                                  status=True,
-                                  node='test')))
+    def test_disruption_raised_critical_event(self):
+        with DisruptionEvent(nemesis_name="DeleteByRowsRange",
+                             node="target_node", publish_event=False) as nemesis_event:
+            nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
+            self.assertEqual(
+                str(nemesis_event),
+                '(DisruptionEvent Severity.NORMAL) period_type=begin event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318: '
+                'nemesis_name=DeleteByRowsRange target_node=target_node'
+            )
+
+            try:
+                1 / 0
+            except ZeroDivisionError:
+                nemesis_event.add_error(['division by zero'])
+                nemesis_event.full_traceback = "traceback.format_exc()"
+                nemesis_event.severity = Severity.CRITICAL
+                nemesis_event.duration = 15
+                raise
+
+        self.assertIn('division by zero', nemesis_event.errors_formatted)
+        self.assertEqual(nemesis_event.severity, Severity.CRITICAL)
+        self.assertEqual(nemesis_event.duration_formatted, '15s')
+
+    def test_disruption_raised_error_event(self):
+        with DisruptionEvent(nemesis_name="DeleteByRowsRange",
+                             node="target_node", publish_event=False) as nemesis_event:
+            nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
+            self.assertEqual(
+                str(nemesis_event),
+                '(DisruptionEvent Severity.NORMAL) period_type=begin event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318: '
+                'nemesis_name=DeleteByRowsRange target_node=target_node'
+            )
+
+            try:
+                1 / 0
+            except ZeroDivisionError:
+                nemesis_event.add_error(['division by zero'])
+                nemesis_event.full_traceback = "traceback.format_exc()"
+                nemesis_event.duration = 15
+                raise
+
+        self.assertIn('division by zero', nemesis_event.errors_formatted)
+        self.assertEqual(nemesis_event.severity, Severity.ERROR)
+        self.assertEqual(nemesis_event.duration_formatted, '15s')
+
+    def test_disruption_error_event(self):
+        with DisruptionEvent(nemesis_name="DeleteByRowsRange",
+                             node="target_node", publish_event=False) as nemesis_event:
+            nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
+            self.assertEqual(
+                str(nemesis_event),
+                '(DisruptionEvent Severity.NORMAL) period_type=begin event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318: '
+                'nemesis_name=DeleteByRowsRange target_node=target_node'
+            )
+
+            try:
+                1 / 0
+            except ZeroDivisionError:
+                nemesis_event.add_error(['division by zero'])
+                nemesis_event.full_traceback = "traceback.format_exc()"
+                nemesis_event.duration = 15
+                nemesis_event.severity = Severity.ERROR
+
+        self.assertEqual(
+            str(nemesis_event),
+            '(DisruptionEvent Severity.ERROR) period_type=end event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318 '
+            'duration=15s: nemesis_name=DeleteByRowsRange target_node=target_node errors=division by zero\n'
+            'traceback.format_exc()'
+        )
+
+    def test_disruption_normal_event(self):
+        with DisruptionEvent(nemesis_name="DeleteByRowsRange",
+                             node="target_node", publish_event=False) as nemesis_event:
+            nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
+            self.assertEqual(
+                str(nemesis_event),
+                '(DisruptionEvent Severity.NORMAL) period_type=begin event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318: '
+                'nemesis_name=DeleteByRowsRange target_node=target_node'
+            )
+            nemesis_event.duration = 15
+
+        self.assertEqual(
+            str(nemesis_event),
+            '(DisruptionEvent Severity.NORMAL) period_type=end event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318 '
+            'duration=15s: nemesis_name=DeleteByRowsRange target_node=target_node'
+        )
 
     def test_filter(self):
         enospc_line_1 = \

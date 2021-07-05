@@ -1,6 +1,6 @@
 from collections import namedtuple
 import sdcm.utils.cloud_monitor  # pylint: disable=unused-import # import only to avoid cyclic dependency
-from sdcm.nemesis import Nemesis, ChaosMonkey, CategoricalMonkey
+from sdcm.nemesis import Nemesis, CategoricalMonkey
 from sdcm.cluster_k8s.mini_k8s import LocalMinimalScyllaPodCluster
 from sdcm.cluster_k8s.mini_k8s import RemoteMinimalScyllaPodCluster
 from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
@@ -16,7 +16,38 @@ FakeTester = namedtuple("FakeTester", ['params', 'loaders', 'monitors', 'db_clus
                         defaults=[PARAMS, {}, {}, Cluster(params=PARAMS)])
 
 
-class AddRemoveDCMonkey(Nemesis):
+class FakeNemesis(Nemesis):
+    def __new__(cls, tester_obj, termination_event, *args):
+        return object.__new__(cls)
+
+
+class ChaosMonkey(FakeNemesis):
+    ...
+
+
+class FakeCategoricalMonkey(CategoricalMonkey):
+    runs = []
+
+    def __new__(cls, tester_obj, termination_event, *args):
+        return object.__new__(cls)
+
+    def __init__(self, tester_obj, termination_event, dist: dict, default_weight: float = 1):
+        super(CategoricalMonkey, self).__init__(tester_obj, termination_event)
+        setattr(CategoricalMonkey, 'disrupt_m1', self.disrupt_m1)
+        setattr(CategoricalMonkey, 'disrupt_m2', self.disrupt_m2)
+        self.disruption_distribution = CategoricalMonkey.get_disruption_distribution(dist, default_weight)
+
+    def disrupt_m1(self):
+        self.runs.append(1)
+
+    def disrupt_m2(self):
+        self.runs.append(2)
+
+    def get_runs(self):
+        return self.runs
+
+
+class AddRemoveDCMonkey(FakeNemesis):
     @Nemesis.add_disrupt_method
     def disrupt_add_remove_dc(self):  # pylint: disable=no-self-use
         return 'Worked'
@@ -68,40 +99,30 @@ def test_is_it_on_kubernetes():
             self.loaders = None
             self.monitors = None
 
-    assert Nemesis(FakeTester(FakeLocalMinimalScyllaPodCluster()), None)._is_it_on_kubernetes()
-    assert Nemesis(FakeTester(FakeRemoteMinimalScyllaPodCluster()), None)._is_it_on_kubernetes()
-    assert Nemesis(FakeTester(FakeGkeScyllaPodCluster()), None)._is_it_on_kubernetes()
-    assert Nemesis(FakeTester(FakeEksScyllaPodCluster()), None)._is_it_on_kubernetes()
+    assert FakeNemesis(FakeTester(FakeLocalMinimalScyllaPodCluster()), None)._is_it_on_kubernetes()
+    assert FakeNemesis(FakeTester(FakeRemoteMinimalScyllaPodCluster()), None)._is_it_on_kubernetes()
+    assert FakeNemesis(FakeTester(FakeGkeScyllaPodCluster()), None)._is_it_on_kubernetes()
+    assert FakeNemesis(FakeTester(FakeEksScyllaPodCluster()), None)._is_it_on_kubernetes()
 
-    assert not Nemesis(FakeTester(FakeScyllaGCECluster()), None)._is_it_on_kubernetes()
-    assert not Nemesis(FakeTester(FakeScyllaAWSCluster()), None)._is_it_on_kubernetes()
-    assert not Nemesis(FakeTester(FakeScyllaDockerCluster()), None)._is_it_on_kubernetes()
+    assert not FakeNemesis(FakeTester(FakeScyllaGCECluster()), None)._is_it_on_kubernetes()
+    assert not FakeNemesis(FakeTester(FakeScyllaAWSCluster()), None)._is_it_on_kubernetes()
+    assert not FakeNemesis(FakeTester(FakeScyllaDockerCluster()), None)._is_it_on_kubernetes()
 
 # pylint: disable=protected-access
 
 
 def test_categorical_monkey():
-    runs = []
-
-    def disrupt_m1(_):
-        runs.append(1)
-
-    def disrupt_m2(_):
-        runs.append(2)
-    setattr(CategoricalMonkey, 'disrupt_m1', disrupt_m1)
-    setattr(CategoricalMonkey, 'disrupt_m2', disrupt_m2)
-
     tester = FakeTester()
 
-    nemesis = CategoricalMonkey(tester, None, {'m1': 1}, 0)
+    nemesis = FakeCategoricalMonkey(tester, None, {'m1': 1}, 0)
     nemesis._random_disrupt()
 
-    nemesis = CategoricalMonkey(tester, None, {'m2': 1}, 0)
+    nemesis = FakeCategoricalMonkey(tester, None, {'m2': 1}, 0)
     nemesis._random_disrupt()
 
-    assert runs == [1, 2]
+    assert nemesis.runs == [1, 2]
 
-    nemesis = CategoricalMonkey(tester, None, {'m1': 1, 'm2': 1}, 0)
+    nemesis = FakeCategoricalMonkey(tester, None, {'m1': 1, 'm2': 1}, 0)
     nemesis._random_disrupt()
 
-    assert runs in ([1, 2, 1], [1, 2, 2])
+    assert nemesis.runs in ([1, 2, 1], [1, 2, 2])
