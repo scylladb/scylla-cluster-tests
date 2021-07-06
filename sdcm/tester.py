@@ -174,20 +174,20 @@ class silence:  # pylint: disable=invalid-name
             else:
                 name = self.name
             try:
-                self.log.debug(f"Silently running '{name}'")
+                self.log.debug("Silently running '%s'", name)
                 funct(*args, **kwargs)
-                self.log.debug(f"Finished '{name}'. No errors were silenced.")
+                self.log.debug("Finished '%s'. No errors were silenced.", name)
             except Exception as exc:  # pylint: disable=broad-except
-                self.log.debug(f"Finished '{name}'. {str(type(exc))} exception was silenced.")
+                self.log.debug("Finished '%s'. %s exception was silenced.", name, str(type(exc)))
                 self._store_test_result(args[0], exc, exc.__traceback__, name)
 
         return decor
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_val is None:
-            self.log.debug(f"Finished '{self.name}'. No errors were silenced.")
+            self.log.debug("Finished '%s'. No errors were silenced.", self.name)
         else:
-            self.log.debug(f"Finished '{self.name}'. {str(exc_type)} exception was silenced.")
+            self.log.debug("Finished '%s'. %s exception was silenced.", self.name, str(exc_type))
             self._store_test_result(self.parent, exc_val, exc_tb, self.name)
         return True
 
@@ -222,8 +222,7 @@ class ClusterInformation(NamedTuple):
     schema_versions: List[SchemaVersion]
 
 
-class ClusterTester(db_stats.TestStatsMixin,
-                    unittest.TestCase):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
+class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     log = None
     localhost = None
     events_processes_registry = None
@@ -233,8 +232,8 @@ class ClusterTester(db_stats.TestStatsMixin,
     k8s_cluster: Union[None, gke.GkeCluster, eks.EksCluster, mini_k8s.GceMinikubeCluster,
                        mini_k8s.LocalMinikubeCluster] = None
 
-    def __init__(self, *args):  # pylint: disable=too-many-statements
-        super(ClusterTester, self).__init__(*args)
+    def __init__(self, *args):  # pylint: disable=too-many-statements,too-many-locals,too-many-branches
+        super().__init__(*args)
         self.result = None
         self._results = []
         self.status = "RUNNING"
@@ -324,7 +323,8 @@ class ClusterTester(db_stats.TestStatsMixin,
                           {'uniqueMember': unique_members_list, 'userPassword': user_password}]
             self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
                                           user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
-        if (self.params.get("prepare_saslauthd") or self.params.get("use_saslauthd_authenticator")) and not self.params.get("use_ms_ad_ldap"):
+        if (self.params.get("prepare_saslauthd")
+                or self.params.get("use_saslauthd_authenticator")) and not self.params.get("use_ms_ad_ldap"):
             ldap_users = LDAP_USERS.copy()
             ldap_address = list(TestConfig.LDAP_ADDRESS).copy()
             ldap_entry = [f'ou=Person,{LDAP_BASE_OBJECT}',
@@ -362,15 +362,16 @@ class ClusterTester(db_stats.TestStatsMixin,
     def _init_test_timeout_thread(self) -> threading.Timer:
         start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
         end_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time + int(self.test_duration) * 60))
-        self.log.info(f'Test start time {start_time}, duration is {self.test_duration} and timeout set to {end_time}')
+        self.log.info('Test start time %s, duration is %s and timeout set to %s',
+                      start_time, self.test_duration, end_time)
 
         def kill_the_test():
             TestTimeoutEvent(start_time=self.start_time, duration=self.test_duration).publish()
 
-        th = threading.Timer(60 * int(self.test_duration), kill_the_test)
-        th.daemon = True
-        th.start()
-        return th
+        thread = threading.Timer(60 * int(self.test_duration), kill_the_test)
+        thread.daemon = True
+        thread.start()
+        return thread
 
     def _init_localhost(self):
         return LocalHost(user_prefix=self.params.get("user_prefix"), test_id=TestConfig.test_id())
@@ -378,7 +379,7 @@ class ClusterTester(db_stats.TestStatsMixin,
     def _move_kubectl_config(self):
         secure_mode = stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
         os.environ['KUBECONFIG'] = self.kubectl_config_path
-        if not (os.path.exists(self.kubectl_config_path)):
+        if not os.path.exists(self.kubectl_config_path):
             os.makedirs(os.path.dirname(self.kubectl_config_path), exist_ok=True)
             with open(self.kubectl_config_path, 'w') as kube_config_file:
                 kube_config_file.write('')
@@ -386,7 +387,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         os.chmod(os.path.dirname(self.kubectl_config_path), mode=secure_mode)
         os.chmod(self.kubectl_config_path, mode=secure_mode)
         os.environ['HELM_CONFIG_HOME'] = self.helm_config_path
-        if not (os.path.exists(self.helm_config_path)):
+        if not os.path.exists(self.helm_config_path):
             os.makedirs(os.path.dirname(self.helm_config_path), exist_ok=True)
         os.chmod(os.path.dirname(self.helm_config_path), mode=secure_mode)
 
@@ -407,7 +408,7 @@ class ClusterTester(db_stats.TestStatsMixin,
 
     def run(self, result=None):
         self.result = self.defaultTestResult() if result is None else result
-        result = super(ClusterTester, self).run(self.result)
+        result = super().run(self.result)
         return result
 
     @property
@@ -485,7 +486,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         # download rpms for update_db_packages
         self.params['update_db_packages'] = download_dir_from_cloud(self.params.get('update_db_packages'))
 
-    def download_encrypt_keys(self):
+    def download_encrypt_keys(self):  # pylint: disable=no-self-use
         download_encrypt_keys()
 
     @property
@@ -1373,11 +1374,11 @@ class ClusterTester(db_stats.TestStatsMixin,
         else:
             raise ValueError(f'Unsupported stress command: "{stress_cmd[:50]}..."')
 
-    def run_stress_cassandra_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None,
-                                    prefix='',  # pylint: disable=too-many-arguments,unused-argument
+    def run_stress_cassandra_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None,  # pylint: disable=too-many-arguments
+                                    prefix='',
                                     round_robin=False, stats_aggregate_cmds=True, keyspace_name=None,
-                                    use_single_loader=False,  # pylint: disable=too-many-arguments,unused-argument
-                                    stop_test_on_failure=True):  # pylint: disable=too-many-arguments,unused-argument
+                                    use_single_loader=False,  # pylint: disable=unused-argument
+                                    stop_test_on_failure=True):
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
         timeout = self.get_duration(duration)
         if self.create_stats:
@@ -1487,10 +1488,9 @@ class ClusterTester(db_stats.TestStatsMixin,
                                         node_list=self.db_cluster.nodes,
                                         round_robin=round_robin, params=self.params).run()
 
-    def run_ndbench_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',
-                           # pylint: disable=too-many-arguments
+    def run_ndbench_thread(self, stress_cmd, duration=None, stress_num=1, prefix='',  # pylint: disable=too-many-arguments
                            round_robin=False, stats_aggregate_cmds=True,
-                           keyspace_num=None, keyspace_name=None, profile=None,
+                           keyspace_num=None, keyspace_name=None, profile=None,  # pylint: disable=unused-argument
                            use_single_loader=False):  # pylint: disable=unused-argument
 
         timeout = self.get_duration(duration)
@@ -1557,8 +1557,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         # use the last 5 lines for the final error message.
         errors = errors[-5:]
         if errors:
-            self.log.warning("cassandra-stress errors on "
-                             "nodes:\n%s" % "\n".join(errors))
+            self.log.warning("cassandra-stress errors on nodes:\n%s", "\n".join(errors))
 
     def get_stress_results(self, queue, store_results=True):
         results = queue.get_results()
@@ -1604,7 +1603,7 @@ class ClusterTester(db_stats.TestStatsMixin,
                          'errors': stats['errors']})
         return stats
 
-    def run_fullscan(self, ks_cf, db_node, page_size=100000):
+    def run_fullscan(self, ks_cf, db_node, page_size=100000):  # pylint: disable=too-many-locals
         """Run cql select count(*) request
 
         if ks_cf is not random, use value from config
@@ -1648,7 +1647,7 @@ class ClusterTester(db_stats.TestStatsMixin,
                     if read_pages > 0:
                         pages += 1
             FullScanEvent.finish(db_node_ip=db_node.ip_address, ks_cf=ks_cf, message="finished successfully").publish()
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             # 'unpack requires a string argument of length 4' error is received when cassandra.connection return
             # "Error decoding response from Cassandra":
             # failure like:
@@ -1892,8 +1891,8 @@ class ClusterTester(db_stats.TestStatsMixin,
     def rows_to_list(rows):
         return [list(row) for row in rows]
 
-    def copy_table(self, node, src_keyspace, src_table, dest_keyspace, dest_table, columns_list=None,
-                   copy_data=False):  # pylint: disable=too-many-arguments
+    def copy_table(self, node, src_keyspace, src_table, dest_keyspace,  # pylint: disable=too-many-arguments
+                   dest_table, columns_list=None, copy_data=False):
         """
         Create table with same structure as <src_keyspace>.<src_table>.
         If columns_list is supplied, the table with create with the columns that in the columns_list
@@ -1911,13 +1910,14 @@ class ClusterTester(db_stats.TestStatsMixin,
                 result = self.copy_data_between_tables(node, src_keyspace, src_table,
                                                        dest_keyspace, dest_table, columns_list)
             except Exception as error:  # pylint: disable=broad-except
-                self.log.error(f'Copying data from {src_table} to {dest_table} failed with error: {error}')
+                self.log.error('Copying data from %s to %s failed with error: %s',
+                               src_table, dest_table, error)
                 return False
 
         return result
 
-    def copy_view(self, node, src_keyspace, src_view, dest_keyspace, dest_table, columns_list=None,
-                  copy_data=False):  # pylint: disable=too-many-arguments
+    def copy_view(self, node, src_keyspace, src_view, dest_keyspace,  # pylint: disable=too-many-arguments
+                  dest_table, columns_list=None, copy_data=False):
         """
         Create table with same structure as <src_keyspace>.<src_view>.
         If columns_list is supplied, the table with create with the columns that in the columns_list
@@ -1936,13 +1936,14 @@ class ClusterTester(db_stats.TestStatsMixin,
                 result = self.copy_data_between_tables(node, src_keyspace, src_view,
                                                        dest_keyspace, dest_table, columns_list)
             except Exception as error:  # pylint: disable=broad-except
-                self.log.error(f'Copying data from {src_view} to {dest_table} failed with error {error}')
+                self.log.error('Copying data from %s to %s failed with error %s',
+                               src_view, dest_table, error)
                 return False
 
         return result
 
-    def create_table_as(self, node, src_keyspace, src_table, dest_keyspace, dest_table, create_statement,
-                        # pylint: disable=too-many-arguments,too-many-locals,inconsistent-return-statements
+    def create_table_as(self, node, src_keyspace, src_table,  # pylint: disable=too-many-arguments,too-many-locals,inconsistent-return-statements
+                        dest_keyspace, dest_table, create_statement,
                         columns_list=None):
         """ Create table with same structure as another table or view
             If columns_list is supplied, the table with create with the columns that in the columns_list
@@ -1966,8 +1967,9 @@ class ClusterTester(db_stats.TestStatsMixin,
                     columns = column_types
 
                 if not columns:
-                    self.log.error(f'Wrong supplied columns list: {columns}. '
-                                   f'The columns do not exist in the {src_keyspace}.{src_table} table')
+                    self.log.error('Wrong supplied columns list: %s. '
+                                   'The columns do not exist in the %s.%s table',
+                                   columns, src_keyspace, src_table)
                     return False
 
                 for column in columns_list or result.column_names:
@@ -1999,7 +2001,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         BE SURE that the builder has enough memory and your dataset will be less then 2Gb.
         """
         if verbose:
-            self.log.debug(f"Fetch all rows by statement: {statement}")
+            self.log.debug("Fetch all rows by statement: %s", statement)
         session.default_fetch_size = default_fetch_size
         session.default_consistency_level = ConsistencyLevel.QUORUM
         result = session.execute_async(statement)
@@ -2007,7 +2009,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         current_rows = fetcher.all_data()
         if verbose and current_rows:
             dataset_size = sum(sys.getsizeof(e) for e in current_rows[0]) * len(current_rows)
-            self.log.debug(f"Size of fetched rows: {dataset_size} bytes")
+            self.log.debug("Size of fetched rows: %s bytes", dataset_size)
         return current_rows
 
     def copy_data_between_tables(self, node, src_keyspace, src_table, dest_keyspace,
@@ -2030,7 +2032,7 @@ class ClusterTester(db_stats.TestStatsMixin,
             # Fetch all rows from view / table
             source_table_rows = self.fetch_all_rows(session=session, default_fetch_size=5000, statement=statement)
             if not source_table_rows:
-                self.log.error(f"Can't copy data from {src_table}. Fetch all rows failed, see error above")
+                self.log.error("Can't copy data from %s. Fetch all rows failed, see error above", src_table)
                 return False
 
             # TODO: Temporary function. Will be removed
@@ -2061,22 +2063,24 @@ class ClusterTester(db_stats.TestStatsMixin,
             try:
                 succeeded_rows = sum(1 for (success, result) in results if success)
                 if succeeded_rows != len(source_table_rows):
-                    self.log.warning(f'Problem during copying data. Not all rows were inserted.'
-                                     f'Rows expected to be inserted: {len(source_table_rows)}; '
-                                     f'Actually inserted rows: {succeeded_rows}.')
+                    self.log.warning('Problem during copying data. Not all rows were inserted. '
+                                     'Rows expected to be inserted: %s; '
+                                     'Actually inserted rows: %s.',
+                                     len(source_table_rows), succeeded_rows)
                     return False
-            except Exception as exc:
-                self.log.warning(f'Problem during copying data: {exc}')
+            except Exception as exc:  # pylint: disable=broad-except
+                self.log.warning('Problem during copying data: %s', exc)
                 return False
 
             result = session.execute(f"SELECT count(*) FROM {dest_keyspace}.{dest_table}")
             if result:
                 if result.current_rows[0].count != len(source_table_rows):
-                    self.log.warning(f'Problem during copying data. '
-                                     f'Rows in source table: {len(source_table_rows)}; '
-                                     f'Rows in destination table: {len(result.current_rows)}.')
+                    self.log.warning('Problem during copying data. '
+                                     'Rows in source table: %s; '
+                                     'Rows in destination table: %s.',
+                                     len(source_table_rows), len(result.current_rows))
                     return False
-        self.log.debug(f'All rows have been copied from {src_table} to {dest_table}')
+        self.log.debug('All rows have been copied from %s to %s', src_table, dest_table)
         return True
 
     def collect_partitions_info(self, table_name, primary_key_column, save_into_file_name):
@@ -2091,8 +2095,8 @@ class ClusterTester(db_stats.TestStatsMixin,
         try:
             out = self.db_cluster.nodes[0].run_cqlsh(cmd=get_distinct_partition_keys_cmd, timeout=600, split=True,
                                                      num_retry_on_failure=5)
-        except Exception as exc:
-            self.log.error(f"Failed to collect partition info. Error details: {str(exc)}")
+        except Exception as exc:  # pylint: disable=broad-except
+            self.log.error("Failed to collect partition info. Error details: %s", str(exc))
             return None
 
         pk_list = sorted([int(pk) for pk in out[3:-3]])
@@ -2107,8 +2111,8 @@ class ClusterTester(db_stats.TestStatsMixin,
                 try:
                     out = self.db_cluster.nodes[0].run_cqlsh(cmd=count_partition_keys_cmd, timeout=600, split=True,
                                                              num_retry_on_failure=5)
-                except Exception as exc:
-                    self.log.error(f"Failed to collect partition info. Error details: {str(exc)}")
+                except Exception as exc:  # pylint: disable=broad-except
+                    self.log.error("Failed to collect partition info. Error details: %s", str(exc))
                     return None
 
                 self.log.debug('Count result: {}'.format(out))
@@ -2138,7 +2142,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         truncated_time = self.rows_to_list(session.execute(query))
         return truncated_time[0]
 
-    def get_describecluster_info(self) -> Optional[ClusterInformation]:
+    def get_describecluster_info(self) -> Optional[ClusterInformation]:  # pylint: disable=too-many-locals
         """
         Runs the 'nodetool describecluster' command on a node.
 
@@ -2161,10 +2165,12 @@ class ClusterTester(db_stats.TestStatsMixin,
 
         if describecluster_output.ok:
             desc_stdout = describecluster_output.stdout
-            name_pattern = re.compile("((?<=Name: )[\w _-]*)")
-            snitch_pattern = re.compile("((?<=Snitch: )[\w.]*)")
-            partitioner_pattern = re.compile("((?<=Partitioner: )[\w.]*)")
-            schema_versions_pattern = re.compile("([a-z0-9-]{36}: \[[\d., ]*\])")
+            name_pattern = re.compile("((?<=Name: )[\w _-]*)")  # pylint: disable=anomalous-backslash-in-string
+            snitch_pattern = re.compile("((?<=Snitch: )[\w.]*)")  # pylint: disable=anomalous-backslash-in-string
+            partitioner_pattern = re.compile(
+                "((?<=Partitioner: )[\w.]*)")  # pylint: disable=anomalous-backslash-in-string
+            schema_versions_pattern = re.compile(
+                "([a-z0-9-]{36}: \[[\d., ]*\])")  # pylint: disable=anomalous-backslash-in-string
 
             name = name_pattern.search(desc_stdout).group()
             snitch = snitch_pattern.search(desc_stdout).group()
@@ -2252,34 +2258,35 @@ class ClusterTester(db_stats.TestStatsMixin,
         source_modules = []
         result = False
         with open(self.left_processes_log, 'a') as log_file:
-            for th_num, th in enumerate(threading.enumerate()):
-                if th is threading.current_thread():
+            for thread in threading.enumerate():
+                if thread is threading.current_thread():
                     continue
                 result = True
                 source = '<no code available>'
                 module = 'Unknown'
-                if th.__class__ is threading.Thread:
-                    if th.run.__func__ is not threading.Thread.run:
-                        module = th.run.__module__
-                        source = inspect.getsource(th.run)
-                    elif getattr(th, '_target', None):
-                        module = th._target.__module__
-                        source = inspect.getsource(th._target)
+                if thread.__class__ is threading.Thread:
+                    if thread.run.__func__ is not threading.Thread.run:
+                        module = thread.run.__module__
+                        source = inspect.getsource(thread.run)
+                    elif getattr(thread, '_target', None):
+                        module = thread._target.__module__  # pylint: disable=protected-access
+                        source = inspect.getsource(thread._target)  # pylint: disable=protected-access
                 else:
-                    module = th.__module__
-                    source = inspect.getsource(th.__class__)
+                    module = thread.__module__
+                    source = inspect.getsource(thread.__class__)
                 if module not in source_modules:
                     source_modules.append(module)
-                log_file.write(f"========= Thread {th.name} from {module} =========\n")
+                log_file.write(f"========= Thread {thread.name} from {module} =========\n")
                 log_file.write(f"========= SOURCE =========\n{source}\n")
-                log_file.write(f"========= STACK TRACE =========\n{self._get_stacktrace(th)}\n")
-                log_file.write(f"========= END OF Thread {th.name} from {module} =========\n")
+                log_file.write(f"========= STACK TRACE =========\n{self._get_stacktrace(thread)}\n")
+                log_file.write(f"========= END OF Thread {thread.name} from {module} =========\n")
         if result:
-            self.log.error(f"There are some threads left alive from following modules: {','.join(source_modules)}")
+            self.log.error("There are some threads left alive from following modules: %s",
+                           ",".join(source_modules))
         return result
 
-    def _get_stacktrace(self, thread):
-        frame = sys._current_frames().get(thread.ident, None)
+    def _get_stacktrace(self, thread):  # pylint: disable=no-self-use
+        frame = sys._current_frames().get(thread.ident, None)  # pylint: disable=protected-access
         output = []
         for filename, lineno, name, line in traceback.extract_stack(frame):
             output.append('File: "%s", line %d, in %s' % (filename,
@@ -2294,7 +2301,7 @@ class ClusterTester(db_stats.TestStatsMixin,
             return False
         source_modules = []
         with open(self.left_processes_log, 'a') as log_file:
-            for proc_num, proc in enumerate(multiprocessing.active_children()):
+            for proc in multiprocessing.active_children():
                 source = '<no code available>'
                 module = 'Unknown'
                 if proc.__class__ is multiprocessing.Process:
@@ -2309,7 +2316,8 @@ class ClusterTester(db_stats.TestStatsMixin,
                 log_file.write(f"========= Process {proc.name} from {module} =========\n")
                 log_file.write(f"========= SOURCE =========\n{source}\n")
                 log_file.write(f"========= END OF Process {proc.name} from {module}  =========\n")
-        self.log.error(f"There are some processes left alive from the following modules {','.join(source_modules)}")
+        self.log.error("There are some processes left alive from the following modules %s",
+                       ",".join(source_modules))
         return True
 
     @silence()
@@ -2395,7 +2403,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         result = self.show_alive_threads()
         result = self.show_alive_processes() or result
         if result:
-            self.log.error(f'Please check {self.left_processes_log} log to see them')
+            self.log.error('Please check %s log to see them', self.left_processes_log)
 
     def _get_test_result_event(self) -> TestResultEvent:
         return TestResultEvent(
@@ -2549,7 +2557,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         self.log.debug("scylla_hints_manager_sent: %s", results)
         assert results, "No results from Prometheus"
         # if all are zeros the result will be False, otherwise we are still sending
-        return any([float(v[1]) for v in results[0]["values"]])
+        return any((float(v[1]) for v in results[0]["values"]))
 
     @retrying(n=30, sleep_time=60, allowed_exceptions=(AssertionError, UnexpectedExit, Failure))
     def wait_for_hints_to_be_sent(self, node, num_dest_nodes):
@@ -2568,9 +2576,9 @@ class ClusterTester(db_stats.TestStatsMixin,
             results = self.prometheus_db.query(query=query, start=starting_from, end=time.time())
             err_msg = "There were hint manager %s detected during the test!" % (
                 "drops" if "dropped" in query else "errors")
-            assert any([float(v[1]) for v in results[0]["values"]]) is False, err_msg
+            assert any((float(v[1]) for v in results[0]["values"])) is False, err_msg
 
-    def get_data_set_size(self, cs_cmd):
+    def get_data_set_size(self, cs_cmd):  # pylint: disable=inconsistent-return-statements
         """:returns value of n in stress comand, that is approximation and currently doesn't take in consideration
             column size definitions if they present in the command
         """
@@ -2600,7 +2608,7 @@ class ClusterTester(db_stats.TestStatsMixin,
                                                                           _registry=self.events_processes_registry))
         if self.db_cluster.latency_results and self.create_stats:
             self.db_cluster.latency_results = calculate_latency(self.db_cluster.latency_results)
-            self.log.debug(f'collected latency values are: {self.db_cluster.latency_results}')
+            self.log.debug('collected latency values are: %s', self.db_cluster.latency_results)
             self.update({"latency_during_ops": self.db_cluster.latency_results})
 
             self.update_test_details()
@@ -2635,14 +2643,16 @@ class ClusterTester(db_stats.TestStatsMixin,
         except Exception as ex:  # pylint: disable=broad-except
             self.log.exception('Failed to check regression: %s', ex)
 
-    def check_regression_multi_baseline(self, subtests_info=None, metrics=None, email_subject=None):
+    def check_regression_multi_baseline(self, subtests_info=None,  # pylint: disable=inconsistent-return-statements
+                                        metrics=None, email_subject=None):
         results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
                                                       send_email=self.params.get('send_email'),
                                                       email_recipients=self.params.get('email_recipients'),
                                                       events=get_events_grouped_by_category(
                                                           _registry=self.events_processes_registry))
         if email_subject is None:
-            email_subject = 'Performance Regression Compare Results - {test.test_name} - {test.software.scylla_server_any.version.as_string}'
+            email_subject = ('Performance Regression Compare Results - {test.test_name} - '
+                             '{test.software.scylla_server_any.version.as_string}')
             email_postfix = self.params.get('email_subject_postfix')
             if email_postfix:
                 email_subject += ' - ' + email_postfix
@@ -2677,12 +2687,12 @@ class ClusterTester(db_stats.TestStatsMixin,
             assert results or results == [], "No results from Prometheus"
             # if all are zeros the result will be False, otherwise there are still compactions
             if results:
-                assert any([float(v[1]) for v in results[0]["values"]]) is False, \
+                assert any((float(v[1]) for v in results[0]["values"])) is False, \
                     "Waiting until all compactions settle down"
 
         is_compactions_done()
 
-    def metric_has_data(self, metric_query, n=80, sleep_time=60, ):
+    def metric_has_data(self, metric_query, n=80, sleep_time=60, ):  # pylint: disable=invalid-name
         """
         wait for any prometheus metric to have data in it
 
@@ -2700,10 +2710,10 @@ class ClusterTester(db_stats.TestStatsMixin,
         def is_metric_has_data():
             now = time.time()
             results = self.prometheus_db.query(query=metric_query, start=now - 60, end=now)
-            self.log.debug(f"metric_has_data: {results}")
+            self.log.debug("metric_has_data: %s", results)
             assert results, "No results from Prometheus"
             if results:
-                assert any([float(v[1]) for v in results[0]["values"]]) > 0, f"{metric_query} didn't has data in it"
+                assert any((float(v[1]) for v in results[0]["values"])) > 0, f"{metric_query} didn't has data in it"
 
         is_metric_has_data()
 
@@ -2823,7 +2833,9 @@ class ClusterTester(db_stats.TestStatsMixin,
         node.wait_db_up()
 
     def get_used_capacity(self, node) -> float:  # pylint: disable=too-many-locals
-        # node_filesystem_size_bytes{mountpoint="/var/lib/scylla", instance=~".*?10.0.79.46.*?"}-node_filesystem_avail_bytes{mountpoint="/var/lib/scylla", instance=~".*?10.0.79.46.*?"}
+        # node_filesystem_size_bytes{
+        #     mountpoint="/var/lib/scylla", instance=~".*?10.0.79.46.*?"}-node_filesystem_avail_bytes{
+        #         mountpoint="/var/lib/scylla", instance=~".*?10.0.79.46.*?"}
         fs_size_metric = 'node_filesystem_size_bytes'
         fs_size_metric_old = 'node_filesystem_size'
         avail_size_metric = 'node_filesystem_avail_bytes'
@@ -2836,7 +2848,7 @@ class ClusterTester(db_stats.TestStatsMixin,
 
         used_capacity_query = f'{filesystem_capacity_query}-{avail_size_metric}{capacity_query_postfix}'
 
-        self.log.debug(f"filesystem_capacity_query: {filesystem_capacity_query}")
+        self.log.debug("filesystem_capacity_query: %s", filesystem_capacity_query)
 
         fs_size_res = self.prometheus_db.query(query=filesystem_capacity_query,
                                                start=int(time.time()) - 5, end=int(time.time()))
@@ -2844,7 +2856,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         if not fs_size_res[0]:  # if no returned values - try the old metric names.
             filesystem_capacity_query = f'{fs_size_metric_old}{capacity_query_postfix}'
             used_capacity_query = f'{filesystem_capacity_query}-{avail_size_metric_old}{capacity_query_postfix}'
-            self.log.debug(f"filesystem_capacity_query: {filesystem_capacity_query}")
+            self.log.debug("filesystem_capacity_query: %s", filesystem_capacity_query)
             fs_size_res = self.prometheus_db.query(query=filesystem_capacity_query, start=int(time.time()) - 5,
                                                    end=int(time.time()))
 
@@ -2899,8 +2911,8 @@ class ClusterTester(db_stats.TestStatsMixin,
 
         try:
             email_data = self.get_email_data()
-        except Exception as e:
-            self.log.error(f"Error while saving email data. Error: {e}")
+        except Exception as exc:  # pylint: disable=broad-except
+            self.log.error("Error while saving email data. Error: %s", exc)
 
         json_file_path = os.path.join(self.logdir, "email_data.json")
 
@@ -2993,7 +3005,7 @@ class ClusterTester(db_stats.TestStatsMixin,
         elif backend in ("baremetal", "docker"):
             scylla_instance_type = "N/A"
         else:
-            self.log.error(f"Don't know how to get instance type for the '{backend}' backend.")
+            self.log.error("Don't know how to get instance type for the '%s' backend.", backend)
             scylla_instance_type = "N/A"
 
         job_name = os.environ.get('JOB_NAME').split("/")[-1] if os.environ.get('JOB_NAME') else config_file_name
@@ -3042,7 +3054,7 @@ class ClusterTester(db_stats.TestStatsMixin,
             output.append(result['message'])
         return output
 
-    def _get_live_node(self) -> Optional[BaseNode]:
+    def _get_live_node(self) -> Optional[BaseNode]:  # pylint: disable=inconsistent-return-statements
         parallel_obj = ParallelObject(objects=self.db_cluster.nodes)
         parallel_obj_results = parallel_obj.run(self._check_ssh_node_connectivity,
                                                 ignore_exceptions=True)
