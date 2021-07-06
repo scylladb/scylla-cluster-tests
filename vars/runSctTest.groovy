@@ -28,6 +28,9 @@ def call(Map params, String region, functional_test = false){
     if [[ -n "${params.aws_region ? params.aws_region : ''}" ]] ; then
         export SCT_REGION_NAME=${aws_region}
     fi
+    if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
+        export SCT_GCE_DATACENTER=${params.gce_datacenter}
+    fi
 
     if [[ -n "${params.new_version ? params.new_version : ''}" ]] ; then
         export SCT_NEW_VERSION="${params.new_version}"

@@ -1,7 +1,7 @@
 #! groovy
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.region_name)
+    def builder = getJenkinsLabels(params.backend, params.region_name, params.gce_datacenter)
 
     pipeline {
         agent {
@@ -44,6 +44,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('region_name', '')}",
                    description: 'AWS region with Scylla AMI (for AMI test, ignored otherwise)',
                    name: 'region_name')
+            string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
+                   description: 'GCE datacenter',
+                   name: 'gce_datacenter')
             string(defaultValue: '',
                    description: "a Scylla docker image to run against (for docker backend.) Should be `scylladb/scylla' for official images",
                    name: 'scylla_docker_image')
@@ -123,6 +126,9 @@ def call(Map pipelineParams) {
                                                         export SCT_REGION_NAME="${params.region_name}"
                                                     elif [[ ! -z "${params.gce_image_db}" ]]; then
                                                         export SCT_GCE_IMAGE_DB="${params.gce_image_db}"
+                                                        if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
+                                                            export SCT_GCE_DATACENTER=${params.gce_datacenter}
+                                                        fi
                                                     elif [[ ! -z "${params.scylla_version}" ]]; then
                                                         export SCT_SCYLLA_VERSION="${params.scylla_version}"
                                                     elif [[ ! -z "${params.scylla_repo}" ]]; then

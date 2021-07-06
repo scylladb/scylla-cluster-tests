@@ -1,7 +1,7 @@
 #!groovy
 import groovy.json.JsonSlurper
 
-def call(String backend, String region=null) {
+def call(String backend, String region=null, String datacenter=null) {
     try {
         regionList = new JsonSlurper().parseText(region)
         region = regionList[0]
@@ -14,30 +14,38 @@ def call(String backend, String region=null) {
                           'aws-eu-north-1': 'aws-sct-builders-eu-north-1',
                           'aws-eu-central-1': 'aws-sct-builders-eu-central-1',
                           'aws-us-east-1' : 'aws-sct-builders-us-east-1-new',
+                          'gce-us-east1': 'gce-sct-builders-us-east1',
+                          'gce-us-west1': 'gce-sct-builders-us-west1',
                           'gce': 'gce-sct-builders',
                           'docker': 'sct-builders']
 
     def cloud_provider = getCloudProviderFromBackend(backend)
 
-    if (cloud_provider == 'aws' && region)
+    if ((cloud_provider == 'aws' && region) || (cloud_provider == 'gce' && datacenter))
     {
-        println("Finding builder for AWS region: " + region)
-        if (region == "random"){
-            def aws_supported_regions = ["eu-west-2", "eu-north-1", "eu-central-1"]
-            Collections.shuffle(aws_supported_regions)
-            region = aws_supported_regions[0]
-        }
-        def cp_region = cloud_provider + "-" + region
-        println("Checking if we have a label for " + cp_region)
-        def label = jenkins_labels.get(cp_region, null)
-        if (label != null){
-            println("Found AWS builder with label: " + label)
-            return [ "label": label, "region": region ]
-        }
-        else{
-            throw new Exception("=================== AWS region ${region} not supported ! ===================")
+        if (cloud_provider == 'aws')
+        {
+            def supported_regions = ["eu-west-2", "eu-north-1", "eu-central-1"]
+        } else {
+            def supported_datacenters = ["us-east1", "us-west1"]
         }
 
+        println("Finding builder for region: " + region)
+        if (region == "random" || datacenter == "random"){
+            Collections.shuffle(supported_regions)
+            region = supported_regions[0]
+        }
+
+        def cp_region = cloud_provider + "-" + region
+        println("Checking if we have a label for " + cp_region)
+
+        def label = jenkins_labels.get(cp_region, null)
+        if (label != null){
+            println("Found builder with label: " + label)
+            return [ "label": label, "region": region ]
+        } else {
+            throw new Exception("=================== ${cloud_provider} region ${region} not supported ! ===================")
+        }
     }
     else
     {
