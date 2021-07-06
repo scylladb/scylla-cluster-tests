@@ -386,6 +386,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # Let's wait for the target Node to have their services re-started
             self.log.info('Waiting scylla services to be restarted after we killed them...')
             self.target_node.wait_db_up(timeout=14400)
+            if self.cluster.params.get('use_mgmt'):
+                # Workaround for https://github.com/scylladb/scylla-manager/issues/2813
+                # When scylla take too long time to bring api port up
+                #  scylla-manager-agent fails to start and never go up
+                self.target_node.start_service(service_name='scylla-manager-agent', timeout=600, ignore_status=True)
             self.log.info('Waiting JMX services to be restarted after we killed them...')
             self.target_node.wait_jmx_up()
         self.cluster.wait_for_schema_agreement()
