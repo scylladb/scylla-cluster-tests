@@ -99,14 +99,34 @@ class CDCReaderStressEvent(BaseYcsbStressEvent, abstract=True):
 CDCReaderStressEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR)
 
 
-class NdbenchStressEvent(StressEvent, abstract=True):
+class NdBenchStressEvent(StressEvent, abstract=True):
     failure: Type[StressEventProtocol]
     error: Type[StressEventProtocol]
     start: Type[StressEventProtocol]
     finish: Type[StressEventProtocol]
 
 
-NdbenchStressEvent.add_stress_subevents(failure=Severity.CRITICAL, error=Severity.ERROR)
+NdBenchStressEvent.add_stress_subevents(start=Severity.NORMAL,
+                                        finish=Severity.NORMAL,
+                                        error=Severity.ERROR,
+                                        failure=Severity.CRITICAL)
+
+
+class NdBenchErrorEvent(LogEvent, abstract=True):
+    Error: Type[LogEventProtocol]
+    Failure: Type[LogEventProtocol]
+
+
+NdBenchErrorEvent.add_subevent_type("Error", severity=Severity.ERROR, regex=r"\sERROR")
+NdBenchErrorEvent.add_subevent_type("Failure", severity=Severity.CRITICAL, regex=f"\sFAILURE|\sFAILED")
+
+
+NDBENCH_ERROR_EVENTS = (
+    NdBenchErrorEvent.Failure(),
+    NdBenchErrorEvent.Error()
+)
+
+NDBENCH_ERROR_EVENTS_PATTERNS = [(re.compile(event.regex), event) for event in NDBENCH_ERROR_EVENTS]
 
 
 class KclStressEvent(StressEvent, abstract=True):

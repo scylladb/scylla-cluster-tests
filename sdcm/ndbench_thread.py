@@ -16,17 +16,44 @@ import re
 import logging
 import time
 import uuid
-from distutils.util import strtobool  # pylint: disable=import-error,no-name-in-module
+from typing import Any
 
 from sdcm.prometheus import nemesis_metrics_obj
-from sdcm.sct_events.loaders import NdbenchStressEvent
+from sdcm.sct_events.loaders import NdBenchStressEvent, NDBENCH_ERROR_EVENTS_PATTERNS
 from sdcm.utils.common import FileFollowerThread
-from sdcm.remote import FailuresWatcher
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+class NdBenchStressEventsPublisher(FileFollowerThread):
+    def __init__(self, node: Any, ndbench_log_filename: str, event_id: str = None):
+        super().__init__()
+
+        self.node = str(node)
+        self.cs_log_filename = ndbench_log_filename
+        self.event_id = event_id
+
+    def run(self) -> None:
+        while not self.stopped():
+            if not os.path.isfile(self.cs_log_filename):
+                time.sleep(0.5)
+                continue
+
+            for line_number, line in enumerate(self.follow_file(self.cs_log_filename)):
+                if self.stopped():
+                    break
+
+                for pattern, event in NDBENCH_ERROR_EVENTS_PATTERNS:
+                    if self.event_id:
+                        # Connect the event to the stress load
+                        event.event_id = self.event_id
+
+                    if pattern.search(line):
+                        event.add_info(node=self.node, line=line, line_number=line_number).publish()
+                        break  # Stop iterating patterns to avoid creating two events for one line of the log
 
 
 class NdBenchStatsPublisher(FileFollowerThread):
@@ -76,22 +103,8 @@ class NdBenchStatsPublisher(FileFollowerThread):
                             operation, name = key.split('_', 1)
                             self.set_metric(operation, name, float(value))
 
-                except Exception:  # pylint: disable=broad-except
-                    LOGGER.exception("fail to send metric")
-
-
-def convert_bool_or_int(value):
-    try:
-        return int(value)
-    except ValueError:
-        pass
-
-    try:
-        return strtobool(value)
-    except ValueError:
-        pass
-
-    return value
+                except Exception as exc:
+                    LOGGER.warning("Failed to send metric. Failed with exception {exc}".format(exc=exc))
 
 
 class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
@@ -111,10 +124,6 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
         log_file_name = os.path.join(loader.logdir, f'ndbench-l{loader_idx}-c{cpu_idx}-{uuid.uuid4()}.log')
         LOGGER.debug('ndbench local log: %s', log_file_name)
 
-        def raise_event_callback(sentinel, line):  # pylint: disable=unused-argument
-            if line:
-                NdbenchStressEvent.error(node=loader, stress_cmd=self.stress_cmd, errors=[str(line), ]).publish()
-
         LOGGER.debug("running: %s", self.stress_cmd)
 
         if self.stress_num > 1:
@@ -122,27 +131,27 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
         else:
             node_cmd = self.stress_cmd
 
-        docker = RemoteDocker(loader, 'scylladb/hydra-loaders:ndbench-jdk8-20200209',
+        docker = RemoteDocker(loader, 'molokoknifey/repos:ndbench-jdk8-20210701',
                               extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
 
-        node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; cd /ndbench && {node_cmd}'
+        node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {node_cmd}'
 
-        NdbenchStressEvent.start(node=loader, stress_cmd=self.stress_cmd).publish()
+        NdBenchStressEvent.start(node=loader, stress_cmd=self.stress_cmd).publish()
 
-        with NdBenchStatsPublisher(loader, loader_idx, ndbench_log_filename=log_file_name):
+        with NdBenchStatsPublisher(loader, loader_idx, ndbench_log_filename=log_file_name), \
+                NdBenchStressEventsPublisher(node=loader, ndbench_log_filename=log_file_name):
             try:
                 return docker.run(cmd=node_cmd,
                                   timeout=self.timeout + self.shutdown_timeout,
                                   ignore_status=True,
                                   log_file=log_file_name,
-                                  verbose=True,
-                                  watchers=[FailuresWatcher(r'\sERROR|\sFAILURE|\sFAILED|\sis\scorrupt', callback=raise_event_callback, raise_exception=False)])
+                                  verbose=True)
             except Exception as exc:
-                NdbenchStressEvent.failure(node=str(loader),
+                NdBenchStressEvent.failure(node=str(loader),
                                            stress_cmd=self.stress_cmd,
                                            log_file_name=log_file_name,
                                            errors=[format_stress_cmd_error(exc), ]).publish()
             finally:
-                NdbenchStressEvent.finish(node=loader,
+                NdBenchStressEvent.finish(node=loader,
                                           stress_cmd=self.stress_cmd,
                                           log_file_name=log_file_name).publish()

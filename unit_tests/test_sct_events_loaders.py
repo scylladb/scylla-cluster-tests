@@ -291,16 +291,16 @@ class TestCDCReaderStressEvent(unittest.TestCase):
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
 
-class TestNdbenchStressEvent(unittest.TestCase):
+class TestNdBenchStressEvent(unittest.TestCase):
     def test_subevents(self):
-        self.assertTrue(issubclass(NdbenchStressEvent.failure, NdbenchStressEvent))
-        self.assertTrue(issubclass(NdbenchStressEvent.error, NdbenchStressEvent))
-        self.assertFalse(hasattr(NdbenchStressEvent, "timeout"))
-        self.assertTrue(issubclass(NdbenchStressEvent.start, NdbenchStressEvent))
-        self.assertTrue(issubclass(NdbenchStressEvent.finish, NdbenchStressEvent))
+        self.assertTrue(issubclass(NdBenchStressEvent.failure, NdBenchStressEvent))
+        self.assertTrue(issubclass(NdBenchStressEvent.error, NdBenchStressEvent))
+        self.assertFalse(hasattr(NdBenchStressEvent, "timeout"))
+        self.assertTrue(issubclass(NdBenchStressEvent.start, NdBenchStressEvent))
+        self.assertTrue(issubclass(NdBenchStressEvent.finish, NdBenchStressEvent))
 
     def test_without_errors(self):
-        event = NdbenchStressEvent.error(node=[], stress_cmd="c-s", log_file_name="1.log")
+        event = NdBenchStressEvent.error(node=[], stress_cmd="c-s", log_file_name="1.log")
         self.assertEqual(event.severity, Severity.ERROR)
         self.assertEqual(event.node, "[]")
         self.assertEqual(event.stress_cmd, "c-s")
@@ -308,12 +308,12 @@ class TestNdbenchStressEvent(unittest.TestCase):
         self.assertIsNone(event.errors)
         event.event_id = "a07b48fa-2706-465b-b139-698d35909cfa"
         self.assertEqual(str(event),
-                         "(NdbenchStressEvent Severity.ERROR) period_type=not-set "
+                         "(NdBenchStressEvent Severity.ERROR) period_type=not-set "
                          "event_id=a07b48fa-2706-465b-b139-698d35909cfa: type=error node=[]\nstress_cmd=c-s")
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
     def test_with_errors(self):
-        event = NdbenchStressEvent.failure(node="node1", errors=["e1", "e2"])
+        event = NdBenchStressEvent.failure(node="node1", errors=["e1", "e2"])
         self.assertEqual(event.severity, Severity.CRITICAL)
         self.assertEqual(event.node, "node1")
         self.assertIsNone(event.stress_cmd)
@@ -322,7 +322,7 @@ class TestNdbenchStressEvent(unittest.TestCase):
         event.event_id = "e45b347e-c395-4583-9f19-6e1fcdf31fab"
         self.assertEqual(
             str(event),
-            "(NdbenchStressEvent Severity.CRITICAL) period_type=not-set "
+            "(NdBenchStressEvent Severity.CRITICAL) period_type=not-set "
             "event_id=e45b347e-c395-4583-9f19-6e1fcdf31fab: type=failure "
             "node=node1\nerrors:\n\ne1\ne2"
         )
