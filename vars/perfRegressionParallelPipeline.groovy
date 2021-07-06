@@ -3,7 +3,7 @@ import groovy.json.JsonSlurper
 
 def call(Map pipelineParams) {
 
-    def builder = getJenkinsLabels(params.backend, params.aws_region)
+    def builder = getJenkinsLabels(params.backend, params.aws_region, params.gce_datacenter)
 
     pipeline {
         agent {
@@ -23,6 +23,10 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('aws_region', 'eu-west-1')}",
                description: 'us-east-1|eu-west-1',
                name: 'aws_region')
+
+            string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
+                   description: 'GCE datacenter',
+                   name: 'gce_datacenter')
 
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'scylla_version')
@@ -125,6 +129,11 @@ def call(Map pipelineParams) {
                                                         export SCT_CLUSTER_BACKEND=${params.backend}
                                                         export SCT_REGION_NAME=${pipelineParams.aws_region}
                                                         export SCT_CONFIG_FILES=${test_config}
+
+                                                        if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
+                                                            export SCT_GCE_DATACENTER=${params.gce_datacenter}
+                                                        fi
+
                                                         export SCT_EMAIL_RECIPIENTS="${email_recipients}"
                                                         if [[ ! -z "${params.scylla_ami_id}" ]] ; then
                                                             export SCT_AMI_ID_DB_SCYLLA=${params.scylla_ami_id}
@@ -178,6 +187,9 @@ def call(Map pipelineParams) {
 
                                                         export SCT_CLUSTER_BACKEND="${params.backend}"
                                                         export SCT_REGION_NAME=${aws_region}
+                                                        if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
+                                                            export SCT_GCE_DATACENTER=${params.gce_datacenter}
+                                                        fi
                                                         export SCT_CONFIG_FILES=${test_config}
 
                                                         echo "start collect logs ..."

@@ -28,13 +28,25 @@ LOGGER = logging.getLogger(__name__)
 
 GceDriver = get_driver(Provider.GCE)  # pylint: disable=invalid-name
 
+# The keys are the region name, the value is the available zones, which will be used for random.choice()
+SUPPORTED_REGIONS = {
+    # us-east1 zones: b, c, and d. Details: https://cloud.google.com/compute/docs/regions-zones#locations
+    # choose zones c and d twice as often as zone b
+    'us-east1': 'bccdd',
+    'us-west1': 'abc'}
+
 
 def append_zone(region: str) -> str:
-    assert region.startswith("us-east1"), "only `us-east1' region is supported"
-    if region.count("-") == 1:
-        # us-east1 zones: b, c, and d. Details: https://cloud.google.com/compute/docs/regions-zones#locations
-        return f"{region}-{random.choice('bccdd')}"  # choose zones c and d twice as often as zone b
-    return region
+    dash_count = region.count("-")
+    if dash_count == 2:
+        # return as is if region already has availability zone in it
+        return region
+    if dash_count != 1:
+        raise Exception(f'Wrong region name: {region}')
+    availability_zones = SUPPORTED_REGIONS.get(region, None)
+    if not availability_zones:
+        raise Exception(f'Unsupported region: {region}')
+    return f"{region}-{random.choice(availability_zones)}"
 
 
 def _get_gce_service(credentials: dict, datacenter: str) -> GceDriver:
