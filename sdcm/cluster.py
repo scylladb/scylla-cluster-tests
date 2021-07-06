@@ -394,12 +394,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @cached_property
     def is_nonroot_install(self):
-        return self.parent_cluster.params.get("unified_package") and self.parent_cluster.params.get("nonroot_offline_install")
+        return self.parent_cluster.params.get("unified_package") \
+            and self.parent_cluster.params.get("nonroot_offline_install")
 
     @property
     def is_client_encrypt(self):
         result = self.remoter.run(
-            f"grep ^client_encryption_options: {self.add_install_prefix(SCYLLA_YAML_PATH)} -A 3 | grep enabled | awk '{{print $2}}'", ignore_status=True)
+            f"grep ^client_encryption_options: {self.add_install_prefix(SCYLLA_YAML_PATH)} "
+            f"-A 3 | grep enabled | awk '{{print $2}}'", ignore_status=True)
         return 'true' in result.stdout.lower()
 
     @property
@@ -2007,18 +2009,22 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             elif self.is_debian8():
                 self.remoter.run("sudo sed -i -e 's/jessie-updates/stable-updates/g' /etc/apt/sources.list")
                 self.remoter.run(
-                    'echo "deb http://archive.debian.org/debian jessie-backports main" |sudo tee /etc/apt/sources.list.d/backports.list')
+                    'echo "deb http://archive.debian.org/debian jessie-backports main" '
+                    '|sudo tee /etc/apt/sources.list.d/backports.list')
                 self.remoter.run(
-                    r"sudo sed -i -e 's/:\/\/.*\/debian jessie-backports /:\/\/archive.debian.org\/debian jessie-backports /g' /etc/apt/sources.list.d/*.list")
+                    r"sudo sed -i -e 's/:\/\/.*\/debian jessie-backports /:\/\/archive.debian.org\/debian"
+                    r" jessie-backports /g' /etc/apt/sources.list.d/*.list")
                 self.remoter.run(
                     "echo 'Acquire::Check-Valid-Until \"false\";' |sudo tee /etc/apt/apt.conf.d/99jessie-backports")
                 self.remoter.run('sudo apt-get update')
                 self.remoter.run('sudo apt-get install gnupg-curl -y')
                 self.remoter.run(
-                    'sudo apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key')
+                    'sudo apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/'
+                    'scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key')
                 self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19')
                 self.remoter.run(
-                    'echo "deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/ /" |sudo tee /etc/apt/sources.list.d/scylla-3rdparty.list')
+                    'echo "deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/'
+                    'Debian_8.0/ /" |sudo tee /etc/apt/sources.list.d/scylla-3rdparty.list')
                 self.remoter.run('sudo apt-get update')
                 self.remoter.run('sudo apt-get install -y openjdk-8-jre-headless -t jessie-backports')
                 self.remoter.run('sudo update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64')
@@ -4010,7 +4016,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             nemesis_thread.join(timeout)
         self.nemesis_threads = []
 
-    def node_config_setup(self, node, seed_address=None, endpoint_snitch=None, murmur3_partitioner_ignore_msb_bits=None, client_encrypt=None):  # pylint: disable=too-many-arguments,invalid-name
+    def node_config_setup(self, node, seed_address=None,  # pylint: disable=too-many-arguments,invalid-name
+                          endpoint_snitch=None, murmur3_partitioner_ignore_msb_bits=None, client_encrypt=None):
         node.config_setup(seed_address=seed_address,
                           cluster_name=self.name,  # pylint: disable=no-member
                           enable_exp=self.params.get('experimental'),
@@ -4181,7 +4188,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             # when scylla-server process will be restarted
             node.replacement_node_ip = None
             node.remoter.run(
-                f'sudo sed -i -e "s/^replace_address_first_boot:/# replace_address_first_boot:/g" {node.add_install_prefix(SCYLLA_YAML_PATH)}')
+                f'sudo sed -i -e "s/^replace_address_first_boot:/# replace_address_first_boot:/g" '
+                f'{node.add_install_prefix(SCYLLA_YAML_PATH)}')
 
     @staticmethod
     def verify_logging_from_nodes(nodes_list):
