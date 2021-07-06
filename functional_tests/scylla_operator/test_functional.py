@@ -121,3 +121,29 @@ def test_mgmt_backup(tester, db_cluster):
     mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ])
     status = mgr_task.wait_and_get_final_status(timeout=54000, step=5, only_final=True)
     assert TaskStatus.DONE == status
+
+
+def test_listen_address(tester, db_cluster):
+    """
+    Issues: https://github.com/scylladb/scylla-operator/issues/484
+            https://github.com/scylladb/scylla/issues/8381
+    Fix commit: https://github.com/scylladb/scylla-operator/pull/529
+    """
+    all_errors = []
+    for node in db_cluster.nodes:
+        result = node.remoter.run("ps aux | grep docker-entrypoint.py | grep -Po '\\-\\-listen-address=[^ ]+' | "
+                                  "sed -r 's/--listen-address[= ]([^ ]+)/\\1/'", ignore_status=True)
+        # Check in command line first
+        if result.ok:
+            if result.stdout.strip() != '0.0.0.0':
+                all_errors.append(f"Node {node.name} has wrong listen-address argument {result.stdout}")
+            continue
+        # If no --listen-address in command line then proceed with scylla.yaml
+        with node.actual_scylla_yaml() as scylla_yaml:
+            listen_address = scylla_yaml.get('listen_address')
+            if not listen_address:
+                all_errors.append(f"Not found listen_address flag in the {node.name} scylla.yaml")
+            if listen_address != '0.0.0.0':
+                all_errors.append(f'Node {node.name} has wrong listen_address "{listen_address}" in scylla.yaml')
+
+    assert not all_errors, "Following errors found:\n{'\n'.join(errors)}"
