@@ -1102,8 +1102,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         wait.wait_for(keyspace_available, timeout=120, step=60,
                       text='Waiting until keyspace {} is available'.format(keyspace), throw_exc=False)
         try:
+            # Don't need NodetoolEvent when waiting for space_node_threshold before start the nemesis, not publish it
             result = self.run_nodetool(sub_cmd='cfstats', args=keyspace, timeout=60,
-                                       warning_event_on_exception=(Failure, UnexpectedExit))
+                                       warning_event_on_exception=(Failure, UnexpectedExit), publish_event=False)
         except (Failure, UnexpectedExit):
             self.log.error('nodetool error - see tcpdump thread uuid %s for '
                            'debugging info', tcpdump_id)
