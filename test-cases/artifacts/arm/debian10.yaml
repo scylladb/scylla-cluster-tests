@@ -1,0 +1,8 @@
+ami_db_scylla_user: 'admin'
+ami_id_db_scylla: 'ami-0dfa62d39d27bdd6b'  # not free
+region_name: 'eu-west-1'
+instance_type_db: 'r6gd.large'
+# enhanced network isn't supported
+append_scylla_setup_args: ' --no-ec2-check '
+use_preinstalled_scylla: false
+use_mgmt: false

@@ -1,0 +1,17 @@
+#! groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+artifactsPipeline(
+    test_config: '''["test-cases/artifacts/ubuntu2004.yaml", "test-cases/artifacts/arm/ubuntu2004.yaml"]''',
+    backend: 'aws',
+    region_name: 'eu-west-1',
+    provision_type: 'spot_low_price',
+
+    // scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/deb/unstable/focal/master/latest/scylladb-manager-master/scylla-manager.list',
+    scylla_mgmt_repo: '',
+
+    timeout: [time: 30, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy'
+)
