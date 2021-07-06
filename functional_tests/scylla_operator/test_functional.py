@@ -31,7 +31,7 @@ def test_cassandra_rackdc(cassandra_rackdc_properties):
     with cassandra_rackdc_properties() as props:
         original = props['prefer_local']
 
-    log.info(f"cassandra-rackdc.properties.prefer_local = {original}")
+    log.info("cassandra-rackdc.properties.prefer_local = %s", original)
 
     if original == 'false':
         changed = 'true'
@@ -72,7 +72,7 @@ def test_grow_shrink_cluster(tester, db_cluster):
 def test_drain_and_replace_node_kubernetes(tester, db_cluster):
     target_node = random.choice(db_cluster.non_seed_nodes)
     old_uid = target_node.k8s_pod_uid
-    log.info(f'TerminateNode %s (uid=%s)', target_node, old_uid)
+    log.info('TerminateNode %s (uid=%s)', target_node, old_uid)
     target_node.drain_k8s_node()
     target_node.mark_to_be_replaced()
     target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
@@ -84,11 +84,11 @@ def test_drain_and_replace_node_kubernetes(tester, db_cluster):
 def test_drain_wait_and_replace_node_kubernetes(tester, db_cluster):
     target_node = random.choice(db_cluster.non_seed_nodes)
     old_uid = target_node.k8s_pod_uid
-    log.info(f'TerminateNode %s (uid=%s)', target_node, old_uid)
+    log.info('TerminateNode %s (uid=%s)', target_node, old_uid)
     target_node.drain_k8s_node()
     target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
     old_uid = target_node.k8s_pod_uid
-    log.info(f'Mark %s (uid=%s) to be replaced', target_node, old_uid)
+    log.info('Mark %s (uid=%s) to be replaced', target_node, old_uid)
     target_node.mark_to_be_replaced()
     target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
     target_node.wait_for_pod_readiness()
