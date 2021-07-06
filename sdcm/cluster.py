@@ -5094,6 +5094,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         run_script = dedent(f"""
             cd -P {self.monitor_install_path}
             mkdir -p {self.monitoring_data_dir}
+            echo "" > UA.sh
             ./start-all.sh \
             -D "{labels}" \
             -s `realpath "{self.monitoring_conf_dir}/scylla_servers.yml"` \
