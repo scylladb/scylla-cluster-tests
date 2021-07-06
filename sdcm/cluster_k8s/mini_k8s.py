@@ -160,7 +160,6 @@ class KindK8sMixin:
 
     def start_k8s_software(self) -> None:
         LOGGER.debug("Start Kind cluster")
-        target_user = self._target_user if self._target_user else 'root'
         script = dedent(f"""
             sysctl fs.protected_regular=0
             ip link set docker0 promisc on
@@ -188,6 +187,9 @@ class KindK8sMixin:
             kind create cluster --config /tmp/kind.cluster.yaml
         """)
         self.host_node.remoter.run(f"sudo -E bash -cxe '{script}'")
+
+    def stop_k8s_software(self):
+        self.host_node.remoter.run('kind delete cluster', ignore_status=True)
 
 
 class MinikubeK8sMixin:
@@ -236,6 +238,9 @@ class MinikubeK8sMixin:
             # sed -ri "s/${{ABS_MINIKUBE_DIR////\\\\/}}/${{ABS_KUBECONFIG_DIR////\\\\/}}\\/.minikube/g" $ABS_KUBECONFIG_DIR/config
         """)
         self.host_node.remoter.run(f"sudo -E bash -cxe '{script}'")
+
+    def stop_k8s_software(self):
+        self.host_node.remoter.run('minikube delete', ignore_status=True)
 
 
 class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
@@ -361,6 +366,13 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
         Start kind/k3d/minikube
         """
 
+    @property
+    @abc.abstractmethod
+    def stop_k8s_software(self):
+        """
+        Stop kind/k3d/minikube
+        """
+
     def deploy(self):
         if not self.is_docker_installed:
             self.setup_docker()
@@ -371,6 +383,9 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
         if not self.is_k8s_software_running:
             if cluster.TestConfig.REUSE_CLUSTER:
                 raise RuntimeError("SCT_REUSE_CLUSTER is set, but target host is not ready")
+            self.start_k8s_software()
+        elif not cluster.TestConfig.REUSE_CLUSTER:
+            self.stop_k8s_software()
             self.start_k8s_software()
         self.create_kubectl_config()
 
@@ -616,4 +631,4 @@ class RemoteMinimalScyllaPodCluster(LocalMinimalScyllaPodCluster, IptablesCluste
 
 
 class MonitorSetMinikube(MonitorSetGCE):
-    def install_scylla_manager(self, node, auth_token): ...
+    def install_scylla_manager(self, node): ...
