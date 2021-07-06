@@ -48,10 +48,13 @@ YcsbStressEvent.failure: CRITICAL
 YcsbStressEvent.error: ERROR
 YcsbStressEvent.start: NORMAL
 YcsbStressEvent.finish: NORMAL
-NdbenchStressEvent.failure: CRITICAL
-NdbenchStressEvent.error: ERROR
-NdbenchStressEvent.start: NORMAL
-NdbenchStressEvent.finish: NORMAL
+NdBenchStressEvent.failure: CRITICAL
+NdBenchStressEvent.error: ERROR
+NdBenchStressEvent.start: NORMAL
+NdBenchStressEvent.finish: NORMAL
+NdBenchErrorEvent.BuildFailed: CRITICAL
+NdBenchErrorEvent.Error: ERROR
+NdBenchErrorEvent.Failure:  CRITICAL
 CDCReaderStressEvent.failure: CRITICAL
 CDCReaderStressEvent.error: ERROR
 CDCReaderStressEvent.start: NORMAL

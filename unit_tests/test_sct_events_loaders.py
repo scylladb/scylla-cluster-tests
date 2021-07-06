@@ -19,9 +19,9 @@ from invoke.runners import Result
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.loaders import \
-    GeminiEvent, CassandraStressEvent, ScyllaBenchEvent, YcsbStressEvent, NdbenchStressEvent, CDCReaderStressEvent, \
+    GeminiEvent, CassandraStressEvent, ScyllaBenchEvent, YcsbStressEvent, CDCReaderStressEvent, \
     KclStressEvent, CassandraStressLogEvent, ScyllaBenchLogEvent, GeminiLogEvent, \
-    CS_ERROR_EVENTS, SCYLLA_BENCH_ERROR_EVENTS
+    CS_ERROR_EVENTS, SCYLLA_BENCH_ERROR_EVENTS, NdBenchStressEvent
 
 
 class TestGeminiEvent(unittest.TestCase):
@@ -181,26 +181,26 @@ class TestCDCReaderStressEvent(unittest.TestCase):
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
 
-class TestNdbenchStressEvent(unittest.TestCase):
+class TestNdBenchStressEvent(unittest.TestCase):
     def test_subevents(self):
-        self.assertTrue(issubclass(NdbenchStressEvent.failure, NdbenchStressEvent))
-        self.assertTrue(issubclass(NdbenchStressEvent.error, NdbenchStressEvent))
-        self.assertFalse(hasattr(NdbenchStressEvent, "timeout"))
-        self.assertTrue(issubclass(NdbenchStressEvent.start, NdbenchStressEvent))
-        self.assertTrue(issubclass(NdbenchStressEvent.finish, NdbenchStressEvent))
+        self.assertTrue(issubclass(NdBenchStressEvent.failure, NdBenchStressEvent))
+        self.assertTrue(issubclass(NdBenchStressEvent.error, NdBenchStressEvent))
+        self.assertFalse(hasattr(NdBenchStressEvent, "timeout"))
+        self.assertTrue(issubclass(NdBenchStressEvent.start, NdBenchStressEvent))
+        self.assertTrue(issubclass(NdBenchStressEvent.finish, NdBenchStressEvent))
 
     def test_without_errors(self):
-        event = NdbenchStressEvent.error(node=[], stress_cmd="c-s", log_file_name="1.log")
+        event = NdBenchStressEvent.error(node=[], stress_cmd="c-s", log_file_name="1.log")
         self.assertEqual(event.severity, Severity.ERROR)
         self.assertEqual(event.node, "[]")
         self.assertEqual(event.stress_cmd, "c-s")
         self.assertEqual(event.log_file_name, "1.log")
         self.assertIsNone(event.errors)
-        self.assertEqual(str(event), "(NdbenchStressEvent Severity.ERROR): type=error node=[]\nstress_cmd=c-s")
+        self.assertEqual(str(event), "(NdBenchStressEvent Severity.ERROR): type=error node=[]\nstress_cmd=c-s")
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 
     def test_with_errors(self):
-        event = NdbenchStressEvent.failure(node="node1", errors=["e1", "e2"])
+        event = NdBenchStressEvent.failure(node="node1", errors=["e1", "e2"])
         self.assertEqual(event.severity, Severity.CRITICAL)
         self.assertEqual(event.node, "node1")
         self.assertIsNone(event.stress_cmd)
@@ -208,7 +208,7 @@ class TestNdbenchStressEvent(unittest.TestCase):
         self.assertEqual(event.errors, ["e1", "e2"])
         self.assertEqual(
             str(event),
-            "(NdbenchStressEvent Severity.CRITICAL): type=failure node=node1\nstress_cmd=None\nerrors:\n\ne1\ne2"
+            "(NdBenchStressEvent Severity.CRITICAL): type=failure node=node1\nstress_cmd=None\nerrors:\n\ne1\ne2"
         )
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
 

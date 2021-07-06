@@ -2843,7 +2843,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.log.info("Waiting for Scylla Machine Image setup to finish...")
         wait.wait_for(self.is_machine_image_configured, step=10, timeout=300)
 
-    def get_sysctl_output(self) -> dict[str, str]:
+    def get_sysctl_output(self) -> Dict[str, str]:
         properties = {}
         result = self.remoter.sudo("sysctl -a", ignore_status=True)
 
