@@ -59,6 +59,7 @@ from sdcm.cluster_k8s import PodCluster
 from sdcm.cluster_k8s.minikube import MinikubeScyllaPodCluster
 from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
+from sdcm.wait import wait_for
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
 
@@ -886,12 +887,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # So we need to validate that resharded files are placed in the "upload" folder before moving.
             # Find the compaction output that reported about the resharding
 
-            search_reshard = node.follow_system_log(patterns=['Resharded.*\[/'])
+            system_log_follower = node.follow_system_log(patterns=['Resharded.*\[/'])
             node.run_nodetool(sub_cmd="refresh", args="-- keyspace1 standard1")
-            resharding_done = list(search_reshard)
-            return resharding_done
+            return system_log_follower
 
-        def validate_resharding_after_refresh(resharding_done):
+        @timeout(
+            timeout=60,
+            allowed_exceptions=(AssertionError,),
+            message="Waiting for resharding completion message to appear in logs")
+        def validate_resharding_after_refresh(system_log_follower):
             """
             # Validate that files after resharding were saved in the "upload" folder.
             # Example of compaction output:
@@ -908,10 +912,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-16-big-Data.db:level=0,
             #   ]. 91MB to 92MB (~100% of original) in 5009ms = 18MB/s. ~370176 total partitions merged to 370150
             """
-            assert resharding_done, "Resharding wasn't run"
-            self.log.debug(f"Found resharding: {resharding_done}")
+            resharding_logs = list(system_log_follower)
+            assert resharding_logs, "Resharding wasn't run"
+            self.log.debug(f"Found resharding: {resharding_logs}")
 
-            for line in resharding_done:
+            for line in resharding_logs:
                 # Find all files that were created after resharding
                 for one_file in re.findall(r"(/var/.*?),", line, re.IGNORECASE):
                     # The file path have to include "upload" folder
@@ -930,8 +935,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
             # Executing rolling refresh one by one
             for node in self.cluster.nodes:
-                resharding_done = do_refresh(node)
-                validate_resharding_after_refresh(resharding_done)
+                system_log_follower = do_refresh(node)
+                validate_resharding_after_refresh(system_log_follower)
 
             # Verify that the special key is loaded by SELECT query
             result = self.target_node.run_cqlsh(query_verify)
