@@ -163,36 +163,36 @@ class KindK8sMixin:
     def start_k8s_software(self) -> None:
         LOGGER.debug("Start Kind cluster")
         script = dedent("""
-            sysctl fs.protected_regular=0
-            ip link set docker0 promisc on
-            kind delete cluster || true
-            cat >/tmp/kind.cluster.yaml <<- EndOfSpec
-            kind: Cluster
-            apiVersion: kind.x-k8s.io/v1alpha4
-            # patch the generated kubeadm config with some extra settings
-            networking:
-              podSubnet: 10.244.0.0/16
-              serviceSubnet: 10.96.0.0/16
-            kubeadmConfigPatches:
-            - |
-              apiVersion: kubelet.config.k8s.io/v1beta1
-              kind: KubeletConfiguration
-              evictionHard:
-                nodefs.available: 0%
-            nodes:
-              # the control plane node config
-              - role: control-plane
-                # the three workers
-              - role: worker
-              - role: worker
-              - role: worker
-              - role: worker
-            EndOfSpec
-            kind delete cluster || true
-            kind create cluster --config /tmp/kind.cluster.yaml
-            SERVICE_GATEWAY=`docker inspect kind-control-plane -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`
-            ip ro add 10.96.0.0/16 via $SERVICE_GATEWAY || ip ro change 10.96.0.0/16 via $SERVICE_GATEWAY
-            ip ro add 10.224.0.0/16 via $SERVICE_GATEWAY || ip ro change 10.224.0.0/16 via $SERVICE_GATEWAY 
+        sysctl fs.protected_regular=0
+        ip link set docker0 promisc on
+        kind delete cluster || true
+        cat >/tmp/kind.cluster.yaml <<- EndOfSpec
+        kind: Cluster
+        apiVersion: kind.x-k8s.io/v1alpha4
+        # patch the generated kubeadm config with some extra settings
+        networking:
+          podSubnet: 10.244.0.0/16
+          serviceSubnet: 10.96.0.0/16
+        kubeadmConfigPatches:
+        - |
+          apiVersion: kubelet.config.k8s.io/v1beta1
+          kind: KubeletConfiguration
+          evictionHard:
+            nodefs.available: 0%
+        nodes:
+          # the control plane node config
+          - role: control-plane
+            # the three workers
+          - role: worker
+          - role: worker
+          - role: worker
+          - role: worker
+        EndOfSpec
+        kind delete cluster || true
+        kind create cluster --config /tmp/kind.cluster.yaml
+        SERVICE_GATEWAY=`docker inspect kind-control-plane -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`
+        ip ro add 10.96.0.0/16 via $SERVICE_GATEWAY || ip ro change 10.96.0.0/16 via $SERVICE_GATEWAY
+        ip ro add 10.224.0.0/16 via $SERVICE_GATEWAY || ip ro change 10.224.0.0/16 via $SERVICE_GATEWAY 
         """)
         self.host_node.remoter.run(f"sudo -E bash -cxe '{script}'")
 
