@@ -170,6 +170,9 @@ class KindK8sMixin:
             kind: Cluster
             apiVersion: kind.x-k8s.io/v1alpha4
             # patch the generated kubeadm config with some extra settings
+            networking:
+              podSubnet: 10.244.0.0/16
+              serviceSubnet: 10.96.0.0/16
             kubeadmConfigPatches:
             - |
               apiVersion: kubelet.config.k8s.io/v1beta1
@@ -187,6 +190,9 @@ class KindK8sMixin:
             EndOfSpec
             kind delete cluster || true
             kind create cluster --config /tmp/kind.cluster.yaml
+            SERVICE_GATEWAY=`docker inspect kind-control-plane -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`
+            ip ro add 10.96.0.0/16 via $SERVICE_GATEWAY || ip ro change 10.96.0.0/16 via $SERVICE_GATEWAY
+            ip ro add 10.224.0.0/16 via $SERVICE_GATEWAY || ip ro change 10.224.0.0/16 via $SERVICE_GATEWAY 
         """)
         self.host_node.remoter.run(f"sudo -E bash -cxe '{script}'")
 
@@ -286,6 +292,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
         values.delete('racks.[0].storage.storageClassName')
         values.set('cpuset', False)
         values.set('developerMode', True)
+        values.set('hostNetworking', False)
         return values
 
     def create_kubectl_config(self):
