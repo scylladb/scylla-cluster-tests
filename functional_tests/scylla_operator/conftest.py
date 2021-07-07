@@ -12,10 +12,12 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
+
 import logging
 import os
 import traceback
 import contextlib
+
 from typing import Optional
 
 import pytest
@@ -29,25 +31,27 @@ LOGGER = logging.getLogger(__name__)
 
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
-def pytest_runtest_makereport(item, call):
+def pytest_runtest_makereport(item, call):  # pylint: disable=unused-argument
     # Populate test result to test function instance
     outcome = yield
     rep = outcome.get_result()
     if rep.passed:
-        item._test_result = ('SUCCESS', None)
+        item._test_result = ('SUCCESS', None)  # pylint: disable=protected-access
     else:
-        item._test_result = ('FAILED', str(rep.longrepr))
+        item._test_result = ('FAILED', str(rep.longrepr))  # pylint: disable=protected-access
 
 
 @pytest.fixture(autouse=True)
-def harvest_test_results(request, tester):
+def harvest_test_results(
+        request, tester: ScyllaOperatorFunctionalClusterTester):  # pylint: disable=redefined-outer-name
     # Pickup test results at the end of the test and submit it to the tester
 
     def publish_test_result():
-        tester.update_test_status(request.node.nodeid, *request.node._test_result)
+        tester.update_test_status(
+            request.node.nodeid,
+            *request.node._test_result)  # pylint: disable=protected-access
 
     request.addfinalizer(publish_test_result)
-    return None
 
 
 @pytest.fixture(autouse=True, scope='package')
@@ -58,9 +62,9 @@ def tester() -> ScyllaOperatorFunctionalClusterTester:
     tester_inst.setUp()
     yield tester_inst
     with contextlib.suppress(Exception):
-        tester.tearDown()
+        tester_inst.tearDown()
     with contextlib.suppress(Exception):
-        tester.tearDownClass()
+        tester_inst.tearDownClass()
 
 
 @pytest.fixture(scope="function")
@@ -70,7 +74,11 @@ def change_test_dir(request):
     os.chdir(request.config.invocation_dir)
 
 
-def skip_if_cluster_requirements_not_met(request, tester, db_cluster):
+# pylint: disable=redefined-outer-name
+def skip_if_cluster_requirements_not_met(
+        request,
+        tester: ScyllaOperatorFunctionalClusterTester,
+        db_cluster: ScyllaPodCluster):
     require_node_terminate = request.node.get_closest_marker('require_node_terminate')
     require_mgmt = request.node.get_closest_marker('require_mgmt')
     if require_node_terminate and require_node_terminate.args:
@@ -80,11 +88,11 @@ def skip_if_cluster_requirements_not_met(request, tester, db_cluster):
                 pytest.skip(f'cluster {type(db_cluster).__name__} does not support {terminate_method} '
                             'node termination method')
     if require_mgmt and not tester.params.get('use_mgmt'):
-        pytest.skip(f'test require scylla manager to be deployed')
+        pytest.skip('test require scylla manager to be deployed')
 
 
 @pytest.fixture()
-def db_cluster(tester: ScyllaOperatorFunctionalClusterTester):
+def db_cluster(tester: ScyllaOperatorFunctionalClusterTester):  # pylint: disable=redefined-outer-name
     if not tester.healthy_flag:
         pytest.skip('cluster is not healthy, skipping rest of the tests')
 
@@ -94,7 +102,8 @@ def db_cluster(tester: ScyllaOperatorFunctionalClusterTester):
         _bring_cluster_back_to_original_state(tester)
 
 
-def _bring_cluster_back_to_original_state(tester):
+def _bring_cluster_back_to_original_state(
+        tester: ScyllaOperatorFunctionalClusterTester):  # pylint: disable=redefined-outer-name
     try:
         # Bring cluster to original number of nodes in it
         expected_nodes_number = tester.params.get('n_db_nodes')
@@ -104,12 +113,12 @@ def _bring_cluster_back_to_original_state(tester):
             for node in tester.db_cluster.nodes[expected_nodes_number::-1]:
                 tester.db_cluster.decommission(node)
         tester.db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(tester.db_cluster.nodes))
-    except Exception as exc:
+    except Exception as exc:  # pylint: disable=broad-except
         tester.healthy_flag = False
         pytest.fail("Failed to bring cluster nodes back to original number due to :\n" +
                     "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
 
 
 @pytest.fixture()
-def cassandra_rackdc_properties(db_cluster: ScyllaPodCluster):
+def cassandra_rackdc_properties(db_cluster: ScyllaPodCluster):  # pylint: disable=redefined-outer-name
     return db_cluster.remote_cassandra_rackdc_properties
