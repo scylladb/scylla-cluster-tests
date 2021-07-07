@@ -202,7 +202,7 @@ class KindK8sMixin:
     def on_deploy_completed(self):
         if self.scylla_image:
             self.docker_pull(self.scylla_image)
-            self.host_node.remoter.run(f"kind load docker-image {self.scylla_image}")
+            self.host_node.remoter.run(f"kind load docker-image {self.scylla_image}", ignore_status=True)
 
 
 class MinikubeK8sMixin:
@@ -261,7 +261,7 @@ class MinikubeK8sMixin:
     def on_deploy_completed(self):
         if self.scylla_image:
             self.docker_pull(self.scylla_image)
-            self.host_node.remoter.run(f'minikube image load {self.scylla_image}')
+            self.host_node.remoter.run(f'minikube image load {self.scylla_image}', ignore_status=True)
 
 
 class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
