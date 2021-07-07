@@ -936,8 +936,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_cluster.deploy_scylla_operator(pool_name='')
         if self.params.get('use_mgmt'):
             self.k8s_cluster.deploy_scylla_manager(pool_name='')
-        # This should remove some of the unpredictability of pods startup time.
-        self.k8s_cluster.docker_pull(f"{self.params.get('docker_image')}:{self.params.get('scylla_version')}")
 
         self.db_cluster = mini_k8s.LocalMinimalScyllaPodCluster(
             k8s_cluster=self.k8s_cluster,
