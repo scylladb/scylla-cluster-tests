@@ -23,11 +23,10 @@ from sdcm import cluster, cluster_gce
 from sdcm.cluster import LocalNode
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.base import CommandRunner
-from sdcm.remote.kubernetes_cmd_runner import KubernetesCmdRunner
 from sdcm.cluster_k8s import KubernetesCluster, BaseScyllaPodContainer, ScyllaPodCluster
 from sdcm.cluster_k8s.iptables import IptablesPodPortsRedirectMixin, IptablesClusterOpsMixin
 from sdcm.cluster_gce import MonitorSetGCE
-from sdcm.utils.k8s import KubernetesOps, TokenUpdateThread, HelmValues
+from sdcm.utils.k8s import TokenUpdateThread, HelmValues
 from sdcm.utils.common import get_free_port, wait_for_port
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import ContainerManager
@@ -160,7 +159,7 @@ class KindK8sMixin:
 
     def start_k8s_software(self) -> None:
         LOGGER.debug("Start Kind cluster")
-        script = dedent(f"""
+        script = dedent("""
             sysctl fs.protected_regular=0
             ip link set docker0 promisc on
             kind delete cluster || true
@@ -244,8 +243,9 @@ class MinikubeK8sMixin:
 
 
 class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
+    # pylint: disable=too-many-arguments
     def __init__(self, mini_k8s_version, params: dict, user_prefix: str = '', region_name: str = None,
-                 cluster_uuid: str = None, **kwargs):
+                 cluster_uuid: str = None, **_):
         self.software_version = mini_k8s_version
         super().__init__(params=params, user_prefix=user_prefix, region_name=region_name, cluster_uuid=cluster_uuid)
 
@@ -287,7 +287,6 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
         """
         No token update thread required
         """
-        pass
 
     @property
     def software_version(self):
@@ -321,15 +320,18 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def _create_kubectl_config_cmd(self): ...
+    def _create_kubectl_config_cmd(self):
+        pass
 
     @property
     @abc.abstractmethod
-    def _target_user(self) -> Optional[str]: ...
+    def _target_user(self) -> Optional[str]:
+        pass
 
     @property
     @abc.abstractmethod
-    def k8s_server_url(self): ...
+    def k8s_server_url(self):
+        pass
 
     @property
     @abc.abstractmethod
@@ -402,6 +404,7 @@ class LocalMinimalClusterBase(MinimalClusterBase):
             mini_k8s_version=software_version,
             params=params)
 
+    # pylint: disable=invalid-overridden-method
     @cached_property
     def host_node(self):
         node = LocalNode(
@@ -419,11 +422,13 @@ class LocalMinimalClusterBase(MinimalClusterBase):
         host, port = MinimalK8SOps.get_local_kubectl_proxy()
         return f"http://{host}:{port}"
 
-    def deploy_node_pool(self, pool, wait_till_ready=True) -> None: ...
+    def deploy_node_pool(self, pool, wait_till_ready=True) -> None:
+        pass
 
     @property
     @abc.abstractmethod
-    def _create_kubectl_config_cmd(self): ...
+    def _create_kubectl_config_cmd(self):
+        pass
 
     @property
     def _target_user(self) -> str:
@@ -439,10 +444,12 @@ class LocalKindCluster(KindK8sMixin, LocalMinimalClusterBase):
 
 
 class RemoteMinimalClusterBase(MinimalClusterBase, metaclass=abc.ABCMeta):
+    # pylint: disable=invalid-overridden-method
     @cached_property
     def host_node(self):
         return self.nodes[-1]
 
+    # pylint: disable=invalid-overridden-method
     @cached_property
     def k8s_server_url(self):
         host, port = MinimalK8SOps.get_kubectl_proxy(self.host_node)
@@ -456,11 +463,14 @@ class RemoteMinimalClusterBase(MinimalClusterBase, metaclass=abc.ABCMeta):
     def nodes_dest_ip(self) -> Optional[str]:
         return self.host_node.ip_address
 
-    def deploy(self): ...
+    def deploy(self):
+        pass
 
-    def create_kubectl_config(self): ...
+    def create_kubectl_config(self):
+        pass
 
-    def create_token_update_thread(self): ...
+    def create_token_update_thread(self):
+        pass
 
     def deploy_node_pool(self, pool, wait_till_ready=True) -> None:
         raise NotImplementedError("Not supported on minimal k8s")
@@ -492,22 +502,26 @@ class GceMinikubeCluster(MinikubeK8sMixin, RemoteMinimalClusterBase, cluster_gce
                          gce_region_names=gce_datacenter,
                          node_type="scylla-db")
 
+    # pylint: disable=unused-argument,arguments-differ
     @cluster.wait_for_init_wrap
-    def wait_for_init(self):
+    def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):
         for node in self.nodes:
-            node.remoter._reconnect()  # Reconnect to update user groups in main thread too.
+            # Reconnect to update user groups in main thread too.
+            node.remoter._reconnect()  # pylint: disable=protected-access
         super().wait_for_init()
 
     def destroy(self) -> None:
         super().destroy()
         self.stop_k8s_task_threads()
 
-    def deploy_node_pool(self, pool, wait_till_ready=True) -> None: ...
+    def deploy_node_pool(self, pool, wait_till_ready=True) -> None:
+        pass
 
     def node_setup(self, node, verbose=False, timeout=3600):
         raise NotImplementedError("Not implemented yet")
 
-    def get_node_ips_param(self, public_ip=True): ...
+    def get_node_ips_param(self, public_ip=True):
+        pass
 
 
 class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
@@ -536,6 +550,7 @@ class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
         return 'db'
 
 
+# pylint: disable=too-many-ancestors
 class RemoteMinimalScyllaPodContainer(LocalMinimalScyllaPodContainer, IptablesPodPortsRedirectMixin):
     parent_cluster: 'RemoteMinimalScyllaPodCluster'
     public_ip_via_service: bool = False
@@ -549,6 +564,7 @@ class RemoteMinimalScyllaPodContainer(LocalMinimalScyllaPodContainer, IptablesPo
         return self.parent_cluster.k8s_cluster.nodes_dest_ip
 
 
+# pylint: disable=too-many-ancestors
 class LocalMinimalScyllaPodCluster(ScyllaPodCluster):
     """
     This class represents scylla cluster hosted on locally running minimal k8s clusters, such as: k3d, minikube or kind
@@ -578,7 +594,7 @@ class LocalMinimalScyllaPodCluster(ScyllaPodCluster):
         super().wait_for_nodes_up_and_normal(nodes, verification_node)
 
     @cluster.wait_for_init_wrap
-    def wait_for_init(self, node_list=None, verbose=False, timeout=None, *_, **__):
+    def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):  # pylint: disable=unused-argument
         node_list = node_list if node_list else self.nodes
         self.wait_for_nodes_up_and_normal(nodes=node_list)
 
@@ -586,16 +602,19 @@ class LocalMinimalScyllaPodCluster(ScyllaPodCluster):
         self.k8s_cluster.docker_pull(f"{self.params.get('docker_image')}:{new_version}")
         return super().upgrade_scylla_cluster(new_version)
 
-    def fstrim_scylla_disks(self):
+    @staticmethod
+    def fstrim_scylla_disks():
         LOGGER.warning("'k8s-gce-minikube' doesn't support running 'fstrim' command. Ignoring.")
 
 
+# pylint: disable=too-many-ancestors
 class RemoteMinimalScyllaPodCluster(LocalMinimalScyllaPodCluster, IptablesClusterOpsMixin):
     """
     This class represents scylla cluster hosted on remotely running minimal k8s clusters, such as: k3d, minikube or kind
     """
     PodContainerClass = RemoteMinimalScyllaPodContainer
 
+    # pylint: disable=too-many-arguments
     def add_nodes(self,
                   count: int,
                   ec2_user_data: str = "",
@@ -631,4 +650,5 @@ class RemoteMinimalScyllaPodCluster(LocalMinimalScyllaPodCluster, IptablesCluste
 
 
 class MonitorSetMinikube(MonitorSetGCE):
-    def install_scylla_manager(self, node): ...
+    def install_scylla_manager(self, node):
+        pass
