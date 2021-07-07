@@ -13,7 +13,7 @@
 import abc
 import getpass
 import logging
-from typing import Optional, List
+from typing import Optional, List, Callable
 from textwrap import dedent
 from functools import cached_property
 
@@ -135,8 +135,11 @@ class MinimalK8SOps:
 
 
 class KindK8sMixin:
-    software_version: str
+    docker_pull: Callable
     host_node: 'BaseNode'
+    params: dict
+    scylla_image: Optional[str]
+    software_version: str
     _target_user: str
     _create_kubectl_config_cmd: str = 'kind export kubeconfig'
 
@@ -190,10 +193,18 @@ class KindK8sMixin:
     def stop_k8s_software(self):
         self.host_node.remoter.run('kind delete cluster', ignore_status=True)
 
+    def on_deploy_completed(self):
+        if self.scylla_image:
+            self.docker_pull(self.scylla_image)
+            self.host_node.remoter.run(f"kind load docker-image {self.scylla_image}")
+
 
 class MinikubeK8sMixin:
-    software_version: str
+    docker_pull: Callable
     host_node: 'BaseNode'
+    params: dict
+    scylla_image: Optional[str]
+    software_version: str
     _target_user: str
     _create_kubectl_config_cmd = 'minikube update-context'
 
@@ -240,6 +251,11 @@ class MinikubeK8sMixin:
 
     def stop_k8s_software(self):
         self.host_node.remoter.run('minikube delete', ignore_status=True)
+
+    def on_deploy_completed(self):
+        if self.scylla_image:
+            self.docker_pull(self.scylla_image)
+            self.host_node.remoter.run(f'minikube image load {self.scylla_image}')
 
 
 class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
@@ -375,6 +391,19 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
         Stop kind/k3d/minikube
         """
 
+    def on_deploy_completed(self):
+        """
+        Hook that is executed just before completing deployment
+        """
+
+    @property
+    def scylla_image(self):
+        docker_repo = self.params.get('docker_image')
+        scylla_version = self.params.get('scylla_version')
+        if not scylla_version or not docker_repo:
+            return
+        return f"{docker_repo}:{scylla_version}"
+
     def deploy(self):
         if not self.is_docker_installed:
             self.setup_docker()
@@ -390,6 +419,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
             self.stop_k8s_software()
             self.start_k8s_software()
         self.create_kubectl_config()
+        self.on_deploy_completed()
 
 
 class LocalMinimalClusterBase(MinimalClusterBase):
