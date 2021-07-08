@@ -80,12 +80,13 @@ from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.test_config import TestConfig
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version, get_systemd_version
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import LogEvent
+from sdcm.sct_events.base import LogEvent, ContinuousEventsRegistry
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.grafana import set_grafana_url
-from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, BACKTRACE_RE, DatabaseLogEvent, ScyllaHelpErrorEvent
+from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, BACKTRACE_RE, DatabaseLogEvent, \
+    ScyllaHelpErrorEvent, get_pattern_to_event_to_func_mapping
 from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
@@ -214,6 +215,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         self.last_line_no = 1
         self.last_log_position = 0
+        self._continuous_events_registry = ContinuousEventsRegistry()
         self._coredump_thread: Optional[CoredumpExportSystemdThread] = None
         self._db_log_reader_thread = None
         self._scylla_manager_journal_thread = None
@@ -353,6 +355,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return orig_log_path
 
     database_log = system_log
+
+    @property
+    def continuous_events_registry(self) -> ContinuousEventsRegistry:
+        return self._continuous_events_registry
 
     @property
     def cassandra_stress_version(self):
@@ -1330,6 +1336,16 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                             one_line_backtrace.append(trace_line)
 
                 if index not in self._system_log_errors_index or start_from_beginning:
+                    ''' for each line, if it matches a continuous event pattern, 
+                    call the appropriate function with the class tied to that pattern'''
+                    db_event_pattern_func_map = get_pattern_to_event_to_func_mapping(
+                        event_registry=self.continuous_events_registry,
+                        node=self.ip_address)
+                    for item in db_event_pattern_func_map:
+                        event_match = item.pattern.search(line)
+                        if event_match:
+                            item.period_func()
+
                     # for each line use all regexes to match, and if found send an event
                     for pattern, event in SYSTEM_ERROR_EVENTS_PATTERNS:
                         match = pattern.search(line)

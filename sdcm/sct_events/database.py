@@ -13,10 +13,12 @@
 
 import re
 import logging
-from typing import Type, List, Tuple, Generic, Optional
+from functools import partial
+from typing import Type, List, Tuple, Generic, Optional, NamedTuple, Pattern, Callable
 
 from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event, InformationalEvent
+from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event, InformationalEvent, ContinuousEvent, \
+    ContinuousEventsRegistry, ContinuousEventRegistryException, EventPeriod
 
 TOLERABLE_REACTOR_STALL: int = 1000  # ms
 
@@ -44,8 +46,6 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     ABORTING_ON_SHARD: Type[LogEventProtocol]
     SEGMENTATION: Type[LogEventProtocol]
     INTEGRITY_CHECK: Type[LogEventProtocol]
-    BOOT: Type[LogEventProtocol]
-    STOP: Type[LogEventProtocol]
     SUPPRESSED_MESSAGES: Type[LogEventProtocol]
     stream_exception: Type[LogEventProtocol]
     POWER_OFF: Type[LogEventProtocol]
@@ -112,10 +112,6 @@ DatabaseLogEvent.add_subevent_type("SEGMENTATION", severity=Severity.ERROR,
                                    regex="segmentation")
 DatabaseLogEvent.add_subevent_type("INTEGRITY_CHECK", severity=Severity.ERROR,
                                    regex="integrity check failed")
-DatabaseLogEvent.add_subevent_type("BOOT", severity=Severity.NORMAL,
-                                   regex="Starting Scylla Server")
-DatabaseLogEvent.add_subevent_type("STOP", severity=Severity.NORMAL,
-                                   regex="Stopping Scylla Server")
 DatabaseLogEvent.add_subevent_type("SUPPRESSED_MESSAGES", severity=Severity.WARNING,
                                    regex="journal: Suppressed")
 DatabaseLogEvent.add_subevent_type("stream_exception", severity=Severity.ERROR,
@@ -144,8 +140,6 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.ABORTING_ON_SHARD(),
     DatabaseLogEvent.SEGMENTATION(),
     DatabaseLogEvent.INTEGRITY_CHECK(),
-    DatabaseLogEvent.BOOT(),
-    DatabaseLogEvent.STOP(),
     DatabaseLogEvent.SUPPRESSED_MESSAGES(),
     DatabaseLogEvent.stream_exception(),
     DatabaseLogEvent.POWER_OFF(),
@@ -216,3 +210,92 @@ class IndexSpecialColumnErrorEvent(InformationalEvent):
     @property
     def msgfmt(self) -> str:
         return super().msgfmt + ": message={0.message}"
+
+
+class ScyllaServerEventPattern(NamedTuple):
+    pattern: Pattern
+    period_func: Callable
+
+
+class ScyllaServerEventPatternFuncs(NamedTuple):
+    pattern: Pattern
+    event_class: Type[ContinuousEvent]
+    period_func: Callable
+
+
+class ScyllaDatabaseContinuousEvent(ContinuousEvent, abstract=True):
+    begin_pattern: str = NotImplemented
+    end_pattern: str = NotImplemented
+
+    def __init__(self, node: str, severity=Severity.UNKNOWN, publish_event=False):
+        super().__init__(severity=severity, publish_event=publish_event)
+        self.node = node
+
+
+class ScyllaServerStatusEvent(ScyllaDatabaseContinuousEvent):
+    begin_pattern = r'Starting Scylla Server'
+    end_pattern = r'Stopping Scylla Server'
+
+    def __init__(self, node: str, severity=Severity.NORMAL, publish_event=True):
+        super().__init__(node=node, severity=severity, publish_event=publish_event)
+
+
+class BootstrapEvent(ScyllaDatabaseContinuousEvent):
+    begin_pattern = r'Starting to bootstrap'
+    end_pattern = r'Bootstrap succeeded'
+
+    def __init__(self, node: str, severity=Severity.NORMAL, publish_event=True):
+        super().__init__(node=node, severity=severity, publish_event=publish_event)
+
+
+SCYLLA_DATABASE_CONTINUOUS_EVENTS = [
+    ScyllaServerStatusEvent,
+    BootstrapEvent
+]
+
+
+def get_pattern_to_event_to_func_mapping(event_registry: ContinuousEventsRegistry,
+                                         node: str) \
+        -> List[ScyllaServerEventPatternFuncs]:
+    '''
+    This function maps regex patterns, event classes and begin / end
+    functions into ScyllaServerEventPatternFuncs object. Helper
+    functions are delegated to find the event that should be the
+    target of the start / stop action, or creating a new one.
+    '''
+    mapping = []
+
+    def _add_event(event_type: Type[ContinuousEvent]):
+        new_event = event_type(node=node)
+        new_event.begin_event()
+
+    def _end_event(event_type: Type[ContinuousEvent]):
+        event_filter = event_registry.get_registry_filter()
+        event_filter \
+            .filter_by_node(node=node) \
+            .filter_by_type(event_type=event_type) \
+            .filter_by_period(period_type=EventPeriod.Begin.value)
+
+        begun_events = event_filter.get_filtered()
+
+        if not begun_events:
+            raise ContinuousEventRegistryException("Did not find any events of type {event_type}"
+                                                   "with period type {period_type}"
+                                                   .format(event_type=event_type, period_type=EventPeriod.Begin.value))
+        if len(begun_events) > 1:
+            LOGGER.warning("Found {event_count} events of type {event_type} with period {event_period}. "
+                           "Will apply the function to the oldest event by default."
+                           .format(event_count=len(begun_events),
+                                   event_type=event_type,
+                                   event_period=EventPeriod.Begin.value))
+        event = begun_events[0]
+        event.end_event()
+
+    for event in SCYLLA_DATABASE_CONTINUOUS_EVENTS:
+        mapping.append(ScyllaServerEventPatternFuncs(pattern=re.compile(event.begin_pattern),
+                                                     event_class=event,
+                                                     period_func=partial(_add_event, event_type=event)))
+        mapping.append(ScyllaServerEventPatternFuncs(pattern=re.compile(event.end_pattern), event_class=event,
+                                                     period_func=partial(_end_event, event_type=event)))
+
+    return mapping
