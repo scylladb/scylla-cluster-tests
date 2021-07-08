@@ -247,11 +247,6 @@ class MinikubeK8sMixin:
             minikube delete || true
             minikube start --driver=none --extra-config=apiserver.service-node-port-range=1-65535
             chmod 777 -R $MINIKUBE_HOME
-            # [ -z "$KUBECONFIG" ] || exit
-            # ABS_KUBECONFIG_DIR=$(dirname $(realpath -m $KUBECONFIG))
-            # ABS_MINIKUBE_DIR=$(realpath -m ~/.minikube)
-            # cp -r $ABS_MINIKUBE_DIR $ABS_KUBECONFIG_DIR
-            # sed -ri "s/${{ABS_MINIKUBE_DIR////\\\\/}}/${{ABS_KUBECONFIG_DIR////\\\\/}}\\/.minikube/g" $ABS_KUBECONFIG_DIR/config
         """)
         self.host_node.remoter.run(f"sudo -E bash -cxe '{script}'")
 
