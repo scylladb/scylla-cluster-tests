@@ -58,7 +58,7 @@ def call() {
             string(defaultValue: '', description: 'run gemini with specific seed number',
                    name: "gemini_seed")
 
-            string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_repo', '')}",
+            string(defaultValue: '',
                    description: 'If empty - the default scylla manager agent repo will be taken',
                    name: 'scylla_mgmt_agent_repo')
 
