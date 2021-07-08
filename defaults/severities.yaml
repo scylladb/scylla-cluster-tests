@@ -84,3 +84,5 @@ NodetoolEvent: ERROR
 ScyllaBenchEvent: CRITICAL
 CassandraStressEvent: CRITICAL
 GeminiStressEvent: CRITICAL
+ScyllaServerStatusEvent: NORMAL
+BootstrapEvent: NORMAL

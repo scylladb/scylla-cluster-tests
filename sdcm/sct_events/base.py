@@ -53,6 +53,35 @@ class Singleton(type):
         return cls._instances[cls]
 
 
+class ContinuousRegistryFilter:
+    def __init__(self, registry: List[Any]):
+        self._registry = registry
+        self._output = registry.copy()
+
+    def filter_by_id(self, event_id: str) -> ContinuousRegistryFilter:
+        self._output = [event for event in self._output if event.event_id == event_id]
+
+        return self
+
+    def filter_by_node(self, node: str) -> ContinuousRegistryFilter:
+        self._output = [item for item in self._output if item.node == node]
+
+        return self
+
+    def filter_by_type(self, event_type: Type[ContinuousEvent]) -> ContinuousRegistryFilter:
+        self._output = [item for item in self._output if isinstance(item, event_type)]
+
+        return self
+
+    def filter_by_period(self, period_type: EventPeriod) -> ContinuousRegistryFilter:
+        self._output = [item for item in self._output if item.period_type == period_type]
+
+        return self
+
+    def get_filtered(self) -> List[Any]:
+        return self._output
+
+
 class ContinuousEventRegistryException(BaseException):
     pass
 
@@ -72,7 +101,10 @@ class ContinuousEventsRegistry(metaclass=Singleton):
         self.continuous_events.append(event)
 
     def get_event_by_id(self, event_id: Union[uuid.UUID, str]) -> Optional[ContinuousEvent]:
-        found_events = [event for event in self.continuous_events if event.event_id == event_id]
+        event_filter = self.get_registry_filter()
+        found_events = event_filter \
+            .filter_by_id(event_id=event_id) \
+            .get_filtered()
 
         if len(found_events) > 1:
             raise ContinuousEventRegistryException("More than one event with uuid = {event_id}. Found {event_count} "
@@ -86,7 +118,11 @@ class ContinuousEventsRegistry(metaclass=Singleton):
         return found_events[0]
 
     def get_events_by_type(self, event_type: Type[ContinuousEvent]) -> List[ContinuousEvent]:
-        found_events = [event for event in self.continuous_events if isinstance(event, event_type)]
+        event_filter = self.get_registry_filter()
+        found_events = event_filter \
+            .filter_by_type(event_type=event_type) \
+            .get_filtered()
+
         if not found_events:
             LOGGER.warning("No continuous events of type: {event_type} found in registry."
                            .format(event_type=event_type))
@@ -95,12 +131,33 @@ class ContinuousEventsRegistry(metaclass=Singleton):
 
     def get_events_by_period(self,
                              period_type: EventPeriod) -> List[ContinuousEvent]:
-        found_events = [event for event in self.continuous_events if event.period_type == period_type.value]
+        event_filter = self.get_registry_filter()
+        found_events = event_filter \
+            .filter_by_period(period_type=period_type) \
+            .get_filtered()
+
         if not found_events:
             LOGGER.warning("No continuous events with period type: {period_type} found in registry."
                            .format(period_type=period_type))
 
         return found_events
+
+    def get_events_by_node(self, node: str) -> List[ContinuousEvent]:
+        event_filter = self.get_registry_filter()
+        found_events = event_filter \
+            .filter_by_node(node=node) \
+            .get_filtered()
+
+        if not found_events:
+            LOGGER.warning("No continuous event with associated with node: {node_name} found in registry"
+                           .format(node_name=node))
+
+        return found_events
+
+    def get_registry_filter(self) -> ContinuousRegistryFilter:
+        registry_filter = ContinuousRegistryFilter(registry=self.continuous_events)
+
+        return registry_filter
 
 
 class SctEventTypesRegistry(Dict[str, Type["SctEvent"]]):  # pylint: disable=too-few-public-methods
@@ -296,9 +353,11 @@ class ContinuousEvent(SctEvent, abstract=True):
     _duration: Optional[int] = None
 
     def __init__(self,
+                 node: str = "",
                  severity: Severity = Severity.UNKNOWN,
                  publish_event: bool = True):
         super().__init__(severity=severity)
+        self.node = node
         self.log_file_name = None
         self.errors = []
         self.publish_event = publish_event
@@ -307,6 +366,8 @@ class ContinuousEvent(SctEvent, abstract=True):
         self.end_timestamp = None
         self.is_skipped = False
         self.skip_reason = ""
+        self._continuous_event_registry = ContinuousEventsRegistry()
+        self.register_event()
 
     def __enter__(self):
         event = self.begin_event()
@@ -407,6 +468,9 @@ class ContinuousEvent(SctEvent, abstract=True):
         if self.publish_event:
             self._ready_to_publish = True
             self.publish()
+
+    def register_event(self):
+        self._continuous_event_registry.add_event(self)
 
 
 def add_severity_limit_rules(rules: List[str]) -> None:
