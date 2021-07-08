@@ -79,7 +79,7 @@ class BackupFunctionsMixIn:
     def install_azcopy_dependencies(self, node):
         self._run_cmd_with_retry(executor=node.remoter.sudo, cmd=shell_script_cmd("""\
             curl -L https://aka.ms/downloadazcopy-v10-linux | \
-                tar xz -C /usr/local/bin --strip-components 1 --wildcards '*/azcopy'
+                tar xz -C /usr/bin --strip-components 1 --wildcards '*/azcopy'
         """))
         self.backup_azure_blob_service = \
             f"https://{TestConfig.backup_azure_blob_credentials['account']}.blob.core.windows.net/"
@@ -87,16 +87,34 @@ class BackupFunctionsMixIn:
 
     @staticmethod
     def download_from_s3(node, source, destination):
-        node.remoter.run(f"aws s3 cp '{source}' '{destination}'")
+        node.remoter.sudo(f"aws s3 cp '{source}' '{destination}'")
 
     @staticmethod
     def download_from_gs(node, source, destination):
-        node.remoter.run(f"gsutil cp '{source.replace('gcs://', 'gs://')}' '{destination}'")
+        node.remoter.sudo(f"gsutil cp '{source.replace('gcs://', 'gs://')}' '{destination}'")
 
     def download_from_azure(self, node, source, destination):
         # azure://<bucket>/<path> -> https://<account>.blob.core.windows.net/<bucket>/<path>?SAS
         source = f"{source.replace('azure://', self.backup_azure_blob_service)}{self.backup_azure_blob_sas}"
-        node.remoter.run(f"azcopy copy '{source}' '{destination}'")
+        node.remoter.sudo(f"azcopy copy '{source}' '{destination}'")
+
+    def get_table_id(self, node, table_name, keyspace_name=None, remove_hyphen=True):
+        """
+
+        :param keyspace_name: not mandatory. Should be used when there's more than one table with the same
+        name in different keyspaces
+        :param remove_hyphen: In the table's directory, scylla removes the hyphens from the id. Setting
+        the attribute to True will remove the hyphens.
+        """
+        query = f"SELECT id FROM system_schema.tables WHERE table_name='{table_name}'"
+        if keyspace_name:
+            query += f"and keyspace_name='{keyspace_name}'"
+        with self.db_cluster.cql_connection_patient(node) as session:
+            results = session.execute(query)
+        base_id = str(results[0].id)
+        if remove_hyphen:
+            return base_id.replace('-', '')
+        return base_id
 
     def restore_backup(self, mgr_cluster, snapshot_tag, keyspace_and_table_list):  # pylint: disable=too-many-locals
         backup_bucket_backend = self.params.get("backup_bucket_backend")
@@ -120,14 +138,10 @@ class BackupFunctionsMixIn:
             for keyspace, tables in keyspace_and_table_list.items():
                 keyspace_path = node_data_path / keyspace
                 for table in tables:
-                    destination = self.DESTINATION / table
-                    node.remoter.run(f'mkdir -p {destination}')
-                    for file_path in per_node_backup_file_paths[node_id][keyspace][table]:
-                        download(node=node, source=file_path, destination=destination)
-                    file_details_lst = per_node_backup_file_paths[node_id][keyspace][table][0].split('/')
-                    table_id = file_details_lst[file_details_lst.index(table) + 1]
+                    table_id = self.get_table_id(node=node, table_name=table, keyspace_name=keyspace)
                     table_upload_path = keyspace_path / f"{table}-{table_id}" / "upload"
-                    node.remoter.sudo(f"cp {destination / '*'} {table_upload_path}")
+                    for file_path in per_node_backup_file_paths[node_id][keyspace][table]:
+                        download(node=node, source=file_path, destination=table_upload_path)
                     node.remoter.sudo(f"chown scylla:scylla -Rf {table_upload_path}")
                     node.run_nodetool(f"refresh -- {keyspace} {table}")
 
