@@ -1767,7 +1767,7 @@ class PodCluster(cluster.BaseCluster):
     def get_node_ips_param(self, public_ip=True):
         raise NotImplementedError("Derived class must implement 'get_node_ips_param' method!")
 
-    def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):
+    def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):  # pylint: disable=arguments-differ
         raise NotImplementedError("Derived class must implement 'wait_for_init' method!")
 
     def get_nodes_reboot_timeout(self, count) -> Union[float, int]:
@@ -1831,7 +1831,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
     get_scylla_args = cluster_docker.ScyllaDockerCluster.get_scylla_args
 
     @cluster.wait_for_init_wrap
-    def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):
+    def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):  # pylint: disable=arguments-differ
         node_list = node_list if node_list else self.nodes
         self.wait_for_nodes_up_and_normal(nodes=node_list)
         if self.scylla_yaml_update_required:
