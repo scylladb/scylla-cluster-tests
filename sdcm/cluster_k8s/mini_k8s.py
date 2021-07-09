@@ -41,15 +41,15 @@ LOGGER = logging.getLogger(__name__)
 
 class MinimalK8SOps:
     @classmethod
-    def setup_docker(cls, node: cluster.BaseNode, target_user: str = None) -> None:
-        if node.distro.is_ubuntu:
-            cls.setup_docker_ubuntu(node, target_user=target_user)
+    def setup_prerequisites(cls, node: cluster.BaseNode) -> None:
+        if node.distro.is_ubuntu or node.distro.is_debian:
+            cls.setup_prerequisites_ubuntu(node)
         else:
             raise ValueError(f"{node.distro} is not supported")
 
     @staticmethod
-    def setup_docker_ubuntu(node: cluster.BaseNode, target_user: str = None) -> None:
-        script = dedent(f"""
+    def setup_prerequisites_ubuntu(node: cluster.BaseNode) -> None:
+        script = dedent("""
             # Make sure that cloud-init finished running.
             # until [ -f /var/lib/cloud/instance/boot-finished ]; do sleep 1; done
 
@@ -60,13 +60,10 @@ class MinimalK8SOps:
             apt-get -qq update
             apt-get -qq install --no-install-recommends apt-transport-https conntrack
 
-            # Install and configure Docker.
-            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
-            add-apt-repository \\"deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\\"
-            apt-get -qq install --no-install-recommends docker-ce docker-ce-cli containerd.io
-            {f'usermod -a -G docker{target_user}' if target_user else ''}
-
             mkdir -p /var/lib/scylla/coredumps
+
+            # Create /etc/ssh/ssh_host_ecdsa_key if it is absent
+            ls /etc/ssh/ssh_host_ecdsa_key || ssh-keygen -f /etc/ssh/ssh_host_ecdsa_key -t ecdsa -q -N ''
 
             cat <<EOF > /etc/sysctl.d/99-sct-minikube.conf
             fs.aio-max-nr=1048576
@@ -76,11 +73,29 @@ class MinimalK8SOps:
             EOF
             sysctl --system
             """)
-        node.remoter.sudo(f'bash -cxe "{script}"', change_context=True)
+        node.remoter.sudo(f'bash -cxe "{script}"')
+
+    @classmethod
+    def setup_docker(cls, node: cluster.BaseNode, target_user: str = None) -> None:
+        if node.distro.is_ubuntu or node.distro.is_debian:
+            cls.setup_docker_ubuntu(node, target_user=target_user)
+        else:
+            raise ValueError(f"{node.distro} is not supported")
+
+    @staticmethod
+    def setup_docker_ubuntu(node: cluster.BaseNode, target_user: str = None) -> None:
+        script = dedent(f"""
+            # Install and configure Docker.
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+            add-apt-repository \\"deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\\"
+            apt-get -qq install --no-install-recommends docker-ce docker-ce-cli containerd.io
+            {f'usermod -a -G docker{target_user}' if target_user else ''}
+            """)
+        node.remoter.sudo(f'bash -cxe "{script}"')
 
     @classmethod
     def setup_kubectl(cls, node: cluster.BaseNode, kubectl_version: str) -> None:
-        if node.distro.is_ubuntu:
+        if node.distro.is_ubuntu or node.distro.is_debian:
             cls.setup_kubectl_ubuntu(node, kubectl_version=kubectl_version)
         else:
             raise ValueError(f"{node.distro} is not supported")
@@ -93,7 +108,7 @@ class MinimalK8SOps:
                 https://storage.googleapis.com/kubernetes-release/release/v{kubectl_version}/bin/linux/amd64/kubectl
             chmod +x /usr/local/bin/kubectl
             """)
-        node.remoter.sudo(f'bash -cxe "{script}"', change_context=True)
+        node.remoter.sudo(f'bash -cxe "{script}"')
 
     @staticmethod
     def get_local_kubectl_proxy() -> [str, int]:
@@ -229,7 +244,7 @@ class MinikubeK8sMixin:
                 https://storage.googleapis.com/minikube/releases/v{self.software_version}/minikube-linux-amd64
             chmod +x /usr/local/bin/minikube
         """)
-        self.host_node.remoter.sudo(f'bash -cxe "{script}"', change_context=True)
+        self.host_node.remoter.sudo(f'bash -cxe "{script}"')
 
     def start_k8s_software(self):
         LOGGER.debug("Start Minikube cluster")
@@ -273,6 +288,10 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
     @property
     def is_docker_installed(self) -> None:
         return self.host_node.remoter.run('ls /usr/local/bin/docker || ls /usr/bin/docker', ignore_status=True).ok
+
+    def setup_prerequisites(self):
+        LOGGER.debug("Install prerequisites to %s", self.host_node)
+        MinimalK8SOps.setup_prerequisites(node=self.host_node)
 
     def setup_docker(self):
         LOGGER.debug("Install docker to %s", self.host_node)
@@ -407,6 +426,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
         return f"{docker_repo}:{scylla_version}"
 
     def deploy(self):
+        self.setup_prerequisites()
         if not self.is_docker_installed:
             self.setup_docker()
         if not self.is_kubectl_installed:
