@@ -96,23 +96,39 @@ def db_cluster(tester: ScyllaOperatorFunctionalClusterTester):  # pylint: disabl
     if not tester.healthy_flag:
         pytest.skip('cluster is not healthy, skipping rest of the tests')
 
+    with tester.db_cluster.scylla_config_map as scylla_config_map:
+        original_scylla_config_map = scylla_config_map
+    original_scylla_cluster_spec = tester.db_cluster.get_scylla_cluster_plain_value('/spec')
+
     yield tester.db_cluster
 
     if tester.healthy_flag:
-        _bring_cluster_back_to_original_state(tester)
+        _bring_cluster_back_to_original_state(
+            tester.db_cluster,
+            config_map=original_scylla_config_map,
+            scylla_cluster_spec=original_scylla_cluster_spec
+        )
 
 
+# pylint: disable=redefined-outer-name
 def _bring_cluster_back_to_original_state(
-        tester: ScyllaOperatorFunctionalClusterTester):  # pylint: disable=redefined-outer-name
+        db_cluster: ScyllaPodCluster,
+        config_map: dict,
+        scylla_cluster_spec: dict
+):
+    restart = False
     try:
-        # Bring cluster to original number of nodes in it
-        expected_nodes_number = tester.params.get('n_db_nodes')
-        if len(tester.db_cluster.nodes) < expected_nodes_number:
-            tester.db_cluster.add_nodes(expected_nodes_number - len(tester.db_cluster.nodes))
-        elif len(tester.db_cluster.nodes) > expected_nodes_number:
-            for node in tester.db_cluster.nodes[expected_nodes_number::-1]:
-                tester.db_cluster.decommission(node)
-        tester.db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(tester.db_cluster.nodes))
+        if scylla_cluster_spec != db_cluster.get_scylla_cluster_plain_value('/spec'):
+            restart = True
+        db_cluster.replace_scylla_cluster_value('/spec', scylla_cluster_spec)
+        with db_cluster.scylla_config_map as recover_config_map:
+            if recover_config_map != config_map:
+                # if config map is changed scylla will be restarted and we don't have to explicitly restart it
+                restart = False
+            recover_config_map.clear()
+            recover_config_map.update(config_map)
+        if restart:
+            db_cluster.restart_scylla()
     except Exception as exc:  # pylint: disable=broad-except
         tester.healthy_flag = False
         pytest.fail("Failed to bring cluster nodes back to original number due to :\n" +
