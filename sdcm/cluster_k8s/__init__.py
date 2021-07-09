@@ -314,6 +314,33 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         return KubernetesOps.kubectl(self, *command, namespace=namespace, timeout=timeout, remoter=remoter,
                                      ignore_status=ignore_status, verbose=verbose)
 
+    def kubectl_wait(self, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None, verbose=True):
+        """
+        We use kubectl wait to wait till all resources get into proper state
+        there are two problems with this:
+        1. kubectl wait fails when no resource matched criteria
+        2. if resources are provisioned gradually, kubectl wait can slip thrue crack when half of the resource
+          provisioned and the rest is not even deployed
+
+        This function is to address these problem by wrapping 'kubectl wait' and make it restarted when no resource
+        are there to tackle problem #1 and track number of resources it reported and wait+rerun if resource number
+        had changed to tackle problem #2
+        """
+        last_resource_count = -1
+
+        @timeout_wrapper(timeout=timeout, sleep_time=5)
+        def wait_body():
+            nonlocal last_resource_count
+            result = self.kubectl('wait --timeout=1m', *command, namespace=namespace, timeout=timeout, remoter=remoter,
+                                  verbose=verbose)
+            current_resource_count = result.stdout.count('condition met')
+            if current_resource_count != last_resource_count:
+                last_resource_count = current_resource_count
+                time.sleep(10)
+                raise RuntimeError("Retry since matched resource count has changed")
+            return result
+        return wait_body()
+
     def kubectl_multi_cmd(self, *command, namespace=None, timeout=KUBECTL_TIMEOUT, remoter=None, ignore_status=False,
                           verbose=True):
         if self.api_call_rate_limiter:
@@ -395,9 +422,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             LOGGER.debug(self.helm(
                 f"install cert-manager jetstack/cert-manager --version v{self.params.get('k8s_cert_manager_version')}",
                 namespace="cert-manager", values=helm_values))
-            time.sleep(10)
 
-        self.kubectl("wait --timeout=10m --all --for=condition=Ready pod", namespace="cert-manager")
+        self.kubectl_wait("--all --for=condition=Ready pod", namespace="cert-manager",
+                          timeout=600)
         wait_for(
             self.check_if_cert_manager_fully_functional,
             text='Waiting for cert-manager to become fully operational',
@@ -497,8 +524,11 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                     namespace=SCYLLA_MANAGER_NAMESPACE,
                 ))
 
-        self.kubectl("wait --timeout=10m --all --for=condition=Ready pod",
-                     namespace=SCYLLA_MANAGER_NAMESPACE)
+        self.kubectl_wait(
+            "--all --for=condition=Ready pod",
+            namespace=SCYLLA_MANAGER_NAMESPACE,
+            timeout=600,
+        )
         self.start_scylla_manager_journal_thread()
 
     def check_if_cert_manager_fully_functional(self) -> bool:
@@ -563,7 +593,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 values=values
             ))
 
-            time.sleep(10)
             KubernetesOps.wait_for_pods_readiness(
                 kluster=self,
                 total_pods=lambda pods: pods > 0,
@@ -631,8 +660,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
         wait_for(lambda: self.minio_ip_address, text='Waiting for minio pod to popup',
                  timeout=120, throw_exc=True)
-        self.kubectl("wait --timeout=10m -l app=minio --for=condition=Ready pod",
-                     timeout=605, namespace=MINIO_NAMESPACE)
+        self.kubectl_wait("-l app=minio --for=condition=Ready pod",
+                     timeout=600, namespace=MINIO_NAMESPACE)
 
     def get_scylla_cluster_helm_values(self, cpu_limit, memory_limit, pool_name: str = None) -> HelmValues:
         return HelmValues({
@@ -777,7 +806,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         LOGGER.debug("Check Scylla cluster")
         self.kubectl("get scyllaclusters.scylla.scylladb.com", namespace=SCYLLA_NAMESPACE)
         LOGGER.debug("Wait for %d secs before we start to apply changes to the cluster", DEPLOY_SCYLLA_CLUSTER_DELAY)
-        time.sleep(DEPLOY_SCYLLA_CLUSTER_DELAY)
         self.start_scylla_cluster_events_thread()
 
     @log_run_info
@@ -910,7 +938,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                     "patch configmap scylla-manager-dashboards "
                     "-p '{\"metadata\":{\"labels\":{\"grafana_dashboard\": \"1\"}}}'",
                     namespace=namespace)
-        time.sleep(10)
         self.check_k8s_monitoring_cluster_health(namespace=namespace)
         LOGGER.info("K8S Prometheus is available at %s:%s",
                     self.k8s_monitoring_node_ip, self.k8s_prometheus_external_port)
@@ -942,7 +969,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
     def check_k8s_monitoring_cluster_health(self, namespace: str):
         LOGGER.info("Check the monitoring cluster")
-        self.kubectl("wait --timeout=15m --all --for=condition=Ready pod", timeout=1000, namespace=namespace)
+        self.kubectl_wait("--all --for=condition=Ready pod", timeout=900, namespace=namespace)
         if self.USE_MONITORING_EXPOSE_SERVICE:
             LOGGER.info("Expose ports for prometheus of the monitoring cluster")
             self.k8s_monitoring_prometheus_expose_service = PortExposeService(
@@ -1417,8 +1444,6 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
         return True
 
     def wait_for_pod_readiness(self):
-        time.sleep(self.pod_readiness_delay)
-
         # To make it more informative in worst case scenario it repeat waiting text 5 times
         wait_for(self._wait_for_pod_readiness,
                  text=f"Wait for {self.name} pod to be ready...",
@@ -1782,7 +1807,6 @@ class PodCluster(cluster.BaseCluster):
         return self.PodContainerClass.pod_readiness_delay
 
     def wait_for_pods_readiness(self, pods_to_wait: int, total_pods: int):
-        time.sleep(self.get_nodes_readiness_delay)
         KubernetesOps.wait_for_pods_readiness(
             kluster=self.k8s_cluster,
             total_pods=total_pods,
@@ -2129,13 +2153,14 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         if not self.nodes:
             return True
 
-        @timeout_wrapper(timeout=self.nodes[0].pod_replace_timeout * 2 * 60)
+        @timeout_wrapper(
+            timeout=self.nodes[0].pod_replace_timeout * 2 * 60,
+            sleep_time=self.PodContainerClass.pod_readiness_delay)
         def wait_till_any_node_get_new_image(nodes_with_old_image: list):
             for node in nodes_with_old_image.copy():
                 if node.image == new_image:
                     nodes_with_old_image.remove(node)
                     return True
-            time.sleep(self.PodContainerClass.pod_readiness_delay)
             raise RuntimeError('No node was upgraded')
 
         nodes = self.nodes.copy()
@@ -2215,7 +2240,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
 
 class ManagerPodCluser(PodCluster):  # pylint: disable=abstract-method
     def wait_for_pods_readiness(self, pods_to_wait: int, total_pods: int):
-        time.sleep(self.get_nodes_readiness_delay)
         KubernetesOps.wait_for_pods_readiness(
             kluster=self.k8s_cluster,
             total_pods=lambda x: x > 1,
