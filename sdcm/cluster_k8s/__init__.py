@@ -1970,9 +1970,15 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
 
         if TestConfig.MULTI_REGION:
             node.datacenter_setup(self.datacenter)  # pylint: disable=no-member
+        try:
+            # NOTE: case of seedful scylla (operator v1.3.0-)
+            seed_nodes = ','.join(self.seed_nodes_ips)
+        except AssertionError:
+            # NOTE: case of seedless scylla (operator v1.4.0+)
+            seed_nodes = None
         self.node_config_setup(
             node,
-            seed_address=','.join(self.seed_nodes_ips),
+            seed_address=seed_nodes,
             endpoint_snitch=self.get_endpoint_snitch(),
         )
 
