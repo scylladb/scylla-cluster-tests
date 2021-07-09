@@ -195,7 +195,7 @@ class KindK8sMixin:
         kind create cluster --config /tmp/kind.cluster.yaml
         SERVICE_GATEWAY=`docker inspect kind-control-plane -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`
         ip ro add 10.96.0.0/16 via $SERVICE_GATEWAY || ip ro change 10.96.0.0/16 via $SERVICE_GATEWAY
-        ip ro add 10.224.0.0/16 via $SERVICE_GATEWAY || ip ro change 10.224.0.0/16 via $SERVICE_GATEWAY 
+        ip ro add 10.224.0.0/16 via $SERVICE_GATEWAY || ip ro change 10.224.0.0/16 via $SERVICE_GATEWAY
         """)
         self.host_node.remoter.run(f"sudo -E bash -cxe '{script}'")
 
@@ -262,7 +262,7 @@ class MinikubeK8sMixin:
             self.host_node.remoter.run(f'minikube image load {self.scylla_image}', ignore_status=True)
 
 
-class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
+class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: disable=too-many-public-methods
     # pylint: disable=too-many-arguments
     def __init__(self, mini_k8s_version, params: dict, user_prefix: str = '', region_name: str = None,
                  cluster_uuid: str = None, **_):
@@ -406,7 +406,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):
         docker_repo = self.params.get('docker_image')
         scylla_version = self.params.get('scylla_version')
         if not scylla_version or not docker_repo:
-            return
+            return ""
         return f"{docker_repo}:{scylla_version}"
 
     def deploy(self):
@@ -559,7 +559,7 @@ class GceMinikubeCluster(MinikubeK8sMixin, RemoteMinimalClusterBase, cluster_gce
         pass
 
 
-class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
+class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):  # pylint: disable=abstract-method
     public_ip_via_service: bool = False
     parent_cluster: 'LocalMinimalScyllaPodCluster'
 
@@ -586,7 +586,7 @@ class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
 
 
 # pylint: disable=too-many-ancestors
-class RemoteMinimalScyllaPodContainer(LocalMinimalScyllaPodContainer, IptablesPodPortsRedirectMixin):
+class RemoteMinimalScyllaPodContainer(LocalMinimalScyllaPodContainer, IptablesPodPortsRedirectMixin):  # pylint: disable=abstract-method
     parent_cluster: 'RemoteMinimalScyllaPodCluster'
     public_ip_via_service: bool = False
 
