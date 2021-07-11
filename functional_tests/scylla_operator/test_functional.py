@@ -20,6 +20,7 @@ import pytest
 
 from sdcm.mgmt import TaskStatus  # pylint: disable=import-error
 from sdcm.utils.k8s import HelmValues  # pylint: disable=import-error
+from functional_tests.scylla_operator.libs.helpers import get_orphaned_services
 
 
 log = logging.getLogger()
@@ -219,3 +220,53 @@ def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
     finally:
         db_cluster.k8s_cluster.helm(
             f"uninstall {target_chart_name}", namespace=namespace)
+
+
+def test_orphaned_services_after_shrink_cluster(db_cluster):
+    """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
+    log.info("Decommission of two node")
+    db_cluster.decommission(db_cluster.nodes[-1])
+    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
+
+    assert not get_orphaned_services(db_cluster), f"Orphaned services were found after decommission"
+
+    db_cluster.decommission(db_cluster.nodes[-1])
+    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
+
+    assert not get_orphaned_services(db_cluster), f"Orphaned services were found after decommission"
+
+
+@pytest.mark.require_node_terminate('drain_k8s_node')
+def test_orphaned_services_after_drain(db_cluster):
+    """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
+    node_to_remove = random.choice(db_cluster.non_seed_nodes)
+    node_to_remove_uid = node_to_remove.k8s_pod_uid
+    log.info(f'TerminateNode %s (uid=%s)', node_to_remove, node_to_remove_uid)
+    node_to_remove.drain_k8s_node()
+    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
+    assert not get_orphaned_services(db_cluster), f"Orphaned services were found after drain"
+
+    node_to_remove.mark_to_be_replaced()
+    node_to_remove.wait_till_k8s_pod_get_uid(ignore_uid=node_to_remove_uid)
+    node_to_remove.wait_for_pod_readiness()
+    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
+    assert not get_orphaned_services(db_cluster), f"Orphaned services were found after replace"
+
+
+def test_orphaned_services_multi_rack(db_cluster):
+    """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
+    new_nodes = []
+    log.info("Add node to the rack 1")
+    new_nodes.append(db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=1))
+
+    log.info("Add node to the rack 2")
+    new_nodes.append(db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=2))
+
+    assert not get_orphaned_services(db_cluster), f"Orphaned services were found after grow cluster with new racks"
+
+    log.info("Decommission of 2 nodes")
+    for node in new_nodes:
+        db_cluster.decommission(node[0])
+
+    db_cluster.wait_for_pods_readiness(pods_to_wait=2, total_pods=len(db_cluster.nodes))
+    assert not get_orphaned_services(db_cluster), f"Orphaned services were found after decommission"
