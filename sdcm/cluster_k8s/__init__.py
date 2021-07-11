@@ -1504,6 +1504,9 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
 
     parent_cluster: ScyllaPodCluster
 
+    def actual_scylla_yaml(self):
+        return super().remote_scylla_yaml()
+
     @contextlib.contextmanager
     def remote_scylla_yaml(self) -> ContextManager:
         """Update scylla.yaml, k8s way
