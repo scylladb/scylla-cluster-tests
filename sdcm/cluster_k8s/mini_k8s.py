@@ -101,8 +101,10 @@ class MinimalK8SOps:
         LOCALRUNNER.sudo(f"fuser -v4k {KUBECTL_PROXY_PORT}/tcp", ignore_status=True)
 
         LOGGER.debug("Start kubectl proxy in detached mode")
+        proxy_port = get_free_port(address='127.0.0.1')
         LOCALRUNNER.run(
-            "setsid kubectl proxy --disable-filter --accept-hosts '.*' > proxy.log 2>&1 < /dev/null & sleep 1")
+            f"setsid kubectl proxy --disable-filter --address '127.0.0.1' --port {proxy_port} "
+            "--accept-hosts '.*' > proxy.log 2>&1 < /dev/null & sleep 1")
 
         def get_proxy_ip_port():
             return LOCALRUNNER.run("grep -P '^Starting' proxy.log | grep -oP '127.0.0.1:[0-9]+'").stdout
@@ -116,6 +118,7 @@ class MinimalK8SOps:
         node.remoter.sudo(f"fuser -v4k {KUBECTL_PROXY_PORT}/tcp", ignore_status=True)
 
         LOGGER.debug("Start kubectl proxy in detached mode")
+        node.remoter.run("kill -9 $(ps aux | grep 'kubectl proxy' | awk '{print $2}')", ignore_status=True)
         node.remoter.run(
             "setsid kubectl proxy --disable-filter --accept-hosts '.*' > proxy.log 2>&1 < /dev/null & sleep 1")
 
