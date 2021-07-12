@@ -254,22 +254,21 @@ SCYLLA_DATABASE_CONTINUOUS_EVENTS = [
 ]
 
 
-def get_pattern_to_event_to_func_mapping(event_registry: ContinuousEventsRegistry,
-                                         node: str) \
-        -> List[ScyllaServerEventPatternFuncs]:
-    '''
+def get_pattern_to_event_to_func_mapping(node: str) -> List[ScyllaServerEventPatternFuncs]:
+    """
     This function maps regex patterns, event classes and begin / end
     functions into ScyllaServerEventPatternFuncs object. Helper
     functions are delegated to find the event that should be the
     target of the start / stop action, or creating a new one.
-    '''
+    """
     mapping = []
+    event_registry = ContinuousEventsRegistry()
 
-    def _add_event(event_type: Type[ContinuousEvent]):
+    def _add_event(event_type: Type[ScyllaDatabaseContinuousEvent]):
         new_event = event_type(node=node)
         new_event.begin_event()
 
-    def _end_event(event_type: Type[ContinuousEvent]):
+    def _end_event(event_type: Type[ScyllaDatabaseContinuousEvent]):
         event_filter = event_registry.get_registry_filter()
         event_filter \
             .filter_by_node(node=node) \
@@ -280,15 +279,16 @@ def get_pattern_to_event_to_func_mapping(event_registry: ContinuousEventsRegistr
 
         if not begun_events:
             raise ContinuousEventRegistryException("Did not find any events of type {event_type}"
-                                                   "with period type {period_type}"
-                                                   .format(event_type=event_type, period_type=EventPeriod.Begin.value))
+                                                   "with period type {period_type}."
+                                                   .format(event_type=event_type,
+                                                           period_type=EventPeriod.Begin.value))
         if len(begun_events) > 1:
             LOGGER.warning("Found {event_count} events of type {event_type} with period {event_period}. "
-                           "Will apply the function to the oldest event by default."
+                           "Will apply the function to most recent event by default."
                            .format(event_count=len(begun_events),
                                    event_type=event_type,
                                    event_period=EventPeriod.Begin.value))
-        event = begun_events[0]
+        event = begun_events[-1]
         event.end_event()
 
     for event in SCYLLA_DATABASE_CONTINUOUS_EVENTS:

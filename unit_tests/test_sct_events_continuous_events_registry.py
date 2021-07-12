@@ -33,9 +33,7 @@ class TestContinuousEventsRegistry:
     def populated_registry(self,
                            registry: ContinuousEventsRegistry) -> Generator[ContinuousEventsRegistry, None, None]:
         for _ in range(100):
-            new_nodetool_event = NodetoolEvent(nodetool_command="mock cmd", publish_event=False)
-            new_gemini_event = GeminiStressEvent(node="2323432", cmd="gemini hello", publish_event=False)
-            registry.add_event(random.choice([new_gemini_event, new_nodetool_event]))
+            NodetoolEvent(nodetool_command="mock cmd", publish_event=False)
 
         yield registry
 
@@ -48,13 +46,12 @@ class TestContinuousEventsRegistry:
 
     def test_add_multiple_events(self,
                                  registry: ContinuousEventsRegistry):
+        pre_insertion_item_count = len(registry.continuous_events)
         number_of_insertions = 10
-        for _ in range(number_of_insertions - 1):
-            new_nodetool_event = NodetoolEvent(nodetool_command="mock cmd", publish_event=False)
-            new_gemini_event = GeminiStressEvent(node="2323432", cmd="gemini hello", publish_event=False)
-            registry.add_event(random.choice([new_nodetool_event, new_gemini_event]))
+        for _ in range(number_of_insertions):
+            GeminiStressEvent(node="2323432", cmd="gemini hello", publish_event=False)
 
-        assert len(registry.continuous_events) == number_of_insertions
+        assert pre_insertion_item_count + number_of_insertions == len(registry.continuous_events)
 
     def test_adding_a_non_continuous_event_raises_error(self,
                                                         registry: ContinuousEventsRegistry,
@@ -83,8 +80,8 @@ class TestContinuousEventsRegistry:
     def test_get_events_by_period_type(self,
                                        populated_registry: ContinuousEventsRegistry,
                                        nodetool_stress_event: NodetoolEvent):
-        populated_registry.add_event(nodetool_stress_event)
+        count_of_begun_events_pre = len(populated_registry.get_events_by_period(period_type=EventPeriod.Begin))
         nodetool_stress_event.begin_event()
         found_events = populated_registry.get_events_by_period(period_type=EventPeriod.Begin)
 
-        assert len(found_events) == 1
+        assert len(found_events) == count_of_begun_events_pre + 1

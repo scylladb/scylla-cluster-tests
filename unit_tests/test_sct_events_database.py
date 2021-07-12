@@ -39,8 +39,6 @@ class TestDatabaseLogEvent(unittest.TestCase):
         self.assertTrue(issubclass(DatabaseLogEvent.SEGMENTATION, DatabaseLogEvent)),
         self.assertTrue(issubclass(DatabaseLogEvent.INTEGRITY_CHECK, DatabaseLogEvent)),
         self.assertTrue(issubclass(DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.BOOT, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.STOP, DatabaseLogEvent)),
         self.assertTrue(issubclass(DatabaseLogEvent.SUPPRESSED_MESSAGES, DatabaseLogEvent)),
         self.assertTrue(issubclass(DatabaseLogEvent.stream_exception, DatabaseLogEvent)),
         self.assertTrue(issubclass(DatabaseLogEvent.POWER_OFF, DatabaseLogEvent)),
