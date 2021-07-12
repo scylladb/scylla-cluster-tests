@@ -1340,9 +1340,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 if index not in self._system_log_errors_index or start_from_beginning:
                     ''' for each line, if it matches a continuous event pattern, 
                     call the appropriate function with the class tied to that pattern'''
-                    db_event_pattern_func_map = get_pattern_to_event_to_func_mapping(
-                        event_registry=self.continuous_events_registry,
-                        node=self.ip_address)
+                    db_event_pattern_func_map = get_pattern_to_event_to_func_mapping(node=self.ip_address)
                     for item in db_event_pattern_func_map:
                         event_match = item.pattern.search(line)
                         if event_match:

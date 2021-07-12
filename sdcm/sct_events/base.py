@@ -133,7 +133,7 @@ class ContinuousEventsRegistry(metaclass=Singleton):
                              period_type: EventPeriod) -> List[ContinuousEvent]:
         event_filter = self.get_registry_filter()
         found_events = event_filter \
-            .filter_by_period(period_type=period_type) \
+            .filter_by_period(period_type=period_type.value) \
             .get_filtered()
 
         if not found_events:
@@ -353,11 +353,9 @@ class ContinuousEvent(SctEvent, abstract=True):
     _duration: Optional[int] = None
 
     def __init__(self,
-                 node: str = "",
                  severity: Severity = Severity.UNKNOWN,
                  publish_event: bool = True):
         super().__init__(severity=severity)
-        self.node = node
         self.log_file_name = None
         self.errors = []
         self.publish_event = publish_event

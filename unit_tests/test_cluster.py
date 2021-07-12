@@ -98,7 +98,7 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
 
     def test_search_system_log(self):
         critical_errors = list(self.node.follow_system_log(start_from_beginning=True))
-        self.assertEqual(36, len(critical_errors))
+        self.assertEqual(34, len(critical_errors))
 
     def test_search_system_log_specific_log(self):
         errors = list(self.node.follow_system_log(
