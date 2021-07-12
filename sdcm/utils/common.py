@@ -1323,9 +1323,9 @@ class version():  # pylint: disable=invalid-name,too-few-public-methods
         return inner
 
 
-def get_free_port():
+def get_free_port(address: str = ''):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(('', 0))
+    sock.bind((address, 0))
     addr = sock.getsockname()
     port = addr[1]
     sock.close()
