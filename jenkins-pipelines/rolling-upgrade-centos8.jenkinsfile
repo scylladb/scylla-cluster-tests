@@ -5,8 +5,8 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 rollingUpgradePipeline(
     backend: 'gce',
-    base_versions: ['2020.1', '4.5', '2021.1'],
-    linux_distro: 'centos',
+    base_versions: [],  // auto mode
+    linux_distro: 'centos-8',
     gce_image_db: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-8',
 
     test_name: 'upgrade_test.UpgradeTest.test_rolling_upgrade',

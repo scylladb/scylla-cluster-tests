@@ -87,7 +87,8 @@ def call(Map pipelineParams) {
                     script {
                         def tasks = [:]
 
-                        for (version in supportedUpgradeFromVersions(pipelineParams.base_versions, params.new_scylla_repo)) {
+                        for (version in supportedUpgradeFromVersions(pipelineParams.base_versions, pipelineParams.linux_distro,
+                                                                     params.new_scylla_repo)) {
                             def base_version = version
                             tasks["${base_version}"] = {
                                 node(builder.label) {

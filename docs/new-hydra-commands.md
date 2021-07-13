@@ -26,4 +26,9 @@ hydra clean-resources --dry-run
 # WIP: provision a cluster without running any test scenario i.e. stress/nemesis
 hydra provision --backend aws --scylla-version 3.0
 hydra provision --backend aws --db-nodes 3 --loaders 1 --scylla-version 3.0 --monitoring-version 2.1
+
+# get Scylla base versions for upgrade test
+
+hydra get-scylla-base-versions --only-print-versions true --linux-distro centos --scylla-repo http://downloads.scylladb.com/unstable/scylla/master/rpm/centos/2021-08-29T00:58:58Z/scylla.repo
+
 ```
