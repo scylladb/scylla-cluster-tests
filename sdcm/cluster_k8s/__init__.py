@@ -1923,12 +1923,36 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         )
 
     @property
-    def scylla_config_map(self):
+    @contextlib.contextmanager
+    def scylla_config_map(self) -> dict:
         try:
-            return self.k8s_cluster.k8s_core_v1_api.read_namespaced_config_map(
-                name=SCYLLA_CONFIG_NAME, namespace=self.namespace)
+            config_map = self.k8s_cluster.k8s_core_v1_api.read_namespaced_config_map(
+                name=SCYLLA_CONFIG_NAME, namespace=self.namespace).data or {}
+            exists = True
         except:  # pylint: disable=bare-except
-            return None
+            config_map = {}
+            exists = False
+        original_config_map = deepcopy(config_map)
+        yield config_map
+        if original_config_map == config_map:
+            self.log.debug("%s: scylla config map hasn't been changed", self)
+            return
+        if exists:
+            self.k8s_cluster.k8s_core_v1_api.patch_namespaced_config_map(
+                name=SCYLLA_CONFIG_NAME,
+                namespace=self.namespace,
+                body=[{"op": "replace", "path": '/data', "value": config_map}]
+            )
+        else:
+            self.k8s_cluster.k8s_core_v1_api.create_namespaced_config_map(
+                namespace=self.namespace,
+                body=V1ConfigMap(
+                    data=config_map,
+                    metadata={'name': SCYLLA_CONFIG_NAME}
+                )
+            )
+        self.restart_scylla()
+        self.wait_for_nodes_up_and_normal()
 
     @contextlib.contextmanager
     def remote_cassandra_rackdc_properties(self) -> ContextManager:
@@ -1941,44 +1965,25 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         More details here: https://github.com/scylladb/scylla-operator/blob/master/docs/generic.md#configure-scylla
         """
         with self.scylla_yaml_lock:
-            scylla_config_map = self.scylla_config_map
-            if scylla_config_map is None:
-                old_rack_properties = {}
-            else:
+            with self.scylla_config_map as scylla_config_map:
                 old_rack_properties = properties.deserialize(
-                    scylla_config_map.data.get('cassandra-rackdc.properties', ""))
-            if not old_rack_properties:
-                if len(self.nodes) > 1:
-                    # If there is not config_map than get properties from the very first node in the cluster
+                    scylla_config_map.get('cassandra-rackdc.properties', ""))
+                if not old_rack_properties and len(self.nodes) > 1:
+                    # If there is no config_map than get properties from the very first node in the cluster
                     with self.nodes[0].remote_cassandra_rackdc_properties() as node_rack_properties:
                         old_rack_properties = node_rack_properties
-            new_rack_properties = deepcopy(old_rack_properties)
-            yield new_rack_properties
-            if new_rack_properties == old_rack_properties:
-                LOGGER.debug("%s: cassandra-rackdc.properties hasn't been changed", self)
-                return
-            original = properties.serialize(old_rack_properties).splitlines(keepends=True)
-            changed_bare = properties.serialize(new_rack_properties)
-            changed = changed_bare.splitlines(keepends=True)
-            diff = "".join(unified_diff(original, changed))
-            LOGGER.debug("%s: cassandra-rackdc.properties has been updated:\n%s", self, diff)
-            config_map = self.scylla_config_map
-            if config_map:
-                config_map.data['cassandra-rackdc.properties'] = changed_bare
-                self.k8s_cluster.k8s_core_v1_api.patch_namespaced_config_map(
-                    name=SCYLLA_CONFIG_NAME,
-                    namespace=self.namespace,
-                    body=config_map)
-            else:
-                self.k8s_cluster.k8s_core_v1_api.create_namespaced_config_map(
-                    namespace=self.namespace,
-                    body=V1ConfigMap(
-                        data={'cassandra-rackdc.properties': changed_bare},
-                        metadata={'name': SCYLLA_CONFIG_NAME}
-                    )
-                )
-            self.restart_scylla()
-            self.wait_for_nodes_up_and_normal()
+
+                new_rack_properties = deepcopy(old_rack_properties)
+                yield new_rack_properties
+                if new_rack_properties == old_rack_properties:
+                    self.log.debug("%s: cassandra-rackdc.properties hasn't been changed", self)
+                    return
+                original = properties.serialize(old_rack_properties).splitlines(keepends=True)
+                changed_bare = properties.serialize(new_rack_properties)
+                changed = changed_bare.splitlines(keepends=True)
+                diff = "".join(unified_diff(original, changed))
+                LOGGER.debug("%s: cassandra-rackdc.properties has been updated:\n%s", self, diff)
+                scylla_config_map['cassandra-rackdc.properties'] = changed_bare
 
     @property
     def scylla_cluster_spec(self) -> ResourceField:
