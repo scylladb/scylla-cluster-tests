@@ -2613,7 +2613,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                       send_email=self.params.get('send_email'),
                                                       email_recipients=self.params.get('email_recipients'),
                                                       events=get_events_grouped_by_category(
-                                                          _registry=self.events_processes_registry, limit=self.params.get('events_limit_in_email'))
+                                                          _registry=self.events_processes_registry,
+                                                          limit=self.params.get('events_limit_in_email'))
                                                       )
         is_gce = bool(self.params.get('cluster_backend') == 'gce')
         try:
@@ -2628,7 +2629,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                       send_email=self.params.get('send_email'),
                                                       email_recipients=self.params.get('email_recipients'),
                                                       events=get_events_grouped_by_category(
-                                                          _registry=self.events_processes_registry, limit=self.params.get('events_limit_in_email'))
+                                                          _registry=self.events_processes_registry,
+                                                          limit=self.params.get('events_limit_in_email'))
                                                       )
         is_gce = bool(self.params.get('cluster_backend') == 'gce')
         try:
@@ -2645,7 +2647,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                       send_email=self.params.get('send_email'),
                                                       email_recipients=self.params.get('email_recipients'),
                                                       events=get_events_grouped_by_category(
-                                                          _registry=self.events_processes_registry, limit=self.params.get('events_limit_in_email'))
+                                                          _registry=self.events_processes_registry,
+                                                          limit=self.params.get('events_limit_in_email'))
                                                       )
         if email_subject is None:
             email_subject = ('Performance Regression Compare Results - {test.test_name} - '
@@ -2916,6 +2919,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if email_data:
             email_data["reporter"] = self.email_reporter.__class__.__name__
             self.log.debug('Save email data to file %s', json_file_path)
+            self.log.debug('Email data: %s', email_data)
             save_email_data_to_file(email_data, json_file_path)
 
     @silence()

@@ -400,7 +400,7 @@ class MonitoringStack(BaseMonitoringEntity):
         checked_dashboard_url = "http://{grafana_ip}:{grafana_port}/api/dashboards/db/{uid}"
         try:
             LOGGER.info(
-                "Check dashbaord: %s", checked_dashboard_url.format(grafana_ip=grafana_ip, grafana_port=MonitoringStack.grafana_port, uid=uid))
+                "Check dashboard: %s", checked_dashboard_url.format(grafana_ip=grafana_ip, grafana_port=MonitoringStack.grafana_port, uid=uid))
             res = requests.get(checked_dashboard_url.format(grafana_ip=grafana_ip,
                                                             grafana_port=MonitoringStack.grafana_port,
                                                             uid=uid))
@@ -780,8 +780,7 @@ class ScyllaLogCollector(LogCollector):
         cluster_log_type {str} -- cluster type name
     """
     log_entities = [FileLog(name='system.log',
-                            command="sudo journalctl --no-tail --no-pager -u scylla-ami-setup.service -u scylla-image-setup.service -u scylla-io-setup.service -u scylla-server.service -u scylla-jmx.service",
-                            search_locally=True),
+                            command="sudo journalctl --no-tail --no-pager -u scylla-ami-setup.service -u scylla-image-setup.service -u scylla-io-setup.service -u scylla-server.service -u scylla-jmx.service", search_locally=True),
                     CommandLog(name='cpu_info',
                                command='cat /proc/cpuinfo'),
                     CommandLog(name='mem_info',
@@ -898,6 +897,8 @@ class SCTLogCollector(LogCollector):
         FileLog(name='profile.stats',
                 search_locally=True),
         FileLog(name='sct.log',
+                search_locally=True),
+        FileLog(name='email_data.json',
                 search_locally=True),
         FileLog(name='left_processes.log',
                 search_locally=True),
