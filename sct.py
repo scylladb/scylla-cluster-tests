@@ -75,6 +75,7 @@ from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.get_username import get_username
 from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
+from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
 
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
@@ -526,6 +527,47 @@ def list_repos(dist_type, dist_version):
         tbl.add_row([version_prefix, repo_url])
 
     click.echo(tbl.get_string(title="Scylla Repos"))
+
+
+@cli.command('get-scylla-base-versions', help='Get Scylla base versions of upgrade')
+@click.option('-s', '--scylla-version', type=str,
+              help='Scylla version, eg: 4.5, 2021.1')
+@click.option('-r', '--scylla-repo', type=str,
+              help='Scylla repo')
+@click.option('-d', '--linux-distro', type=str,
+              default='centos', help='Linux Distribution type')
+@click.option('-o', '--only-print-versions', type=bool, default=False, required=False, help='')
+def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_print_versions):  # pylint: disable=too-many-locals
+    """
+    Upgrade test try to upgrade from multiple supported base versions, this command is used to
+    get the base versions according to the scylla repo and distro type, then we don't need to hardcode
+    the base version for each branch.
+    """
+    add_file_logger()
+
+    version_detector = UpgradeBaseVersion(scylla_repo, linux_distro, scylla_version)
+
+    if not version_detector.dist_type == 'centos' and version_detector.dist_version is None:
+        click.secho("when passing --dist-type=debian/ubuntu need to pass --dist-version as well", fg='red')
+        sys.exit(1)
+
+    # We can't detect the support versions for this distro, which shares the repo with others, eg: centos8
+    # so we need to assign the start support versions for it.
+    version_detector.get_start_support_version()
+
+    supported_versions, version_list = version_detector.get_version_list()
+    click.echo(f'Supported Versions: {supported_versions}')
+
+    if only_print_versions:
+        click.echo(f"Base Versions: {' '.join(version_list)}")
+        return
+
+    tbl = PrettyTable(["Version Family", "Repo Url"])
+    tbl.align = "l"
+    for version in version_list:
+        tbl.add_row([version, version_detector.repo_maps[version]])
+    click.echo(tbl.get_string(title="Base Versions"))
+    return
 
 
 @cli.command('output-conf', help="Output test configuration readed from the file")
