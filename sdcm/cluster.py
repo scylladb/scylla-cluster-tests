@@ -2627,15 +2627,16 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 nodetool_event.duration = result.duration
                 return result
             except Exception as details:  # pylint: disable=broad-except
-                if warning_event_on_exception and isinstance(details, warning_event_on_exception):
-                    nodetool_event.severity = Severity.WARNING
-
                 if coredump_on_timeout and isinstance(details, CommandTimedOut):
                     self.generate_coredump_file()
 
                 nodetool_event.add_error([f"{error_message}{str(details)}"])
                 nodetool_event.full_traceback = traceback.format_exc()
-                raise
+
+                if warning_event_on_exception and isinstance(details, warning_event_on_exception):
+                    nodetool_event.severity = Severity.WARNING
+                else:
+                    raise
 
     def check_node_health(self, retries: int = CHECK_NODE_HEALTH_RETRIES) -> None:
         # Task 1443: ClusterHealthCheck is bottle neck in scale test and create a lot of noise in 5000 tables test.
