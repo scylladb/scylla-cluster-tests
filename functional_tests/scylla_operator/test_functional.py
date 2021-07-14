@@ -15,9 +15,11 @@
 
 import logging
 import random
+import time
 import pytest
 
 from sdcm.mgmt import TaskStatus  # pylint: disable=import-error
+from sdcm.utils.k8s import HelmValues  # pylint: disable=import-error
 
 
 log = logging.getLogger()
@@ -147,3 +149,71 @@ def test_listen_address(db_cluster):
                 all_errors.append(f'Node {node.name} has wrong listen_address "{listen_address}" in scylla.yaml')
 
     assert not all_errors, "Following errors found:\n{'\n'.join(errors)}"
+
+
+def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
+    """Covers https://github.com/scylladb/scylla-operator/issues/447"""
+
+    # NOTE: Create invalid ScyllaCluster which must be failed but not block operator.
+    log.info("DEBUG: test_check_operator_operability_when_scylla_crd_is_incorrect")
+    cluster_name, target_chart_name, namespace = ("test-empty-storage-capacity", ) * 3
+    values = HelmValues({
+        'nameOverride': '',
+        'fullnameOverride': cluster_name,
+        'scyllaImage': {
+            'repository': db_cluster.k8s_cluster.params.get('docker_image'),
+            'tag': db_cluster.k8s_cluster.params.get('scylla_version'),
+        },
+        'agentImage': {
+            'repository': 'scylladb/scylla-manager-agent',
+            'tag': db_cluster.k8s_cluster.params.get('scylla_mgmt_agent_version'),
+        },
+        'serviceAccount': {
+            'create': True,
+            'annotations': {},
+            'name': f"{cluster_name}-member"
+        },
+        'developerMode': True,
+        'sysctls': ["fs.aio-max-nr=1048576"],
+        'serviceMonitor': {'create': False},
+        'datacenter': db_cluster.k8s_cluster.params.get('k8s_scylla_datacenter'),
+        'racks': [{
+            'name': db_cluster.k8s_cluster.params.get('k8s_scylla_rack'),
+            'members': 1,
+            'storage': {},
+            'resources': {
+                'limits': {'cpu': 1, 'memory': "200Mi"},
+                'requests': {'cpu': 1, 'memory': "200Mi"},
+            },
+        }]
+    })
+    db_cluster.k8s_cluster.kubectl(f"create namespace {namespace}", ignore_status=True)
+    db_cluster.k8s_cluster.helm_install(
+        target_chart_name=target_chart_name,
+        source_chart_name="scylla-operator/scylla",
+        version=db_cluster.k8s_cluster._scylla_operator_chart_version,  # pylint: disable=protected-access
+        use_devel=True,
+        values=values,
+        namespace=namespace)
+    try:
+        db_cluster.k8s_cluster.wait_till_cluster_is_operational()
+
+        # NOTE: Check that new cluster is non-working. Statefulset must be absent always.
+        #       So, sleep for some time and make sure that it is absent.
+        time.sleep(30)
+        invalid_cluster_sts = db_cluster.k8s_cluster.kubectl(
+            f"get sts -n {namespace} -l scylla/cluster={cluster_name}",
+            ignore_status=True)
+        assert 'No resources found' in invalid_cluster_sts.stderr, (
+            f"Expected {cluster_name} not to have statefulset created.\n"
+            f"stdout: {invalid_cluster_sts.stdout}\n"
+            f"stderr: {invalid_cluster_sts.stderr}")
+
+        # NOTE: Any change to the working ScyllaCluster going to trigger rollout.
+        #       And rollout is enough for us to make sure that operator still works
+        #       having invalid clusters. So, just run rollout restart which updates
+        #       ScyllaCluster CRD.
+        db_cluster.restart_scylla()
+    finally:
+        db_cluster.k8s_cluster.helm(
+            f"uninstall {target_chart_name}", namespace=namespace)
