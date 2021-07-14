@@ -17,7 +17,7 @@ import logging
 import random
 import pytest
 
-from sdcm.mgmt import TaskStatus
+from sdcm.mgmt import TaskStatus  # pylint: disable=import-error
 
 
 log = logging.getLogger()
@@ -52,7 +52,7 @@ def test_cassandra_rackdc(cassandra_rackdc_properties):
         assert original == props['prefer_local']
 
 
-def test_rolling_restart_cluster(tester, db_cluster):
+def test_rolling_restart_cluster(db_cluster):
     db_cluster.k8s_cluster.kubectl("rollout restart statefulset", namespace=db_cluster.namespace)
     for statefulset in db_cluster.statefulsets:
         db_cluster.k8s_cluster.kubectl(
@@ -62,14 +62,14 @@ def test_rolling_restart_cluster(tester, db_cluster):
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
 
-def test_grow_shrink_cluster(tester, db_cluster):
+def test_grow_shrink_cluster(db_cluster):
     new_node = db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=0)[0]
     db_cluster.decommission(new_node)
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
 
 @pytest.mark.require_node_terminate('drain_k8s_node')
-def test_drain_and_replace_node_kubernetes(tester, db_cluster):
+def test_drain_and_replace_node_kubernetes(db_cluster):
     target_node = random.choice(db_cluster.non_seed_nodes)
     old_uid = target_node.k8s_pod_uid
     log.info('TerminateNode %s (uid=%s)', target_node, old_uid)
@@ -81,7 +81,7 @@ def test_drain_and_replace_node_kubernetes(tester, db_cluster):
 
 
 @pytest.mark.require_node_terminate('drain_k8s_node')
-def test_drain_wait_and_replace_node_kubernetes(tester, db_cluster):
+def test_drain_wait_and_replace_node_kubernetes(db_cluster):
     target_node = random.choice(db_cluster.non_seed_nodes)
     old_uid = target_node.k8s_pod_uid
     log.info('TerminateNode %s (uid=%s)', target_node, old_uid)
@@ -96,7 +96,7 @@ def test_drain_wait_and_replace_node_kubernetes(tester, db_cluster):
 
 
 @pytest.mark.require_node_terminate('drain_k8s_node')
-def test_drain_terminate_decommission_add_node_kubernetes(tester, db_cluster):
+def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
     target_node = random.choice(db_cluster.non_seed_nodes)
     target_node.drain_k8s_node()
     db_cluster.decommission(target_node)
@@ -105,7 +105,7 @@ def test_drain_terminate_decommission_add_node_kubernetes(tester, db_cluster):
 
 
 @pytest.mark.require_mgmt()
-def test_mgmt_repair(tester, db_cluster):
+def test_mgmt_repair(db_cluster):
     mgr_cluster = db_cluster.get_cluster_manager()
     mgr_task = mgr_cluster.create_repair_task()
     task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
@@ -114,7 +114,7 @@ def test_mgmt_repair(tester, db_cluster):
 
 
 @pytest.mark.require_mgmt()
-def test_mgmt_backup(tester, db_cluster):
+def test_mgmt_backup(db_cluster):
     mgr_cluster = db_cluster.get_cluster_manager()
     backup_bucket_location = db_cluster.params.get('backup_bucket_location')
     bucket_name = f"s3:{backup_bucket_location.split()[0]}"
@@ -123,7 +123,7 @@ def test_mgmt_backup(tester, db_cluster):
     assert TaskStatus.DONE == status
 
 
-def test_listen_address(tester, db_cluster):
+def test_listen_address(db_cluster):
     """
     Issues: https://github.com/scylladb/scylla-operator/issues/484
             https://github.com/scylladb/scylla/issues/8381
