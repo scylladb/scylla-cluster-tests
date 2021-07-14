@@ -145,7 +145,7 @@ def test_listen_address(db_cluster):
             listen_address = scylla_yaml.get('listen_address')
             if not listen_address:
                 all_errors.append(f"Not found listen_address flag in the {node.name} scylla.yaml")
-            if listen_address != '0.0.0.0':
+            elif listen_address != '0.0.0.0':
                 all_errors.append(f'Node {node.name} has wrong listen_address "{listen_address}" in scylla.yaml')
 
     assert not all_errors, "Following errors found:\n{'\n'.join(errors)}"
