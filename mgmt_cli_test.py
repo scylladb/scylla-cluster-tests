@@ -511,10 +511,12 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
-        rate_limit_list = [f'{dc}:{randint(1, 10)}' for dc in self.get_all_dcs_names()]
+        rate_limit_list = [f'{dc}:{randint(15, 25)}' for dc in self.get_all_dcs_names()]
         self.log.info('rate limit will be {}'.format(rate_limit_list))
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=rate_limit_list)
-        task_status = backup_task.wait_and_get_final_status()
+        task_status = backup_task.wait_and_get_final_status(timeout=18000)
+        assert task_status == TaskStatus.DONE, \
+            f"Task {backup_task.id} did not end successfully:\n{backup_task.detailed_progress}"
         self.log.info('backup task finished with status {}'.format(task_status))
         # TODO: verify that the rate limit is as set in the cmd
         self.verify_backup_success(mgr_cluster=mgr_cluster, backup_task=backup_task)
