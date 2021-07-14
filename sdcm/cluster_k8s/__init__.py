@@ -1985,10 +1985,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                 LOGGER.debug("%s: cassandra-rackdc.properties has been updated:\n%s", self, diff)
                 scylla_config_map['cassandra-rackdc.properties'] = changed_bare
 
-    @property
-    def scylla_cluster_spec(self) -> ResourceField:
-        return self.get_scylla_cluster_value('/spec')
-
     def update_seed_provider(self):
         pass
 
