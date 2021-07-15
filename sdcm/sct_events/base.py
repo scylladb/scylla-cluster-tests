@@ -78,6 +78,11 @@ class ContinuousRegistryFilter:
 
         return self
 
+    def filter_by_shard(self, shard: int) -> ContinuousRegistryFilter:
+        self._output = [item for item in self._output if item.shard == shard]
+
+        return self
+
     def get_filtered(self) -> List[Any]:
         return self._output
 

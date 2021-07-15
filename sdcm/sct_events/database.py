@@ -14,7 +14,7 @@
 import re
 import logging
 from functools import partial
-from typing import Type, List, Tuple, Generic, Optional, NamedTuple, Pattern, Callable
+from typing import Type, List, Tuple, Generic, Optional, NamedTuple, Pattern, Callable, Match
 
 from sdcm.sct_events import Severity, SctEventProtocol
 from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event, InformationalEvent, ContinuousEvent, \
@@ -227,34 +227,53 @@ class ScyllaDatabaseContinuousEvent(ContinuousEvent, abstract=True):
     begin_pattern: str = NotImplemented
     end_pattern: str = NotImplemented
 
-    def __init__(self, node: str, severity=Severity.UNKNOWN, publish_event=False):
+    def __init__(self, node: str, shard: int = None, severity=Severity.UNKNOWN, publish_event=True):
         super().__init__(severity=severity, publish_event=publish_event)
         self.node = node
+        self.shard = shard
+
+    @property
+    def msgfmt(self):
+        node = " node={0.node}" if self.node else ""
+        shard = " shard={0.shard}" if self.shard is not None else ""
+        fmt = f"{super().msgfmt}{node}{shard}"
+
+        return fmt
 
 
 class ScyllaServerStatusEvent(ScyllaDatabaseContinuousEvent):
     begin_pattern = r'Starting Scylla Server'
     end_pattern = r'Stopping Scylla Server'
 
-    def __init__(self, node: str, severity=Severity.NORMAL, publish_event=True):
-        super().__init__(node=node, severity=severity, publish_event=publish_event)
+    def __init__(self, node: str, severity=Severity.NORMAL, **_kwargs):
+        super().__init__(node=node, severity=severity)
 
 
 class BootstrapEvent(ScyllaDatabaseContinuousEvent):
     begin_pattern = r'Starting to bootstrap'
     end_pattern = r'Bootstrap succeeded'
 
-    def __init__(self, node: str, severity=Severity.NORMAL, publish_event=True):
-        super().__init__(node=node, severity=severity, publish_event=publish_event)
+    def __init__(self, node: str, severity=Severity.NORMAL, **_kwargs):
+        super().__init__(node=node, severity=severity)
+
+
+class RepairEvent(ScyllaDatabaseContinuousEvent):
+    begin_pattern = r'Repair 1 out of \d+ ranges, id=\[id=\d+, uuid=[\d\w-]{36}\], shard=(?P<shard>\d+)'
+    end_pattern = r'repair id \[id=\d+, uuid=[\d\w-]{36}\] on shard (?P<shard>\d+) completed'
+
+    def __init__(self, node: str, shard: int, severity=Severity.NORMAL):
+        super().__init__(node=node, shard=shard, severity=severity)
 
 
 SCYLLA_DATABASE_CONTINUOUS_EVENTS = [
     ScyllaServerStatusEvent,
-    BootstrapEvent
+    BootstrapEvent,
+    RepairEvent
 ]
 
 
-def get_pattern_to_event_to_func_mapping(node: str) -> List[ScyllaServerEventPatternFuncs]:
+def get_pattern_to_event_to_func_mapping(node: str) \
+        -> List[ScyllaServerEventPatternFuncs]:
     """
     This function maps regex patterns, event classes and begin / end
     functions into ScyllaServerEventPatternFuncs object. Helper
@@ -264,16 +283,23 @@ def get_pattern_to_event_to_func_mapping(node: str) -> List[ScyllaServerEventPat
     mapping = []
     event_registry = ContinuousEventsRegistry()
 
-    def _add_event(event_type: Type[ScyllaDatabaseContinuousEvent]):
-        new_event = event_type(node=node)
+    def _add_event(event_type: Type[ScyllaDatabaseContinuousEvent], match: Match):
+        shard = int(match.groupdict()["shard"]) if "shard" in match.groupdict().keys() else None
+        new_event = event_type(node=node, shard=shard)
         new_event.begin_event()
+        LOGGER.debug("Added a begin event. Event added: {event} on node {node}, shard {shard}"
+                     .format(event=new_event, node=new_event.node, shard=shard))
 
-    def _end_event(event_type: Type[ScyllaDatabaseContinuousEvent]):
+    def _end_event(event_type: Type[ScyllaDatabaseContinuousEvent], match: Match):
+        shard = int(match.groupdict()["shard"]) if "shard" in match.groupdict().keys() else None
         event_filter = event_registry.get_registry_filter()
         event_filter \
             .filter_by_node(node=node) \
             .filter_by_type(event_type=event_type) \
             .filter_by_period(period_type=EventPeriod.Begin.value)
+
+        if shard is not None:
+            event_filter.filter_by_shard(shard)
 
         begun_events = event_filter.get_filtered()
 
@@ -289,6 +315,7 @@ def get_pattern_to_event_to_func_mapping(node: str) -> List[ScyllaServerEventPat
                                    event_type=event_type,
                                    event_period=EventPeriod.Begin.value))
         event = begun_events[-1]
+        LOGGER.debug(f"Ending event: {event}")
         event.end_event()
 
     for event in SCYLLA_DATABASE_CONTINUOUS_EVENTS:
