@@ -27,7 +27,6 @@ from docker.models.containers import Container
 from sdcm.remote import LOCALRUNNER
 from sdcm.keystore import pub_key_from_private_key_file
 from sdcm.utils.decorators import retrying, Retry
-from sdcm.wait import wait_for
 
 DOCKER_API_CALL_TIMEOUT = 180  # seconds
 

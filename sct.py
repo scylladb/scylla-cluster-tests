@@ -14,6 +14,8 @@
 # Copyright (c) 2021 ScyllaDB
 # pylint: disable=too-many-lines
 
+# pylint: disable=too-many-lines
+
 import os
 import re
 import sys
@@ -493,7 +495,7 @@ def lint_yamls(backend, exclude: str, include: str):  # pylint: disable=too-many
             raise ValueError(f'Include filter "{flt}" compiling failed with: {exc}') from exc
 
     original_env = {**os.environ}
-    process_pool = ProcessPoolExecutor(max_workers=5)
+    process_pool = ProcessPoolExecutor(max_workers=5)  # pylint: disable=consider-using-with
 
     features = []
     for root, _, files in os.walk('./test-cases'):
@@ -682,7 +684,7 @@ def show_events(test_id: str, follow: bool = False, last_n: int = None, save_to:
             options = "-f " if follow else ""
             options += f"-n {last_n} " if last_n else ""
             try:
-                remoter.run(f"tail {options} {builder['path']}/events_log/events.log")
+                remoter.run("tail %s %s/events_log/events.log", options, builder['path'])
             except KeyboardInterrupt:
                 LOGGER.info('Monitoring events.log for test-id %s stopped!', test_id)
         elif save_to:
@@ -718,7 +720,7 @@ def pre_commit():
 class OutputLogger():
     def __init__(self, filename, terminal):
         self.terminal = terminal
-        self.log = open(filename, "a")
+        self.log = open(filename, "a")  # pylint: disable=consider-using-with
 
     def write(self, message):
         self.terminal.write(message)
@@ -979,8 +981,12 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
                 server.create_pipeline_job(jenkins_file, group_name)
 
     server.create_directory(name='artifacts-offline-install', display_name='SCT Artifacts Offline Install Tests')
+
+    def jenkinsfile_generator():
+        for i in ['ami', 'amazon2', 'docker', 'gce-image']:
+            yield f'-{i}.jenkinsfile' in jenkins_file
     for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/artifacts-*.jenkinsfile'):
-        if any((f'-{i}.jenkinsfile' in jenkins_file for i in ['ami', 'amazon2', 'docker', 'gce-image'])):
+        if any(jenkinsfile_generator()):
             continue
         server.create_pipeline_job(jenkins_file, 'artifacts-offline-install')
     for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/nonroot-offline-install/*.jenkinsfile'):

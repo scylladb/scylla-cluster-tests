@@ -140,6 +140,7 @@ class SctRunner(ABC):
         return self._image(image_type=ImageType.GENERAL)
 
     @abstractmethod
+    # pylint: disable=too-many-arguments
     def _create_instance(self, instance_type, base_image, tags_list, instance_name=None, region_az="", test_duration=None):
         ...
 
@@ -158,8 +159,9 @@ class SctRunner(ABC):
         LOGGER.info("Creating SCT Runner instance...")
         image = self.image
         if not image:
-            LOGGER.error(f"SCT Runner image was not found in {self.region_name}! "
-                         f"Use hydra create-runner-image --cloud-privider {self.cloud_provider} --region {self.region_name}")
+            LOGGER.error("SCT Runner image was not found in %s! "
+                         "Use hydra create-runner-image --cloud-privider %s --region %s",
+                         self.region_name, self.cloud_provider, self.region_name)
             sys.exit(1)
         lt_datetime = datetime.datetime.now(tz=pytz.utc)
         return self._create_instance(
@@ -228,6 +230,7 @@ class AwsSctRunner(SctRunner):
             f"found in {self.region_name}: {existing_amis}"
         return self.ec2_resource.Image(existing_amis[0]["ImageId"])  # pylint: disable=no-member
 
+    # pylint: disable=too-many-arguments
     def _create_instance(self, instance_type, base_image, tags_list, instance_name=None, region_az="", test_duration=None):
         region = region_az[:-1]
         aws_region = AwsRegion(region_name=region)
@@ -327,7 +330,8 @@ class AwsSctRunner(SctRunner):
                         "ID: %s", self.SOURCE_IMAGE_REGION, source_image.image_id)
 
         if self.region_name != self.SOURCE_IMAGE_REGION and self.image is None:
-            LOGGER.info(f"Copying {self.image_name} to {self.region_name}...\nNote: It can take 5-15 minutes.")
+            LOGGER.info("Copying %s to %s...\nNote: It can take 5-15 minutes.",
+                        self.image_name, self.region_name)
             result = self.ec2_client.copy_image(  # pylint: disable=no-member
                 Description=self.IMAGE_DESCRIPTION,
                 Name=self.image_name,
@@ -386,12 +390,12 @@ class GceSctRunner(SctRunner):
              it will be copied to the destination region.
              Warning: this can't run in parallel!
          """
-        LOGGER.info(f"Looking for source SCT Runner Image in {self.SOURCE_IMAGE_REGION}...")
+        LOGGER.info("Looking for source SCT Runner Image in %s ...", self.SOURCE_IMAGE_REGION)
         source_image = self.source_image
         if not source_image:
             # GCE doesn't allow repeat name in multiple datacenter
             instance_name = f"{self.image_name}-builder-{self.SOURCE_IMAGE_REGION}"
-            LOGGER.info(f"Source SCT Runner Image not found. Creating...")
+            LOGGER.info("Source SCT Runner Image not found. Creating...")
             if self.availability_zone != "":
                 region_az = f"{self.SOURCE_IMAGE_REGION}-{self.availability_zone}"
             else:
@@ -426,15 +430,15 @@ class GceSctRunner(SctRunner):
                 LOGGER.info("Terminating image builder instance '%s'...", instance.id)
                 self.gce_service_source.destroy_node(instance)
             except Exception as ex:  # pylint: disable=broad-except
-                LOGGER.warning(f"Was not able to terminate '{instance.id}': {ex}\n"
-                               "Please terminate manually!!!")
+                LOGGER.warning("Was not able to terminate '%s': %s\n"
+                               "Please terminate manually!!!", instance.id, str(ex))
 
         else:
-            LOGGER.info(f"SCT Runner image exists in the source region '{self.SOURCE_IMAGE_REGION}'! "
-                        f"ID: {source_image.id}")
+            LOGGER.info("SCT Runner image exists in the source region '%s'! "
+                        "ID: %s", self.SOURCE_IMAGE_REGION, source_image.id)
 
         if self.region_name != self.SOURCE_IMAGE_REGION and self.image is None:
-            LOGGER.info(f"Copying {self.image_name} to {self.region_name}...\nNote: It can take 5-15 minutes.")
+            LOGGER.info("Copying %s to %s ...\nNote: It can take 5-15 minutes.", self.image_name, self.region_name)
             new_image = self.gce_service.ex_copy_image(  # pylint: disable=no-member
                 self.image_name,
                 self._get_image_url(self.source_image.id),
@@ -454,6 +458,7 @@ class GceSctRunner(SctRunner):
             image = self.image
         return self._get_image_url(image.id)
 
+    # pylint: disable=too-many-arguments
     def _create_instance(self, instance_type, base_image, tags_list, instance_name=None, region_az="", test_duration=None):
         if instance_name is None:
             instance_name = f"{self.image_name}-instance"
@@ -474,7 +479,7 @@ class GceSctRunner(SctRunner):
             if tag_dict['Key'] != 'launch_time':
                 labels[tag_dict['Key'].lower()] = str(tag_dict['Value']).lower().replace('.', '_')
             metadata[tag_dict['Key']] = tag_dict['Value']
-        LOGGER.debug(f"Create node ({instance_name}) by image ({base_image})")
+        LOGGER.debug("Create node (%s) by image (%s)", instance_name, base_image)
         return self.gce_service_source.create_node(name=instance_name, size=instance_type,
                                                    image=base_image,
                                                    ex_network='qa-vpc',
@@ -492,7 +497,7 @@ class GceSctRunner(SctRunner):
 
         try:
             return driver.ex_get_image(self.image_name)
-        except ResourceNotFoundError as ex:
+        except ResourceNotFoundError as ex:  # pylint: disable=unused-variable
             return None
 
 
