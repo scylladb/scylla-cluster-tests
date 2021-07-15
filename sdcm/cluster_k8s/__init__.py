@@ -565,6 +565,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 pool_name = self.AUXILIARY_POOL_NAME
 
             values = HelmValues(**get_helm_pool_affinity_values(self.POOL_LABEL_NAME, pool_name) if pool_name else {})
+            if version.parse(self._scylla_operator_chart_version.split("-")[0]) > version.parse("v1.3.0"):
+                # NOTE: following is supported starting with operator-1.4
+                values.set("logLevel", 4)
 
             # Calculate options values which must be set
             #
@@ -626,6 +629,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         # Get existing scylla-operator helm chart values
         values = HelmValues(json.loads(self.helm(
             "get values scylla-operator -o json", namespace=SCYLLA_OPERATOR_NAMESPACE)))
+        if version.parse(new_chart_version.split("-")[0]) > version.parse("v1.3.0"):
+            # NOTE: following is supported starting with operator-1.4
+            values.set("logLevel", 4)
 
         # NOTE: Apply new image repo if provided or set default one redefining base value
         #       example structure: scylladb/scylla-operator:latest
@@ -661,7 +667,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         wait_for(lambda: self.minio_ip_address, text='Waiting for minio pod to popup',
                  timeout=120, throw_exc=True)
         self.kubectl_wait("-l app=minio --for=condition=Ready pod",
-                     timeout=600, namespace=MINIO_NAMESPACE)
+                          timeout=600, namespace=MINIO_NAMESPACE)
 
     def get_scylla_cluster_helm_values(self, cpu_limit, memory_limit, pool_name: str = None) -> HelmValues:
         return HelmValues({
