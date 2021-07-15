@@ -66,6 +66,35 @@ def check_reload_systemd_config(node):
             raise Exception("Systemd config is changed, but not reload automatically")
 
 
+def backup_conf(node):
+    if node.is_rhel_like():
+        node.remoter.run(
+            r'for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ) '
+            r'/etc/systemd/system/{var-lib-scylla,var-lib-systemd-coredump}.mount; '
+            r'do sudo cp -v $conf $conf.autobackup; done')
+    else:
+        node.remoter.run(
+            r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles '
+            r'/var/lib/dpkg/info/scylla-*conf.conffiles '
+            r'/var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ) '
+            r'/etc/systemd/system/{var-lib-scylla,var-lib-systemd-coredump}.mount; '
+            r'do sudo cp -v $conf $conf.backup; done')
+
+
+def recover_conf(node):
+    if node.is_rhel_like():
+        node.remoter.run(
+            r'for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ) '
+            r'/etc/systemd/system/{var-lib-scylla,var-lib-systemd-coredump}.mount; '
+            r'do test -e $conf.autobackup || sudo cp -v $conf.autobackup $conf; done')
+    else:
+        node.remoter.run(
+            r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles '
+            r'/var/lib/dpkg/info/scylla-*conf.conffiles '
+            r'/var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do '
+            r'sudo cp -v $conf.backup $conf; done')
+
+
 class UpgradeTest(FillDatabaseData):
     """
     Test a Scylla cluster upgrade.
@@ -150,15 +179,9 @@ class UpgradeTest(FillDatabaseData):
             node.remoter.run('sudo cp /etc/scylla/scylla.yaml /etc/scylla/scylla.yaml-backup')
             if node.is_rhel_like():
                 node.remoter.run('sudo cp /etc/yum.repos.d/scylla.repo ~/scylla.repo-backup')
-                node.remoter.run(
-                    r'for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ); do sudo cp -v $conf $conf.autobackup; done')
             else:
                 node.remoter.run('sudo cp /etc/apt/sources.list.d/scylla.list ~/scylla.list-backup')
-                node.remoter.run(
-                    r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles '
-                    r'/var/lib/dpkg/info/scylla-*conf.conffiles '
-                    r'/var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do '
-                    r'sudo cp -v $conf $conf.backup; done')
+            backup_conf(node)
             assert new_scylla_repo.startswith('http')
             node.download_scylla_repo(new_scylla_repo)
             # flush all memtables to SSTables
@@ -183,18 +206,14 @@ class UpgradeTest(FillDatabaseData):
                 if node.is_rhel_like():
                     node.remoter.run(r'sudo yum remove scylla\* -y')
                     node.remoter.run('sudo yum install {}{} -y'.format(scylla_pkg, ver_suffix))
-                    node.remoter.run(
-                        r'for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ); do sudo cp -v $conf.autobackup $conf; done')
                 else:
                     node.remoter.run(r'sudo apt-get remove scylla\* -y')
                     # fixme: add publick key
                     node.remoter.run(
                         r'sudo apt-get install {}{} -y '
                         r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '.format(scylla_pkg, ver_suffix))
-                    node.remoter.run(r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles '
-                                     r'/var/lib/dpkg/info/scylla-*conf.conffiles '
-                                     r'/var/lib/dpkg/info/scylla-*jmx.conffiles'
-                                     r' | grep -v init ); do sudo cp -v $conf $conf.backup-2.1; done')
+                recover_conf(node)
+                node.remoter.run('sudo systemctl daemon-reload')
             else:
                 if node.is_rhel_like():
                     node.remoter.run(r'sudo yum update {}{}\* -y'.format(scylla_pkg, ver_suffix))
@@ -255,20 +274,12 @@ class UpgradeTest(FillDatabaseData):
             if node.is_rhel_like():
                 node.remoter.run(r'sudo yum remove scylla\* -y')
                 node.remoter.run(r'sudo yum install %s -y' % node.scylla_pkg())
-                node.remoter.run(
-                    r'for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ); do sudo cp -v '
-                    r'$conf.autobackup $conf; done')
             else:
                 node.remoter.run(r'sudo apt-get remove scylla\* -y')
                 node.remoter.run(
                     r'sudo apt-get install %s\* -y '
                     r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" ' % node.scylla_pkg())
-                node.remoter.run(
-                    r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles '
-                    r'/var/lib/dpkg/info/scylla-*conf.conffiles '
-                    r'/var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do '
-                    r'sudo cp -v $conf.backup $conf; done')
-
+            recover_conf(node)
             node.remoter.run('sudo systemctl daemon-reload')
 
         elif self.upgrade_rollback_mode == 'minor_release':
@@ -279,16 +290,7 @@ class UpgradeTest(FillDatabaseData):
             node.remoter.run(r'sudo yum downgrade scylla\* -y')
             if new_introduced_pkgs:
                 node.remoter.run('sudo yum install %s -y' % node.scylla_pkg())
-            if node.is_rhel_like():
-                node.remoter.run(
-                    r'for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ); do sudo cp -v $conf.autobackup $conf; done')
-            else:
-                node.remoter.run(
-                    r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles '
-                    r'/var/lib/dpkg/info/scylla-*conf.conffiles '
-                    r'/var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do '
-                    r'sudo cp -v $conf.backup $conf; done')
-
+            recover_conf(node)
             node.remoter.run('sudo systemctl daemon-reload')
 
         node.remoter.run('sudo cp /etc/scylla/scylla.yaml-backup /etc/scylla/scylla.yaml')
