@@ -99,7 +99,8 @@ def test_drain_wait_and_replace_node_kubernetes(db_cluster):
 
 @pytest.mark.require_node_terminate('drain_k8s_node')
 def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
-    target_node = random.choice(db_cluster.non_seed_nodes)
+    target_rack = random.choice([*db_cluster.racks])
+    target_node = db_cluster.get_rack_nodes(target_rack)[-1]
     target_node.drain_k8s_node()
     db_cluster.decommission(target_node)
     db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=0)
