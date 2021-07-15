@@ -25,6 +25,7 @@ from sdcm.utils.k8s import HelmValues  # pylint: disable=import-error
 log = logging.getLogger()
 
 
+@pytest.mark.skip("Disabled due to the https://github.com/scylladb/scylla-cluster-tests/issues/3786")
 def test_cassandra_rackdc(cassandra_rackdc_properties):
     """
     Test of applying cassandra-rackdc.properties via configmap
