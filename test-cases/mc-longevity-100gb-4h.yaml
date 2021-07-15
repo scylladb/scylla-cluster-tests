@@ -1,0 +1,13 @@
+test_duration: 40
+
+n_db_nodes: 2
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.large'
+
+nemesis_class_name: 'CorruptThenRepairMonkey'
+nemesis_interval: 5
+
+user_prefix: 'mc-longevity-100gb-4h'
+space_node_threshold: 64424

@@ -86,3 +86,4 @@ CassandraStressEvent: CRITICAL
 GeminiStressEvent: CRITICAL
 ScyllaServerStatusEvent: NORMAL
 BootstrapEvent: NORMAL
+RepairEvent: NORMAL
