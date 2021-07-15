@@ -82,6 +82,8 @@ def call(Map pipelineParams) {
                                     timeout(pipelineParams.timeout) {
                                         withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                                  "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",]) {
+
+                                            def test_config = groovy.json.JsonOutput.toJson(params.test_config)
                                             stage("Checkout (${instance_type})") {
                                                 dir('scylla-cluster-tests') {
                                                     checkout scm
@@ -92,7 +94,7 @@ def call(Map pipelineParams) {
                                                     rm -fv ./latest
 
                                                     export SCT_COLLECT_LOGS=false
-                                                    export SCT_CONFIG_FILES=${params.test_config}
+                                                    export SCT_CONFIG_FILES=${test_config}
 
                                                     if [[ ! -z "${params.scylla_ami_id}" ]]; then
                                                         export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
@@ -146,7 +148,7 @@ def call(Map pipelineParams) {
                                             }
                                             stage("Collect log data (${instance_type})") {
                                                 sctScript """
-                                                    export SCT_CONFIG_FILES=${params.test_config}
+                                                    export SCT_CONFIG_FILES=${test_config}
 
                                                     echo "start collect logs ..."
                                                     ./docker/env/hydra.sh collect-logs --backend ${params.backend} --logdir "`pwd`"
@@ -155,7 +157,7 @@ def call(Map pipelineParams) {
                                             }
                                             stage("Clean resources (${instance_type})") {
                                                 sctScript """
-                                                    export SCT_CONFIG_FILES=${params.test_config}
+                                                    export SCT_CONFIG_FILES=${test_config}
                                                     export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                                     export SCT_CLUSTER_BACKEND="${params.backend}"
 
