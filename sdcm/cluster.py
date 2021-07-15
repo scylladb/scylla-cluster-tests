@@ -1338,8 +1338,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                             one_line_backtrace.append(trace_line)
 
                 if index not in self._system_log_errors_index or start_from_beginning:
-                    ''' for each line, if it matches a continuous event pattern, 
-                    call the appropriate function with the class tied to that pattern'''
+                    # for each line, if it matches a continuous event pattern,
+                    # call the appropriate function with the class tied to that pattern
                     db_event_pattern_func_map = get_pattern_to_event_to_func_mapping(node=self.ip_address)
                     for item in db_event_pattern_func_map:
                         event_match = item.pattern.search(line)
@@ -2606,6 +2606,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             options += "-u {} -pw '{}' ".format(*credentials)
         return f"{self.add_install_prefix('/usr/bin/nodetool')} {options} {sub_cmd} {args}"
 
+    # pylint: disable=inconsistent-return-statements
     def run_nodetool(self, sub_cmd, args="", options="", timeout=None,
                      ignore_status=False, verbose=True, coredump_on_timeout=False,
                      warning_event_on_exception=None, error_message="", publish_event=True):

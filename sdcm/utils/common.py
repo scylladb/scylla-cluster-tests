@@ -33,9 +33,10 @@ import warnings
 import getpass
 import json
 import re
-import requests
 import uuid
 import zipfile
+import io
+import tempfile
 from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Any
 from urllib.parse import urlparse
 from unittest.mock import Mock
@@ -48,6 +49,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from concurrent.futures.thread import _python_exit
 import hashlib
 from pathlib import Path
+import requests
 import pytz
 
 import boto3
@@ -67,6 +69,11 @@ from sdcm.utils.decorators import retrying
 from sdcm import wait
 from sdcm.utils.ldap import LDAP_PASSWORD, LDAP_USERS, DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR
 from sdcm.utils.gce_utils import get_gce_service
+from sdcm.keystore import KeyStore
+from sdcm.utils.docker_utils import ContainerManager
+from sdcm.utils.gce_utils import GcloudContainerMixin
+from sdcm.remote import LocalCmdRunner
+from sdcm.remote import RemoteCmdRunnerBase
 
 
 LOGGER = logging.getLogger('utils')
@@ -357,7 +364,7 @@ class ParallelObject:
         self.timeout = timeout
         self.num_workers = num_workers
         self.disable_logging = disable_logging
-        self._thread_pool = ThreadPoolExecutor(max_workers=self.num_workers)
+        self._thread_pool = ThreadPoolExecutor(max_workers=self.num_workers)  # pylint: disable=consider-using-with
 
     def run(self, func: Callable, ignore_exceptions=False, unpack_objects: bool = False):
         """Run callable object "func" in parallel
@@ -460,7 +467,7 @@ class ParallelObjectResult:  # pylint: disable=too-few-public-methods
 
 class ParallelObjectException(Exception):
     def __init__(self, results: List[ParallelObjectResult]):
-        super(ParallelObjectException, self).__init__()
+        super().__init__()
         self.results = results
 
     def __str__(self):
@@ -699,7 +706,7 @@ def clean_instances_aws(tags_dict, dry_run=False):
             node_type = tags.get("NodeType")
             instance_id = instance['InstanceId']
             if node_type and node_type == "sct-runner":
-                LOGGER.info(f"Skipping Sct Runner instance '{instance_id}'")
+                LOGGER.info("Skipping Sct Runner instance '%s'", instance_id)
                 continue
             LOGGER.info("Going to delete '{instance_id}' [name={name}] ".format(instance_id=instance_id, name=name))
             if not dry_run:
@@ -707,6 +714,7 @@ def clean_instances_aws(tags_dict, dry_run=False):
                 LOGGER.debug("Done. Result: %s\n", response['TerminatingInstances'])
 
 
+# pylint: disable=too-many-locals,too-many-branches,too-many-statements
 def clean_sct_runners():
     LOGGER.info("Looking for SCT runner instances...")
     sct_runners = []
@@ -743,7 +751,7 @@ def clean_sct_runners():
             LOGGER.debug("Result: %s\n", response['TerminatingInstances'])
         elif backend == 'gce':
             driver = get_gce_service(region)
-            LOGGER.debug(f"Destroy Node: {sct_runner.name}")
+            LOGGER.debug("Destroy Node: %s", sct_runner.name)
             driver.destroy_node(sct_runner)
         LOGGER.info("Done.")
 
@@ -760,26 +768,25 @@ def clean_sct_runners():
             region = sct_runner.extra['zone'].name
             instance_id = sct_runner.id
             if tags.get("launch_time") is None:
-                LOGGER.warning(f"Skipping gce instance ({sct_runner.name}) without launch_time!")
+                LOGGER.warning("Skipping gce instance (%s) without launch_time!", sct_runner.name)
                 continue
             launch_time = datetime.datetime.strptime(tags.get("launch_time"), "%B %d, %Y, %H:%M:%S")
             launch_time = launch_time.replace(tzinfo=pytz.utc)
-            LOGGER.info(f"[{region}] {sct_runner.name}, launched at {tags.get('launch_time')} UTC")
+            LOGGER.info("[%s] %s, launched at %s UTC", region, sct_runner.name, tags.get('launch_time'))
 
         seconds_running = (utc_now - launch_time).total_seconds()
         keep_hours = 0
         if "alive" in keep:
-            LOGGER.warning(f"Skipping {instance_id} in {region}: keep={keep}")
+            LOGGER.warning("Skipping %s in %s: keep=%s", instance_id, region, keep)
             continue
-        else:
-            try:
-                keep_hours = int(keep)
-            except ValueError:
-                LOGGER.warning(f"keep value <{keep}> is invalid: should be a number or 'alive'!")
+        try:
+            keep_hours = int(keep)
+        except ValueError:
+            LOGGER.warning("keep value <{keep}> is invalid: should be a number or 'alive'!")
 
         if not keep or seconds_running > keep_hours * 3600:
-            LOGGER.info(f"[{region}] Runner instance '{instance_id}'<keep={keep}> that launched at '{launch_time}' UTC "
-                        f"is unused/expired, cleaning ...")
+            LOGGER.info("[%s] Runner instance '%s'<keep=%s> that launched at '%s' UTC "
+                        "is unused/expired, cleaning ...", region, instance_id, keep, launch_time)
             terminate_runner_instance(backend, region, sct_runner)
             runners_cleaned.append(sct_runner)
     if runners_cleaned:
@@ -856,7 +863,6 @@ def clean_elastic_ips_aws(tags_dict, dry_run=False):
 
 def get_gce_driver():
     # avoid cyclic dependency issues, since too many things import utils.py
-    from sdcm.keystore import KeyStore
 
     gcp_credentials = KeyStore().get_gcp_credentials()
     gce_driver = get_driver(Provider.GCE)
@@ -940,8 +946,6 @@ def list_static_ips_gce(region_name="all", group_by_region=False, verbose=False)
 
 
 def list_clusters_gke(tags_dict: Optional[dict] = None, verbose: bool = False) -> list:
-    from sdcm.utils.docker_utils import ContainerManager
-    from sdcm.utils.gce_utils import GcloudContainerMixin
 
     class GkeCluster:
         def __init__(self, cluster_info: dict, cleaner: "GkeCleaner"):
@@ -972,7 +976,7 @@ def list_clusters_gke(tags_dict: Optional[dict] = None, verbose: bool = False) -
         def list_gke_clusters(self) -> list:
             try:
                 output = self.gcloud.run("container clusters list --format json")
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.error("`gcloud container clusters list --format json' failed to run: %s", exc)
             else:
                 try:
@@ -1023,21 +1027,21 @@ def list_clusters_eks(tags_dict: Optional[dict] = None, verbose: bool = False) -
         tags = {}
 
         @cached_property
-        def eks_client(self):
+        def eks_client(self):  # pylint: disable=no-self-use
             return
 
-        def list_clusters(self) -> list:
+        def list_clusters(self) -> list:  # pylint: disable=no-self-use
             eks_clusters = []
             for aws_region in all_aws_regions():
                 try:
                     cluster_names = boto3.client('eks', region_name=aws_region).list_clusters()['clusters']
-                except Exception as exc:
+                except Exception as exc:  # pylint: disable=broad-except
                     LOGGER.error("Failed to get list of clusters on EKS: %s", exc)
                     return []
                 for cluster_name in cluster_names:
                     try:
                         eks_clusters.append(EksCluster(cluster_name, aws_region))
-                    except Exception as exc:
+                    except Exception as exc:  # pylint: disable=broad-except
                         LOGGER.error("Failed to get body of cluster on EKS: %s", exc)
             return eks_clusters
 
@@ -1093,7 +1097,7 @@ def clean_clusters_gke(tags_dict: dict, dry_run: bool = False) -> None:
             try:
                 res = cluster.destroy()
                 LOGGER.info("%s deleted=%s", cluster.name, res)
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.error(exc)
     ParallelObject(gke_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
 
@@ -1112,7 +1116,7 @@ def clean_clusters_eks(tags_dict: dict, dry_run: bool = False) -> None:
             try:
                 res = cluster.destroy()
                 LOGGER.info("%s deleted=%s", cluster.name, res)
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.error(exc)
     ParallelObject(eks_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
 
@@ -1175,7 +1179,8 @@ def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
             if filename.startswith('scylla-') and filename.endswith('.repo'):
                 version_prefix = filename.replace('.repo', '').split('-')[-1]
                 _S3_SCYLLA_REPOS_CACHE[(
-                    dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket, path=repo_file['Key'])
+                    dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket,
+                                                                                                                  path=repo_file['Key'])
 
     elif dist_type in ('ubuntu', 'debian'):
         response = s3_client.list_objects(Bucket=bucket, Prefix='deb/{}/'.format(dist_type), Delimiter='/')
@@ -1187,7 +1192,8 @@ def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
 
                 version_prefix = filename.replace('-{}.list'.format(dist_version), '').split('-')[-1]
                 _S3_SCYLLA_REPOS_CACHE[(
-                    dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket, path=repo_file['Key'])
+                    dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket,
+                                                                                                                  path=repo_file['Key'])
 
     else:
         raise NotImplementedError("[{}] is not yet supported".format(dist_type))
@@ -1245,7 +1251,7 @@ class FileFollowerIterator():  # pylint: disable=too-few-public-methods
 
 class FileFollowerThread():
     def __init__(self):
-        self.executor = concurrent.futures.ThreadPoolExecutor(1)
+        self.executor = concurrent.futures.ThreadPoolExecutor(1)  # pylint: disable=consider-using-with
         self._stop_event = threading.Event()
         self.future = None
 
@@ -1287,7 +1293,7 @@ class ScyllaCQLSession:
                 query = args[0]
             else:
                 query = kwargs.get("query")
-            LOGGER.debug(f"Executing CQL '{query}'...")
+            LOGGER.debug("Executing CQL '%s' ...", query)
             return execute_orig(*args, **kwargs)
 
         if self.verbose:
@@ -1401,6 +1407,7 @@ def find_scylla_repo(scylla_version, dist_type='centos', dist_version=None):
 
     repo_map = get_s3_scylla_repos_mapping(dist_type, dist_version)
 
+    # pylint: disable=useless-else-on-loop
     for key in repo_map:
         if scylla_version.startswith(key):
             return repo_map[key]
@@ -1570,14 +1577,13 @@ def update_certificates(db_csr='data_dir/ssl_conf/example/db.csr', cadb_pem='dat
     Update the certificate of server encryption, which might be expired.
     """
     try:
-        from sdcm.remote import LocalCmdRunner
         localrunner = LocalCmdRunner()
         localrunner.run(f'openssl x509 -req -in {db_csr} -CA {cadb_pem} -CAkey {cadb_key} -CAcreateserial '
                         f'-out {db_crt} -days 365')
         localrunner.run(f'openssl x509 -enddate -noout -in {db_crt}')
         new_crt = localrunner.run(f'cat {db_crt}').stdout
-    except Exception as ex:
-        raise Exception('Failed to update certificates by openssl: %s' % ex)
+    except Exception as ex:  # pylint: disable=broad-except
+        raise Exception('Failed to update certificates by openssl: %s' % ex) from None
     return new_crt
 
 
@@ -1624,7 +1630,6 @@ def gce_download_dir(bucket, path, target):
     :param target: the local directory to download the files to.
     """
 
-    from sdcm.keystore import KeyStore
     gcp_credentials = KeyStore().get_gcp_credentials()
     gce_driver = libcloud.storage.providers.get_driver(libcloud.storage.types.Provider.GOOGLE_STORAGE)
 
@@ -1794,7 +1799,6 @@ def list_builders(running=False):
 
 
 def get_builder_by_test_id(test_id):
-    from sdcm.remote import RemoteCmdRunnerBase
 
     base_path_on_builder = "/home/jenkins/slave/workspace"
     found_builders = []
@@ -1873,7 +1877,6 @@ def clean_resources_according_post_behavior(params, config, logdir, dry_run=Fals
 
 
 def search_test_id_in_latest(logdir):
-    from sdcm.remote import LocalCmdRunner
 
     test_id = None
     result = LocalCmdRunner().run('cat {0}/latest/test_id'.format(logdir), ignore_status=True)
@@ -1887,7 +1890,6 @@ def search_test_id_in_latest(logdir):
 
 
 def get_testrun_dir(base_dir, test_id=None):
-    from sdcm.remote import LocalCmdRunner
 
     if not test_id:
         test_id = search_test_id_in_latest(base_dir)
@@ -1922,7 +1924,6 @@ def download_encrypt_keys():
     """
     Download certificate files of encryption at-rest from S3 KeyStore
     """
-    from sdcm.keystore import KeyStore
     ks = KeyStore()
     for pem_file in ['CA.pem', 'SCYLLADB.pem', 'hytrust-kmip-cacert.pem', 'hytrust-kmip-scylla.pem']:
         if not os.path.exists('./data_dir/encrypt_conf/%s' % pem_file):
@@ -2125,10 +2126,9 @@ def reach_enospc_on_node(target_node):
             return True
         result = target_node.remoter.run("df -al | grep '/var/lib/scylla'")
         free_space_size = int(result.stdout.split()[3])
-        total_space = int(result.stdout.split()[1])
         occupy_space_size = int(free_space_size * 90 / 100)
         occupy_space_cmd = f'fallocate -l {occupy_space_size}K /var/lib/scylla/occupy_90percent.{time.time()}'
-        LOGGER.debug(f'Cost 90% free space on /var/lib/scylla/ by {occupy_space_cmd}')
+        LOGGER.debug('Cost 90% free space on /var/lib/scylla/ by {}'.format(occupy_space_cmd))
         try:
             target_node.remoter.sudo(occupy_space_cmd, verbose=True)
         except Exception as details:  # pylint: disable=broad-except
@@ -2217,7 +2217,7 @@ def convert_metric_to_ms(metric: str) -> float:
             metric_converted += _convert_to_ms(parsed_values['units'], parsed_values['sec'])
         else:
             metric_converted = float(metric)
-    except ValueError as ve:
+    except ValueError as ve:  # pylint: disable=invalid-name
         metric_converted = metric
         LOGGER.error("Value %s can't be converted to float. Exception: %s", metric, ve)
     return metric_converted
@@ -2292,8 +2292,6 @@ def download_from_github(repo: str, tag: str, dst_dir: str):
     resp = requests.get(url, allow_redirects=True)
     if not resp.ok:
         raise RuntimeError(f"Failed to download {url}, result: {resp.content}")
-    import io
-    import tempfile
     os.makedirs(dst_dir, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmpdir:
         with zipfile.ZipFile(io.BytesIO(resp.content), 'r') as zip_ref:
@@ -2313,7 +2311,7 @@ def walk_thru_data(data, path: str) -> Any:
         if name.isalnum() and isinstance(current, (list, tuple, set)):
             try:
                 current = current[int(name)]
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 current = None
             continue
         current = current.get(name, None)
@@ -2343,14 +2341,14 @@ def prepare_and_start_saslauthd_service(node):
     Install and setup saslauthd service.
     """
     if node.is_rhel_like():
-        setup_script = dedent(f"""
+        setup_script = dedent("""
             sudo yum install -y cyrus-sasl
             sudo systemctl enable saslauthd
             echo 'MECH=ldap' | sudo tee -a /etc/sysconfig/saslauthd
             sudo touch /etc/saslauthd.conf
         """)
     else:
-        setup_script = dedent(f"""
+        setup_script = dedent("""
             sudo apt-get install -y sasl2-bin
             sudo systemctl enable saslauthd
             echo -e 'MECHANISMS=ldap\nSTART=yes\n' | sudo tee -a /etc/default/saslauthd
@@ -2389,4 +2387,4 @@ def make_threads_be_daemonic_by_default():
     @return:
     @rtype:
     """
-    threading.current_thread()._daemonic = True
+    threading.current_thread()._daemonic = True  # pylint: disable=protected-access
