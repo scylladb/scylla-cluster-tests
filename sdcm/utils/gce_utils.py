@@ -15,7 +15,6 @@ import os
 import json
 import random
 import logging
-import threading
 
 from libcloud.compute.providers import Provider, get_driver
 
