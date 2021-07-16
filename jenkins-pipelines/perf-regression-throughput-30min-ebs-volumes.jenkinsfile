@@ -7,7 +7,7 @@ perfRegressionParallelPipeline(
     backend: "aws",
     aws_region: "us-east-1",
     test_name: "performance_regression_test.PerformanceRegressionTest",
-    test_config: "test-cases/performance/perf-regression.100threads.30M-keys-ebs-volumes.yaml",
+    test_config: '''["test-cases/performance/perf-regression.100threads.30M-keys.yaml", "configurations/ebs/ebs-gp2-2v-4tb.yaml"]'''
     sub_tests: ["test_write", "test_read", "test_mixed"],
 
     timeout: [time: 400, unit: "MINUTES"]
