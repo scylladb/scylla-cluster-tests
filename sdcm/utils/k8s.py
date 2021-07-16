@@ -385,7 +385,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             k8s_configuration.host = kluster.k8s_server_url
         else:
             k8s.config.load_kube_config(
-                config_file=os.path.expanduser(os.environ.get('KUBECONFIG', '~/.kube/config')),
+                config_file=kluster.kubeconfig_filepath,
                 client_configuration=k8s_configuration)
         return k8s_configuration
 
@@ -609,8 +609,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
 
 class HelmContainerMixin:
     def helm_container_run_args(self) -> dict:
-        kube_config_path = os.environ.get('KUBECONFIG', '~/.kube/config')
-        kube_config_dir_path = os.path.expanduser(kube_config_path)
+        kube_config_dir_path = os.path.expanduser(self.kubeconfig_filepath)
         helm_config_path = os.path.expanduser(os.environ.get('HELM_CONFIG_HOME', '~/.helm'))
         volumes = {
             os.path.dirname(kube_config_dir_path): {"bind": os.path.dirname(kube_config_dir_path), "mode": "rw"},
@@ -624,7 +623,7 @@ class HelmContainerMixin:
                     name=f"{self.name}-helm",
                     network_mode="host",
                     volumes=volumes,
-                    environment={'KUBECONFIG': kube_config_path},
+                    environment={'KUBECONFIG': self.kubeconfig_filepath},
                     )
 
     @cached_property

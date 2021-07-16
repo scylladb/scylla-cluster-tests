@@ -109,8 +109,7 @@ class GcloudContainerMixin:
     _gcloud_container_instance = None
 
     def gcloud_container_run_args(self) -> dict:
-        kube_config_path = os.environ.get('KUBECONFIG', '~/.kube/config')
-        kube_config_dir_path = os.path.expanduser(kube_config_path)
+        kube_config_dir_path = os.path.expanduser(self.kubeconfig_filepath)
         volumes = {
             os.path.dirname(kube_config_dir_path): {"bind": os.path.dirname(kube_config_dir_path), "mode": "rw"},
         }
@@ -121,7 +120,7 @@ class GcloudContainerMixin:
                     volumes=volumes,
                     user=f"{os.getuid()}:{os.getgid()}",
                     tmpfs={'/.config': f'size=50M,uid={os.getuid()}'},
-                    environment={'KUBECONFIG': kube_config_path},
+                    environment={'KUBECONFIG': self.kubeconfig_filepath},
                     )
 
     def _get_gcloud_container(self) -> Container:

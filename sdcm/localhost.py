@@ -26,11 +26,14 @@ LOGGER = logging.getLogger(__name__)
 
 
 class LocalHost(RSyslogContainerMixin, GcloudContainerMixin, HelmContainerMixin, LdapContainerMixin):
-    def __init__(self, user_prefix: Optional[str] = None, test_id: Optional[str] = None) -> None:
+    def __init__(self, user_prefix: Optional[str] = None, test_id: Optional[str] = None,
+                 kubeconfig_filepath: Optional[str] = None) -> None:
         self._containers = {}
         self.tags = {}
         self.name = (f"{user_prefix}-" if user_prefix else "") + "localhost" + (f"-{test_id}" if test_id else "")
         self.rsyslog_confpath = generate_rsyslog_conf_file()
+        self.kubeconfig_filepath = kubeconfig_filepath or os.path.expanduser(
+            os.environ.get('KUBECONFIG', '~/.kube/config'))
 
     @property
     def rsyslog_port(self) -> Optional[int]:

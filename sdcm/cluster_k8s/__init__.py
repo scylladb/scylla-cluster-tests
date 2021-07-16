@@ -273,7 +273,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     _token_update_thread: Optional[TokenUpdateThread] = None
     pools: Dict[str, CloudK8sNodePool]
 
-    def __init__(self, params: dict, user_prefix: str = '', region_name: str = None, cluster_uuid: str = None):
+    def __init__(self, kubeconfig_filepath: str = '', params: dict, user_prefix: str = '',
+                 region_name: str = None, cluster_uuid: str = None):
         self.pools = {}
         if cluster_uuid is None:
             self.uuid = TestConfig.test_id()
@@ -284,6 +285,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.name = '%s-%s' % (user_prefix, self.shortid)
         self.params = params
         self.api_call_rate_limiter = None
+        self.kubeconfig_filepath = kubeconfig_filepath or os.path.expanduser(
+            os.environ.get('KUBECONFIG', '~/.kube/config'))
 
     # NOTE: Following class attr(s) are defined for consumers of this class
     #       such as 'sdcm.utils.remote_logger.ScyllaOperatorLogger'.
@@ -368,8 +371,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
     @cached_property
     def kubectl_token_path(self):  # pylint: disable=no-self-use
-        return os.path.join(os.path.dirname(
-            os.path.expanduser(os.environ.get('KUBECONFIG', '~/.kube/config'))), 'kubectl.token')
+        return os.path.join(os.path.dirname(self.kubeconfig_filepath), 'kubectl.token')
 
     @cached_property
     def cert_manager_log(self) -> str:
@@ -1186,7 +1188,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         """
         self.create_kubectl_config()
         self.start_token_update_thread()
-        KubernetesOps.patch_kube_config(self.kubectl_token_path)
+        KubernetesOps.patch_kube_config(self.kubectl_token_path, self.kubeconfig_filepath)
         wait_for(self.check_if_token_is_valid, timeout=120, throw_exc=True)
 
     def check_if_token_is_valid(self) -> bool:

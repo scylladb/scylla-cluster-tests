@@ -216,6 +216,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
     short_cluster_name: str
 
     def __init__(self,
+                 kubeconfig_filepath,
                  eks_cluster_version,
                  ec2_security_group_ids,
                  ec2_subnet_ids,
@@ -229,7 +230,12 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
                  cluster_uuid=None,
                  region_name=None
                  ):
-        super().__init__(user_prefix=user_prefix, cluster_uuid=cluster_uuid, region_name=region_name, params=params)
+        super().__init__(
+            kubeconfig_filepath=kubeconfig_filepath,
+            user_prefix=user_prefix,
+            cluster_uuid=cluster_uuid,
+            region_name=region_name,
+            params=params)
         self.credentials = credentials
         self.eks_cluster_version = eks_cluster_version
         self.ec2_role_arn = ec2_role_arn

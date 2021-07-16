@@ -145,6 +145,7 @@ class GkeCluster(KubernetesCluster):
     pools: Dict[str, GkeNodePool]
 
     def __init__(self,
+                 kubeconfig_filepath,
                  gke_cluster_version,
                  gke_k8s_release_channel,
                  gce_image_type,
@@ -159,6 +160,7 @@ class GkeCluster(KubernetesCluster):
                  n_nodes=1
                  ):
         super().__init__(
+            kubeconfig_filepath=kubeconfig_filepath,
             params=params,
             cluster_uuid=cluster_uuid,
             user_prefix=user_prefix

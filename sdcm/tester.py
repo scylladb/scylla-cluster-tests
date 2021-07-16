@@ -374,7 +374,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return thread
 
     def _init_localhost(self):
-        return LocalHost(user_prefix=self.params.get("user_prefix"), test_id=TestConfig.test_id())
+        return LocalHost(
+            user_prefix=self.params.get("user_prefix"),
+            test_id=TestConfig.test_id(),
+            kubectl_config_path=self.kubectl_config_path,
+        )
 
     def _move_kubectl_config(self):
         secure_mode = stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
@@ -1055,7 +1059,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         assert len(services) == 1, "Doesn't support multi DC setup for `k8s-gke' backend"
 
         services, gce_datacenter = list(services.values()), list(services.keys())
-        self.k8s_cluster = gke.GkeCluster(gke_cluster_version=self.params.get("gke_cluster_version"),
+        self.k8s_cluster = gke.GkeCluster(kubeconfig_filepath=self.kubectl_config_path,
+                                          gke_cluster_version=self.params.get("gke_cluster_version"),
                                           gke_k8s_release_channel=self.params.get("gke_k8s_release_channel"),
                                           gce_image_type=self.params.get("gce_root_disk_type_db"),
                                           gce_image_size=self.params.get("gce_root_disk_size_db"),
@@ -1178,7 +1183,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         init_db_info_from_params(db_info, params=self.params, regions=regions)
         init_monitoring_info_from_params(monitor_info, params=self.params, regions=regions)
 
-        self.k8s_cluster = eks.EksCluster(eks_cluster_version=self.params.get("eks_cluster_version"),
+        self.k8s_cluster = eks.EksCluster(kubeconfig_filepath=self.kubectl_config_path,
+                                          eks_cluster_version=self.params.get("eks_cluster_version"),
                                           ec2_security_group_ids=ec2_security_group_ids,
                                           ec2_subnet_ids=ec2_subnet_ids,
                                           credentials=self.credentials,
