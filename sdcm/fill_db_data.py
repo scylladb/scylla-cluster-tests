@@ -91,8 +91,10 @@ class FillDatabaseData(ClusterTester):
                             ) WITH compaction = {'class': 'LeveledCompactionStrategy'}"""],
             'truncates': ['TRUNCATE static_cf_test'],
             'inserts': [
-                "INSERT INTO static_cf_test (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
-                "UPDATE static_cf_test SET firstname = 'Samwise', lastname = 'Gamgee', age = 33 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479"],
+                "INSERT INTO static_cf_test (userid, firstname, lastname, age) VALUES "
+                "(550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
+                "UPDATE static_cf_test SET firstname = 'Samwise', lastname = 'Gamgee', age = 33 "
+                "WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479"],
             'queries': [
                 "SELECT firstname, lastname FROM static_cf_test WHERE userid = 550e8400-e29b-41d4-a716-446655440000",
                 "SELECT * FROM static_cf_test WHERE userid = 550e8400-e29b-41d4-a716-446655440000",
@@ -114,8 +116,10 @@ class FillDatabaseData(ClusterTester):
                         ) WITH compaction = {'class': 'DateTieredCompactionStrategy'}"""],
             'truncates': ['TRUNCATE static_cf_test_batch'],
             'inserts': [
-                "INSERT INTO static_cf_test_batch (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
-                "UPDATE static_cf_test_batch SET firstname = 'Samwise', lastname = 'Gamgee', age = 33 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                "INSERT INTO static_cf_test_batch (userid, firstname, lastname, age) VALUES "
+                "(550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
+                "UPDATE static_cf_test_batch SET firstname = 'Samwise', lastname = 'Gamgee', age = 33 "
+                "WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479",
                 """BEGIN BATCH
                         INSERT INTO static_cf_test_batch (userid, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 36)
                         UPDATE static_cf_test_batch SET age = 37 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479
@@ -141,8 +145,10 @@ class FillDatabaseData(ClusterTester):
                             AND compaction = {'class': 'TimeWindowCompactionStrategy'}"""],
             'truncates': ['TRUNCATE noncomposite_static_cf_test'],
             'inserts': [
-                "INSERT INTO noncomposite_static_cf_test (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
-                "UPDATE noncomposite_static_cf_test SET firstname = 'Samwise', lastname = 'Gamgee', age = 33 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479"],
+                "INSERT INTO noncomposite_static_cf_test (userid, firstname, lastname, age) VALUES "
+                "(550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
+                "UPDATE noncomposite_static_cf_test SET firstname = 'Samwise', lastname = 'Gamgee', age = 33 "
+                "WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479"],
             'queries': [
                 "SELECT firstname, lastname FROM noncomposite_static_cf_test WHERE userid = 550e8400-e29b-41d4-a716-446655440000",
                 "SELECT * FROM noncomposite_static_cf_test WHERE userid = 550e8400-e29b-41d4-a716-446655440000",
@@ -167,13 +173,17 @@ class FillDatabaseData(ClusterTester):
                             AND compaction = {'class': 'SizeTieredCompactionStrategy'}"""],
             'truncates': ['TRUNCATE noncomposite_static_cf_test_batch'],
             'inserts': [
-                "INSERT INTO noncomposite_static_cf_test_batch (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
-                "UPDATE noncomposite_static_cf_test_batch SET firstname = 'Samwise', lastname = 'Gamgee', age = 33 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                "INSERT INTO noncomposite_static_cf_test_batch (userid, firstname, lastname, age) VALUES "
+                "(550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
+                "UPDATE noncomposite_static_cf_test_batch SET firstname = 'Samwise', lastname = 'Gamgee', "
+                "age = 33 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479",
                 """BEGIN BATCH
                         INSERT INTO noncomposite_static_cf_test_batch (userid, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 36)
                         UPDATE noncomposite_static_cf_test_batch SET age = 37 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479
-                        DELETE firstname, lastname FROM noncomposite_static_cf_test_batch WHERE userid = 550e8400-e29b-41d4-a716-446655440000
-                        DELETE firstname, lastname FROM noncomposite_static_cf_test_batch WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479
+                        DELETE firstname, lastname FROM noncomposite_static_cf_test_batch
+                        WHERE userid = 550e8400-e29b-41d4-a716-446655440000
+                        DELETE firstname, lastname FROM noncomposite_static_cf_test_batch
+                        WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479
                         APPLY BATCH"""],
             'queries': [
                 "SELECT * FROM noncomposite_static_cf_test_batch"],
@@ -197,7 +207,8 @@ class FillDatabaseData(ClusterTester):
                 "INSERT INTO dynamic_cf_test (userid, url, time) VALUES (550e8400-e29b-41d4-a716-446655440000, 'http://foo-2.bar', 24)",
                 "INSERT INTO dynamic_cf_test (userid, url, time) VALUES (550e8400-e29b-41d4-a716-446655440000, 'http://bar.bar', 128)",
                 "UPDATE dynamic_cf_test SET time = 24 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479 and url = 'http://bar.foo'",
-                "UPDATE dynamic_cf_test SET time = 12 WHERE userid IN (f47ac10b-58cc-4372-a567-0e02b2c3d479, 550e8400-e29b-41d4-a716-446655440000) and url = 'http://foo-3'"],
+                "UPDATE dynamic_cf_test SET time = 12 WHERE userid IN (f47ac10b-58cc-4372-a567-0e02b2c3d479, "
+                "550e8400-e29b-41d4-a716-446655440000) and url = 'http://foo-3'"],
             'queries': [
                 "SELECT url, time FROM dynamic_cf_test WHERE userid = 550e8400-e29b-41d4-a716-446655440000",
                 "SELECT * FROM dynamic_cf_test WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479",
@@ -228,7 +239,8 @@ class FillDatabaseData(ClusterTester):
                 "INSERT INTO dense_cf_test (userid, ip, port, time) VALUES (550e8400-e29b-41d4-a716-446655440000, '192.168.0.1', 80, 42)",
                 "INSERT INTO dense_cf_test (userid, ip, port, time) VALUES (550e8400-e29b-41d4-a716-446655440000, '192.168.0.2', 80, 24)",
                 "INSERT INTO dense_cf_test (userid, ip, port, time) VALUES (550e8400-e29b-41d4-a716-446655440000, '192.168.0.2', 90, 42)",
-                "UPDATE dense_cf_test SET time = 24 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479 AND ip = '192.168.0.2' AND port = 80",
+                "UPDATE dense_cf_test SET time = 24 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479 "
+                "AND ip = '192.168.0.2' AND port = 80",
                 "INSERT INTO dense_cf_test (userid, ip, time) VALUES (f47ac10b-58cc-4372-a567-0e02b2c3d479, '192.168.0.3', 42)",
                 "UPDATE dense_cf_test SET time = 42 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479 AND ip = '192.168.0.4'"],
             'queries': [
@@ -274,14 +286,21 @@ class FillDatabaseData(ClusterTester):
                             ) WITH compaction = {'class': 'TimeWindowCompactionStrategy'}"""],
             'truncates': ['TRUNCATE sparse_cf_test'],
             'inserts': [
-                "INSERT INTO sparse_cf_test (userid, posted_month, posted_day, body, posted_by) VALUES (550e8400-e29b-41d4-a716-446655440000, 1, 12, 'Something else', 'Frodo Baggins')",
-                "INSERT INTO sparse_cf_test (userid, posted_month, posted_day, body, posted_by) VALUES (550e8400-e29b-41d4-a716-446655440000, 1, 24, 'Something something', 'Frodo Baggins')",
-                "UPDATE sparse_cf_test SET body = 'Yo Froddo', posted_by = 'Samwise Gamgee' WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479 AND posted_month = 1 AND posted_day = 3",
-                "UPDATE sparse_cf_test SET body = 'Yet one more message' WHERE userid = 550e8400-e29b-41d4-a716-446655440000 AND posted_month = 1 and posted_day = 30"],
+                "INSERT INTO sparse_cf_test (userid, posted_month, posted_day, body, posted_by) VALUES "
+                "(550e8400-e29b-41d4-a716-446655440000, 1, 12, 'Something else', 'Frodo Baggins')",
+                "INSERT INTO sparse_cf_test (userid, posted_month, posted_day, body, posted_by) VALUES "
+                "(550e8400-e29b-41d4-a716-446655440000, 1, 24, 'Something something', 'Frodo Baggins')",
+                "UPDATE sparse_cf_test SET body = 'Yo Froddo', posted_by = 'Samwise Gamgee' WHERE "
+                "userid = f47ac10b-58cc-4372-a567-0e02b2c3d479 AND posted_month = 1 AND posted_day = 3",
+                "UPDATE sparse_cf_test SET body = 'Yet one more message' WHERE userid = 550e8400-e29b-41d4-a716-446655440000 "
+                "AND posted_month = 1 and posted_day = 30"],
             'queries': [
-                "SELECT body, posted_by FROM sparse_cf_test WHERE userid = 550e8400-e29b-41d4-a716-446655440000 AND posted_month = 1 AND posted_day = 24",
-                "SELECT posted_day, body, posted_by FROM sparse_cf_test WHERE userid = 550e8400-e29b-41d4-a716-446655440000 AND posted_month = 1 AND posted_day > 12",
-                "SELECT posted_day, body, posted_by FROM sparse_cf_test WHERE userid = 550e8400-e29b-41d4-a716-446655440000 AND posted_month = 1"],
+                "SELECT body, posted_by FROM sparse_cf_test WHERE userid = 550e8400-e29b-41d4-a716-446655440000 AND "
+                "posted_month = 1 AND posted_day = 24",
+                "SELECT posted_day, body, posted_by FROM sparse_cf_test WHERE userid = 550e8400-e29b-41d4-a716-446655440000 "
+                "AND posted_month = 1 AND posted_day > 12",
+                "SELECT posted_day, body, posted_by FROM sparse_cf_test WHERE userid = 550e8400-e29b-41d4-a716-446655440000 "
+                "AND posted_month = 1"],
             'results': [
                 [['Something something', 'Frodo Baggins']],
                 [[24, 'Something something', 'Frodo Baggins'],
@@ -356,7 +375,8 @@ class FillDatabaseData(ClusterTester):
             ],
             'min_version': '',
             'max_version': '',
-            'skip': '#64 Clustering columns may not be skipped in multi-column relations. They should appear in the PRIMARY KEY order. Got (c, d, e) > (1, 1, 1)'},
+            'skip': '#64 Clustering columns may not be skipped in multi-column relations. They should appear in the '
+            'PRIMARY KEY order. Got (c, d, e) > (1, 1, 1)'},
         {
             'name': 'limit_sparse_test: Validate LIMIT option for sparse table in SELECT statements',
             'create_tables': [
@@ -426,8 +446,10 @@ class FillDatabaseData(ClusterTester):
                               'CREATE INDEX byAge ON indexed_with_eq_test(age);'],
             'truncates': ['TRUNCATE indexed_with_eq_test'],
             'inserts': [
-                "INSERT INTO indexed_with_eq_test (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
-                "UPDATE indexed_with_eq_test SET firstname = 'Samwise', lastname = 'Gamgee', age = 33 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                "INSERT INTO indexed_with_eq_test (userid, firstname, lastname, age) VALUES "
+                "(550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
+                "UPDATE indexed_with_eq_test SET firstname = 'Samwise', lastname = 'Gamgee', age = 33 WHERE "
+                "userid = f47ac10b-58cc-4372-a567-0e02b2c3d479",
             ],
             'queries': [
                 "SELECT firstname FROM indexed_with_eq_test WHERE userid = 550e8400-e29b-41d4-a716-446655440000 AND age = 33",
@@ -447,11 +469,14 @@ class FillDatabaseData(ClusterTester):
                                   firstname text,
                                   lastname text,
                                   age int)""",
-                              'CREATE MATERIALIZED VIEW mv_byAge as SELECT * from mv_with_eq_test WHERE userid IS NOT NULL and age IS NOT NULL PRIMARY KEY (age, userid);'],
+                              'CREATE MATERIALIZED VIEW mv_byAge as SELECT * from mv_with_eq_test WHERE '
+                              'userid IS NOT NULL and age IS NOT NULL PRIMARY KEY (age, userid);'],
             'truncates': ['TRUNCATE mv_with_eq_test'],
             'inserts': [
-                "INSERT INTO mv_with_eq_test (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
-                "UPDATE mv_with_eq_test SET firstname = 'Samwise', lastname = 'Gamgee', age = 33 WHERE userid = f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                "INSERT INTO mv_with_eq_test (userid, firstname, lastname, age) VALUES "
+                "(550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
+                "UPDATE mv_with_eq_test SET firstname = 'Samwise', lastname = 'Gamgee', age = 33 WHERE "
+                "userid = f47ac10b-58cc-4372-a567-0e02b2c3d479",
             ],
             'queries': [
                 "SELECT firstname FROM mv_with_eq_test WHERE userid = 550e8400-e29b-41d4-a716-446655440000",
@@ -473,11 +498,14 @@ class FillDatabaseData(ClusterTester):
                                   PRIMARY KEY(userid, age))"""],
             'truncates': ['TRUNCATE select_key_in_test'],
             'inserts': [
-                "INSERT INTO select_key_in_test (userid, firstname, lastname, age) VALUES (550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
-                "INSERT INTO select_key_in_test (userid, firstname, lastname, age) VALUES (f47ac10b-58cc-4372-a567-0e02b2c3d479, 'Samwise', 'Gamgee', 33)",
+                "INSERT INTO select_key_in_test (userid, firstname, lastname, age) VALUES "
+                "(550e8400-e29b-41d4-a716-446655440000, 'Frodo', 'Baggins', 32)",
+                "INSERT INTO select_key_in_test (userid, firstname, lastname, age) VALUES "
+                "(f47ac10b-58cc-4372-a567-0e02b2c3d479, 'Samwise', 'Gamgee', 33)",
             ],
             'queries': [
-                "SELECT firstname, lastname FROM select_key_in_test WHERE userid IN (550e8400-e29b-41d4-a716-446655440000, f47ac10b-58cc-4372-a567-0e02b2c3d479) order by age"],
+                "SELECT firstname, lastname FROM select_key_in_test WHERE "
+                "userid IN (550e8400-e29b-41d4-a716-446655440000, f47ac10b-58cc-4372-a567-0e02b2c3d479) order by age"],
             'results': [
                 [['Frodo', 'Baggins'], ['Samwise', 'Gamgee']]
             ],
@@ -1005,7 +1033,8 @@ class FillDatabaseData(ClusterTester):
         {
             'name': 'no_range_ghost_test',
             'create_tables': ["CREATE TABLE no_range_ghost_test (k int PRIMARY KEY, v int)",
-                              "CREATE KEYSPACE ks_no_range_ghost_test with replication = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };",
+                              "CREATE KEYSPACE ks_no_range_ghost_test with replication = "
+                              "{ 'class' : 'SimpleStrategy', 'replication_factor' : 1 };",
                               """CREATE COLUMNFAMILY ks_no_range_ghost_test.users (
                                                                               KEY varchar PRIMARY KEY,
                                                                               password varchar,
@@ -1494,7 +1523,8 @@ class FillDatabaseData(ClusterTester):
             'queries': ["SELECT blog_id, content FROM composite_index_with_pk_test WHERE author='foo'",
                         "SELECT blog_id, content FROM composite_index_with_pk_test WHERE time1 > 0 AND author='foo' ALLOW FILTERING",
                         "SELECT blog_id, content FROM composite_index_with_pk_test WHERE time1 = 1 AND author='foo' ALLOW FILTERING",
-                        "SELECT blog_id, content FROM composite_index_with_pk_test WHERE time1 = 1 AND time2 = 0 AND author='foo' ALLOW FILTERING",
+                        "SELECT blog_id, content FROM composite_index_with_pk_test WHERE "
+                        "time1 = 1 AND time2 = 0 AND author='foo' ALLOW FILTERING",
                         "SELECT content FROM composite_index_with_pk_test WHERE time1 = 1 AND time2 = 1 AND author='foo' ALLOW FILTERING",
                         "SELECT content FROM composite_index_with_pk_test WHERE time1 = 1 AND time2 > 0 AND author='foo' ALLOW FILTERING",
                         ],
@@ -2074,11 +2104,16 @@ class FillDatabaseData(ClusterTester):
                         "#LENGTH select zipcode from multi_in_test where zipcode='06902' ALLOW FILTERING",
                         "#LENGTH select zipcode from multi_in_test where group='test' and zipcode='06902'",
                         "#LENGTH select zipcode from multi_in_test where group='test' and zipcode IN ('06902','73301','94102')",
-                        "#LENGTH select zipcode from multi_in_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA')",
-                        "#LENGTH select zipcode from multi_in_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA') and fips_regions = 9",
-                        "#LENGTH select zipcode from multi_in_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA') ORDER BY zipcode DESC",
-                        "#LENGTH select zipcode from multi_in_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA') and fips_regions > 0",
-                        "#LENGTH select zipcode from multi_in_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA') and fips_regions < 0"],
+                        "#LENGTH select zipcode from multi_in_test where group='test' AND zipcode IN "
+                        "('06902','73301','94102') and state IN ('CT','CA')",
+                        "#LENGTH select zipcode from multi_in_test where group='test' AND zipcode IN "
+                        "('06902','73301','94102') and state IN ('CT','CA') and fips_regions = 9",
+                        "#LENGTH select zipcode from multi_in_test where group='test' AND zipcode IN "
+                        "('06902','73301','94102') and state IN ('CT','CA') ORDER BY zipcode DESC",
+                        "#LENGTH select zipcode from multi_in_test where group='test' AND zipcode IN "
+                        "('06902','73301','94102') and state IN ('CT','CA') and fips_regions > 0",
+                        "#LENGTH select zipcode from multi_in_test where group='test' AND zipcode IN "
+                        "('06902','73301','94102') and state IN ('CT','CA') and fips_regions < 0"],
             'results': [16,
                         8,
                         2,
@@ -2132,11 +2167,16 @@ class FillDatabaseData(ClusterTester):
                         "#LENGTH select zipcode from multi_in_compact_test where zipcode='06902' ALLOW FILTERING",
                         "#LENGTH select zipcode from multi_in_compact_test where group='test' and zipcode='06902'",
                         "#LENGTH select zipcode from multi_in_compact_test where group='test' and zipcode IN ('06902','73301','94102')",
-                        "#LENGTH select zipcode from multi_in_compact_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA')",
-                        "#LENGTH select zipcode from multi_in_compact_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA') and fips_regions = 9",
-                        "#LENGTH select zipcode from multi_in_compact_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA') ORDER BY zipcode DESC",
-                        "#LENGTH select zipcode from multi_in_compact_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA') and fips_regions > 0",
-                        "#LENGTH select zipcode from multi_in_compact_test where group='test' AND zipcode IN ('06902','73301','94102') and state IN ('CT','CA') and fips_regions < 0"],
+                        "#LENGTH select zipcode from multi_in_compact_test where group='test' AND "
+                        "zipcode IN ('06902','73301','94102') and state IN ('CT','CA')",
+                        "#LENGTH select zipcode from multi_in_compact_test where group='test' AND "
+                        "zipcode IN ('06902','73301','94102') and state IN ('CT','CA') and fips_regions = 9",
+                        "#LENGTH select zipcode from multi_in_compact_test where group='test' AND "
+                        "zipcode IN ('06902','73301','94102') and state IN ('CT','CA') ORDER BY zipcode DESC",
+                        "#LENGTH select zipcode from multi_in_compact_test where group='test' AND "
+                        "zipcode IN ('06902','73301','94102') and state IN ('CT','CA') and fips_regions > 0",
+                        "#LENGTH select zipcode from multi_in_compact_test where group='test' AND "
+                        "zipcode IN ('06902','73301','94102') and state IN ('CT','CA') and fips_regions < 0"],
             'results': [16,
                         8,
                         2,
@@ -2633,7 +2673,8 @@ class FillDatabaseData(ClusterTester):
                 "CREATE TABLE add_deletion_info_in_unsorted_column_test (k int, v int, PRIMARY KEY (k, v))"],
             'truncates': ["TRUNCATE add_deletion_info_in_unsorted_column_test"],
             'inserts': ["INSERT INTO add_deletion_info_in_unsorted_column_test (k, v) VALUES (0, 1)",
-                        "BEGIN BATCH DELETE FROM add_deletion_info_in_unsorted_column_test WHERE k=0 AND v=1; INSERT INTO add_deletion_info_in_unsorted_column_test (k, v) VALUES (0, 2); APPLY BATCH"],
+                        "BEGIN BATCH DELETE FROM add_deletion_info_in_unsorted_column_test WHERE k=0 AND v=1; "
+                        "INSERT INTO add_deletion_info_in_unsorted_column_test (k, v) VALUES (0, 2); APPLY BATCH"],
             'queries': ["SELECT * FROM add_deletion_info_in_unsorted_column_test"],
             'results': [[[0, 2]]],
             'min_version': '',
@@ -2686,7 +2727,8 @@ class FillDatabaseData(ClusterTester):
             'queries': [
                 "SELECT name.firstname FROM user_types_test WHERE id = ea0b7cc8-dee9-437e-896c-c14ed34ce9cd",
                 "SELECT name.firstname FROM user_types_test WHERE id = ea0b7cc8-dee9-437e-896c-c14ed34ce9cd",
-                "UPDATE user_types_test SET addresses = addresses + { 'home': ( '...', 'SF',  94102, {'123456'} ) } WHERE id=ea0b7cc8-dee9-437e-896c-c14ed34ce9cd"],
+                "UPDATE user_types_test SET addresses = addresses + { 'home': ( '...', 'SF',  94102, {'123456'} ) } "
+                "WHERE id=ea0b7cc8-dee9-437e-896c-c14ed34ce9cd"],
             'results': [[['Paul']],
                         [['Paul']],
                         []],
@@ -2721,12 +2763,14 @@ class FillDatabaseData(ClusterTester):
             'queries': [
                 "SELECT name.firstname FROM non_frozen_user_types_test WHERE id = ea0b7cc8-dee9-437e-896c-c14ed34ce9cd",
                 "SELECT name.lastname FROM non_frozen_user_types_test WHERE id = ea0b7cc8-dee9-437e-896c-c14ed34ce9cd",
-                "UPDATE non_frozen_user_types_test SET addresses = addresses + { 'home': ( '...', 'SF',  94102, {'123456'} ) } WHERE id=ea0b7cc8-dee9-437e-896c-c14ed34ce9cd",
+                "UPDATE non_frozen_user_types_test SET addresses = addresses + { 'home': ( '...', 'SF',  94102, {'123456'} ) } WHERE "
+                "id=ea0b7cc8-dee9-437e-896c-c14ed34ce9cd",
                 "#STR SELECT addresses FROM non_frozen_user_types_test WHERE id = ea0b7cc8-dee9-437e-896c-c14ed34ce9cd"],
             'results': [[['Paul']],
                         [['smith']],
                         [],
-                        "[[OrderedMapSerializedKey([('home', home_address(street='...', city='SF', zip_code=94102, phones=SortedSet(['123456'])))])]]"],
+                        "[[OrderedMapSerializedKey([('home', home_address(street='...', city='SF', zip_code=94102, "
+                        "phones=SortedSet(['123456'])))])]]"],
             'min_version': '',
             'max_version': '',
             'skip_condition': 'self.version_non_frozen_udt_support()',
@@ -2746,10 +2790,12 @@ class FillDatabaseData(ClusterTester):
         """, "CREATE TABLE more_user_types_test (id int PRIMARY KEY, val frozen<type2>)"],
             'truncates': ["TRUNCATE more_user_types_test"],
             'inserts': [
-                "INSERT INTO more_user_types_test(id, val) VALUES (0, { s : {{ s : {'foo', 'bar'}, m : { 'foo' : 'bar' }, l : ['foo', 'bar']} }})"
+                "INSERT INTO more_user_types_test(id, val) "
+                "VALUES (0, { s : {{ s : {'foo', 'bar'}, m : { 'foo' : 'bar' }, l : ['foo', 'bar']} }})"
             ],
             'queries': ["#STR SELECT * FROM more_user_types_test"],
-            'results': ["[[0, type2(s=SortedSet([type1(s=SortedSet(['bar', 'foo']), m=OrderedMapSerializedKey([('foo', 'bar')]), l=['foo', 'bar'])]))]]"],
+            'results': ["[[0, type2(s=SortedSet([type1(s=SortedSet(['bar', 'foo']), "
+                        "m=OrderedMapSerializedKey([('foo', 'bar')]), l=['foo', 'bar'])]))]]"],
             'min_version': '',
             'max_version': '',
             'skip': ''},
@@ -2937,7 +2983,8 @@ class FillDatabaseData(ClusterTester):
                         "SELECT v FROM in_order_by_without_selecting_test WHERE k=0 AND c1 = 0 AND c2 IN (2, 0) ORDER BY c1 ASC",
                         "SELECT v FROM in_order_by_without_selecting_test WHERE k=0 AND c1 = 0 AND c2 IN (2, 0) ORDER BY c1 DESC",
                         "SELECT v FROM in_order_by_without_selecting_test WHERE k IN (1, 0)",
-                        # message="Cannot page queries with both ORDER BY and a IN restriction on the partition key; you must either remove the ORDER BY or the IN and sort client side, or disable paging for this query"
+                        # message="Cannot page queries with both ORDER BY and a IN restriction on the partition key; "
+                        # "you must either remove the ORDER BY or the IN and sort client side, or disable paging for this query"
                         # "SELECT v FROM in_order_by_without_selecting_test WHERE k IN (1, 0) ORDER BY c1 ASC"
                         ],
             'results': [[[0, 0, 0, 0], [0, 0, 2, 2]],
@@ -2988,7 +3035,8 @@ class FillDatabaseData(ClusterTester):
     @staticmethod
     def cql_create_simple_tables(session, rows):
         """ Create tables for truncate test """
-        create_query = "CREATE TABLE IF NOT EXISTS truncate_table%d (my_id int PRIMARY KEY, col1 int, value int) with cdc = {'enabled': true, 'ttl': 0}"
+        create_query = "CREATE TABLE IF NOT EXISTS truncate_table%d (my_id int PRIMARY KEY, col1 int, value int) " \
+            "with cdc = {'enabled': true, 'ttl': 0}"
         for i in range(rows):
             session.execute(create_query % i)
             # Added sleep after each created table
