@@ -59,7 +59,7 @@ class ManagerTask:
     def __init__(self, task_id, cluster_id, manager_node):
         self.manager_node = manager_node
         self.sctool = SCTool(manager_node=manager_node)
-        self.id = task_id
+        self.id = task_id  # pylint: disable=invalid-name
         self.cluster_id = cluster_id
 
     def get_property(self, parsed_table, column_name):
@@ -156,7 +156,7 @@ class ManagerTask:
         # The manager will sometimes retry a task a few times if it's defined this way, and so in the case of
         # a failure in the task the manager can present the task's status as 'ERROR (#/4)'
         tmp = str_status.split()
-        if 'ERROR (4/4)' == ' '.join(tmp[0:1]):
+        if ' '.join(tmp[0:1]) == 'ERROR (4/4)':
             return TaskStatus.ERROR_FINAL
         return TaskStatus.from_str(tmp[0])
 
@@ -317,7 +317,7 @@ class RepairTask(ManagerTask):
         progress_table_lines = self.detailed_progress[1:]  # Removing headers
         inclusive_table_progress_dict = {}
         for line in progress_table_lines:
-            keyspace_name, table_name, progress_percentage, _ = line
+            keyspace_name, _, progress_percentage, _ = line
             if keyspace_name not in inclusive_table_progress_dict:
                 inclusive_table_progress_dict[keyspace_name] = []
             inclusive_table_progress_dict[keyspace_name].append(int(progress_percentage.strip()[:-1]))
@@ -758,8 +758,9 @@ class ScyllaManagerTool(ScyllaManagerBase):
             raise ScyllaManagerError(
                 "Non-Manager-supported Distro found on Monitoring Node: {}".format(manager_node.distro))
 
-    def _initial_wait(self, seconds: int):
-        LOGGER.debug(f'Sleep {seconds} seconds, waiting for manager service ready to respond')
+    @staticmethod
+    def _initial_wait(seconds: int):
+        LOGGER.debug('Sleep %s seconds, waiting for manager service ready to respond', seconds)
         time.sleep(seconds)
 
     @property
@@ -799,7 +800,8 @@ class ScyllaManagerTool(ScyllaManagerBase):
     def scylla_mgr_ssh_setup(self, node_ip, user='centos', identity_file='/tmp/scylla-test',  # pylint: disable=too-many-arguments
                              create_user=None, single_node=False):
         """
-        scyllamgr_ssh_setup [--ssh-user <username>] [--ssh-identity-file <path to private key>] [--ssh-config-file <path to SSH config file>] [--create-user <username>] [--single-node] [--debug] SCYLLA_NODE_IP
+        scyllamgr_ssh_setup [--ssh-user <username>] [--ssh-identity-file <path to private key>]
+            [--ssh-config-file <path to SSH config file>] [--create-user <username>] [--single-node] [--debug] SCYLLA_NODE_IP
            -u --ssh-user <username>        username used to connect to Scylla nodes, must be a sudo enabled user
            -i --ssh-identity-file <file>        path to SSH identity file (private key) for user
            -c --ssh-config-file <file>        path to alternate SSH configuration file, see man ssh_config
