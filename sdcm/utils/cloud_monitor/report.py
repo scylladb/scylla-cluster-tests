@@ -1,10 +1,13 @@
 import os
 import tempfile
-import pytz
+
 from datetime import datetime, timedelta
 from collections import defaultdict
 from copy import deepcopy
+
 import jinja2
+import pytz
+
 from sdcm.keystore import KeyStore
 from sdcm.utils.cloud_monitor.resources import CLOUD_PROVIDERS
 from sdcm.utils.cloud_monitor.resources.instances import CloudInstances
@@ -46,7 +49,7 @@ class BaseReport:
 
 class CloudResourcesReport(BaseReport):
     def __init__(self, cloud_instances: CloudInstances, static_ips: StaticIPs):
-        super(CloudResourcesReport, self).__init__(cloud_instances, static_ips, html_template="cloud_resources.html")
+        super().__init__(cloud_instances, static_ips, html_template="cloud_resources.html")
         stats = dict(num_running_instances=0,
                      num_stopped_instances=0,
                      unused_static_ips=0,
@@ -68,7 +71,7 @@ class CloudResourcesReport(BaseReport):
 
 class PerUserSummaryReport(BaseReport):
     def __init__(self, cloud_instances: CloudInstances, static_ips: StaticIPs):
-        super(PerUserSummaryReport, self).__init__(cloud_instances, static_ips, html_template="per_user_summary.html")
+        super().__init__(cloud_instances, static_ips, html_template="per_user_summary.html")
         self.report = {"results": {"qa": {}, "others": {}}, "cloud_providers": CLOUD_PROVIDERS}
         self.qa_users = KeyStore().get_qa_users()
 
@@ -103,7 +106,7 @@ class PerUserSummaryReport(BaseReport):
 
 class GeneralReport(BaseReport):
     def __init__(self, cloud_instances: CloudInstances, static_ips: StaticIPs):
-        super(GeneralReport, self).__init__(cloud_instances, static_ips, html_template="base.html")
+        super().__init__(cloud_instances, static_ips, html_template="base.html")
         self.cloud_resources_report = CloudResourcesReport(cloud_instances=cloud_instances, static_ips=static_ips)
         self.per_user_report = PerUserSummaryReport(cloud_instances, static_ips)
 
@@ -117,7 +120,7 @@ class DetailedReport(BaseReport):
     """Attached as HTML file"""
 
     def __init__(self, cloud_instances: CloudInstances, static_ips: StaticIPs, user=None):
-        super(DetailedReport, self).__init__(cloud_instances, static_ips, html_template="per_user.html")
+        super().__init__(cloud_instances, static_ips, html_template="per_user.html")
         self.user = user
         self.report = defaultdict(list)
 
@@ -133,8 +136,7 @@ class DetailedReport(BaseReport):
 
 class QAonlyTimeDistributionReport(BaseReport):
     def __init__(self, cloud_instances: CloudInstances, static_ips: StaticIPs, user=None):
-        super(QAonlyTimeDistributionReport, self).__init__(
-            cloud_instances, static_ips, html_template="per_qa_user.html")
+        super().__init__(cloud_instances, static_ips, html_template="per_qa_user.html")
         self.user = user
         self.report = {7: defaultdict(list), 5: defaultdict(list), 3: defaultdict(list)}
         self.qa_users = KeyStore().get_qa_users()
@@ -161,11 +163,13 @@ class QAonlyTimeDistributionReport(BaseReport):
 
     @staticmethod
     def _is_older_than_3days(create_time):
-        return pytz.utc.localize(datetime.utcnow() - timedelta(days=3)) > create_time > pytz.utc.localize(datetime.utcnow() - timedelta(days=5))
+        return pytz.utc.localize(datetime.utcnow() - timedelta(days=3)) > create_time > pytz.utc.localize(
+            datetime.utcnow() - timedelta(days=5))
 
     @staticmethod
     def _is_older_than_5days(create_time):
-        return pytz.utc.localize(datetime.utcnow() - timedelta(days=5)) > create_time > pytz.utc.localize(datetime.utcnow() - timedelta(days=7))
+        return pytz.utc.localize(datetime.utcnow() - timedelta(days=5)) > create_time > pytz.utc.localize(
+            datetime.utcnow() - timedelta(days=7))
 
     @staticmethod
     def _is_older_than_7days(create_time):
@@ -174,5 +178,6 @@ class QAonlyTimeDistributionReport(BaseReport):
     def _is_user_be_skipped(self, instance):
         return instance.owner == "qa" or instance.owner not in self.qa_users
 
-    def _is_instance_be_skipped(self, instance):
+    @staticmethod
+    def _is_instance_be_skipped(instance):
         return instance.state != "running"
