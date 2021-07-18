@@ -2,16 +2,11 @@
 # This is stress longevity test that runs scylla-benchtime window load  with different node operations:
 # disruptive and not disruptive
 
-import time
-
 from longevity_test import LongevityTest
 from sdcm.sct_events.group_common_events import ignore_mutation_write_errors
 
 
 class TWCSLongevityTest(LongevityTest):
-    def __init__(self, *args):
-        super(TWCSLongevityTest, self).__init__(*args)
-
     def create_tables_for_scylla_bench(self, window_size=1, ttl=900):
         with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
             session.execute("""
