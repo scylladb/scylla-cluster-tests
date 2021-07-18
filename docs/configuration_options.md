@@ -271,4 +271,3 @@
 | **<a href="#user-content-max_events_severities" name="max_events_severities">max_events_severities</a>**  | Limit severity level for event types | N/A | SCT_MAX_EVENTS_SEVERITIES
 | **<a href="#user-content-scylla_rsyslog_setup" name="scylla_rsyslog_setup">scylla_rsyslog_setup</a>**  | Configure rsyslog on scylla nodes to send logs to monitoring nodes | False | SCT_SCYLLA_RSYSLOG_SETUP
 | **<a href="#user-content-events_limit_in_email" name="events_limit_in_email">events_limit_in_email</a>**  | Limit number events in email reports | False | SCT_EVENTS_LIMIT_IN_EMAIL
-| **<a href="#user-content-collect_single_archive" name="collect_single_archive">collect_single_archive</a>**  | Collect all logs to a single archive | False | SCT_COLLECT_SINGLE_ARCHIVE
