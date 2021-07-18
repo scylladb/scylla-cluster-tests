@@ -989,12 +989,27 @@ class SCTLogCollector(LogCollector):
                 LOGGER.warning('Nothing found')
                 return []
 
-        if self.params.get("collect_single_archive"):
+        if self.is_collect_to_a_single_archive:
             s3_links = self.create_single_archive_and_upload()
         else:
+            LOGGER.info("SCT log files are too big, uploading them separately")
             s3_links = self.create_achive_per_file_and_upload()
 
         return s3_links
+
+    def get_files_size(self) -> int:
+        total_size = 0
+        for dirpath, dirnames, filenames in os.walk(self.local_dir):
+            for filename in filenames:
+                filepath = os.path.join(dirpath, filename)
+                # skip if it is symbolic link
+                if not os.path.islink(filepath):
+                    total_size += os.path.getsize(filepath)
+        return total_size
+
+    @property
+    def is_collect_to_a_single_archive(self) -> bool:
+        return self.get_files_size() < 3*1024*1024*1024
 
     def create_single_archive_and_upload(self) -> list[str]:
         final_archive = self.archive_to_tarfile(self.local_dir)

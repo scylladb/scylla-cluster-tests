@@ -1109,8 +1109,6 @@ class SCTConfiguration(dict):
         dict(name="scylla_rsyslog_setup", env="SCT_SCYLLA_RSYSLOG_SETUP", type=boolean,
              help="Configure rsyslog on Scylla nodes to send logs to monitoring nodes"),
 
-        dict(name="collect_single_archive", env="SCT_COLLECT_SINGLE_ARCHIVE", type=boolean,
-             help="Collect all logs to a single archive"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
