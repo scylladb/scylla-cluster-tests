@@ -195,7 +195,7 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
             publisher.event_id = cs_stress_event.event_id
             try:
                 result = node.remoter.run(cmd=node_cmd, timeout=self.timeout, log_file=log_file_name)
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-except
                 cs_stress_event.severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR
                 cs_stress_event.add_error(errors=[format_stress_cmd_error(exc)])
 
@@ -212,7 +212,8 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
 
         self.max_workers = len(loaders) * self.stress_num
         LOGGER.debug("Starting %d c-s Worker threads", self.max_workers)
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers)
+        self.executor = concurrent.futures.ThreadPoolExecutor(  # pylint: disable=consider-using-with
+            max_workers=self.max_workers)
 
         for loader_idx, loader in enumerate(loaders):
             for cpu_idx in range(self.stress_num):
@@ -316,7 +317,8 @@ class DockerBasedStressThread:
 
         self.max_workers = len(loaders) * self.stress_num
         LOGGER.debug("Starting %d %s Worker threads", self.max_workers, self.__class__.__name__)
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers)
+        self.executor = concurrent.futures.ThreadPoolExecutor(  # pylint: disable=consider-using-with
+            max_workers=self.max_workers)
 
         for loader_idx, loader in enumerate(loaders):
             for cpu_idx in range(self.stress_num):
@@ -360,6 +362,6 @@ class DockerBasedStressThread:
             db_nodes = [db_node for db_node in nodes_in_region if not db_node.running_nemesis]
             assert db_nodes, "No node to query, nemesis runs on all DB nodes!"
             node_to_query = random.choice(db_nodes)
-            LOGGER.debug(f"Selected '{node_to_query}' to query for local nodes")
+            LOGGER.debug("Selected '%s' to query for local nodes", node_to_query)
             return node_to_query.ip_address
         return self.node_list[0].ip_address
