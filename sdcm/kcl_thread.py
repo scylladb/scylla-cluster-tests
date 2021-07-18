@@ -18,6 +18,9 @@ import logging
 import uuid
 import threading
 
+from functools import cached_property
+from typing import Dict
+
 from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.sct_events.system import InfoEvent
@@ -41,7 +44,8 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
             target_address = self.node_list[0].parent_cluster.get_node().ip_address
         else:
             target_address = self.node_list[0].ip_address
-        stress_cmd = f"./gradlew run --args=\' {self.stress_cmd.replace('hydra-kcl', '')} -e http://{target_address}:{self.params.get('alternator_port')} \'"
+        stress_cmd = f"./gradlew run --args=\' {self.stress_cmd.replace('hydra-kcl', '')} " \
+                     f"-e http://{target_address}:{self.params.get('alternator_port')} \'"
         return stress_cmd
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
@@ -100,19 +104,27 @@ class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-
         db_nodes = [db_node for db_node in self.node_list if not db_node.running_nemesis]
         assert db_nodes, "No node to query, nemesis runs on all DB nodes!"
         node_to_query = random.choice(db_nodes)
-        LOGGER.debug(f"Selected '{node_to_query}' to query for local nodes")
+        LOGGER.debug("Selected '%s' to query for local nodes", node_to_query)
         return node_to_query
+
+    @cached_property
+    def _options(self) -> Dict[str, str]:
+        return dict(item.strip().split("=") for item in self.stress_cmd.replace('table_compare', '').strip().split(";"))
+
+    @property
+    def _interval(self) -> int:
+        return int(self._options.get('interval', 20))
+
+    @property
+    def _timeout(self) -> int:
+        return int(self._options.get('timeout', 28800))
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
         KclStressEvent.start(node=loader, stress_cmd=self.stress_cmd).publish()
         try:
-            options_str = self.stress_cmd.replace('table_compare', '').strip()
-            options = dict(item.strip().split("=") for item in options_str.split(";"))
-            interval = int(options.get('interval', 20))
-            timeout = int(options.get('timeout', 28800))
-            src_table = options.get('src_table')
-            dst_table = options.get('dst_table')
-            start_time = time.time()
+            src_table = self._options.get('src_table')
+            dst_table = self._options.get('dst_table')
+            end_time = time.time() + self._timeout
 
             while not self._stop_event.is_set():
                 node: BaseNode = self.db_node_to_query(loader)
@@ -123,23 +135,23 @@ class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-
                 src_size = node.get_cfstats(src_table)['Number of partitions (estimate)']
 
                 node.running_nemesis = None
-                elapsed_time = time.time() - start_time
                 status = f"== CompareTablesSizesThread: dst table/src table number of partitions: {dst_size}/{src_size} =="
                 LOGGER.info(status)
-                status_msg = f'[{elapsed_time}/{timeout}] {status}'
-                InfoEvent(status_msg).publish()
+                InfoEvent(f'[{time.time()}/{end_time}] {status}').publish()
 
                 if src_size == 0:
                     continue
-                if elapsed_time > timeout:
-                    InfoEvent(f"== CompareTablesSizesThread: exiting on timeout of {timeout}").publish()
+                if time.time() > end_time:
+                    InfoEvent(f"== CompareTablesSizesThread: exiting on timeout of {self._timeout}").publish()
                     break
-                time.sleep(interval)
+                time.sleep(self._interval)
             return None
 
         except Exception as exc:  # pylint: disable=broad-except
-            errors_str = format_stress_cmd_error(exc)
-            KclStressEvent.failure(node=loader, stress_cmd=self.stress_cmd, errors=[errors_str, ]).publish()
+            KclStressEvent.failure(
+                node=loader,
+                stress_cmd=self.stress_cmd,
+                errors=[format_stress_cmd_error(exc), ]).publish()
             raise
         finally:
             KclStressEvent.finish(node=loader).publish()
