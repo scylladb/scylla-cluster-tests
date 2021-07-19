@@ -5213,7 +5213,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         labels = " ".join(f"--label {key}={value}" for key, value in node.tags.items())
         scylla_manager_servers_arg = ""
         if self.params.get("use_mgmt"):
-            scylla_manager_servers_arg = f'-N `realpath "{self.monitoring_conf_dir}/scylla_manager_servers.yml"` \\'
+            scylla_manager_servers_arg = f'-N `realpath "{self.monitoring_conf_dir}/scylla_manager_servers.yml"`'
         run_script = dedent(f"""
             cd -P {self.monitor_install_path}
             mkdir -p {self.monitoring_data_dir}
