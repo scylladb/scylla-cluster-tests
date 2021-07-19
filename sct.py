@@ -422,8 +422,6 @@ def output_conf(config_files, backend):
     sys.exit(0)
 
 
-<<<<<<< HEAD
-=======
 def _run_yaml_test(backend, full_path, env):
     output = []
     error = False
@@ -497,7 +495,6 @@ def lint_yamls(backend, exclude: str, include: str):  # pylint: disable=too-many
     sys.exit(1 if failed else 0)
 
 
->>>>>>> e2b351d0... fix(logcollector): pylint warning messages
 @cli.command(help="Check test configuration file")
 @click.argument('config_file', type=str, default='')
 @click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), default='aws')
