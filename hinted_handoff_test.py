@@ -5,7 +5,7 @@ from sdcm.tester import ClusterTester
 class HintedHandoffTest(ClusterTester):
 
     def __init__(self, *args, **kwargs):
-        super(HintedHandoffTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.stress_write_cmd = "cassandra-stress write no-warmup cl=ONE n=100123123 -schema 'replication(factor=3)' " \
                                 "-port jmx=6868 -mode cql3 native -rate 'threads=20 throttle=16000/s' " \
                                 "-col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..100123123 -log interval=15"
@@ -15,7 +15,7 @@ class HintedHandoffTest(ClusterTester):
                                " -pop seq=1..100123123 -log interval=15"
 
     def setUp(self):
-        super(HintedHandoffTest, self).setUp()
+        super().setUp()
         self.start_time = time.time()
 
     def test_stop_nodes_under_stress(self):
