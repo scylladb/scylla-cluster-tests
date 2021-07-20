@@ -828,7 +828,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
         try:
             ssh_identity_file = [arg for arg in res.stdout.split('\n') if "--ssh-identity-file" in arg][0].split()[-1]
         except Exception as ex:
-            raise ScyllaManagerError("Failed to parse scyllamgr_ssh_setup output: {}".format(ex))
+            raise ScyllaManagerError(f"Failed to parse scyllamgr_ssh_setup output: {ex}") from ex
 
         return res, ssh_identity_file
 
@@ -1005,7 +1005,7 @@ class SCTool:
             res = self.manager_node.remoter.sudo(f"sctool {cmd}")
             LOGGER.debug("sctool output: %s", res.stdout)
         except (UnexpectedExit, Failure) as ex:
-            raise ScyllaManagerError(f"Encountered an error on sctool command: {cmd}: {ex}")
+            raise ScyllaManagerError(f"Encountered an error on sctool command: {cmd}: {ex}") from ex
 
         if replace_broken_unicode_values:
             res.stdout = self.replace_broken_unicode_values(res.stdout)
