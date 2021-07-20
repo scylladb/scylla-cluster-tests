@@ -211,7 +211,7 @@ class ProfileBase(cProfile.Profile):
         new_kwargs = kwargs.copy()
         new_kwargs['timer'] = _get_timer_from_str(new_kwargs.get('timer', None))
         self._group_name = new_kwargs.pop('group_name', None)
-        super(ProfileBase, self).__init__(*args, **new_kwargs)
+        super().__init__(*args, **new_kwargs)
         if args:
             self._args = args
         if kwargs:
@@ -221,19 +221,19 @@ class ProfileBase(cProfile.Profile):
         if not self._enabled:
             subcalls = self._kwargs.get('subcalls', True) if subcalls is None else subcalls
             builtins = self._kwargs.get('builtins', True) if builtins is None else builtins
-            super(ProfileBase, self).enable(subcalls, builtins)
+            super().enable(subcalls, builtins)
             self._enabled = True
 
     def disable(self):
         if self._enabled:
             self._enabled = False
-            super(ProfileBase, self).disable()
+            super().disable()
 
     def create_stats(self):
         if self._stat_created:
             return
         self._stat_created = True
-        super(ProfileBase, self).create_stats()
+        super().create_stats()
         if self._main_profile:
             self._main_profile.send_stats_to_main_process(self.stats)
 
@@ -264,7 +264,7 @@ class ProcessProfile(ProfileBase):
     _type = 'process'
 
     def __init__(self, *args, queue=None, **kwargs):
-        super(ProcessProfile, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if queue:
             self._master = False
             self._queue = queue
