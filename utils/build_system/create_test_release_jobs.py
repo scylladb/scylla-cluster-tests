@@ -4,7 +4,7 @@ from pathlib import Path
 
 import jenkins  # pylint: disable=import-error
 
-from sdcm.wait import wait_for
+from sdcm.wait import wait_for  # pylint: disable=import-error
 
 DIR_TEMPLATE = open(Path(__file__).parent / 'folder-template.xml').read()
 JOB_TEMPLATE = open(Path(__file__).parent / 'template.xml').read()
@@ -29,7 +29,7 @@ class JenkinsPipelines:
     def create_pipeline_job(self, jenkins_file, group_name, job_name=None, job_name_suffix="-test"):
         base_name = job_name or Path(jenkins_file).stem
         sct_jenkinsfile = jenkins_file.split("scylla-cluster-tests/")[-1]
-        LOGGER.info(f"{sct_jenkinsfile} is used to create job")
+        LOGGER.info("%s is used to create job", sct_jenkinsfile)
         xml_data = JOB_TEMPLATE % dict(sct_display_name=f"{base_name}{job_name_suffix}",
                                        sct_description=sct_jenkinsfile,
                                        sct_repo=self.sct_repo,
@@ -52,7 +52,7 @@ class JenkinsPipelines:
         Job started one by one, to avoid situation
         when all jenkins resources will be allocated
         """
-        LOGGER.info(f"Start first build {name}")
+        LOGGER.info("Start first build %s", name)
         job_id = self.jenkins.build_job(name)
 
         # wait while worker will be found
@@ -62,7 +62,7 @@ class JenkinsPipelines:
 
         # wait while job will be executed
         def check_job_is_finished(job_name):
-            return not self.jenkins.get_build_info(name, 1).get("building")
+            return not self.jenkins.get_build_info(job_name, 1).get("building")
 
         wait_for(check_job_is_finished, step=5, text="Check job is finished",
                  timeout=120, throw_exc=True, job_name=name)
