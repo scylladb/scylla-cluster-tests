@@ -233,57 +233,55 @@ class TestMBM(unittest.TestCase):  # pylint: disable=too-many-public-methods
         self.assertFalse(report_results)
 
     def test_main_help_message(self):
-        ps = subprocess.Popen(['./microbenchmarking.py', '--help'],
-                              cwd=self.cwd,
-                              stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE)
-        stdout, stderr = ps.communicate()
-        self.assertEqual(ps.returncode, 0)
-        self.assertIn(b'usage: microbenchmarking.py [-h] Modes ...', stdout)
-        self.assertFalse(stderr)
+        with subprocess.Popen(['./microbenchmarking.py', '--help'], cwd=self.cwd,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE) as ps:
+            stdout, stderr = ps.communicate()
+            self.assertEqual(ps.returncode, 0)
+            self.assertIn(b'usage: microbenchmarking.py [-h] Modes ...', stdout)
+            self.assertFalse(stderr)
 
     def test_help_parameter_for_exclude(self):
         msg = b'usage: microbenchmarking.py exclude [-h]'
-        ps = subprocess.Popen(['./microbenchmarking.py', 'exclude', '--help'],
+        with subprocess.Popen(['./microbenchmarking.py', 'exclude', '--help'],
                               cwd=self.cwd,
                               stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE)
-        stdout, stderr = ps.communicate()
-        self.assertEqual(ps.returncode, 0)
-        self.assertIn(msg, stdout)
-        self.assertFalse(stderr)
+                              stderr=subprocess.PIPE) as ps:
+            stdout, stderr = ps.communicate()
+            self.assertEqual(ps.returncode, 0)
+            self.assertIn(msg, stdout)
+            self.assertFalse(stderr)
 
     def test_help_parameter_for_check(self):
         msg = b"""usage: microbenchmarking.py check [-h] [--update-db]"""
 
-        ps = subprocess.Popen(['./microbenchmarking.py', 'check', '--help'],
+        with subprocess.Popen(['./microbenchmarking.py', 'check', '--help'],
                               cwd=self.cwd,
                               stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE)
+                              stderr=subprocess.PIPE) as ps:
 
-        stdout, stderr = ps.communicate()
-        self.assertEqual(ps.returncode, 0)
-        self.assertIn(msg, stdout)
-        self.assertFalse(stderr)
+            stdout, stderr = ps.communicate()
+            self.assertEqual(ps.returncode, 0)
+            self.assertIn(msg, stdout)
+            self.assertFalse(stderr)
 
     def test_execute_mbm_from_cli(self):
         result_path = os.path.join(os.path.dirname(__file__), 'test_data/test_microbenchmarking/PFF_with_AVGAIO')
         html_report = tempfile.mkstemp(suffix=".html", prefix="microbenchmarking-")[1]
-        ps = subprocess.Popen(['./microbenchmarking.py', 'check',
+        with subprocess.Popen(['./microbenchmarking.py', 'check',
                                '--results-path', result_path,
                                '--email-recipients', 'alex.bykov@scylladb.com',
                                '--report-path', html_report,
                                '--hostname', self.mbra.hostname],
                               cwd=self.cwd,
                               stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE)
-        stdout, _ = ps.communicate()
-        print(_)
-        print(stdout)
-        self.assertEqual(ps.returncode, 0)
-        self.assertIn(b"Send email to ['alex.bykov@scylladb.com']", stdout)
-        self.assertIn(b"HTML report saved to '/tmp/microbenchmarking", stdout)
-        self.assertIn(b"Rendering results to html using 'results_microbenchmark.html' template...", stdout)
+                              stderr=subprocess.PIPE) as ps:
+            stdout, _ = ps.communicate()
+            print(_)
+            print(stdout)
+            self.assertEqual(ps.returncode, 0)
+            self.assertIn(b"Send email to ['alex.bykov@scylladb.com']", stdout)
+            self.assertIn(b"HTML report saved to '/tmp/microbenchmarking", stdout)
+            self.assertIn(b"Rendering results to html using 'results_microbenchmark.html' template...", stdout)
 
 
 if __name__ == "__main__":
