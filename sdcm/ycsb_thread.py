@@ -12,7 +12,6 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
-import random
 import re
 import logging
 import time
