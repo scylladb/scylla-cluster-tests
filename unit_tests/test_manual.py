@@ -18,6 +18,8 @@ from sdcm.ycsb_thread import YcsbStressThread
 
 logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
 
+# pylint: disable=line-too-long
+
 
 class Node:  # pylint: disable=no-init,too-few-public-methods
     def __init__(self):
@@ -78,7 +80,7 @@ class TestCassandraStressExporter(unittest.TestCase):
         cls.metrics = nemesis_metrics_obj()
 
     def test_01(self):
-        tmp_file = tempfile.NamedTemporaryFile(mode='w+')
+        tmp_file = tempfile.NamedTemporaryFile(mode='w+')  # pylint: disable=consider-using-with
         cs_exporter = CassandraStressExporter("127.0.0.1", self.metrics, 'write',
                                               tmp_file.name, loader_idx=1, cpu_idx=0)
 
@@ -148,7 +150,7 @@ class TestStressThread(BaseSCTEventsTest):
     @staticmethod
     def test_02():
 
-        tmp_file = tempfile.NamedTemporaryFile(mode='w+')
+        tmp_file = tempfile.NamedTemporaryFile(mode='w+')  # pylint: disable=consider-using-with
         tailer = CassandraStressEventsPublisher(node=Node(), cs_log_filename=tmp_file.name)
 
         res = tailer.start()
