@@ -175,7 +175,7 @@ class CommandRunner(metaclass=ABCMeta):
             quotes are NOT added and so should be added at some point by
             the caller.
         """
-        escape_chars = r' !"$&' "'" r'()*,:;<=>?[\]^`{|}'
+        escape_chars = r' !"$&' + "'" + r'()*,:;<=>?[\]^`{|}'
 
         new_name = []
         for char in filename:
