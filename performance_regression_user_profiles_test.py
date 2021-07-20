@@ -24,7 +24,7 @@ class PerformanceRegressionUserProfilesTest(ClusterTester):
     """
 
     def __init__(self, *args, **kwargs):
-        super(PerformanceRegressionUserProfilesTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.create_stats = False
 
     def _clean_keyspace(self, cs_profile):  # pylint: disable=invalid-name
