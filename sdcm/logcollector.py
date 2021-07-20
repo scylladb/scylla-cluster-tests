@@ -964,7 +964,7 @@ class SCTLogCollector(LogCollector):
 
     def get_files_size(self) -> int:
         total_size = 0
-        for dirpath, dirnames, filenames in os.walk(self.local_dir):
+        for dirpath, _, filenames in os.walk(self.local_dir):
             for filename in filenames:
                 filepath = os.path.join(dirpath, filename)
                 # skip if it is symbolic link
