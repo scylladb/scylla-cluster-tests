@@ -48,7 +48,7 @@ class SlaPerUserTest(LongevityTest):
     MIXED_LOAD = 'mixed'
 
     def __init__(self, *args, **kwargs):
-        super(SlaPerUserTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.prometheus_stats = None
         self.num_of_partitions = 200000000
         self.backgroud_task = None
