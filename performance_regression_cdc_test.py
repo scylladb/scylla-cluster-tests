@@ -179,7 +179,7 @@ class PerformanceRegressionCDCTest(PerformanceRegressionTest):
         if save_stats:
             self.update_test_details(scylla_conf=True)
             stat_results = PP.pformat(self._stats["results"])
-            self.log.debug(f'Results {test_name}: \n{stat_results}')
+            self.log.debug('Results %s: \n%s', test_name, stat_results)
             self.display_results(results, test_name=test_name)
 
     def truncate_base_table(self, node, cdclog_table=False):
