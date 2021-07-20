@@ -72,7 +72,7 @@ class AWSPricing:
             all_prices = [float(p['SpotPrice']) for p in prices]
             return sum(all_prices) / len(all_prices)
         else:
-            LOGGER.warning(f"Spot price not found for '{instance_type}' in '{region_name}':\n{result}")
+            LOGGER.warning("Spot price not found for '%s' in '%s':\n%s", instance_type, region_name, result)
             return 0
 
     def get_instance_price(self, region, instance_type, state, lifecycle):
@@ -245,7 +245,7 @@ class GCEPricing:  # pylint: disable=too-few-public-methods
         if state == "running":
             price = self.prices[lifecycle].get(instance_type, 0)
             if price == 0:
-                LOGGER.warning(f"No price for {instance_type}")
+                LOGGER.warning("No price for %s", instance_type)
             return price
         else:
             # calculate disk price
