@@ -29,7 +29,7 @@ class DummyNode(sdcm.cluster.BaseNode):  # pylint: disable=abstract-method
         return '127.0.0.%s' % self.name.replace('node', '')
 
     @property
-    def is_nonroot_install(self):
+    def is_nonroot_install(self):  # pylint: disable=invalid-overridden-method
         return False
 
 
@@ -37,7 +37,7 @@ class DummyCluster(sdcm.cluster.BaseScyllaCluster):
     def __init__(self, *args, **kwargs):
         self.params = {}
         self.nodes = []
-        super(DummyCluster, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def set_test_params(self, seeds_selector, seeds_num, db_type):
         self.params = {'seeds_selector': seeds_selector, 'seeds_num': seeds_num, 'db_type': db_type}
