@@ -10,7 +10,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-import time
 import unittest
 from unittest import mock
 
