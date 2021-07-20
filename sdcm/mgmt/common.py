@@ -53,8 +53,8 @@ class HostStatus(Enum):
             if output_str == "-":
                 return cls.DOWN
             return getattr(cls, output_str)
-        except AttributeError:
-            raise ScyllaManagerError("Could not recognize returned host status: {}".format(output_str))
+        except AttributeError as err:
+            raise ScyllaManagerError("Could not recognize returned host status: {}".format(output_str)) from err
 
 
 class HostRestStatus(Enum):
@@ -71,11 +71,11 @@ class HostRestStatus(Enum):
             if output_str == "-":
                 return cls.DOWN
             return getattr(cls, output_str)
-        except AttributeError:
-            raise ScyllaManagerError("Could not recognize returned host rest status: {}".format(output_str))
+        except AttributeError as err:
+            raise ScyllaManagerError("Could not recognize returned host rest status: {}".format(output_str)) from err
 
 
-class TaskStatus:
+class TaskStatus:  # pylint: disable=too-few-public-methods
     NEW = "NEW"
     RUNNING = "RUNNING"
     DONE = "DONE"
@@ -91,5 +91,5 @@ class TaskStatus:
         try:
             output_str = output_str.upper()
             return getattr(cls, output_str)
-        except AttributeError:
-            raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str))
+        except AttributeError as err:
+            raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str)) from err
