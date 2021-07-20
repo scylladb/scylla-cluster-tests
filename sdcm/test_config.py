@@ -2,12 +2,10 @@ import logging
 import os
 import queue
 from textwrap import dedent
-
-import requests
-
 from datetime import datetime
 from typing import Optional, Dict
 
+import requests
 from sdcm.keystore import KeyStore
 from sdcm.utils.common import get_my_ip
 from sdcm.utils.decorators import retrying
@@ -19,7 +17,7 @@ from sdcm.utils.ldap import LdapServerNotReady
 LOGGER = logging.getLogger(__name__)
 
 
-class TestConfig:
+class TestConfig:  # pylint: disable=too-many-public-methods
     TEST_DURATION = 60
     RSYSLOG_SSH_TUNNEL_LOCAL_PORT = 5000
     IP_SSH_CONNECTIONS = 'private'
