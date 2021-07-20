@@ -23,11 +23,11 @@ class PhysicalMachineNode(cluster.BaseNode):
                           'key_file': credentials.key_file}
         self._public_ip = public_ip
         self._private_ip = private_ip
-        super(PhysicalMachineNode, self).__init__(name=name,
-                                                  parent_cluster=parent_cluster,
-                                                  base_logdir=base_logdir,
-                                                  ssh_login_info=ssh_login_info,
-                                                  node_prefix=node_prefix)
+        super().__init__(name=name,
+                         parent_cluster=parent_cluster,
+                         base_logdir=base_logdir,
+                         ssh_login_info=ssh_login_info,
+                         node_prefix=node_prefix)
 
     def init(self):
         super().init()
@@ -79,7 +79,7 @@ class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-m
         node_cnt = n_nodes[0] if isinstance(n_nodes, list) else n_nodes
         if len(self._node_public_ips) < node_cnt or len(self._node_private_ips) < node_cnt:
             raise NodeIpsNotConfiguredError('Physical hosts IPs are not configured!')
-        super(PhysicalMachineCluster, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     def _create_node(self, name, public_ip, private_ip):
         node = PhysicalMachineNode(name,
@@ -92,7 +92,8 @@ class PhysicalMachineCluster(cluster.BaseCluster):  # pylint: disable=abstract-m
         node.init()
         return node
 
-    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):  # pylint: disable=unused-argument
+    # pylint: disable=unused-argument,too-many-arguments
+    def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
         for node_index in range(count):
             node_name = '%s-%s' % (self.node_prefix, node_index)
             self.nodes.append(self._create_node(node_name,
@@ -109,7 +110,7 @@ class ScyllaPhysicalCluster(cluster.BaseScyllaCluster, PhysicalMachineCluster):
             node_prefix=cluster.prepend_user_prefix(user_prefix, 'db-node'),
             node_type='scylla-db'
         ))
-        super(ScyllaPhysicalCluster, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     def node_setup(self, node, verbose=False, timeout=3600):
         """
@@ -129,7 +130,7 @@ class LoaderSetPhysical(PhysicalMachineCluster, cluster.BaseLoaderSet):  # pylin
             node_prefix=cluster.prepend_user_prefix(user_prefix, 'loader-node'),
             node_type='loader'
         ))
-        super(LoaderSetPhysical, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     @classmethod
     def _get_node_ips_param(cls, ip_type='public'):
