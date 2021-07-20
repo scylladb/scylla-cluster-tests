@@ -44,7 +44,7 @@ class __DEFAULT__:  # pylint: disable=invalid-name, too-few-public-methods
     """ Default value for function attribute when None is not an option """
 
 
-class StreamWatcher(ABC):
+class StreamWatcher(ABC):  # pylint: disable=too-few-public-methods
     @abstractmethod
     def submit_line(self, line: str):
         pass
@@ -386,8 +386,8 @@ class Client:  # pylint: disable=too-many-instance-attributes
             self.session.eagain(
                 self.session.userauth_password,
                 args=(self.user, self.password), timeout=self.timings.auth_timeout)
-        except:  # pylint: disable=bare-except
-            raise AuthenticationException("Password authentication failed")
+        except Exception as error:  # pylint: disable=broad-except
+            raise AuthenticationException("Password authentication failed") from error
 
     @staticmethod
     def _get_socket_family(host):
@@ -416,10 +416,10 @@ class Client:  # pylint: disable=too-many-instance-attributes
         try:
             self.sock.connect((host, port))
         except gaierror as ex:
-            raise UnknownHostException("Unknown host %s - %s" % (host, str(ex.args[1])))
+            raise UnknownHostException("Unknown host %s - %s" % (host, str(ex.args[1]))) from ex
         except sock_error as ex:
             error_type = ex.args[1] if len(ex.args) > 1 else ex.args[0]
-            raise ConnectError("Error connecting to host '%s:%s' - %s" % (host, port, str(error_type)))
+            raise ConnectError("Error connecting to host '%s:%s' - %s" % (host, port, str(error_type))) from ex
 
     @staticmethod
     def _process_output(  # pylint: disable=too-many-arguments, too-many-branches
@@ -504,7 +504,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                     self._connect()
             except Exception as exc:
                 self.disconnect()
-                raise ConnectError(str(exc))
+                raise ConnectError(str(exc)) from exc
             return
         end_time = perf_counter() + timeout
         delays_iter = iter(self.timings.connect_delays)
@@ -520,8 +520,8 @@ class Client:  # pylint: disable=too-many-instance-attributes
                 except Exception as exc:  # pylint: disable=broad-except
                     self.disconnect()
                     if perf_counter() > end_time:
-                        raise ConnectTimeout(
-                            f'Failed to connect in {timeout} seconds, last error: ({type(exc).__name__}){str(exc)}')
+                        ex_msg = f'Failed to connect in {timeout} seconds, last error: ({type(exc).__name__}){str(exc)}'
+                        raise ConnectTimeout(ex_msg) from exc
             delay = next(delays_iter, delay)
             sleep(delay)
         return
