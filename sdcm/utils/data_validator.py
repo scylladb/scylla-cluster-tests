@@ -278,7 +278,7 @@ class LongevityDataValidator:
         for profile in cs_profile:
             _, profile_content = get_profile_content(profile)
             mv_create_cmd = self.get_view_cmd_from_profile(profile_content, name_substr, all_entries)
-            LOGGER.debug(f'Create commands: {mv_create_cmd}')
+            LOGGER.debug('Create commands: %s', mv_create_cmd)
             for cmd in mv_create_cmd:
                 view_name = self.get_view_name_from_stress_cmd(cmd, name_substr)
                 if view_name:
@@ -317,8 +317,8 @@ class LongevityDataValidator:
                 ).publish()
                 return
 
-            LOGGER.debug(f'Copy expected data for immutable rows: {self.view_name_for_not_updated_data} -> '
-                         f'{self.expected_data_table_name}')
+            LOGGER.debug('Copy expected data for immutable rows: %s -> %s',
+                         self.view_name_for_not_updated_data, self.expected_data_table_name)
             if not self.longevity_self_object.copy_view(node=self.longevity_self_object.db_cluster.nodes[0],
                                                         src_keyspace=self.keyspace_name,
                                                         src_view=self.view_name_for_not_updated_data,
@@ -346,10 +346,10 @@ class LongevityDataValidator:
                 ).publish()
                 return
 
-            LOGGER.debug(f'Copy expected data for updated rows. {self.view_names_for_updated_data}')
+            LOGGER.debug('Copy expected data for updated rows. %s', self.view_names_for_updated_data)
             for src_view in self.view_names_for_updated_data:
                 expected_data_table_name = self.set_expected_data_table_name(src_view)
-                LOGGER.debug(f'Expected data table name {expected_data_table_name}')
+                LOGGER.debug('Expected data table name %s', expected_data_table_name)
                 if not self.longevity_self_object.copy_view(node=self.longevity_self_object.db_cluster.nodes[0],
                                                             src_keyspace=self.keyspace_name, src_view=src_view,
                                                             dest_keyspace=self.keyspace_name,
@@ -374,7 +374,7 @@ class LongevityDataValidator:
             ).publish()
             return
 
-        LOGGER.debug(f'Get rows count in {self.view_name_for_deletion_data} MV before stress')
+        LOGGER.debug('Get rows count in %s MV before stress', self.view_name_for_deletion_data)
         pk_name = self.base_table_partition_keys[0]
         with self.longevity_self_object.db_cluster.cql_connection_patient(
                 self.longevity_self_object.db_cluster.nodes[0], keyspace=self.keyspace_name) as session:
@@ -383,7 +383,7 @@ class LongevityDataValidator:
                 statement=f"SELECT {pk_name} FROM {self.view_name_for_deletion_data}")
             if rows_before_deletion:
                 self.rows_before_deletion = len(rows_before_deletion)
-                LOGGER.debug(f"{self.rows_before_deletion} rows for deletion")
+                LOGGER.debug("%s rows for deletion", self.rows_before_deletion)
 
     def validate_range_not_expected_to_change(self, session, during_nemesis=False):
         """
@@ -462,9 +462,8 @@ class LongevityDataValidator:
                               f"Expected dataset length: {len(expected_result)}"
                     ).publish()
                 else:
-                    LOGGER.debug(
-                        f'Verify immutable rows. '
-                        f'Actual dataset length: {len(actual_result)}, Expected dataset length: {len(expected_result)}')
+                    LOGGER.debug('Verify immutable rows. Actual dataset length: %s, Expected dataset length: %s',
+                                 len(actual_result), len(expected_result))
 
     def validate_range_expected_to_change(self, session, during_nemesis=False):
         """
@@ -504,7 +503,7 @@ class LongevityDataValidator:
             # views_set[2] - view name with all expected partition keys
             # views_set[3] - do perform validation for the view or not
             if not during_nemesis:
-                LOGGER.debug(f'Verify updated row. View {views_set[0]}')
+                LOGGER.debug('Verify updated row. View %s', views_set[0])
             if not views_set[3]:
                 DataValidatorEvent.UpdatedRowsValidator(
                     severity=Severity.WARNING,
@@ -577,9 +576,9 @@ class LongevityDataValidator:
                         message=f"Validation updated rows finished successfully. View {views_set[0]}"
                     ).publish()
                 else:
-                    LOGGER.debug(f'Validation updated rows.  View {views_set[0]}. '
-                                 f'Actual dataset length {len(before_update_rows) + len(after_update_rows)}, '
-                                 f'Expected dataset length: {len(expected_rows)}.')
+                    LOGGER.debug('Validation updated rows.  View %s. Actual dataset length %s, '
+                                 'Expected dataset length: %s.',
+                                 views_set[0], len(before_update_rows) + len(after_update_rows), len(expected_rows))
 
     def validate_deleted_rows(self, session, during_nemesis=False):
         """
