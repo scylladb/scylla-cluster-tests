@@ -349,7 +349,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         with unittest.mock.patch.object(sct_config, 'get_branch_version', return_value='2019.1.1', clear=True):
             conf = sct_config.SCTConfiguration()
             conf.verify_configuration()
-            conf._get_target_upgrade_version()
+            conf._get_target_upgrade_version()  # pylint: disable=protected-access
         self.assertEqual(conf.get('target_upgrade_version'), '2019.1.1')
 
     def test_15a_new_scylla_repo_by_scylla_version(self):
@@ -365,7 +365,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                 unittest.mock.patch.object(sct_config, 'find_scylla_repo', return_value=resolved_repo_link, clear=True):
             conf = sct_config.SCTConfiguration()
             conf.verify_configuration()
-            conf._get_target_upgrade_version()
+            conf._get_target_upgrade_version()  # pylint: disable=protected-access
 
         self.assertEqual(conf.get('scylla_repo'), resolved_repo_link)
         target_upgrade_version = conf.get('target_upgrade_version')
