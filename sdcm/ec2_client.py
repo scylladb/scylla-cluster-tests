@@ -54,9 +54,9 @@ class EC2ClientWarpper():
     def _get_ec2_client(self, region_name=None) -> EC2Client:
         try:
             return boto3.client(service_name='ec2', region_name=region_name)
-        except NoRegionError:
+        except NoRegionError as err:
             if not region_name:
-                raise CreateEC2ClientNoRegionError()
+                raise CreateEC2ClientNoRegionError() from err
             # next class instance could be created without region_name parameter
             boto3.setup_default_session(region_name=region_name)
             return self._get_ec2_client()
@@ -139,7 +139,7 @@ class EC2ClientWarpper():
         :return: spot bid price
         """
         LOGGER.info('Calculating spot price based on OnDemand price')
-        from sdcm.utils.pricing import AWSPricing
+        from sdcm.utils.pricing import AWSPricing  # pylint: disable=import-outside-toplevel
         aws_pricing = AWSPricing()
         on_demand_price = float(aws_pricing.get_on_demand_instance_price(self.region_name, instance_type))
 
@@ -171,7 +171,7 @@ class EC2ClientWarpper():
         while not status and timeout < self._timeout:
             time.sleep(self._wait_interval)
             status, resp = self._is_request_fulfilled(request_ids)
-            LOGGER.debug(f"{request_ids}: [{status}] - {resp}")
+            LOGGER.debug("%s: [%s] - %s", request_ids, status, resp)
             if not status and resp in [SPOT_PRICE_TOO_LOW, SPOT_CAPACITY_NOT_AVAILABLE_ERROR]:
                 break
             timeout += self._wait_interval
