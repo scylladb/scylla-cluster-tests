@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 LOGGER = logging.getLogger(__name__)
 
 
-class QueryFilter():
+class QueryFilter:
     """
     Definition of query filtering parameters
     """
@@ -40,7 +40,8 @@ class QueryFilter():
         test_details += ' AND test_details.test_name: {}'.format(self.test_name.replace(":", r"\:"))
         return test_details
 
-    def filter_test_for_lastyear(self):
+    @staticmethod
+    def filter_test_for_last_year():
         year_ago = (datetime.today() - timedelta(days=365)).date().strftime("%Y%m%d")
         return f"versions.scylla-server.date:{{{year_ago} TO *}}"
 
@@ -65,7 +66,7 @@ class QueryFilter():
             query.append(self.filter_by_dashboard_query())
 
         if self.lastyear:
-            query.append(self.filter_test_for_lastyear())
+            query.append(self.filter_test_for_last_year())
 
         return " AND ".join([q for q in query if q])
 
