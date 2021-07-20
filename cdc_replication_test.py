@@ -72,6 +72,7 @@ REPLICATOR_URL = "https://kbr-scylla.s3-eu-west-1.amazonaws.com/scylla-cdc-repli
 class CDCReplicationTest(ClusterTester):
     KS_NAME = 'ks1'
     TABLE_NAME = 'table1'
+    consistency_ok = None
 
     def collect_data_for_analysis(self, master_node: cluster.BaseNode, replica_node: cluster.BaseNode) -> None:
         with self.db_cluster.cql_connection_patient(node=master_node) as sess:
@@ -131,6 +132,7 @@ class CDCReplicationTest(ClusterTester):
         self.start_replicator(Mode.DELTA)
 
         self.consistency_ok = True
+        # pylint: disable=unexpected-keyword-arg
         self.db_cluster.nemesis.append(CategoricalMonkey(
             tester_obj=self, termination_event=self.db_cluster.nemesis_termination_event,
             dist={
