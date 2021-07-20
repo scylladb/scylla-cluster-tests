@@ -42,7 +42,7 @@ class LoggerBase(metaclass=ABCMeta):
 class NodeLoggerBase(LoggerBase, metaclass=ABCMeta):
     def __init__(self, node, target_log_file: str):
         self._node = node
-        super(NodeLoggerBase, self).__init__(target_log_file=target_log_file)
+        super().__init__(target_log_file=target_log_file)
 
 
 class SSHLoggerBase(NodeLoggerBase):
@@ -69,6 +69,7 @@ class SSHLoggerBase(NodeLoggerBase):
         except Exception as details:  # pylint: disable=broad-except
             self._log.error('Error checking if file %s exists: %s',
                             file_path, details)
+        return False
 
     def _log_retrieve(self, since):
         if not since:
@@ -184,6 +185,7 @@ class CommandLoggerBase(LoggerBase):
     def _thread_body(self):
         while not self._termination_event.wait(self.restart_delay):
             try:
+                # pylint: disable=consider-using-with
                 self._child_process = subprocess.Popen(self._logger_cmd, shell=True)
                 started = False
                 try:
@@ -226,14 +228,14 @@ class CommandNodeLoggerBase(CommandLoggerBase, metaclass=ABCMeta):
 
 
 class DockerScyllaLogger(CommandNodeLoggerBase):
-
+    # pylint: disable=invalid-overridden-method
     @cached_property
     def _logger_cmd(self) -> str:
         return f'docker logs -f {self._node.name} 2>&1 | grep scylla >>{self._target_log_file}'
 
 
 class DockerGeneralLogger(CommandNodeLoggerBase):
-
+    # pylint: disable=invalid-overridden-method
     @cached_property
     def _logger_cmd(self) -> str:
         return f'docker logs -f {self._node.name} >>{self._target_log_file} 2>&1'
@@ -244,11 +246,11 @@ class KubectlGeneralLogger(CommandNodeLoggerBase):
 
     @property
     def _logger_cmd(self) -> str:
-        pc = self._node.parent_cluster
-        cmd = pc.k8s_cluster.kubectl_cmd(
-            f"logs --previous=false -f --since={int(self.time_delta)}s", self._node.name, "-c", pc.container,
-            namespace=pc.namespace)
-        return f"{cmd} >> {self._target_log_file} 2>&1"
+        parent_cluster = self._node.parent_cluster
+        cmd = parent_cluster.k8s_cluster.kubectl_cmd(
+            f"logs --previous=false -f --since={int(self.time_delta)}s", self._node.name, "-c",
+            parent_cluster.container, namespace=parent_cluster.namespace)
+        return f"{cmd} >> {self._target_log_file} 2>&1"  # pylint: disable=protected-access
 
 
 class KubectlClusterEventsLogger(CommandClusterLoggerBase):
@@ -256,7 +258,8 @@ class KubectlClusterEventsLogger(CommandClusterLoggerBase):
 
     @property
     def _logger_cmd(self) -> str:
-        cmd = self._cluster.kubectl_cmd("get events -w", namespace=self._cluster._scylla_namespace)
+        cmd = self._cluster.kubectl_cmd("get events -w",
+                                        namespace=self._cluster._scylla_namespace)  # pylint: disable=protected-access
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
@@ -269,7 +272,7 @@ class CertManagerLogger(CommandClusterLoggerBase):
             f"logs --previous=false -f --since={int(self.time_delta)}s --all-containers=true "
             "-l app.kubernetes.io/instance=cert-manager",
             namespace="cert-manager")
-        return f"{cmd} >> {self._target_log_file} 2>&1"
+        return f"{cmd} >> {self._target_log_file} 2>&1"  # pylint: disable=protected-access
 
 
 class ScyllaManagerLogger(CommandClusterLoggerBase):
@@ -280,7 +283,7 @@ class ScyllaManagerLogger(CommandClusterLoggerBase):
         cmd = self._cluster.kubectl_cmd(
             f"logs --previous=false -f --since={int(self.time_delta)}s --all-containers=true "
             "-l app.kubernetes.io/instance=scylla-manager",
-            namespace=self._cluster._scylla_manager_namespace)
+            namespace=self._cluster._scylla_manager_namespace)  # pylint: disable=protected-access
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
@@ -292,7 +295,7 @@ class ScyllaOperatorLogger(CommandClusterLoggerBase):
         cmd = self._cluster.kubectl_cmd(
             f"logs --previous=false -f --since={int(self.time_delta)}s --all-containers=true "
             "-l app.kubernetes.io/instance=scylla-operator",
-            namespace=self._cluster._scylla_operator_namespace)
+            namespace=self._cluster._scylla_operator_namespace)  # pylint: disable=protected-access
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 
