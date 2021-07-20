@@ -30,7 +30,7 @@ class LWTLongevityTest(LongevityTest):
     BASE_TABLE_PARTITION_KEYS = ['domain', 'published_date']
 
     def __init__(self, *args):
-        super(LWTLongevityTest, self).__init__(*args)
+        super().__init__(*args)
         self.data_validator = None
 
     def run_prepare_write_cmd(self):
