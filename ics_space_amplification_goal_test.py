@@ -38,30 +38,30 @@ class IcsSpaceAmplificationTest(LongevityTest):
         node_capacity_query_postfix = generate_node_capacity_query_postfix(node)
         filesystem_capacity_query = f'{FS_SIZE_METRIC}{node_capacity_query_postfix}'
         used_capacity_query = f'{filesystem_capacity_query}-{AVAIL_SIZE_METRIC}{node_capacity_query_postfix}'
-        self.log.debug(f"filesystem_capacity_query: {filesystem_capacity_query}")
+        self.log.debug("filesystem_capacity_query: %s", filesystem_capacity_query)
 
         fs_size_res = self.prometheus_db.query(query=filesystem_capacity_query, start=int(time.time()) - 5,
                                                end=int(time.time()))
         if not fs_size_res:
-            self.log.warning(f"No results from Prometheus query: {filesystem_capacity_query}")
+            self.log.warning("No results from Prometheus query: %s", filesystem_capacity_query)
             return 0
             # assert fs_size_res, "No results from Prometheus"
         if not fs_size_res[0]:  # if no returned values - try the old metric names.
             filesystem_capacity_query = f'{FS_SIZE_METRIC_OLD}{node_capacity_query_postfix}'
             used_capacity_query = f'{filesystem_capacity_query}-{AVAIL_SIZE_METRIC_OLD}{node_capacity_query_postfix}'
-            self.log.debug(f"filesystem_capacity_query: {filesystem_capacity_query}")
+            self.log.debug("filesystem_capacity_query: %s", filesystem_capacity_query)
             fs_size_res = self.prometheus_db.query(query=filesystem_capacity_query, start=int(time.time()) - 5,
                                                    end=int(time.time()))
 
         assert fs_size_res[0], "Could not resolve capacity query result."
-        self.log.debug(f"used_capacity_query: {used_capacity_query}")
+        self.log.debug("used_capacity_query: %s", used_capacity_query)
         used_cap_res = self.prometheus_db.query(query=used_capacity_query, start=int(time.time()) - 5,
                                                 end=int(time.time()))
         assert used_cap_res, "No results from Prometheus"
         used_size_mb = float(used_cap_res[0]["values"][0][1]) / float(MB_SIZE)
         used_size_gb = round(float(used_size_mb / 1024), 2)
-        self.log.debug(
-            f"The used filesystem capacity on node {node.public_ip_address} is: {used_size_mb} MB/ {used_size_gb} GB")
+        self.log.debug("The used filesystem capacity on node %s is: %s MB/ %s GB",
+                       node.public_ip_address,  used_size_mb, used_size_gb)
         return used_size_gb
 
     def _get_filesystem_available_size_list(self, node, start_time):
@@ -94,11 +94,11 @@ class IcsSpaceAmplificationTest(LongevityTest):
         assert fs_size_res, "No results from Prometheus"
         if not fs_size_res[0]:  # if no returned values - try the old metric names.
             filesystem_capacity_query = f'{fs_size_metric_old}{node_capacity_query_postfix}'
-            self.log.debug(f"filesystem_capacity_query: {filesystem_capacity_query}")
+            self.log.debug("filesystem_capacity_query: %s", filesystem_capacity_query)
             fs_size_res = self.prometheus_db.query(query=filesystem_capacity_query, start=int(time.time()) - 5,
                                                    end=int(time.time()))
         assert fs_size_res[0], "Could not resolve capacity query result."
-        self.log.debug(f"fs_size_res: {fs_size_res}")
+        self.log.debug("fs_size_res: %s", fs_size_res)
         fs_size_gb = float(fs_size_res[0]["values"][0][1]) / float(GB_SIZE)
         return fs_size_gb
 
@@ -116,9 +116,8 @@ class IcsSpaceAmplificationTest(LongevityTest):
             [int(val[1]) for val in
              self._get_filesystem_available_size_list(node=node, start_time=start_time)]) / GB_SIZE
         max_used_capacity_gb = fs_size_gb - min_available_capacity_gb
-        self.log.debug(
-            f"The maximum used filesystem capacity of {node.private_ip_address} for the last {time_interval_minutes}"
-            f" minutes is: {max_used_capacity_gb} GB/ {fs_size_gb} GB")
+        self.log.debug("The maximum used filesystem capacity of %s for the last %s minutes is: %s GB/ %s GB",
+                       node.private_ip_address, time_interval_minutes, max_used_capacity_gb, fs_size_gb)
         return max_used_capacity_gb
 
     def _get_nodes_space_ampl_over_time_gb(self, dict_nodes_initial_capacity, start_time,
@@ -132,18 +131,18 @@ class IcsSpaceAmplificationTest(LongevityTest):
                                                                                  start_time=start_time)
             dict_nodes_space_amplification[node.private_ip_address] = \
                 round(node_max_used_capacity_gb - written_data_size_gb - node_initial_capacity, 2)
-            self.log.info(
-                f"Node {node.private_ip_address} used capacity changed from {node_initial_capacity}"
-                f" to {node_used_capacity}.")
-            self.log.info(f"Space amplification is: {dict_nodes_space_amplification[node.private_ip_address]} GB")
+            self.log.info("Node %s used capacity changed from %s to %s.",
+                          node.private_ip_address, node_initial_capacity, node_used_capacity)
+            self.log.info("Space amplification is: %s GB", dict_nodes_space_amplification[node.private_ip_address])
         return dict_nodes_space_amplification
 
     def measure_nodes_space_amplification_after_write(self, dict_nodes_initial_capacity, written_data_size_gb,
                                                       start_time):
-        self.log.info(f"Space amplification results after a write of: {written_data_size_gb} are:")
         dict_nodes_space_amplification = self._get_nodes_space_ampl_over_time_gb(
             dict_nodes_initial_capacity=dict_nodes_initial_capacity,
             written_data_size_gb=written_data_size_gb, start_time=start_time)
+        self.log.info("Space amplification results after a write of: %s are: %s",
+                      written_data_size_gb, dict_nodes_space_amplification)
         InfoEvent(message=f"Space amplification results after a write of: {written_data_size_gb} are: "
                           f"{dict_nodes_space_amplification}").publish()
 
@@ -170,7 +169,7 @@ class IcsSpaceAmplificationTest(LongevityTest):
             dict_requested_compaction.update(additional_compaction_params)
 
         full_alter_query = base_query + str(dict_requested_compaction)
-        LOGGER.debug(f"Alter table query is: {full_alter_query}")
+        LOGGER.debug("Alter table query is: %s", full_alter_query)
         node1: BaseNode = self.db_cluster.nodes[0]
         node1.run_cqlsh(cmd=full_alter_query)
         InfoEvent(message=f"Altered table by: {full_alter_query}").publish()
@@ -245,7 +244,7 @@ class IcsSpaceAmplificationTest(LongevityTest):
                 dict_nodes_initial_capacity=dict_nodes_capacity_before_overwrite_data,
                 written_data_size_gb=total_data_to_overwrite_gb, start_time=start_time)
 
-        InfoEvent(message=f"Space-amplification-goal testing cycles are done.").publish()
+        InfoEvent(message="Space-amplification-goal testing cycles are done.").publish()
 
 
 def generate_node_capacity_query_postfix(node):
