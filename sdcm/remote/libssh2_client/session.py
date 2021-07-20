@@ -74,7 +74,7 @@ class Session(LibSSH2Session):  # pylint: disable=too-few-public-methods
             self.channels.remove(channel)
         try:
             channel.close()
-        except:
+        except:  # pylint: disable=bare-except
             pass
         try:
             channel.wait_closed()
