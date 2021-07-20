@@ -564,7 +564,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
                     session.execute(query)
             except Exception as ex:
                 self.log.debug('Failed to drop materialized view using query {0}. Error: {1}'.format(query, str(ex)))
-                raise Exception
+                raise
 
             self.log.debug('Finish dropping materialized view {}'.format(mv_name))
 
