@@ -98,13 +98,13 @@ class RemoteBrowser:
         return Remote(command_executor=f"http://{host}:{port}/wd/hub", options=ChromeOptions())
 
     def open(self, url, resolution="1920px*1280px"):
-        LOGGER.info(f"Set resoltion {resolution}")
+        LOGGER.info("Set resoltion %s", resolution)
         self.browser.set_window_size(*resolution.replace("px", "").split("*", 1))
-        LOGGER.info(f"Get url {url}")
+        LOGGER.info("Get url %s", url)
         self.browser.get(url)
 
     def get_screenshot(self, url, screenshot_path):
-        LOGGER.info(f"Save a screenshot of {url} to {screenshot_path}")
+        LOGGER.info("Save a screenshot of %s to %s", url, screenshot_path)
 
         self.browser.get_screenshot_as_file(screenshot_path)
 
@@ -122,8 +122,8 @@ class RemoteBrowser:
     def destroy_container(self, name):
         try:
             if ContainerManager.get_container(self.node, name, raise_not_found_exc=False) is not None:
-                LOGGER.debug(f"Destroy {name} ({self}) container")
+                LOGGER.debug("Destroy %s (%s) container", name, self)
                 ContainerManager.destroy_container(self.node, name, ignore_keepalive=True)
-                LOGGER.info(f"{name} ({self}) destroyed")
+                LOGGER.info("%s (%s) destroyed", name, self)
         except Exception as exc:  # pylint: disable=broad-except
-            LOGGER.error(f"{self}: some exception raised during container `{name}' destroying", exc_info=exc)
+            LOGGER.error("%s: some exception raised during container '%s' destroying", self, name, exc_info=exc)
