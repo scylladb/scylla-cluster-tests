@@ -15,7 +15,7 @@ class AWSInstance(CloudInstance):  # pylint: disable=too-few-public-methods,
 
     def __init__(self, instance):
         tags = aws_tags_to_dict(instance.get('Tags'))
-        super(AWSInstance, self).__init__(
+        super().__init__(
             cloud="aws",
             name=tags.get("Name", NA),
             instance_id=instance['InstanceId'],
@@ -39,7 +39,7 @@ class GCEInstance(CloudInstance):
     def __init__(self, instance):
         tags = gce_meta_to_dict(instance.extra['metadata'])
         is_preemptible = instance.extra["scheduling"]["preemptible"]
-        super(GCEInstance, self).__init__(
+        super().__init__(
             cloud="gce",
             name=instance.name,
             instance_id=instance.id,
