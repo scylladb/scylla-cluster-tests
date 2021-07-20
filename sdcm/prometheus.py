@@ -82,7 +82,7 @@ class NemesisMetrics:
     DISRUPT_GAUGE = 'nemesis_disruptions_gauge'
 
     def __init__(self):
-        super(NemesisMetrics, self).__init__()
+        super().__init__()
         self._disrupt_counter = self.create_counter(self.DISRUPT_COUNTER,
                                                     'Counter for nemesis disruption methods',
                                                     ['method', 'event'])
@@ -124,7 +124,7 @@ class NemesisMetrics:
 class PrometheusAlertManagerListener(threading.Thread):
 
     def __init__(self, ip, port=9093, interval=10, stop_flag: threading.Event = None):
-        super(PrometheusAlertManagerListener, self).__init__(name=self.__class__.__name__, daemon=True)
+        super().__init__(name=self.__class__.__name__, daemon=True)
         self._alert_manager_url = f"http://{ip}:{port}/api/v2"
         self._stop_flag = stop_flag if stop_flag else threading.Event()
         self._interval = interval
@@ -264,6 +264,7 @@ class PrometheusAlertManagerListener(threading.Thread):
 
 
 class AlertSilencer:
+    # pylint: disable=too-many-arguments
     def __init__(self,
                  alert_manager: PrometheusAlertManagerListener,
                  alert_name: str,
