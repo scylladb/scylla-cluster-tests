@@ -58,12 +58,12 @@ class GCENode(cluster.BaseNode):
                           'key_file': credentials.key_file,
                           'extra_ssh_options': '-tt'}
         self._preempted_last_state = False
-        super(GCENode, self).__init__(name=name,
-                                      parent_cluster=parent_cluster,
-                                      ssh_login_info=ssh_login_info,
-                                      base_logdir=base_logdir,
-                                      node_prefix=node_prefix,
-                                      dc_idx=dc_idx)
+        super().__init__(name=name,
+                         parent_cluster=parent_cluster,
+                         ssh_login_info=ssh_login_info,
+                         base_logdir=base_logdir,
+                         node_prefix=node_prefix,
+                         dc_idx=dc_idx)
 
     @staticmethod
     def is_gce() -> bool:
@@ -224,14 +224,14 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self._service_accounts = service_accounts
         # the full node prefix will contain unique uuid, so use this for search of existing nodes
         self._node_prefix = node_prefix
-        super(GCECluster, self).__init__(cluster_uuid=cluster_uuid,
-                                         cluster_prefix=cluster_prefix,
-                                         node_prefix=node_prefix,
-                                         n_nodes=n_nodes,
-                                         params=params,
-                                         # services=services,
-                                         region_names=gce_region_names,
-                                         node_type=node_type)
+        super().__init__(cluster_uuid=cluster_uuid,
+                         cluster_prefix=cluster_prefix,
+                         node_prefix=node_prefix,
+                         n_nodes=n_nodes,
+                         params=params,
+                         # services=services,
+                         region_names=gce_region_names,
+                         node_type=node_type)
         self.log.debug("GCECluster constructor")
 
     def __str__(self):
@@ -286,6 +286,21 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 },
                 "autoDelete": True}
 
+    def _get_disks_struct(self, name, dc_idx):
+        gce_disk_struct = [self._get_root_disk_struct(name=name,
+                                                      disk_type=self._gce_image_type,
+                                                      dc_idx=dc_idx)]
+        for i in range(self._gce_n_local_ssd):
+            gce_disk_struct.append(self._get_local_ssd_disk_struct(name=name, index=i, dc_idx=dc_idx))
+        if self._add_disks:
+            for disk_type, disk_size in self._add_disks.items():
+                disk_size = int(disk_size)
+                if disk_size:
+                    gce_disk_struct.append(self._get_persistent_disk_struct(name=name, disk_size=disk_size,
+                                                                            disk_type=disk_type, dc_idx=dc_idx))
+        self.log.debug(gce_disk_struct)
+        return gce_disk_struct
+
     def _create_instance(self, node_index, dc_idx, spot=False):
         # if size of disk is larget than 80G, then
         # change the timeout of job completion to default * 3.
@@ -297,19 +312,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             self.log.info("Job complete timeout is set to %ss" %
                           self._gce_services[dc_idx].connection.timeout)
         name = f"{self.node_prefix}-{dc_idx}-{node_index}".lower()
-        gce_disk_struct = list()
-        gce_disk_struct.append(self._get_root_disk_struct(name=name,
-                                                          disk_type=self._gce_image_type,
-                                                          dc_idx=dc_idx))
-        for i in range(self._gce_n_local_ssd):
-            gce_disk_struct.append(self._get_local_ssd_disk_struct(name=name, index=i, dc_idx=dc_idx))
-        if self._add_disks:
-            for disk_type, disk_size in self._add_disks.items():
-                disk_size = int(disk_size)
-                if disk_size:
-                    gce_disk_struct.append(self._get_persistent_disk_struct(name=name, disk_size=disk_size,
-                                                                            disk_type=disk_type, dc_idx=dc_idx))
-        self.log.info(gce_disk_struct)
+        gce_disk_struct = self._get_disks_struct(name=name, dc_idx=dc_idx)
         # Name must start with a lowercase letter followed by up to 63
         # lowercase letters, numbers, or hyphens, and cannot end with a hyphen
         assert len(name) <= 63, "Max length of instance name is 63"
@@ -420,8 +423,9 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             node.init()
             return node
         except Exception as ex:
-            raise CreateGCENodeError('Failed to create node: %s' % ex)
+            raise CreateGCENodeError('Failed to create node: %s' % ex) from ex
 
+    # pylint: disable=too-many-arguments
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
         if count <= 0:
             return []
@@ -459,24 +463,25 @@ class ScyllaGCECluster(cluster.BaseScyllaCluster, GCECluster):
         # We have to pass the cluster name in advance in user_data
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
-        super(ScyllaGCECluster, self).__init__(gce_image=gce_image,
-                                               gce_image_type=gce_image_type,
-                                               gce_image_size=gce_image_size,
-                                               gce_n_local_ssd=gce_n_local_ssd,
-                                               gce_network=gce_network,
-                                               gce_instance_type=gce_instance_type,
-                                               gce_image_username=gce_image_username,
-                                               services=services,
-                                               credentials=credentials,
-                                               cluster_prefix=cluster_prefix,
-                                               node_prefix=node_prefix,
-                                               n_nodes=n_nodes,
-                                               add_disks=add_disks,
-                                               params=params,
-                                               gce_region_names=gce_datacenter,
-                                               node_type='scylla-db',
-                                               service_accounts=service_accounts
-                                               )
+        super().__init__(
+            gce_image=gce_image,
+            gce_image_type=gce_image_type,
+            gce_image_size=gce_image_size,
+            gce_n_local_ssd=gce_n_local_ssd,
+            gce_network=gce_network,
+            gce_instance_type=gce_instance_type,
+            gce_image_username=gce_image_username,
+            services=services,
+            credentials=credentials,
+            cluster_prefix=cluster_prefix,
+            node_prefix=node_prefix,
+            n_nodes=n_nodes,
+            add_disks=add_disks,
+            params=params,
+            gce_region_names=gce_datacenter,
+            node_type='scylla-db',
+            service_accounts=service_accounts,
+        )
         self.version = '2.1'
 
     @staticmethod
