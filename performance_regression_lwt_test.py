@@ -119,7 +119,7 @@ class PerformanceRegressionLWTTest(PerformanceRegressionTest):
         results = self.get_stress_results(queue=stress_queue, store_results=True)
         self.update_test_details(scylla_conf=True)
         stat_results = PP.pformat(self._stats["results"])
-        self.log.debug(f'Results {subtype}: \n{stat_results}')
+        self.log.debug('Results %s: \n%s', subtype, stat_results)
         self.display_results(results, test_name=subtype)
         return self._test_id
 
