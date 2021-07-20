@@ -9,12 +9,12 @@
 #
 # See LICENSE for more details.
 #
-# Copyright (c) 2020 ScyllaDB
+# Copyright (c) 2021 ScyllaDB
 
 from typing import Type, Protocol, Optional, runtime_checkable
 
 from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import SctEvent, InformationalEvent
+from sdcm.sct_events.base import InformationalEvent
 
 
 @runtime_checkable
