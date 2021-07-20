@@ -30,7 +30,7 @@ class AwsElasticIP(StaticIP):  # pylint: disable=too-few-public-methods
         tags_dict = {}
         if tags:
             tags_dict = aws_tags_to_dict(tags)
-        super(AwsElasticIP, self).__init__(
+        super().__init__(
             cloud="aws",
             name=tags_dict.get("Name", NA) if tags else NA,
             address=eip['PublicIp'],
@@ -43,7 +43,7 @@ class AwsElasticIP(StaticIP):  # pylint: disable=too-few-public-methods
 class GceStaticIP(StaticIP):  # pylint: disable=too-few-public-methods
     def __init__(self, static_ip: GCEAddress):
         used_by = static_ip.extra.get("users")
-        super(GceStaticIP, self).__init__(
+        super().__init__(
             cloud="gce",
             name=static_ip.name,
             address=static_ip.address,
@@ -58,7 +58,7 @@ class StaticIPs(CloudResources):
 
     def __init__(self, cloud_instances):
         self.cloud_instances = cloud_instances  # needed to identify use when attached to an instance
-        super(StaticIPs, self).__init__()
+        super().__init__()
 
     def get_aws_elastic_ips(self):
         LOGGER.info("Getting AWS Elastic IPs...")
