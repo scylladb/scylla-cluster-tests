@@ -233,7 +233,7 @@ class Role(UserRoleBase):
     AUTHENTICATION_ENTITY = 'ROLE'
 
     def __init__(self, session, name, password=None, login=False, superuser=False, options_dict=None, verbose=True):  # pylint: disable=too-many-arguments
-        super(Role, self).__init__(session, name, password, superuser, verbose)
+        super().__init__(session, name, password, superuser, verbose)
         self.login = login
         self.options_dict = options_dict
 
