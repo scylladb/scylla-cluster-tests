@@ -35,13 +35,14 @@ class MetricsPosition(NamedTuple):
     errors: int
 
 
+# pylint: disable=too-many-instance-attributes
 class StressExporter(FileFollowerThread, metaclass=ABCMeta):
     METRICS_GAUGES = {}
 
+    # pylint: disable=too-many-arguments
     def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str, stress_log_filename: str,
-                 loader_idx: int, cpu_idx: int = 1):  # pylint: disable=too-many-arguments
-
-        super(StressExporter, self).__init__()
+                 loader_idx: int, cpu_idx: int = 1):
+        super().__init__()
         self.metrics = metrics
         self.stress_operation = stress_operation
         self.stress_log_filename = stress_log_filename
@@ -66,7 +67,7 @@ class StressExporter(FileFollowerThread, metaclass=ABCMeta):
 
     def clear_metrics(self) -> None:
         if self.stress_metric:
-            for metric_name in [metric for metric in self.metrics_positions._fields]:
+            for metric_name in self.metrics_positions._fields:
                 self.set_metric(metric_name, 0.0)
 
     @staticmethod
@@ -116,13 +117,13 @@ class StressExporter(FileFollowerThread, metaclass=ABCMeta):
 
 
 class CassandraStressExporter(StressExporter):
-
+    # pylint: disable=too-many-arguments
     def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str, stress_log_filename: str,
-                 loader_idx: int, cpu_idx: int = 1):  # pylint: disable=too-many-arguments
+                 loader_idx: int, cpu_idx: int = 1):
 
         self.keyspace_regex = re.compile(r'.*Keyspace:\s(.*?)$')
-        super(CassandraStressExporter, self).__init__(instance_name, metrics, stress_operation, stress_log_filename, loader_idx,
-                                                      cpu_idx)
+        super().__init__(instance_name, metrics, stress_operation, stress_log_filename, loader_idx,
+                         cpu_idx)
 
     def create_metrix_gauge(self):
         gauge_name = f'collectd_cassandra_stress_{self.stress_operation}_gauge'
@@ -151,12 +152,6 @@ class CassandraStressExporter(StressExporter):
 
 class ScyllaBenchStressExporter(StressExporter):
 
-    def __init__(self, instance_name: str, metrics: NemesisMetrics, stress_operation: str, stress_log_filename: str,
-                 loader_idx: int, cpu_idx: int = 1):  # pylint: disable=too-many-arguments
-
-        super(ScyllaBenchStressExporter, self).__init__(instance_name, metrics, stress_operation, stress_log_filename,
-                                                        loader_idx, cpu_idx)
-
     def create_metrix_gauge(self) -> str:
         gauge_name = f'collectd_scylla_bench_stress_{self.stress_operation}_gauge'
         if gauge_name not in self.METRICS_GAUGES:
@@ -168,8 +163,8 @@ class ScyllaBenchStressExporter(StressExporter):
 
     def merics_position_in_log(self) -> MetricsPosition:
         # Enumerate stress metric position in the log. Example:
-        # time                operations/s   rows/s   errors  max              99.9th           99th             95th             90th             median        mean
-        # 1.033603151s                3439    34390        0  71.434239ms      70.713343ms      62.685183ms      2.818047ms       1.867775ms       1.048575ms    2.947276ms
+        # time  operations/s    rows/s   errors  max   99.9th   99th      95th     90th       median        mean
+        # 1.033603151s    3439    34390    0  71.434239ms   70.713343ms   62.685183ms    2.818047ms  1.867775ms 1.048575ms  2.947276ms
 
         return MetricsPosition(ops=1, lat_mean=10, lat_med=9, lat_perc_95=7, lat_perc_99=6, lat_perc_999=5,
                                lat_max=4, errors=3)
@@ -178,7 +173,7 @@ class ScyllaBenchStressExporter(StressExporter):
         # If line is not starts with numeric ended by "s" - skip this line.
         # Example:
         #    Client compression:  true
-        #    1.004777157s                2891    28910        0  67.829759ms      64.290815ms      58.327039ms      4.653055ms       3.244031µs       1.376255µs
+        #    1.004777157s       2891    28910     0  67.829759ms   64.290815ms    58.327039ms    4.653055ms   3.244031µs   1.376255µs
 
         line_splitted = (line or '').split()
         if not line_splitted or not line_splitted[0].endswith('s'):
