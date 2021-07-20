@@ -106,7 +106,7 @@ def db_cluster(tester: ScyllaOperatorFunctionalClusterTester):  # pylint: disabl
         _bring_cluster_back_to_original_state(
             tester.db_cluster,
             config_map=original_scylla_config_map,
-            scylla_cluster_spec=original_scylla_cluster_spec
+            original_scylla_cluster_spec=original_scylla_cluster_spec
         )
 
 
@@ -114,16 +114,36 @@ def db_cluster(tester: ScyllaOperatorFunctionalClusterTester):  # pylint: disabl
 def _bring_cluster_back_to_original_state(
         db_cluster: ScyllaPodCluster,
         config_map: dict,
-        scylla_cluster_spec: dict
+        original_scylla_cluster_spec: dict
 ):
     restart = False
     try:
-        if scylla_cluster_spec != db_cluster.get_scylla_cluster_plain_value('/spec'):
+        # Restore cluster spec, there is one problem though:
+        #  s-o does not support rack removal, so if we see an extra rack we need to remove members form it
+        #  but keep it in the cluster spec
+        # Other alternative is to redeploy cluster, which is expensive and we will do so only if it is found needed
+
+        original_rack_specs = original_scylla_cluster_spec.get('datacenter', {}).get('racks', [])
+        current_cluster_spec = db_cluster.get_scylla_cluster_plain_value('/spec')
+        current_rack_specs = current_cluster_spec.get('datacenter', {}).get('racks', [])
+        if len(original_rack_specs) < len(current_rack_specs):
+            # A new racks with 0 members in them to the original cluster specification
+            # At this point original_rack_specs is more like cluster spec we want to have
+            new_racks = current_rack_specs[len(original_rack_specs):]
+            for rack in new_racks:
+                rack['members'] = 0
+            original_rack_specs.extend(new_racks)
+
+        if original_scylla_cluster_spec != current_cluster_spec:
+            # If cluster spec we currently have is not equal to what we want replace it and
+            #  remember to restart the cluster afterwards
+            db_cluster.replace_scylla_cluster_value('/spec', original_scylla_cluster_spec)
             restart = True
-        db_cluster.replace_scylla_cluster_value('/spec', scylla_cluster_spec)
+
+        # Restore config-map scylla-config
         with db_cluster.scylla_config_map as recover_config_map:
             if recover_config_map != config_map:
-                # if config map is changed scylla will be restarted and we don't have to explicitly restart it
+                # if config map is changed scylla will be restarted therefore we don't have to explicitly restart it
                 restart = False
             recover_config_map.clear()
             recover_config_map.update(config_map)
