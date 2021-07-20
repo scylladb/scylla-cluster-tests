@@ -89,8 +89,8 @@ class Panel:
 
 class Snapshot:  # pylint: disable=too-few-public-methods
     locators_sequence = [
-        (By.XPATH,
-         """/html/body/grafana-app/div/div/react-container/div/div[1]/div[1]/div[4]/div/button"""),  # full xpath is set, no any explicit ids.
+        (By.XPATH,  # full xpath is set, no any explicit ids.
+         """/html/body/grafana-app/div/div/react-container/div/div[1]/div[1]/div[4]/div/button"""),
         (By.XPATH, """//ul/li[contains(text(), "Snapshot")]"""),
         (By.XPATH, """//button//span[contains(text(), "Publish to snapshot.raintank.io")]"""),
         (By.XPATH, """//a[contains(@href, "https://snapshot.raintank.io")]""")
