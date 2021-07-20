@@ -67,7 +67,8 @@ def create_cql_ks_and_table(docker_scylla):
 def test_01_dynamodb_api(request, docker_scylla, prom_address):
     loader_set = LocalLoaderSetDummy()
 
-    cmd = 'bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=1000000 -p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -s'
+    cmd = 'bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=1000000 ' \
+          '-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -s'
     ycsb_thread = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=TEST_PARAMS)
 
     def cleanup_thread():
@@ -101,7 +102,8 @@ def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, eve
     loader_set = LocalLoaderSetDummy()
 
     # 2. do write without dataintegrity=true
-    cmd = 'bin/ycsb load dynamodb -P workloads/workloada -threads 5 -p recordcount=50 -p fieldcount=1 -p fieldlength=100'
+    cmd = 'bin/ycsb load dynamodb -P workloads/workloada -threads 5 ' \
+          '-p recordcount=50 -p fieldcount=1 -p fieldlength=100'
     ycsb_thread1 = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=30, params=TEST_PARAMS)
 
     def cleanup_thread1():
@@ -114,7 +116,8 @@ def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, eve
     ycsb_thread1.kill()
 
     # 3. do read with dataintegrity=true
-    cmd = 'bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=100 -p fieldcount=10 -p fieldlength=512 -p dataintegrity=true -p operationcount=100000000'
+    cmd = 'bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=100 ' \
+          '-p fieldcount=10 -p fieldlength=512 -p dataintegrity=true -p operationcount=100000000'
     ycsb_thread2 = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=30, params=TEST_PARAMS)
 
     def cleanup_thread2():
@@ -151,7 +154,8 @@ def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, eve
 def test_03_cql(request, docker_scylla, prom_address):
     loader_set = LocalLoaderSetDummy()
 
-    cmd = 'bin/ycsb load cassandra-cql -P workloads/workloada -threads 5 -p recordcount=1000000 -p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -s'
+    cmd = 'bin/ycsb load cassandra-cql -P workloads/workloada -threads 5 -p recordcount=1000000 ' \
+          '-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -s'
     ycsb_thread = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=TEST_PARAMS)
 
     def cleanup_thread():
