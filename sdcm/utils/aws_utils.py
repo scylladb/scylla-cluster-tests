@@ -1,9 +1,9 @@
+import time
+import logging
 from functools import cached_property
 from typing import List, Dict
 
 import boto3
-import logging
-import time
 
 from botocore.exceptions import ClientError
 
@@ -88,7 +88,7 @@ class EksClusterCleanupMixin:
         return False
 
     def destroy(self):
-        for n in range(2):
+        for _ in range(2):
             self.destroy_nodegroups()
             if self.failed_to_delete_nodegroup_names:
                 self.destroy_nodegroups(status='DELETE_FAILED')
@@ -120,7 +120,7 @@ class EksClusterCleanupMixin:
                 if attachment_id := attachment.get('AttachmentId'):
                     try:
                         self.ec2_client.detach_network_interface(AttachmentId=attachment_id, Force=True)
-                    except Exception as exc:
+                    except Exception as exc:  # pylint: disable=broad-except
                         LOGGER.debug("Failed to detach network interface (%s) attachment %s:\n%s",
                                      network_interface_id, attachment_id, exc)
 
@@ -130,7 +130,7 @@ class EksClusterCleanupMixin:
             network_interface_id = interface_description['NetworkInterfaceId']
             try:
                 self.ec2_client.delete_network_interface(NetworkInterfaceId=network_interface_id)
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.debug("Failed to delete network interface %s :\n%s", network_interface_id, exc)
 
     def destroy_attached_security_groups(self):
@@ -138,7 +138,7 @@ class EksClusterCleanupMixin:
         # even when cluster is gone
         try:
             sg_list = self.attached_security_group_ids
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             LOGGER.debug("Failed to get list of security groups:\n%s", exc)
             return
 
@@ -148,12 +148,12 @@ class EksClusterCleanupMixin:
             # In this case you need to forcefully detach interfaces and delete them to make nodegroup deletion possible.
             try:
                 self.delete_network_interfaces_of_sg(security_group_id)
-            except Exception:
-                pass
+            except Exception as exc:  # pylint: disable=broad-except
+                LOGGER.debug("destroy_attached_security_groups: %s", exc)
 
             try:
                 self.ec2_client.delete_security_group(GroupId=security_group_id)
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.debug("Failed to delete security groups %s, due to the following error:\n%s",
                              security_group_id, exc)
 
@@ -163,7 +163,7 @@ class EksClusterCleanupMixin:
             for node_group_name in self._get_attached_nodegroup_names(status=status):
                 try:
                     self.eks_client.delete_nodegroup(clusterName=self.short_cluster_name, nodegroupName=node_group_name)
-                except Exception as exc:
+                except Exception as exc:  # pylint: disable=broad-except
                     LOGGER.debug("Failed to delete nodegroup %s/%s, due to the following error:\n%s",
                                  self.short_cluster_name, node_group_name, exc)
             time.sleep(10)
@@ -179,20 +179,20 @@ class EksClusterCleanupMixin:
         # EKS infra does not cleanup load balancers and some of them can be left alive even when cluster is gone
         try:
             elb_names = self.attached_load_balancers_names
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             LOGGER.debug("Failed to get list of load balancers:\n%s", exc)
             return
 
         for elb_name in elb_names:
             try:
                 self.elb_client.delete_load_balancer(LoadBalancerName=elb_name)
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.debug("Failed to delete load balancer %s, due to the following error:\n%s", elb_name, exc)
 
     def destroy_cluster(self):
         try:
             self.eks_client.delete_cluster(name=self.short_cluster_name)
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             LOGGER.debug("Failed to delete cluster %s, due to the following error:\n%s",
                          self.short_cluster_name, exc)
 
@@ -227,7 +227,7 @@ def init_db_info_from_params(db_info: dict, params: dict, regions: List, root_de
         elif isinstance(n_db_nodes, str):  # latest type to support multiple datacenters
             db_info['n_nodes'] = [int(n) for n in n_db_nodes.split()]
         else:
-            raise RuntimeError('Unsupported parameter type: %s', type(n_db_nodes))
+            raise RuntimeError(f"Unsupported parameter type: {type(n_db_nodes)}")
     if db_info['type'] is None:
         db_info['type'] = params.get('instance_type_db')
     if db_info['disk_size'] is None:
@@ -301,7 +301,7 @@ def ec2_instance_wait_public_ip(instance):
     instance.reload()
     if instance.public_ip_address is None:
         raise PublicIpNotReady(instance)
-    LOGGER.debug(f"[{instance}] Got public ip: {instance.public_ip_address}")
+    LOGGER.debug("[%s] Got public ip: %s", instance, instance.public_ip_address)
 
 
 def ec2_ami_get_root_device_name(image_id, region):
@@ -310,5 +310,6 @@ def ec2_ami_get_root_device_name(image_id, region):
     try:
         if image.root_device_name:
             return image.root_device_name
-    except (TypeError, ClientError):
-        raise AssertionError(f"Image '{image_id}' details not found in '{region}'")
+    except (TypeError, ClientError) as exc:
+        raise AssertionError(f"Image '{image_id}' details not found in '{region}'") from exc
+    return None
