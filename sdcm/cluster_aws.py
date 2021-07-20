@@ -91,15 +91,15 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self.region_names = region_names
         self.params = params
 
-        super(AWSCluster, self).__init__(cluster_uuid=cluster_uuid,
-                                         cluster_prefix=cluster_prefix,
-                                         node_prefix=node_prefix,
-                                         n_nodes=n_nodes,
-                                         params=params,
-                                         region_names=self.region_names,
-                                         node_type=node_type,
-                                         extra_network_interface=extra_network_interface
-                                         )
+        super().__init__(cluster_uuid=cluster_uuid,
+                         cluster_prefix=cluster_prefix,
+                         node_prefix=node_prefix,
+                         n_nodes=n_nodes,
+                         params=params,
+                         region_names=self.region_names,
+                         node_type=node_type,
+                         extra_network_interface=extra_network_interface
+                         )
 
     def __str__(self):
         return 'Cluster %s (AMI: %s Type: %s)' % (self.name,
@@ -242,7 +242,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             except CreateSpotInstancesError as cl_ex:
                 if instances_provision_type == instances_provision_fallbacks[-1]:
                     raise
-                elif not self.check_spot_error(str(cl_ex), instances_provision_type):
+                if not self.check_spot_error(str(cl_ex), instances_provision_type):
                     raise
 
         return instances
@@ -409,6 +409,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
             sudo systemctl restart network
         """)
+    # pylint: disable=too-many-arguments
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
         post_boot_script = cluster.TestConfig.get_startup_script()
@@ -478,12 +479,12 @@ class AWSNode(cluster.BaseNode):
         ssh_login_info = {'hostname': None,
                           'user': ami_username,
                           'key_file': credentials.key_file}
-        super(AWSNode, self).__init__(name=f"{node_prefix}-{self.node_index}",
-                                      parent_cluster=parent_cluster,
-                                      ssh_login_info=ssh_login_info,
-                                      base_logdir=base_logdir,
-                                      node_prefix=node_prefix,
-                                      dc_idx=dc_idx)
+        super().__init__(name=f"{node_prefix}-{self.node_index}",
+                         parent_cluster=parent_cluster,
+                         ssh_login_info=ssh_login_info,
+                         base_logdir=base_logdir,
+                         node_prefix=node_prefix,
+                         dc_idx=dc_idx)
 
     def init(self):
         LOGGER.debug("Waiting until instance {0._instance} starts running...".format(self))
@@ -852,24 +853,26 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                          '--totalnodes %s' % (name, sum(n_nodes)))
             user_data += ' --stop-services'
 
-        super(ScyllaAWSCluster, self).__init__(ec2_ami_id=ec2_ami_id,
-                                               ec2_subnet_id=ec2_subnet_id,
-                                               ec2_security_group_ids=ec2_security_group_ids,
-                                               ec2_instance_type=ec2_instance_type,
-                                               ec2_ami_username=ec2_ami_username,
-                                               ec2_user_data=user_data,
-                                               ec2_block_device_mappings=ec2_block_device_mappings,
-                                               cluster_uuid=cluster_uuid,
-                                               services=services,
-                                               credentials=credentials,
-                                               cluster_prefix=cluster_prefix,
-                                               node_prefix=node_prefix,
-                                               n_nodes=n_nodes,
-                                               params=params,
-                                               node_type=node_type,
-                                               extra_network_interface=params.get('extra_network_interface'))
+        super().__init__(
+            ec2_ami_id=ec2_ami_id,
+            ec2_subnet_id=ec2_subnet_id,
+            ec2_security_group_ids=ec2_security_group_ids,
+            ec2_instance_type=ec2_instance_type,
+            ec2_ami_username=ec2_ami_username,
+            ec2_user_data=user_data,
+            ec2_block_device_mappings=ec2_block_device_mappings,
+            cluster_uuid=cluster_uuid,
+            services=services,
+            credentials=credentials,
+            cluster_prefix=cluster_prefix,
+            node_prefix=node_prefix,
+            n_nodes=n_nodes,
+            params=params,
+            node_type=node_type,
+            extra_network_interface=params.get('extra_network_interface'))
         self.version = '2.1'
 
+    # pylint: disable=too-many-arguments
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
         if not ec2_user_data:
             if self._ec2_user_data and isinstance(self._ec2_user_data, str):
@@ -889,14 +892,17 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             ec2_user_data += ' --seeds %s ' % seeds
 
         ec2_user_data = self.update_bootstrap(ec2_user_data, enable_auto_bootstrap)
-        added_nodes = super(ScyllaAWSCluster, self).add_nodes(count=count,
-                                                              ec2_user_data=ec2_user_data,
-                                                              dc_idx=dc_idx,
-                                                              rack=rack,
-                                                              enable_auto_bootstrap=enable_auto_bootstrap)
+        added_nodes = super().add_nodes(
+            count=count,
+            ec2_user_data=ec2_user_data,
+            dc_idx=dc_idx,
+            rack=rack,
+            enable_auto_bootstrap=enable_auto_bootstrap,
+        )
         return added_nodes
 
-    def node_config_setup(self, node, seed_address=None, endpoint_snitch=None, murmur3_partitioner_ignore_msb_bits=None, client_encrypt=None):  # pylint: disable=too-many-arguments
+    def node_config_setup(self, node, seed_address=None, endpoint_snitch=None,
+                          murmur3_partitioner_ignore_msb_bits=None, client_encrypt=None):  # pylint: disable=too-many-arguments
         setup_params = dict(
             enable_exp=self.params.get('experimental'),
             endpoint_snitch=endpoint_snitch,
@@ -948,7 +954,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
 
     def destroy(self):
         self.stop_nemesis()
-        super(ScyllaAWSCluster, self).destroy()
+        super().destroy()
 
 
 class CassandraAWSCluster(ScyllaAWSCluster):
@@ -974,22 +980,23 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         user_data = ('--clustername %s '
                      '--totalnodes %s --version community '
                      '--release 2.1.15' % (name, sum(n_nodes)))
-
-        super(CassandraAWSCluster, self).__init__(ec2_ami_id=ec2_ami_id,  # pylint: disable=unexpected-keyword-arg
-                                                  ec2_subnet_id=ec2_subnet_id,
-                                                  ec2_security_group_ids=ec2_security_group_ids,
-                                                  ec2_instance_type=ec2_instance_type,
-                                                  ec2_ami_username=ec2_ami_username,
-                                                  ec2_user_data=user_data,
-                                                  ec2_block_device_mappings=ec2_block_device_mappings,
-                                                  cluster_uuid=cluster_uuid,
-                                                  services=services,
-                                                  credentials=credentials,
-                                                  cluster_prefix=cluster_prefix,
-                                                  node_prefix=node_prefix,
-                                                  n_nodes=n_nodes,
-                                                  params=params,
-                                                  node_type=node_type)
+        # pylint: disable=unexpected-keyword-arg
+        super().__init__(
+            ec2_ami_id=ec2_ami_id,
+            ec2_subnet_id=ec2_subnet_id,
+            ec2_security_group_ids=ec2_security_group_ids,
+            ec2_instance_type=ec2_instance_type,
+            ec2_ami_username=ec2_ami_username,
+            ec2_user_data=user_data,
+            ec2_block_device_mappings=ec2_block_device_mappings,
+            cluster_uuid=cluster_uuid,
+            services=services,
+            credentials=credentials,
+            cluster_prefix=cluster_prefix,
+            node_prefix=node_prefix,
+            n_nodes=n_nodes,
+            params=params,
+            node_type=node_type)
 
     def get_seed_nodes(self):
         node = self.nodes[0]
@@ -1000,10 +1007,10 @@ class CassandraAWSCluster(ScyllaAWSCluster):
             conf_dict = yaml.safe_load(yaml_stream)
             try:
                 return conf_dict['seed_provider'][0]['parameters'][0]['seeds'].split(',')
-            except:
-                raise ValueError('Unexpected cassandra.yaml '
-                                 'contents:\n%s' % yaml_stream.read())
+            except Exception as exc:
+                raise ValueError('Unexpected cassandra.yaml. Contents:\n%s' % yaml_stream.read()) from exc
 
+    # pylint: disable=too-many-arguments
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
         if not ec2_user_data:
             if self.nodes:
@@ -1015,10 +1022,11 @@ class CassandraAWSCluster(ScyllaAWSCluster):
                                                        count,
                                                        seeds))
         ec2_user_data = self.update_bootstrap(ec2_user_data, enable_auto_bootstrap)
-        added_nodes = super(CassandraAWSCluster, self).add_nodes(count=count,
-                                                                 ec2_user_data=ec2_user_data,
-                                                                 dc_idx=dc_idx,
-                                                                 rack=0)
+        added_nodes = super().add_nodes(
+            count=count,
+            ec2_user_data=ec2_user_data,
+            dc_idx=dc_idx,
+            rack=0)
         return added_nodes
 
     def node_setup(self, node, verbose=False, timeout=3600):
