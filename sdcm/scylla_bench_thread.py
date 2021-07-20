@@ -16,7 +16,7 @@ import re
 import uuid
 import time
 import logging
-import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from sdcm.loader import ScyllaBenchStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
@@ -56,7 +56,8 @@ class ScyllaBenchStressEventsPublisher(FileFollowerThread):
                         event.add_info(node=self.node, line=line, line_number=line_number).publish()
 
 
-class ScyllaBenchThread:
+class ScyllaBenchThread:  # pylint: disable=too-many-instance-attributes
+    # pylint: disable=too-many-arguments
     def __init__(self, stress_cmd, loader_set, timeout, node_list=None, round_robin=False, use_single_loader=False,
                  stop_test_on_failure=False, stress_num=1, credentials=None):
         if not node_list:
@@ -83,10 +84,10 @@ class ScyllaBenchThread:
         errors = []
 
         LOGGER.debug('Wait for stress threads results')
-        for future in concurrent.futures.as_completed(self.results_futures, timeout=self.timeout):
+        for future in as_completed(self.results_futures, timeout=self.timeout):
             results.append(future.result())
 
-        for node, result in results:
+        for _, result in results:
             if not result:
                 # Silently skip if stress command threw an error, since it was already reported in _run_stress
                 continue
@@ -103,7 +104,7 @@ class ScyllaBenchThread:
     def _run_stress_bench(self, node, loader_idx, stress_cmd, node_list):
         read_gap = 480  # reads starts after write, read can look before start read time to current time using several sstables
         stress_cmd = re.sub(r"SCT_TIME", f"{int(time.time()) - read_gap}", stress_cmd)
-        LOGGER.debug(f"replaced stress command {stress_cmd}")
+        LOGGER.debug("replaced stress command %s", stress_cmd)
 
         os.makedirs(node.logdir, exist_ok=True)
 
@@ -158,7 +159,7 @@ class ScyllaBenchThread:
 
         self.max_workers = (os.cpu_count() or 1) * 5
         LOGGER.debug("Starting %d scylla-bench Worker threads", self.max_workers)
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers)
+        self.executor = ThreadPoolExecutor(max_workers=self.max_workers)  # pylint: disable=consider-using-with
 
         for loader_idx, loader in enumerate(loaders):
             self.results_futures += [self.executor.submit(self._run_stress_bench,
