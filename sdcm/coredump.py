@@ -28,6 +28,7 @@ from sdcm.sct_events.system import CoreDumpEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 
 
+# pylint: disable=too-many-instance-attributes
 @dataclass
 class CoreDumpInfo:
     pid: str
@@ -55,6 +56,7 @@ class CoreDumpInfo:
             return f'CoreDump[{self.pid}, {self.corefile}]'
         return f'CoreDump[{self.pid}]'
 
+    # pylint: disable=too-many-arguments
     def update(self,
                node: 'BaseNode' = None,
                corefile: str = None,
@@ -80,7 +82,7 @@ class CoreDumpInfo:
                 setattr(self, attr_name, attr_value)
 
 
-class CoredumpThreadBase(Thread):
+class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attributes
     lookup_period = 30
     upload_retry_limit = 3
     max_coredump_thread_exceptions = 10
@@ -110,7 +112,7 @@ class CoredumpThreadBase(Thread):
             try:
                 self.main_cycle_body()
                 exceptions_count = 0
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-except
                 self.log.error("Following error occurred: %s", exc)
                 exceptions_count += 1
                 if exceptions_count == self.max_coredump_thread_exceptions:
@@ -178,7 +180,7 @@ class CoredumpThreadBase(Thread):
     def publish_event(self, core_info: CoreDumpInfo):
         try:
             core_info.publish_event()
-        except Exception as exc:  # pylint: disable=bare-except
+        except Exception as exc:  # pylint: disable=broad-except
             self.log.error(f"Failed to publish coredump event due to the: {str(exc)}")
 
     def extract_info_from_core_pids(
@@ -360,9 +362,9 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
             elif line.startswith('Command Line:'):
                 command_line = line[14:].strip()
             elif line.startswith('Coredump:') or line.startswith('Storage:'):
+                # Ignore inaccessible cores
+                # Storage: /var/lib/systemd/coredump/core.vi.1000.6c4de4c206a0476e88444e5ebaaac482.18554.1578994298000000.lz4 (inaccessible)
                 if "inaccessible" in line:
-                    # Ignore inaccessible cores
-                    #       Storage: /var/lib/systemd/coredump/core.vi.1000.6c4de4c206a0476e88444e5ebaaac482.18554.1578994298000000.lz4 (inaccessible)
                     continue
                 corefile = line[line.find(':') + 1:].strip()
             elif line.startswith('Timestamp:'):
@@ -426,7 +428,8 @@ class CoredumpExportFileThread(CoredumpThreadBase):
         else:
             raise RuntimeError("Distro is not supported")
 
-    def _extract_core_info_from_file_name(self, corefile: str) -> Dict[str, str]:
+    @staticmethod
+    def _extract_core_info_from_file_name(corefile: str) -> Dict[str, str]:
         data = os.path.splitext(corefile)[0].split('-')
         return {
             'host': data[0],
