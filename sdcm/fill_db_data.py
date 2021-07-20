@@ -15,7 +15,7 @@ __author__ = 'Roy Dahan'
 #
 # Copyright (c) 2016 ScyllaDB
 
-# pylint: disable=too-many-lines,eval-used
+# pylint: disable=too-many-lines,eval-used, line-too-long
 import contextlib
 import logging
 import random
@@ -3030,7 +3030,7 @@ class FillDatabaseData(ClusterTester):
         cdc_properties = "cdc = {'enabled': true, 'preimage': true, 'postimage': true, 'ttl': 36000}"
 
         if item.get("no_cdc"):
-            self.log.warning(f"Skip adding cdc enabling properties due %s", item['no_cdc'])
+            self.log.warning("Skip adding cdc enabling properties due %s", item['no_cdc'])
             return create_table
 
         if "CREATE TABLE" in create_table.upper() and "COUNTER" not in create_table.upper():
@@ -3058,7 +3058,7 @@ class FillDatabaseData(ClusterTester):
                     and not eval(item['skip_condition']):
                 item['skip'] = 'skip'
                 self.all_verification_items[test_num]['skip'] = 'skip'
-                self.log.debug(f"Version doesn't support the item, skip it: %s.", item['create_tables'])
+                self.log.debug("Version doesn't support the item, skip it: %s.", item['create_tables'])
 
             # TODO: fix following condition to make "skip_condition" really skip stuff
             # when it is True, not False as it is now.
@@ -3075,7 +3075,7 @@ class FillDatabaseData(ClusterTester):
                         # waiting the schema agreement
                         if 'CREATE INDEX' in create_table.upper():
                             time.sleep(15)
-                        self.log.debug(f"create table: %s", create_table)
+                        self.log.debug("create table: %s", create_table)
                         session.execute(create_table)
                         # sleep for 15 seconds to wait creating cdc tables
                         self.db_cluster.wait_for_schema_agreement()
@@ -3220,7 +3220,8 @@ class FillDatabaseData(ClusterTester):
                 LOGGER.exception(item['queries'][i])
                 raise ex
 
-    def _run_invalid_queries(self, item, session):
+    @staticmethod
+    def _run_invalid_queries(item, session):
         for i in range(len(item['invalid_queries'])):
             try:
                 session.execute(item['invalid_queries'][i])
@@ -3239,7 +3240,7 @@ class FillDatabaseData(ClusterTester):
                     f"cdc tables content are differes\n Initial:{item['cdc_tables'][cdc_table]}\n" \
                     f"New_result: {actual_result}"
             except AssertionError as err:
-                LOGGER.error(f"content was differ {err}")
+                LOGGER.error("content was differ %s", err)
 
     def run_db_queries(self, session, default_fetch_size):
         self.log.info('Start to running queries')
