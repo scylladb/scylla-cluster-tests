@@ -61,7 +61,7 @@ def parse_cdc_blob_settings(blob: bytes) -> Dict[str, Union[bool, str]]:
         res = re.search(regexp, blob.decode())
         if res:
             for key, value in res.groupdict().items():
-                if value == 'false' or value == "off":
+                if value in ("false", "off"):
                     value = False
                 elif value == 'true':
                     value = True
@@ -94,9 +94,9 @@ def get_table_cdc_properties(session, ks_name: str, table_name: str) -> Dict[str
     time.sleep(10)
     ks = session.cluster.metadata.keyspaces[ks_name]
     raw_cdc_extention = ks.tables[table_name].extensions['cdc']
-    LOGGER.debug(f"Blob object with cdc settings: {raw_cdc_extention}")
+    LOGGER.debug("Blob object with cdc settings: %s", raw_cdc_extention)
     cdc_settings = parse_cdc_blob_settings(raw_cdc_extention)
-    LOGGER.debug(f"CDC settings as dict: {cdc_settings}")
+    LOGGER.debug("CDC settings as dict: %s", cdc_settings)
 
     return cdc_settings
 
@@ -105,7 +105,7 @@ def toggle_cdc_property(name: str, value: Union[str, bool]) -> Union[bool, str]:
     if name in ["ttl"]:
         return str(randint(300, 3600))
     else:
-        variants = set(CDC_SETTINGS_NAMES_VALUES[name]) - set([value])
+        variants = set(CDC_SETTINGS_NAMES_VALUES[name]) - {value}
         return choice(list(variants))
 
 
