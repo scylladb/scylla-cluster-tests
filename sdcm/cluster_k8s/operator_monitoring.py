@@ -14,14 +14,11 @@
 import threading
 import logging
 import re
-import json
 from typing import Iterable
-from datetime import datetime
 
 from sdcm.utils.file import File
 from sdcm.utils.decorators import timeout
 from sdcm.sct_events.operator import (
-    ScyllaOperatorLogEvent,
     SCYLLA_OPERATOR_EVENT_PATTERNS,
 )
 
@@ -30,8 +27,8 @@ class ScyllaOperatorLogMonitoring(threading.Thread):
     lookup_time = 0.1
     log = logging.getLogger('ScyllaOperatorLogMonitoring')
     patterns = [
-        re.compile('^\s*{\s*"L"\s*:\s*"ERROR"'),
-        re.compile('^\s*{\s*"L"\s*:\s*"INFO"'),
+        re.compile(r'^\s*{\s*"L"\s*:\s*"ERROR"'),
+        re.compile(r'^\s*{\s*"L"\s*:\s*"INFO"'),
     ]
 
     def __init__(self, kluster):
@@ -50,7 +47,8 @@ class ScyllaOperatorLogMonitoring(threading.Thread):
             self.check_logs(file_follower)
         self.check_logs(file_follower)
 
-    def check_logs(self, file_follower: Iterable[str]):
+    @staticmethod
+    def check_logs(file_follower: Iterable[str]):
         for log_record in file_follower:
             event_to_log = None
             for pattern, event in SCYLLA_OPERATOR_EVENT_PATTERNS:
