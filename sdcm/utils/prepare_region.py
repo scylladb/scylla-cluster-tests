@@ -29,7 +29,7 @@ class AwsRegion:
     @property
     def sct_vpc(self) -> EC2ServiceResource.Vpc:
         vpcs = self.client.describe_vpcs(Filters=[{"Name": "tag:Name", "Values": [self.VPC_NAME]}])
-        LOGGER.debug(f"Found VPCs: {vpcs}")
+        LOGGER.debug("Found VPCs: %s", vpcs)
         existing_vpcs = vpcs.get("Vpcs", [])
         if len(existing_vpcs) == 0:
             return None
@@ -40,7 +40,7 @@ class AwsRegion:
     def create_vpc(self):
         LOGGER.info("Going to create VPC...")
         if self.sct_vpc:
-            LOGGER.warning(f"VPC '{self.VPC_NAME}' already exists!  Id: '{self.sct_vpc.vpc_id}'.")
+            LOGGER.warning("VPC '%s' already exists!  Id: '%s'.", self.VPC_NAME, self.sct_vpc.vpc_id)
             return self.sct_vpc.vpc_id
         else:
             result = self.client.create_vpc(CidrBlock=str(self.VPC_CIDR), AmazonProvidedIpv6CidrBlock=True)
@@ -66,7 +66,7 @@ class AwsRegion:
     def sct_subnet(self, region_az) -> EC2ServiceResource.Subnet:
         subnet_name = self.az_subnet_name(region_az)
         subnets = self.client.describe_subnets(Filters=[{"Name": "tag:Name", "Values": [subnet_name]}])
-        LOGGER.debug(f"Found Subnets: {subnets}")
+        LOGGER.debug("Found Subnets: %s", subnets)
         existing_subnets = subnets.get("Subnets", [])
         if len(existing_subnets) == 0:
             return None
@@ -75,11 +75,11 @@ class AwsRegion:
         return self.resource.Subnet(existing_subnets[0]["SubnetId"])  # pylint: disable=no-member
 
     def create_subnet(self, region_az, ipv4_cidr, ipv6_cidr):
-        LOGGER.info(f"Creating subnet for {region_az}...")
+        LOGGER.info("Creating subnet for %s...", region_az)
         subnet_name = self.az_subnet_name(region_az)
         if self.sct_subnet(region_az):
             subnet_id = self.sct_subnet(region_az).subnet_id
-            LOGGER.warning(f"Subnet '{subnet_name}' already exists!  Id: '{subnet_id}'.")
+            LOGGER.warning("Subnet '%s' already exists!  Id: '%s'.", subnet_name, subnet_id)
         else:
 
             result = self.client.create_subnet(CidrBlock=str(ipv4_cidr), Ipv6CidrBlock=str(ipv6_cidr),
@@ -110,7 +110,7 @@ class AwsRegion:
     def sct_internet_gateway(self) -> EC2ServiceResource.InternetGateway:
         igws = self.client.describe_internet_gateways(Filters=[{"Name": "tag:Name",
                                                                 "Values": [self.INTERNET_GATEWAY_NAME]}])
-        LOGGER.debug(f"Found Internet gateways: {igws}")
+        LOGGER.debug("Found Internet gateways: %s", igws)
         existing_igws = igws.get("InternetGateways", [])
         if len(existing_igws) == 0:
             return None
@@ -122,8 +122,8 @@ class AwsRegion:
     def create_internet_gateway(self):
         LOGGER.info("Creating Internet Gateway..")
         if self.sct_internet_gateway:
-            LOGGER.warning(f"Internet Gateway '{self.INTERNET_GATEWAY_NAME}' already exists! "
-                           f"Id: '{self.sct_internet_gateway.internet_gateway_id}'.")
+            LOGGER.warning("Internet Gateway '%s' already exists! Id: '%s'.",
+                           self.INTERNET_GATEWAY_NAME, self.sct_internet_gateway.internet_gateway_id)
         else:
             result = self.client.create_internet_gateway()
             igw_id = result["InternetGateway"]["InternetGatewayId"]
@@ -137,7 +137,7 @@ class AwsRegion:
     def sct_route_table(self) -> EC2ServiceResource.RouteTable:
         route_tables = self.client.describe_route_tables(Filters=[{"Name": "tag:Name",
                                                                    "Values": [self.ROUTE_TABLE_NAME]}])
-        LOGGER.debug(f"Found Route Tables: {route_tables}")
+        LOGGER.debug("Found Route Tables: %s", route_tables)
         existing_rts = route_tables.get("RouteTables", [])
         if len(existing_rts) == 0:
             return None
@@ -150,8 +150,8 @@ class AwsRegion:
         # add route to Internet: 0.0.0.0/0 -> igw
         LOGGER.info("Configuring main Route Table...")
         if self.sct_route_table:
-            LOGGER.warning(f"Route Table '{self.ROUTE_TABLE_NAME}' already exists! "
-                           f"Id: '{self.sct_route_table.route_table_id}'.")
+            LOGGER.warning("Route Table '%s' already exists! Id: '%s'.",
+                           self.ROUTE_TABLE_NAME, self.sct_route_table.route_table_id)
         else:
             route_tables = list(self.sct_vpc.route_tables.all())
             assert len(route_tables) == 1, f"Only one main route table should exist for {self.VPC_NAME}. " \
@@ -173,7 +173,7 @@ class AwsRegion:
     def sct_security_group(self) -> EC2ServiceResource.SecurityGroup:
         security_groups = self.client.describe_security_groups(Filters=[{"Name": "tag:Name",
                                                                          "Values": [self.SECURITY_GROUP_NAME]}])
-        LOGGER.debug(f"Found Security Groups: {security_groups}")
+        LOGGER.debug("Found Security Groups: %s", security_groups)
         existing_sgs = security_groups.get("SecurityGroups", [])
         if len(existing_sgs) == 0:
             return None
@@ -191,8 +191,8 @@ class AwsRegion:
         """
         LOGGER.info("Creating Security Group...")
         if self.sct_security_group:
-            LOGGER.warning(f"Security Group '{self.SECURITY_GROUP_NAME}' already exists! "
-                           f"Id: '{self.sct_internet_gateway.internet_gateway_id}'.")
+            LOGGER.warning("Security Group '%s' already exists! Id: '%s'.",
+                           self.SECURITY_GROUP_NAME, self.sct_security_group.group_id)
         else:
             result = self.client.create_security_group(Description='Security group that is used by SCT',
                                                        GroupName=self.SECURITY_GROUP_NAME,
@@ -373,7 +373,7 @@ class AwsRegion:
                 return None
             else:
                 raise
-        LOGGER.debug(f"Found key pairs: {key_pairs}")
+        LOGGER.debug("Found key pairs: %s", key_pairs)
         existing_key_pairs = key_pairs.get("KeyPairs", [])
         assert len(existing_key_pairs) == 1, \
             f"More than 1 Key Pair with {self.KEY_PAIR_NAME} found " \
@@ -383,7 +383,7 @@ class AwsRegion:
     def create_key_pair(self):
         LOGGER.info("Creating SCT Key Pair...")
         if self.sct_keypair:
-            LOGGER.warning(f"SCT Key Pair already exists in {self.region_name}!")
+            LOGGER.warning("SCT Key Pair already exists in '%s'!", self.region_name)
         else:
             ks = KeyStore()
             sct_key_pair = ks.get_ec2_ssh_key_pair()
@@ -392,7 +392,7 @@ class AwsRegion:
             LOGGER.info("SCT Key Pair created.")
 
     def configure(self):
-        LOGGER.info(f"Configuring '{self.region_name}' region...")
+        LOGGER.info("Configuring '%s' region...", self.region_name)
         self.create_vpc()
         self.create_subnets()
         self.create_internet_gateway()
