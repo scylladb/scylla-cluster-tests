@@ -83,5 +83,21 @@ class RemoteDocker(BaseNode):
             self.log.error("Error checking for '%s' on port %s: %s", service_name, port, details)
             return False
 
+    def _get_ipv6_ip_address(self):
+        pass
+
+    def _refresh_instance_state(self):
+        pass
+
+    def check_spot_termination(self):
+        pass
+
+    @property
+    def region(self):
+        pass
+
+    def restart(self):
+        pass
+
     def __str__(self):
         return f'RemoteDocker [{self.image_name}] on [{self.node}]'
