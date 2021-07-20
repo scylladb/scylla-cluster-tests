@@ -99,7 +99,7 @@ class GeminiStressThread:  # pylint: disable=too-many-instance-attributes
         return cmd
 
     def run(self):
-
+        # pylint: disable=consider-using-with
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(self.loaders.nodes))
         for loader_idx, loader in enumerate(self.loaders.nodes):
             self.futures.append(executor.submit(self._run_gemini, loader, loader_idx))
