@@ -28,7 +28,7 @@ class TWCSLongevityTest(LongevityTest):
     def run_prepare_write_cmd(self):
         self.create_tables_for_scylla_bench()
         with ignore_mutation_write_errors():
-            super(TWCSLongevityTest, self).run_prepare_write_cmd()
+            super().run_prepare_write_cmd()
 
         # Run nemesis during stress as it was stopped before copy expected data
         if self.params.get('nemesis_during_prepare'):
