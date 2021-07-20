@@ -1,6 +1,6 @@
 import time
-import pytest
 import logging
+import pytest
 
 import sdcm.utils.alternator as alternator
 from sdcm.ycsb_thread import YcsbStressThread
@@ -18,18 +18,20 @@ ALTERNATOR = alternator.api.Alternator(sct_params={"alternator_access_key_id": N
                                                    "alternator_port": ALTERNATOR_PORT})
 
 
-def test_01_kcl_with_ycsb(request, docker_scylla, events):
+def test_01_kcl_with_ycsb(request, docker_scylla, events):  # pylint: disable=too-many-locals
     loader_set = LocalLoaderSetDummy()
     num_of_keys = 1000
     # 1. start kcl thread and ycsb at the same time
-    ycsb_cmd = f'bin/ycsb load dynamodb  -P workloads/workloada -p recordcount={num_of_keys} -p dataintegrity=true -p insertorder=uniform -p insertcount={num_of_keys} -p fieldcount=2 -p fieldlength=5'
+    ycsb_cmd = f'bin/ycsb load dynamodb  -P workloads/workloada -p recordcount={num_of_keys} -p dataintegrity=true ' \
+               f'-p insertorder=uniform -p insertcount={num_of_keys} -p fieldcount=2 -p fieldlength=5'
     ycsb_thread = YcsbStressThread(loader_set, ycsb_cmd, node_list=[docker_scylla], timeout=600, params=TEST_PARAMS)
 
     kcl_cmd = f"hydra-kcl -t usertable -k {num_of_keys}"
     kcl_thread = KclStressThread(loader_set, kcl_cmd, node_list=[docker_scylla], timeout=600, params=TEST_PARAMS)
-
+    stress_cmd = 'table_compare interval=20; src_table="alternator_usertable".usertable; ' \
+                 'dst_table="alternator_usertable-dest"."usertable-dest"'
     compare_sizes = CompareTablesSizesThread(
-        loader_set, """table_compare interval=20; src_table="alternator_usertable".usertable; dst_table="alternator_usertable-dest"."usertable-dest" """, node_list=[docker_scylla], timeout=600, params=TEST_PARAMS)
+        loader_set=loader_set, stress_cmd=stress_cmd, node_list=[docker_scylla], timeout=600, params=TEST_PARAMS)
 
     def cleanup_thread():
         ycsb_thread.kill()
@@ -58,7 +60,9 @@ def test_01_kcl_with_ycsb(request, docker_scylla, events):
     error_log_content_before = events.get_event_log_file('error.log')
 
     # 2. do read with dataintegrity=true
-    cmd = f'bin/ycsb run dynamodb -P workloads/workloada -p recordcount={num_of_keys} -p insertorder=uniform -p insertcount={num_of_keys} -p fieldcount=2 -p fieldlength=5 -p dataintegrity=true -p operationcount={num_of_keys}'
+    cmd = f'bin/ycsb run dynamodb -P workloads/workloada -p recordcount={num_of_keys} -p insertorder=uniform ' \
+          f'-p insertcount={num_of_keys} -p fieldcount=2 -p fieldlength=5 -p dataintegrity=true ' \
+          f'-p operationcount={num_of_keys}'
     ycsb_thread2 = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=500, params=TEST_PARAMS)
 
     def cleanup_thread2():
