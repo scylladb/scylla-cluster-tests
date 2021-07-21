@@ -38,11 +38,11 @@ class ScyllaOperatorTaskBaseClass(BaseClass):
     name: 'str'
     # StartDate specifies the task start date expressed in the RFC3339 format or now[+duration],
     # e.g. now+3d2h10m, valid units are d, h, m, s (default "now").
-    startDate: str = None
+    start_date: str = None
     # Interval task schedule interval e.g. 3d2h10m, valid units are d, h, m, s (default "0").
     interval: str = None
-    # NumRetries the number of times a scheduled task will retry to run before failing (default 3).
-    numRetries: int = None
+    # num_retries the number of times a scheduled task will retry to run before failing (default 3).
+    num_retries: int = None
 
 
 @dataclass
@@ -50,8 +50,8 @@ class ScyllaOperatorRepairTask(ScyllaOperatorTaskBaseClass):
     # DC list of datacenter glob patterns, e.g. 'dc1', '!otherdc*' used to specify the DCs
     # to include or exclude from backup.
     dc: List[str] = None
-    # FailFast stop repair on first error.
-    failFast: bool = None
+    # fail_fast stop repair on first error.
+    fail_fast: bool = None
     # Intensity integer >= 1 or a decimal between (0,1), higher values may result in higher speed and cluster load.
     # 0 value means repair at maximum intensity.
     intensity: float = None
@@ -61,11 +61,12 @@ class ScyllaOperatorRepairTask(ScyllaOperatorTaskBaseClass):
     # Keyspace a list of keyspace/tables glob patterns, e.g. 'keyspace,!keyspace.table_prefix_*'
     # used to include or exclude keyspaces from repair.
     keyspace: List[str] = None
-    # SmallTableThreshold enable small table optimization for tables of size lower than given threshold.
+    # small_table_threshold enable small table optimization for tables of size lower than given threshold.
     # Supported units [B, MiB, GiB, TiB] (default "1GiB").
-    smallTableThreshold: str = None
+    small_table_threshold: str = None
 
 
+# pylint: disable=invalid-name,too-many-instance-attributes,too-many-arguments
 @dataclass
 class ScyllaOperatorRepairTaskStatus(ScyllaOperatorRepairTask):
     # These statuses are not available at scylla-operator 1.0
@@ -91,8 +92,8 @@ class ScyllaOperatorBackupTask(ScyllaOperatorTaskBaseClass):
     # DC list of datacenter glob patterns, e.g. 'dc1', '!otherdc*' used to specify the DCs
     # to include or exclude from backup.
     dc: List[str] = None
-    # FailFast stop repair on first error.
-    failFast: bool = None
+    # fail_fast stop repair on first error.
+    fail_fast: bool = None
     # Intensity integer >= 1 or a decimal between (0,1), higher values may result in higher speed and cluster load.
     # 0 value means repair at maximum intensity.
     intensity: int = None
@@ -102,28 +103,28 @@ class ScyllaOperatorBackupTask(ScyllaOperatorTaskBaseClass):
     # Keyspace a list of keyspace/tables glob patterns, e.g. 'keyspace,!keyspace.table_prefix_*'
     # used to include or exclude keyspaces from repair.
     keyspace: List[str] = None
-    # SmallTableThreshold enable small table optimization for tables of size lower than given threshold.
+    # small_table_threshold enable small table optimization for tables of size lower than given threshold.
     # Supported units [B, MiB, GiB, TiB] (default "1GiB").
-    smallTableThreshold: str = None
+    small_table_threshold: str = None
     # List of locations where backup is going to be stored, location is string in following format:
     # <provider>:<path> , where provider could be gcs or s3
     location: List[str] = None
     # RateLimit a list of megabytes (MiB) per second rate limits expressed in the format [<dc>:]<limit>.
     # The <dc>: part is optional and only needed when different datacenters need different upload limits.
     # Set to 0 for no limit (default 100).
-    rateLimit: List[str] = None
+    rate_limit: List[str] = None
     # Retention The number of backups which are to be stored (default 3).
     retention: int = None
     # SnapshotParallel a list of snapshot parallelism limits in the format [<dc>:]<limit>.
     # The <dc>: part is optional and allows for specifying different limits in selected datacenters.
     # If The <dc>: part is not set, the limit is global (e.g. 'dc1:2,5') the runs are parallel in n nodes (2 in dc1)
     # and n nodes in all the other datacenters.
-    snapshotParallel: List[str] = None
+    snapshot_parallel: List[str] = None
     # UploadParallel a list of upload parallelism limits in the format [<dc>:]<limit>.
     # The <dc>: part is optional and allows for specifying different limits in selected datacenters.
     # If The <dc>: part is not set the limit is global (e.g. 'dc1:2,5') the runs are parallel in n nodes (2 in dc1)
     # and n nodes in all the other datacenters.
-    uploadParallel: List[str] = None
+    upload_parallel: List[str] = None
 
 
 @dataclass
@@ -157,7 +158,8 @@ class OperatorManagerCluster(ManagerCluster):
         super().__init__(manager_node=manager_node, cluster_id=cluster_id, ssh_identity_file=ssh_identity_file,
                          client_encrypt=client_encrypt)
 
-    def _pick_original_name(self, basic_name, names):
+    @staticmethod
+    def _pick_original_name(basic_name, names):
         current_name = basic_name
         idx = 1
         while current_name in names:
@@ -198,12 +200,12 @@ class OperatorManagerCluster(ManagerCluster):
             interval=interval,
             keyspace=keyspace_list,
             location=location_list,
-            numRetries=num_retries,
-            rateLimit=rate_limit_list,
+            num_retries=num_retries,
+            rate_limit=rate_limit_list,
             retention=retention,
-            snapshotParallel=snapshot_parallel_list,
-            startDate=start_date,
-            uploadParallel=upload_parallel_list
+            snapshot_parallel=snapshot_parallel_list,
+            start_date=start_date,
+            upload_parallel=upload_parallel_list
         )
         try:
             self.scylla_cluster.add_scylla_cluster_value('/spec/backups', so_backup_task.to_dict())
@@ -212,6 +214,7 @@ class OperatorManagerCluster(ManagerCluster):
             raise
         return so_backup_task
 
+    # pylint: disable=too-many-locals
     def create_backup_task(
             self,
             dc_list=None,
@@ -251,12 +254,12 @@ class OperatorManagerCluster(ManagerCluster):
         so_repair_task = ScyllaOperatorRepairTask(
             name=name,
             dc=dc_list,
-            failFast=fail_fast,
+            fail_fast=fail_fast,
             intensity=intensity,
             parallel=parallel,
             keyspace=keyspace,
             interval=interval,
-            numRetries=num_retries,
+            num_retries=num_retries,
         )
         try:
             self.scylla_cluster.add_scylla_cluster_value('/spec/repairs', so_repair_task.to_dict())
@@ -265,7 +268,7 @@ class OperatorManagerCluster(ManagerCluster):
             raise
         return so_repair_task
 
-    def create_repair_task(self, dc_list=None,  # pylint: disable=too-many-arguments
+    def create_repair_task(self, dc_list=None,  # pylint: disable=too-many-arguments,arguments-differ
                            keyspace=None, interval=None, num_retries=None, fail_fast=None,
                            intensity=None, parallel=None, name=None) -> RepairTask:
         # TBD: After https://github.com/scylladb/scylla-operator/issues/272 is solved,
