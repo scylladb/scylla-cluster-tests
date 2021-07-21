@@ -13,10 +13,10 @@
 
 import os
 import re
-import logging
 import time
 import uuid
 import tempfile
+import logging
 from textwrap import dedent
 
 from sdcm.prometheus import nemesis_metrics_obj
