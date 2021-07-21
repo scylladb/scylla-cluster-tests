@@ -1125,8 +1125,9 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
             except ImportError:
                 LOGGER.error("Couldn't collect Siren manager logs, cluster_cloud module isn't installed")
             else:
-                instance = get_manager_instance_by_cluster_id(cluster_id=self.params["cloud_cluster_id"],
-                                                              region_name=self.params["region_name"][0])
+                instance = get_manager_instance_by_cluster_id(
+                    cluster_id=self.params["cloud_cluster_id"], region_name=self.params["region_name"][0],
+                    manager_id=self.params["cloud_manager_id"])
                 name = [tag["Value"]
                         for tag in instance["Tags"] if tag["Key"] == "Name"]
                 self.siren_manager_set.append(CollectingNode(name=name[0],
