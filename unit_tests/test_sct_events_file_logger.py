@@ -32,6 +32,7 @@ class TestFileLogger(unittest.TestCase, EventsUtilsMixin):
     def tearDownClass(cls) -> None:
         cls.teardown_events_processes()
 
+    # pylint: disable=protected-access
     def test_file_logger(self):
         start_events_logger(_registry=self.events_processes_registry)
         file_logger = get_events_logger(_registry=self.events_processes_registry)
