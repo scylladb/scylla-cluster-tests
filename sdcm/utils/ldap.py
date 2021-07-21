@@ -11,11 +11,11 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from sdcm.utils.decorators import retrying
-
 from time import sleep
+
 from ldap3 import Server, Connection, ALL, ALL_ATTRIBUTES
 from ldap3.core.exceptions import LDAPSocketOpenError
+from sdcm.utils.decorators import retrying
 
 
 LDAP_IMAGE = "osixia/openldap:1.4.0"
