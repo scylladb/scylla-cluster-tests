@@ -24,8 +24,9 @@ def raise_event_on_failure(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             ThreadFailedEvent(message=str(exc), traceback=format_exc()).publish()
+        return None
 
     return wrapper
 
