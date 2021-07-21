@@ -42,6 +42,7 @@ LOGGER = logging.getLogger(__name__)
 class GkeNodePool(CloudK8sNodePool):
     k8s_cluster: 'GkeCluster'
 
+    # pylint: disable=too-many-arguments
     def __init__(
             self,
             k8s_cluster: 'KubernetesCluster',
@@ -81,7 +82,7 @@ class GkeNodePool(CloudK8sNodePool):
                f"--cluster {self.k8s_cluster.short_cluster_name}",
                f"--num-nodes {self.num_nodes}",
                f"--machine-type {self.instance_type}",
-               f"--image-type UBUNTU"
+               "--image-type UBUNTU"
                ]
         if not self.k8s_cluster.gke_k8s_release_channel:
             # NOTE: only static K8S release channel supports disabling of autoupgrade
@@ -120,7 +121,7 @@ class GkeNodePool(CloudK8sNodePool):
             ).get('instanceGroupUrls')[0]
             return group_link.split('/')[-1]
         except Exception as exc:
-            raise RuntimeError(f"Can't get instance group name due to the: {exc}")
+            raise RuntimeError(f"Can't get instance group name due to the: {exc}") from exc
 
     def remove_instance(self, instance_name: str):
         self.k8s_cluster.gcloud.run(
@@ -139,11 +140,13 @@ class GcloudTokenUpdateThread(TokenUpdateThread):
             f'config config-helper --min-expiry={self._token_min_duration * 60} --format=json')
 
 
+# pylint: disable=too-many-instance-attributes
 class GkeCluster(KubernetesCluster):
     AUXILIARY_POOL_NAME = 'default-pool'  # This is default pool that is deployed with the cluster
     POOL_LABEL_NAME = 'cloud.google.com/gke-nodepool'
     pools: Dict[str, GkeNodePool]
 
+    # pylint: disable=too-many-arguments
     def __init__(self,
                  gke_cluster_version,
                  gke_k8s_release_channel,
@@ -224,7 +227,7 @@ class GkeCluster(KubernetesCluster):
                      f"--user {self.gce_user}")
 
     @cached_property
-    def gcloud(self) -> GcloudContextManager:
+    def gcloud(self) -> GcloudContextManager:  # pylint: disable=no-self-use
         return cluster.TestConfig.tester_obj().localhost.gcloud
 
     def deploy_node_pool(self, pool: GkeNodePool, wait_till_ready=True) -> None:
@@ -261,7 +264,7 @@ class GkeCluster(KubernetesCluster):
         except Exception as exc:
             if default is not None:
                 return default
-            raise RuntimeError(f"Can't get instance group name due to the: {exc}")
+            raise RuntimeError(f"Can't get instance group name due to the: {exc}") from exc
 
     def delete_instance_that_belong_to_instance_group(self, group_name: str, instance_name: str):
         self.gcloud.run(f'compute instance-groups managed delete-instances {group_name} '
@@ -394,6 +397,7 @@ class GkeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
     node_pool: 'GkeNodePool'
     PodContainerClass = GkeScyllaPodContainer
 
+    # pylint: disable=too-many-arguments
     def add_nodes(self,
                   count: int,
                   ec2_user_data: str = "",
