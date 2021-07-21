@@ -20,9 +20,7 @@ import logging
 import os.path
 import tempfile
 import unittest
-import time
 from weakref import proxy as weakproxy
-from contextlib import ExitStack
 
 from invoke import Result
 
@@ -35,6 +33,8 @@ from sdcm.utils.distro import Distro
 
 from unit_tests.dummy_remote import DummyRemote
 from unit_tests.lib.events_utils import EventsUtilsMixin
+
+# pylint: disable=protected-access
 
 
 class DummyNode(BaseNode):  # pylint: disable=abstract-method
@@ -71,11 +71,12 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
         pass
 
     @property
-    def is_nonroot_install(self):
+    def is_nonroot_install(self):  # pylint: disable=invalid-overridden-method
         return False
 
 
-class DummyDbCluster(BaseCluster):
+class DummyDbCluster(BaseCluster):  # pylint: disable=abstract-method
+    # pylint: disable=super-init-not-called
     def __init__(self, nodes):
         self.nodes = nodes
 
