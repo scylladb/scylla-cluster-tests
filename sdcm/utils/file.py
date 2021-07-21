@@ -15,6 +15,7 @@ from typing import Optional, TextIO, List, Union, AnyStr, Iterable
 from re import Pattern
 
 
+# pylint: disable=too-few-public-methods
 class ReiterableGenerator:
     def __init__(self, generator):
         self._generator = generator
@@ -23,6 +24,7 @@ class ReiterableGenerator:
         return self._generator()
 
 
+# pylint: disable=too-many-instance-attributes
 class File:
     """
     File object that support chaining and context managing
@@ -32,6 +34,7 @@ class File:
         >>> ).move_to_beginning().readlines() == ['someline\\n', 'someline #1\\n', 'someline #2\\n']
     """
 
+    # pylint: disable=too-many-arguments
     def __init__(self, path: str, mode: str = 'r', buffering: Optional[int] = None,
                  encoding: Optional[str] = None, errors: Optional[str] = None, newline: Optional[str] = None,
                  closefd: bool = True):
@@ -60,7 +63,7 @@ class File:
     def _open(self) -> TextIO:
         kwargs = {attr_name: getattr(self, attr_name) for attr_name in
                   ['mode', 'buffering', 'encoding', 'errors', 'closefd'] if getattr(self, attr_name, None) is not None}
-        return open(self.path, **kwargs)  # deepcode ignore missing~close~open: <comment the reason here>
+        return open(self.path, **kwargs)  # pylint: disable=consider-using-with
 
     def move_to(self, pos) -> 'File':
         self._io.seek(pos)
@@ -82,20 +85,20 @@ class File:
         self._io.seek(pos, 2)
         return self
 
-    def write(self, s: AnyStr) -> 'File':
-        self._io.write(s)
+    def write(self, any_str: AnyStr) -> 'File':
+        self._io.write(any_str)
         return self
 
-    def writelines(self, s: List[AnyStr]) -> 'File':
-        self._io.writelines(s)
+    def writelines(self, list_of_any_str: List[AnyStr]) -> 'File':
+        self._io.writelines(list_of_any_str)
         return self
 
     def seek(self, offset: int, whence: int = 0) -> 'File':
         self._io.seek(offset, whence)
         return self
 
-    def read(self, n: int = -1) -> AnyStr:
-        return self._io.read(n)
+    def read(self, num_bytes: int = -1) -> AnyStr:
+        return self._io.read(num_bytes)
 
     def readline(self, limit: int = -1) -> AnyStr:
         return self._io.readline(limit)
