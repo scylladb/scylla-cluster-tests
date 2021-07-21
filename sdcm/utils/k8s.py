@@ -706,11 +706,12 @@ class TokenUpdateThread(threading.Thread, metaclass=abc.ABCMeta):
     def run(self):
         wait_time = 0.01
         while not self._termination_event.wait(wait_time):
+            tmp_token_path = self._kubectl_token_path + ".tmp"
             try:
-                mode = 'r+' if os.path.exists(self._kubectl_token_path) else 'w'
-                with open(self._kubectl_token_path, mode) as gcloud_config_file:
+                with open(tmp_token_path, 'w+') as gcloud_config_file:
                     gcloud_config_file.write(self.get_token())
                     gcloud_config_file.flush()
+                os.rename(tmp_token_path, self._kubectl_token_path)
                 LOGGER.debug('Cloud token has been updated and stored at %s', self._kubectl_token_path)
             except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.debug('Failed to read gcloud config: %s', exc)
