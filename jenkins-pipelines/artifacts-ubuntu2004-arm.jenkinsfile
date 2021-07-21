@@ -4,7 +4,7 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 artifactsPipeline(
-    test_config: '''["test-cases/artifacts/ubuntu2004.yaml", "test-cases/artifacts/arm/ubuntu2004.yaml"]''',
+    test_config: '''["test-cases/artifacts/ubuntu2004.yaml", "configurations/arm/ubuntu2004.yaml"]''',
     backend: 'aws',
     region_name: 'eu-west-1',
     provision_type: 'spot_low_price',

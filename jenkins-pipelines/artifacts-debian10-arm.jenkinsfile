@@ -4,7 +4,7 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 artifactsPipeline(
-    test_config: '''["test-cases/artifacts/debian10.yaml", "test-cases/artifacts/arm/debian10.yaml"]''',
+    test_config: '''["test-cases/artifacts/debian10.yaml", "configurations/arm/debian10.yaml"]''',
     backend: 'aws',
     region_name: 'eu-west-1',
     provision_type: 'spot_low_price',
