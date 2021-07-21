@@ -143,7 +143,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
                 session.execute("DROP TABLE ks1.cf1 ;")
 
             for i in range(2, 4):
-                LOGGER.debug(f"rerunning the backup task for the {i} time")
+                LOGGER.debug("rerunning the backup task for the %s time", i)
                 rerunning_backup_task.start(continue_task=False)
                 rerunning_backup_task.wait_and_get_final_status(step=5)
                 assert rerunning_backup_task.status == TaskStatus.DONE, \
