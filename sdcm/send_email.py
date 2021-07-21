@@ -554,12 +554,17 @@ def build_reporter(name: str,
         return None
 
 
-def get_running_instances_for_email_report(test_id):
+def get_running_instances_for_email_report(test_id: str, ip_filter: str = None):  # pylint: disable=too-many-locals
     """Get running instances left after testrun
 
-    Get all running instances leff after testrun is done
+    Get all running instances leff after testrun is done.
+    If ip_filter is provided, the instance with that ip will be
+    filtered out of the results.
     :param test_id: testrun test id
     :type test_id: str
+    :param ip_filter: the ip of the sct test runner to be excluded
+    from the report, since it will be terminated on test end
+    :type ip_filter: str
     :returns: list of instances left running after test run
     in format:
     [
@@ -575,18 +580,22 @@ def get_running_instances_for_email_report(test_id):
     for region in instances:
         for instance in instances[region]:
             name = [tag['Value'] for tag in instance['Tags'] if tag['Key'] == 'Name']
-            nodes.append([name[0],
-                          instance.get('PublicIpAddress', 'N/A'),
-                          instance['State']['Name'],
-                          "aws",
-                          region])
+            public_ip_addr = instance.get('PublicIpAddress', 'N/A')
+            if public_ip_addr != ip_filter:
+                nodes.append([name[0],
+                              instance.get('PublicIpAddress', 'N/A'),
+                              instance['State']['Name'],
+                              "aws",
+                              region])
     instances = list_instances_gce(tags_dict=tags, running=True)
     for instance in instances:
-        nodes.append([instance.name,
-                      ", ".join(instance.public_ips) if None not in instance.public_ips else "N/A",
-                      instance.state,
-                      "gce",
-                      instance.extra["zone"].name])
+        public_ips = instance.public_ips
+        if ip_filter not in public_ips:
+            nodes.append([instance.name,
+                          ", ".join(public_ips) if None not in instance.public_ips else "N/A",
+                          instance.state,
+                          "gce",
+                          instance.extra["zone"].name])
     resources = list_resources_docker(tags_dict=tags, running=True, group_as_builder=True)
     for builder_name, containers in resources.get("containers", {}).items():
         for container in containers:
