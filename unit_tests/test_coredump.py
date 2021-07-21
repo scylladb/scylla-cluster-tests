@@ -3,19 +3,21 @@ import os
 import time
 import tempfile
 from abc import abstractmethod
+
+from sdcm.cluster import BaseNode
 from sdcm.coredump import CoredumpExportSystemdThread, CoreDumpInfo, CoredumpExportFileThread, CoredumpThreadBase
 from unit_tests.lib.data_pickle import Pickler
 from unit_tests.lib.mock_remoter import MockRemoter
-from sdcm.cluster import BaseNode
 
 
-class FakeNode(BaseNode):
+class FakeNode(BaseNode):  # pylint: disable=abstract-method
+    # pylint: disable=super-init-not-called
     def __init__(self, remoter, logdir):
         self.remoter = remoter
         os.makedirs(logdir, exist_ok=True)
         self.logdir = logdir
 
-    def wait_ssh_up(self, verbose=False):
+    def wait_ssh_up(self, verbose=False, timeout=60):
         return True
 
 
@@ -42,7 +44,8 @@ class CoredumpExportSystemdTestThread(CoredumpExportSystemdThread):
     def get_results(self) -> dict:
         return Pickler.to_data(self._localize_results())
 
-    def load_expected_results(self, filepath: str) -> dict:
+    @staticmethod
+    def load_expected_results(filepath: str) -> dict:
         return Pickler.load_data_from_file(filepath)
 
     def save_results(self, filepath):
@@ -73,7 +76,8 @@ class CoredumpExportFileTestThread(CoredumpExportFileThread):
     def get_results(self) -> dict:
         return Pickler.to_data(self._localize_results())
 
-    def load_expected_results(self, filepath: str) -> dict:
+    @staticmethod
+    def load_expected_results(filepath: str) -> dict:
         return Pickler.load_data_from_file(filepath)
 
     def save_results(self, filepath):
@@ -89,14 +93,14 @@ class CoredumpExportTestBase(unittest.TestCase):
         pass
 
     def _run_coredump_with_fake_remoter(self, test_name: str):
-        th = self._init_target_coredump_class(test_name)
-        th.start()
+        coredump_thread = self._init_target_coredump_class(test_name)
+        coredump_thread.start()
         time.sleep(1)
-        th.stop()
-        th.join(20)
-        self.assertFalse(th.is_alive(), 'CoredumpExportThread thread did not stop in 20 seconds')
-        results = th.get_results()
-        expected_results = th.load_expected_results(
+        coredump_thread.stop()
+        coredump_thread.join(20)
+        self.assertFalse(coredump_thread.is_alive(), 'CoredumpExportThread thread did not stop in 20 seconds')
+        results = coredump_thread.get_results()
+        expected_results = coredump_thread.load_expected_results(
             os.path.join(os.path.dirname(__file__), 'test_data', 'test_coredump', self.test_data_folder,
                          test_name + '_results.json')
         )
@@ -106,7 +110,7 @@ class CoredumpExportTestBase(unittest.TestCase):
                 self.assertEqual(expected_coredump_list, result_coredump_list)
             except Exception as exc:
                 raise AssertionError(
-                    f'Got unexpected results for {coredump_status}: {str(result_coredump_list)}\n{str(exc)}')
+                    f'Got unexpected results for {coredump_status}: {str(result_coredump_list)}\n{str(exc)}') from exc
 
 
 class CoredumpExportExceptionTest(CoredumpExportTestBase):
@@ -114,7 +118,7 @@ class CoredumpExportExceptionTest(CoredumpExportTestBase):
     test_data_folder = 'systemd'
 
     def _init_target_coredump_class(self, test_name: str) -> CoredumpExportSystemdTestThread:
-        th = CoredumpExportSystemdTestThread(
+        coredump_thread = CoredumpExportSystemdTestThread(
             FakeNode(
                 MockRemoter(
                     responses=os.path.join(
@@ -126,8 +130,8 @@ class CoredumpExportExceptionTest(CoredumpExportTestBase):
             ),
             5
         )
-        th.max_coredump_thread_exceptions = 2
-        return th
+        coredump_thread.max_coredump_thread_exceptions = 2
+        return coredump_thread
 
     def test_with_exceptions_limit_reached(self):
         self._run_coredump_with_fake_remoter('exceptions_limit_reached_test')
