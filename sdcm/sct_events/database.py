@@ -245,7 +245,7 @@ class ScyllaServerStatusEvent(ScyllaDatabaseContinuousEvent):
     begin_pattern = r'Starting Scylla Server'
     end_pattern = r'Stopping Scylla Server'
 
-    def __init__(self, node: str, severity=Severity.NORMAL, **_kwargs):
+    def __init__(self, node: str, severity=Severity.NORMAL, **__):
         super().__init__(node=node, severity=severity)
 
 
@@ -253,7 +253,7 @@ class BootstrapEvent(ScyllaDatabaseContinuousEvent):
     begin_pattern = r'Starting to bootstrap'
     end_pattern = r'Bootstrap succeeded'
 
-    def __init__(self, node: str, severity=Severity.NORMAL, **_kwargs):
+    def __init__(self, node: str, severity=Severity.NORMAL, **__):
         super().__init__(node=node, severity=severity)
 
 
@@ -287,8 +287,6 @@ def get_pattern_to_event_to_func_mapping(node: str) \
         shard = int(match.groupdict()["shard"]) if "shard" in match.groupdict().keys() else None
         new_event = event_type(node=node, shard=shard)
         new_event.begin_event()
-        LOGGER.debug("Added a begin event. Event added: {event} on node {node}, shard {shard}"
-                     .format(event=new_event, node=new_event.node, shard=shard))
 
     def _end_event(event_type: Type[ScyllaDatabaseContinuousEvent], match: Match):
         shard = int(match.groupdict()["shard"]) if "shard" in match.groupdict().keys() else None
@@ -315,7 +313,6 @@ def get_pattern_to_event_to_func_mapping(node: str) \
                                    event_type=event_type,
                                    event_period=EventPeriod.Begin.value))
         event = begun_events[-1]
-        LOGGER.debug(f"Ending event: {event}")
         event.end_event()
 
     for event in SCYLLA_DATABASE_CONTINUOUS_EVENTS:
