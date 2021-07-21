@@ -49,7 +49,7 @@ def get_gce_services(regions: list) -> dict:
     return {region_az: _get_gce_service(credentials, region_az) for region_az in map(append_zone, regions)}
 
 
-def get_gce_service(region: str):
+def get_gce_service(region: str) -> GceDriver:
     credentials = KeyStore().get_gcp_credentials()
     return _get_gce_service(credentials, append_zone(region))
 

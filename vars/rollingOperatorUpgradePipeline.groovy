@@ -180,6 +180,19 @@ def call(Map pipelineParams) {
                                         }
                                     }
                                 }
+                                stage('Clean SCT Runners') {
+                                    steps {
+                                        catchError(stageResult: 'FAILURE') {
+                                            script {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        cleanSctRunners(params, currentBuild)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                         parallel tasks

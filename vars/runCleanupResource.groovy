@@ -34,7 +34,6 @@ def call(Map params, String region){
     else
         ./docker/env/hydra.sh clean-resources --post-behavior --logdir "`pwd`"
     fi
-    ./docker/env/hydra.sh clean-runner-instances
     echo "Finished cleaning resources."
     """
 }

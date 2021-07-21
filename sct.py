@@ -52,6 +52,7 @@ from sdcm.cluster import TestConfig
 from sdcm.utils.log import setup_stdout_logger
 from sdcm.utils.prepare_region import AwsRegion
 from sdcm.utils.get_username import get_username
+from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
 
 LOGGER = setup_stdout_logger()
@@ -836,19 +837,20 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
     click.echo(table.get_string(title="Collected logs by test-id: {}".format(collector.test_id)))
 
 
+# pylint: disable=too-many-arguments,too-many-branches
 @cli.command('send-email', help='Send email with results for testrun')
 @click.option('--test-id', help='Test-id of run')
 @click.option('--test-status', help='Override test status FAILED|ABORTED')
 @click.option('--start-time', help='Override test start time')
 @click.option('--started-by', help='Default user that started the test')
+@click.option('--runner-ip', type=str, required=False, help="Sct runner ip for the running test")
 @click.option('--email-recipients', help="Send email to next recipients")
 @click.option('--logdir', help='Directory where to find testrun folder')
-def send_email(test_id=None, test_status=None, start_time=None, started_by=None, email_recipients=None, logdir=None):  # pylint: disable=too-many-arguments,too-many-branches
+def send_email(test_id=None, test_status=None, start_time=None, started_by=None, runner_ip=None,
+               email_recipients=None, logdir=None):
     if started_by is None:
         started_by = get_username()
     add_file_logger()
-
-    from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter  # pylint: disable=import-outside-toplevel
 
     if not email_recipients:
         LOGGER.warning("No email recipients. Email will not be sent")
@@ -872,7 +874,7 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
 
     if test_results:
         reporter = test_results.get("reporter", "")
-        test_results['nodes'] = get_running_instances_for_email_report(test_id)
+        test_results['nodes'] = get_running_instances_for_email_report(test_id, runner_ip)
     else:
         LOGGER.warning("Failed to read test results for %s", test_id)
         reporter = "TestAborted"
@@ -894,7 +896,7 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
         if test_id:
             test_results.update({
                 "test_id": test_id,
-                "nodes": get_running_instances_for_email_report(test_id)
+                "nodes": get_running_instances_for_email_report(test_id, runner_ip)
             })
     test_results['logs_links'] = list_logs_by_test_id(test_results.get('test_id', test_id))
     email_recipients = email_recipients.split(',')
@@ -1100,9 +1102,11 @@ def create_runner_instance(cloud_provider, region, availability_zone, test_id, d
 
 
 @cli.command("clean-runner-instances", help="Clean all unused SCT runner instances")
-def clean_runner_instances():
+@click.option("-ts", "--test-status", required=False, type=str, default="FAILED")
+@click.option("-ip", "--runner-ip", required=False, type=str, default="")
+def clean_runner_instances(test_status: str = None, runner_ip: str = None):
     add_file_logger()
-    clean_sct_runners()
+    clean_sct_runners(test_status=test_status, test_runner_ip=runner_ip)
 
 
 if __name__ == '__main__':
