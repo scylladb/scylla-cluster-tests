@@ -159,3 +159,4 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
                 NdBenchStressEvent.finish(node=loader,
                                           stress_cmd=self.stress_cmd,
                                           log_file_name=log_file_name).publish()
+        return None
