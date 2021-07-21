@@ -8,10 +8,10 @@ import logging.config
 import click
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import scan
+from sdcm.keystore import KeyStore
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from sdcm.keystore import KeyStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ LOGGER = logging.getLogger(__name__)
 @click.option('--new-index', default='nemesis_data', help='name of the target index')
 @click.option('--days', default=10, type=int, help="how many days backwards to migrate")
 @click.argument('old_index_name', type=str, default='longevitytest')
-def migrate(old_index_name, dry_run, new_index, days):
+def migrate(old_index_name, dry_run, new_index, days):  # pylint: disable=too-many-locals
 
     logging.basicConfig(level=logging.DEBUG)
     logging.config.dictConfig({
@@ -56,18 +56,18 @@ def migrate(old_index_name, dry_run, new_index, days):
     )
     ks = KeyStore()
     es_conf = ks.get_elasticsearch_credentials()
-    es = Elasticsearch(hosts=[es_conf["es_url"]], verify_certs=True,
-                       http_auth=(es_conf["es_user"], es_conf["es_password"]))
+    elastic_search = Elasticsearch(hosts=[es_conf["es_url"]], verify_certs=True,
+                                   http_auth=(es_conf["es_user"], es_conf["es_password"]))
 
-    if not es.indices.exists(index=new_index):
-        es.indices.create(index=new_index)
+    if not elastic_search.indices.exists(index=new_index):
+        elastic_search.indices.create(index=new_index)
 
     def post_to_new(doc):
         if dry_run:
             return
-        es.index(index=new_index, doc_type='nemesis', body=doc)
+        elastic_search.index(index=new_index, doc_type='nemesis', body=doc)
 
-    res = scan(es, index=old_index_name, query={"query": {"range": {
+    res = scan(elastic_search, index=old_index_name, query={"query": {"range": {
         "test_details.start_time": {
             "gte": (datetime.datetime.utcnow() - datetime.timedelta(days=days)).timestamp(),
             "lte": datetime.datetime.utcnow().timestamp(),
@@ -78,10 +78,10 @@ def migrate(old_index_name, dry_run, new_index, days):
     for num, hit in enumerate(res):
         nemesis_list = hit["_source"]["nemesis"]
         test_data = hit["_source"]
-        LOGGER.info(f"{num}: {test_data['test_details']['test_id']}")
+        LOGGER.info("%s: %s", num, test_data['test_details']['test_id'])
         if 'scylla-server' not in test_data['versions']:
-            LOGGER.debug(
-                f"{num}: No version for {test_data['test_details']['test_id']} - {test_data['test_details']['job_name']}")
+            LOGGER.debug("%s: No version for %s - %s",
+                         num, test_data['test_details']['test_id'], test_data['test_details']['job_name'])
             if not test_data['test_details']['job_name']:
                 LOGGER.debug(test_data)
             continue
