@@ -43,9 +43,12 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, **kwargs):
 
     def retry_logger(retry_state):
         # pylint: disable=protected-access
-        LOGGER.debug('wait_for: Retrying {}: attempt {} ended with: {}'.format(text if text else retry_state.fn.__name__,
-                                                                               retry_state.attempt_number,
-                                                                               str(retry_state.outcome._exception) if retry_state.outcome._exception else retry_state.outcome._result))
+        LOGGER.debug(
+            'wait_for: Retrying %s: attempt %s ended with: %s',
+            text if text else retry_state.fn.__name__,
+            retry_state.attempt_number,
+            str(retry_state.outcome._exception) if retry_state.outcome._exception else retry_state.outcome._result
+        )
 
     try:
         retry = tenacity.Retrying(
@@ -66,7 +69,7 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, **kwargs):
             LOGGER.error("last error: %s", repr(ex))
         if throw_exc:
             if hasattr(ex, 'last_attempt') and not ex.last_attempt._result:  # pylint: disable=protected-access,no-member
-                raise RetryError(err)
+                raise RetryError(err) from ex
             raise
 
     return res
