@@ -16,7 +16,7 @@ import logging
 import time
 from textwrap import dedent
 from typing import List, Dict, Optional, Union, Literal
-from functools import cached_property, partial
+from functools import cached_property
 
 import boto3
 from mypy_boto3_ec2.type_defs import LaunchTemplateBlockDeviceMappingRequestTypeDef, \
@@ -24,8 +24,7 @@ from mypy_boto3_ec2.type_defs import LaunchTemplateBlockDeviceMappingRequestType
     LaunchTemplateTagSpecificationRequestTypeDef
 
 from sdcm import sct_abs_path, cluster
-from sdcm.cluster_aws import AWSCluster, MonitorSetAWS
-from sdcm.localhost import LocalHost
+from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.utils.aws_utils import tags_as_ec2_tags, EksClusterCleanupMixin
 from sdcm.utils.k8s import TokenUpdateThread
 from sdcm.wait import wait_for
@@ -42,10 +41,12 @@ from sdcm.remote import LOCALRUNNER
 LOGGER = logging.getLogger(__name__)
 
 
+# pylint: disable=too-many-instance-attributes
 class EksNodePool(CloudK8sNodePool):
     k8s_cluster: 'EksCluster'
     disk_type: Literal["standard", "io1", "io2", "gp2", "sc1", "st1"]
 
+    # pylint: disable=too-many-arguments,too-many-locals
     def __init__(
             self,
             k8s_cluster: 'EksCluster',
@@ -192,7 +193,7 @@ class EksNodePool(CloudK8sNodePool):
             self.k8s_cluster.eks_client.delete_nodegroup(
                 clusterName=self.k8s_cluster.short_cluster_name,
                 nodegroupName=self.name)
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             LOGGER.debug("Failed to delete nodegroup %s/%s, due to the following error:\n%s",
                          self.k8s_cluster.short_cluster_name, self.name, exc)
 
@@ -208,6 +209,7 @@ class EksTokenUpdateThread(TokenUpdateThread):
         return LOCALRUNNER.run(self._aws_cmd).stdout
 
 
+# pylint: disable=too-many-instance-attributes
 class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
     POOL_LABEL_NAME = 'eks.amazonaws.com/nodegroup'
     USE_MONITORING_EXPOSE_SERVICE = False
@@ -215,6 +217,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
     pools: Dict[str, EksNodePool]
     short_cluster_name: str
 
+    # pylint: disable=too-many-arguments
     def __init__(self,
                  eks_cluster_version,
                  ec2_security_group_ids,
@@ -489,6 +492,7 @@ class EksScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
     PodContainerClass = EksScyllaPodContainer
     nodes: List[EksScyllaPodContainer]
 
+    # pylint: disable=too-many-arguments
     def __init__(self,
                  k8s_cluster: KubernetesCluster,
                  scylla_cluster_name: Optional[str] = None,
@@ -499,6 +503,7 @@ class EksScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
                  ) -> None:
         super().__init__(k8s_cluster=k8s_cluster, scylla_cluster_name=scylla_cluster_name, user_prefix=user_prefix,
                          n_nodes=n_nodes, params=params, node_pool=node_pool)
+    # pylint: disable=too-many-arguments
 
     def add_nodes(self,
                   count: int,
