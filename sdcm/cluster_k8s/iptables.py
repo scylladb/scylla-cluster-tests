@@ -29,6 +29,7 @@ LOGGER = logging.getLogger(__name__)
 IptablesChainCommand = Literal["A", "C", "D"]
 
 
+# pylint: disable=too-few-public-methods
 class IptablesPodPortsRedirectMixin:
     def iptables_node_redirect_rules(self,
                                      dest_ip: str,
@@ -43,6 +44,7 @@ class IptablesPodPortsRedirectMixin:
                                             dest_port=p.node_port) for p in self._loadbalancer_service.spec.ports]
 
 
+# pylint: disable=too-few-public-methods
 class IptablesPodIpRedirectMixin:
     def iptables_node_redirect_rules(self,
                                      dest_ip: str,
@@ -96,6 +98,7 @@ class IptablesClusterOpsMixin:
                 node.remoter.sudo(shell_script_cmd(iptables_rules))
 
 
+# pylint: disable=too-many-arguments
 def iptables_port_redirect_rule(iptables_bin: str,
                                 command: IptablesChainCommand,
                                 to_ip: str,
