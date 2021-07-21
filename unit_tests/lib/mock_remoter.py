@@ -37,17 +37,18 @@ class MockRemoter:
         elif isinstance(responses, dict):
             self.responses = responses
 
-    def is_up(self, timeout=None):
+    def is_up(self, timeout=None):  # pylint: disable=unused-argument,no-self-use
         return True
 
-    def _process_response(self, response):
+    def _process_response(self, response):  # pylint: disable=no-self-use
         if isinstance(response, Result):
             return response
         elif isinstance(response, Exception):
             raise response
         return None
 
-    def run(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,unused-argument
+    def run(self, cmd: str, timeout: Optional[float] = None,
             ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
             log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None,
             change_context: bool = False) -> Result:
