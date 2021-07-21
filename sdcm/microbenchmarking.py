@@ -38,7 +38,7 @@ def chdir(dirname=None):
 
 class LargeNumberOfDatasetsException(Exception):
     def __init__(self, msg, *args, **kwargs):
-        super(LargeNumberOfDatasetsException, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.message = msg
 
     def __str__(self):
@@ -47,7 +47,7 @@ class LargeNumberOfDatasetsException(Exception):
 
 class EmptyResultFolder(Exception):
     def __init__(self, msg, *args, **kwargs):
-        super(EmptyResultFolder, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.message = msg
 
     def __str__(self):
@@ -61,7 +61,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
     submetrics = {'frag/s': ['mad f/s', 'max f/s', 'min f/s']}
 
     def __init__(self, email_recipients, db_version=None):
-        super(MicroBenchmarkingResultsAnalyzer, self).__init__(
+        super().__init__(
             es_index="microbenchmarking",
             es_doc_type="microbenchmark",
             send_email=True,
@@ -268,7 +268,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
                 self.log.warning("No results for '%s' in DB. Skipping", test_type)
                 continue
             for metrica in self.metrics:
-                self.log.info(f"Analyzing {test_type}:{metrica}")
+                self.log.info("Analyzing %s:%s", test_type, metrica)
                 set_results_for(current_result, metrica)
                 if metrica in list(self.submetrics.keys()):
                     set_results_for_sub(current_result, metrica)
@@ -481,9 +481,10 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
             return
 
         for doc in results['hits']['hits']:
-            self.log.info("Exlcude test: {}\nCommit: #{}\nRun Date time: {}\n".format(doc['_id'],
-                                                                                      doc['_source']['versions']['scylla-server']['commit_id'],
-                                                                                      doc['_source']['test_run_date']))
+            self.log.info("Exlcude test: %s\nCommit: #%s\nRun Date time: %s\n",
+                          doc['_id'],
+                          doc['_source']['versions']['scylla-server']['commit_id'],
+                          doc['_source']['test_run_date'])
             self._es.update_doc(index=self._es_index,
                                 doc_type=self._es_doc_type,
                                 doc_id=doc['_id'],
