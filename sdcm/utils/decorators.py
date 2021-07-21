@@ -29,9 +29,10 @@ class retrying:  # pylint: disable=invalid-name,too-few-public-methods
         Used as a decorator to retry function run that can possibly fail with allowed exceptions list
     """
 
-    def __init__(self, n=3, sleep_time=1,  # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,redefined-outer-name
+    def __init__(self, n=3, sleep_time=1,
                  allowed_exceptions=(Exception,), message="", timeout=0,
-                 raise_on_exceeded=True):  # pylint: disable=redefined-outer-name
+                 raise_on_exceeded=True):
         if n:
             self.n = n  # number of times to retry  # pylint: disable=invalid-name
         else:
@@ -63,10 +64,10 @@ class retrying:  # pylint: disable=invalid-name,too-few-public-methods
                     LOGGER.debug("'%s': failed with '%r', retrying [#%s]", func.__name__, ex, i)
                     time.sleep(self.sleep_time)
                     if i == self.n - 1 or (end_time and time.time() > end_time):
-                        LOGGER.error(f"'{func.__name__}': Number of retries exceeded!")
+                        LOGGER.error("'%s': Number of retries exceeded!", func.__name__)
                         if self.raise_on_exceeded:
                             raise
-                        return None
+            return None
 
         return inner
 
@@ -154,7 +155,7 @@ def latency_calculator_decorator(func):
     :return: Wrapped method.
     """
     # calling this import here, because of circular import
-    from sdcm.utils import latency
+    from sdcm.utils import latency  # pylint: disable=import-outside-toplevel
 
     @wraps(func)
     def wrapped(*args, **kwargs):
