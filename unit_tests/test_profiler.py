@@ -114,7 +114,7 @@ class TestProfileFactory(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         self._subroutines = []
         self.pr_factory = None
-        super(TestProfileFactory, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def tearDown(self) -> None:
         if not self.pr_factory:
