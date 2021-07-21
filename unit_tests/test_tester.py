@@ -35,6 +35,7 @@ class FakeSCTConfiguration(SCTConfiguration):
         }
 
 
+# pylint: disable=too-many-instance-attributes
 class ClusterTesterForTests(ClusterTester):
     _sct_log = None
     _final_event = None
@@ -80,7 +81,7 @@ class ClusterTesterForTests(ClusterTester):
         pass
 
     @property
-    def elasticsearch(self):
+    def elasticsearch(self):  # pylint: disable=invalid-overridden-method
         return None
 
     @silence()
@@ -104,7 +105,8 @@ class ClusterTesterForTests(ClusterTester):
         shutil.rmtree(self.logdir)
         for event_category, total_events in event_summary.items():
             assert len(events_by_category[event_category]) == total_events, \
-                f"{event_category}: Contains ({len(events_by_category[event_category])}) while ({total_events}) expected:\n{''.join(events_by_category[event_category])}"
+                f"{event_category}: Contains ({len(events_by_category[event_category])}) while " \
+                f"({total_events}) expected:\n{''.join(events_by_category[event_category])}"
             assert final_event.events[event_category][0] == events_by_category[event_category][-1]
         if final_event.test_status == 'SUCCESS':
             assert unittest_final_event is None
@@ -266,7 +268,7 @@ class SuccessTest(ClusterTesterForTests):
         pass
 
     def _validate_results(self):
-        super(SuccessTest, self)._validate_results()
+        super()._validate_results()
         assert self.event_summary == {'NORMAL': 2}
         assert self.final_event.test_status == 'SUCCESS'
 
@@ -279,6 +281,6 @@ class SubtestsSuccessTest(ClusterTesterForTests):
             pass
 
     def _validate_results(self):
-        super(SubtestsSuccessTest, self)._validate_results()
+        super()._validate_results()
         assert self.event_summary == {'NORMAL': 2}
         assert self.final_event.test_status == 'SUCCESS'
