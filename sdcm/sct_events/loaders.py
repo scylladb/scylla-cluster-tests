@@ -28,7 +28,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class GeminiStressEvent(BaseStressEvent):
-
+    # pylint: disable=too-many-arguments, too-many-instance-attributes
     def __init__(self, node: Any,
                  cmd: str,
                  log_file_name: Optional[str] = None,
@@ -117,8 +117,8 @@ class NdBenchErrorEvent(LogEvent, abstract=True):
     Failure: Type[LogEventProtocol]
 
 
-NdBenchErrorEvent.add_subevent_type("Error", severity=Severity.ERROR, regex=r"\sERROR")
-NdBenchErrorEvent.add_subevent_type("Failure", severity=Severity.CRITICAL, regex=f"\sFAILURE|\sFAILED")
+NdBenchErrorEvent.add_subevent_type("Error", severity=Severity.ERROR, regex=r"ERROR")
+NdBenchErrorEvent.add_subevent_type("Failure", severity=Severity.CRITICAL, regex=r"FAILURE|FAILED")
 
 
 NDBENCH_ERROR_EVENTS = (

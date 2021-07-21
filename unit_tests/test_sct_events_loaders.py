@@ -176,9 +176,9 @@ class TestScyllaBenchEvent(unittest.TestCase):
 
         try:
             raise ValueError('Stress command completed with bad status 1')
-        except Exception as e:
+        except Exception as exc:  # pylint: disable=broad-except
             scylla_bench_event.severity = Severity.ERROR
-            scylla_bench_event.add_error([str(e)])
+            scylla_bench_event.add_error([str(exc)])
 
         scylla_bench_event.end_event()
         scylla_bench_event.end_timestamp = scylla_bench_event.timestamp = 1623596960.1202102
@@ -377,7 +377,7 @@ class TestCassandraStressLogEvent(unittest.TestCase):
         self.assertSetEqual(set(dir(CassandraStressLogEvent)) - set(dir(LogEvent)),
                             {ev.type for ev in CS_ERROR_EVENTS})
 
-    def test_cs_hint_in_flight_error(self):
+    def test_cs_hint_in_flight_error(self):  # pylint: disable=no-self-use
         def _get_event(line, expected_type, expected_severity):
             for pattern, event in CS_ERROR_EVENTS_PATTERNS:
                 if pattern.search(line):
@@ -445,7 +445,7 @@ class TestGeminiLogEvent(unittest.TestCase):
         self.assertEqual(event.line_number, 1)
         self.assertIsNone(event.backtrace)
         self.assertIsNone(event.raw_backtrace)
-        self.assertTrue(event._ready_to_publish)
+        self.assertTrue(event._ready_to_publish)  # pylint: disable=protected-access
         event.event_id = "3eaf9cb2-b54b-43f5-8472-d0fbf5c25f72"
         self.assertEqual(
             str(event),
@@ -465,7 +465,7 @@ class TestGeminiLogEvent(unittest.TestCase):
         self.assertEqual(event.line_number, 0)
         self.assertIsNone(event.backtrace)
         self.assertIsNone(event.raw_backtrace)
-        self.assertFalse(event._ready_to_publish)
+        self.assertFalse(event._ready_to_publish)  # pylint: disable=protected-access
         event.event_id = "3ce0cdeb-0866-40ce-9a20-25ea3ae08be2"
         self.assertEqual(
             str(event),
