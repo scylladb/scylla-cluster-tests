@@ -80,8 +80,8 @@ class TestContinuousEventsRegistry:
     def test_get_events_by_period_type(self,
                                        populated_registry: ContinuousEventsRegistry,
                                        nodetool_stress_event: NodetoolEvent):
-        count_of_begun_events_pre = len(populated_registry.get_events_by_period(period_type=EventPeriod.Begin))
+        count_of_begun_events_pre = len(populated_registry.get_events_by_period(period_type=EventPeriod.BEGIN))
         nodetool_stress_event.begin_event()
-        found_events = populated_registry.get_events_by_period(period_type=EventPeriod.Begin)
+        found_events = populated_registry.get_events_by_period(period_type=EventPeriod.BEGIN)
 
         assert len(found_events) == count_of_begun_events_pre + 1
