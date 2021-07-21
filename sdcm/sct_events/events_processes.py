@@ -41,14 +41,15 @@ LOGGER = logging.getLogger(__name__)
 
 StopEvent = Union[multiprocessing.Event, threading.Event]
 
-T_inbound_event = TypeVar("T_inbound_event")
-T_outbound_event = TypeVar("T_outbound_event")
-T_outbound_events_protocol = TypeVar("T_outbound_events_protocol")
+T_inbound_event = TypeVar("T_inbound_event")  # pylint: disable=invalid-name
+T_outbound_event = TypeVar("T_outbound_event")  # pylint: disable=invalid-name
+T_outbound_events_protocol = TypeVar("T_outbound_events_protocol")  # pylint: disable=invalid-name
 
 InboundEventsGenerator = Generator[T_inbound_event, None, None]
 OutboundEventsGenerator = Generator[T_outbound_event, None, None]
 
 
+# pylint: disable=too-few-public-methods
 class OutboundEventsProtocol(Protocol[T_outbound_events_protocol]):
     def outbound_events(self,
                         stop_event: StopEvent,
@@ -82,7 +83,9 @@ class BaseEventsProcess(Generic[T_inbound_event, T_outbound_event], abc.ABC):
                         get_events_process(name=self.inbound_events_process, _registry=self._registry)) \
             .outbound_events(stop_event=self.stop_event, events_counter=self._events_counter)
 
-    def outbound_events(self, stop_event: StopEvent, events_counter: multiprocessing.Value) -> OutboundEventsGenerator:
+    # pylint: disable=unused-argument,no-self-use
+    def outbound_events(self, stop_event: StopEvent,
+                        events_counter: multiprocessing.Value) -> OutboundEventsGenerator:
         yield from []
 
     def terminate(self) -> None:
@@ -152,7 +155,7 @@ _EVENTS_PROCESSES: Optional[EventsProcessesRegistry] = None
 
 
 def create_default_events_process_registry(log_dir: Union[str, Path]):
-    global _EVENTS_PROCESSES
+    global _EVENTS_PROCESSES  # pylint: disable=global-statement
 
     with _EVENTS_PROCESSES_LOCK:
         if _EVENTS_PROCESSES is None:
@@ -183,7 +186,7 @@ def get_events_process(name: str, _registry: Optional[EventsProcessesRegistry] =
 def verbose_suppress(*args, **kwargs):
     try:
         yield
-    except Exception:
+    except Exception:  # pylint: disable=broad-except
         LOGGER.exception(*args, **kwargs)
 
 
