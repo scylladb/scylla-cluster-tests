@@ -61,7 +61,7 @@ class NdBenchStatsPublisher(FileFollowerThread):
     collectible_ops = ['read', 'write']
 
     def __init__(self, loader_node, loader_idx, ndbench_log_filename):
-        super(NdBenchStatsPublisher, self).__init__()
+        super().__init__()
         self.loader_node = loader_node
         self.loader_idx = loader_idx
         self.ndbench_log_filename = ndbench_log_filename
@@ -85,7 +85,10 @@ class NdBenchStatsPublisher(FileFollowerThread):
     def run(self):
         # INFO RPSCount:78 - Read avg: 0.314ms, Read RPS: 7246, Write avg: 0.39ms, Write RPS: 1802, total RPS: 9048, Success Ratio: 100%
         stat_regex = re.compile(
-            r'Read avg: (?P<read_lat_avg>.*?)ms.*?Read RPS: (?P<read_ops>.*?),.*?Write avg: (?P<write_lat_avg>.*?)ms.*?Write RPS: (?P<write_ops>.*?),', re.IGNORECASE)
+            r'Read avg: (?P<read_lat_avg>.*?)ms.*?'
+            r'Read RPS: (?P<read_ops>.*?),.*?'
+            r'Write avg: (?P<write_lat_avg>.*?)ms.*?'
+            r'Write RPS: (?P<write_ops>.*?),', re.IGNORECASE)
 
         while not self.stopped():
             exists = os.path.isfile(self.ndbench_log_filename)
@@ -103,7 +106,7 @@ class NdBenchStatsPublisher(FileFollowerThread):
                             operation, name = key.split('_', 1)
                             self.set_metric(operation, name, float(value))
 
-                except Exception as exc:
+                except Exception as exc:  # pylint: disable=broad-except
                     LOGGER.warning("Failed to send metric. Failed with exception {exc}".format(exc=exc))
 
 
@@ -141,12 +144,13 @@ class NdBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-
         with NdBenchStatsPublisher(loader, loader_idx, ndbench_log_filename=log_file_name), \
                 NdBenchStressEventsPublisher(node=loader, ndbench_log_filename=log_file_name):
             try:
-                return docker.run(cmd=node_cmd,
-                                  timeout=self.timeout + self.shutdown_timeout,
-                                  ignore_status=True,
-                                  log_file=log_file_name,
-                                  verbose=True)
-            except Exception as exc:
+                docker_run_result = docker.run(cmd=node_cmd,
+                                               timeout=self.timeout + self.shutdown_timeout,
+                                               ignore_status=True,
+                                               log_file=log_file_name,
+                                               verbose=True)
+                return docker_run_result
+            except Exception as exc:  # pylint: disable=broad-except
                 NdBenchStressEvent.failure(node=str(loader),
                                            stress_cmd=self.stress_cmd,
                                            log_file_name=log_file_name,

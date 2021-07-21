@@ -12,7 +12,6 @@ stress_cmd: >-
 
 n_db_nodes: '6 6'
 n_loaders: '2 2'
-region_aware_loader: true
 n_monitor_nodes: 1
 
 instance_type_db: 'i3.xlarge'
@@ -20,7 +19,6 @@ instance_type_loader: 'c5.4xlarge'
 
 user_prefix: 'longevity-ndbench-multi-dc'
 space_node_threshold: 64424
-hinted_handoff: 'disabled'
 
 internode_compression: 'all'
 internode_encryption: 'dc'
