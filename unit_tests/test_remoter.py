@@ -18,7 +18,7 @@ import threading
 from typing import Union, Optional
 from logging import getLogger
 
-from parameterized import parameterized
+# from parameterized import parameterized
 
 from sdcm.remote import RemoteLibSSH2CmdRunner, RemoteCmdRunner, LocalCmdRunner, RetryableNetworkException, \
     SSHConnectTimeoutError, shell_script_cmd
@@ -28,12 +28,10 @@ from sdcm.remote.remote_file import remote_file
 from sdcm.cluster_k8s import KubernetesCluster
 
 
-ALL_COMMANDS_WITH_ALL_OPTIONS = []
-
-
 class FakeKluster(KubernetesCluster):
     k8s_server_url = None
 
+    # pylint: disable=super-init-not-called
     def __init__(self, k8s_server_url):
         self.k8s_server_url = k8s_server_url
 
@@ -50,21 +48,29 @@ class FakeKluster(KubernetesCluster):
         pass
 
 
-for ip in ['::1', '127.0.0.1']:
-    for cmd in [
-        'echo 0',
-        'echo 0; false',
-        'adasdasdasd',
-        "/bin/bash -c \"printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\n%.0s' {1..100};\""]:
-        for verbose_value in [False, True]:
-            for ignore_status_value in [False, True]:
-                for new_session_value in [False, True]:
-                    for retry_value in [1, 2]:
-                        for timeout_value in [None, 5]:
-                            for remoter_type in [RemoteCmdRunner, RemoteLibSSH2CmdRunner, KubernetesCmdRunner]:
-                                ALL_COMMANDS_WITH_ALL_OPTIONS.append(
-                                    (remoter_type, ip, cmd, verbose_value, ignore_status_value, new_session_value, retry_value, timeout_value))
+# pylint: disable=too-many-nested-blocks
+def generate_all_commands_with_all_options():
+    all_commands_with_all_options = []
+    for ip in ['::1', '127.0.0.1']:
+        for cmd in [
+            'echo 0',
+            'echo 0; false',
+            'adasdasdasd',
+            "/bin/bash -c \"printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\n%.0s' {1..100};\""]:
+            for verbose_value in [False, True]:
+                for ignore_status_value in [False, True]:
+                    for new_session_value in [False, True]:
+                        for retry_value in [1, 2]:
+                            for timeout_value in [None, 5]:
+                                for remoter_type in [RemoteCmdRunner, RemoteLibSSH2CmdRunner, KubernetesCmdRunner]:
+                                    all_commands_with_all_options.append(
+                                        (remoter_type, ip, cmd, verbose_value, ignore_status_value, new_session_value,
+                                         retry_value, timeout_value))
+    return all_commands_with_all_options
+
+
+ALL_COMMANDS_WITH_ALL_OPTIONS = generate_all_commands_with_all_options()
 
 
 class TestRemoteCmdRunners(unittest.TestCase):
@@ -98,6 +104,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
         paramiko_thread_results.append(result)
         remoter.stop()
 
+    # pylint: disable=too-many-arguments
     @staticmethod
     def _create_and_run_in_same_thread(remoter_type, host, key_file, stmt, kwargs, paramiko_thread_results):
         if issubclass(remoter_type, (RemoteCmdRunner, RemoteLibSSH2CmdRunner)):
@@ -111,7 +118,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
         except Exception as exc:  # pylint: disable=broad-except
             result = exc
         paramiko_thread_results.append(result)
-        remoter._reconnect()
+        remoter._reconnect()  # pylint: disable=protected-access
         try:
             result = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
@@ -126,7 +133,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
         except Exception as exc:  # pylint: disable=broad-except
             result = exc
         paramiko_thread_results.append(result)
-        remoter._reconnect()
+        remoter._reconnect()  # pylint: disable=protected-access
         try:
             result = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
@@ -212,7 +219,7 @@ class TestRemoteCmdRunners(unittest.TestCase):
             result = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
             result = exc
-        remoter._reconnect()
+        remoter._reconnect()  # pylint: disable=protected-access
         try:
             result2 = remoter.run(stmt, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
@@ -370,8 +377,8 @@ class TestSudoAndRunShellScript(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         class _Runner(CommandRunner):
-            def run(self, cmd, *args, **kwargs):
-                self.command_to_run = cmd
+            def run(self, cmd, *_, **__):
+                self.command_to_run = cmd  # pylint: disable=attribute-defined-outside-init
 
             def _create_connection(self):
                 pass
@@ -403,7 +410,7 @@ class TestRemoteFile(unittest.TestCase):
             hostname = "localhost"
             command_to_run = ""
 
-            def run(self, cmd, *args, **kwargs):
+            def run(self, cmd, *_, **__):
                 self.command_to_run = cmd
                 if cmd == "mktemp":
                     return Result(stdout="temporary\n")
@@ -413,12 +420,12 @@ class TestRemoteFile(unittest.TestCase):
                     return Result(stdout="644")
                 return Result(stdout="", stderr="")
 
-            def send_files(self, src: str, dst: str, *args, **kwargs) -> bool:
+            def send_files(self, src: str, dst: str, *_, **__) -> bool:
                 self.sf_src = src
                 self.sf_dst = dst
                 return True
 
-            def receive_files(self, src: str, dst: str, *args, **kwargs) -> bool:
+            def receive_files(self, src: str, dst: str, *_, **__) -> bool:
                 with open(dst, "w"):
                     pass
                 self.rf_src = src
