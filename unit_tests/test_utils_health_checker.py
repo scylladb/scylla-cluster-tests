@@ -72,7 +72,7 @@ class Node:
     running_nemesis = None
 
     @staticmethod
-    def print_node_running_nemesis(node_ip):
+    def print_node_running_nemesis(_):
         return ""
 
     @staticmethod
