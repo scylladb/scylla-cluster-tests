@@ -1609,8 +1609,11 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
 
     def init(self) -> None:
         super().init()
-        if self.distro.is_rhel_like:
-            self.remoter.sudo("rpm -q iproute || yum install -y iproute")  # need this because of scylladb/scylla#7560
+        if self.distro.is_rhel_like and not self.remoter.sudo("rpm -q iproute", ignore_status=True).ok:
+            # need this because of scylladb/scylla#7560
+            # Time to time 'yum install -y iproute' fails, let's download the package and install it afterwards
+            self.remoter.sudo('yum install --downloadonly iproute', retry=5)
+            self.remoter.sudo("yum install -y iproute")
         self.remoter.sudo('mkdir -p /var/lib/scylla/coredumps', ignore_status=True)
 
     def drain_k8s_node(self):
