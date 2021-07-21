@@ -32,6 +32,7 @@ class TestEventsAnalyzer(unittest.TestCase, EventsUtilsMixin):
     def tearDownClass(cls) -> None:
         cls.teardown_events_processes()
 
+    # pylint: disable=protected-access
     def test_events_analyzer(self):
         start_events_analyzer(_registry=self.events_processes_registry)
         events_analyzer = get_events_process(name=EVENTS_ANALYZER_ID, _registry=self.events_processes_registry)
