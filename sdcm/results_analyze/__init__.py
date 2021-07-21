@@ -26,8 +26,9 @@ PP = pprint.PrettyPrinter(indent=2)
 
 
 class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
+    # pylint: disable=too-many-arguments
     def __init__(self, es_index, es_doc_type, send_email=False, email_recipients=(),
-                 email_template_fp="", query_limit=1000, logger=None, events=None):  # pylint: disable=too-many-arguments
+                 email_template_fp="", query_limit=1000, logger=None, events=None):
         self._es = ES()
         self._conf = self._es._conf  # pylint: disable=protected-access
         self._es_index = es_index
@@ -156,7 +157,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
     def save_html_to_file(self, results):
         email = BaseEmailReporter()
         report_file = os.path.join(email.logdir, 'reactor_stall_events_list.html')
-        self.log.debug(f'report_file = {report_file}')
+        self.log.debug('report_file = %s', report_file)
         template_file = 'results_reactor_stall_events_list.html'
         email.save_html_to_file(results, report_file, template_file=template_file)
         self.log.debug('HTML successfully saved to local file')
@@ -172,7 +173,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
     """
 
     def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None, events=None):   # pylint: disable=too-many-arguments
-        super(LatencyDuringOperationsPerformanceAnalyzer, self).__init__(
+        super().__init__(
             es_index=es_index,
             es_doc_type=es_doc_type,
             send_email=send_email,
@@ -229,7 +230,7 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
     """
 
     def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None, events=None):   # pylint: disable=too-many-arguments
-        super(SpecifiedStatsPerformanceAnalyzer, self).__init__(
+        super().__init__(
             es_index=es_index,
             es_doc_type=es_doc_type,
             send_email=send_email,
@@ -364,7 +365,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
     PARAMS = TestStatsMixin.STRESS_STATS
 
     def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None, events=None):  # pylint: disable=too-many-arguments
-        super(PerformanceResultsAnalyzer, self).__init__(
+        super().__init__(
             es_index=es_index,
             es_doc_type=es_doc_type,
             send_email=send_email,
@@ -390,7 +391,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             return None
         stats_average = self._remove_non_stat_keys(test_doc['_source']['results']['stats_average'])
         stats_total = test_doc['_source']['results']['stats_total']
-        if not stats_average or not stats_total or any([stats_average[k] == '' for k in self.PARAMS]):
+        if not stats_average or not stats_total or any(stats_average[k] == '' for k in self.PARAMS):
             self.log.error('Cannot find average/total results for test: {}!'.format(test_doc['_id']))
             return None
         # replace average by total value for op rate
@@ -444,6 +445,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
                     param, src[param], dst[param], version_dst))
         return cmp_res
 
+    # pylint: disable=too-many-arguments
     def check_regression(self, test_id, is_gce=False, email_subject_postfix=None, use_wide_query=False, lastyear=False):
         """
         Get test results by id, filter similar results and calculate max values for each version,
@@ -738,7 +740,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         base_line = current_tests.get(subtest_baseline)
         for sub_type in current_tests:
             if not current_tests[sub_type] or sub_type == subtest_baseline:
-                self.log.info(f'No tests with {subtest_baseline} in the current run {test_version} to compare')
+                self.log.info('No tests with %s in the current run %s to compare', subtest_baseline, test_version)
                 continue
             cmp_res = self.cmp(current_tests[sub_type]['stats'],
                                base_line['stats'],
