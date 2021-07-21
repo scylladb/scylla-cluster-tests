@@ -99,7 +99,9 @@ class CommandRunner(metaclass=ABCMeta):
             new_session: bool = False,
             log_file: Optional[str] = None,
             retry: int = 1,
-            watchers: Optional[List[StreamWatcher]] = None) -> Result:
+            watchers: Optional[List[StreamWatcher]] = None,
+            change_context: bool = False
+            ) -> Result:
         pass
 
     # pylint: disable=too-many-arguments

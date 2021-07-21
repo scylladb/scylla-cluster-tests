@@ -233,7 +233,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
                     result = LocalCmdRunner().run(scp, timeout=timeout)
                 except self.exception_unexpected as ex:
                     if self._is_error_retryable(ex.result.stderr):
-                        raise RetryableNetworkException(ex.result.stderr, original=ex)
+                        raise RetryableNetworkException(ex.result.stderr, original=ex) from ex
                     raise
                 self.log.debug("Command %s with status %s", result.command, result.exited)
                 if result.exited:
@@ -346,7 +346,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
                     result = LocalCmdRunner().run(scp)
                 except self.exception_unexpected as ex:
                     if self._is_error_retryable(ex.result.stderr):
-                        raise RetryableNetworkException(ex.result.stderr, original=ex)
+                        raise RetryableNetworkException(ex.result.stderr, original=ex) from ex
                     raise
                 self.log.debug('Command %s with status %s', result.command, result.exited)
                 if result.exited:
@@ -567,10 +567,18 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             allowed_exceptions = (Exception, )
         return {'n': retry, 'sleep_time': 5, 'allowed_exceptions': allowed_exceptions}
 
-    def run(self, cmd: str, timeout: Optional[float] = None,  # pylint: disable=too-many-arguments
-            ignore_status: bool = False, verbose: bool = True, new_session: bool = False,
-            log_file: Optional[str] = None, retry: int = 1, watchers: Optional[List[StreamWatcher]] = None,
-            change_context: bool = False) -> Result:
+    # pylint: disable=too-many-arguments
+    def run(self,
+            cmd: str,
+            timeout: Optional[float] = None,
+            ignore_status: bool = False,
+            verbose: bool = True,
+            new_session: bool = False,
+            log_file: Optional[str] = None,
+            retry: int = 1,
+            watchers: Optional[List[StreamWatcher]] = None,
+            change_context: bool = False
+            ) -> Result:
         """
         Run command at the remote endpoint and return result
         :param cmd: Command to execute
@@ -600,6 +608,7 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
             except Exception as exc:  # pylint: disable=broad-except
                 if self._run_on_exception(exc, verbose, ignore_status):
                     raise
+            return None
 
         result = _run()
         self._print_command_results(result, verbose, ignore_status)
