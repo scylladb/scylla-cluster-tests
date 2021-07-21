@@ -22,6 +22,7 @@ class DistroError(Exception):
     pass
 
 
+# pylint: disable=too-many-public-methods
 @enum.unique
 class Distro(enum.Enum):
     UNKNOWN = (None, None)
@@ -67,8 +68,8 @@ class Distro(enum.Enum):
                 continue
             try:
                 key, value = line.split("=", 1)
-            except ValueError:
-                raise DistroError(f"Unable to parse /etc/os-release line: `{line}'")
+            except ValueError as err:
+                raise DistroError(f"Unable to parse /etc/os-release line: `{line}'") from err
             value = value.strip('"')
             parsed[key] = value
         distro_id = parsed.get("ID")
@@ -85,7 +86,7 @@ class Distro(enum.Enum):
         if distro == cls.UNKNOWN:
             LOGGER.error("Unable to detect Linux distribution name")
         else:
-            LOGGER.info(f"Detected Linux distribution: {distro.name}")
+            LOGGER.info("Detected Linux distribution: %s", distro.name)
 
         return distro
 
