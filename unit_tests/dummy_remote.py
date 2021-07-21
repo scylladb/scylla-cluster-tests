@@ -43,6 +43,7 @@ class DummyRemote:
 
 
 class LocalNode(BaseNode):
+    # pylint: disable=too-many-arguments
     def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0):
         super().__init__(name, parent_cluster)
         self.remoter = LocalCmdRunner()
@@ -52,8 +53,21 @@ class LocalNode(BaseNode):
     def ip_address(self):
         return "127.0.0.1"
 
+    @property
+    def region(self):
+        return "eu-north-1"
+
     def _refresh_instance_state(self):
         return "127.0.0.1", "127.0.0.1"
+
+    def _get_ipv6_ip_address(self):
+        pass
+
+    def check_spot_termination(self):
+        pass
+
+    def restart(self):
+        pass
 
 
 class LocalLoaderSetDummy:
@@ -67,6 +81,7 @@ class LocalLoaderSetDummy:
 
 
 class LocalScyllaClusterDummy(BaseScyllaCluster):
+    # pylint: disable=super-init-not-called
     def __init__(self):
         self.name = "LocalScyllaClusterDummy"
 
