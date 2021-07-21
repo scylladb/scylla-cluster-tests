@@ -26,6 +26,8 @@ from sdcm.sct_events.events_processes import \
 
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
+# pylint: disable=protected-access
+
 
 class TestFileLogger(unittest.TestCase, EventsUtilsMixin):
     @classmethod
