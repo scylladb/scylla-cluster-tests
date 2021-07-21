@@ -56,7 +56,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         TestConfig.BACKTRACE_DECODING = False
 
         self.monitor_node.start_decode_on_monitor_node_thread()
-        self.node._read_system_log_and_publish_events()
+        self.node._read_system_log_and_publish_events()  # pylint: disable=protected-access
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()
         self.monitor_node.wait_till_tasks_threads_are_stopped()
@@ -76,7 +76,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         TestConfig.DECODING_QUEUE = queue.Queue()
 
         self.monitor_node.start_decode_on_monitor_node_thread()
-        self.node._read_system_log_and_publish_events()
+        self.node._read_system_log_and_publish_events()  # pylint: disable=protected-access
 
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()
@@ -100,7 +100,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         self.monitor_node.start_decode_on_monitor_node_thread()
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_interlace_stall.log')
 
-        self.node._read_system_log_and_publish_events()
+        self.node._read_system_log_and_publish_events()  # pylint: disable=protected-access
 
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()
@@ -124,7 +124,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         self.monitor_node.start_decode_on_monitor_node_thread()
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_core.log')
 
-        self.node._read_system_log_and_publish_events()
+        self.node._read_system_log_and_publish_events()  # pylint: disable=protected-access
 
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()
