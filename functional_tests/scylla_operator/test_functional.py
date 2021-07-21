@@ -228,12 +228,12 @@ def test_orphaned_services_after_shrink_cluster(db_cluster):
     db_cluster.decommission(db_cluster.nodes[-1])
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
-    assert not get_orphaned_services(db_cluster), f"Orphaned services were found after decommission"
+    assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
 
     db_cluster.decommission(db_cluster.nodes[-1])
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
-    assert not get_orphaned_services(db_cluster), f"Orphaned services were found after decommission"
+    assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
 
 
 @pytest.mark.require_node_terminate('drain_k8s_node')
@@ -241,16 +241,16 @@ def test_orphaned_services_after_drain(db_cluster):
     """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
     node_to_remove = random.choice(db_cluster.non_seed_nodes)
     node_to_remove_uid = node_to_remove.k8s_pod_uid
-    log.info(f'TerminateNode %s (uid=%s)', node_to_remove, node_to_remove_uid)
+    log.info('TerminateNode %s (uid=%s)', node_to_remove, node_to_remove_uid)
     node_to_remove.drain_k8s_node()
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-    assert not get_orphaned_services(db_cluster), f"Orphaned services were found after drain"
+    assert not get_orphaned_services(db_cluster), "Orphaned services were found after drain"
 
     node_to_remove.mark_to_be_replaced()
     node_to_remove.wait_till_k8s_pod_get_uid(ignore_uid=node_to_remove_uid)
     node_to_remove.wait_for_pod_readiness()
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-    assert not get_orphaned_services(db_cluster), f"Orphaned services were found after replace"
+    assert not get_orphaned_services(db_cluster), "Orphaned services were found after replace"
 
 
 def test_orphaned_services_multi_rack(db_cluster):
@@ -262,11 +262,11 @@ def test_orphaned_services_multi_rack(db_cluster):
     log.info("Add node to the rack 2")
     new_nodes.append(db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=2))
 
-    assert not get_orphaned_services(db_cluster), f"Orphaned services were found after grow cluster with new racks"
+    assert not get_orphaned_services(db_cluster), "Orphaned services were found after grow cluster with new racks"
 
     log.info("Decommission of 2 nodes")
     for node in new_nodes:
         db_cluster.decommission(node[0])
 
     db_cluster.wait_for_pods_readiness(pods_to_wait=2, total_pods=len(db_cluster.nodes))
-    assert not get_orphaned_services(db_cluster), f"Orphaned services were found after decommission"
+    assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
