@@ -22,26 +22,26 @@ from sdcm.sct_events.database import \
 class TestDatabaseLogEvent(unittest.TestCase):
     def test_known_system_errors(self):
         self.assertTrue(issubclass(DatabaseLogEvent.NO_SPACE_ERROR, DatabaseLogEvent))
-        self.assertTrue(issubclass(DatabaseLogEvent.UNKNOWN_VERB, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.CLIENT_DISCONNECT, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.SEMAPHORE_TIME_OUT, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.SYSTEM_PAXOS_TIMEOUT, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.RESTARTED_DUE_TO_TIME_OUT, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.EMPTY_NESTED_EXCEPTION, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.DATABASE_ERROR, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.BAD_ALLOC, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.SCHEMA_FAILURE, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.RUNTIME_ERROR, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.FILESYSTEM_ERROR, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.STACKTRACE, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.BACKTRACE, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.ABORTING_ON_SHARD, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.SEGMENTATION, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.INTEGRITY_CHECK, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.SUPPRESSED_MESSAGES, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.stream_exception, DatabaseLogEvent)),
-        self.assertTrue(issubclass(DatabaseLogEvent.POWER_OFF, DatabaseLogEvent)),
+        self.assertTrue(issubclass(DatabaseLogEvent.UNKNOWN_VERB, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.CLIENT_DISCONNECT, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.SEMAPHORE_TIME_OUT, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.SYSTEM_PAXOS_TIMEOUT, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.RESTARTED_DUE_TO_TIME_OUT, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.EMPTY_NESTED_EXCEPTION, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.DATABASE_ERROR, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.BAD_ALLOC, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.SCHEMA_FAILURE, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.RUNTIME_ERROR, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.FILESYSTEM_ERROR, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.STACKTRACE, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.BACKTRACE, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.ABORTING_ON_SHARD, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.SEGMENTATION, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.INTEGRITY_CHECK, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.SUPPRESSED_MESSAGES, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.stream_exception, DatabaseLogEvent))
+        self.assertTrue(issubclass(DatabaseLogEvent.POWER_OFF, DatabaseLogEvent))
 
     def test_reactor_stalled_severity(self):
         event1 = DatabaseLogEvent.REACTOR_STALLED()
