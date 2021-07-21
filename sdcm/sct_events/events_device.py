@@ -139,6 +139,7 @@ class EventsDevice(multiprocessing.Process):
                 while sub.poll(timeout=self.sub_polling_timeout):
                     yield sub.recv_pyobj(flags=zmq.NOBLOCK)
 
+    # pylint: disable=import-outside-toplevel
     def outbound_events(self,
                         stop_event: StopEvent,
                         events_counter: multiprocessing.Value) -> Generator[Tuple[str, Any], None, None]:
@@ -172,7 +173,7 @@ class EventsDevice(multiprocessing.Process):
                 if isinstance(obj, SystemEvent):
                     continue
 
-                obj_filtered = any([f.eval_filter(obj) for f in filters.values()])
+                obj_filtered = any(f.eval_filter(obj) for f in filters.values())
 
                 if obj_filtered:
                     continue
