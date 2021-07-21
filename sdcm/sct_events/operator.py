@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import List, Tuple, Type, Optional
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event
+from sdcm.sct_events.base import LogEvent, LogEventProtocol, T_log_event
 
 
 LOGGER = logging.getLogger(__name__)
@@ -44,6 +44,7 @@ class ScyllaOperatorLogEvent(LogEvent):
         '_trace_id': 'trace_id'
     }
 
+    # pylint: disable=too-many-arguments
     def __init__(self, timestamp=None, namespace=None, cluster=None, message=None, error=None, trace_id=None,
                  regex=None, severity=Severity.ERROR):
         super().__init__(regex, severity=severity)
@@ -55,6 +56,7 @@ class ScyllaOperatorLogEvent(LogEvent):
         cluster = f"/{self.cluster}" if self.cluster else ""
         return super().msgfmt + " {0.trace_id} {0.namespace}" + cluster + ": {0.message}, {0.error}"
 
+    # pylint: disable=too-many-arguments
     def set_params(self, timestamp=None, namespace=None, cluster=None, message=None, error=None, trace_id=None):
         self.namespace = namespace
         self.cluster = cluster
