@@ -18,6 +18,7 @@ def avg(values):
     return sum(values)/len(values)
 
 
+# pylint: disable=too-many-arguments,too-many-locals,too-many-nested-blocks,too-many-branches
 def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
     res = dict()
     prometheus = PrometheusDBStats(host=monitor_node.external_address)
@@ -37,7 +38,7 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
             if not entry['values']:
                 continue
             sequence = [float(val[-1]) for val in entry['values'] if not val[-1].lower() == 'nan']
-            if not sequence or all([val == sequence[0] for val in sequence]):
+            if not sequence or all(val == sequence[0] for val in sequence):
                 continue
             latency_values_lst.extend(sequence)
             max_latency_values_lst.extend(sequence)
