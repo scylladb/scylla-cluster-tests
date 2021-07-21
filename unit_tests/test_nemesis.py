@@ -20,6 +20,9 @@ class FakeNemesis(Nemesis):
     def __new__(cls, tester_obj, termination_event, *args):
         return object.__new__(cls)
 
+    def disrupt(self):
+        pass
+
 
 class ChaosMonkey(FakeNemesis):
     ...
@@ -32,7 +35,7 @@ class FakeCategoricalMonkey(CategoricalMonkey):
         return object.__new__(cls)
 
     def __init__(self, tester_obj, termination_event, dist: dict, default_weight: float = 1):
-        super(CategoricalMonkey, self).__init__(tester_obj, termination_event)
+        super().__init__(tester_obj, termination_event, dist, default_weight)
         setattr(CategoricalMonkey, 'disrupt_m1', self.disrupt_m1)
         setattr(CategoricalMonkey, 'disrupt_m2', self.disrupt_m2)
         self.disruption_distribution = CategoricalMonkey.get_disruption_distribution(dist, default_weight)
@@ -62,6 +65,7 @@ def test_list_nemesis_of_added_disrupt_methods():
     assert nemesis.call_random_disrupt_method(disrupt_methods=['disrupt_add_remove_dc']) is None
 
 
+# pylint: disable=super-init-not-called,too-many-ancestors
 def test_is_it_on_kubernetes():
     class FakeLocalMinimalScyllaPodCluster(LocalMinimalScyllaPodCluster):
         def __init__(self, params: dict = None):
@@ -91,6 +95,7 @@ def test_is_it_on_kubernetes():
         def __init__(self, params: dict = None):
             self.params = params
 
+    # pylint: disable=redefined-outer-name,protected-access,too-few-public-methods
     class FakeTester:
         def __init__(self, db_cluster):
             self.params = {'nemesis_interval': 10, 'nemesis_filter_seeds': 1}
@@ -108,9 +113,8 @@ def test_is_it_on_kubernetes():
     assert not FakeNemesis(FakeTester(FakeScyllaAWSCluster()), None)._is_it_on_kubernetes()
     assert not FakeNemesis(FakeTester(FakeScyllaDockerCluster()), None)._is_it_on_kubernetes()
 
+
 # pylint: disable=protected-access
-
-
 def test_categorical_monkey():
     tester = FakeTester()
 
