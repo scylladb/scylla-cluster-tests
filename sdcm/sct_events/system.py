@@ -39,6 +39,7 @@ class TestTimeoutEvent(SctEvent):
 class TestFrameworkEvent(InformationalEvent):  # pylint: disable=too-many-instance-attributes
     __test__ = False  # Mark this class to be not collected by pytest.
 
+    # pylint: disable=too-many-arguments
     def __init__(self,
                  source: Any,
                  source_method: Optional = None,
@@ -143,6 +144,7 @@ class ThreadFailedEvent(InformationalEvent):
 
 
 class CoreDumpEvent(InformationalEvent):
+    # pylint: disable=too-many-arguments
     def __init__(self,
                  node: Any,
                  corefile_url: str,
