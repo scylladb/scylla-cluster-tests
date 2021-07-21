@@ -182,10 +182,10 @@ class SctEventTypesRegistry(Dict[str, Type["SctEvent"]]):  # pylint: disable=too
 
 
 class EventPeriod(Enum):
-    Begin = "begin"
-    End = "end"
-    Informational = "one-time"  # this is not interval event. It's for one point of time event
-    NotDefined = "not-set"
+    BEGIN = "begin"
+    END = "end"
+    INFORMATIONAL = "one-time"  # this is not interval event. It's for one point of time event
+    NOT_DEFINED = "not-set"
 
 
 class SctEvent:
@@ -197,7 +197,7 @@ class SctEvent:
     type: Optional[str] = None  # this attribute set by add_subevent_type()
     subtype: Optional[str] = None  # this attribute set by add_subevent_type()
 
-    period_type: str = EventPeriod.NotDefined.value  # attribute possible values are from EventTypes enum
+    period_type: str = EventPeriod.NOT_DEFINED.value  # attribute possible values are from EventTypes enum
 
     formatter: Callable[[str, SctEvent], str] = staticmethod(str.format)
     msgfmt: str = "({0.base} {0.severity}) period_type={0.period_type} event_id={0.event_id}"
@@ -348,8 +348,8 @@ class SctEvent:
 class InformationalEvent(SctEvent, abstract=True):
 
     def __init__(self, severity: Severity = Severity.UNKNOWN):
-        super(InformationalEvent, self).__init__(severity=severity)
-        self.period_type = EventPeriod.Informational.value
+        super().__init__(severity=severity)
+        self.period_type = EventPeriod.INFORMATIONAL.value
 
 
 class ContinuousEvent(SctEvent, abstract=True):
@@ -441,7 +441,7 @@ class ContinuousEvent(SctEvent, abstract=True):
     def begin_event(self) -> ContinuousEvent:
         self.timestamp = time.time()
         self.begin_timestamp = self.timestamp
-        self.period_type = EventPeriod.Begin.value
+        self.period_type = EventPeriod.BEGIN.value
         self.severity = Severity.NORMAL
         if self.publish_event:
             self._ready_to_publish = True
@@ -452,7 +452,7 @@ class ContinuousEvent(SctEvent, abstract=True):
     def end_event(self) -> None:
         self.timestamp = time.time()
         self.end_timestamp = self.timestamp
-        self.period_type = EventPeriod.End.value
+        self.period_type = EventPeriod.END.value
         if self.publish_event:
             self._ready_to_publish = True
             self.publish()
@@ -466,7 +466,7 @@ class ContinuousEvent(SctEvent, abstract=True):
     # TODO: rename function to "error" after the refactor will be done
     def event_error(self):
         self.timestamp = time.time()
-        self.period_type = EventPeriod.Informational.value
+        self.period_type = EventPeriod.INFORMATIONAL.value
         self.duration = None
         if self.publish_event:
             self._ready_to_publish = True

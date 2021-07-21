@@ -294,7 +294,7 @@ def get_pattern_to_event_to_func_mapping(node: str) \
         event_filter \
             .filter_by_node(node=node) \
             .filter_by_type(event_type=event_type) \
-            .filter_by_period(period_type=EventPeriod.Begin.value)
+            .filter_by_period(period_type=EventPeriod.BEGIN.value)
 
         if shard is not None:
             event_filter.filter_by_shard(shard)
@@ -305,13 +305,13 @@ def get_pattern_to_event_to_func_mapping(node: str) \
             raise ContinuousEventRegistryException("Did not find any events of type {event_type}"
                                                    "with period type {period_type}."
                                                    .format(event_type=event_type,
-                                                           period_type=EventPeriod.Begin.value))
+                                                           period_type=EventPeriod.BEGIN.value))
         if len(begun_events) > 1:
             LOGGER.warning("Found {event_count} events of type {event_type} with period {event_period}. "
                            "Will apply the function to most recent event by default."
                            .format(event_count=len(begun_events),
                                    event_type=event_type,
-                                   event_period=EventPeriod.Begin.value))
+                                   event_period=EventPeriod.BEGIN.value))
         event = begun_events[-1]
         event.end_event()
 
