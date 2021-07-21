@@ -34,7 +34,7 @@ class NemesisElasticSearchPublisher:
     def create_es_connection(self):
         ks = KeyStore()
         es_conf = ks.get_elasticsearch_credentials()
-        self.es = Elasticsearch(hosts=[es_conf["es_url"]], verify_certs=False,
+        self.es = Elasticsearch(hosts=[es_conf["es_url"]], verify_certs=False,  # pylint: disable=invalid-name
                                 http_auth=(es_conf["es_user"], es_conf["es_password"]))
 
     @cached_property
@@ -84,11 +84,9 @@ class NemesisElasticSearchPublisher:
             if diff > 1.0:
                 # NOTE: useful for cases when loader nodes fail to connect to
                 # terminated K8S host machines. It may provide very huge output up to 1Gb.
-                LOGGER.warning(
-                    f"Got too big error message running '{disrupt_name}' nemesis: "
-                    f"{error_message_size_mb}Mb.\n"
-                    f"The limit is '{self.error_message_size_limit_mb}Mb'. "
-                    "Trimming the error message...")
+                LOGGER.warning("Got too big error message running '%s' nemesis: %sMb.\n"
+                               "The limit is '%sMb'. Trimming the error message...",
+                               disrupt_name, error_message_size_mb, self.error_message_size_limit_mb)
                 # NOTE: we are satisfied making rough rounding here
                 data["error"] = data["error"][:int(len(data["error"]) / diff)]
             new_nemesis_data.update(dict(
