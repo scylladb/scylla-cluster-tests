@@ -16,6 +16,7 @@ import json
 import enum
 
 
+# pylint: disable=too-few-public-methods
 class DefaultValue:
     pass
 
@@ -23,7 +24,8 @@ class DefaultValue:
 __builtin__ = [].__class__.__module__
 
 
-def is_builtin(o): return o.__module__ == __builtin__
+def is_builtin(obj):
+    return obj.__module__ == __builtin__
 
 
 def _init_invoke_result(instance_type, children):
@@ -33,38 +35,34 @@ def _init_invoke_result(instance_type, children):
     )
 
 
-def _init_default(instance_type, children):
-    return True, instance_type()
-
-
 class PicklerAction(enum.Enum):
-    passthrough = 1
+    PASSTHROUGH = 1
 
 
 class Pickler:
     class_info = {
         'fabric.runners.Result': {
             'init_args': {
-                'stderr': PicklerAction.passthrough,
-                'stdout': PicklerAction.passthrough,
-                'exited': PicklerAction.passthrough,
+                'stderr': PicklerAction.PASSTHROUGH,
+                'stdout': PicklerAction.PASSTHROUGH,
+                'exited': PicklerAction.PASSTHROUGH,
                 'connection': None
             },
             'instance_attrs': {
-                'exit_status': PicklerAction.passthrough
+                'exit_status': PicklerAction.PASSTHROUGH
             }
         },
         'sdcm.coredump.CoreDumpInfo': {
             'init_args': {
                 'process_retry': 0,
                 'node': None,
-                '*': PicklerAction.passthrough,
+                '*': PicklerAction.PASSTHROUGH,
             },
         },
         'invoke.exceptions.UnexpectedExit': {
             'init_args': {
-                'result': PicklerAction.passthrough,
-                'reason': PicklerAction.passthrough
+                'result': PicklerAction.PASSTHROUGH,
+                'reason': PicklerAction.PASSTHROUGH
             }
         }
     }
@@ -77,12 +75,12 @@ class Pickler:
 
     @staticmethod
     def import_and_return(path):
-        gl = globals()
-        tclass = gl.get(path, None)
+        global_vars = globals()
+        tclass = global_vars.get(path, None)
         if tclass is not None:
             return tclass
         paths = path.split('.')
-        gl[path] = lib = getattr(__import__(
+        global_vars[path] = lib = getattr(__import__(
             '.'.join(paths[0:-1]), globals(), locals(), fromlist=[paths[-1]], level=0), paths[-1])
         return lib
 
@@ -139,7 +137,7 @@ class Pickler:
             return cls._to_data_list(obj)
         if isinstance(obj, tuple):
             return tuple(cls._to_data_list(obj))
-        if type(obj) is type:
+        if isinstance(obj, type):
             return {'__class__': obj.__name__}
         return cls._to_data_object(obj)
 
@@ -164,7 +162,7 @@ class Pickler:
             obj = obj.__dict__
         for attr_name, attr_value in obj.items():
             attr_action = action_map.get(attr_name, default_action)
-            if attr_action is PicklerAction.passthrough:
+            if attr_action is PicklerAction.PASSTHROUGH:
                 yield attr_name, cls.from_data(attr_value)
                 continue
         for attr_name, attr_action in action_map.items():
@@ -185,7 +183,7 @@ class Pickler:
             init_args[attr_name] = attr_value
         instance_class = cls.import_and_return(instance_type)
         instance = instance_class(**init_args)
-        for attr_name, attr_value in cls._from_data_iterate_attrs(instance_type, obj, 'init_args', PicklerAction.passthrough):
+        for attr_name, attr_value in cls._from_data_iterate_attrs(instance_type, obj, 'init_args', PicklerAction.PASSTHROUGH):
             setattr(instance, attr_name, attr_value)
         return instance
 
