@@ -13,7 +13,6 @@
 #
 # Copyright (c) 2021 ScyllaDB
 from sdcm.cluster_k8s import SCYLLA_NAMESPACE
-from sdcm.utils.k8s import KubernetesOps
 
 
 def get_orphaned_services(db_cluster):
@@ -32,4 +31,4 @@ def scylla_pod_names(db_cluster):
 def scylla_services_names(db_cluster):
     services = db_cluster.k8s_cluster.kubectl(f"get svc -n {SCYLLA_NAMESPACE} -l scylla/cluster=sct-cluster "
                                               f"-o=custom-columns='NAME:.metadata.name'")
-    return [name for name in services.stdout.split() if name != 'NAME' and name != 'sct-cluster-client']
+    return [name for name in services.stdout.split() if name not in ('NAME', 'sct-cluster-client')]
