@@ -26,6 +26,8 @@ from sdcm.sct_events.base import \
 Y = None  # define a global name for pickle.
 
 
+# pylint: disable=protected-access,invalid-name,abstract-method,redefined-outer-name,global-statement
+
 class TestSctEventDefaultRegistry(unittest.TestCase):
     def test_sct_event_is_in_registry(self):
         self.assertIn("SctEvent", SctEvent._sct_event_types_registry)
@@ -91,6 +93,7 @@ class TestSctEvent(SctEventTestCase):
         self.assertIsInstance(y, SctEventProtocol)
 
     def test_subclass_twice_with_same_name(self):
+        # pylint: disable=unused-variable
         class Y(SctEvent):
             pass
 
@@ -300,6 +303,7 @@ class TestSctEvent(SctEventTestCase):
         class Y(SctEvent):
             T: Type[YT]
 
+        # pylint: disable=too-few-public-methods
         class Mixin:
             severity = Severity.WARNING
 
@@ -354,6 +358,7 @@ class TestSctEvent(SctEventTestCase):
                 self.attr1 = attr1
                 super().__init__(severity=Severity.ERROR)
 
+        # pylint: disable=too-few-public-methods
         class Mixin:
             severity = Severity.WARNING
 
