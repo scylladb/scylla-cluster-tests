@@ -47,11 +47,10 @@ class CQLColumnType:
     self_type = None
     parent = None
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **__):
         if cls.self_type is None:
             raise ValueError(f"<{str(cls)}> self_type should be defined")
-        # pylint: disable=protected-access
-        CQLTypeBuilder._register_class(cls)
+        CQLTypeBuilder._register_class(cls)  # pylint: disable=protected-access
 
     def __init__(self, self_type=None):
         self.self_type = self_type
