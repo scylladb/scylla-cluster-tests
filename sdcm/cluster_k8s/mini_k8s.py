@@ -159,22 +159,22 @@ class KindK8sMixin:
     scylla_image: Optional[str]
     software_version: str
     _target_user: str
-    _create_kubectl_config_cmd: str = 'kind export kubeconfig'
+    _create_kubectl_config_cmd: str = '/var/tmp/kind export kubeconfig'
 
     @property
     def is_k8s_software_installed(self) -> bool:
-        return self.host_node.remoter.run('ls /usr/local/bin/kind || ls /usr/bin/kind', ignore_status=True).ok
+        return self.host_node.remoter.run('ls /var/tmp/kind', ignore_status=True).ok
 
     @property
     def is_k8s_software_running(self) -> bool:
-        return self.host_node.remoter.run('kind get kubeconfig', ignore_status=True).ok
+        return self.host_node.remoter.run('/var/tmp/kind get kubeconfig', ignore_status=True).ok
 
     def setup_k8s_software(self):
         script = dedent(f"""
         # Download kubectl binary.
-        curl -fsSLo /usr/local/bin/kind \
+        curl -fsSLo /var/tmp/kind \
             https://kind.sigs.k8s.io/dl/v{self.software_version}/kind-linux-amd64
-        chmod +x /usr/local/bin/kind
+        chmod +x /var/tmp/kind
         """)
         self.host_node.remoter.sudo(f'bash -cxe "{script}"')
 
@@ -183,7 +183,7 @@ class KindK8sMixin:
         script = dedent("""
         sysctl fs.protected_regular=0
         ip link set docker0 promisc on
-        kind delete cluster || true
+        /var/tmp/kind delete cluster || true
         cat >/tmp/kind.cluster.yaml <<- EndOfSpec
         kind: Cluster
         apiVersion: kind.x-k8s.io/v1alpha4
@@ -206,8 +206,8 @@ class KindK8sMixin:
           - role: worker
           - role: worker
         EndOfSpec
-        kind delete cluster || true
-        kind create cluster --config /tmp/kind.cluster.yaml
+        /var/tmp/kind delete cluster || true
+        /var/tmp/kind create cluster --config /tmp/kind.cluster.yaml
         SERVICE_GATEWAY=`docker inspect kind-control-plane -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`
         ip ro add 10.96.0.0/16 via $SERVICE_GATEWAY || ip ro change 10.96.0.0/16 via $SERVICE_GATEWAY
         ip ro add 10.224.0.0/16 via $SERVICE_GATEWAY || ip ro change 10.224.0.0/16 via $SERVICE_GATEWAY
@@ -215,12 +215,12 @@ class KindK8sMixin:
         self.host_node.remoter.run(f"sudo -E bash -cxe '{script}'")
 
     def stop_k8s_software(self):
-        self.host_node.remoter.run('kind delete cluster', ignore_status=True)
+        self.host_node.remoter.run('/var/tmp/kind delete cluster', ignore_status=True)
 
     def on_deploy_completed(self):
         if self.scylla_image:
             self.docker_pull(self.scylla_image)
-            self.host_node.remoter.run(f"kind load docker-image {self.scylla_image}", ignore_status=True)
+            self.host_node.remoter.run(f"/var/tmp/kind load docker-image {self.scylla_image}", ignore_status=True)
 
 
 class MinikubeK8sMixin:
@@ -230,22 +230,22 @@ class MinikubeK8sMixin:
     scylla_image: Optional[str]
     software_version: str
     _target_user: str
-    _create_kubectl_config_cmd = 'minikube update-context'
+    _create_kubectl_config_cmd = '/var/tmp/minikube update-context'
 
     @property
     def is_k8s_software_installed(self) -> bool:
-        return self.host_node.remoter.run('ls /usr/local/bin/minikube || ls /usr/bin/minikube', ignore_status=True).ok
+        return self.host_node.remoter.run('ls /var/tmp/minikube', ignore_status=True).ok
 
     @property
     def is_k8s_software_running(self) -> bool:
-        return self.host_node.remoter.run('minikube status', ignore_status=True).ok
+        return self.host_node.remoter.run('/var/tmp/minikube status', ignore_status=True).ok
 
     def setup_k8s_software(self):
         script = dedent(f"""
             # Download Minikube binary.
-            curl -fsSLo /usr/local/bin/minikube \
+            curl -fsSLo /var/tmp/minikube \
                 https://storage.googleapis.com/minikube/releases/v{self.software_version}/minikube-linux-amd64
-            chmod +x /usr/local/bin/minikube
+            chmod +x /var/tmp/minikube
         """)
         self.host_node.remoter.sudo(f'bash -cxe "{script}"')
 
@@ -262,19 +262,19 @@ class MinikubeK8sMixin:
             rm -rf /root/.minikube; ln -s $MINIKUBE_HOME /root/.minikube || true
             {f'rm -rf ~{target_user}/.minikube; '
              f'ln -s $MINIKUBE_HOME ~{target_user}/.minikube || true' if target_user != 'root' else ''}
-            minikube delete || true
-            minikube start --driver=none --extra-config=apiserver.service-node-port-range=1-65535
+            /var/tmp/minikube delete || true
+            /var/tmp/minikube start --driver=none --extra-config=apiserver.service-node-port-range=1-65535
             chmod 777 -R $MINIKUBE_HOME
         """)
         self.host_node.remoter.run(f"sudo -E bash -cxe '{script}'")
 
     def stop_k8s_software(self):
-        self.host_node.remoter.run('minikube delete', ignore_status=True)
+        self.host_node.remoter.run('/var/tmp/minikube delete', ignore_status=True)
 
     def on_deploy_completed(self):
         if self.scylla_image:
             self.docker_pull(self.scylla_image)
-            self.host_node.remoter.run(f'minikube image load {self.scylla_image}', ignore_status=True)
+            self.host_node.remoter.run(f'/var/tmp/minikube image load {self.scylla_image}', ignore_status=True)
 
 
 class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: disable=too-many-public-methods
