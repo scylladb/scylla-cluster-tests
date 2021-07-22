@@ -15,13 +15,17 @@
 
 import logging
 import random
+import threading
 import time
 import pytest
 
-from sdcm.mgmt import TaskStatus  # pylint: disable=import-error
-from sdcm.utils.k8s import HelmValues  # pylint: disable=import-error
-from functional_tests.scylla_operator.libs.helpers import get_orphaned_services
-
+from sdcm.cluster_k8s import ScyllaPodCluster
+from sdcm.mgmt import TaskStatus
+from sdcm.utils.k8s import HelmValues
+from functional_tests.scylla_operator.libs.helpers import (get_orphaned_services,
+                                                           scylla_operator_rollout_restart,
+                                                           wait_for_scylla_operator_rollout_complete,
+                                                           scylla_operator_pods_and_statuses)
 
 log = logging.getLogger()
 
@@ -161,7 +165,7 @@ def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
 
     # NOTE: Create invalid ScyllaCluster which must be failed but not block operator.
     log.info("DEBUG: test_check_operator_operability_when_scylla_crd_is_incorrect")
-    cluster_name, target_chart_name, namespace = ("test-empty-storage-capacity", ) * 3
+    cluster_name, target_chart_name, namespace = ("test-empty-storage-capacity",) * 3
     values = HelmValues({
         'nameOverride': '',
         'fullnameOverride': cluster_name,
@@ -272,3 +276,59 @@ def test_orphaned_services_multi_rack(db_cluster):
 
     db_cluster.wait_for_pods_readiness(pods_to_wait=2, total_pods=len(db_cluster.nodes))
     assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
+
+
+def test_ha_update_spec_while_rollout_restart(db_cluster: ScyllaPodCluster):
+    """
+    Cover the issue https://github.com/scylladb/scylla-operator/issues/410
+    Validate that cluster resources can be updated while the scylla-operator is rolling out.
+    - update cluster specification a few time
+    - start rollout restart in parallel with the update
+    - validate that the cluster specification has been updated
+    """
+    terminate_change_spec_thread = threading.Event()
+    value = 1048576
+    crd_update_errors = []
+
+    def change_cluster_spec():
+        nonlocal value
+        nonlocal crd_update_errors
+        while not terminate_change_spec_thread.wait(0.1):
+            try:
+                db_cluster.replace_scylla_cluster_value('/spec/sysctls', [f"fs.aio-max-nr={value + 1}"])
+                # increase the value just when the sysctls spec value has been updated - to prevent the situation when
+                # value was increased, but sysctls spec value was not updated
+                value += 1
+            except Exception as error:  # pylint: disable=broad-except
+                log.debug("Change /spec/sysctls value to %d failed. Error: %s", value, str(error))
+                crd_update_errors.append(str(error))
+
+    change_cluster_spec_thread = threading.Thread(target=change_cluster_spec, daemon=True)
+    log.info("Start update cluster specification")
+    change_cluster_spec_thread.start()
+
+    log.info("Start rollout restart")
+    scylla_operator_rollout_restart(db_cluster)
+    operator_rollout_errors = wait_for_scylla_operator_rollout_complete(db_cluster)
+    assert not operator_rollout_errors, "Rollout restart failed. Reasons: {}".format('\n'.join(operator_rollout_errors))
+
+    log.info("Stop update cluster specification")
+    terminate_change_spec_thread.set()
+    change_cluster_spec_thread.join()
+
+    assert not crd_update_errors, \
+        "Found following errors during rollout restart: {}".format("\n".join(crd_update_errors))
+
+    sysctl_value = db_cluster.get_scylla_cluster_plain_value('/spec/sysctls')
+    expected_sysctl_value = [f"fs.aio-max-nr={value}"]
+    assert expected_sysctl_value == sysctl_value, \
+        f"Cluster specification has not been updated. Expected {expected_sysctl_value}, actual {sysctl_value}"
+
+
+def test_scylla_operator_pods(db_cluster: ScyllaPodCluster):
+    scylla_operator_pods = scylla_operator_pods_and_statuses(db_cluster)
+
+    assert len(scylla_operator_pods) == 2, f'Expected 2 scylla-operator pods, but exists {len(scylla_operator_pods)}'
+
+    not_running_pods = ','.join([pods_info[0] for pods_info in scylla_operator_pods if pods_info[1] != 'Running'])
+    assert not not_running_pods, f'There are pods in state other than running: {not_running_pods}'
