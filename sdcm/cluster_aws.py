@@ -373,45 +373,76 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
     @staticmethod
     def configure_eth1_script():
-        return dedent("""
-            BASE_EC2_NETWORK_URL=http://169.254.169.254/latest/meta-data/network/interfaces/macs/
-            NUMBER_OF_ENI=`curl -s ${BASE_EC2_NETWORK_URL} | wc -w`
-            for mac in `curl -s ${BASE_EC2_NETWORK_URL}`
-            do
-                DEVICE_NUMBER=`curl -s ${BASE_EC2_NETWORK_URL}${mac}/device-number`
-                if [[ "$DEVICE_NUMBER" == "1" ]]; then
-                   ETH1_MAC=${mac}
+        return dedent(r"""
+            if `grep -qi "ubuntu" /etc/os-release`; then
+
+                ETH1_IP_ADDRESS=`ip route show | grep eth1 | grep -oPm1 'src \K[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*'`
+                ETH1_CIDR_BLOCK=`ip route show | grep eth1 | grep -oPm1 '\K[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*/[0-9]*'`
+                ETH1_SUBNET=`echo ${ETH1_CIDR_BLOCK} | grep -oP '\\K/\\d+'`
+
+                sudo bash -c "echo '
+                network:
+                  version: 2
+                  renderer: networkd
+                  ethernets:
+                    eth0:
+                      dhcp4: yes
+                      dhcp6: yes
+                    eth1:
+                      addresses:
+                       - ${ETH1_IP_ADDRESS}${ETH1_SUBNET}
+                      dhcp4: no
+                      dhcp6: no
+                      routes:
+                       - to: 0.0.0.0/0
+                         via: 10.0.0.1 # Default gateway
+                         table: 2
+                       - to: ${ETH1_CIDR_BLOCK}
+                         scope: link
+                         table: 2
+                      routing-policy:
+                        - from: ${ETH1_IP_ADDRESS}/32
+                          table: 2
+                ' > /etc/netplan/51-eth1.yaml"
+
+                netplan --debug apply
+
+            else
+
+                BASE_EC2_NETWORK_URL=http://169.254.169.254/latest/meta-data/network/interfaces/macs/
+                NUMBER_OF_ENI=`curl -s ${BASE_EC2_NETWORK_URL} | wc -w`
+                for mac in `curl -s ${BASE_EC2_NETWORK_URL}`
+                do
+                    DEVICE_NUMBER=`curl -s ${BASE_EC2_NETWORK_URL}${mac}/device-number`
+                    if [[ "$DEVICE_NUMBER" == "1" ]]; then
+                       ETH1_MAC=${mac}
+                    fi
+                done
+                if [[ ! "${DEVICE_NUMBER}x" == "x" ]]; then
+                   ETH1_IP_ADDRESS=`curl -s ${BASE_EC2_NETWORK_URL}${ETH1_MAC}/local-ipv4s`
+                   ETH1_CIDR_BLOCK=`curl -s ${BASE_EC2_NETWORK_URL}${ETH1_MAC}/subnet-ipv4-cidr-block`
                 fi
-            done
+                sudo bash -c "echo 'GATEWAYDEV=eth0' >> /etc/sysconfig/network"
+                echo "
+                DEVICE="eth1"
+                BOOTPROTO="dhcp"
+                ONBOOT="yes"
+                TYPE="Ethernet"
+                USERCTL="yes"
+                PEERDNS="yes"
+                IPV6INIT="no"
+                PERSISTENT_DHCLIENT="1"
+                " > /etc/sysconfig/network-scripts/ifcfg-eth1
+                echo "
+                default via 10.0.0.1 dev eth1 table 2
+                ${ETH1_CIDR_BLOCK} dev eth1 src ${ETH1_IP_ADDRESS} table 2
+                " > /etc/sysconfig/network-scripts/route-eth1
+                echo "
+                from ${ETH1_IP_ADDRESS}/32 table 2
+                " > /etc/sysconfig/network-scripts/rule-eth1
+                sudo systemctl restart network
 
-            if [[ ! "${DEVICE_NUMBER}x" == "x" ]]; then
-               ETH1_IP_ADDRESS=`curl -s ${BASE_EC2_NETWORK_URL}${ETH1_MAC}/local-ipv4s`
-               ETH1_CIDR_BLOCK=`curl -s ${BASE_EC2_NETWORK_URL}${ETH1_MAC}/subnet-ipv4-cidr-block`
             fi
-
-            sudo bash -c "echo 'GATEWAYDEV=eth0' >> /etc/sysconfig/network"
-
-            echo "
-            DEVICE="eth1"
-            BOOTPROTO="dhcp"
-            ONBOOT="yes"
-            TYPE="Ethernet"
-            USERCTL="yes"
-            PEERDNS="yes"
-            IPV6INIT="no"
-            PERSISTENT_DHCLIENT="1"
-            " > /etc/sysconfig/network-scripts/ifcfg-eth1
-
-            echo "
-            default via 10.0.0.1 dev eth1 table 2
-            ${ETH1_CIDR_BLOCK} dev eth1 src ${ETH1_IP_ADDRESS} table 2
-            " > /etc/sysconfig/network-scripts/route-eth1
-
-            echo "
-            from ${ETH1_IP_ADDRESS}/32 table 2
-            " > /etc/sysconfig/network-scripts/rule-eth1
-
-            sudo systemctl restart network
         """)
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
