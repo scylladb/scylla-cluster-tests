@@ -31,14 +31,13 @@ class ChaosMonkey(FakeNemesis):
 class FakeCategoricalMonkey(CategoricalMonkey):
     runs = []
 
-    def __new__(cls, tester_obj, termination_event, *args):
+    def __new__(cls, *_, **__):
         return object.__new__(cls)
 
     def __init__(self, tester_obj, termination_event, dist: dict, default_weight: float = 1):
-        super().__init__(tester_obj, termination_event, dist, default_weight)
         setattr(CategoricalMonkey, 'disrupt_m1', self.disrupt_m1)
         setattr(CategoricalMonkey, 'disrupt_m2', self.disrupt_m2)
-        self.disruption_distribution = CategoricalMonkey.get_disruption_distribution(dist, default_weight)
+        super().__init__(tester_obj, termination_event, dist, default_weight)
 
     def disrupt_m1(self):
         self.runs.append(1)
@@ -118,15 +117,15 @@ def test_is_it_on_kubernetes():
 def test_categorical_monkey():
     tester = FakeTester()
 
-    nemesis = FakeCategoricalMonkey(tester, None, {'m1': 1}, 0)
+    nemesis = FakeCategoricalMonkey(tester, None, {'m1': 1}, default_weight=0)
     nemesis._random_disrupt()
 
-    nemesis = FakeCategoricalMonkey(tester, None, {'m2': 1}, 0)
+    nemesis = FakeCategoricalMonkey(tester, None, {'m2': 1}, default_weight=0)
     nemesis._random_disrupt()
 
     assert nemesis.runs == [1, 2]
 
-    nemesis = FakeCategoricalMonkey(tester, None, {'m1': 1, 'm2': 1}, 0)
+    nemesis = FakeCategoricalMonkey(tester, None, {'m1': 1, 'm2': 1}, default_weight=0)
     nemesis._random_disrupt()
 
     assert nemesis.runs in ([1, 2, 1], [1, 2, 2])
