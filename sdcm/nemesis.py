@@ -3309,7 +3309,7 @@ class CategoricalMonkey(Nemesis):
             name = str(name)
             prefixed_name = prefixed('disrupt_', name)
             if prefixed_name not in all_methods:
-                raise ValueError(f"'{name}' is not a valid disruption")
+                raise ValueError(f"'{name}' is not a valid disruption. All methods: {all_methods.keys()}")
 
             if not is_nonnegative_number(weight):
                 raise ValueError("Each disruption weight must be a non-negative number."
