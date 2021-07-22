@@ -481,7 +481,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
             return
 
         for doc in results['hits']['hits']:
-            self.log.info("Exlcude test: %s\nCommit: #%s\nRun Date time: %s\n",
+            self.log.info("Exclude test: %s\nCommit: #%s\nRun Date time: %s\n",
                           doc['_id'],
                           doc['_source']['versions']['scylla-server']['commit_id'],
                           doc['_source']['test_run_date'])
