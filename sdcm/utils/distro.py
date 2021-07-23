@@ -41,6 +41,7 @@ class Distro(enum.Enum):
     UBUNTU18 = ("ubuntu", "18.04")
     UBUNTU20 = ("ubuntu", "20.04")
     UBUNTU21 = ("ubuntu", "21.04")
+    SLES15 = ("sles", "15")
 
     @classmethod
     def _missing_(cls, value):
@@ -145,6 +146,14 @@ class Distro(enum.Enum):
     @property
     def is_ubuntu(self):
         return self.value[0] == "ubuntu"  # pylint: disable=unsubscriptable-object
+
+    @property
+    def is_sles(self):
+        return self.value[0] == "sles"  # pylint: disable=unsubscriptable-object
+
+    @property
+    def is_sles15(self):
+        return self == self.SLES15
 
     @property
     def is_debian8(self):

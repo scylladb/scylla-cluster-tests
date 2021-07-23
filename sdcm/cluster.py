@@ -508,7 +508,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @property
     def scylla_server_sysconfig_path(self):
-        return f"/etc/{'sysconfig' if self.distro.is_rhel_like else 'default'}/scylla-server"
+        return f"/etc/{'sysconfig' if self.distro.is_rhel_like or self.distro.is_sles else 'default'}/scylla-server"
 
     def scylla_random_shards(self):
         max_shards = self.cpu_cores
@@ -667,6 +667,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if 'One of the configured repositories failed (Extra Packages for Enterprise Linux 7 - x86_64)' in result:
                 return "enterprise" in self.remoter.sudo("cat /etc/yum.repos.d/scylla.repo").stdout
             return "scylla-enterprise.x86_64" in result or "No matches found" not in result
+        elif self.distro.is_sles:
+            result = self.remoter.sudo("zypper search scylla-enterprise 2>&1", ignore_status=True).stdout
+            return "scylla-enterprise" in result or "No matching items found" not in result
         return "scylla-enterprise" in self.remoter.sudo("apt-cache search scylla-enterprise", ignore_status=True).stdout
 
     @property
@@ -1044,6 +1047,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 f"stderr: {ss_version_result.stderr}")
             if self.is_rhel_like():
                 self.remoter.sudo("yum install -y iproute", ignore_status=True)
+            elif self.distro.is_sles:
+                self.remoter.sudo("zypper install -y iproute", ignore_status=True)
             else:
                 self.remoter.sudo("apt-get install -y iproute2", ignore_status=True)
 
@@ -1817,8 +1822,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 f"sed -i '/{append_scylla_args}/! s/SCYLLA_ARGS=\"/&{append_scylla_args} /' "
                 f"{self.scylla_server_sysconfig_path}")
 
-        if debug_install and self.distro.is_rhel_like:
-            self.remoter.sudo("yum install -y scylla-gdb", verbose=True, ignore_status=True)
+        if debug_install:
+            if self.distro.is_rhel_like:
+                self.remoter.sudo("yum install -y scylla-gdb", verbose=True, ignore_status=True)
+            elif self.distro.is_sles:
+                self.remoter.sudo("zypper install -y scylla-gdb", verbose=True, ignore_status=True)
 
         if self.init_system == "systemd":
             systemd_version = get_systemd_version(self.remoter.run("systemctl --version", ignore_status=True).stdout)
@@ -1851,14 +1859,21 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return
         if self.is_rhel_like():
             repo_path = '/etc/yum.repos.d/scylla.repo'
-            self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
-            self.remoter.run('sudo chown root:root %s' % repo_path)
-            self.remoter.run('sudo chmod 644 %s' % repo_path)
+            self.remoter.sudo('curl -o %s -L %s' % (repo_path, scylla_repo))
+            self.remoter.sudo('chown root:root %s' % repo_path)
+            self.remoter.sudo('chmod 644 %s' % repo_path)
+            result = self.remoter.run('cat %s' % repo_path, verbose=True)
+            verify_scylla_repo_file(result.stdout, is_rhel_like=True)
+        elif self.distro.is_sles:
+            repo_path = '/etc/zypp/repos.d/scylla.repo'
+            self.remoter.sudo('curl -o %s -L %s' % (repo_path, scylla_repo))
+            self.remoter.sudo('chown root:root %s' % repo_path)
+            self.remoter.sudo('chmod 644 %s' % repo_path)
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=True)
         else:
             repo_path = '/etc/apt/sources.list.d/scylla.list'
-            self.remoter.run('sudo curl -o %s -L %s' % (repo_path, scylla_repo))
+            self.remoter.sudo('curl -o %s -L %s' % (repo_path, scylla_repo))
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=False)
         self.update_repo_cache()
@@ -1866,10 +1881,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def download_scylla_manager_repo(self, scylla_repo: str) -> None:
         if self.distro.is_rhel_like:
             repo_path = '/etc/yum.repos.d/scylla-manager.repo'
+        elif self.distro.is_sles:
+            repo_path = '/etc/zypp/repos.d/scylla-manager.repo'
         else:
             repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
         self.remoter.sudo(f"curl -o {repo_path} -L {scylla_repo}")
-        if not self.distro.is_rhel_like:
+        if self.distro.is_debian_like:
             self.remoter.sudo("apt-get update", ignore_status=True)
 
     @retrying(n=30, sleep_time=15, allowed_exceptions=UnexpectedExit)
@@ -1877,7 +1894,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if self.distro.is_ubuntu:
             wait.wait_for(func=self.is_apt_lock_free, step=30, timeout=60, text='Checking if package manager is free',
                           throw_exc=False)
-        self.remoter.sudo(f'{"yum" if self.distro.is_rhel_like else "apt-get"} install -y {package_name}')
+        if self.distro.is_rhel_like:
+            pkg_cmd = 'yum'
+        elif self.distro.is_sles:
+            pkg_cmd = 'zypper'
+        else:
+            pkg_cmd = 'apt-get'
+        self.remoter.sudo(f'{pkg_cmd} install -y {package_name}')
 
     def is_apt_lock_free(self) -> bool:
         return self.remoter.sudo("lsof /var/lib/dpkg/lock", ignore_status=True).ok
@@ -1938,6 +1961,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.download_scylla_manager_repo(scylla_mgmt_address)
         if self.is_rhel_like():
             self.remoter.sudo("yum update scylla-manager-agent -y")
+        elif self.distro.is_sles:
+            self.remoter.sudo("zypper update scylla-manager-agent -y")
         else:
             self.remoter.sudo("apt-get update", ignore_status=True)
             self.remoter.sudo("apt-get install -y scylla-manager-agent")
@@ -1970,10 +1995,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         """
         self.stop_scylla_server(verify_down=False, ignore_status=True)
         if self.is_rhel_like():
-            self.remoter.run('sudo yum remove -y scylla\\*')
+            self.remoter.sudo('yum remove -y scylla\\*')
+        elif self.distro.is_sles:
+            self.remoter.sudo('zypper remove -y scylla\\*', ignore_status=True)
         else:
-            self.remoter.run('sudo rm -f /etc/apt/sources.list.d/scylla.list')
-            self.remoter.run('sudo apt-get remove -y scylla\\*', ignore_status=True)
+            self.remoter.sudo('rm -f /etc/apt/sources.list.d/scylla.list')
+            self.remoter.sudo('apt-get remove -y scylla\\*', ignore_status=True)
         self.update_repo_cache()
         self.clean_scylla_data()
 
@@ -1981,13 +2008,17 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         try:
             if self.is_rhel_like():
                 # try to avoid ERROR 404 of yum, reference https://wiki.centos.org/yum-errors
-                self.remoter.run('sudo yum clean all')
-                self.remoter.run('sudo rm -rf /var/cache/yum/')
-                self.remoter.run('sudo yum makecache', retry=3)
+                self.remoter.sudo('yum clean all')
+                self.remoter.sudo('rm -rf /var/cache/yum/')
+                self.remoter.sudo('yum makecache', retry=3)
+            elif self.distro.is_sles:
+                self.remoter.sudo('zypper clean all')
+                self.remoter.sudo('rm -rf /var/cache/zypp/')
+                self.remoter.sudo('zypper refresh', retry=3)
             else:
-                self.remoter.run('sudo apt-get clean all')
-                self.remoter.run('sudo rm -rf /var/cache/apt/')
-                self.remoter.run('sudo apt-get update', retry=3)
+                self.remoter.sudo('apt-get clean all')
+                self.remoter.sudo('rm -rf /var/cache/apt/')
+                self.remoter.sudo('apt-get update', retry=3)
                 self.remoter.run("echo 'debconf debconf/frontend select Noninteractive' | sudo debconf-set-selections")
         except Exception as ex:  # pylint: disable=broad-except
             self.log.error('Failed to update repo cache: %s', ex)
@@ -2000,6 +2031,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.remoter.run('sudo yum update -y --skip-broken --disablerepo=epel', retry=3)
             else:
                 self.remoter.run('sudo yum update -y --skip-broken', retry=3)
+        elif self.distro.is_sles:
+            self.remoter.sudo('zypper update -y -l')
         else:
             self.remoter.run(
                 'sudo DEBIAN_FRONTEND=noninteractive apt-get '
@@ -2025,6 +2058,19 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run('sudo yum install -y python36-PyYAML', ignore_status=True)
             self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
             self.remoter.run('sudo yum install -y scylla-gdb', ignore_status=True)
+        elif self.distro.is_sles15:
+            self.remoter.sudo('zypper install -y rsync tcpdump screen')
+            self.download_scylla_repo(scylla_repo)
+            # self.remoter.sudo('zypper mr -e Python_2_Module_x86_64:SLE-Module-Python2-15-SP3-Pool')
+            # self.remoter.sudo('zypper mr -e Python_2_Module_x86_64:SLE-Module-Python2-15-SP3-Updates')
+            # self.remoter.sudo('zypper mr -e Legacy_Module_x86_64:SLE-Module-Legacy15-SP3-Updates')
+            # self.remoter.sudo('zypper mr -e Legacy_Module_x86_64:SLE-Module-Legacy15-SP3-Pool')
+            self.remoter.sudo('SUSEConnect --product sle-module-legacy/15.3/x86_64')
+            self.remoter.sudo('SUSEConnect --product sle-module-python2/15.3/x86_64')
+            self.remoter.sudo('zypper install -y python2-PyYAML', ignore_status=True)
+            self.remoter.sudo('zypper install -y python3-PyYAML', ignore_status=True)
+            self.remoter.sudo('zypper install -y {}'.format(self.scylla_pkg()))
+            self.remoter.sudo('zypper install -y scylla-gdb', ignore_status=True)
         else:
             if self.is_ubuntu14():
                 self.remoter.run('sudo apt-get install software-properties-common -y')
@@ -2120,6 +2166,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # https://github.com/scylladb/scylla-jmx/issues/127
         if self.is_rhel_like():
             self.remoter.run(f'sudo yum install -y java-1.8.0-openjdk {additional_pkgs}')
+        elif self.distro.is_sles:
+            raise Exception("Offline install on SLES isn't supported")
         elif self.distro.is_debian10:
             self.remoter.run(f'sudo apt-get install -y openjdk-11-jre-headless {additional_pkgs}')
         else:
@@ -2150,6 +2198,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def install_scylla_debuginfo(self) -> None:
         if self.distro.is_rhel_like:
             cmd = fr"yum install -y {self.scylla_pkg()}-debuginfo-{self.scylla_version}\*"
+        elif self.distro.is_sles:
+            cmd = fr"zypper install -y {self.scylla_pkg()}-debuginfo-{self.scylla_version}\*"
         else:
             cmd = fr"apt-get install -y {self.scylla_pkg()}-server-dbg={self.scylla_version}\*"
 
@@ -2157,7 +2207,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.remoter.sudo(cmd, ignore_status=True)
 
     def is_scylla_installed(self, raise_if_not_installed=False):
-        if self.distro.is_rhel_like:
+        if self.distro.is_rhel_like or self.distro.is_sles:
             result = self.remoter.run(f'rpm -q {self.scylla_pkg()}', verbose=False, ignore_status=True)
         elif self.distro.is_ubuntu or self.distro.is_debian:
             result = self.remoter.run(f'dpkg-query --show {self.scylla_pkg()}', verbose=False, ignore_status=True)
@@ -2299,6 +2349,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.download_scylla_manager_repo(scylla_mgmt_address)
         if self.distro.is_rhel_like:
             self.remoter.sudo("yum update scylla-manager-server scylla-manager-client -y")
+        elif self.distro.is_sles:
+            self.remoter.sudo("zypper update scylla-manager-server scylla-manager-client -y")
         else:
             self.remoter.sudo("apt-get update", ignore_status=True)
             # Upgrade should update packages of:
@@ -2327,6 +2379,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if self.distro.is_rhel_like:
             self.install_epel()
             self.remoter.sudo("yum install python36-PyYAML -y", retry=3)
+        elif self.distro.is_sles:
+            self.remoter.sudo("zypper install python36-PyYAML -y", retry=3)
         elif self.distro.is_debian or self.distro.is_ubuntu:
             self.remoter.sudo('apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B', retry=3)
             self.remoter.sudo('apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19', retry=3)
@@ -2899,7 +2953,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @property
     def scylla_packages_installed(self) -> List[str]:
-        if self.distro.is_rhel_like:
+        if self.distro.is_rhel_like or self.distro.is_sles:
             cmd = "rpm -qa 'scylla*'"
         else:
             cmd = "dpkg-query --show 'scylla*'"
