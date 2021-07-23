@@ -10,7 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-
+import json
 import logging
 import time
 from textwrap import dedent
@@ -20,6 +20,7 @@ from functools import cached_property
 import yaml
 
 from sdcm import sct_abs_path, cluster
+from sdcm.utils.decorators import retrying
 from sdcm.utils.k8s import ApiCallRateLimiter, TokenUpdateThread
 from sdcm.utils.gce_utils import GcloudContextManager
 from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BaseScyllaPodContainer, CloudK8sNodePool
@@ -134,9 +135,14 @@ class GcloudTokenUpdateThread(TokenUpdateThread):
         self._token_min_duration = token_min_duration
         super().__init__(kubectl_token_path=kubectl_token_path)
 
+    @retrying(n=5, message='Get token from google cloud', allowed_exceptions=(Exception,))
     def get_token(self) -> str:
-        return self._gcloud.run(
+        gcloud_token = self._gcloud.run(
             f'config config-helper --min-expiry={self._token_min_duration * 60} --format=json')
+        # gcloud config config-helper can return broken token
+        # deserializing it to be sure that token has correct format
+        json.loads(gcloud_token)
+        return gcloud_token
 
 
 class GkeCluster(KubernetesCluster):
