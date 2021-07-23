@@ -265,10 +265,19 @@ class RepairEvent(ScyllaDatabaseContinuousEvent):
         super().__init__(node=node, shard=shard, severity=severity)
 
 
+class JMXServiceEvent(ScyllaDatabaseContinuousEvent):
+    begin_pattern = r'Started Scylla JMX'
+    end_pattern = r'JMX is enabled to receive remote connections on port: \d+'
+
+    def __init__(self, node: str, severity=Severity.NORMAL, **__):
+        super().__init__(node=node, severity=severity)
+
+
 SCYLLA_DATABASE_CONTINUOUS_EVENTS = [
     ScyllaServerStatusEvent,
     BootstrapEvent,
-    RepairEvent
+    RepairEvent,
+    JMXServiceEvent
 ]
 
 
