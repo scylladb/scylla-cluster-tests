@@ -708,8 +708,9 @@ class TokenUpdateThread(threading.Thread, metaclass=abc.ABCMeta):
         while not self._termination_event.wait(wait_time):
             tmp_token_path = self._kubectl_token_path + ".tmp"
             try:
+                token = self.get_token()
                 with open(tmp_token_path, 'w+') as gcloud_config_file:
-                    gcloud_config_file.write(self.get_token())
+                    gcloud_config_file.write(token)
                     gcloud_config_file.flush()
                 os.rename(tmp_token_path, self._kubectl_token_path)
                 LOGGER.debug('Cloud token has been updated and stored at %s', self._kubectl_token_path)
