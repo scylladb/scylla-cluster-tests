@@ -90,3 +90,4 @@ GeminiStressEvent: CRITICAL
 ScyllaServerStatusEvent: NORMAL
 BootstrapEvent: NORMAL
 RepairEvent: NORMAL
+JMXServiceEvent: NORMAL
