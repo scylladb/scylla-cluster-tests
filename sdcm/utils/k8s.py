@@ -706,19 +706,42 @@ class TokenUpdateThread(threading.Thread, metaclass=abc.ABCMeta):
     def run(self):
         wait_time = 0.01
         while not self._termination_event.wait(wait_time):
-            tmp_token_path = self._kubectl_token_path + ".tmp"
             try:
-                token = self.get_token()
-                with open(tmp_token_path, 'w+') as gcloud_config_file:
-                    gcloud_config_file.write(token)
-                    gcloud_config_file.flush()
-                os.rename(tmp_token_path, self._kubectl_token_path)
+                self._get_token_and_save_to_temporary_location()
+                self._check_token_validity_in_temporary_location()
+                self._replace_active_token_by_token_from_temporary_location()
                 LOGGER.debug('Cloud token has been updated and stored at %s', self._kubectl_token_path)
             except Exception as exc:  # pylint: disable=broad-except
-                LOGGER.debug('Failed to read gcloud config: %s', exc)
+                LOGGER.debug('Failed to update cloud token: %s', exc)
                 wait_time = 5
             else:
                 wait_time = self.update_period
+            finally:
+                self._clean_up_token_in_temporary_location()
+
+    @cached_property
+    def _temporary_token_path(self):
+        return self._kubectl_token_path + ".tmp"
+
+    def _clean_up_token_in_temporary_location(self):
+        try:
+            if os.path.exists(self._temporary_token_path):
+                os.unlink(self._temporary_token_path)
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.debug('Failed to cleanup temporary token: %s', exc)
+
+    def _check_token_validity_in_temporary_location(self):
+        with open(self._temporary_token_path, 'r') as gcloud_config_file:
+            json.load(gcloud_config_file)
+
+    def _get_token_and_save_to_temporary_location(self):
+        token = self.get_token()
+        with open(self._temporary_token_path, 'w+') as gcloud_config_file:
+            gcloud_config_file.write(token)
+            gcloud_config_file.flush()
+
+    def _replace_active_token_by_token_from_temporary_location(self):
+        os.rename(self._temporary_token_path, self._kubectl_token_path)
 
     @abc.abstractmethod
     def get_token(self) -> str:
