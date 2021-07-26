@@ -1119,7 +1119,9 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                                                    instance=instance,
                                                    global_ip=instance['PublicIpAddress'],
                                                    tags={**self.tags, "NodeType": "monitor", }))
-        if self.params["use_cloud_manager"]:
+        # Temporarily disabling cloud-manager logs collection
+        # due to: https://github.com/scylladb/scylla-cluster-tests/issues/3816
+        if self.params["use_cloud_manager"] and False:  # pylint: disable=condition-evals-to-constant
             try:
                 from cluster_cloud import get_manager_instance_by_cluster_id  # pylint: disable=import-outside-toplevel
             except ImportError:
