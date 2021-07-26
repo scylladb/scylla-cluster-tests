@@ -436,17 +436,6 @@ class ManagerCluster(ScyllaManagerBase):
         if legacy_args:
             cmd += f" {legacy_args}"
         res = self.sctool.run(cmd=cmd, parse_table_res=False)
-        if not res.stdout:
-            raise ScyllaManagerError("Unknown failure for sctool '{}' command".format(cmd))
-
-        if res.stderr:
-            # We are ignoring "unable to resolve host" messages as they are being show on every command, because
-            # we had issues changing Ubuntu machines hostname.
-            if res.stderr.count('unable to resolve host'):
-                pass
-            else:
-                LOGGER.debug("Encountered an error on '{}' command response".format(cmd))
-                raise ScyllaManagerError(res.stderr)
 
         task_id = res.stdout.strip()
         LOGGER.debug("Created task id is: {}".format(task_id))
