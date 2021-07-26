@@ -1,6 +1,6 @@
 from logging import getLogger
 from datetime import datetime
-
+from boto3 import client as boto3_client
 from sdcm.utils.cloud_monitor.common import InstanceLifecycle, NA
 from sdcm.utils.cloud_monitor.resources import CloudInstance, CloudResources
 from sdcm.utils.common import aws_tags_to_dict, gce_meta_to_dict, list_instances_aws, list_instances_gce
@@ -10,27 +10,50 @@ from sdcm.utils.pricing import AWSPricing, GCEPricing
 LOGGER = getLogger(__name__)
 
 
-class AWSInstance(CloudInstance):  # pylint: disable=too-few-public-methods,
+class AWSInstance(CloudInstance):
     pricing = AWSPricing()
 
     def __init__(self, instance):
-        tags = aws_tags_to_dict(instance.get('Tags'))
+        self._instance = instance
+        self._tags = aws_tags_to_dict(instance.get('Tags'))
         super().__init__(
             cloud="aws",
-            name=tags.get("Name", NA),
+            name=self._tags.get("Name", NA),
             instance_id=instance['InstanceId'],
             region_az=instance["Placement"]["AvailabilityZone"],
             state=instance["State"]["Name"],
             lifecycle=InstanceLifecycle.SPOT if instance.get("SpotInstanceRequestId") else InstanceLifecycle.ON_DEMAND,
             instance_type=instance["InstanceType"],
-            owner=tags.get("RunByUser", tags.get("Owner", NA)),
+            owner=self.get_owner(),
             create_time=instance['LaunchTime'],
-            keep=tags.get("keep", ""),
+            keep=self._tags.get("keep", ""),
         )
 
     @property
     def region(self):
         return self.region_az[:-1]
+
+    def get_owner_from_cloud_trail(self):
+        try:
+            client = boto3_client('cloudtrail', region_name=self._instance["Placement"]["AvailabilityZone"][:-1])
+            result = client.lookup_events(LookupAttributes=[{'AttributeKey': 'ResourceName',
+                                                             'AttributeValue': self._instance['InstanceId']}])
+            for event in result["Events"]:
+                if event['EventName'] == 'RunInstances':
+                    return event["Username"]
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.warning("Error occurred when trying to find an owner for '%s' in CloudTrail: %s",
+                           self._instance['InstanceId'], exc)
+        return None
+
+    def get_owner(self):
+        # try to get the owner using tags
+        if owner := self._tags.get("RunByUser", self._tags.get("Owner")):
+            return owner
+        # get the owner from the Cloud Trail
+        if owner := self.get_owner_from_cloud_trail():
+            return owner
+        return NA
 
 
 class GCEInstance(CloudInstance):
