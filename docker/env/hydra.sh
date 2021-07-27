@@ -21,6 +21,8 @@ export GIT_USER_EMAIL=$(git config --get user.email)
 
 # Hydra arguments parsing
 
+SCT_ARGUMENTS=()
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --execute-on-runner)
@@ -30,6 +32,16 @@ while [[ $# -gt 0 ]]; do
             ;;
         --dry-run-hydra)
             HYDRA_DRY_RUN="1"
+            shift
+            ;;
+        --install-package-from-directory)
+            SCT_ARGUMENTS+=("$1")
+            SCT_ARGUMENTS+=("$2")
+            shift
+            shift
+            ;;
+        --install-bash-completion)
+            SCT_ARGUMENTS+=("$1")
             shift
             ;;
         -*|--*)
@@ -285,7 +297,7 @@ COMMAND=${HYDRA_COMMAND[0]}
 if [[ "$COMMAND" == *'bash'* ]] || [[ "$COMMAND" == *'python'* ]]; then
     CMD=${HYDRA_COMMAND[@]}
 else
-    CMD="./sct.py ${HYDRA_COMMAND[@]}"
+    CMD="./sct.py ${SCT_ARGUMENTS[@]} ${HYDRA_COMMAND[@]}"
 fi
 
 run_in_docker "${CMD}" "${DOCKER_HOST}"
