@@ -3387,17 +3387,20 @@ class LimitedChaosMonkey(Nemesis):
         self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
 
 
+CLOUD_LIMITED_CHAOS_MONKEY = ['disrupt_nodetool_cleanup',
+                              'disrupt_nodetool_drain', 'disrupt_nodetool_refresh',
+                              'disrupt_stop_start_scylla_server', 'disrupt_major_compaction',
+                              'disrupt_modify_table', 'disrupt_nodetool_enospc',
+                              'disrupt_stop_wait_start_scylla_server',
+                              'disrupt_soft_reboot_node',
+                              'disrupt_truncate']
+
+
 class ScyllaCloudLimitedChaosMonkey(Nemesis):
 
     def disrupt(self):
         # Limit the nemesis scope to only one relevant to scylla cloud, where we defined we don't have AWS api access:
-        self.call_random_disrupt_method(disrupt_methods=['disrupt_nodetool_cleanup',
-                                                         'disrupt_nodetool_drain', 'disrupt_nodetool_refresh',
-                                                         'disrupt_stop_start_scylla_server', 'disrupt_major_compaction',
-                                                         'disrupt_modify_table', 'disrupt_nodetool_enospc',
-                                                         'disrupt_stop_wait_start_scylla_server',
-                                                         'disrupt_soft_reboot_node',
-                                                         'disrupt_truncate'])
+        self.call_random_disrupt_method(disrupt_methods=CLOUD_LIMITED_CHAOS_MONKEY)
 
 
 class AllMonkey(Nemesis):
