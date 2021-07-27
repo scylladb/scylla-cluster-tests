@@ -111,9 +111,12 @@ echo "Making sure the ownerships of results directories are of the user"
 if [ -z "$HYDRA_DRY_RUN" ]; then
     sudo chown -R `whoami`:`whoami` ~/sct-results &> /dev/null || true
     sudo chown -R `whoami`:`whoami` "${SCT_DIR}/sct-results" &> /dev/null || true
+    DOCKER_GROUP_ARGS=()
 else
     echo "sudo chown -R `whoami`:`whoami` ~/sct-results &> /dev/null || true"
     echo "sudo chown -R `whoami`:`whoami` \"${SCT_DIR}/sct-results\" &> /dev/null || true"
+    # Setting it for testing purpose
+    DOCKER_GROUP_ARGS='--group-add 1 --group-add 2 --group-add 3'
 fi
 
 # export all SCT_* env vars into the docker run
