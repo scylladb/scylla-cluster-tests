@@ -773,7 +773,7 @@ class FillDatabaseData(ClusterTester):
                 "INSERT INTO null_support_test (k, c, v2) VALUES (0, 0, { 'foo', 'bar', null })"],
             'min_version': '4.4.rc0',
             'max_version': '',
-            'skip_condition': 'self.version_null_values_support()',
+            'skip_condition': 'not self.is_mixed_cluster() and self.version_null_values_support()',
             'skip': ''},
         # null_support_test_old_version:  Test support for nulls on old versions
         {
@@ -808,7 +808,7 @@ class FillDatabaseData(ClusterTester):
             ],
             'min_version': '',
             'max_version': '4.3',
-            'skip_condition': 'not self.version_null_values_support()',
+            'skip_condition': 'not self.is_mixed_cluster() and not self.version_null_values_support()',
             'skip': ''},
         # nameless_index_test:  Test CREATE INDEX without name and validate the index can be dropped
         {
@@ -3036,6 +3036,15 @@ class FillDatabaseData(ClusterTester):
         if not node.scylla_version:
             node.get_scylla_version()
         return node.scylla_version, node.is_enterprise
+
+    def is_mixed_cluster(self):
+        versions = []
+        for node in self.db_cluster.nodes:
+            if not node.scylla_version:
+                node.get_scylla_version()
+            versions.append(node.scylla_version)
+        # Not all nodes have same version
+        return versions.count(versions[0]) != len(versions)
 
     def version_null_values_support(self):
         scylla_version, is_enterprise = self.get_scylla_version()
