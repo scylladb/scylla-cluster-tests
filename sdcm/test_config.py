@@ -12,12 +12,13 @@ from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.get_username import get_username
 from sdcm.utils.ldap import LdapServerNotReady
+from sdcm.utils.metaclasses import Singleton
 
 
 LOGGER = logging.getLogger(__name__)
 
 
-class TestConfig:  # pylint: disable=too-many-public-methods
+class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-methods
     TEST_DURATION = 60
     RSYSLOG_SSH_TUNNEL_LOCAL_PORT = 5000
     IP_SSH_CONNECTIONS = 'private'
