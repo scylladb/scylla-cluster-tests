@@ -168,7 +168,7 @@ class ServerMetricsNemesisDashboard(Dashboard):
 
     name = f'{test_name}scylla-per-server-metrics-nemesis'
     path = 'dashboard/db/{dashboard_name}-{version}'
-    resolution = '1920px*7000px'
+    resolution = '1920px*8000px'
     panels = [Panel("Total Requests"),
               Panel("Load per Instance"),
               Panel("Requests Served per Instance"),
