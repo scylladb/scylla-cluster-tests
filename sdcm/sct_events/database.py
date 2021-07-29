@@ -243,7 +243,7 @@ class ScyllaDatabaseContinuousEvent(ContinuousEvent, abstract=True):
 
 class ScyllaServerStatusEvent(ScyllaDatabaseContinuousEvent):
     begin_pattern = r'Starting Scylla Server'
-    end_pattern = r'Stopping Scylla Server'
+    end_pattern = r'Stopping Scylla Server|Failed to start Scylla Server'
 
     def __init__(self, node: str, severity=Severity.NORMAL, **__):
         super().__init__(node=node, severity=severity)
