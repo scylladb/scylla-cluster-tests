@@ -43,6 +43,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         cls.monitor_node = DecodeDummyNode(name='test_monitor_node', parent_cluster=None,
                                            base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
         cls.monitor_node.remoter = DummyRemote()
+        cls.test_config = TestConfig()
 
     @classmethod
     def tearDownClass(cls):
@@ -52,8 +53,8 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system.log')
 
     def test_01_reactor_stall_is_not_decoded_if_disabled(self):
-        TestConfig.DECODING_QUEUE = queue.Queue()
-        TestConfig.BACKTRACE_DECODING = False
+        self.test_config.DECODING_QUEUE = queue.Queue()
+        self.test_config.BACKTRACE_DECODING = False
 
         self.monitor_node.start_decode_on_monitor_node_thread()
         self.node._read_system_log_and_publish_events()  # pylint: disable=protected-access
@@ -71,9 +72,9 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
                 self.assertIsNone(event['backtrace'])
 
     def test_02_reactor_stalls_is_decoded_if_enabled(self):
-        TestConfig.BACKTRACE_DECODING = True
+        self.test_config.BACKTRACE_DECODING = True
 
-        TestConfig.DECODING_QUEUE = queue.Queue()
+        self.test_config.DECODING_QUEUE = queue.Queue()
 
         self.monitor_node.start_decode_on_monitor_node_thread()
         self.node._read_system_log_and_publish_events()  # pylint: disable=protected-access
@@ -94,8 +95,8 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
 
     def test_03_decode_interlace_reactor_stall(self):  # pylint: disable=invalid-name
 
-        TestConfig.DECODING_QUEUE = queue.Queue()
-        TestConfig.BACKTRACE_DECODING = True
+        self.test_config.DECODING_QUEUE = queue.Queue()
+        self.test_config.BACKTRACE_DECODING = True
 
         self.monitor_node.start_decode_on_monitor_node_thread()
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_interlace_stall.log')
@@ -118,8 +119,8 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
 
     def test_04_decode_backtraces_core(self):
 
-        TestConfig.DECODING_QUEUE = queue.Queue()
-        TestConfig.BACKTRACE_DECODING = True
+        self.test_config.DECODING_QUEUE = queue.Queue()
+        self.test_config.BACKTRACE_DECODING = True
 
         self.monitor_node.start_decode_on_monitor_node_thread()
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_core.log')

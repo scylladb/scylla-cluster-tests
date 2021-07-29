@@ -46,6 +46,7 @@ class BackupFunctionsMixIn:
 
     backup_azure_blob_service = None
     backup_azure_blob_sas = None
+    test_config = TestConfig()
 
     @cached_property
     def locations(self) -> list[str]:
@@ -82,8 +83,8 @@ class BackupFunctionsMixIn:
                 tar xz -C /usr/bin --strip-components 1 --wildcards '*/azcopy'
         """))
         self.backup_azure_blob_service = \
-            f"https://{TestConfig.backup_azure_blob_credentials['account']}.blob.core.windows.net/"
-        self.backup_azure_blob_sas = TestConfig.backup_azure_blob_credentials["download_sas"]
+            f"https://{self.test_config.backup_azure_blob_credentials['account']}.blob.core.windows.net/"
+        self.backup_azure_blob_sas = self.test_config.backup_azure_blob_credentials["download_sas"]
 
     @staticmethod
     def download_from_s3(node, source, destination):

@@ -16,9 +16,8 @@ import logging
 from itertools import chain
 from typing import Literal, List, Optional
 
-from sdcm import cluster
 from sdcm.remote import LOCALRUNNER, shell_script_cmd
-
+from sdcm.test_config import TestConfig
 
 IPTABLES_BIN = "iptables"
 IPTABLES_LEGACY_BIN = "iptables-legacy"
@@ -85,7 +84,7 @@ class IptablesClusterOpsMixin:
                                              loaders: bool = True,
                                              monitors: bool = True) -> None:
         nodes_to_update = []
-        if tester := cluster.TestConfig.tester_obj():
+        if tester := TestConfig().tester_obj():
             if loaders and tester.loaders:
                 nodes_to_update.extend(tester.loaders.nodes)
             if monitors and tester.monitors:

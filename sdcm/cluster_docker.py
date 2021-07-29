@@ -150,7 +150,7 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
                  n_nodes: Union[list, int] = 3,
                  params: dict = None) -> None:
         self.source_image = f"{docker_image}:{docker_image_tag}"
-        self.node_container_image_tag = f"scylla-sct:{node_type}-{str(cluster.TestConfig.test_id())[:8]}"
+        self.node_container_image_tag = f"scylla-sct:{node_type}-{str(self.test_config.test_id())[:8]}"
         self.node_container_key_file = node_key_file
 
         super().__init__(cluster_prefix=cluster_prefix,
@@ -204,7 +204,7 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
         return self.nodes
 
     def add_nodes(self, count, ec2_user_data="", dc_idx=0, rack=0, enable_auto_bootstrap=False):
-        return self._get_nodes() if cluster.TestConfig.REUSE_CLUSTER else self._create_nodes(count, enable_auto_bootstrap)
+        return self._get_nodes() if self.test_config.REUSE_CLUSTER else self._create_nodes(count, enable_auto_bootstrap)
 
 
 class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: disable=abstract-method
@@ -236,7 +236,7 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
 
         self.check_aio_max_nr(node)
 
-        if cluster.TestConfig.BACKTRACE_DECODING:
+        if self.test_config.BACKTRACE_DECODING:
             node.install_scylla_debuginfo()
 
         self.node_config_setup(node, seed_address, endpoint_snitch)
