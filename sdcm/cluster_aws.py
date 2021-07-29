@@ -44,7 +44,6 @@ from sdcm.utils.decorators import retrying
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.database import DatabaseLogEvent
-from sdcm.test_config import TestConfig
 
 LOGGER = logging.getLogger(__name__)
 
@@ -106,9 +105,8 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                                   self._ec2_ami_id,
                                                   self._ec2_instance_type)
 
-    @staticmethod
-    def calculate_spot_duration_for_test():
-        return floor(TestConfig.TEST_DURATION / 60) * 60 + 60
+    def calculate_spot_duration_for_test(self):
+        return floor(self.test_config.TEST_DURATION / 60) * 60 + 60
 
     def _create_on_demand_instances(self, count, interfaces, ec2_user_data, dc_idx=0):  # pylint: disable=too-many-arguments
         ami_id = self._ec2_ami_id[dc_idx]
@@ -296,7 +294,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
     def _get_instances(self, dc_idx):
 
-        test_id = cluster.TestConfig.test_id()
+        test_id = self.test_config.test_id()
         if not test_id:
             raise ValueError("test_id should be configured for using reuse_cluster")
 
@@ -412,7 +410,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     # pylint: disable=too-many-arguments
 
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
-        post_boot_script = cluster.TestConfig.get_startup_script()
+        post_boot_script = self.test_config.get_startup_script()
         if self.extra_network_interface:
             post_boot_script += self.configure_eth1_script()
 
@@ -430,7 +428,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             else:
                 ec2_user_data = post_boot_script
 
-        if cluster.TestConfig.REUSE_CLUSTER:
+        if self.test_config.REUSE_CLUSTER:
             instances = self._get_instances(dc_idx)
         else:
             instances = self._create_instances(count, ec2_user_data, dc_idx)
@@ -490,7 +488,7 @@ class AWSNode(cluster.BaseNode):
         LOGGER.debug("Waiting until instance {0._instance} starts running...".format(self))
         self._instance_wait_safe(self._instance.wait_until_running)
 
-        if not cluster.TestConfig.REUSE_CLUSTER:
+        if not self.test_config.REUSE_CLUSTER:
             resources_to_tag = [self._instance.id, ]
             if len(self._instance.network_interfaces) == 2:
                 # first we need to configure the both networks so we'll have public ip
@@ -572,7 +570,7 @@ class AWSNode(cluster.BaseNode):
         """
         if self.parent_cluster.params.get("ip_ssh_connections") == "ipv6":
             return self.ipv6_ip_address
-        elif TestConfig.IP_SSH_CONNECTIONS == 'public' or cluster.TestConfig.INTRA_NODE_COMM_PUBLIC:
+        elif self.test_config.IP_SSH_CONNECTIONS == 'public' or self.test_config.INTRA_NODE_COMM_PUBLIC:
             return self.public_ip_address
         else:
             return self._instance.private_ip_address
@@ -833,7 +831,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                  params=None):
         # pylint: disable=too-many-locals
         # We have to pass the cluster name in advance in user_data
-        cluster_uuid = cluster.TestConfig.test_id()
+        cluster_uuid = self.test_config.test_id()
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
 
@@ -923,7 +921,7 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
             ldap=self.params.get('use_ldap_authorization'),
             ms_ad_ldap=self.params.get('use_ms_ad_ldap'),
         )
-        if cluster.TestConfig.INTRA_NODE_COMM_PUBLIC:
+        if self.test_config.INTRA_NODE_COMM_PUBLIC:
             setup_params.update(dict(
                 broadcast=node.public_ip_address,
             ))
@@ -1033,7 +1031,7 @@ class CassandraAWSCluster(ScyllaAWSCluster):
         node.wait_ssh_up(verbose=verbose)
         node.wait_db_up(verbose=verbose)
 
-        if cluster.TestConfig.REUSE_CLUSTER:
+        if self.test_config.REUSE_CLUSTER:
             # for reconfigure rsyslog
             node.run_startup_script()
             return

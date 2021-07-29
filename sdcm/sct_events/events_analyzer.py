@@ -53,7 +53,7 @@ class EventsAnalyzer(BaseEventsProcess[Tuple[str, Any], None], threading.Thread)
 
     def kill_test(self, backtrace_with_reason) -> None:
         self.terminate()
-        if tester := TestConfig.tester_obj():
+        if tester := TestConfig().tester_obj():
             tester.kill_test(backtrace_with_reason)
         else:
             LOGGER.error("No test was registered using `TestConfig.set_tester_obj()', do not kill")

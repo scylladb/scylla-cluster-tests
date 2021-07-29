@@ -316,7 +316,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         # Name must start with a lowercase letter followed by up to 63
         # lowercase letters, numbers, or hyphens, and cannot end with a hyphen
         assert len(name) <= 63, "Max length of instance name is 63"
-        startup_script = cluster.TestConfig.get_startup_script()
+        startup_script = self.test_config.get_startup_script()
 
         if self.params.get("scylla_linux_distro") in ("ubuntu-bionic", "ubuntu-xenial", "ubuntu-focal",):
             # we need to disable sshguard to prevent blocking connections from the builder
@@ -387,7 +387,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         return found[0] if found else None
 
     def _get_instances(self, dc_idx):
-        test_id = cluster.TestConfig.test_id()
+        test_id = self.test_config.test_id()
         if not test_id:
             raise ValueError("test_id should be configured for using reuse_cluster")
         instances_by_nodetype = list_instances_gce(tags_dict={'TestId': test_id, 'NodeType': self.node_type})
@@ -431,10 +431,10 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             return []
         self.log.info("Adding nodes to cluster")
         nodes = []
-        if cluster.TestConfig.REUSE_CLUSTER:
+        if self.test_config.REUSE_CLUSTER:
             instances = self._get_instances(dc_idx)
             if not instances:
-                raise RuntimeError("No nodes found for testId %s " % (cluster.TestConfig.test_id(),))
+                raise RuntimeError("No nodes found for testId %s " % (self.test_config.test_id(),))
         else:
             instances = self._create_instances(count, dc_idx)
 

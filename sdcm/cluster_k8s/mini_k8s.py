@@ -437,10 +437,10 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
         if not self.is_k8s_software_installed:
             self.setup_k8s_software()
         if not self.is_k8s_software_running:
-            if cluster.TestConfig.REUSE_CLUSTER:
+            if self.test_config.REUSE_CLUSTER:
                 raise RuntimeError("SCT_REUSE_CLUSTER is set, but target host is not ready")
             self.start_k8s_software()
-        elif not cluster.TestConfig.REUSE_CLUSTER:
+        elif not self.test_config.REUSE_CLUSTER:
             self.stop_k8s_software()
             self.start_k8s_software()
         self.create_kubectl_config()

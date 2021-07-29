@@ -93,7 +93,7 @@ try:
 except ImportError:
     cluster_cloud = None
 
-configure_logging(exception_handler=handle_exception, variables={'log_dir': TestConfig.logdir()})
+configure_logging(exception_handler=handle_exception, variables={'log_dir': TestConfig().logdir()})
 
 try:
     from botocore.vendored.requests.packages.urllib3.contrib.pyopenssl import extract_from_urllib3
@@ -241,13 +241,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self._init_params()
         reuse_cluster_id = self.params.get('reuse_cluster')
         if reuse_cluster_id:
-            TestConfig.reuse_cluster(True)
-            TestConfig.set_test_id(reuse_cluster_id)
+            self.test_config.reuse_cluster(True)
+            self.test_config.set_test_id(reuse_cluster_id)
         else:
             # Test id is set by Hydra or generated if running without Hydra
-            TestConfig.set_test_id(self.params.get('test_id') or uuid4())
-        TestConfig.set_test_name(self.id())
-        TestConfig.set_tester_obj(self)
+            self.test_config.set_test_id(self.params.get('test_id') or uuid4())
+        self.test_config.set_test_name(self.id())
+        self.test_config.set_tester_obj(self)
         self._init_logging()
         RemoteCmdRunnerBase.set_default_ssh_transport(self.params.get('ssh_transport'))
 
@@ -259,32 +259,32 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         ip_ssh_connections = self.params.get(key='ip_ssh_connections')
         self.log.debug("IP used for SSH connections is '%s'",
                        ip_ssh_connections)
-        TestConfig.set_ip_ssh_connections(ip_ssh_connections)
+        self.test_config.set_ip_ssh_connections(ip_ssh_connections)
         self._duration = self.params.get(key='test_duration')
         post_behavior_db_nodes = self.params.get('post_behavior_db_nodes')
         self.log.debug('Post behavior for db nodes %s', post_behavior_db_nodes)
-        TestConfig.keep_cluster(node_type='db_nodes', val=post_behavior_db_nodes)
+        self.test_config.keep_cluster(node_type='db_nodes', val=post_behavior_db_nodes)
         post_behavior_monitor_nodes = self.params.get('post_behavior_monitor_nodes')
         self.log.debug('Post behavior for loader nodes %s', post_behavior_monitor_nodes)
-        TestConfig.keep_cluster(node_type='monitor_nodes', val=post_behavior_monitor_nodes)
+        self.test_config.keep_cluster(node_type='monitor_nodes', val=post_behavior_monitor_nodes)
         post_behavior_loader_nodes = self.params.get('post_behavior_loader_nodes')
         self.log.debug('Post behavior for loader nodes %s', post_behavior_loader_nodes)
-        TestConfig.keep_cluster(node_type='loader_nodes', val=post_behavior_loader_nodes)
-        TestConfig.set_duration(self._duration)
+        self.test_config.keep_cluster(node_type='loader_nodes', val=post_behavior_loader_nodes)
+        self.test_config.set_duration(self._duration)
         cluster_backend = self.params.get('cluster_backend')
         if cluster_backend == 'aws':
-            TestConfig.set_multi_region(len(self.params.get('region_name').split()) > 1)
+            self.test_config.set_multi_region(len(self.params.get('region_name').split()) > 1)
         elif cluster_backend == 'gce':
-            TestConfig.set_multi_region(len(self.params.get('gce_datacenter').split()) > 1)
+            self.test_config.set_multi_region(len(self.params.get('gce_datacenter').split()) > 1)
 
         if self.params.get("backup_bucket_backend") == "azure":
-            TestConfig.set_backup_azure_blob_credentials()
+            self.test_config.set_backup_azure_blob_credentials()
 
-        TestConfig.BACKTRACE_DECODING = self.params.get('backtrace_decoding')
-        if TestConfig.BACKTRACE_DECODING:
-            TestConfig.set_decoding_queue()
-        TestConfig.set_intra_node_comm_public(self.params.get(
-            'intra_node_comm_public') or TestConfig.MULTI_REGION)
+        self.test_config.BACKTRACE_DECODING = self.params.get('backtrace_decoding')
+        if self.test_config.BACKTRACE_DECODING:
+            self.test_config.set_decoding_queue()
+        self.test_config.set_intra_node_comm_public(self.params.get(
+            'intra_node_comm_public') or self.test_config.MULTI_REGION)
 
         # for saving test details in DB
         self.create_stats = self.params.get(key='store_perf_results')
@@ -300,12 +300,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self._move_kubectl_config()
         self.localhost = self._init_localhost()
         if self.params.get("logs_transport") == 'rsyslog':
-            TestConfig.configure_rsyslog(self.localhost, enable_ngrok=False)
+            self.test_config.configure_rsyslog(self.localhost, enable_ngrok=False)
 
         self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
         if self.params.get("use_ms_ad_ldap"):
             ldap_ms_ad_credentials = KeyStore().get_ldap_ms_ad_credentials()
-            TestConfig.LDAP_ADDRESS = ldap_ms_ad_credentials["server_address"]
+            self.test_config.LDAP_ADDRESS = ldap_ms_ad_credentials["server_address"]
         elif self.params.get("use_ldap_authorization") or self.params.get("prepare_saslauthd") or self.params.get(
                 "use_saslauthd_authenticator"):
             self.configure_ldap(node=self.localhost, use_ssl=False)
@@ -315,7 +315,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.params['are_ldap_users_on_scylla'] = False
             ldap_role = LDAP_ROLE
             ldap_users = LDAP_USERS.copy()
-            ldap_address = list(TestConfig.LDAP_ADDRESS).copy()
+            ldap_address = list(self.test_config.LDAP_ADDRESS).copy()
             unique_members_list = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}' for user in ldap_users]
             user_password = LDAP_PASSWORD  # not in use not for authorization, but must be in the config
             ldap_entry = [f'cn={ldap_role},{LDAP_BASE_OBJECT}',
@@ -326,7 +326,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if (self.params.get("prepare_saslauthd")
                 or self.params.get("use_saslauthd_authenticator")) and not self.params.get("use_ms_ad_ldap"):
             ldap_users = LDAP_USERS.copy()
-            ldap_address = list(TestConfig.LDAP_ADDRESS).copy()
+            ldap_address = list(self.test_config.LDAP_ADDRESS).copy()
             ldap_entry = [f'ou=Person,{LDAP_BASE_OBJECT}',
                           ['organizationalUnit', 'top'],
                           {'ou': 'Person'}]
@@ -343,13 +343,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.alternator = alternator.api.Alternator(sct_params=self.params)
         start_events_device(log_dir=self.logdir, _registry=self.events_processes_registry)
         time.sleep(0.5)
-        InfoEvent(message=f"TEST_START test_id={TestConfig.test_id()}").publish()
+        InfoEvent(message=f"TEST_START test_id={self.test_config.test_id()}").publish()
 
     def configure_ldap(self, node, use_ssl=False):
-        TestConfig.configure_ldap(node=node, use_ssl=use_ssl)
+        self.test_config.configure_ldap(node=node, use_ssl=use_ssl)
         ldap_role = LDAP_ROLE
         ldap_users = LDAP_USERS.copy()
-        ldap_address = list(TestConfig.LDAP_ADDRESS).copy()
+        ldap_address = list(self.test_config.LDAP_ADDRESS).copy()
         unique_members_list = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}' for user in ldap_users]
         ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
         user_password = LDAP_PASSWORD  # not in use not for authorization, but must be in the config
@@ -374,7 +374,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return thread
 
     def _init_localhost(self):
-        return LocalHost(user_prefix=self.params.get("user_prefix"), test_id=TestConfig.test_id())
+        return LocalHost(user_prefix=self.params.get("user_prefix"), test_id=self.test_config.test_id())
 
     def _move_kubectl_config(self):
         secure_mode = stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
@@ -404,7 +404,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def _init_logging(self):
         self.log = logging.getLogger(self.__class__.__name__)
-        self.logdir = TestConfig.logdir()
+        self.logdir = self.test_config.logdir()
 
     def run(self, result=None):
         self.result = self.defaultTestResult() if result is None else result
@@ -479,7 +479,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def kill_test(self, backtrace_with_reason):
         test_pid = os.getpid()
-        self.result.addFailure(TestConfig.tester_obj(), backtrace_with_reason)
+        self.result.addFailure(self.test_config.tester_obj(), backtrace_with_reason)
         os.kill(test_pid, signal.SIGUSR2)
 
     def download_db_packages(self):
@@ -555,7 +555,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.monitors.wait_for_init()
 
         # cancel reuse cluster - for new nodes added during the test
-        TestConfig.reuse_cluster(False)
+        self.test_config.reuse_cluster(False)
         if self.monitors and self.monitors.nodes:
             self.prometheus_db = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
         self.start_time = time.time()
@@ -573,7 +573,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             return
         # change RF of system_auth
         system_auth_rf = self.params.get('system_auth_rf')
-        if system_auth_rf > 1 and not TestConfig.REUSE_CLUSTER:
+        if system_auth_rf > 1 and not self.test_config.REUSE_CLUSTER:
             self.log.info('change RF of system_auth to %s', system_auth_rf)
             node = self.db_cluster.nodes[0]
             credentials = self.db_cluster.get_db_auth()
@@ -813,7 +813,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     ec2_ami_username=self.params.get('ami_db_cassandra_user'),
                     **cl_params)
             elif db_type == 'mixed_scylla':
-                TestConfig.mixed_cluster(True)
+                self.test_config.mixed_cluster(True)
                 n_test_oracle_db_nodes = self.params.get('n_test_oracle_db_nodes')
                 cl_params.update(dict(ec2_instance_type=self.params.get('instance_type_db_oracle'),
                                       user_prefix=user_prefix + '-oracle',
@@ -1013,8 +1013,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             params=self.params)
 
         self.log.debug("Update startup script with iptables rules")
-        startup_script = "\n".join((TestConfig.get_startup_script(), *self.db_cluster.nodes_iptables_redirect_rules(),))
-        TestConfig.get_startup_script = lambda: startup_script
+        startup_script = "\n".join((self.test_config.get_startup_script(),
+                                    *self.db_cluster.nodes_iptables_redirect_rules(),))
+        self.test_config.get_startup_script = lambda: startup_script
 
         self.loaders = LoaderSetGCE(gce_image=self.params.get("gce_image"),
                                     gce_image_type=self.params.get("gce_root_disk_type_loader"),
@@ -1134,9 +1135,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if self.params.get("n_monitor_nodes") > 0:
             self.log.debug("Update startup script with iptables rules")
-            startup_script = "\n".join((TestConfig.get_startup_script(), *
+            startup_script = "\n".join((self.test_config.get_startup_script(), *
                                         self.db_cluster.nodes_iptables_redirect_rules(),))
-            TestConfig.get_startup_script = lambda: startup_script
+            self.test_config.get_startup_script = lambda: startup_script
 
             self.monitors = gke.MonitorSetGKE(
                 gce_image=self.params.get("gce_image_monitor"),
@@ -1272,9 +1273,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if monitor_info['n_nodes']:
             self.log.debug("Update startup script with iptables rules")
-            startup_script = "\n".join((TestConfig.get_startup_script(), *
+            startup_script = "\n".join((self.test_config.get_startup_script(), *
                                         self.db_cluster.nodes_iptables_redirect_rules(),))
-            TestConfig.get_startup_script = lambda: startup_script
+            self.test_config.get_startup_script = lambda: startup_script
 
             self.monitors = MonitorSetEKS(
                 ec2_ami_id=self.params.get('ami_id_monitor').split(),
@@ -1329,7 +1330,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def _cs_add_node_flag(self, stress_cmd):
         if '-node' not in stress_cmd:
-            if TestConfig.INTRA_NODE_COMM_PUBLIC:
+            if self.test_config.INTRA_NODE_COMM_PUBLIC:
                 ip = ','.join(self.db_cluster.get_node_public_ips())
             else:
                 ip = self.db_cluster.get_node_private_ips()[0]
@@ -2323,7 +2324,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             return
 
         actions_per_cluster_type = get_post_behavior_actions(self.params)
-        critical_events = get_testrun_status(TestConfig.test_id(), self.logdir, only_critical=True)
+        critical_events = get_testrun_status(self.test_config.test_id(), self.logdir, only_critical=True)
         if self.db_cluster is not None:
             action = actions_per_cluster_type['db_nodes']['action']
             self.log.info("Action for db nodes is %s", action)
@@ -2334,7 +2335,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     self.destroy_cluster(self.cs_db_cluster)
             elif action == 'keep-on-failure' and critical_events:
                 self.log.info('Critical errors found. Set keep flag for db nodes')
-                TestConfig.keep_cluster(node_type='db_nodes', val='keep')
+                self.test_config.keep_cluster(node_type='db_nodes', val='keep')
                 self.set_keep_alive_on_failure(self.db_cluster)
                 if self.cs_db_cluster:
                     self.set_keep_alive_on_failure(self.cs_db_cluster)
@@ -2347,7 +2348,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 self.loaders = None
             elif action == 'keep-on-failure' and critical_events:
                 self.log.info('Critical errors found. Set keep flag for loader nodes')
-                TestConfig.keep_cluster(node_type='loader_nodes', val='keep')
+                self.test_config.keep_cluster(node_type='loader_nodes', val='keep')
                 self.set_keep_alive_on_failure(self.loaders)
 
         if self.monitors is not None:
@@ -2358,7 +2359,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 self.monitors = None
             elif action == 'keep-on-failure' and critical_events:
                 self.log.info('Critical errors found. Set keep flag for monitor nodes')
-                TestConfig.keep_cluster(node_type='monitor_nodes', val='keep')
+                self.test_config.keep_cluster(node_type='monitor_nodes', val='keep')
                 self.set_keep_alive_on_failure(self.monitors)
 
         self.destroy_credentials()
@@ -2391,7 +2392,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.params.get('collect_logs'):
             self.collect_sct_logs()
         self.finalize_teardown()
-        self.log.info('Test ID: {}'.format(TestConfig.test_id()))
+        self.log.info('Test ID: {}'.format(self.test_config.test_id()))
         self._check_alive_routines_and_report_them()
 
     def _check_alive_routines_and_report_them(self):
@@ -2442,7 +2443,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     @silence()
     def collect_sct_logs(self):
         s3_link = SCTLogCollector(
-            [], TestConfig.test_id(), os.path.join(self.logdir, "collected_logs"), params=self.params
+            [], self.test_config.test_id(), os.path.join(self.logdir, "collected_logs"), params=self.params
         ).collect_logs(self.logdir)
         if s3_link:
             self.log.info(s3_link)
@@ -2637,7 +2638,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         is_gce = bool(self.params.get('cluster_backend') == 'gce')
         try:
             results_analyzer.check_regression_with_subtest_baseline(self._test_id,
-                                                                    base_test_id=TestConfig.test_id(),
+                                                                    base_test_id=self.test_config.test_id(),
                                                                     subtest_baseline=subtest_baseline,
                                                                     is_gce=is_gce)
         except Exception as ex:  # pylint: disable=broad-except
@@ -2765,7 +2766,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             if not cluster["nodes"]:
                 continue
             with silence(parent=self, name=f"Collect and publish {cluster['name']} logs"):
-                collector = cluster["collector"](cluster["nodes"], TestConfig.test_id(), storage_dir, self.params)
+                collector = cluster["collector"](cluster["nodes"], self.test_config.test_id(), storage_dir, self.params)
                 if s3_link := collector.collect_logs(self.logdir):
                     self.log.info(s3_link)
                     logs_dict[cluster["logname"]] = s3_link
@@ -2776,7 +2777,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             with silence(parent=self, name="Publish log links"):
                 self.update({"test_details": {"log_files": logs_dict, }, })
 
-        self.log.info("Logs collected. Run command `hydra investigate show-logs %s' to get links", TestConfig.test_id())
+        self.log.info("Logs collected. Run command `hydra investigate show-logs %s' to get links",
+                      self.test_config.test_id())
 
     @silence()
     def get_test_failures(self):

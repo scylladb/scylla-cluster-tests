@@ -29,6 +29,7 @@ import yaml
 import requests
 
 from sdcm.es import ES
+from sdcm.test_config import TestConfig
 from sdcm.utils.common import get_job_name, normalize_ipv6_url
 from sdcm.utils.decorators import retrying
 from sdcm.sct_events.system import ElasticsearchEvent
@@ -348,6 +349,7 @@ class Stats:
         self._test_id = kwargs.get("test_id")
         self._es_doc_type = "test_stats"
         self._stats = {}
+        self.test_config = TestConfig()
 
         # For using this class as a base for TestStatsMixin.
         if not self._test_id:
@@ -427,8 +429,7 @@ class TestStatsMixin(Stats):
     STRESS_STATS = ('op rate', 'latency mean', 'latency 99th percentile')
     STRESS_STATS_TOTAL = ('op rate', 'Total errors')
 
-    @staticmethod
-    def _create_test_id(doc_id_with_timestamp=False):
+    def _create_test_id(self, doc_id_with_timestamp=False):
         """Return doc_id equal unified test-id
 
         Generate doc_id for ES document as unified global test-id
@@ -441,8 +442,7 @@ class TestStatsMixin(Stats):
         :rtype: {str}
         """
         # avoid cyclic-decencies between cluster and db_stats
-        from sdcm.cluster import TestConfig  # pylint: disable=import-outside-toplevel
-        doc_id = TestConfig.test_id()
+        doc_id = self.test_config.test_id()
         if doc_id_with_timestamp:
             doc_id += "_{}".format(datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
         return doc_id
@@ -511,9 +511,6 @@ class TestStatsMixin(Stats):
         return setup_details
 
     def get_test_details(self):
-        # avoid cyclic-decencies between cluster and db_stats
-        from sdcm.cluster import TestConfig  # pylint: disable=import-outside-toplevel
-
         test_details = {}
         test_details['sct_git_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
         test_details['job_name'] = get_job_name()
@@ -525,7 +522,7 @@ class TestStatsMixin(Stats):
         test_details['grafana_screenshots'] = []
         test_details['grafana_annotations'] = []
         test_details['prometheus_data'] = ""
-        test_details['test_id'] = TestConfig.test_id()
+        test_details['test_id'] = self.test_config.test_id()
         test_details['log_files'] = {}
         return test_details
 

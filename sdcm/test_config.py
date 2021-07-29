@@ -208,7 +208,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
                ''')
         if cls.RSYSLOG_ADDRESS:
 
-            if cls.IP_SSH_CONNECTIONS == 'public' or TestConfig.MULTI_REGION:
+            if cls.IP_SSH_CONNECTIONS == 'public' or cls.MULTI_REGION:
                 post_boot_script += dedent('''
                        sudo echo 'action(type="omfwd" Target="{0}" Port="{1}" Protocol="tcp")'>> /etc/rsyslog.conf
                        sudo systemctl restart rsyslog
