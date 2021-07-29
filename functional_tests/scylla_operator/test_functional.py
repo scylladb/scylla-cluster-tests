@@ -113,6 +113,7 @@ def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
 def test_mgmt_repair(db_cluster):
     mgr_cluster = db_cluster.get_cluster_manager()
     mgr_task = mgr_cluster.create_repair_task()
+    assert mgr_task, "Failed to create repair task"
     task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
     assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(
         mgr_task.id, str(mgr_task.status))
@@ -124,6 +125,7 @@ def test_mgmt_backup(db_cluster):
     backup_bucket_location = db_cluster.params.get('backup_bucket_location')
     bucket_name = f"s3:{backup_bucket_location.split()[0]}"
     mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ])
+    assert mgr_task, "Failed to create backup task"
     status = mgr_task.wait_and_get_final_status(timeout=54000, step=5, only_final=True)
     assert TaskStatus.DONE == status
 
