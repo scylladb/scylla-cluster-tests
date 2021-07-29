@@ -242,8 +242,10 @@ class OperatorManagerCluster(ManagerCluster):
             start_date=start_date,
             upload_parallel_list=upload_parallel_list,
         )
-        so_task_status = self.wait_for_operator_backup_task_status(so_task)
-        return self.get_mgr_backup_task_by_id(so_task_status.mgmt_task_id)
+        return wait_for(
+            lambda: self.get_mgr_backup_task_by_id(self.wait_for_operator_backup_task_status(so_task).mgmt_task_id),
+            timeout=15,
+        )
 
     def _create_scylla_operator_repair_task(self, dc_list=None, keyspace=None, interval=None, num_retries=None,
                                             fail_fast=None, intensity=None, parallel=None,
@@ -276,8 +278,10 @@ class OperatorManagerCluster(ManagerCluster):
         so_task = self._create_scylla_operator_repair_task(dc_list=dc_list, keyspace=keyspace, interval=interval,
                                                            num_retries=num_retries, fail_fast=fail_fast,
                                                            intensity=intensity, parallel=parallel, name=name)
-        so_task_status = self.wait_for_operator_repair_task_status(so_task)
-        return self.get_mgr_repair_task_by_id(so_task_status.mgmt_task_id)
+        return wait_for(
+            lambda: self.get_mgr_repair_task_by_id(self.wait_for_operator_repair_task_status(so_task).mgmt_task_id),
+            timeout=15,
+        )
 
     def wait_for_operator_repair_task_status(
             self, so_repair_task: ScyllaOperatorRepairTask, timeout=120, step=1) -> ScyllaOperatorRepairTaskStatus:
