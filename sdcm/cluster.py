@@ -3017,7 +3017,6 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def __init__(self, cluster_uuid=None, cluster_prefix='cluster', node_prefix='node', n_nodes=3, params=None,
                  region_names=None, node_type=None, extra_network_interface=False):
         self.extra_network_interface = extra_network_interface
-        self.test_config = TestConfig()
         if params is None:
             params = {}
         if cluster_uuid is None:
@@ -3061,6 +3060,10 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.coredumps = dict()
         self.latency_results = dict()
         super().__init__()
+
+    @cached_property
+    def test_config(self) -> TestConfig:  # pylint: disable=no-self-use
+        return TestConfig()
 
     @property
     def auto_bootstrap(self):
