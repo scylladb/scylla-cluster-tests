@@ -364,7 +364,7 @@ class ParallelObject:
         self.timeout = timeout
         self.num_workers = num_workers
         self.disable_logging = disable_logging
-        self._thread_pool = ThreadPoolExecutor(max_workers=self.num_workers)  # pylint: disable=consider-using-with
+        self._thread_pool = ThreadPoolExecutor(max_workers=self.num_workers)  # pylint: disable=bad-option-value
 
     def run(self, func: Callable, ignore_exceptions=False, unpack_objects: bool = False):
         """Run callable object "func" in parallel
@@ -951,6 +951,7 @@ def list_clusters_gke(tags_dict: Optional[dict] = None, verbose: bool = False) -
         def __init__(self, cluster_info: dict, cleaner: "GkeCleaner"):
             self.cluster_info = cluster_info
             self.cleaner = cleaner
+            self.destroying_pool = None
 
         @cached_property
         def extra(self) -> dict:
@@ -965,8 +966,20 @@ def list_clusters_gke(tags_dict: Optional[dict] = None, verbose: bool = False) -
         def zone(self) -> str:
             return self.cluster_info["zone"]
 
+        @cached_property
+        def node_pools(self):
+            pools = self.cluster_info["nodePools"]
+            return [pname["name"] for pname in pools]
+
         def destroy(self):
             return self.cleaner.gcloud.run(f"container clusters delete {self.name} --zone {self.zone} --quiet")
+
+        def destroy_pool(self, name: str):
+            res = self.cleaner.gcloud.run(
+                f"container node-pools delete {name} --cluster {self.name} --zone {self.zone} --quiet")
+            if len(self.node_pools) < 3:
+                res += self.destroy()
+            return res
 
     class GkeCleaner(GcloudContainerMixin):
         name = f"gke-cleaner-{uuid.uuid4()!s:.8}"
@@ -995,6 +1008,12 @@ def list_clusters_gke(tags_dict: Optional[dict] = None, verbose: bool = False) -
             tags_dict={k: v for k, v in tags_dict.items() if k != 'NodeType'},
             instances=clusters,
         )
+    if node_type := tags_dict.get('NodeType'):
+        for cluster in clusters:
+            for pool_name in cluster.node_pools:
+                if node_type and node_type.split("-")[0] in pool_name:
+                    cluster.destroying_pool = pool_name
+                    break
 
     if verbose:
         LOGGER.info("Done. Found total of %s GKE clusters.", len(clusters))
@@ -1092,11 +1111,18 @@ def clean_clusters_gke(tags_dict: dict, dry_run: bool = False) -> None:
         return
 
     def delete_cluster(cluster):
-        LOGGER.info("Going to delete: %s", cluster.name)
+        if cluster.destroying_pool:
+            LOGGER.info("Going to delete node-pool: %s in cluster: %s", cluster.destroying_pool, cluster.name)
+        else:
+            LOGGER.info("Going to delete: %s", cluster.name)
         if not dry_run:
             try:
-                res = cluster.destroy()
-                LOGGER.info("%s deleted=%s", cluster.name, res)
+                if cluster.destroying_pool:
+                    res = cluster.destroy_pool(cluster.destroying_pool)
+                    LOGGER.info("Node-pool %s in cluster %s deleted=%s", cluster.destroying_pool, cluster.name, res)
+                else:
+                    res = cluster.destroy()
+                    LOGGER.info("%s deleted=%s", cluster.name, res)
             except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.error(exc)
     ParallelObject(gke_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
@@ -1251,7 +1277,7 @@ class FileFollowerIterator():  # pylint: disable=too-few-public-methods
 
 class FileFollowerThread():
     def __init__(self):
-        self.executor = concurrent.futures.ThreadPoolExecutor(1)  # pylint: disable=consider-using-with
+        self.executor = concurrent.futures.ThreadPoolExecutor(1)  # pylint: disable=bad-option-value
         self._stop_event = threading.Event()
         self.future = None
 
@@ -1856,7 +1882,9 @@ def clean_resources_according_post_behavior(params, config, logdir, dry_run=Fals
 
     # Define 'KUBECONFIG' env var that is needed in some cases on K8S backends
     testrun_dir = get_testrun_dir(test_id=params.get('TestId'), base_dir=logdir)
-    os.environ['KUBECONFIG'] = str(Path(testrun_dir) / ".kube/config")
+    kubeconfig_dir = Path(testrun_dir) if testrun_dir else Path(logdir)
+
+    os.environ['KUBECONFIG'] = str(kubeconfig_dir / ".kube/config")
 
     for cluster_nodes_type, action_type in actions_per_type.items():
         if action_type["action"] == "keep":
