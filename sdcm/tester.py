@@ -1084,7 +1084,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 name=self.k8s_cluster.LOADER_POOL_NAME,
                 instance_type=self.params.get("gce_instance_type_loader"),
                 num_nodes=self.params.get("n_loaders"),
-                k8s_cluster=self.k8s_cluster)
+                k8s_cluster=self.k8s_cluster,
+                tags=self.k8s_cluster.tags)
             self.k8s_cluster.deploy_node_pool(loader_pool, wait_till_ready=False)
 
         monitor_pool = None
@@ -1096,7 +1097,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 disk_type=self.params.get("gce_root_disk_type_monitor"),
                 instance_type=self.params.get("gce_instance_type_monitor"),
                 num_nodes=1,
-                k8s_cluster=self.k8s_cluster)
+                k8s_cluster=self.k8s_cluster,
+                tags=self.k8s_cluster.tags
+            )
             self.k8s_cluster.deploy_node_pool(monitor_pool, wait_till_ready=False)
 
         scylla_pool = gke.GkeNodePool(
@@ -1106,7 +1109,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             disk_type=self.params.get("gce_root_disk_type_db"),
             instance_type=self.params.get("gce_instance_type_db"),
             num_nodes=int(self.params.get("n_db_nodes")) + 1,
-            k8s_cluster=self.k8s_cluster)
+            k8s_cluster=self.k8s_cluster,
+            tags=self.k8s_cluster.tags)
+
         self.k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
 
         self.k8s_cluster.wait_all_node_pools_to_be_ready()

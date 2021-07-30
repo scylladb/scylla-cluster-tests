@@ -77,12 +77,14 @@ class GkeNodePool(CloudK8sNodePool):
 
     @property
     def _deploy_cmd(self) -> str:
+        tags = ",".join(f"{key}={value}" for key, value in self.tags.items())
         cmd = [f"container --project {self.gce_project} node-pools create {self.name}",
                f"--zone {self.gce_zone}",
                f"--cluster {self.k8s_cluster.short_cluster_name}",
                f"--num-nodes {self.num_nodes}",
                f"--machine-type {self.instance_type}",
-               "--image-type UBUNTU"
+               "--image-type UBUNTU",
+               f"--metadata {tags}"
                ]
         if not self.k8s_cluster.gke_k8s_release_channel:
             # NOTE: only static K8S release channel supports disabling of autoupgrade
