@@ -599,7 +599,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             KubernetesOps.wait_for_pods_readiness(
                 kluster=self,
                 total_pods=lambda pods: pods > 0,
-                readiness_timeout=5*60,
+                readiness_timeout=5,
                 namespace=SCYLLA_OPERATOR_NAMESPACE
             )
         # Start the Scylla Operator logging thread

@@ -561,7 +561,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             result = kluster.kubectl(
                 f"wait --timeout={readiness_timeout // 5}m --all --for=condition=Ready pod",
                 namespace=namespace,
-                timeout=readiness_timeout // 5 * 60 + 10)
+                timeout=readiness_timeout * 60 // 5 + 10)
             count = result.stdout.count('condition met')
             if isinstance(total_pods, (int, float)):
                 if total_pods != count:
