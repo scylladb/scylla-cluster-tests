@@ -161,7 +161,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._add_drop_column_columns_info = {}
         self._add_drop_column_target_table = []
         self._add_drop_column_tables_to_ignore = {
-            'scylla_bench': '*',  # Ignore scylla-bench tables
             'alternator_usertable': '*',  # Ignore alternator tables
             'ks_truncate': 'counter1',  # Ignore counter table
             'keyspace1': 'counter1',  # Ignore counter table
