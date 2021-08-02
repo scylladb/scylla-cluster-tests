@@ -56,7 +56,6 @@ class EksNodePool(CloudK8sNodePool):
             instance_type: str,
             role_arn: str,
             labels: dict = None,
-            tags: dict = None,
             security_group_ids: List[str] = None,
             ec2_subnet_ids: List[str] = None,
             ssh_key_pair_name: str = None,
@@ -77,7 +76,6 @@ class EksNodePool(CloudK8sNodePool):
             image_type=image_type,
             instance_type=instance_type,
             labels=labels,
-            tags=tags,
             is_deployed=is_deployed,
         )
         self.role_arn = role_arn
@@ -384,11 +382,11 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         for instance_id in instance_ids:
             self.set_security_groups(self.get_ec2_instance_by_id(instance_id))
 
-    def deploy_scylla_cluster(self, *args, **kwargs) -> None:
+    def deploy_scylla_cluster(self, *args, **kwargs) -> None:  # pylint: disable=signature-differs
         super().deploy_scylla_cluster(*args, **kwargs)
         self.set_security_groups_on_all_instances()
 
-    def deploy_monitoring_cluster(self, *args, **kwargs) -> None:
+    def deploy_monitoring_cluster(self, *args, **kwargs) -> None:  # pylint: disable=signature-differs
         super().deploy_monitoring_cluster(*args, **kwargs)
         self.set_security_groups_on_all_instances()
 

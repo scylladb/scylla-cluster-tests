@@ -53,7 +53,6 @@ class GkeNodePool(CloudK8sNodePool):
             disk_type: str = None,
             image_type: str = 'UBUNTU',
             labels: dict = None,
-            tags: dict = None,
             local_ssd_count: int = None,
             gce_project: str = None,
             gce_zone: str = None,
@@ -68,7 +67,6 @@ class GkeNodePool(CloudK8sNodePool):
             image_type=image_type,
             instance_type=instance_type,
             labels=labels,
-            tags=tags,
             is_deployed=is_deployed,
         )
         self.local_ssd_count = local_ssd_count
@@ -94,6 +92,8 @@ class GkeNodePool(CloudK8sNodePool):
             cmd.append(f"--disk-size {self.disk_size}")
         if self.local_ssd_count:
             cmd.append(f"--local-ssd-count {self.local_ssd_count}")
+        if self.tags:
+            cmd.append(f"--metadata {','.join(f'{key}={value}' for key, value in self.tags.items())}")
         return ' '.join(cmd)
 
     def deploy(self) -> None:
