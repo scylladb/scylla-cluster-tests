@@ -24,7 +24,7 @@ from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import cached_property
 
 
-WEB_DRIVER_IMAGE = "selenium/standalone-chrome:latest"
+WEB_DRIVER_IMAGE = "selenium/standalone-chrome:3.141.59-20210713"
 WEB_DRIVER_REMOTE_PORT = 4444
 WEB_DRIVER_CONTAINER_START_DELAY = 30  # seconds
 
