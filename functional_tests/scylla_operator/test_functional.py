@@ -15,13 +15,15 @@
 
 import logging
 import random
+import re
 import time
 import pytest
 
+from sdcm.cluster_k8s import ScyllaPodCluster
 from sdcm.mgmt import TaskStatus  # pylint: disable=import-error
+from sdcm.utils.file import File
 from sdcm.utils.k8s import HelmValues  # pylint: disable=import-error
-from functional_tests.scylla_operator.libs.helpers import get_orphaned_services
-
+from functional_tests.scylla_operator.libs.helpers import get_orphaned_services, scylla_operator_pods_and_statuses
 
 log = logging.getLogger()
 
@@ -56,7 +58,7 @@ def test_cassandra_rackdc(cassandra_rackdc_properties):
         assert original == props['prefer_local']
 
 
-def test_rolling_restart_cluster(db_cluster):
+def test_rolling_restart_cluster(db_cluster: ScyllaPodCluster):
     db_cluster.k8s_cluster.kubectl("rollout restart statefulset", namespace=db_cluster.namespace)
     for statefulset in db_cluster.statefulsets:
         db_cluster.k8s_cluster.kubectl(
@@ -66,14 +68,14 @@ def test_rolling_restart_cluster(db_cluster):
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
 
-def test_grow_shrink_cluster(db_cluster):
+def test_grow_shrink_cluster(db_cluster: ScyllaPodCluster):
     new_node = db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=0)[0]
     db_cluster.decommission(new_node)
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
 
 @pytest.mark.require_node_terminate('drain_k8s_node')
-def test_drain_and_replace_node_kubernetes(db_cluster):
+def test_drain_and_replace_node_kubernetes(db_cluster: ScyllaPodCluster):
     target_node = random.choice(db_cluster.non_seed_nodes)
     old_uid = target_node.k8s_pod_uid
     log.info('TerminateNode %s (uid=%s)', target_node, old_uid)
@@ -85,7 +87,7 @@ def test_drain_and_replace_node_kubernetes(db_cluster):
 
 
 @pytest.mark.require_node_terminate('drain_k8s_node')
-def test_drain_wait_and_replace_node_kubernetes(db_cluster):
+def test_drain_wait_and_replace_node_kubernetes(db_cluster: ScyllaPodCluster):
     target_node = random.choice(db_cluster.non_seed_nodes)
     old_uid = target_node.k8s_pod_uid
     log.info('TerminateNode %s (uid=%s)', target_node, old_uid)
@@ -100,7 +102,7 @@ def test_drain_wait_and_replace_node_kubernetes(db_cluster):
 
 
 @pytest.mark.require_node_terminate('drain_k8s_node')
-def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
+def test_drain_terminate_decommission_add_node_kubernetes(db_cluster: ScyllaPodCluster):
     target_rack = random.choice([*db_cluster.racks])
     target_node = db_cluster.get_rack_nodes(target_rack)[-1]
     target_node.drain_k8s_node()
@@ -110,7 +112,7 @@ def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
 
 
 @pytest.mark.require_mgmt()
-def test_mgmt_repair(db_cluster):
+def test_mgmt_repair(db_cluster: ScyllaPodCluster):
     mgr_cluster = db_cluster.get_cluster_manager()
     mgr_task = mgr_cluster.create_repair_task()
     assert mgr_task, "Failed to create repair task"
@@ -120,7 +122,7 @@ def test_mgmt_repair(db_cluster):
 
 
 @pytest.mark.require_mgmt()
-def test_mgmt_backup(db_cluster):
+def test_mgmt_backup(db_cluster: ScyllaPodCluster):
     mgr_cluster = db_cluster.get_cluster_manager()
     backup_bucket_location = db_cluster.params.get('backup_bucket_location')
     bucket_name = f"s3:{backup_bucket_location.split()[0]}"
@@ -130,7 +132,7 @@ def test_mgmt_backup(db_cluster):
     assert TaskStatus.DONE == status
 
 
-def test_listen_address(db_cluster):
+def test_listen_address(db_cluster: ScyllaPodCluster):
     """
     Issues: https://github.com/scylladb/scylla-operator/issues/484
             https://github.com/scylladb/scylla/issues/8381
@@ -156,12 +158,12 @@ def test_listen_address(db_cluster):
     assert not all_errors, "Following errors found:\n{'\n'.join(errors)}"
 
 
-def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
+def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster: ScyllaPodCluster):
     """Covers https://github.com/scylladb/scylla-operator/issues/447"""
 
     # NOTE: Create invalid ScyllaCluster which must be failed but not block operator.
     log.info("DEBUG: test_check_operator_operability_when_scylla_crd_is_incorrect")
-    cluster_name, target_chart_name, namespace = ("test-empty-storage-capacity", ) * 3
+    cluster_name, target_chart_name, namespace = ("test-empty-storage-capacity",) * 3
     values = HelmValues({
         'nameOverride': '',
         'fullnameOverride': cluster_name,
@@ -224,7 +226,7 @@ def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
             f"uninstall {target_chart_name}", namespace=namespace)
 
 
-def test_orphaned_services_after_shrink_cluster(db_cluster):
+def test_orphaned_services_after_shrink_cluster(db_cluster: ScyllaPodCluster):
     """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
     log.info("Decommission of two node")
     db_cluster.decommission(db_cluster.nodes[-1])
@@ -239,7 +241,7 @@ def test_orphaned_services_after_shrink_cluster(db_cluster):
 
 
 @pytest.mark.require_node_terminate('drain_k8s_node')
-def test_orphaned_services_after_drain(db_cluster):
+def test_orphaned_services_after_drain(db_cluster: ScyllaPodCluster):
     """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
     node_to_remove = random.choice(db_cluster.non_seed_nodes)
     node_to_remove_uid = node_to_remove.k8s_pod_uid
@@ -255,7 +257,7 @@ def test_orphaned_services_after_drain(db_cluster):
     assert not get_orphaned_services(db_cluster), "Orphaned services were found after replace"
 
 
-def test_orphaned_services_multi_rack(db_cluster):
+def test_orphaned_services_multi_rack(db_cluster: ScyllaPodCluster):
     """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
     new_nodes = []
     log.info("Add node to the rack 1")
@@ -272,3 +274,22 @@ def test_orphaned_services_multi_rack(db_cluster):
 
     db_cluster.wait_for_pods_readiness(pods_to_wait=2, total_pods=len(db_cluster.nodes))
     assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
+
+
+def test_scylla_operator_pods(db_cluster: ScyllaPodCluster):
+    scylla_operator_pods = scylla_operator_pods_and_statuses(db_cluster)
+
+    assert len(scylla_operator_pods) == 2, f'Expected 2 scylla-operator pods, but exists {len(scylla_operator_pods)}'
+
+    not_running_pods = ','.join([pods_info[0] for pods_info in scylla_operator_pods if pods_info[1] != 'Running'])
+    assert not not_running_pods, f'Not all nods are running: {not_running_pods}'
+
+    lock_hold_pod_name = []
+    for pods_info in scylla_operator_pods:
+        pattern = re.compile(f'.*lock is held by {pods_info[0]}_.*')
+        scylla_operator_log = File(db_cluster.k8s_cluster.scylla_operator_log, 'r').read_lines_filtered(*[pattern])
+        if list(scylla_operator_log):
+            lock_hold_pod_name.append(pods_info[0])
+
+    assert len(lock_hold_pod_name) == 1, \
+        'One pod is expected to hold lock, but found that both pods are got lock'

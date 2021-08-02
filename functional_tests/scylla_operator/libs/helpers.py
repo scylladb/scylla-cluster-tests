@@ -12,7 +12,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-from sdcm.cluster_k8s import SCYLLA_NAMESPACE
+from sdcm.cluster_k8s import SCYLLA_NAMESPACE, SCYLLA_OPERATOR_NAMESPACE  # pylint: disable=import-error
 
 
 def get_orphaned_services(db_cluster):
@@ -32,3 +32,11 @@ def scylla_services_names(db_cluster):
     services = db_cluster.k8s_cluster.kubectl(f"get svc -n {SCYLLA_NAMESPACE} -l scylla/cluster=sct-cluster "
                                               f"-o=custom-columns='NAME:.metadata.name'")
     return [name for name in services.stdout.split() if name not in ('NAME', 'sct-cluster-client')]
+
+
+def scylla_operator_pods_and_statuses(db_cluster):
+    pods = db_cluster.k8s_cluster.kubectl(f"get pods -n {SCYLLA_OPERATOR_NAMESPACE} "
+                                          f"-o=custom-columns='NAME:.metadata.name,STATUS:.status.phase'")
+
+    return [name.split() for name in pods.stdout.split('\n') if
+            'NAME' not in name and SCYLLA_OPERATOR_NAMESPACE in name]
