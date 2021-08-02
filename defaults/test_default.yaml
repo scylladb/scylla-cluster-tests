@@ -160,3 +160,4 @@ scylla_rsyslog_setup: false
 backup_bucket_region: ''  # use the same region as a cluster
 
 events_limit_in_email: 10
+scylla_bench_version: v0.1.3

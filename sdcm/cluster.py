@@ -4712,9 +4712,8 @@ class BaseLoaderSet():
     def is_scylla_bench_installed(node: BaseNode):
         return node.remoter.run('ls /$HOME/go/bin/scylla-bench', ignore_status=True).ok
 
-    @staticmethod
     @retrying(n=5)
-    def install_scylla_bench(node):
+    def install_scylla_bench(self, node):
         if node.distro.is_rhel_like:
             node.remoter.sudo("yum install -y git")
         else:
@@ -4722,14 +4721,14 @@ class BaseLoaderSet():
                 apt-get update
                 apt-get install -y git
             """))
-        node.remoter.sudo(shell_script_cmd("""\
+        node.remoter.sudo(shell_script_cmd(f"""\
             rm -rf /usr/local/go
             curl -LO https://storage.googleapis.com/golang/go1.16.3.linux-amd64.tar.gz
             tar -C /usr/local -xvzf go1.16.3.linux-amd64.tar.gz
             echo 'export GOPATH=$HOME/go' >> $HOME/.bash_profile
             echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bash_profile
             source $HOME/.bash_profile
-            GO111MODULE=on go get -v github.com/scylladb/scylla-bench@v0.1.3
+            GO111MODULE=on go get -v github.com/scylladb/scylla-bench@{self.params.get('scylla_bench_version')}
         """))
 
 
