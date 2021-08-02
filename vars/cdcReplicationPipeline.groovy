@@ -51,6 +51,10 @@ def runSctTest(Map params, String region){
         export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
     fi
 
+    if [[ ! -z "${params.manager_branch}" ]] ; then
+        export SCT_MANAGER_BRANCH="${params.manager_branch}"
+    fi
+
     echo "start test ......."
     if [[ "$cloud_provider" == "aws" ]]; then
         RUNNER_IP=\$(cat sct_runner_ip||echo "")
@@ -125,6 +129,10 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'If empty - the default manager version will be taken',
                    name: 'scylla_mgmt_repo')
+
+            string(defaultValue: '',
+                   description: 'master_latest|2.4|2.3|2.2',
+                   name: 'manager_branch')
 
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',

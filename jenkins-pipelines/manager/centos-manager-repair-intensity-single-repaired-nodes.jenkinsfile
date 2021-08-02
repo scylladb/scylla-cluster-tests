@@ -11,8 +11,7 @@ managerPipeline(
     test_name: 'mgmt_cli_test.MgmtCliTest.test_repair_intensity_feature_on_single_node',
     test_config: 'test-cases/manager/manager-repair-intensity-single-repaired-nodes.yaml',
 
-    scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo',
-    scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo',
+    manager_branch: 'master_latest',
     scylla_version: '4.4',
 
     timeout: [time: 1620, unit: 'MINUTES'],

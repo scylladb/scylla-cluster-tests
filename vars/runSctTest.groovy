@@ -121,6 +121,10 @@ def call(Map params, String region, functional_test = false){
         export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
     fi
 
+    if [[ -n "${params.manager_branch ? params.manager_branch : ''}" ]] ; then
+        export SCT_MANAGER_BRANCH="${params.manager_branch}"
+    fi
+
     echo "start test ......."
     if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" || "$cloud_provider" == "k8s-local-kind-aws" || "$cloud_provider" == "k8s-local-kind-gce" ]]; then
         RUNNER_IP=\$(cat sct_runner_ip||echo "")

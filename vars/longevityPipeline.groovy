@@ -71,6 +71,10 @@ def call(Map pipelineParams) {
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
 
+            string(defaultValue: "${pipelineParams.get('manager_branch', '')}",
+                   description: 'master_latest|2.4|2.3|2.2',
+                   name: 'manager_branch')
+
             string(defaultValue: '',
                    description: 'If empty - the default manager version will be taken',
                    name: 'scylla_mgmt_repo')

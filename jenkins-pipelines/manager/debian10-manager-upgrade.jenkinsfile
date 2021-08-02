@@ -8,11 +8,9 @@ managerPipeline(
     backend: 'aws',
     aws_region: 'us-east-1',
 
-    target_scylla_mgmt_server_repo: 'http://downloads.scylladb.com/manager/deb/unstable/buster/master/latest/scylladb-manager-master/scylla-manager.list',
-    target_scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo',
+    target_manager_branch: 'master_latest',
 
-    scylla_mgmt_repo: 'http://downloads.scylladb.com/deb/debian/scylladb-manager-2.4-buster.list',
-    scylla_mgmt_agent_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.4.repo',
+    manager_branch: '2.4',
     scylla_version: '4.4',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',

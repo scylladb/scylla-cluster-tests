@@ -32,6 +32,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_repo', '')}",
                    description: 'manager agent repo',
                    name: 'scylla_mgmt_agent_repo')
+            string(defaultValue: "${pipelineParams.get('manager_branch', '')}",
+                   description: 'master_latest|2.4|2.3|2.2',
+                   name: 'manager_branch')
             string(defaultValue: '',
                    description: 'a Scylla AMI to run against (for AMI test, should be blank otherwise)',
                    name: 'scylla_ami_id')
@@ -137,6 +140,12 @@ def call(Map pipelineParams) {
                                                         export SCT_USE_MGMT=true
                                                         export SCT_SCYLLA_REPO_M="${params.scylla_repo}"
                                                         export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
+                                                    fi
+
+                                                    if [[ ! -z "${params.manager_branch}" && -z "${params.unified_package}" ]]; then
+                                                        export SCT_USE_MGMT=true
+                                                        export SCT_SCYLLA_REPO_M="${params.scylla_repo}"
+                                                        export SCT_MANAGER_BRANCH="${params.manager_branch}"
                                                     fi
 
                                                     if [[ ! -z "${params.scylla_mgmt_agent_repo}" ]] ; then

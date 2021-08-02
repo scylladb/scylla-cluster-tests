@@ -17,6 +17,7 @@ from time import sleep
 from sdcm.tester import ClusterTester
 from sdcm.mgmt import get_scylla_manager_tool, TaskStatus
 from sdcm.mgmt.cli import RepairTask
+from sdcm.mgmt.common import get_manager_repo_from_defaults
 from mgmt_cli_test import BackupFunctionsMixIn
 
 
@@ -51,9 +52,17 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
         return mgr_cluster, current_manager_version
 
     def test_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
+        manager_node = self.monitors.nodes[0]
+
         target_upgrade_server_version = self.params.get('target_scylla_mgmt_server_repo')
         target_upgrade_agent_version = self.params.get('target_scylla_mgmt_agent_repo')
-        manager_node = self.monitors.nodes[0]
+        target_manager_branch = self.params.get('target_manager_branch')
+        if not target_upgrade_server_version:
+            target_upgrade_server_version = get_manager_repo_from_defaults(target_manager_branch,
+                                                                           distro=manager_node.distro)
+        if not target_upgrade_agent_version:
+            target_upgrade_agent_version = get_manager_repo_from_defaults(target_manager_branch,
+                                                                          distro=self.db_cluster.nodes[0].distro)
 
         new_manager_http_port = 12345
         with manager_node.remote_manager_yaml() as scylla_manager_yaml:

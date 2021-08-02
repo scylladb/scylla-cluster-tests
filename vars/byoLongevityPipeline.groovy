@@ -66,6 +66,10 @@ def call() {
                    description: 'If empty - the default manager version will be taken',
                    name: 'scylla_mgmt_repo')
 
+            string(defaultValue: '',
+                   description: 'master_latest|2.4|2.3|2.2',
+                   name: 'manager_branch')
+
             string(defaultValue: "spot",
                    description: 'spot|on_demand|spot_fleet',
                    name: 'provision_type')

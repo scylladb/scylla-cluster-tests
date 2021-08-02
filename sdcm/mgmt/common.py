@@ -1,11 +1,27 @@
+from enum import Enum
 import logging
 import datetime
+import yaml
 
-from enum import Enum
+from sdcm.utils.distro import Distro
 
 
 DEFAULT_TASK_TIMEOUT = 7200  # 2 hours
 LOGGER = logging.getLogger(__name__)
+
+
+def distro_to_name(distro_object):
+    known_distro_dict = {
+        Distro.CENTOS7: "centos7",
+        Distro.DEBIAN9: "debian9",
+        Distro.DEBIAN10: "debian10",
+        Distro.UBUNTU16: "ubuntu16",
+        Distro.UBUNTU18: "ubuntu18",
+        Distro.UBUNTU20: "ubuntu20"
+    }
+    distro_name = known_distro_dict.get(distro_object, None)
+    assert distro_name, f"Unfamiliar distribution: {distro_object}"
+    return distro_name
 
 
 def duration_to_timedelta(duration_string):
@@ -22,6 +38,37 @@ def duration_to_timedelta(duration_string):
     if "s" in duration_string:
         total_seconds += int(duration_string[:duration_string.find('s')])
     return datetime.timedelta(seconds=total_seconds)
+
+
+def get_manager_repo_from_defaults(manager_branch_name, distro):
+    with open("defaults/manager_versions.yaml", 'r') as mgmt_config:
+        manager_repos_by_branch_dict = yaml.load(mgmt_config, Loader=yaml.BaseLoader)["manager_repos_by_branch"]
+
+    branch_specific_repos = manager_repos_by_branch_dict.get(manager_branch_name, None)
+    assert branch_specific_repos, f"Couldn't find manager branch {manager_branch_name} in manager defaults"
+
+    distro_name = distro_to_name(distro)
+
+    repo_address = branch_specific_repos.get(distro_name, None)
+    assert repo_address, f"Could not find manager repo for distro {distro_name} in branch {manager_branch_name}"
+
+    return repo_address
+
+
+def get_manager_scylla_backend(scylla_backend_branch_name, distro):
+    with open("defaults/manager_versions.yaml", 'r') as mgmt_config:
+        scylla_backend_repos_by_branch_dict = yaml.load(mgmt_config,
+                                                        Loader=yaml.BaseLoader)["scylla_backend_repo_by_branch"]
+
+    branch_specific_repos = scylla_backend_repos_by_branch_dict.get(scylla_backend_branch_name, None)
+    assert branch_specific_repos, f"Couldn't find scylla branch {scylla_backend_branch_name} in manager defaults"
+
+    distro_name = distro_to_name(distro)
+
+    backend_repo_address = branch_specific_repos.get(distro_name, None)
+    assert backend_repo_address, f"Could not find manager scylla backend repo for {distro}"
+
+    return backend_repo_address
 
 
 class ScyllaManagerError(Exception):

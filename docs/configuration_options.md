@@ -28,6 +28,9 @@
 | **<a href="#user-content-scylla_repo_loader" name="scylla_repo_loader">scylla_repo_loader</a>**  | Url to the repo of scylla version to install c-s for loader | N/A | SCT_SCYLLA_REPO_LOADER
 | **<a href="#user-content-scylla_mgmt_repo" name="scylla_mgmt_repo">scylla_mgmt_repo</a>**  | Url to the repo of scylla manager version to install for management tests | http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylladb-manager-2.2.repo | SCT_SCYLLA_MGMT_REPO
 | **<a href="#user-content-scylla_mgmt_agent_repo" name="scylla_mgmt_agent_repo">scylla_mgmt_agent_repo</a>**  | Url to the repo of scylla manager agent version to install for management tests | N/A | SCT_SCYLLA_MGMT_AGENT_REPO
+| **<a href="#user-content-manager_branch" name="manager_branch">manager_branch</a>**  | manager version (for both server and agent). options are stored in defaults/manager_versions.yaml | N/A | SCT_MANAGER_BRANCH
+| **<a href="#user-content-target_manager_branch" name="target_manager_branch">target_manager_branch</a>**  | manager version (for both server and agent) to upgrade to. options are stored in defaults/manager_versions.yaml | N/A | SCT_TARGET_MANAGER_BRANCH
+| **<a href="#user-content-manager_scylla_backend_branch" name="manager_scylla_backend_branch">manager_scylla_backend_branch</a>**  | scylla enterprise version to be used as the backend to the manager server | N/A | SCT_MANAGER_SCYLLA_BACKEND_BRANCH
 | **<a href="#user-content-scylla_mgmt_agent_version" name="scylla_mgmt_agent_version">scylla_mgmt_agent_version</a>**  |  | N/A | SCT_SCYLLA_MGMT_AGENT_VERSION
 | **<a href="#user-content-scylla_mgmt_pkg" name="scylla_mgmt_pkg">scylla_mgmt_pkg</a>**  | Url to the scylla manager packages to install for management tests | N/A | SCT_SCYLLA_MGMT_PKG
 | **<a href="#user-content-stress_cmd_lwt_i" name="stress_cmd_lwt_i">stress_cmd_lwt_i</a>**  | Stress command for LWT performance test for INSERT baseline | N/A | SCT_STRESS_CMD_LWT_I

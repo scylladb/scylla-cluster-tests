@@ -97,6 +97,14 @@ def call(Map pipelineParams) {
                    description: 'If empty - the default manager version will be taken',
                    name: 'scylla_mgmt_repo')
 
+            string(defaultValue: "${pipelineParams.get('manager_branch', '')}",
+                   description: 'master_latest|2.4|2.3|2.2',
+                   name: 'manager_branch')
+
+            string(defaultValue: "${pipelineParams.get('target_manager_branch', '')}",
+                   description: 'master_latest|2.4|2.3|2.2',
+                   name: 'target_manager_branch')
+
             string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_repo', '')}",
                    description: 'manager agent repo',
                    name: 'scylla_mgmt_agent_repo')
@@ -240,6 +248,14 @@ def call(Map pipelineParams) {
                                             export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
                                         fi
 
+                                        if [[ ! -z "${params.manager_branch}" ]] ; then
+                                            export SCT_MANAGER_BRANCH="${params.manager_branch}"
+                                        fi
+
+                                        if [[ ! -z "${params.target_manager_branch}" ]] ; then
+                                            export SCT_TARGET_MANAGER_BRANCH="${params.target_manager_branch}"
+                                        fi
+
                                         if [[ ! -z "${params.target_scylla_mgmt_server_repo}" ]] ; then
                                             export SCT_TARGET_SCYLLA_MGMT_SERVER_REPO="${params.target_scylla_mgmt_server_repo}"
                                         fi
@@ -289,12 +305,14 @@ def call(Map pipelineParams) {
                                 if (downstreamJobName.contains("upgrade")) {
                                     repoParams = [
                                         [$class: 'StringParameterValue', name: 'target_scylla_mgmt_server_repo', value: params.scylla_mgmt_repo],
-                                        [$class: 'StringParameterValue', name: 'target_scylla_mgmt_agent_repo', value: params.scylla_mgmt_agent_repo]
+                                        [$class: 'StringParameterValue', name: 'target_scylla_mgmt_agent_repo', value: params.scylla_mgmt_agent_repo],
+                                        [$class: 'StringParameterValue', name: 'target_manager_branch', value: params.manager_branch]
                                     ]
                                 } else {
                                     repoParams = [
                                         [$class: 'StringParameterValue', name: 'scylla_mgmt_repo', value: params.scylla_mgmt_repo],
-                                        [$class: 'StringParameterValue', name: 'scylla_mgmt_agent_repo', value: params.scylla_mgmt_agent_repo]
+                                        [$class: 'StringParameterValue', name: 'scylla_mgmt_agent_repo', value: params.scylla_mgmt_agent_repo],
+                                        [$class: 'StringParameterValue', name: 'manager_branch', value: params.manager_branch]
                                     ]
                                 }
                                 triggerJob(fullJobPath, repoParams)

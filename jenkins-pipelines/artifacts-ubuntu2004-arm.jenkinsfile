@@ -8,7 +8,7 @@ artifactsPipeline(
     backend: 'aws',
     region_name: 'eu-west-1',
     provision_type: 'spot_low_price',
-    scylla_mgmt_repo: '',
+    manager_branch: '',  // scylla manager doesn't currently support arm processors
 
     timeout: [time: 30, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy'

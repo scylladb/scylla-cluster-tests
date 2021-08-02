@@ -216,6 +216,18 @@ class SCTConfiguration(dict):
              type=str,
              help="Url to the repo of scylla manager agent version to install for management tests"),
 
+        dict(name="manager_branch", env="SCT_MANAGER_BRANCH",
+             type=str,
+             help="Branch of scylla manager server and agent to install. Options in defaults/manager_versions.yaml"),
+
+        dict(name="target_manager_branch", env="SCT_TARGET_MANAGER_BRANCH",
+             type=str,
+             help="Branch of scylla manager server and agent to upgrade to. Options in defaults/manager_versions.yaml"),
+
+        dict(name="manager_scylla_backend_branch", env="SCT_MANAGER_SCYLLA_BACKEND_BRANCH",
+             type=str,
+             help="Branch of scylla db enterprise to install. Options in defaults/manager_versions.yaml"),
+
         dict(name="scylla_mgmt_agent_version", env="SCT_SCYLLA_MGMT_AGENT_VERSION", type=str,
              help=""),
 
