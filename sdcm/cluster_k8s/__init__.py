@@ -163,7 +163,6 @@ class CloudK8sNodePool(metaclass=abc.ABCMeta):  # pylint: disable=too-many-insta
             disk_size: int = None,
             disk_type: str = None,
             labels: dict = None,
-            tags: dict = None,
             is_deployed: bool = False):
         self.k8s_cluster = k8s_cluster
         self.name = name
@@ -173,8 +172,11 @@ class CloudK8sNodePool(metaclass=abc.ABCMeta):  # pylint: disable=too-many-insta
         self.disk_type = disk_type
         self.image_type = image_type
         self.labels = labels
-        self.tags = tags
         self.is_deployed = is_deployed
+
+    @property
+    def tags(self):
+        return self.k8s_cluster.tags
 
     @abc.abstractmethod
     def deploy(self):
