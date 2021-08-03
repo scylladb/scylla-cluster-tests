@@ -958,10 +958,7 @@ def list_clusters_gke(tags_dict: Optional[dict] = None, verbose: bool = False) -
     clusters = GkeCleaner().list_gke_clusters()
 
     if tags_dict:
-        clusters = filter_gce_by_tags(
-            tags_dict={k: v for k, v in tags_dict.items() if k != 'NodeType'},
-            instances=clusters,
-        )
+        clusters = filter_k8s_clusters_by_tags(tags_dict, clusters)
 
     if verbose:
         LOGGER.info("Done. Found total of %s GKE clusters.", len(clusters))
@@ -1014,17 +1011,22 @@ def list_clusters_eks(tags_dict: Optional[dict] = None, verbose: bool = False) -
 
     clusters = EksCleaner().list_clusters()
 
-    if 'NodeType' in tags_dict:
-        tags_dict = tags_dict.copy()
-        del tags_dict['NodeType']
-
     if tags_dict:
-        clusters = filter_gce_by_tags(tags_dict=tags_dict, instances=clusters)
+        clusters = filter_k8s_clusters_by_tags(tags_dict, clusters)
 
     if verbose:
         LOGGER.info("Done. Found total of %s GKE clusters.", len(clusters))
 
     return clusters
+
+
+def filter_k8s_clusters_by_tags(tags_dict: dict,
+                                clusters: list[Union["EksCluster", "GkeCluster"]]) -> list[Union["EksCluster", "GkeCluster"]]:
+    if "NodeType" in tags_dict and tags_dict.get("NodeType") != "k8s":
+        return []
+
+    return filter_gce_by_tags(tags_dict={k: v for k, v in tags_dict.items() if k != 'NodeType'},
+                              instances=clusters)
 
 
 def clean_instances_gce(tags_dict, dry_run=False):
@@ -1807,6 +1809,7 @@ def get_post_behavior_actions(config):
         "db_nodes": {"NodeType": "scylla-db", "action": None},
         "monitor_nodes": {"NodeType": "monitor", "action": None},
         "loader_nodes": {"NodeType": "loader", "action": None},
+        "k8s_cluster": {"NodeType": "k8s", "action": None},
     }
 
     for key in action_per_type:
@@ -1823,7 +1826,8 @@ def clean_resources_according_post_behavior(params, config, logdir, dry_run=Fals
 
     # Define 'KUBECONFIG' env var that is needed in some cases on K8S backends
     testrun_dir = get_testrun_dir(test_id=params.get('TestId'), base_dir=logdir)
-    os.environ['KUBECONFIG'] = str(Path(testrun_dir) / ".kube/config")
+    kubeconfig_dir = Path(testrun_dir) if testrun_dir else Path(logdir)
+    os.environ['KUBECONFIG'] = str(kubeconfig_dir / ".kube/config")
 
     for cluster_nodes_type, action_type in actions_per_type.items():
         if action_type["action"] == "keep":

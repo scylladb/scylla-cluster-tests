@@ -21,6 +21,7 @@ def call(Map params, String region){
     export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
     export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
     export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
+    export SCT_POST_BEHAVIOR_K8S_CLUSTER="${params.post_behavior_k8s_cluster}"
 
     echo "Starting to clean resources ..."
     if [[ "$cloud_provider" == "aws" ]]; then
