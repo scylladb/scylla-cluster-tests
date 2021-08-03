@@ -244,7 +244,7 @@ class OperatorManagerCluster(ManagerCluster):
         )
         return wait_for(
             lambda: self.get_mgr_backup_task_by_id(self.wait_for_operator_backup_task_status(so_task).mgmt_task_id),
-            timeout=15,
+            timeout=120,
         )
 
     def _create_scylla_operator_repair_task(self, dc_list=None, keyspace=None, interval=None, num_retries=None,
@@ -280,7 +280,7 @@ class OperatorManagerCluster(ManagerCluster):
                                                            intensity=intensity, parallel=parallel, name=name)
         return wait_for(
             lambda: self.get_mgr_repair_task_by_id(self.wait_for_operator_repair_task_status(so_task).mgmt_task_id),
-            timeout=15,
+            timeout=120,
         )
 
     def wait_for_operator_repair_task_status(
