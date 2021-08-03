@@ -86,6 +86,7 @@ def call(Map params, String region, functional_test = false){
     export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
     export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
     export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
+    export SCT_POST_BEHAVIOR_K8S_CLUSTER="${params.post_behavior_k8s_cluster}"
 
     if [[ -n "${params.provision_type ? params.provision_type : ''}" ]] ; then
         export SCT_INSTANCE_PROVISION="${params.provision_type}"
