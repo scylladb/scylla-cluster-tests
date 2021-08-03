@@ -1032,6 +1032,17 @@ class SCTConfiguration(dict):
                 'keep-on-failure' - Keep instances if testrun failed
              """,
              choices=("keep", "keep-on-failure", "destroy")),
+
+        dict(name="post_behavior_k8s_cluster", env="SCT_POST_BEHAVIOR_K8S_CLUSTER", type=str,
+             help="""
+            Failure/post test behavior, i.e. what to do with the k8s cluster at the end of the test.
+
+            'destroy' - Destroy k8s cluster and credentials (default)
+            'keep' - Keep k8s cluster running and leave credentials alone
+            'keep-on-failure' - Keep k8s cluster if testrun failed
+         """,
+             choices=("keep", "keep-on-failure", "destroy")),
+
         dict(name="workaround_kernel_bug_for_iotune", env="SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE", type=bool,
              help="Workaround a known kernel bug which causes iotune to fail in scylla_io_setup, "
                   "only effect GCE backend"),

@@ -58,6 +58,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('post_behavior_monitor_nodes', 'keep-on-failure')}",
                    description: 'keep|keep-on-failure|destroy',
                    name: 'post_behavior_monitor_nodes')
+            string(defaultValue: "${pipelineParams.get('post_behavior_k8s_cluster', 'keep-on-failure')}",
+                   description: 'keep|keep-on-failure|destroy',
+                   name: 'post_behavior_k8s_cluster')
 
             string(defaultValue: "${pipelineParams.get('tag_ami_with_result', 'false')}",
                    description: 'true|false',
