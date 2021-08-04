@@ -1321,7 +1321,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.get_cluster_k8s_gce_minikube()
         elif cluster_backend == 'k8s-local-minikube':
             self.get_cluster_k8s_local_minimal_cluster(mini_k8s.LocalMinikubeCluster)
-        elif cluster_backend == 'k8s-local-kind':
+        elif cluster_backend in ('k8s-local-kind', 'k8s-local-kind-aws', 'k8s-local-kind-gce'):
             self.get_cluster_k8s_local_minimal_cluster(mini_k8s.LocalKindCluster)
         elif cluster_backend == 'k8s-gke':
             self.get_cluster_k8s_gke()
