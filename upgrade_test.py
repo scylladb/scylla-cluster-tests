@@ -971,7 +971,7 @@ class UpgradeTest(FillDatabaseData):
             rack=peer_db_node.rack,
             enable_auto_bootstrap=True)
         self.db_cluster.wait_for_init(node_list=new_nodes, timeout=40 * 60)
-        self.db_cluster.wait_for_rollout_restart(pods_to_wait=1)
+        self.db_cluster.wait_sts_rollout_restart(pods_to_wait=1)
         self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
         self.monitors.reconfigure_scylla_monitoring()
 
