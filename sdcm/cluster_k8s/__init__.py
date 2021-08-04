@@ -45,7 +45,7 @@ from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstanc
 from invoke.exceptions import CommandTimedOut
 
 from sdcm import sct_abs_path, cluster, cluster_docker
-from sdcm.cluster import DeadNode
+from sdcm.cluster import DeadNode, ClusterNodesNotReady
 from sdcm.test_config import TestConfig
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import NETWORK_EXCEPTIONS
@@ -1868,6 +1868,15 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                          node_pool=node_pool)
 
     get_scylla_args = cluster_docker.ScyllaDockerCluster.get_scylla_args
+
+    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None):
+        self.wait_for_pods_readiness(pods_to_wait=len(nodes), total_pods=len(self.nodes))
+        self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
+
+    @timeout_wrapper(timeout=180, sleep_time=3, allowed_exceptions=NETWORK_EXCEPTIONS + (ClusterNodesNotReady,),
+                     message="Waiting for nodes to join the cluster")
+    def check_nodes_up_and_normal(self, nodes=None, verification_node=None):
+        super().check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 
     @cluster.wait_for_init_wrap
     def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):  # pylint: disable=arguments-differ
