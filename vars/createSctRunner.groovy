@@ -9,7 +9,7 @@ def call(Map params, Integer test_duration, String region) {
     set -xe
     env
 
-    if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" ]]; then
+    if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" || "$cloud_provider" == "k8s-local-kind-aws" || "$cloud_provider" == "k8s-local-kind-gce" ]]; then
         rm -fv sct_runner_ip
         ./docker/env/hydra.sh create-runner-instance --cloud-provider ${cloud_provider} --region ${region} --availability-zone ${params.availability_zone} --test-id \${SCT_TEST_ID} --duration ${test_duration}
     else

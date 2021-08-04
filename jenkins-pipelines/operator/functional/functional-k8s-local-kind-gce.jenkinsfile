@@ -1,0 +1,15 @@
+#!groovy
+
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'k8s-local-kind-gce',
+    aws_region: 'us-east1',
+    functional_test: true,
+    test_name: 'functional_tests/scylla_operator',
+    test_config: 'test-cases/scylla-operator/functional.yaml',
+    email_recipients: 'qa@scylladb.com,scylla-operator@scylladb.com',
+    post_behavior_db_nodes: 'destroy',
+    post_behavior_loader_nodes: 'destroy',
+    post_behavior_monitor_nodes: 'destroy',
+)
