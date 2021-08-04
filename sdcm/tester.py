@@ -929,6 +929,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         )
         self.k8s_cluster = cluster_type(
             software_version=self.params.get("mini_k8s_version"),
+            user_prefix=self.params.get("user_prefix"),
             params=self.params,
         )
         self.k8s_cluster.deploy()
