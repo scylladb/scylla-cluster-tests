@@ -457,6 +457,7 @@ class LocalMinimalClusterBase(MinimalClusterBase):
         self.node_prefix = cluster.prepend_user_prefix(user_prefix, "node")
         super().__init__(
             mini_k8s_version=software_version,
+            user_prefix=user_prefix,
             params=params)
 
     # pylint: disable=invalid-overridden-method
