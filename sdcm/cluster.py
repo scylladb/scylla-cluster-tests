@@ -707,6 +707,20 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.log.error("Error checking if file %s exists: %s", file_path, details)
             return None
 
+    def stop_network_interface(self, interface_name="eth1"):
+        if self.is_rhel_like():
+            shutdown_interface_command = "/sbin/ifdown {}"
+        else:
+            shutdown_interface_command = "ip link set {} down"
+        self.remoter.sudo(shutdown_interface_command.format(interface_name))
+
+    def start_network_interface(self, interface_name="eth1"):
+        if self.is_rhel_like():
+            startup_interface_command = "/sbin/ifup {}"
+        else:
+            startup_interface_command = "ip link set {} up"
+        self.remoter.sudo(startup_interface_command.format(interface_name))
+
     @cached_property
     def is_enterprise(self):
         if self.distro.is_rhel_like:
