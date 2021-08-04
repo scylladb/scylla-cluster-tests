@@ -1810,7 +1810,7 @@ class PodCluster(cluster.BaseCluster):
     def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):  # pylint: disable=arguments-differ
         raise NotImplementedError("Derived class must implement 'wait_for_init' method!")
 
-    def wait_for_rollout_restart(self, pods_to_wait: int):
+    def wait_sts_rollout_restart(self, pods_to_wait: int):
         timeout = self.get_nodes_reboot_timeout(pods_to_wait)
         for statefulset in self.statefulsets:
             self.k8s_cluster.kubectl(
