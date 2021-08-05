@@ -23,7 +23,7 @@ import getpass
 import pathlib
 from typing import List, Union, Set
 
-from distutils.util import strtobool  # pylint: disable=import-error,no-name-in-module
+from distutils.util import strtobool
 
 import anyconfig
 
