@@ -112,10 +112,10 @@ class MinimalK8SOps:
 
     @staticmethod
     def get_local_kubectl_proxy() -> [str, int]:
-        LOGGER.debug("Stop any other process listening on kubectl proxy port")
+        LOGGER.info("Stop any other process listening on kubectl proxy port")
         LOCALRUNNER.sudo(f"fuser -v4k {KUBECTL_PROXY_PORT}/tcp", ignore_status=True)
 
-        LOGGER.debug("Start kubectl proxy in detached mode")
+        LOGGER.info("Start kubectl proxy in detached mode")
         proxy_port = get_free_port(address='127.0.0.1')
         LOCALRUNNER.run(
             f"setsid kubectl proxy --disable-filter --address '127.0.0.1' --port {proxy_port} "
@@ -129,15 +129,15 @@ class MinimalK8SOps:
 
     @staticmethod
     def get_kubectl_proxy(node: cluster.BaseNode) -> [str, int]:
-        LOGGER.debug("Stop any other process listening on kubectl proxy port")
+        LOGGER.info("Stop any other process listening on kubectl proxy port")
         node.remoter.sudo(f"fuser -v4k {KUBECTL_PROXY_PORT}/tcp", ignore_status=True)
 
-        LOGGER.debug("Start kubectl proxy in detached mode")
+        LOGGER.info("Start kubectl proxy in detached mode")
         node.remoter.run("kill -9 $(ps aux | grep 'kubectl proxy' | awk '{print $2}')", ignore_status=True)
         node.remoter.run(
             "setsid kubectl proxy --disable-filter --accept-hosts '.*' > proxy.log 2>&1 < /dev/null & sleep 1")
 
-        LOGGER.debug("Start auto_ssh for kubectl proxy")
+        LOGGER.info("Start auto_ssh for kubectl proxy")
         ContainerManager.run_container(node, KUBECTL_PROXY_CONTAINER,
                                        local_port=KUBECTL_PROXY_PORT,
                                        remote_port=get_free_port(),
@@ -146,7 +146,7 @@ class MinimalK8SOps:
         host = "127.0.0.1"
         port = int(ContainerManager.get_environ(node, KUBECTL_PROXY_CONTAINER)["SSH_TUNNEL_REMOTE"])
 
-        LOGGER.debug("Waiting for port %s:%s is accepting connections", host, port)
+        LOGGER.info("Waiting for port %s:%s is accepting connections", host, port)
         wait_for_port(host, port)
 
         return host, port
@@ -179,7 +179,7 @@ class KindK8sMixin:
         self.host_node.remoter.sudo(f'bash -cxe "{script}"')
 
     def start_k8s_software(self) -> None:
-        LOGGER.debug("Start Kind cluster")
+        LOGGER.info("Start Kind cluster")
         script = dedent("""
         sysctl fs.protected_regular=0
         ip link set docker0 promisc on
@@ -250,7 +250,7 @@ class MinikubeK8sMixin:
         self.host_node.remoter.sudo(f'bash -cxe "{script}"')
 
     def start_k8s_software(self):
-        LOGGER.debug("Start Minikube cluster")
+        LOGGER.info("Start Minikube cluster")
         target_user = self._target_user if self._target_user else 'root'
         script = dedent(f"""
             sysctl fs.protected_regular=0
@@ -293,15 +293,15 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
         return self.host_node.remoter.run('ls /usr/local/bin/docker || ls /usr/bin/docker', ignore_status=True).ok
 
     def setup_prerequisites(self):
-        LOGGER.debug("Install prerequisites to %s", self.host_node)
+        LOGGER.info("Install prerequisites to %s", self.host_node)
         MinimalK8SOps.setup_prerequisites(node=self.host_node)
 
     def setup_docker(self):
-        LOGGER.debug("Install docker to %s", self.host_node)
+        LOGGER.info("Install docker to %s", self.host_node)
         MinimalK8SOps.setup_docker(node=self.host_node, target_user=self._target_user)
 
     def setup_kubectl(self):
-        LOGGER.debug("Install kubectl to %s", self.host_node)
+        LOGGER.info("Install kubectl to %s", self.host_node)
         MinimalK8SOps.setup_kubectl(node=self.host_node, kubectl_version=self.local_kubectl_version)
 
     def get_scylla_cluster_helm_values(self, cpu_limit, memory_limit, pool_name: str = None) -> HelmValues:
@@ -316,7 +316,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
         """
         Kubectl config is being created when minikube cluster is started
         """
-        LOGGER.debug("Creating kubectl config")
+        LOGGER.info("Creating kubectl config")
         if self._target_user:
             self.host_node.remoter.run(self._create_kubectl_config_cmd)
             # Create config for target user in it's default place
