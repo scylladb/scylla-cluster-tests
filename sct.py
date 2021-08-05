@@ -777,7 +777,7 @@ def run_pytest(target, backend, config, logdir):
     if not target:
         print("argv is referring to the directory or file that contain tests, it can't be empty")
         sys.exit(1)
-    sys.exit(pytest.main(['-v', '-p', 'no:warnings', target]))
+    sys.exit(pytest.main(['-s', '-v', '-p', 'no:warnings', target]))
 
 
 @cli.command("cloud-usage-report", help="Generate and send Cloud usage report")
