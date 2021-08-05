@@ -105,6 +105,7 @@ SCYLLA_MANAGER_NAMESPACE = "scylla-manager"
 SCYLLA_NAMESPACE = "scylla"
 MINIO_NAMESPACE = "minio"
 SCYLLA_CONFIG_NAME = "scylla-config"
+SCYLLA_AGENT_CONFIG_NAME = "scylla-agent-config"
 
 # Resources that are used by container deployed by scylla-operator on scylla nodes
 OPERATOR_CONTAINERS_RESOURCES = {
@@ -707,7 +708,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 {
                     'name': self.params.get('k8s_scylla_rack'),
                     'scyllaConfig': SCYLLA_CONFIG_NAME,
-                    'scyllaAgentConfig': 'scylla-agent-config',
+                    'scyllaAgentConfig': SCYLLA_AGENT_CONFIG_NAME,
                     'members': 0,
                     'storage': {
                         'storageClassName': self.params.get('k8s_scylla_disk_class'),
@@ -736,16 +737,18 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.wait_all_node_pools_to_be_ready()
 
     def create_scylla_manager_agent_config(self):
-        # Create kubernetes secret that holds scylla manager agent configuration
-        self.update_secret_from_data('scylla-agent-config', SCYLLA_NAMESPACE, {
-            'scylla-manager-agent.yaml': {
-                's3': {
-                    'provider': 'Minio',
-                    'endpoint': self.s3_provider_endpoint,
-                    'access_key_id': 'minio_access_key',
-                    'secret_access_key': 'minio_secret_key'
-                }
+        data = {}
+        if self.params['use_mgmt']:
+            data["s3"] = {
+                'provider': 'Minio',
+                'endpoint': self.s3_provider_endpoint,
+                'access_key_id': 'minio_access_key',
+                'secret_access_key': 'minio_secret_key',
             }
+
+        # Create kubernetes secret that holds scylla manager agent configuration
+        self.update_secret_from_data(SCYLLA_AGENT_CONFIG_NAME, SCYLLA_NAMESPACE, {
+            'scylla-manager-agent.yaml': data,
         })
 
     @log_run_info
@@ -762,9 +765,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                     "SCT_REUSE_CLUSTER is set, but target scylla cluster is unhealthy") from exc
         LOGGER.info("Create and initialize a Scylla cluster")
         self.kubectl(f"create namespace {SCYLLA_NAMESPACE}")
-
-        if self.params['use_mgmt']:
-            self.create_scylla_manager_agent_config()
+        self.create_scylla_manager_agent_config()
 
         affinity_modifiers = []
 
