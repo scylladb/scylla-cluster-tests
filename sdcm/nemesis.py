@@ -33,7 +33,7 @@ from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 
-from invoke import UnexpectedExit  # pylint: disable=import-error
+from invoke import UnexpectedExit
 from cassandra import ConsistencyLevel
 
 from sdcm.paths import SCYLLA_YAML_PATH

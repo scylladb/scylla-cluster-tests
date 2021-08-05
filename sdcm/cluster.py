@@ -38,8 +38,8 @@ from dataclasses import dataclass
 import yaml
 import requests
 from paramiko import SSHException
-from tenacity import RetryError  # pylint: disable=import-error
-from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut  # pylint: disable=import-error
+from tenacity import RetryError
+from invoke.exceptions import UnexpectedExit, Failure, CommandTimedOut
 from cassandra import ConsistencyLevel
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.cluster import Cluster as ClusterDriver  # pylint: disable=no-name-in-module

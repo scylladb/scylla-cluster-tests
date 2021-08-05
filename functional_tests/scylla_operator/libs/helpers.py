@@ -12,7 +12,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-# pylint: disable=import-error
 import yaml
 
 from sdcm.cluster_k8s import SCYLLA_NAMESPACE, SCYLLA_OPERATOR_NAMESPACE, ScyllaPodCluster

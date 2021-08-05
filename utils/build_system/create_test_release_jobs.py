@@ -1,10 +1,10 @@
 import logging
-
 from pathlib import Path
 
-import jenkins  # pylint: disable=import-error
+import jenkins
 
-from sdcm.wait import wait_for  # pylint: disable=import-error
+from sdcm.wait import wait_for
+
 
 DIR_TEMPLATE = open(Path(__file__).parent / 'folder-template.xml').read()
 JOB_TEMPLATE = open(Path(__file__).parent / 'template.xml').read()
