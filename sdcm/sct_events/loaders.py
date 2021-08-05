@@ -147,6 +147,7 @@ class CassandraStressLogEvent(LogEvent, abstract=True):
     ConsistencyError: Type[LogEventProtocol]
     OperationOnKey: Type[LogEventProtocol]
     TooManyHintsInFlight: Type[LogEventProtocol]
+    ShardAwareDriver: Type[LogEventProtocol]
 
 
 # Task: https://trello.com/c/kGply3WI/2718-stress-failure-should-stop-the-test-immediately
@@ -161,7 +162,8 @@ CassandraStressLogEvent.add_subevent_type("IOException", severity=Severity.ERROR
                                           regex=r"java\.io\.IOException")
 CassandraStressLogEvent.add_subevent_type("ConsistencyError", severity=Severity.ERROR,
                                           regex="Cannot achieve consistency level")
-
+CassandraStressLogEvent.add_subevent_type("ShardAwareDriver", severity=Severity.NORMAL,
+                                          regex="Using optimized driver")
 
 CS_ERROR_EVENTS = (
     CassandraStressLogEvent.TooManyHintsInFlight(),
@@ -169,8 +171,13 @@ CS_ERROR_EVENTS = (
     CassandraStressLogEvent.IOException(),
     CassandraStressLogEvent.ConsistencyError(),
 )
+CS_NORMAL_EVENTS = (CassandraStressLogEvent.ShardAwareDriver(), )
+
 CS_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex), event) for event in CS_ERROR_EVENTS]
+
+CS_NORMAL_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
+    [(re.compile(event.regex), event) for event in CS_NORMAL_EVENTS]
 
 
 class ScyllaBenchLogEvent(LogEvent, abstract=True):

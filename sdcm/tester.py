@@ -2956,7 +2956,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 "test_id": self.test_id,
                 "test_name": self.id(),
                 "test_status": test_status,
-                "username": get_username(), }
+                "username": get_username(),
+                "shard_awareness_driver": self.is_shard_awareness_driver}
 
     @silence()
     def tag_ami_with_result(self):
@@ -2997,3 +2998,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         node.wait_ssh_up(verbose=False, timeout=50)
 
         return node
+
+    @property
+    def is_shard_awareness_driver(self) -> bool:
+        all_events = get_events_grouped_by_category()
+        for event_str in all_events["NORMAL"]:
+            if "type=ShardAwareDriver" in event_str:
+                return True
+        return False

@@ -19,13 +19,14 @@ import random
 import logging
 import concurrent.futures
 from typing import Any
+from itertools import chain
 
 from sdcm.loader import CassandraStressExporter
 from sdcm.cluster import BaseLoaderSet
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import Severity
 from sdcm.utils.common import FileFollowerThread, generate_random_string, get_profile_content
-from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS
+from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
 
 
 LOGGER = logging.getLogger(__name__)
@@ -57,7 +58,7 @@ class CassandraStressEventsPublisher(FileFollowerThread):
                 if self.stopped():
                     break
 
-                for pattern, event in CS_ERROR_EVENTS_PATTERNS:
+                for pattern, event in chain(CS_NORMAL_EVENTS_PATTERNS, CS_ERROR_EVENTS_PATTERNS):
                     if self.event_id:
                         # Connect the event to the stress load
                         event.event_id = self.event_id

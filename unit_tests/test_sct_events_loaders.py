@@ -14,6 +14,8 @@
 import pickle
 import unittest
 
+from itertools import chain
+
 from invoke.runners import Result
 
 from sdcm.sct_events import Severity
@@ -21,7 +23,7 @@ from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.loaders import \
     GeminiStressEvent, CassandraStressEvent, ScyllaBenchEvent, YcsbStressEvent, NdBenchStressEvent, CDCReaderStressEvent, \
     KclStressEvent, CassandraStressLogEvent, ScyllaBenchLogEvent, GeminiStressLogEvent, \
-    CS_ERROR_EVENTS, SCYLLA_BENCH_ERROR_EVENTS, CS_ERROR_EVENTS_PATTERNS
+    CS_ERROR_EVENTS, CS_NORMAL_EVENTS, SCYLLA_BENCH_ERROR_EVENTS, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
 
 
 class TestGeminiEvent(unittest.TestCase):
@@ -377,58 +379,67 @@ class TestKclStressEvent(unittest.TestCase):
 
 
 class TestCassandraStressLogEvent(unittest.TestCase):
+    @staticmethod
+    def get_event(line, expected_type, expected_severity):
+        for pattern, event in chain(CS_NORMAL_EVENTS_PATTERNS, CS_ERROR_EVENTS_PATTERNS):
+            if pattern.search(line):
+                event.add_info(node='self.node', line=line, line_number=1).dont_publish()
+                assert event.type == expected_type, \
+                    f'Unexpected event.type {event.type}. Expected "{expected_type}"'
+                assert event.severity == expected_severity, \
+                    f'Unexpected event.severity {event.severity}. Expected "{expected_severity}"'
+                return
+
+        raise ValueError(f"Event is not recognized in the line {line}. Expected exception type is {expected_type},"
+                         f"expected severity is {expected_severity}")
+
     def test_known_cs_errors(self):
         self.assertTrue(issubclass(CassandraStressLogEvent.IOException, CassandraStressLogEvent))
         self.assertTrue(issubclass(CassandraStressLogEvent.ConsistencyError, CassandraStressLogEvent))
         self.assertTrue(issubclass(CassandraStressLogEvent.OperationOnKey, CassandraStressLogEvent))
         self.assertTrue(issubclass(CassandraStressLogEvent.TooManyHintsInFlight, CassandraStressLogEvent))
 
-    def test_cs_error_events_list(self):
+    def test_known_cs_normal(self):
+        self.assertTrue(issubclass(CassandraStressLogEvent.ShardAwareDriver, CassandraStressLogEvent))
+
+    def test_cs_all_events_list(self):
         self.assertSetEqual(set(dir(CassandraStressLogEvent)) - set(dir(LogEvent)),
-                            {ev.type for ev in CS_ERROR_EVENTS})
+                            {ev.type for ev in chain(CS_NORMAL_EVENTS, CS_ERROR_EVENTS)})
 
     def test_cs_hint_in_flight_error(self):  # pylint: disable=no-self-use
-        def _get_event(line, expected_type, expected_severity):
-            for pattern, event in CS_ERROR_EVENTS_PATTERNS:
-                if pattern.search(line):
-                    event.add_info(node='self.node', line=line, line_number=1).dont_publish()
-                    assert event.type == expected_type, \
-                        f'Unexpected event.type {event.type}. Expected "{expected_type}"'
-                    assert event.severity == expected_severity, \
-                        f'Unexpected event.severity {event.severity}. Expected "{expected_severity}"'
-                    return
+        self.get_event(line='java.io.IOException: Operation x10 on key(s) [334f37384f4d32303430]: Error executing: '
+                       '(OverloadedException): Queried host (10.0.3.167/10.0.3.167:9042) was overloaded: Too many '
+                       'in flight hints: 10490670',
+                       expected_type='TooManyHintsInFlight',
+                       expected_severity=Severity.ERROR)
 
-            raise ValueError(f"Event is not recognized in the line {line}. Expected exception type is {expected_type},"
-                             f"expected severity is {expected_severity}")
+        self.get_event(line='java.io.IOException: Operation x10 on key(s) [334f37384f4d32303430]: Error executing: '
+                       '(OverloadedException): Queried host (10.0.3.167/10.0.3.167:9042) was overloaded: Too many '
+                       'hints in flight: 10490670',
+                       expected_type='TooManyHintsInFlight',
+                       expected_severity=Severity.ERROR)
 
-        _get_event(line='java.io.IOException: Operation x10 on key(s) [334f37384f4d32303430]: Error executing: '
-                        '(OverloadedException): Queried host (10.0.3.167/10.0.3.167:9042) was overloaded: Too many '
-                        'in flight hints: 10490670',
-                   expected_type='TooManyHintsInFlight',
-                   expected_severity=Severity.ERROR)
+        self.get_event(line='java.io.IOException: Operation x10 on key(s) [334f37384f4d32303430]: Error executing: '
+                       '(OverloadedException): Queried host (10.0.3.167/10.0.3.167:9042) ',
+                       expected_type='OperationOnKey',
+                       expected_severity=Severity.CRITICAL)
 
-        _get_event(line='java.io.IOException: Operation x10 on key(s) [334f37384f4d32303430]: Error executing: '
-                        '(OverloadedException): Queried host (10.0.3.167/10.0.3.167:9042) was overloaded: Too many '
-                        'hints in flight: 10490670',
-                   expected_type='TooManyHintsInFlight',
-                   expected_severity=Severity.ERROR)
+        self.get_event(line='java.io.IOException: Connection reset by peer',
+                       expected_type='IOException',
+                       expected_severity=Severity.ERROR)
 
-        _get_event(line='java.io.IOException: Operation x10 on key(s) [334f37384f4d32303430]: Error executing: '
-                        '(OverloadedException): Queried host (10.0.3.167/10.0.3.167:9042) ',
-                   expected_type='OperationOnKey',
-                   expected_severity=Severity.CRITICAL)
+        self.get_event(line='03:56:37.572 [cluster1-nio-worker-4] DEBUG com.datastax.driver.core.Connection - Connection['
+                       '/10.0.3.121:9042-11, inFlight=5, closed=false] Response received on stream 17856 but no '
+                       'handler set anymore (either the request has timed out or it was closed due to another error). '
+                       'Received message is ERROR UNAVAILABLE: Cannot achieve consistency level for cl QUORUM. '
+                       'Requires 2, alive 1',
+                       expected_type='ConsistencyError',
+                       expected_severity=Severity.ERROR)
 
-        _get_event(line='java.io.IOException: Connection reset by peer',
-                   expected_type='IOException',
-                   expected_severity=Severity.ERROR)
-
-        _get_event(line='03:56:37.572 [cluster1-nio-worker-4] DEBUG com.datastax.driver.core.Connection - Connection['
-                        '/10.0.3.121:9042-11, inFlight=5, closed=false] Response received on stream 17856 but no '
-                        'handler set anymore (either the request has timed out or it was closed due to another error). '
-                        'Received message is ERROR UNAVAILABLE: Cannot achieve consistency level for cl QUORUM. '
-                        'Requires 2, alive 1',
-                   expected_type='ConsistencyError',
-                   expected_severity=Severity.ERROR)
+    def test_cs_normal_shared_awarnes_event(self):
+        self.get_event(line='com.datastax.driver.core.Cluster - ===== Using optimized driver!!! =====',
+                       expected_type='ShardAwareDriver',
+                       expected_severity=Severity.NORMAL)
 
 
 class TestScyllaBenchLogEvent(unittest.TestCase):

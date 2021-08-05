@@ -62,6 +62,7 @@ CassandraStressLogEvent.OperationOnKey: CRITICAL
 # TODO: change TooManyHintsInFlight severity to CRITICAL, when we have more stable hinted handoff backpressure
 # TODO: mechanism.
 CassandraStressLogEvent.TooManyHintsInFlight: ERROR
+CassandraStressLogEvent.ShardAwareDriver: NORMAL
 ScyllaBenchLogEvent.ConsistencyError: ERROR
 GeminiStressLogEvent.GeminiEvent: CRITICAL
 PrometheusAlertManagerEvent: CRITICAL

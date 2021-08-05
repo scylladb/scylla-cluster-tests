@@ -19,6 +19,8 @@ import subprocess
 import platform
 import logging
 import json
+import urllib.parse
+
 from textwrap import dedent
 from math import sqrt
 from typing import Optional
@@ -316,6 +318,16 @@ class PrometheusDBStats():
         for item in results:
             res[item['metric']['group']] = {int(i[1]) for i in item['values']}
         return res
+
+    def get_scylla_storage_proxy_replica_cross_shard_ops(self, start_time, end_time):
+        query = """sum(irate(scylla_storage_proxy_replica_cross_shard_ops{instance=~".+[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.+",shard=~"[0-9]+"}[1m])) by (dc)"""  # pylint: disable=line-too-long
+        query = urllib.parse.quote(query)
+        results = self.query(query, start_time, end_time)
+        cross_shards_ops_per_node_shard_by_dc = []
+        for res in results:
+            cross_shards_ops_per_node_shard_by_dc.extend([float(v) for _, v in res["values"]])
+
+        return cross_shards_ops_per_node_shard_by_dc
 
     def get_latency(self, start_time, end_time, latency_type, scrap_metrics_step=None):
         """latency values are returned in microseconds"""
