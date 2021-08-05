@@ -205,6 +205,9 @@
             {% if gemini_version %}
             <li>Gemini version: {{ gemini_version }}</li>
             {% endif %}
+            {% if shard_awareness_driver %}
+                <li> Cassandra-stress uses shared-aware driver</li>
+            {% endif %}
         </ul>
     </div>
 

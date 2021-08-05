@@ -147,6 +147,7 @@ class BaseEmailReporter:
         "test_name",
         "test_status",
         "username",
+        "shard_awareness_driver",
     )
     _fields = ()
     email_template_file = 'results_base.html'
