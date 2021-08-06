@@ -18,7 +18,6 @@ import logging
 import os
 import re
 import time
-import random
 import unittest
 import warnings
 from uuid import uuid4
@@ -35,7 +34,6 @@ from invoke.exceptions import UnexpectedExit, Failure  # pylint: disable=import-
 
 from cassandra.concurrent import execute_concurrent_with_args  # pylint: disable=no-name-in-module
 from cassandra import ConsistencyLevel
-from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR, Setup, UserRemoteCredentials, set_duration as set_cluster_duration, \
@@ -48,6 +46,7 @@ from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.cluster_k8s import minikube, gke
+from sdcm.full_scan_thread import FullScanThread
 from sdcm.scylla_bench_thread import ScyllaBenchThread
 from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, update_certificates, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, PageFetcher, \
@@ -63,7 +62,6 @@ from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events import Severity
 from sdcm.sct_events.setup import start_events_device, stop_events_device
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEvent, TestTimeoutEvent
-from sdcm.sct_events.database import FullScanEvent
 from sdcm.sct_events.file_logger import get_events_grouped_by_category, get_logger_event_summary
 from sdcm.sct_events.events_analyzer import stop_events_analyzer
 from sdcm.stress_thread import CassandraStressThread
@@ -1387,58 +1385,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                          'errors': stats['errors']})
         return stats
 
-    def run_fullscan(self, ks_cf, db_node, page_size=100000):
-        """Run cql select count(*) request
-
-        if ks_cf is not random, use value from config
-        if ks_cf is random, choose random from not system
-
-        Arguments:
-            loader_node {BaseNode} -- loader cluster node
-            db_node {BaseNode} -- db cluster node
-
-        Returns:
-            object -- object with result of remoter.run command
-        """
-        ks_cf_list = self.db_cluster.get_non_system_ks_cf_list(db_node)
-        if ks_cf not in ks_cf_list:
-            ks_cf = 'random'
-
-        if 'random' in ks_cf.lower():
-            ks_cf = random.choice(ks_cf_list)
-
-        read_pages = random.choice([100, 1000, 0])
-
-        FullScanEvent.start(db_node_ip=db_node.ip_address, ks_cf=ks_cf).publish()
-
-        cmd_select_all = 'select * from {}'
-        cmd_bypass_cache = 'select * from {} bypass cache'
-        cmd = random.choice([cmd_select_all, cmd_bypass_cache]).format(ks_cf)
-        try:
-            credentials = self.db_cluster.get_db_auth()
-            username, password = credentials if credentials else (None, None)
-            with self.db_cluster.cql_connection_patient(db_node, user=username, password=password) as session:
-                self.log.info('Will run command "{}"'.format(cmd))
-                result = session.execute(SimpleStatement(cmd, fetch_size=page_size,
-                                                         consistency_level=ConsistencyLevel.ONE))
-                pages = 0
-                while result.has_more_pages and pages <= read_pages:
-                    result.fetch_next_page()
-                    if read_pages > 0:
-                        pages += 1
-            FullScanEvent.finish(db_node_ip=db_node.ip_address, ks_cf=ks_cf, message="finished successfully").publish()
-        except Exception as exc:
-            # 'unpack requires a string argument of length 4' error is received when cassandra.connection return
-            # "Error decoding response from Cassandra":
-            # failure like:
-            #   Operation failed for keyspace1.standard1 - received 0 responses and 1 failures from 1 CL=ONE
-            msg = str(exc)
-            if db_node.running_nemesis or any(s in msg for s in ("timed out", "unpack requires", "timeout")):
-                severity = Severity.WARNING
-            else:
-                severity = Severity.ERROR
-            FullScanEvent.finish(db_node_ip=db_node.ip_address, ks_cf=ks_cf, message=msg, severity=severity).publish()
-
     def run_fullscan_thread(self, ks_cf='random', interval=1, duration=None):
         """Run thread of cql command select *
 
@@ -1451,20 +1397,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             timeout {number} -- interval between request in min (default: {1})
             duration {int} -- duration of running thread in min (default: {None})
         """
-        duration = self.get_duration(duration)
-        interval = interval * 60
-
-        @log_run_info('Fullscan thread')
-        def run_in_thread():
-            start = current = time.time()
-            while current - start < duration:
-                db_node = random.choice(self.db_cluster.nodes)
-                self.run_fullscan(ks_cf, db_node)
-                time.sleep(interval)
-                current = time.time()
-
-        thread = threading.Thread(target=run_in_thread, name='FullScanThread', daemon=True)
-        thread.start()
+        FullScanThread(
+            db_cluster=self.db_cluster,
+            ks_cf=ks_cf,
+            duration=self.get_duration(duration),
+            interval=interval * 60,
+            termination_event=self.db_cluster.nemesis_termination_event,
+        ).start()
 
     @staticmethod
     def is_keyspace_in_cluster(session, keyspace_name):
@@ -1743,7 +1682,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 for column in columns_list or result.column_names:
                     column_kind = session.execute("select kind from system_schema.columns where keyspace_name='{ks}' "
                                                   "and table_name='{name}' and column_name='{column}'"
-                                                  .format(ks=src_keyspace, name=src_table,column=column))
+                                                  .format(ks=src_keyspace, name=src_table, column=column))
                     if column_kind.current_rows[0].kind in ['partition_key', 'clustering']:
                         primary_keys.append(column)
 
@@ -2187,7 +2126,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         start = 1
         for i in range(1, n_loaders + 1):
             stress_cmd = base_cmd + stress_keys + str(keys_per_node) + population + str(start) + ".." + \
-                         str(keys_per_node * i) + stress_fixed_params
+                str(keys_per_node * i) + stress_fixed_params
             start = keys_per_node * i + 1
 
             write_queue.append(self.run_stress_thread(stress_cmd=stress_cmd, round_robin=True))
