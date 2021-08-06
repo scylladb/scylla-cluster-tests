@@ -134,6 +134,9 @@ def _bring_cluster_back_to_original_state(
                 rack['members'] = 0
             original_rack_specs.extend(new_racks)
 
+        # NOTE: ignore 'forceRedeploymentReason' field always to avoid redundant restarts
+        original_scylla_cluster_spec.pop("forceRedeploymentReason", None)
+        current_cluster_spec.pop("forceRedeploymentReason", None)
         if original_scylla_cluster_spec != current_cluster_spec:
             # If cluster spec we currently have is not equal to what we want replace it and
             #  remember to restart the cluster afterwards
