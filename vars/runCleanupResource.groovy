@@ -18,10 +18,18 @@ def call(Map params, String region){
         export SCT_REGION_NAME=${aws_region}
     fi
 
-    export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
-    export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
-    export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
-    export SCT_POST_BEHAVIOR_K8S_CLUSTER="${params.post_behavior_k8s_cluster}"
+    if [[ -n "${params.post_behavior_db_nodes ? params.post_behavior_db_nodes : ''}" ]] ; then
+        export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+    fi
+    if [[ -n "${params.post_behavior_loader_nodes ? params.post_behavior_loader_nodes : ''}" ]] ; then
+        export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
+    fi
+    if [[ -n "${params.post_behavior_monitor_nodes ? params.post_behavior_monitor_nodes : ''}" ]] ; then
+        export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
+    fi
+    if [[ -n "${params.post_behavior_k8s_cluster ? params.post_behavior_k8s_cluster : ''}" ]] ; then
+        export SCT_POST_BEHAVIOR_K8S_CLUSTER="${params.post_behavior_k8s_cluster}"
+    fi
 
     echo "Starting to clean resources ..."
     if [[ "$cloud_provider" == "aws" ]]; then
