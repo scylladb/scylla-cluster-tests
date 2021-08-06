@@ -21,7 +21,7 @@ import datetime
 import tarfile
 import tempfile
 import traceback
-from typing import Optional
+from typing import List, Optional
 from pathlib import Path
 from functools import cached_property
 
@@ -699,7 +699,7 @@ class LogCollector:
                                        timeout=timeout)
         return local_dir
 
-    def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:
+    def collect_logs(self, local_search_path: Optional[str] = None) -> List[str]:
         def collect_logs_per_node(node):
             LOGGER.info('Collecting logs on host: %s', node.name)
             remote_node_dir = self.create_remote_storage_dir(node)
@@ -806,7 +806,7 @@ class ScyllaLogCollector(LogCollector):
     cluster_dir_prefix = "db-cluster"
     collect_timeout = 600
 
-    def collect_logs(self, local_search_path=None) -> list[str]:
+    def collect_logs(self, local_search_path=None) -> List[str]:
         self.collect_logs_for_inactive_nodes(local_search_path)
         return super().collect_logs(local_search_path)
 
@@ -835,7 +835,7 @@ class LoaderLogCollector(LogCollector):
                 search_locally=True),
     ]
 
-    def collect_logs(self, local_search_path=None) -> list[str]:
+    def collect_logs(self, local_search_path=None) -> List[str]:
         self.collect_logs_for_inactive_nodes(local_search_path)
         return super().collect_logs(local_search_path)
 
@@ -931,7 +931,7 @@ class SCTLogCollector(LogCollector):
     cluster_log_type = 'sct-runner'
     cluster_dir_prefix = 'sct-runner'
 
-    def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:
+    def collect_logs(self, local_search_path: Optional[str] = None) -> List[str]:
         for ent in self.log_entities:
             ent.collect(None, self.local_dir, None, local_search_path=local_search_path)
         if not os.listdir(self.local_dir):
@@ -976,7 +976,7 @@ class SCTLogCollector(LogCollector):
     def is_collect_to_a_single_archive(self) -> bool:
         return self.get_files_size() < 3*1024*1024*1024
 
-    def create_single_archive_and_upload(self) -> list[str]:
+    def create_single_archive_and_upload(self) -> List[str]:
         final_archive = self.archive_to_tarfile(self.local_dir)
 
         s3_link = upload_archive_to_s3(final_archive, f"{self.test_id}/{self.current_run}")
@@ -984,7 +984,7 @@ class SCTLogCollector(LogCollector):
         remove_files(final_archive)
         return [s3_link]
 
-    def create_achive_per_file_and_upload(self) -> list[str]:
+    def create_achive_per_file_and_upload(self) -> List[str]:
         s3_links = []
         for root, _, files in os.walk(self.local_dir):
             for current_file in files:
@@ -1019,7 +1019,7 @@ class JepsenLogCollector(LogCollector):
     cluster_log_type = "jepsen-data"
     cluster_dir_prefix = "jepsen-data"
 
-    def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:
+    def collect_logs(self, local_search_path: Optional[str] = None) -> List[str]:
         s3_link = []
         if self.nodes:
             jepsen_node = self.nodes[0]

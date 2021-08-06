@@ -917,7 +917,7 @@ def filter_gce_by_tags(tags_dict, instances):
     return filtered_instances
 
 
-def list_instances_gce(tags_dict=None, running=False, verbose=False) -> list[Node]:
+def list_instances_gce(tags_dict=None, running=False, verbose=False) -> List[Node]:
     """
     list all instances with specific tags GCE
 
@@ -1072,7 +1072,7 @@ def list_clusters_eks(tags_dict: Optional[dict] = None, verbose: bool = False) -
 
 
 def filter_k8s_clusters_by_tags(tags_dict: dict,
-                                clusters: list[Union["EksCluster", "GkeCluster"]]) -> list[Union["EksCluster", "GkeCluster"]]:
+                                clusters: List[Union["EksCluster", "GkeCluster"]]) -> List[Union["EksCluster", "GkeCluster"]]:
     if "NodeType" in tags_dict and tags_dict.get("NodeType") != "k8s":
         return []
 
