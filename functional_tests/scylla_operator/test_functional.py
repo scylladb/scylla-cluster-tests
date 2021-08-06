@@ -61,13 +61,13 @@ def test_cassandra_rackdc(cassandra_rackdc_properties):
 
 
 def test_rolling_restart_cluster(db_cluster):
-    db_cluster.k8s_cluster.kubectl("rollout restart statefulset", namespace=db_cluster.namespace)
-    for statefulset in db_cluster.statefulsets:
-        db_cluster.k8s_cluster.kubectl(
-            f"rollout status statefulset/{statefulset.metadata.name} --watch=true --timeout={10}m",
-            namespace=db_cluster.namespace,
-            timeout=10 * 60 + 10)
+    old_force_redeployment_reason = db_cluster.get_scylla_cluster_value("/spec/forceRedeploymentReason")
+    db_cluster.restart_scylla()
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
+    new_force_redeployment_reason = db_cluster.get_scylla_cluster_value("/spec/forceRedeploymentReason")
+
+    assert old_force_redeployment_reason != new_force_redeployment_reason, (
+        f"'{old_force_redeployment_reason}' must be different than '{new_force_redeployment_reason}'")
 
 
 def test_grow_shrink_cluster(db_cluster):
