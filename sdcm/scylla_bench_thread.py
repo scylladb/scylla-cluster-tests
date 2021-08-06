@@ -191,14 +191,19 @@ class ScyllaBenchThread:  # pylint: disable=too-many-instance-attributes
                     line.startswith('Rows per request:') or line.startswith('Page size:') or \
                     line.startswith('Concurrency:') or line.startswith('Connections:') or \
                     line.startswith('Maximum rate:') or line.startswith('Client compression:'):
-                split_idx = line.index(':')
-                key = line[:split_idx].strip()
-                value = line[split_idx + 1:].split()[0]
+                # Concurrency:             7
+                # Connections:             4
+                # Maximum rate:            32000 op/s
+                # Client compression:      true
+                split = line.split(':', maxsplit=1)
+                key = split[0].strip()
+                value = split[1].split()[0] if split[1] else ''
                 results[key] = value
             elif line.startswith('Clustering row size:'):
-                split_idx = line.index(':')
-                key = line[:split_idx].strip()
-                value = ' '.join(line[split_idx + 1:].split())
+                # Clustering row size:     Fixed(5120)
+                split = line.split(':', maxsplit=1)
+                key = split[0].strip()
+                value = ' '.join(split[1].split())
                 results[key] = value
 
             if line.startswith('Results'):
