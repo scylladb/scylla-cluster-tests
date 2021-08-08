@@ -135,9 +135,13 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
     def image(self) -> str:
         return self.parent_cluster.source_image
 
+    @property
+    def init_system(self):
+        """systemd is not used in Docker"""
+        return "docker"
+
 
 class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
-    node_container_context_path = os.path.join(os.path.dirname(__file__), '../docker/scylla-sct')
     node_container_user = "scylla-test"
 
     def __init__(self,
@@ -159,6 +163,10 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
                          params=params,
                          region_names=["localhost-dc", ],  # Multi DC is not supported currently.
                          node_type=node_type)
+
+    @property
+    def node_container_context_path(self):
+        return os.path.join(os.path.dirname(__file__), '../docker/scylla-sct', self.params.get("scylla_linux_distro"))
 
     def _create_node(self, node_index, container=None):
         node = DockerNode(parent_cluster=self,
