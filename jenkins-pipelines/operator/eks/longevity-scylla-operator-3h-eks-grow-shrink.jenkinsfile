@@ -11,5 +11,6 @@ longevityPipeline(
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
     post_behavior_monitor_nodes: 'destroy',
+    post_behavior_k8s_cluster: 'destroy',
     timeout: [time: 400, unit: 'MINUTES']
 )
