@@ -54,6 +54,8 @@ def call(Map pipelineParams) {
                    name: 'post_behavior_loader_nodes')
             choice(choices: ["${pipelineParams.get('post_behavior_monitor_nodes', 'destroy')}", 'keep', 'keep-on-failure'],
                    name: 'post_behavior_monitor_nodes')
+            choice(choices: ["${pipelineParams.get('post_behavior_k8s_cluster', 'destroy')}", 'keep', 'keep-on-failure'],
+                   name: 'post_behavior_k8s_cluster')
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com,scylla-operator@scylladb.com')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
