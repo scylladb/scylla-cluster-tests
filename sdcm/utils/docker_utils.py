@@ -20,7 +20,7 @@ from types import SimpleNamespace
 from typing import List, Optional, Union, Any, Tuple
 
 import docker
-from docker.errors import DockerException, NotFound, ImageNotFound, NullResource
+from docker.errors import DockerException, NotFound, ImageNotFound, NullResource, BuildError
 from docker.models.images import Image
 from docker.models.containers import Container
 
@@ -356,7 +356,12 @@ class ContainerManager:
             getattr(instance, f"{name.family}_container_image_build_args", cls._build_args)(**extra_build_args))
 
         LOGGER.debug("Build arguments for Docker image `%s':\n%s,", image_tag, pformat(build_args, indent=8))
-        image, logs = docker_client.images.build(tag=image_tag, **dockerfile_args, **build_args)
+        try:
+            image, logs = docker_client.images.build(tag=image_tag, **dockerfile_args, **build_args)
+        except BuildError as docker_build_error:
+            LOGGER.critical("Build log:\n%s",
+                            "\n".join(item['stream'] for item in docker_build_error.build_log if "stream" in item))
+            raise
 
         LOGGER.debug(">>> Build log for Docker image `%s': >>>", image_tag)
         for entry in logs:
