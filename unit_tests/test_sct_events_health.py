@@ -28,6 +28,11 @@ class TestValidators(unittest.TestCase):
         self.assertTrue(issubclass(ClusterHealthValidatorEvent.NodeSchemaVersion, ClusterHealthValidatorEvent))
         self.assertTrue(hasattr(ClusterHealthValidatorEvent, "NodesNemesis"))
         self.assertTrue(issubclass(ClusterHealthValidatorEvent.NodesNemesis, ClusterHealthValidatorEvent))
+        self.assertTrue(hasattr(ClusterHealthValidatorEvent, "ScyllaCloudClusterServerDiagnostic"))
+        self.assertTrue(issubclass(
+            ClusterHealthValidatorEvent.ScyllaCloudClusterServerDiagnostic,
+            ClusterHealthValidatorEvent
+        ))
         self.assertTrue(hasattr(ClusterHealthValidatorEvent, "Info"))
         self.assertTrue(issubclass(ClusterHealthValidatorEvent.Info, ClusterHealthValidatorEvent))
         self.assertTrue(hasattr(ClusterHealthValidatorEvent, "Done"))
