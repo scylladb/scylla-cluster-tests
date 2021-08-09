@@ -10,7 +10,7 @@ DEFAULT_TASK_TIMEOUT = 7200  # 2 hours
 LOGGER = logging.getLogger(__name__)
 
 
-def distro_to_name(distro_object):
+def get_distro_name(distro_object):
     known_distro_dict = {
         Distro.CENTOS7: "centos7",
         Distro.DEBIAN9: "debian9",
@@ -47,7 +47,7 @@ def get_manager_repo_from_defaults(manager_branch_name, distro):
     branch_specific_repos = manager_repos_by_branch_dict.get(manager_branch_name, None)
     assert branch_specific_repos, f"Couldn't find manager branch {manager_branch_name} in manager defaults"
 
-    distro_name = distro_to_name(distro)
+    distro_name = get_distro_name(distro)
 
     repo_address = branch_specific_repos.get(distro_name, None)
     assert repo_address, f"Could not find manager repo for distro {distro_name} in branch {manager_branch_name}"
@@ -63,7 +63,7 @@ def get_manager_scylla_backend(scylla_backend_branch_name, distro):
     branch_specific_repos = scylla_backend_repos_by_branch_dict.get(scylla_backend_branch_name, None)
     assert branch_specific_repos, f"Couldn't find scylla branch {scylla_backend_branch_name} in manager defaults"
 
-    distro_name = distro_to_name(distro)
+    distro_name = get_distro_name(distro)
 
     backend_repo_address = branch_specific_repos.get(distro_name, None)
     assert backend_repo_address, f"Could not find manager scylla backend repo for {distro}"
