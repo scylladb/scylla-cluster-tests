@@ -15,7 +15,7 @@ import os
 import time
 import logging
 from textwrap import dedent
-from typing import Dict
+from typing import Dict, Any
 from functools import cached_property
 import json
 
@@ -25,7 +25,7 @@ from sdcm import cluster
 from sdcm.keystore import pub_key_from_private_key_file
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
-
+from sdcm.utils.decorators import retrying
 
 SPOT_TERMINATION_CHECK_DELAY = 1
 SPOT_TERMINATION_METADATA_CHECK_TIMEOUT = 15
@@ -341,28 +341,11 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                                "ssh-keys": f"{username}:ssh-rsa {public_key}", },
                                   ex_service_accounts=self._service_accounts,
                                   ex_preemptible=spot)
-        try:
-            instance = self._gce_services[dc_idx].create_node(**create_node_params)
-        except GoogleBaseError as details:
-            if not spot:
-                raise
-            self.log.warning('Unable to create a spot instance, try to create an on-demand one: %s', details)
 
-            # May happen that spot instance was preempted during instance creating. This instance won't be
-            # destroyed but stopped and stays with the name in the instances pool. In this case we should destroy this
-            # instance before creating new one
-            if "Instance failed to start due to preemption" in str(details) and \
-                    (failed_instance := self._get_instances_by_name(dc_idx=dc_idx, name=name)):
-                try:
-                    self._gce_services[dc_idx].destroy_node(node=failed_instance, destroy_boot_disk=True)
-                # if the instance is destroyed already - ignore the exception
-                # otherwise - raise exception
-                except ResourceNotFoundError as exc:
-                    if 'notFound' not in str(exc):
-                        raise
-
-            create_node_params['ex_preemptible'] = spot = False
-            instance = self._gce_services[dc_idx].create_node(**create_node_params)
+        instance = self._create_node_with_retries(name=name,
+                                                  dc_idx=dc_idx,
+                                                  create_node_params=create_node_params,
+                                                  spot=spot)
 
         self.log.info('Created %s instance %s', 'spot' if spot else 'on-demand', instance)
         if gce_job_default_timeout:
@@ -370,12 +353,45 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             self._gce_services[dc_idx].connection.timeout = gce_job_default_timeout
         return instance
 
+    @retrying(n=3,
+              sleep_time=900,
+              allowed_exceptions=(GoogleBaseError, ResourceNotFoundError),
+              message="Retrying to create a GCE node...",
+              raise_on_exceeded=True)
+    def _create_node_with_retries(self,
+                                  name: str,
+                                  dc_idx: int,
+                                  create_node_params: dict[str, Any],
+                                  spot: bool = False) -> GCENode:
+        try:
+            return self._gce_services[dc_idx].create_node(**create_node_params)
+        except GoogleBaseError as gbe:
+            if not spot:
+                raise
+
+            #  attempt to destroy if node did not start due to preemption
+            if "Instance failed to start due to preemption" in str(gbe):
+                try:
+                    self._destroy_instance(name=name, dc_idx=dc_idx)
+                except ResourceNotFoundError:
+                    LOGGER.warning("Attempted to destroy node: {name: %s, idx:%s}, but could not find it. "
+                                   "Possibly the node was destroyed already.", name, dc_idx)
+
+            create_node_params['ex_preemptible'] = spot = False
+
+            raise gbe
+
     def _create_instances(self, count, dc_idx=0):
         spot = 'spot' in self.instance_provision
         instances = []
         for node_index in range(self._node_index + 1, self._node_index + count + 1):
             instances.append(self._create_instance(node_index, dc_idx, spot))
         return instances
+
+    def _destroy_instance(self, name: str, dc_idx: int) -> bool:
+        target_node = self._get_instances_by_name(dc_idx=dc_idx, name=name)
+
+        return self._gce_services[dc_idx].destroy_node(node=target_node, destroy_boot_disk=True)
 
     def _get_instances_by_prefix(self, dc_idx: int = 0):
         instances_by_zone = self._gce_services[dc_idx].list_nodes(ex_zone=self._gce_region_names[dc_idx])
