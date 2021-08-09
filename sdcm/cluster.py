@@ -32,6 +32,7 @@ from datetime import datetime
 from textwrap import dedent
 from functools import cached_property, wraps
 from collections import defaultdict
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 import yaml
@@ -2654,6 +2655,31 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 else:
                     raise
 
+    def node_health_events(self) -> Iterator[ClusterHealthValidatorEvent]:
+        nodes_status = self.get_nodes_status()
+        peers_details = self.get_peers_info() or {}
+        gossip_info = self.get_gossip_info() or {}
+
+        return itertools.chain(
+            check_nodes_status(
+                nodes_status=nodes_status,
+                current_node=self,
+                removed_nodes_list=self.parent_cluster.dead_nodes_ip_address_list),
+            check_node_status_in_gossip_and_nodetool_status(
+                gossip_info=gossip_info,
+                nodes_status=nodes_status,
+                current_node=self),
+            check_schema_version(
+                gossip_info=gossip_info,
+                peers_details=peers_details,
+                nodes_status=nodes_status,
+                current_node=self),
+            check_nulls_in_peers(
+                gossip_info=gossip_info,
+                peers_details=peers_details,
+                current_node=self),
+        )
+
     def check_node_health(self, retries: int = CHECK_NODE_HEALTH_RETRIES) -> None:
         # Task 1443: ClusterHealthCheck is bottle neck in scale test and create a lot of noise in 5000 tables test.
         # Disable it
@@ -2662,30 +2688,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         for retry_n in range(1, retries+1):
             LOGGER.debug("Check the health of the node `%s' [attempt #%d]", self.name, retry_n)
-
-            nodes_status = self.get_nodes_status()
-            peers_details = self.get_peers_info() or {}
-            gossip_info = self.get_gossip_info() or {}
-
-            events = itertools.chain(
-                check_nodes_status(
-                    nodes_status=nodes_status,
-                    current_node=self,
-                    removed_nodes_list=self.parent_cluster.dead_nodes_ip_address_list),
-                check_node_status_in_gossip_and_nodetool_status(
-                    gossip_info=gossip_info,
-                    nodes_status=nodes_status,
-                    current_node=self),
-                check_schema_version(
-                    gossip_info=gossip_info,
-                    peers_details=peers_details,
-                    nodes_status=nodes_status,
-                    current_node=self),
-                check_nulls_in_peers(
-                    gossip_info=gossip_info,
-                    peers_details=peers_details,
-                    current_node=self), )
-
+            events = self.node_health_events()
             event = next(events, None)
             if event is None:
                 LOGGER.debug("Node `%s' is healthy", self.name)
