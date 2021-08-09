@@ -187,19 +187,20 @@ def call(Map pipelineParams) {
                     }
                 }
             }
-            stage('Clean SCT Runners') {
-                steps {
-                    catchError(stageResult: 'FAILURE') {
-                        script {
-                            wrap([$class: 'BuildUser']) {
-                                dir('scylla-cluster-tests') {
-                                    cleanSctRunners(params, currentBuild)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+//  This stage is not currently used, since we don't currently use SCT Runner in this pipeline
+//             stage('Clean SCT Runners') {
+//                 steps {
+//                     catchError(stageResult: 'FAILURE') {
+//                         script {
+//                             wrap([$class: 'BuildUser']) {
+//                                 dir('scylla-cluster-tests') {
+//                                     cleanSctRunners(params, currentBuild)
+//                                 }
+//                             }
+//                         }
+//                     }
+//                 }
+//             }
         }
         post {
             always {
