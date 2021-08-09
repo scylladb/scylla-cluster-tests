@@ -279,7 +279,7 @@ def call(Map pipelineParams) {
                                         fi
 
                                         echo "start test ......."
-                                        if [[ "$cloud_provider" == "aws" ]]; then
+                                        if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" ]]; then
                                             RUNNER_IP=\$(cat sct_runner_ip||echo "")
                                             if [[ ! -z "\${RUNNER_IP}" ]] ; then
                                                 ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} run-test ${params.test_name} --backend ${params.backend}

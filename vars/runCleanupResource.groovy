@@ -41,7 +41,7 @@ def call(Map params, String region){
             ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} clean-resources --post-behavior --test-id \$SCT_TEST_ID
         else
             echo "SCT runner IP file is empty. Probably SCT Runner was not created."
-            exit 1
+            ./docker/env/hydra.sh clean-resources --post-behavior --test-id \$SCT_TEST_ID
         fi
     else
         ./docker/env/hydra.sh clean-resources --post-behavior --logdir "`pwd`"

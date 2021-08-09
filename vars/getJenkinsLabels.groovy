@@ -27,7 +27,8 @@ def call(String backend, String region=null, String datacenter=null) {
         {
             def supported_regions = ["eu-west-2", "eu-north-1", "eu-central-1"]
         } else {
-            def supported_datacenters = ["us-east1", "us-west1"]
+            def supported_regions = ["us-east1", "us-west1"]
+            region = datacenter
         }
 
         println("Finding builder for region: " + region)

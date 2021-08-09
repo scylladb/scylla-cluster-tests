@@ -55,6 +55,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
+            string(defaultValue: "${pipelineParams.get('test_config', '')}",
+                   description: 'Test configuration file',
+                   name: 'test_config')
         }
         options {
             timestamps()
@@ -89,14 +92,27 @@ def call(Map pipelineParams) {
                             tasks["${base_version}"] = {
                                 node(builder.label) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
-                                             "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",]) {
+                                             "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
+                                             "SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
 
-                                        stage("Upgrade from ${base_version}") {
+                                        stage("Create SCT Runner for ${base_version}") {
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {
                                                         checkout scm
+                                                        timeout(time: 5, unit: 'MINUTES') {
+                                                            createSctRunner(params, pipelineParams.timeout.time, builder.region)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        stage("Upgrade from ${base_version}") {
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
                                                         def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
+                                                        def cloud_provider = getCloudProviderFromBackend(params.backend)
                                                         sh """
                                                         #!/bin/bash
                                                         set -xe
@@ -143,7 +159,17 @@ def call(Map pipelineParams) {
                                                         fi
 
                                                         echo "start test ......."
-                                                        ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir "`pwd`"
+                                                        if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" ]]; then
+                                                            SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
+                                                            if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
+                                                                ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} run-test ${pipelineParams.test_name} --backend ${params.backend}
+                                                            else
+                                                                echo "SCT runner IP file is empty. Probably SCT Runner was not created."
+                                                                exit 1
+                                                            fi
+                                                        else
+                                                            ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir "`pwd`"
+                                                        fi
                                                         echo "end test ....."
                                                         """
                                                     }
@@ -154,20 +180,7 @@ def call(Map pipelineParams) {
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {
-                                                        def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
-                                                        sh """
-                                                        #!/bin/bash
-
-                                                        set -xe
-                                                        env
-
-                                                        export SCT_CLUSTER_BACKEND=${params.backend}
-                                                        export SCT_CONFIG_FILES=${test_config}
-
-                                                        echo "start collect logs ..."
-                                                        ./docker/env/hydra.sh collect-logs --logdir "`pwd`" --backend ${params.backend}
-                                                        echo "end collect logs"
-                                                        """
+                                                        runCollectLogs(params, builder.region)
                                                     }
                                                 }
                                             }
@@ -176,31 +189,9 @@ def call(Map pipelineParams) {
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {
-                                                        sh """
-                                                        #!/bin/bash
-
-                                                        set -xe
-                                                        env
-
-                                                        if [[ -n "${params.post_behavior_db_nodes ? params.post_behavior_db_nodes : ''}" ]] ; then
-                                                            export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
-                                                        fi
-                                                        if [[ -n "${params.post_behavior_loader_nodes ? params.post_behavior_loader_nodes : ''}" ]] ; then
-                                                            export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
-                                                        fi
-                                                        if [[ -n "${params.post_behavior_monitor_nodes ? params.post_behavior_monitor_nodes : ''}" ]] ; then
-                                                            export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
-                                                        fi
-                                                        if [[ -n "${params.post_behavior_k8s_cluster ? params.post_behavior_k8s_cluster : ''}" ]] ; then
-                                                            export SCT_POST_BEHAVIOR_K8S_CLUSTER="${params.post_behavior_k8s_cluster}"
-                                                        fi
-
-                                                        export SCT_CLUSTER_BACKEND="${params.backend}"
-
-                                                        echo "start clean resources ..."
-                                                        ./docker/env/hydra.sh clean-resources --post-behavior --logdir "`pwd`"
-                                                        echo "end clean resources"
-                                                        """
+                                                        timeout(time: 10, unit: 'MINUTES') {
+                                                            runCleanupResource(params, builder.region)
+                                                        }
                                                     }
                                                 }
                                             }
@@ -210,16 +201,18 @@ def call(Map pipelineParams) {
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {
-                                                        sh """
-                                                        #!/bin/bash
-
-                                                        set -xe
-                                                        env
-
-                                                        echo "Start send email ..."
-                                                        ./docker/env/hydra.sh send-email --logdir "`pwd`" --email-recipients "${email_recipients}"
-                                                        echo "Email sent"
-                                                        """
+                                                        timeout(time: 10, unit: 'MINUTES') {
+                                                            runSendEmail(params, currentBuild)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        stage('Clean SCT Runners') {
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        cleanSctRunners(params, currentBuild)
                                                     }
                                                 }
                                             }
