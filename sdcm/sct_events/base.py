@@ -93,20 +93,18 @@ class ContinuousEventsRegistry(metaclass=Singleton):
 
     def add_event(self, event: ContinuousEvent):
         if not issubclass(type(event), ContinuousEvent):
-            raise ContinuousEventRegistryException(f"Event: {event} is not a ContinuousEvent")
+            msg = f"Event: {event} is not a ContinuousEvent"
+            raise ContinuousEventRegistryException(msg)
+
+        if self._find_event_by_id(event.event_id):
+            msg = f"Event with id: {event.event_id} is already present. Event ids in the registry must be unique."
+            raise ContinuousEventRegistryException(msg)
 
         self.continuous_events.append(event)
 
     def get_event_by_id(self, event_id: Union[uuid.UUID, str]) -> Optional[ContinuousEvent]:
-        event_filter = self.get_registry_filter()
-        found_events = event_filter \
-            .filter_by_id(event_id=event_id) \
-            .get_filtered()
+        found_events = self._find_event_by_id(event_id)
 
-        if len(found_events) > 1:
-            raise ContinuousEventRegistryException("More than one event with uuid = {event_id}. Found {event_count} "
-                                                   "events with the same id."
-                                                   .format(event_id=event_id, event_count=len(found_events)))
         if not found_events:
             LOGGER.warning("Couldn't find continuous event with id: {event_id} in registry.".format(event_id=event_id))
 
@@ -155,6 +153,12 @@ class ContinuousEventsRegistry(metaclass=Singleton):
         registry_filter = ContinuousRegistryFilter(registry=self.continuous_events)
 
         return registry_filter
+
+    def _find_event_by_id(self, event_id: Union[uuid.UUID, str]) -> List[ContinuousEvent]:
+        event_filter = self.get_registry_filter()
+        found_events = event_filter.filter_by_id(event_id).get_filtered()
+
+        return found_events
 
 
 class SctEventTypesRegistry(Dict[str, Type["SctEvent"]]):  # pylint: disable=too-few-public-methods

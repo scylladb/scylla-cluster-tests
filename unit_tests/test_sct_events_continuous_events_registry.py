@@ -38,11 +38,11 @@ class TestContinuousEventsRegistry:
         yield registry
 
     def test_add_event(self,
-                       registry: ContinuousEventsRegistry,
-                       nodetool_stress_event: NodetoolEvent):
-        registry.add_event(nodetool_stress_event)
+                       registry: ContinuousEventsRegistry):
+        # continuous events are added to the registry on event instantiation
+        event = NodetoolEvent(nodetool_command="mock cmd")
 
-        assert nodetool_stress_event in registry.continuous_events
+        assert event in registry.continuous_events
 
     def test_add_multiple_events(self,
                                  registry: ContinuousEventsRegistry):
