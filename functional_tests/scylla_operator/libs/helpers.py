@@ -13,9 +13,21 @@
 #
 # Copyright (c) 2021 ScyllaDB
 # pylint: disable=import-error
+import re
+from enum import Enum
+
 import yaml
 
 from sdcm.cluster_k8s import SCYLLA_NAMESPACE, SCYLLA_OPERATOR_NAMESPACE, ScyllaPodCluster
+
+
+class PodStatuses(Enum):
+    RUNNING = 'Running'
+    CRASH_LOOP_BACK_OFF = 'CrashLoopBackOff'
+
+
+class ReadLogException(Exception):
+    pass
 
 
 def get_orphaned_services(db_cluster):
@@ -59,9 +71,59 @@ def wait_for_scylla_operator_rollout_complete(db_cluster: ScyllaPodCluster, time
     return status
 
 
+def get_namespace_pods(db_cluster, namespace, label):
+    return db_cluster.k8s_cluster.kubectl(f"get pods -n {namespace} {'-l ' + label if label else ''} -o yaml")
+
+
 def scylla_operator_pods_and_statuses(db_cluster):
-    pods = db_cluster.k8s_cluster.kubectl(f"get pods -n {SCYLLA_OPERATOR_NAMESPACE} "
-                                          f"-l app.kubernetes.io/instance=scylla-operator "
-                                          f"-o=custom-columns='NAME:.metadata.name,STATUS:.status.phase' -o yaml")
+    pods = get_namespace_pods(db_cluster, namespace=SCYLLA_OPERATOR_NAMESPACE,
+                              label='app.kubernetes.io/instance=scylla-operator')
 
     return [[pod["metadata"]["name"], pod["status"]["phase"]] for pod in yaml.load(pods.stdout)["items"] if pod]
+
+
+def pods_and_statuses(db_cluster, namespace, label=None):
+    pods = get_namespace_pods(db_cluster, namespace=namespace, label=label)
+    return [[pod["metadata"]["name"], pod["status"]["phase"]] for pod in yaml.load(pods.stdout)["items"] if pod]
+
+
+def namespace_persistent_volume(db_cluster, namespace, label=None):
+    label = " -l " + label if label else ''
+    return db_cluster.k8s_cluster.kubectl(f"get pvc -n {namespace}{label} -o yaml")
+
+
+def pod_storage_capacity(db_cluster, namespace, pod_name=None, label=None):
+    pods_storage_capacity = []
+    persistent_volume_info = namespace_persistent_volume(db_cluster, namespace, label)
+    for pod in yaml.load(persistent_volume_info.stdout)["items"]:
+        if pod_name and pod_name not in pod["metadata"]["name"]:
+            continue
+
+        pods_storage_capacity.append([pod["metadata"]["name"], pod["status"]["capacity"]["storage"]])
+
+    return pods_storage_capacity
+
+
+def scylla_storage_capacity(db_cluster, namespace=SCYLLA_NAMESPACE, pod_name=None):
+    return pod_storage_capacity(db_cluster, namespace=namespace, pod_name=pod_name,
+                                label="app.kubernetes.io/name=scylla")
+
+
+def get_container_log(db_cluster, namespace, pod_name, container_name):
+    return db_cluster.k8s_cluster.kubectl(f"logs {pod_name} -c {container_name}", namespace=namespace)
+
+
+def watch_container_log_for_string(db_cluster, search_str, namespace, pod_name, container_name):
+    log_text = get_container_log(db_cluster, namespace, pod_name, container_name)
+    if log_text.return_code != 0 or log_text.stderr:
+        raise ReadLogException(f"Failed to read log of {pod_name}, container {container_name}. "
+                               f"Status: {log_text.return_code}. Error: {log_text.stderr}")
+
+    search_pattern = re.compile(search_str, re.IGNORECASE)
+    if search_pattern.search(log_text.stdout):
+        return True
+    return False
+
+
+def watch_scylla_container_log_for_string(db_cluster, search_str, namespace, pod_name):
+    return watch_container_log_for_string(db_cluster, search_str, namespace, pod_name, container_name='scylla')

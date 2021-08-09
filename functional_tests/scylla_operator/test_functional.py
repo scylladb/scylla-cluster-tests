@@ -25,147 +25,328 @@ from sdcm.utils.k8s import HelmValues
 from functional_tests.scylla_operator.libs.helpers import (get_orphaned_services,
                                                            scylla_operator_rollout_restart,
                                                            wait_for_scylla_operator_rollout_complete,
-                                                           scylla_operator_pods_and_statuses)
+                                                           scylla_operator_pods_and_statuses, PodStatuses,
+                                                           pods_and_statuses, scylla_storage_capacity,
+                                                           watch_scylla_container_log_for_string)
 
 log = logging.getLogger()
 
 
-@pytest.mark.skip("Disabled due to the https://github.com/scylladb/scylla-cluster-tests/issues/3786")
-def test_cassandra_rackdc(cassandra_rackdc_properties):
+# @pytest.mark.skip("Disabled due to the https://github.com/scylladb/scylla-cluster-tests/issues/3786")
+# def test_cassandra_rackdc(cassandra_rackdc_properties):
+#     """
+#     Test of applying cassandra-rackdc.properties via configmap
+#     """
+#
+#     with cassandra_rackdc_properties() as props:
+#         original = props['prefer_local']
+#
+#     log.info("cassandra-rackdc.properties.prefer_local = %s", original)
+#
+#     if original == 'false':
+#         changed = 'true'
+#     elif original == 'true':
+#         changed = 'false'
+#     else:
+#         assert False, f'cassandra-rackdc.properties have unexpected prefer_local value {original}'
+#
+#     with cassandra_rackdc_properties() as props:
+#         assert original == props['prefer_local']
+#         props['prefer_local'] = changed
+#
+#     with cassandra_rackdc_properties() as props:
+#         assert changed == props['prefer_local']
+#         props['prefer_local'] = original
+#
+#     with cassandra_rackdc_properties() as props:
+#         assert original == props['prefer_local']
+#
+#
+# def test_rolling_restart_cluster(db_cluster):
+#     db_cluster.k8s_cluster.kubectl("rollout restart statefulset", namespace=db_cluster.namespace)
+#     for statefulset in db_cluster.statefulsets:
+#         db_cluster.k8s_cluster.kubectl(
+#             f"rollout status statefulset/{statefulset.metadata.name} --watch=true --timeout={10}m",
+#             namespace=db_cluster.namespace,
+#             timeout=10 * 60 + 10)
+#     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
+#
+#
+# def test_grow_shrink_cluster(db_cluster):
+#     new_node = db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=0)[0]
+#     db_cluster.decommission(new_node)
+#     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
+#
+#
+# @pytest.mark.require_node_terminate('drain_k8s_node')
+# def test_drain_and_replace_node_kubernetes(db_cluster):
+#     target_node = random.choice(db_cluster.non_seed_nodes)
+#     old_uid = target_node.k8s_pod_uid
+#     log.info('TerminateNode %s (uid=%s)', target_node, old_uid)
+#     target_node.drain_k8s_node()
+#     target_node.mark_to_be_replaced()
+#     target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
+#     target_node.wait_for_pod_readiness()
+#     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
+#
+#
+# @pytest.mark.require_node_terminate('drain_k8s_node')
+# def test_drain_wait_and_replace_node_kubernetes(db_cluster):
+#     target_node = random.choice(db_cluster.non_seed_nodes)
+#     old_uid = target_node.k8s_pod_uid
+#     log.info('TerminateNode %s (uid=%s)', target_node, old_uid)
+#     target_node.drain_k8s_node()
+#     target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
+#     old_uid = target_node.k8s_pod_uid
+#     log.info('Mark %s (uid=%s) to be replaced', target_node, old_uid)
+#     target_node.mark_to_be_replaced()
+#     target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
+#     target_node.wait_for_pod_readiness()
+#     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
+#
+#
+# @pytest.mark.require_node_terminate('drain_k8s_node')
+# def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
+#     target_rack = random.choice([*db_cluster.racks])
+#     target_node = db_cluster.get_rack_nodes(target_rack)[-1]
+#     target_node.drain_k8s_node()
+#     db_cluster.decommission(target_node)
+#     db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=0)
+#     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
+#
+#
+# @pytest.mark.require_mgmt()
+# def test_mgmt_repair(db_cluster):
+#     mgr_cluster = db_cluster.get_cluster_manager()
+#     mgr_task = mgr_cluster.create_repair_task()
+#     assert mgr_task, "Failed to create repair task"
+#     task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
+#     assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(
+#         mgr_task.id, str(mgr_task.status))
+#
+#
+# @pytest.mark.require_mgmt()
+# def test_mgmt_backup(db_cluster):
+#     mgr_cluster = db_cluster.get_cluster_manager()
+#     backup_bucket_location = db_cluster.params.get('backup_bucket_location')
+#     bucket_name = f"s3:{backup_bucket_location.split()[0]}"
+#     mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ])
+#     assert mgr_task, "Failed to create backup task"
+#     status = mgr_task.wait_and_get_final_status(timeout=54000, step=5, only_final=True)
+#     assert TaskStatus.DONE == status
+#
+#
+# def test_listen_address(db_cluster):
+#     """
+#     Issues: https://github.com/scylladb/scylla-operator/issues/484
+#             https://github.com/scylladb/scylla/issues/8381
+#     Fix commit: https://github.com/scylladb/scylla-operator/pull/529
+#     """
+#     all_errors = []
+#     for node in db_cluster.nodes:
+#         result = node.remoter.run("ps aux | grep docker-entrypoint.py | grep -Po '\\-\\-listen-address=[^ ]+' | "
+#                                   "sed -r 's/--listen-address[= ]([^ ]+)/\\1/'", ignore_status=True)
+#         # Check in command line first
+#         if result.ok:
+#             if result.stdout.strip() != '0.0.0.0':
+#                 all_errors.append(f"Node {node.name} has wrong listen-address argument {result.stdout}")
+#             continue
+#         # If no --listen-address in command line then proceed with scylla.yaml
+#         with node.actual_scylla_yaml() as scylla_yaml:
+#             listen_address = scylla_yaml.get('listen_address')
+#             if not listen_address:
+#                 all_errors.append(f"Not found listen_address flag in the {node.name} scylla.yaml")
+#             elif listen_address != '0.0.0.0':
+#                 all_errors.append(f'Node {node.name} has wrong listen_address "{listen_address}" in scylla.yaml')
+#
+#     assert not all_errors, "Following errors found:\n{'\n'.join(errors)}"
+#
+#
+# def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
+#     """Covers https://github.com/scylladb/scylla-operator/issues/447"""
+#
+#     # NOTE: Create invalid ScyllaCluster which must be failed but not block operator.
+#     log.info("DEBUG: test_check_operator_operability_when_scylla_crd_is_incorrect")
+#     cluster_name, target_chart_name, namespace = ("test-empty-storage-capacity",) * 3
+#     values = HelmValues({
+#         'nameOverride': '',
+#         'fullnameOverride': cluster_name,
+#         'scyllaImage': {
+#             'repository': db_cluster.k8s_cluster.params.get('docker_image'),
+#             'tag': db_cluster.k8s_cluster.params.get('scylla_version'),
+#         },
+#         'agentImage': {
+#             'repository': 'scylladb/scylla-manager-agent',
+#             'tag': db_cluster.k8s_cluster.params.get('scylla_mgmt_agent_version'),
+#         },
+#         'serviceAccount': {
+#             'create': True,
+#             'annotations': {},
+#             'name': f"{cluster_name}-member"
+#         },
+#         'developerMode': True,
+#         'sysctls': ["fs.aio-max-nr=1048576"],
+#         'serviceMonitor': {'create': False},
+#         'datacenter': db_cluster.k8s_cluster.params.get('k8s_scylla_datacenter'),
+#         'racks': [{
+#             'name': db_cluster.k8s_cluster.params.get('k8s_scylla_rack'),
+#             'members': 1,
+#             'storage': {},
+#             'resources': {
+#                 'limits': {'cpu': 1, 'memory': "200Mi"},
+#                 'requests': {'cpu': 1, 'memory': "200Mi"},
+#             },
+#         }]
+#     })
+#     db_cluster.k8s_cluster.kubectl(f"create namespace {namespace}", ignore_status=True)
+#     db_cluster.k8s_cluster.helm_install(
+#         target_chart_name=target_chart_name,
+#         source_chart_name="scylla-operator/scylla",
+#         version=db_cluster.k8s_cluster._scylla_operator_chart_version,  # pylint: disable=protected-access
+#         use_devel=True,
+#         values=values,
+#         namespace=namespace)
+#     try:
+#         db_cluster.k8s_cluster.wait_till_cluster_is_operational()
+#
+#         # NOTE: Check that new cluster is non-working. Statefulset must be absent always.
+#         #       So, sleep for some time and make sure that it is absent.
+#         time.sleep(30)
+#         invalid_cluster_sts = db_cluster.k8s_cluster.kubectl(
+#             f"get sts -n {namespace}  -l scylla/cluster={cluster_name}",
+#             ignore_status=True)
+#         assert 'No resources found' in invalid_cluster_sts.stderr, (
+#             f"Expected {cluster_name} not to have statefulset created.\n"
+#             f"stdout: {invalid_cluster_sts.stdout}\n"
+#             f"stderr: {invalid_cluster_sts.stderr}")
+#
+#         # NOTE: Any change to the working ScyllaCluster going to trigger rollout.
+#         #       And rollout is enough for us to make sure that operator still works
+#         #       having invalid clusters. So, just run rollout restart which updates
+#         #       ScyllaCluster CRD.
+#         db_cluster.restart_scylla()
+#     finally:
+#         db_cluster.k8s_cluster.helm(
+#             f"uninstall {target_chart_name}", namespace=namespace)
+#
+#
+# def test_orphaned_services_after_shrink_cluster(db_cluster):
+#     """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
+#     log.info("Decommission of two node")
+#     db_cluster.decommission(db_cluster.nodes[-1])
+#     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
+#
+#     assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
+#
+#     db_cluster.decommission(db_cluster.nodes[-1])
+#     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
+#
+#     assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
+#
+#
+# @pytest.mark.require_node_terminate('drain_k8s_node')
+# def test_orphaned_services_after_drain(db_cluster):
+#     """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
+#     node_to_remove = random.choice(db_cluster.non_seed_nodes)
+#     node_to_remove_uid = node_to_remove.k8s_pod_uid
+#     log.info('TerminateNode %s (uid=%s)', node_to_remove, node_to_remove_uid)
+#     node_to_remove.drain_k8s_node()
+#     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
+#     assert not get_orphaned_services(db_cluster), "Orphaned services were found after drain"
+#
+#     node_to_remove.mark_to_be_replaced()
+#     node_to_remove.wait_till_k8s_pod_get_uid(ignore_uid=node_to_remove_uid)
+#     node_to_remove.wait_for_pod_readiness()
+#     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
+#     assert not get_orphaned_services(db_cluster), "Orphaned services were found after replace"
+#
+#
+# def test_orphaned_services_multi_rack(db_cluster):
+#     """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
+#     new_nodes = []
+#     log.info("Add node to the rack 1")
+#     new_nodes.append(db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=1))
+#
+#     log.info("Add node to the rack 2")
+#     new_nodes.append(db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=2))
+#
+#     assert not get_orphaned_services(db_cluster), "Orphaned services were found after grow cluster with new racks"
+#
+#     log.info("Decommission of 2 nodes")
+#     for node in new_nodes:
+#         db_cluster.decommission(node[0])
+#
+#     db_cluster.wait_for_pods_readiness(pods_to_wait=2, total_pods=len(db_cluster.nodes))
+#     assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
+#
+#
+# def test_ha_update_spec_while_rollout_restart(db_cluster: ScyllaPodCluster):
+#     """
+#     Cover the issue https://github.com/scylladb/scylla-operator/issues/410
+#     Validate that cluster resources can be updated while the scylla-operator is rolling out.
+#     - update cluster specification a few time
+#     - start rollout restart in parallel with the update
+#     - validate that the cluster specification has been updated
+#     """
+#     terminate_change_spec_thread = threading.Event()
+#     value = 1048576
+#     crd_update_errors = []
+#
+#     def change_cluster_spec():
+#         nonlocal value
+#         nonlocal crd_update_errors
+#         while not terminate_change_spec_thread.wait(0.1):
+#             try:
+#                 db_cluster.replace_scylla_cluster_value('/spec/sysctls', [f"fs.aio-max-nr={value + 1}"])
+#                 # increase the value just when the sysctls spec value has been updated - to prevent the situation when
+#                 # value was increased, but sysctls spec value was not updated
+#                 value += 1
+#             except Exception as error:  # pylint: disable=broad-except
+#                 log.debug("Change /spec/sysctls value to %d failed. Error: %s", value, str(error))
+#                 crd_update_errors.append(str(error))
+#
+#     change_cluster_spec_thread = threading.Thread(target=change_cluster_spec, daemon=True)
+#     log.info("Start update cluster specification")
+#     change_cluster_spec_thread.start()
+#
+#     log.info("Start rollout restart")
+#     scylla_operator_rollout_restart(db_cluster)
+#     operator_rollout_errors = wait_for_scylla_operator_rollout_complete(db_cluster)
+#     assert not operator_rollout_errors, "Rollout restart failed. Reasons: {}".format('\n'.join(operator_rollout_errors))
+#
+#     log.info("Stop update cluster specification")
+#     terminate_change_spec_thread.set()
+#     change_cluster_spec_thread.join()
+#
+#     assert not crd_update_errors, \
+#         "Found following errors during rollout restart: {}".format("\n".join(crd_update_errors))
+#
+#     sysctl_value = db_cluster.get_scylla_cluster_plain_value('/spec/sysctls')
+#     expected_sysctl_value = [f"fs.aio-max-nr={value}"]
+#     assert expected_sysctl_value == sysctl_value, \
+#         f"Cluster specification has not been updated. Expected {expected_sysctl_value}, actual {sysctl_value}"
+#
+#
+# def test_scylla_operator_pods(db_cluster: ScyllaPodCluster):
+#     scylla_operator_pods = scylla_operator_pods_and_statuses(db_cluster)
+#
+#     assert len(scylla_operator_pods) == 2, f'Expected 2 scylla-operator pods, but exists {len(scylla_operator_pods)}'
+#
+#     not_running_pods = ','.join(
+#         [pods_info[0] for pods_info in scylla_operator_pods if pods_info[1] != PodStatuses.RUNNING.value])
+#     assert not not_running_pods, f'There are pods in state other than running: {not_running_pods}'
+
+
+def test_check_small_scylla_storage_capacity(db_cluster):
     """
-    Test of applying cassandra-rackdc.properties via configmap
+    https://github.com/scylladb/scylla-operator/issues/501
+    https://github.com/scylladb/scylla-operator/pull/502
+
+    Create invalid ScyllaCluster where Scylla refuses to start when developerMode is disabled and disk is smaller
+    than 10Gi
     """
-
-    with cassandra_rackdc_properties() as props:
-        original = props['prefer_local']
-
-    log.info("cassandra-rackdc.properties.prefer_local = %s", original)
-
-    if original == 'false':
-        changed = 'true'
-    elif original == 'true':
-        changed = 'false'
-    else:
-        assert False, f'cassandra-rackdc.properties have unexpected prefer_local value {original}'
-
-    with cassandra_rackdc_properties() as props:
-        assert original == props['prefer_local']
-        props['prefer_local'] = changed
-
-    with cassandra_rackdc_properties() as props:
-        assert changed == props['prefer_local']
-        props['prefer_local'] = original
-
-    with cassandra_rackdc_properties() as props:
-        assert original == props['prefer_local']
-
-
-def test_rolling_restart_cluster(db_cluster):
-    db_cluster.k8s_cluster.kubectl("rollout restart statefulset", namespace=db_cluster.namespace)
-    for statefulset in db_cluster.statefulsets:
-        db_cluster.k8s_cluster.kubectl(
-            f"rollout status statefulset/{statefulset.metadata.name} --watch=true --timeout={10}m",
-            namespace=db_cluster.namespace,
-            timeout=10 * 60 + 10)
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-
-
-def test_grow_shrink_cluster(db_cluster):
-    new_node = db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=0)[0]
-    db_cluster.decommission(new_node)
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-
-
-@pytest.mark.require_node_terminate('drain_k8s_node')
-def test_drain_and_replace_node_kubernetes(db_cluster):
-    target_node = random.choice(db_cluster.non_seed_nodes)
-    old_uid = target_node.k8s_pod_uid
-    log.info('TerminateNode %s (uid=%s)', target_node, old_uid)
-    target_node.drain_k8s_node()
-    target_node.mark_to_be_replaced()
-    target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
-    target_node.wait_for_pod_readiness()
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-
-
-@pytest.mark.require_node_terminate('drain_k8s_node')
-def test_drain_wait_and_replace_node_kubernetes(db_cluster):
-    target_node = random.choice(db_cluster.non_seed_nodes)
-    old_uid = target_node.k8s_pod_uid
-    log.info('TerminateNode %s (uid=%s)', target_node, old_uid)
-    target_node.drain_k8s_node()
-    target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
-    old_uid = target_node.k8s_pod_uid
-    log.info('Mark %s (uid=%s) to be replaced', target_node, old_uid)
-    target_node.mark_to_be_replaced()
-    target_node.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
-    target_node.wait_for_pod_readiness()
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-
-
-@pytest.mark.require_node_terminate('drain_k8s_node')
-def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
-    target_rack = random.choice([*db_cluster.racks])
-    target_node = db_cluster.get_rack_nodes(target_rack)[-1]
-    target_node.drain_k8s_node()
-    db_cluster.decommission(target_node)
-    db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=0)
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-
-
-@pytest.mark.require_mgmt()
-def test_mgmt_repair(db_cluster):
-    mgr_cluster = db_cluster.get_cluster_manager()
-    mgr_task = mgr_cluster.create_repair_task()
-    assert mgr_task, "Failed to create repair task"
-    task_final_status = mgr_task.wait_and_get_final_status(timeout=86400)  # timeout is 24 hours
-    assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(
-        mgr_task.id, str(mgr_task.status))
-
-
-@pytest.mark.require_mgmt()
-def test_mgmt_backup(db_cluster):
-    mgr_cluster = db_cluster.get_cluster_manager()
-    backup_bucket_location = db_cluster.params.get('backup_bucket_location')
-    bucket_name = f"s3:{backup_bucket_location.split()[0]}"
-    mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ])
-    assert mgr_task, "Failed to create backup task"
-    status = mgr_task.wait_and_get_final_status(timeout=54000, step=5, only_final=True)
-    assert TaskStatus.DONE == status
-
-
-def test_listen_address(db_cluster):
-    """
-    Issues: https://github.com/scylladb/scylla-operator/issues/484
-            https://github.com/scylladb/scylla/issues/8381
-    Fix commit: https://github.com/scylladb/scylla-operator/pull/529
-    """
-    all_errors = []
-    for node in db_cluster.nodes:
-        result = node.remoter.run("ps aux | grep docker-entrypoint.py | grep -Po '\\-\\-listen-address=[^ ]+' | "
-                                  "sed -r 's/--listen-address[= ]([^ ]+)/\\1/'", ignore_status=True)
-        # Check in command line first
-        if result.ok:
-            if result.stdout.strip() != '0.0.0.0':
-                all_errors.append(f"Node {node.name} has wrong listen-address argument {result.stdout}")
-            continue
-        # If no --listen-address in command line then proceed with scylla.yaml
-        with node.actual_scylla_yaml() as scylla_yaml:
-            listen_address = scylla_yaml.get('listen_address')
-            if not listen_address:
-                all_errors.append(f"Not found listen_address flag in the {node.name} scylla.yaml")
-            elif listen_address != '0.0.0.0':
-                all_errors.append(f'Node {node.name} has wrong listen_address "{listen_address}" in scylla.yaml')
-
-    assert not all_errors, "Following errors found:\n{'\n'.join(errors)}"
-
-
-def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
-    """Covers https://github.com/scylladb/scylla-operator/issues/447"""
-
-    # NOTE: Create invalid ScyllaCluster which must be failed but not block operator.
-    log.info("DEBUG: test_check_operator_operability_when_scylla_crd_is_incorrect")
-    cluster_name, target_chart_name, namespace = ("test-empty-storage-capacity",) * 3
+    cluster_name, target_chart_name, namespace = ("test-scylla-small-storage-capacity",) * 3
+    set_capacity = '5Gi'
     values = HelmValues({
         'nameOverride': '',
         'fullnameOverride': cluster_name,
@@ -182,21 +363,25 @@ def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
             'annotations': {},
             'name': f"{cluster_name}-member"
         },
-        'developerMode': True,
+        'developerMode': False,
         'sysctls': ["fs.aio-max-nr=1048576"],
         'serviceMonitor': {'create': False},
         'datacenter': db_cluster.k8s_cluster.params.get('k8s_scylla_datacenter'),
         'racks': [{
             'name': db_cluster.k8s_cluster.params.get('k8s_scylla_rack'),
             'members': 1,
-            'storage': {},
+            'storage': {'capacity': set_capacity, 'storageClassName': 'standard'},
             'resources': {
                 'limits': {'cpu': 1, 'memory': "200Mi"},
                 'requests': {'cpu': 1, 'memory': "200Mi"},
             },
         }]
     })
+
+    log.debug("Create %s namespace", namespace)
     db_cluster.k8s_cluster.kubectl(f"create namespace {namespace}", ignore_status=True)
+
+    log.debug('Deploy %s cluster with storage capacity = %s', cluster_name, set_capacity)
     db_cluster.k8s_cluster.helm_install(
         target_chart_name=target_chart_name,
         source_chart_name="scylla-operator/scylla",
@@ -210,125 +395,129 @@ def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
         # NOTE: Check that new cluster is non-working. Statefulset must be absent always.
         #       So, sleep for some time and make sure that it is absent.
         time.sleep(30)
-        invalid_cluster_sts = db_cluster.k8s_cluster.kubectl(
-            f"get sts -n {namespace} -l scylla/cluster={cluster_name}",
-            ignore_status=True)
-        assert 'No resources found' in invalid_cluster_sts.stderr, (
-            f"Expected {cluster_name} not to have statefulset created.\n"
-            f"stdout: {invalid_cluster_sts.stdout}\n"
-            f"stderr: {invalid_cluster_sts.stderr}")
 
-        # NOTE: Any change to the working ScyllaCluster going to trigger rollout.
-        #       And rollout is enough for us to make sure that operator still works
-        #       having invalid clusters. So, just run rollout restart which updates
-        #       ScyllaCluster CRD.
-        db_cluster.restart_scylla()
+        cluster_sts = db_cluster.k8s_cluster.kubectl(
+            f"get sts -n {namespace} -l scylla/cluster={cluster_name}", ignore_status=True)
+
+        assert not cluster_sts.stderr, (
+            f"Expected cluster {cluster_name} have statefulset created but it failed.\n"
+            f"stdout: {cluster_sts.stdout}\n"
+            f"stderr: {cluster_sts.stderr}")
+
+        assert cluster_name in cluster_sts.stdout, (
+            f"Expected {cluster_name} have statefulset created.\n"
+            f"stdout: {cluster_sts.stdout}\n"
+            f"stderr: {cluster_sts.stderr}")
+
+        pod_status = pods_and_statuses(db_cluster, namespace=namespace)
+
+        storage_capacity = scylla_storage_capacity(db_cluster, namespace=namespace, pod_name=pod_status[0][0])
+        assert storage_capacity[0][1] == set_capacity, \
+            f"Expected capacity is {set_capacity}, actual capacity {storage_capacity[0][1]}"
+
+        assert len(pod_status) == 1, f"More then one pod has been created in {namespace} namespace: {pod_status}"
+
+        assert not watch_scylla_container_log_for_string(db_cluster=db_cluster,
+                                                         search_str=r"Scylla version .* initialization completed",
+                                                         namespace=namespace,
+                                                         pod_name=pod_status[0][0]), \
+            "Expected error 'memory per shard too low' error during Scylla start has not been "
+
+        # assert pod_status[0][1] == PodStatuses.CRASH_LOOP_BACK_OFF.value, \
+        #     f"Expected {PodStatuses.CRASH_LOOP_BACK_OFF.value} but actually it's {pod_status[0][1]}"
+
     finally:
-        db_cluster.k8s_cluster.helm(
-            f"uninstall {target_chart_name}", namespace=namespace)
+        db_cluster.k8s_cluster.helm(f"uninstall {target_chart_name}", namespace=namespace)
 
 
-def test_orphaned_services_after_shrink_cluster(db_cluster):
-    """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
-    log.info("Decommission of two node")
-    db_cluster.decommission(db_cluster.nodes[-1])
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-
-    assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
-
-    db_cluster.decommission(db_cluster.nodes[-1])
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-
-    assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
-
-
-@pytest.mark.require_node_terminate('drain_k8s_node')
-def test_orphaned_services_after_drain(db_cluster):
-    """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
-    node_to_remove = random.choice(db_cluster.non_seed_nodes)
-    node_to_remove_uid = node_to_remove.k8s_pod_uid
-    log.info('TerminateNode %s (uid=%s)', node_to_remove, node_to_remove_uid)
-    node_to_remove.drain_k8s_node()
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-    assert not get_orphaned_services(db_cluster), "Orphaned services were found after drain"
-
-    node_to_remove.mark_to_be_replaced()
-    node_to_remove.wait_till_k8s_pod_get_uid(ignore_uid=node_to_remove_uid)
-    node_to_remove.wait_for_pod_readiness()
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-    assert not get_orphaned_services(db_cluster), "Orphaned services were found after replace"
-
-
-def test_orphaned_services_multi_rack(db_cluster):
-    """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
-    new_nodes = []
-    log.info("Add node to the rack 1")
-    new_nodes.append(db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=1))
-
-    log.info("Add node to the rack 2")
-    new_nodes.append(db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=2))
-
-    assert not get_orphaned_services(db_cluster), "Orphaned services were found after grow cluster with new racks"
-
-    log.info("Decommission of 2 nodes")
-    for node in new_nodes:
-        db_cluster.decommission(node[0])
-
-    db_cluster.wait_for_pods_readiness(pods_to_wait=2, total_pods=len(db_cluster.nodes))
-    assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
-
-
-def test_ha_update_spec_while_rollout_restart(db_cluster: ScyllaPodCluster):
+def test_check_default_scylla_storage_capacity(db_cluster):
     """
-    Cover the issue https://github.com/scylladb/scylla-operator/issues/410
-    Validate that cluster resources can be updated while the scylla-operator is rolling out.
-    - update cluster specification a few time
-    - start rollout restart in parallel with the update
-    - validate that the cluster specification has been updated
+    https://github.com/scylladb/scylla-operator/issues/501
+    https://github.com/scylladb/scylla-operator/pull/502
+
+    Create invalid ScyllaCluster where Scylla refuses to start when developerMode is disabled
+    and storage capacity is 10Gi
     """
-    terminate_change_spec_thread = threading.Event()
-    value = 1048576
-    crd_update_errors = []
 
-    def change_cluster_spec():
-        nonlocal value
-        nonlocal crd_update_errors
-        while not terminate_change_spec_thread.wait(0.1):
-            try:
-                db_cluster.replace_scylla_cluster_value('/spec/sysctls', [f"fs.aio-max-nr={value + 1}"])
-                # increase the value just when the sysctls spec value has been updated - to prevent the situation when
-                # value was increased, but sysctls spec value was not updated
-                value += 1
-            except Exception as error:  # pylint: disable=broad-except
-                log.debug("Change /spec/sysctls value to %d failed. Error: %s", value, str(error))
-                crd_update_errors.append(str(error))
+    log.info("DEBUG: test_check_operator_operability_when_scylla_crd_is_incorrect")
+    cluster_name, target_chart_name, namespace = ("test-scylla-default-storage-capacity",) * 3
+    set_capacity = '15Gi'
+    values = HelmValues({
+        'nameOverride': '',
+        'fullnameOverride': cluster_name,
+        'scyllaImage': {
+            'repository': db_cluster.k8s_cluster.params.get('docker_image'),
+            'tag': db_cluster.k8s_cluster.params.get('scylla_version'),
+        },
+        'agentImage': {
+            'repository': 'scylladb/scylla-manager-agent',
+            'tag': db_cluster.k8s_cluster.params.get('scylla_mgmt_agent_version'),
+        },
+        'serviceAccount': {
+            'create': True,
+            'annotations': {},
+            'name': f"{cluster_name}-member"
+        },
+        'developerMode': False,
+        'sysctls': ["fs.aio-max-nr=1048576"],
+        'serviceMonitor': {'create': False},
+        'datacenter': db_cluster.k8s_cluster.params.get('k8s_scylla_datacenter'),
+        'racks': [{
+            'name': db_cluster.k8s_cluster.params.get('k8s_scylla_rack'),
+            'members': 1,
+            'storage': {'capacity': set_capacity},
+            'resources': {
+                'limits': {'cpu': 1, 'memory': "200Mi"},
+                'requests': {'cpu': 1, 'memory': "200Mi"},
+            },
+        }]
+    })
 
-    change_cluster_spec_thread = threading.Thread(target=change_cluster_spec, daemon=True)
-    log.info("Start update cluster specification")
-    change_cluster_spec_thread.start()
+    log.debug("Create %s namespace", namespace)
+    db_cluster.k8s_cluster.kubectl(f"create namespace {namespace}", ignore_status=True)
 
-    log.info("Start rollout restart")
-    scylla_operator_rollout_restart(db_cluster)
-    operator_rollout_errors = wait_for_scylla_operator_rollout_complete(db_cluster)
-    assert not operator_rollout_errors, "Rollout restart failed. Reasons: {}".format('\n'.join(operator_rollout_errors))
+    log.debug('Deploy %s cluster with storage capacity = 10Gi', cluster_name)
+    db_cluster.k8s_cluster.helm_install(
+        target_chart_name=target_chart_name,
+        source_chart_name="scylla-operator/scylla",
+        version=db_cluster.k8s_cluster._scylla_operator_chart_version,  # pylint: disable=protected-access
+        use_devel=True,
+        values=values,
+        namespace=namespace)
+    try:
+        db_cluster.k8s_cluster.wait_till_cluster_is_operational()
+        # NOTE: Check that new cluster is non-working. Statefulset must be absent always.
+        #       So, sleep for some time and make sure that it is absent.
+        time.sleep(30)
 
-    log.info("Stop update cluster specification")
-    terminate_change_spec_thread.set()
-    change_cluster_spec_thread.join()
+        cluster_sts = db_cluster.k8s_cluster.kubectl(
+            f"get sts -n {namespace} -l scylla/cluster={cluster_name}", ignore_status=True)
 
-    assert not crd_update_errors, \
-        "Found following errors during rollout restart: {}".format("\n".join(crd_update_errors))
+        assert not cluster_sts.stderr, (
+            f"Expected cluster {cluster_name} have statefulset created but it failed.\n"
+            f"stdout: {cluster_sts.stdout}\n"
+            f"stderr: {cluster_sts.stderr}")
 
-    sysctl_value = db_cluster.get_scylla_cluster_plain_value('/spec/sysctls')
-    expected_sysctl_value = [f"fs.aio-max-nr={value}"]
-    assert expected_sysctl_value == sysctl_value, \
-        f"Cluster specification has not been updated. Expected {expected_sysctl_value}, actual {sysctl_value}"
+        assert cluster_name in cluster_sts.stdout, (
+            f"Expected {cluster_name} have statefulset created.\n"
+            f"stdout: {cluster_sts.stdout}\n"
+            f"stderr: {cluster_sts.stderr}")
 
+        pod_status = pods_and_statuses(db_cluster, namespace=namespace)
 
-def test_scylla_operator_pods(db_cluster: ScyllaPodCluster):
-    scylla_operator_pods = scylla_operator_pods_and_statuses(db_cluster)
+        assert len(pod_status) == 1, f"More then one pod has been created in {namespace} namespace: {pod_status}"
+        assert pod_status[0][1] == PodStatuses.RUNNING.value, \
+            f"Expected {PodStatuses.RUNNING.value} but actually it's {pod_status[0][1]}"
 
-    assert len(scylla_operator_pods) == 2, f'Expected 2 scylla-operator pods, but exists {len(scylla_operator_pods)}'
+        storage_capacity = scylla_storage_capacity(db_cluster, namespace=namespace, pod_name=pod_status[0][0])
+        assert storage_capacity[0][1] == set_capacity, \
+            f"Expected capacity is {set_capacity}, actual capacity {storage_capacity[0][1]}"
 
-    not_running_pods = ','.join([pods_info[0] for pods_info in scylla_operator_pods if pods_info[1] != 'Running'])
-    assert not not_running_pods, f'There are pods in state other than running: {not_running_pods}'
+        assert watch_scylla_container_log_for_string(db_cluster=db_cluster,
+                                                     search_str=r"Scylla version .* initialization completed",
+                                                     namespace=namespace,
+                                                     pod_name=pod_status[0][0]), \
+            "Expected error 'memory per shard too low' error during Scylla start has not been "
+
+    finally:
+        db_cluster.k8s_cluster.helm(f"uninstall {target_chart_name}", namespace=namespace)
