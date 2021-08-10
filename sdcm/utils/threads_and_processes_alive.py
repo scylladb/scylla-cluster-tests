@@ -44,7 +44,8 @@ def gather_live_threads_and_dump_to_file(dump_file_path: str) -> bool:
                 source = inspect.getsource(thread.__class__)
             if module not in source_modules:
                 source_modules.append(module)
-            log_file.write(f"========= Thread {thread.name} from {module} =========\n")
+            daemonic = getattr(thread, '_daemonic', getattr(thread, 'daemon', False))
+            log_file.write(f"========= Thread {thread.name} daemonic={daemonic} from {module} =========\n")
             log_file.write(f"========= SOURCE =========\n{source}\n")
             log_file.write(f"========= STACK TRACE =========\n{get_thread_stacktrace(thread)}\n")
             log_file.write(f"========= END OF Thread {thread.name} from {module} =========\n")
@@ -70,7 +71,8 @@ def gather_live_processes_and_dump_to_file(dump_file_path: str) -> bool:
                 source = inspect.getsource(proc.__class__)
             if module not in source_modules:
                 source_modules.append(module)
-            log_file.write(f"========= Process {proc.name} from {module} =========\n")
+            daemonic = getattr(proc, '_daemonic', getattr(proc, 'daemon', False))
+            log_file.write(f"========= Process {proc.name} daemonic={daemonic} from {module} =========\n")
             log_file.write(f"========= SOURCE =========\n{source}\n")
             log_file.write(f"========= END OF Process {proc.name} from {module}  =========\n")
     LOGGER.error("There are some processes left alive from the following modules %s", ",".join(source_modules))
