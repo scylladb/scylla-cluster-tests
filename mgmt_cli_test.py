@@ -24,6 +24,7 @@ import boto3
 import libcloud.storage.types
 import libcloud.storage.providers
 from invoke import exceptions
+from azure.storage.blob import BlobServiceClient
 from pkg_resources import parse_version
 
 from sdcm import mgmt
@@ -552,16 +553,30 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         # Unlike S3, if no files match the prefix, no error will occur
         return file_set
 
+    @staticmethod
+    def _get_all_snapshot_files_azure(cluster_id, bucket_name):
+        file_set = set()
+        credentials = KeyStore().get_backup_azure_blob_credentials()
+        blob_service_client = BlobServiceClient(account_url=f"https://{credentials['account']}.blob.core.windows.net",
+                                                credential=credentials['key'])
+        container_client = blob_service_client.get_container_client(bucket_name)
+        blob_iterator = container_client.list_blobs(name_starts_with=f"backup/sst/cluster/{cluster_id}")
+        for listing_object in blob_iterator:
+            file_set.add(listing_object["name"])
+        return file_set
+
     def _get_all_snapshot_files(self, cluster_id):
         bucket_name = self.params.get('backup_bucket_location').split()[0]
-        if self.params.get('cluster_backend') == 'aws':
+        if self.params.get('backup_bucket_backend') == 's3':
             region_name = self.params.get("backup_bucket_region") or self.params.get("region_name").split()[0]
             return self._get_all_snapshot_files_s3(cluster_id=cluster_id, bucket_name=bucket_name,
                                                    region_name=region_name)
-        elif self.params.get('cluster_backend') == 'gce':
+        elif self.params.get('backup_bucket_backend') == 'gcs':
             return self._get_all_snapshot_files_gce(cluster_id=cluster_id, bucket_name=bucket_name)
+        elif self.params.get('backup_bucket_backend') == 'azure':
+            return self._get_all_snapshot_files_azure(cluster_id=cluster_id, bucket_name=bucket_name)
         else:
-            raise ValueError(f'"{self.params.get("cluster_backend")}" not supported')
+            raise ValueError(f'"{self.params.get("backup_bucket_backend")}" not supported')
 
     def test_backup_purge_removes_orphan_files(self):
         """
