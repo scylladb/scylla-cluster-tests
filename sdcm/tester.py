@@ -2279,9 +2279,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self._check_alive_routines_and_report_them()
 
     def _check_alive_routines_and_report_them(self):
-        result = self.show_alive_threads()
-        result = self.show_alive_processes() or result
-        if result:
+        threads_alive = self.show_alive_threads()
+        processes_alive = self.show_alive_processes()
+        if processes_alive or threads_alive:
             self.log.error('Please check %s log to see them', self.left_processes_log)
 
     def _get_test_result_event(self) -> TestResultEvent:
