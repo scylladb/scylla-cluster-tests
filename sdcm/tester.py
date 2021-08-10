@@ -55,7 +55,7 @@ from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_netwo
     get_common_params, init_db_info_from_params, ec2_ami_get_root_device_name
 from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, update_certificates, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, PageFetcher, \
-    rows_to_list, make_threads_be_daemonic_by_default, ParallelObject
+    rows_to_list, make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT
@@ -2242,6 +2242,11 @@ class ClusterTester(db_stats.TestStatsMixin,
         self.finalize_teardown()
         self.log.info('Test ID: {}'.format(Setup.test_id()))
         self._check_alive_routines_and_report_them()
+        self.remove_python_exit_hooks()
+
+    @silence()
+    def remove_python_exit_hooks(self):  # pylint: disable=no-self-use
+        clear_out_all_exit_hooks()
 
     def _check_alive_routines_and_report_them(self):
         result = self.show_alive_threads()
