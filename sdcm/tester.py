@@ -170,14 +170,15 @@ class silence:  # pylint: disable=invalid-name
                 name = funct.__name__
             else:
                 name = self.name
+            result = None
             try:
                 self.log.debug("Silently running '%s'", name)
-                funct(*args, **kwargs)
+                result = funct(*args, **kwargs)
                 self.log.debug("Finished '%s'. No errors were silenced.", name)
             except Exception as exc:  # pylint: disable=broad-except
                 self.log.debug("Finished '%s'. %s exception was silenced.", name, str(type(exc)))
                 self._store_test_result(args[0], exc, exc.__traceback__, name)
-
+            return result
         return decor
 
     def __exit__(self, exc_type, exc_val, exc_tb):
