@@ -167,7 +167,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     @staticmethod
     def test_12_scylla_version_ami_case1():  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
+        os.environ['SCT_SCYLLA_VERSION'] = '4.4.3'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb ami-eae4f795'
 
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
@@ -183,7 +183,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     @staticmethod
     def test_12_scylla_version_repo():
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
+        os.environ['SCT_SCYLLA_VERSION'] = '4.4.3'
 
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
@@ -191,7 +191,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
     @staticmethod
     def test_12_scylla_version_repo_case1():  # pylint: disable=invalid-name
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
-        os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
+        os.environ['SCT_SCYLLA_VERSION'] = '4.4.3'
         os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
 
         conf = sct_config.SCTConfiguration()
