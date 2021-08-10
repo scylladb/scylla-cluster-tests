@@ -2282,3 +2282,13 @@ def change_default_password(node, user='cassandra', password='cassandra'):
     """
     node.run_cqlsh(f"ALTER ROLE '{user}' with password='{password}{DEFAULT_PWD_SUFFIX}'")
     node.parent_cluster.added_password_suffix = True
+
+
+def clear_out_all_exit_hooks():
+    """
+    Some thread-related code is using threading._register_atexit to hook to python program exit
+    in order teardown gracefully as result test can halt at the end for any period of time, even for days.
+    To avoid that we clear it out to be sure that nothing is hooked and test is terminated right after
+      teardown.
+    """
+    threading._threading_atexits.clear()  # pylint: disable=protected-access
