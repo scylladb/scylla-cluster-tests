@@ -201,7 +201,13 @@ class silence:  # pylint: disable=invalid-name
 
 
 def critical_failure_handler(signum, frame):  # pylint: disable=unused-argument
-    raise AssertionError("Critical Error has failed the test")
+    try:
+        if TestConfig().tester_obj().teardown_started:
+            TEST_LOG.info("A critical event happened during tearDown")
+            return
+    except Exception:  # pylint: disable=broad-except
+        pass
+    raise AssertionError("Critical Error has failed the test")  # pylint: disable=raise-missing-from
 
 
 signal.signal(signal.SIGUSR2, critical_failure_handler)
@@ -235,6 +241,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self._results = []
         self.status = "RUNNING"
         self.start_time = time.time()
+        self.teardown_started = False
         self._init_params()
         reuse_cluster_id = self.params.get('reuse_cluster')
         if reuse_cluster_id:
@@ -2239,6 +2246,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.destroy_credentials()
 
     def tearDown(self):
+        self.teardown_started = True
         with silence(parent=self, name='Sending test end event'):
             InfoEvent(message="TEST_END").publish()
         self.log.info('TearDown is starting...')
