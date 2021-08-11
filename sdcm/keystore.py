@@ -50,6 +50,9 @@ class KeyStore:
     def get_gcp_credentials(self):
         return self.get_json("gcp.json")
 
+    def get_dbaaslab_gcp_credentials(self):
+        return self.get_json("gcp-scylladbaaslab.json")
+
     def get_gcp_service_accounts(self):
         return self.get_json("gcp_service_accounts.json")
 
