@@ -38,14 +38,14 @@ from cassandra import ConsistencyLevel
 from sdcm.cluster import SCYLLA_YAML_PATH, NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady
 from sdcm.cluster import NodeStayInClusterAfterDecommission
 from sdcm.mgmt import TaskStatus
-from sdcm.utils.common import remote_get_file, get_db_tables, generate_random_string, \
-    update_certificates, reach_enospc_on_node, clean_enospc_on_node, parse_nodetool_listsnapshots, \
-    update_authenticator
+from sdcm.utils.common import (get_db_tables, generate_random_string,
+                               update_certificates, reach_enospc_on_node, clean_enospc_on_node,
+                               parse_nodetool_listsnapshots,
+                               update_authenticator)
 from sdcm.utils import cdc
 from sdcm.utils.decorators import retrying, latency_calculator_decorator, timeout
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.log import SDCMAdapter
-from sdcm.keystore import KeyStore
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm import wait
 from sdcm.sct_events import Severity
@@ -56,8 +56,10 @@ from sdcm.sct_events.loaders import CassandraStressLogEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
-from sdcm.sct_events.group_common_events import ignore_alternator_client_errors, ignore_no_space_errors, ignore_scrub_invalid_errors
+from sdcm.sct_events.group_common_events import (ignore_alternator_client_errors, ignore_no_space_errors,
+                                                 ignore_scrub_invalid_errors)
 from sdcm.db_stats import PrometheusDBStats
+from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.cluster_k8s import PodCluster
@@ -981,133 +983,66 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._set_current_disruption('MajorCompaction %s' % self.target_node)
         self.target_node.run_nodetool("compact")
 
-    def disrupt_nodetool_refresh(self, big_sstable: bool = False):
-        self._set_current_disruption('Refresh keyspace1.standard1 on {}'.format(self.target_node.name))
-
+    def disrupt_load_and_stream(self):
         # Checking the columns number of keyspace1.standard1
         self.log.debug('Prepare keyspace1.standard1 if it does not exist')
         self._prepare_test_table(ks='keyspace1', table='standard1')
-        query_cmd = "SELECT * FROM keyspace1.standard1 LIMIT 1"
-        result = self.target_node.run_cqlsh(query_cmd)
-        col_num = len(re.findall("(\| C\d+)", result.stdout))
+        column_num = SstableLoadUtils.calculate_columns_count_in_table(self.target_node)
 
-        if col_num == 1:
-            # Use special schema (one column) for refresh before https://github.com/scylladb/scylla/issues/6617 is fixed
-            if big_sstable:
-                sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis_c0/keyspace1.standard1.100M.tar.gz'
-                sstable_file = '/tmp/keyspace1.standard1.100M.tar.gz'
-                sstable_md5 = 'e4f6addc2db8e9af3a906953288ef676'
-                keys_num = 1001000
-            else:
-                sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis_c0/keyspace1.standard1.tar.gz'
-                sstable_file = "/tmp/keyspace1.standard1.tar.gz"
-                sstable_md5 = 'c4aee10691fa6343a786f52663e7f758'
-                keys_num = 1000
-        elif col_num >= 5:
-            # The snapshot has 5 columns, the snapshot (col=5) can be loaded to table (col > 5).
-            # they rest columns will be filled to 'null'.
-            if big_sstable:
-                # 100G, the big file will be saved to GCE image
-                # Fixme: It's very slow and unstable to download 100G files from S3 to GCE instances,
-                #        currently we actually uploaded a small file (3.6 K) to S3.
-                #        We had a solution to save the file in GCE image, it requires bigger boot disk.
-                #        In my old test, the instance init is easy to fail. We can try to use a
-                #        split shared disk to save the 100GB file.
-                # 100M (500000 rows)
-                sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis/keyspace1.standard1.100M.tar.gz'
-                sstable_file = '/tmp/keyspace1.standard1.100M.tar.gz'
-                sstable_md5 = '9c5dd19cfc78052323995198b0817270'
-                keys_num = 501000
-            else:
-                sstable_url = 'https://s3.amazonaws.com/scylla-qa-team/refresh_nemesis/keyspace1.standard1.tar.gz'
-                sstable_file = "/tmp/keyspace1.standard1.tar.gz"
-                sstable_md5 = 'c033a3649a1aec3ba9b81c446c6eecfd'
-                keys_num = 1000
-        else:
-            # Note: when issue #6617 is fixed, we can try to load snapshot (cols=5) to a table (1 < cols < 5),
-            #       expect that refresh will fail (no serious db error).
+        # Run load-and-stream test on regular standard1 table of cassandra-stress.
+        if column_num < 5:
             raise UnsupportedNemesis("Schema doesn't match the snapshot, not uploading")
+
+        test_data = SstableLoadUtils.get_load_test_data_inventory(column_num, big_sstable=False, load_and_stream=True)
 
         result = self.target_node.run_nodetool(sub_cmd="cfstats", args="keyspace1.standard1")
 
-        def do_refresh(node):
-            key_store = KeyStore()
-            creds = key_store.get_scylladb_upload_credentials()
-            # Download the sstable files from S3
-            remote_get_file(node.remoter, sstable_url, sstable_file,
-                            hash_expected=sstable_md5, retries=2,
-                            user_agent=creds['user_agent'])
-            result = node.remoter.sudo("ls -t /var/lib/scylla/data/keyspace1/")
-            upload_dir = result.stdout.split()[0]
-            if node.is_docker():
-                node.remoter.run(f'tar xvfz {sstable_file} -C /var/lib/scylla/data/keyspace1/{upload_dir}/upload/')
-            else:
-                node.remoter.sudo(
-                    f'tar xvfz {sstable_file} -C /var/lib/scylla/data/keyspace1/{upload_dir}/upload/', user='scylla')
+        if result is not None and result.exit_status == 0:
+            map_files_to_node = SstableLoadUtils.distribute_test_files_to_cluster_nodes(nodes=self.cluster.nodes,
+                                                                                        test_data=test_data)
+            for sstables_info, load_on_node in map_files_to_node:
+                SstableLoadUtils.upload_sstables(load_on_node, test_data=sstables_info)
+                system_log_follower = SstableLoadUtils.run_load_and_stream(load_on_node)
+                SstableLoadUtils.validate_load_and_stream_status(load_on_node, system_log_follower)
 
-            # Scylla Enterprise 2019.1 doesn't support to load schema.cql and manifest.json, let's remove them
-            node.remoter.sudo(f'rm -f /var/lib/scylla/data/keyspace1/{upload_dir}/upload/schema.cql')
-            node.remoter.sudo(f'rm -f /var/lib/scylla/data/keyspace1/{upload_dir}/upload/manifest.json')
-            self.log.debug(f'Loading {keys_num} keys to {node.name} by refresh')
+    # pylint: disable=too-many-statements
+    def disrupt_nodetool_refresh(self, big_sstable: bool = False):
+        # Checking the columns number of keyspace1.standard1
+        self.log.debug('Prepare keyspace1.standard1 if it does not exist')
+        self._prepare_test_table(ks='keyspace1', table='standard1')
+        column_num = SstableLoadUtils.calculate_columns_count_in_table(self.target_node)
 
-            # Resharding of the loaded sstable files is performed before they are moved from upload to the main folder.
-            # So we need to validate that resharded files are placed in the "upload" folder before moving.
-            # Find the compaction output that reported about the resharding
+        # Note: when issue #6617 is fixed, we can try to load snapshot (cols=5) to a table (1 < cols < 5),
+        #       expect that refresh will fail (no serious db error).
+        if 1 < column_num < 5:
+            raise UnsupportedNemesis("Schema doesn't match the snapshot, not uploading")
 
-            system_log_follower = node.follow_system_log(patterns=['Resharded.*\[/'])
-            node.run_nodetool(sub_cmd="refresh", args="-- keyspace1 standard1")
-            return system_log_follower
+        test_data = SstableLoadUtils.get_load_test_data_inventory(column_num, big_sstable=big_sstable,
+                                                                  load_and_stream=False)
 
-        @timeout(
-            timeout=60,
-            allowed_exceptions=(AssertionError,),
-            message="Waiting for resharding completion message to appear in logs")
-        def validate_resharding_after_refresh(system_log_follower):
-            """
-            # Validate that files after resharding were saved in the "upload" folder.
-            # Example of compaction output:
-
-            #   scylla[6653]:  [shard 0] compaction - [Reshard keyspace1.standard1 3cad4140-f8c3-11ea-acb1-000000000002]
-            #   Resharded 1 sstables to [
-            #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-9-big-Data.db:level=0,
-            #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-10-big-Data.db:level=0,
-            #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-11-big-Data.db:level=0,
-            #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-12-big-Data.db:level=0,
-            #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-13-big-Data.db:level=0,
-            #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-22-big-Data.db:level=0,
-            #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-15-big-Data.db:level=0,
-            #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-16-big-Data.db:level=0,
-            #   ]. 91MB to 92MB (~100% of original) in 5009ms = 18MB/s. ~370176 total partitions merged to 370150
-            """
-            resharding_logs = list(system_log_follower)
-            assert resharding_logs, "Resharding wasn't run"
-            self.log.debug(f"Found resharding: {resharding_logs}")
-
-            for line in resharding_logs:
-                # Find all files that were created after resharding
-                for one_file in re.findall(r"(/var/.*?),", line, re.IGNORECASE):
-                    # The file path have to include "upload" folder
-                    assert '/upload/' in one_file, "Loaded file was resharded not in 'upload' folder"
+        result = self.target_node.run_nodetool(sub_cmd="cfstats", args="keyspace1.standard1")
 
         if result is not None and result.exit_status == 0:
+            key = '0x32373131364f334f3830'
             # Check one special key before refresh, we will verify refresh by query in the end
             # Note: we can't DELETE the key before refresh, otherwise the old sstable won't be loaded
             #       TRUNCATE can be used the clean the table, but we can't do it for keyspace1.standard1
-            query_verify = "SELECT * FROM keyspace1.standard1 WHERE key=0x32373131364f334f3830"
+            query_verify = f"SELECT * FROM keyspace1.standard1 WHERE key={key}"
             result = self.target_node.run_cqlsh(query_verify)
             if '(0 rows)' in result.stdout:
-                self.log.debug('Key 0x32373131364f334f3830 does not exist before refresh')
+                self.log.debug('Key %s does not exist before refresh', key)
             else:
-                self.log.debug('Key 0x32373131364f334f3830 already exists before refresh')
+                self.log.debug('Key %s already exists before refresh', key)
 
             # Executing rolling refresh one by one
             for node in self.cluster.nodes:
-                system_log_follower = do_refresh(node)
-                validate_resharding_after_refresh(system_log_follower)
+                SstableLoadUtils.upload_sstables(node, test_data=test_data[0])
+                system_log_follower = SstableLoadUtils.run_refresh(node, test_data=test_data[0])
+                SstableLoadUtils.validate_resharding_after_refresh(node=node, system_log_follower=system_log_follower)
 
             # Verify that the special key is loaded by SELECT query
             result = self.target_node.run_cqlsh(query_verify)
-            assert '(1 rows)' in result.stdout, 'The key is not loaded by `nodetool refresh`'
+            assert '(1 rows)' in result.stdout, f'The key {key} is not loaded by `nodetool refresh`'
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
         if isinstance(self.cluster, MinikubeScyllaPodCluster):
@@ -3177,6 +3112,16 @@ class RefreshMonkey(Nemesis):
     @log_time_elapsed_and_status
     def disrupt(self):
         self.disrupt_nodetool_refresh(big_sstable=False)
+
+
+class LoadAndStreamMonkey(Nemesis):
+    disruptive = False
+    run_with_gemini = False
+    kubernetes = True
+    limited = True
+
+    def disrupt(self):
+        self.disrupt_load_and_stream()
 
 
 class RefreshBigMonkey(Nemesis):
