@@ -1,0 +1,33 @@
+test_duration: 60
+max_partitions_in_test_table: 10
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=1m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5",
+             "cassandra-stress counter_write cl=QUORUM duration=1m -schema 'replication(factor=3) compaction(strategy=DateTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=5 -pop seq=1..10000000"
+             ]
+
+prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -max-rate=300 -replication-factor=3 -partition-count=10 -clustering-row-count=100 -clustering-row-size=5120 -concurrency=7 -rows-per-request=10",
+                     "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=10 -clustering-row-count=100 -clustering-row-size=5120 -rows-per-request=10 -concurrency=7 -max-rate=32000 -duration=1m"
+                    ]
+
+n_loaders: 1
+instance_type_db: 'i3.large'
+n_monitor_nodes: 1
+n_db_nodes: 3
+system_auth_rf: 0
+
+nemesis_class_name: NonDisruptiveMonkey
+nemesis_interval: 1
+
+user_prefix: 'PR-provision-test'
+instance_provision: 'spot'
+
+gce_image_db: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
+
+scylla_version: 4.4.1
+scylla_mgmt_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.3.repo'
+scylla_mgmt_agent_repo: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.3.repo'
+
+workaround_kernel_bug_for_iotune: true
+
+post_behavior_db_nodes: "destroy"
+post_behavior_loader_nodes: "destroy"
+post_behavior_monitor_nodes: "destroy"

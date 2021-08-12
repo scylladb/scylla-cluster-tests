@@ -1,0 +1,26 @@
+{
+  "broadcast_address": "__NODE_PUBLIC_ADDRESS__",
+  "listen_address": "__NODE_PRIVATE_ADDRESS__",
+  "endpoint_snitch": "org.apache.cassandra.locator.Ec2MultiRegionSnitch",
+  "rpc_address": "__NODE_PRIVATE_ADDRESS__",
+  "seed_provider": [
+    {
+      "class_name": "org.apache.cassandra.locator.SimpleSeedProvider",
+      "parameters": [
+        {
+          "seeds": "__SEED_NODE_IPS__"
+        }
+      ]
+    }
+  ],
+  "broadcast_rpc_address": "__NODE_PUBLIC_ADDRESS__",
+  "authenticator": "org.apache.cassandra.auth.PasswordAuthenticator",
+  "server_encryption_options": {
+    "internode_encryption": "all",
+    "certificate": "/etc/scylla/ssl_conf/db.crt",
+    "keyfile": "/etc/scylla/ssl_conf/db.key",
+    "truststore": "/etc/scylla/ssl_conf/cadb.pem"
+  },
+  "experimental": true,
+  "saslauthd_socket_path": "/run/saslauthd/mux"
+}
