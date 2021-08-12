@@ -1,0 +1,29 @@
+2021-08-12T06:07:19+00:00  longevity-10gb-3h-load-and-db-node-65bd71ec-1 !INFO    | scylla:  [shard 7] compaction - [Compact keyspace1.standard1 8d418f80-fb33-11eb-9b17-403073af4e08] Compacting [/var/lib/scylla/
+data/keyspace1/standard1-501e29b0fb3311ebb71a4875c5785232/md-55-big-Data.db:level=0:origin=streaming,/var/lib/scylla/data/keyspace1/standard1-501e29b0fb3311ebb71a4875c5785232/md-47-big-Data.db:level=0:origin=com
+paction]
+2021-08-12T06:07:19+00:00  longevity-10gb-3h-load-and-db-node-65bd71ec-1 !INFO    | scylla:  [shard 7] storage_service - load_and_stream: ops_uuid=180d1761-f0f0-4527-a5aa-4b547b321adc, ks=keyspace1, table=standa
+rd1, target_node=10.0.2.144, num_partitions_sent=47973, num_bytes_sent=25329744
+2021-08-12T06:07:19+00:00  longevity-10gb-3h-load-and-db-node-65bd71ec-1 !INFO    | scylla:  [shard 7] storage_service - load_and_stream: ops_uuid=180d1761-f0f0-4527-a5aa-4b547b321adc, ks=keyspace1, table=standa
+rd1, target_node=10.0.1.134, num_partitions_sent=47973, num_bytes_sent=25329744
+2021-08-12T06:07:19+00:00  longevity-10gb-3h-load-and-db-node-65bd71ec-1 !INFO    | scylla:  [shard 7] storage_service - load_and_stream: ops_uuid=180d1761-f0f0-4527-a5aa-4b547b321adc, ks=keyspace1, table=standa
+rd1, target_node=10.0.0.79, num_partitions_sent=47973, num_bytes_sent=25329744
+2021-08-12T06:07:19+00:00  longevity-10gb-3h-load-and-db-node-65bd71ec-1 !INFO    | scylla:  [shard 7] storage_service - load_and_stream: finished ops_uuid=180d1761-f0f0-4527-a5aa-4b547b321adc, ks=keyspace1, tab
+le=standard1, partitions_processed=47973 partitions, bytes_processed=25329744 bytes, partitions_per_second=7844.177 partitions/s, bytes_per_second=3.949857 MiB/s, duration=6.115747 s, status=succeeded
+2021-08-12T06:07:20+00:00  longevity-10gb-3h-load-and-db-node-65bd71ec-1 !INFO    | scylla:  [shard 3] stream_session - [Stream #178968e4-4e41-4fe1-b11f-4c05eafc9868] Write to sstable for ks=keyspace1, cf=standa
+rd1, estimated_partitions=47872, received_partitions=47859
+2021-08-12T06:07:20+00:00  longevity-10gb-3h-load-and-db-node-65bd71ec-1 !INFO    | scylla:  [shard 3] compaction - [Compact keyspace1.standard1 8d76a940-fb33-11eb-900d-403173af4e08] Compacting [/var/lib/scylla/
+data/keyspace1/standard1-501e29b0fb3311ebb71a4875c5785232/md-51-big-Data.db:level=0:origin=streaming,/var/lib/scylla/data/keyspace1/standard1-501e29b0fb3311ebb71a4875c5785232/md-43-big-Data.db:level=0:origin=com
+paction]
+2021-08-12T06:07:20+00:00  longevity-10gb-3h-load-and-db-node-65bd71ec-1 !INFO    | scylla:  [shard 3] storage_service - load_and_stream: ops_uuid=178968e4-4e41-4fe1-b11f-4c05eafc9868, ks=keyspace1, table=standa
+rd1, target_node=10.0.2.144, num_partitions_sent=47859, num_bytes_sent=25269552
+2021-08-12T06:07:20+00:00  longevity-10gb-3h-load-and-db-node-65bd71ec-1 !INFO    | scylla:  [shard 3] storage_service - load_and_stream: ops_uuid=178968e4-4e41-4fe1-b11f-4c05eafc9868, ks=keyspace1, table=standa
+rd1, target_node=10.0.1.134, num_partitions_sent=47859, num_bytes_sent=25269552
+2021-08-12T06:07:20+00:00  longevity-10gb-3h-load-and-db-node-65bd71ec-1 !INFO    | scylla:  [shard 3] storage_service - load_and_stream: ops_uuid=178968e4-4e41-4fe1-b11f-4c05eafc9868, ks=keyspace1, table=standa
+rd1, target_node=10.0.0.79, num_partitions_sent=47859, num_bytes_sent=25269552
+2021-08-12T06:07:20+00:00  longevity-10gb-3h-load-and-db-node-65bd71ec-1 !INFO    | scylla:  [shard 3] storage_service - load_and_stream: finished ops_uuid=178968e4-4e41-4fe1-b11f-4c05eafc9868, ks=keyspace1, tab
+le=standard1, partitions_processed=47859 partitions, bytes_processed=25269552 bytes, partitions_per_second=7398.4717 partitions/s, bytes_per_second=3.7254267 MiB/s, duration=6.4687686 s, status=succeeded
+2021-08-12T06:07:20+00:00  longevity-10gb-3h-load-and-db-node-65bd71ec-1 !INFO    | scylla:  [shard 4] storage_service - Done loading new SSTables for keyspace=keyspace1, table=standard1, load_and_stream=true, primary_replica_only=false, status=succeeded
+2021-08-12T06:07:20+00:00  longevity-10gb-3h-load-and-db-node-65bd71ec-1 !INFO    | scylla:  [shard 5] compaction - [Compact keyspace1.standard1 8c410f70-fb33-11eb-a548-402e73af4e08] Compacted 2 sstables to [/var/lib/scylla/data/keyspace1/standard1-501e29b0fb3311ebb71a4875c5785232/md-61-big-Data.db:level=0]. 28MB to 15MB (~55% of original) in 2079ms = 7MB/s. ~110464 total partitions merged to 62353.
+2021-08-12T06:07:20+00:00  longevity-10gb-3h-load-and-db-node-65bd71ec-1 !INFO    | scylla:  [shard 6] compaction - [Compact keyspace1.standard1 8c42bd20-fb33-11eb-b3fa-402b73af4e08] Compacted 2 sstables to [/var/lib/scylla/data/keyspace1/standard1-501e29b0fb3311ebb71a4875c5785232/md-62-big-Data.db:level=0]. 28MB to 15MB (~55% of original) in 2142ms = 7MB/s. ~110848 total partitions merged to 62499.
+2021-08-12T06:07:20+00:00  longevity-10gb-3h-load-and-db-node-65bd71ec-1 !NOTICE  | sudo: scyllaadm : TTY=unknown ; PWD=/home/scyllaadm ; USER=root ; COMMAND=/usr/bin/coredumpctl --no-pager --no-legend
+2021-08-12T06:07:20+00:00  longevity-10gb-3h-load-and-db-node-65bd71ec-1 !INFO    | sudo: pam_unix(sudo:session): session opened for user root by (uid=0)

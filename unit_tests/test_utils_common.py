@@ -19,8 +19,11 @@ import unittest
 import unittest.mock
 from pathlib import Path
 
-from sdcm.utils.common import tag_ami, convert_metric_to_ms
-from sdcm.utils.common import download_dir_from_cloud
+from sdcm.cluster import BaseNode
+from sdcm.utils.distro import Distro
+from sdcm.utils.common import tag_ami, convert_metric_to_ms, download_dir_from_cloud
+from sdcm.utils.sstable import load_inventory
+from sdcm.utils.sstable.load_utils import SstableLoadUtils
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -84,3 +87,121 @@ class TestDownloadDir(unittest.TestCase):
         sct_update_db_packages = None
         update_db_packages = download_dir_from_cloud(sct_update_db_packages)
         assert update_db_packages is None
+
+
+class DummyNode(BaseNode):  # pylint: disable=abstract-method
+    _system_log = None
+    is_enterprise = False
+    distro = Distro.CENTOS7
+
+    def _get_private_ip_address(self):
+        return '127.0.0.1'
+
+    def _get_public_ip_address(self):
+        return '127.0.0.1'
+
+    def start_task_threads(self):
+        # disable all background threads
+        pass
+
+    @property
+    def system_log(self):
+        return self._system_log
+
+    @system_log.setter
+    def system_log(self, log):
+        self._system_log = log
+
+    def set_hostname(self):
+        pass
+
+    def wait_ssh_up(self, verbose=True, timeout=500):
+        pass
+
+    @property
+    def is_nonroot_install(self):  # pylint: disable=invalid-overridden-method
+        return False
+
+
+class TestSstableLoadUtils(unittest.TestCase):
+    node = None
+    temp_dir = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.node = DummyNode(name='test_node', parent_cluster=None,
+                             base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
+        cls.node.init()
+
+    def setUp(self):
+        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'load_and_stream.log')
+
+    @staticmethod
+    def test_load_column_1_data_inventory():
+        test_data = SstableLoadUtils.get_load_test_data_inventory(column_number=1, big_sstable=False,
+                                                                  load_and_stream=False)
+        assert test_data == load_inventory.COLUMN_1_DATA, \
+            f"Expected {load_inventory.COLUMN_1_DATA}, got {test_data}"
+
+        test_data = SstableLoadUtils.get_load_test_data_inventory(column_number=1, big_sstable=True,
+                                                                  load_and_stream=False)
+        assert test_data == load_inventory.BIG_SSTABLE_COLUMN_1_DATA, \
+            f"Expected {load_inventory.BIG_SSTABLE_COLUMN_1_DATA}, got {test_data}"
+
+    @staticmethod
+    def test_load_multi_column_data_inventory():
+        test_data = SstableLoadUtils.get_load_test_data_inventory(column_number=5, big_sstable=False,
+                                                                  load_and_stream=False)
+        assert test_data == load_inventory.MULTI_COLUMNS_DATA, \
+            f"Expected {load_inventory.MULTI_COLUMNS_DATA}, got {test_data}"
+
+        test_data = SstableLoadUtils.get_load_test_data_inventory(column_number=5, big_sstable=True,
+                                                                  load_and_stream=False)
+        assert test_data == load_inventory.BIG_SSTABLE_MULTI_COLUMNS_DATA, \
+            f"Expected {load_inventory.BIG_SSTABLE_MULTI_COLUMNS_DATA}, got {test_data}"
+
+        test_data = SstableLoadUtils.get_load_test_data_inventory(column_number=6, big_sstable=False,
+                                                                  load_and_stream=False)
+        assert test_data == load_inventory.MULTI_COLUMNS_DATA, \
+            f"Expected {load_inventory.MULTI_COLUMNS_DATA}, got {test_data}"
+
+        test_data = SstableLoadUtils.get_load_test_data_inventory(column_number=6, big_sstable=True,
+                                                                  load_and_stream=False)
+        assert test_data == load_inventory.BIG_SSTABLE_MULTI_COLUMNS_DATA, \
+            f"Expected {load_inventory.BIG_SSTABLE_MULTI_COLUMNS_DATA}, got {test_data}"
+
+    @staticmethod
+    def test_load_not_supported_data_inventory():
+        test_data = SstableLoadUtils.get_load_test_data_inventory(column_number=2, big_sstable=False,
+                                                                  load_and_stream=False)
+        assert not test_data, \
+            f"Expected empty test data, got {test_data}"
+
+    @staticmethod
+    def test_load_load_and_stream_data_inventory():
+        test_data = SstableLoadUtils.get_load_test_data_inventory(column_number=5, big_sstable=False,
+                                                                  load_and_stream=True)
+        assert test_data == load_inventory.MULTI_NODE_DATA, \
+            f"Expected {load_inventory.MULTI_NODE_DATA}, got {test_data}"
+
+    @staticmethod
+    def test_distribute_test_files_to_cluster_nodes():
+        test_cases = [{'nodes': ['node1', 'node2', 'node3'], 'expected_result': 5},
+                      {'nodes': ['node1', 'node2'], 'expected_result': 5},
+                      {'nodes': ['node1', 'node2', 'node3', 'node4'], 'expected_result': 5},
+                      {'nodes': ['node1', 'node2', 'node3', 'node4', 'node5'], 'expected_result': 5},
+                      {'nodes': ['node1', 'node2', 'node3', 'node5', 'node6'], 'expected_result': 5},
+                      ]
+
+        for case in test_cases:
+            test_data = SstableLoadUtils.get_load_test_data_inventory(5, big_sstable=False, load_and_stream=True)
+            map_files_to_node = SstableLoadUtils.distribute_test_files_to_cluster_nodes(nodes=case["nodes"],
+                                                                                        test_data=test_data)
+            assert len(map_files_to_node) == case["expected_result"], \
+                f"Expected {case['expected_result']} elements, got {len(map_files_to_node)}"
+
+    def test_load_and_stream_status(self):
+        patterns = [SstableLoadUtils.LOAD_AND_STREAM_DONE_EXPR.format('keyspace1', 'standard1'),
+                    SstableLoadUtils.LOAD_AND_STREAM_RUN_EXPR]
+        system_log_follower = self.node.follow_system_log(start_from_beginning=True, patterns=patterns)
+        SstableLoadUtils.validate_load_and_stream_status(self.node, system_log_follower)
