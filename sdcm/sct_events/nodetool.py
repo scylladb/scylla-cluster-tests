@@ -10,25 +10,12 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-from dataclasses import dataclass
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import ContinuousEvent
 
 
-@dataclass
-class NodetoolCommand:
-    cmd: str
-    options: str
-
-    def __post_init__(self):
-        cmd_split = self.cmd.split()
-        if len(cmd_split) > 1:
-            options_to_list = [self.options] if self.options else []
-            self.options = ' '.join(cmd_split[1:] + options_to_list)
-            self.cmd = cmd_split[0]
-
-
+# pylint: disable=too-many-instance-attributes
 class NodetoolEvent(ContinuousEvent):
     def __init__(self,  # pylint: disable=too-many-arguments
                  nodetool_command,
@@ -37,17 +24,26 @@ class NodetoolEvent(ContinuousEvent):
                  options=None,
                  publish_event=True):
         super().__init__(severity=severity, publish_event=publish_event)
-        self.nodetool_command = NodetoolCommand(cmd=nodetool_command, options=options)
+
+        # handle the case if command is like "snapshot -kc keyspace1"
+        cmd_splitted = nodetool_command.split()
+        if len(cmd_splitted) > 1:
+            options_to_list = [options] if options else []
+            options = ' '.join(cmd_splitted[1:] + options_to_list)
+
+        if cmd_splitted:
+            self.nodetool_command = cmd_splitted[0]
+        self.options = options
         self.node = str(node)
         self.full_traceback = None
 
     @property
     def msgfmt(self) -> str:
-        fmt = super().msgfmt + ": nodetool_command={0.nodetool_command.cmd}"
+        fmt = super().msgfmt + ": nodetool_command={0.nodetool_command}"
         if self.node:
             fmt += " node={0.node}"
-        if self.nodetool_command.options:
-            fmt += " options={0.nodetool_command.options}"
+        if self.options:
+            fmt += " options={0.options}"
         if self.errors:
             fmt += " errors={0.errors}"
         if self.full_traceback:
