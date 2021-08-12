@@ -23,6 +23,7 @@ import pickle
 import fnmatch
 import logging
 from enum import Enum
+from json import JSONEncoder
 from types import new_class
 from typing import \
     Any, Optional, Type, Dict, List, Tuple, Callable, Generic, TypeVar, Protocol, runtime_checkable, Union
@@ -313,13 +314,13 @@ class SctEvent:
         self._ready_to_publish = False
         LOGGER.debug("%s marked to not publish", self)
 
-    def to_json(self) -> str:
+    def to_json(self, encoder: Type[JSONEncoder] = JSONEncoder) -> str:
         return json.dumps({
             "base": self.base,
             "type": self.type,
             "subtype": self.subtype,
             **self.__getstate__(),
-        })
+        }, cls=encoder)
 
     def __getstate__(self):
         # Remove everything from the __dict__ that starts with "_".
