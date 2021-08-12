@@ -76,3 +76,10 @@ class TestNodetoolEvent(unittest.TestCase):
             'drop_table_during_repair_ks_0 more '
             'options errors=[\'Failed with status 1\']\nTraceback:'
         )
+
+    def test_nodetool_serialization_to_json(self):
+        event = NodetoolEvent(nodetool_command="scrub --skip-corrupted drop_table_during_repair_ks_0", node='1.0.0.121',
+                              options="more options", publish_event=False)
+        event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
+        event.begin_event()
+        self.assertTrue(event.to_json())
