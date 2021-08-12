@@ -111,6 +111,7 @@ def call(Map pipelineParams) {
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
                                                     def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
+                                                    def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
                                                     dir('scylla-cluster-tests') {
                                                         checkout scm
 
@@ -123,7 +124,7 @@ def call(Map pipelineParams) {
 
                                                         export SCT_CLUSTER_BACKEND=${params.backend}
                                                         export SCT_REGION_NAME=${pipelineParams.aws_region}
-                                                        export SCT_CONFIG_FILES=${pipelineParams.test_config}
+                                                        export SCT_CONFIG_FILES=${test_config}
                                                         export SCT_EMAIL_RECIPIENTS="${email_recipients}"
                                                         if [[ ! -z "${params.scylla_ami_id}" ]] ; then
                                                             export SCT_AMI_ID_DB_SCYLLA=${params.scylla_ami_id}

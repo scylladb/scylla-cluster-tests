@@ -161,4 +161,10 @@ scylla_rsyslog_setup: false
 backup_bucket_region: ''  # use the same region as a cluster
 
 events_limit_in_email: 10
+
 scylla_bench_version: v0.1.3
+
+data_volume_disk_num: 0
+data_volume_disk_type: ''
+data_volume_disk_size: 0
+data_volume_disk_iops: 0 # depend on type iops could be 100-16000 for io2|io3 and 3000-16000 for gp3

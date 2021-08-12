@@ -55,6 +55,8 @@ SPOT_CNT_LIMIT = 20
 SPOT_FLEET_LIMIT = 50
 SPOT_TERMINATION_CHECK_OVERHEAD = 15
 LOCAL_CMD_RUNNER = LocalCmdRunner()
+EBS_VOLUME = "attached"
+INSTANCE_STORE = "instance_store"
 
 # pylint: disable=too-many-lines
 
@@ -563,6 +565,12 @@ class AWSNode(cluster.BaseNode):
         return max(next_check_delay - SPOT_TERMINATION_CHECK_OVERHEAD, 0)
 
     @property
+    def is_data_device_lost_after_reboot(self) -> bool:
+        if self.parent_cluster.is_data_volume_on_ebs():
+            return False
+        return any(ss in self._instance.instance_type for ss in ("i2", "i3", ))
+
+    @property
     def external_address(self):
         """
         the communication address for usage between the test and the nodes
@@ -689,10 +697,8 @@ class AWSNode(cluster.BaseNode):
             with self.remote_scylla_yaml() as scylla_yml:
                 scylla_yml["seed_provider"] = seed_provider
 
-        need_to_setup = any(ss in self._instance.instance_type for ss in ("i2", "i3", ))
-
         with ExitStack() as stack:
-            if need_to_setup:
+            if self.is_data_device_lost_after_reboot:
                 # There is no disk yet, lots of the errors here are acceptable, and we'll ignore them.
                 for db_filter in (DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR, node=self),
                                   DbEventsFilter(db_event=DatabaseLogEvent.SCHEMA_FAILURE, node=self),
@@ -721,7 +727,7 @@ class AWSNode(cluster.BaseNode):
             self.refresh_ip_address()
             self.wait_ssh_up()
 
-            if need_to_setup:
+            if self.is_data_device_lost_after_reboot:
                 self.stop_scylla_server(verify_down=False)
 
                 # Moving var-lib-scylla.mount away, since scylla_create_devices fails if it already exists
@@ -844,8 +850,12 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         user_data_format_version = ami_tags.get('sci_version', '2')
         user_data_format_version = ami_tags.get('user_data_format_version', user_data_format_version)
 
+        data_device_type = EBS_VOLUME if params.get("data_volume_disk_num") > 0 else INSTANCE_STORE
+
         if parse_version(user_data_format_version) >= parse_version('2'):
-            user_data = dict(scylla_yaml=dict(cluster_name=name), start_scylla_on_first_boot=False)
+            user_data = dict(scylla_yaml=dict(cluster_name=name),
+                             start_scylla_on_first_boot=False,
+                             data_device=data_device_type)
         else:
             user_data = ('--clustername %s '
                          '--totalnodes %s' % (name, sum(n_nodes)))

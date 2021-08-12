@@ -4119,7 +4119,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                                     dst='/tmp/')
             node.remoter.run('sudo mv /tmp/{0} /etc/scylla.d/{0}'.format(conf))
 
-    def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # pylint: disable=too-many-branches
+    def node_setup(self, node: BaseNode, verbose: bool = False, timeout: int = 3600):  # pylint: disable=too-many-branches,too-many-statements
         node.wait_ssh_up(verbose=verbose, timeout=timeout)
         if node.distro.is_centos8 or node.distro.is_rhel8 or node.distro.is_oel8:
             node.remoter.sudo('systemctl stop iptables', ignore_status=True)
@@ -4167,6 +4167,12 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node.stop_scylla_server(verify_down=False)
                 node.clean_scylla_data()
                 node.remoter.sudo(cmd="rm -f /etc/scylla/ami_disabled", ignore_status=True)
+
+                if self.is_additional_data_volume_used():
+                    result = node.remoter.sudo(cmd="scylla_io_setup")
+                    if result.ok:
+                        self.log.info("Scylla_io_setup result: %s", result.stdout)
+
                 node.start_scylla_server(verify_up=False)
 
             # code to increase java heap memory to scylla-jmx (because of #7609)
@@ -4405,6 +4411,24 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if host_ip is None:
             host_ip = self.nodes[0].ip_address
         return manager_tool.add_cluster(name=cluster_name, host=host_ip, auth_token=self.scylla_manager_auth_token)
+
+    def is_additional_data_volume_used(self) -> bool:
+        """return true if additional data volume is configured
+
+        :returns: if ebs volumes attached return true
+        :rtype: {bool}
+        """
+        return self.params.get("data_volume_disk_num") > 0
+
+    def fstrim_scylla_disks_on_nodes(self):
+        # if used ebs volumes with aws backend fstrim is not supported
+        # fstrim: /var/lib/scylla: the discard operation is not supported
+        if self.is_additional_data_volume_used():
+            self.log.info("fstrim is not supported on additional data volume")
+            return
+
+        for node in self.nodes:
+            node.fstrim_scylla_disks()
 
 
 class BaseLoaderSet():

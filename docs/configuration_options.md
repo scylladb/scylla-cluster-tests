@@ -277,3 +277,7 @@
 | **<a href="#user-content-max_events_severities" name="max_events_severities">max_events_severities</a>**  | Limit severity level for event types | N/A | SCT_MAX_EVENTS_SEVERITIES
 | **<a href="#user-content-scylla_rsyslog_setup" name="scylla_rsyslog_setup">scylla_rsyslog_setup</a>**  | Configure rsyslog on scylla nodes to send logs to monitoring nodes | False | SCT_SCYLLA_RSYSLOG_SETUP
 | **<a href="#user-content-events_limit_in_email" name="events_limit_in_email">events_limit_in_email</a>**  | Limit number events in email reports | False | SCT_EVENTS_LIMIT_IN_EMAIL
+| **<a href="#user-content-data_volume_disk_num" name="data_volume_disk_num">data_volume_disk_num</a>**  | Number of additional data volumes attached to instances. If data_volume_disk_num > 0, then data volumes (ebs on aws) will be used for scylla data directory | N/A | SCT_DATA_VOLUME_DISK_NUM
+| **<a href="#user-content-data_volume_disk_type" name="data_volume_disk_type">data_volume_disk_type</a>**  | Type of addtitional volumes: gp2|gp3|io2|io3 | N/A | SCT_DATA_VOLUME_DISK_TYPE
+| **<a href="#user-content-data_volume_disk_size" name="data_volume_disk_size">data_volume_disk_size</a>**  | Size of additional volume in GB | N/A | SCT_DATA_VOLUME_DISK_SIZE
+| **<a href="#user-content-data_volume_disk_iops" name="data_volume_disk_iops">data_volume_disk_iops</a>**  | Number of iops for ebs type io2|io3|gp3 | N/A | SCT_DATA_VOLUME_DISK_IOPS

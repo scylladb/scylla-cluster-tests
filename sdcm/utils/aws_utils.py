@@ -246,6 +246,25 @@ def init_db_info_from_params(db_info: dict, params: dict, regions: List, root_de
             }]
         else:
             db_info['device_mappings'] = []
+
+        additional_ebs_volumes_num = params.get("data_volume_disk_num")
+        if additional_ebs_volumes_num > 0:
+            ebs_info = {"DeleteOnTermination": True,
+                        "VolumeType": params.get("data_volume_disk_type"),
+                        "VolumeSize": params.get('data_volume_disk_size')}
+
+            if ebs_info['VolumeType'] in ['io1', 'io2', 'gp3']:
+                ebs_info["Iops"] = params.get('data_volume_disk_iops')
+
+            for disk_char in "fghijklmnop"[:additional_ebs_volumes_num]:
+                ebs_volume = {
+                    "DeviceName": f"/dev/xvd{disk_char}",
+                    "Ebs": ebs_info
+                }
+
+                db_info['device_mappings'].append(ebs_volume)
+
+        LOGGER.debug(db_info['device_mappings'])
     return db_info
 
 
