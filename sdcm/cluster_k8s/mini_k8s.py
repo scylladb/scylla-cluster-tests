@@ -491,6 +491,9 @@ class LocalMinimalClusterBase(MinimalClusterBase):
     def _target_user(self) -> str:
         return getpass.getuser()
 
+    def upgrade_kubernetes_platform(self):
+        pass
+
 
 class LocalMinikubeCluster(MinikubeK8sMixin, LocalMinimalClusterBase):
     pass

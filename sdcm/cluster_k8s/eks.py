@@ -390,6 +390,48 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         super().deploy_monitoring_cluster(*args, **kwargs)
         self.set_security_groups_on_all_instances()
 
+    def upgrade_kubernetes_platform(self) -> str:
+        upgrade_version = f"1.{int(self.eks_cluster_version.split('.')[1]) + 1}"
+
+        # Upgrade control plane (API, scheduler, manager and so on ...)
+        LOGGER.info("Upgrading K8S control plane to the '%s' version", upgrade_version)
+        self.eks_client.update_cluster_version(
+            name=self.short_cluster_name,
+            version=upgrade_version,
+        )
+        # NOTE: sleep for some small period of time to make sure that cluster's status changes
+        #       before we poll for it's readiness.
+        #       Upgrade takes dozens of minutes, so, 'sleep'ing for some time won't cause
+        #       time waste by calling 'time.sleep' function.
+        #       5sec is not enough in some cases. 20sec must be sufficient
+        time.sleep(20)
+        self.eks_client.get_waiter('cluster_active').wait(
+            name=self.short_cluster_name,
+            WaiterConfig={'Delay': 30, 'MaxAttempts': 120},
+        )
+
+        # Upgrade scylla-related node pools
+        for node_pool in (self.AUXILIARY_POOL_NAME, self.SCYLLA_POOL_NAME):
+            LOGGER.info("Upgrading '%s' node pool to the '%s' version", node_pool, upgrade_version)
+            self.eks_client.update_nodegroup_version(
+                clusterName=self.short_cluster_name,
+                nodegroupName=node_pool,
+                version=upgrade_version,
+            )
+            time.sleep(20)
+            self.eks_client.get_waiter('nodegroup_active').wait(
+                clusterName=self.short_cluster_name,
+                nodegroupName=node_pool,
+                WaiterConfig={
+                    # NOTE: one Scylla K8S node upgrade takes about 10 minutes
+                    #       So, wait timeout will be different for different number of DB nodes
+                    #       Set it bigger than the expected value to avoid possible fluctuations
+                    'Delay': 30,
+                    'MaxAttempts': self.params.get("n_db_nodes") * 30,
+                },
+            )
+        return upgrade_version
+
 
 class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
     parent_cluster: 'EksScyllaPodCluster'

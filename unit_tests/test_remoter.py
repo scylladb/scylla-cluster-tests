@@ -47,6 +47,9 @@ class FakeKluster(KubernetesCluster):
     def deploy_node_pool(self, pool, wait_till_ready=True) -> None:
         pass
 
+    def upgrade_kubernetes_platform(self):
+        pass
+
 
 # pylint: disable=too-many-nested-blocks
 def generate_all_commands_with_all_options():
