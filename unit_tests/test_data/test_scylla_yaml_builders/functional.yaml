@@ -1,0 +1,8 @@
+test_duration: 300
+k8s_deploy_monitoring: false
+use_mgmt: true
+user_prefix: 'functional'
+
+n_db_nodes: 3
+n_loaders: 0
+n_monitor_nodes: 0

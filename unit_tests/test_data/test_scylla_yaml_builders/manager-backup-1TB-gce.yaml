@@ -1,0 +1,40 @@
+test_duration: 600
+
+user_prefix: 'mgr-backup-1tb'
+cluster_backend: 'gce'
+
+prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=550100150 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native connectionsPerHost=64 -rate threads=150 throttle=45000/s -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1..550100150",
+                    "cassandra-stress write cl=QUORUM n=550100150 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native connectionsPerHost=64 -rate threads=150 throttle=45000/s -col 'size=FIXED(200) n=FIXED(5)' -pop seq=550100151..1100200300",
+                    ]
+stress_read_cmd: ["cassandra-stress read cl=QUORUM duration=580m -port jmx=6868 -mode cql3 native  connectionsPerHost=64 -rate threads=150 -pop seq=1..1100200300  -log interval=5 -col 'size=FIXED(200) n=FIXED(5)'",
+                 ]
+round_robin: true
+
+pre_create_schema: true
+compaction_strategy: 'NullCompactionStrategy'
+post_prepare_cql_cmds: "ALTER TABLE keyspace1.standard1 WITH compaction = {'class': 'SizeTieredCompactionStrategy'}"
+prepare_wait_no_compactions_timeout: 120
+
+n_db_nodes: 4
+n_loaders: 2
+n_monitor_nodes: 1
+
+gce_instance_type_db: 'n1-highmem-16'
+gce_n_local_ssd_disk_db: 8
+gce_instance_type_loader: 'e2-standard-16'
+
+backup_bucket_location: 'manager-backup-tests-us-east1'
+nemesis_class_name: 'MgmtBackup'
+nemesis_interval: 30
+nemesis_filter_seeds: false
+
+gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1804-lts'
+scylla_linux_distro: 'ubuntu-bionic'
+scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/deb/unstable/bionic/master/latest/scylladb-manager-master/scylla-manager.list'
+
+scylla_linux_distro_loader: 'centos'
+scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo'
+
+space_node_threshold: 644245094
+
+nemesis_during_prepare: false

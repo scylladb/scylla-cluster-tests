@@ -1,0 +1,20 @@
+{
+  "broadcast_address": "__NODE_IPV6_ADDRESS__",
+  "listen_address": "__NODE_IPV6_ADDRESS__",
+  "endpoint_snitch": "org.apache.cassandra.locator.Ec2MultiRegionSnitch",
+  "rpc_address": "__NODE_IPV6_ADDRESS__",
+  "seed_provider": [
+    {
+      "class_name": "org.apache.cassandra.locator.SimpleSeedProvider",
+      "parameters": [
+        {
+          "seeds": "__SEED_NODE_IPS__"
+        }
+      ]
+    }
+  ],
+  "broadcast_rpc_address": "__NODE_IPV6_ADDRESS__",
+  "experimental": true,
+  "prometheus_address": "__NODE_IPV6_ADDRESS__",
+  "enable_ipv6_dns_lookup": true
+}

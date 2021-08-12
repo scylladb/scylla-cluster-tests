@@ -1,0 +1,18 @@
+{
+  "broadcast_address": "__NODE_PRIVATE_ADDRESS__",
+  "listen_address": "0.0.0.0",
+  "endpoint_snitch": "org.apache.cassandra.locator.Ec2MultiRegionSnitch",
+  "rpc_address": "0.0.0.0",
+  "seed_provider": [
+    {
+      "class_name": "org.apache.cassandra.locator.SimpleSeedProvider",
+      "parameters": [
+        {
+          "seeds": "__SEED_NODE_IPS__"
+        }
+      ]
+    }
+  ],
+  "broadcast_rpc_address": "__NODE_PRIVATE_ADDRESS__",
+  "experimental": true
+}
