@@ -281,6 +281,28 @@ class GkeCluster(KubernetesCluster):
         self.deploy_minio_s3_backend()
         super().deploy_scylla_manager(pool_name=pool_name)
 
+    # NOTE: blocked by https://github.com/scylladb/scylla-operator/issues/760
+    def upgrade_kubernetes_platform(self) -> str:
+        # NOTE: 'self.gke_cluster_version' can be like 1.21.3-gke.N or 1.21
+        upgrade_version = f"1.{int(self.gke_cluster_version.split('.')[1]) + 1}"
+
+        with self.gcloud as gcloud:
+            # Upgrade control plane (API, scheduler, manager and so on ...)
+            LOGGER.info("Upgrading K8S control plane to the '%s' version", upgrade_version)
+            gcloud.run(f"container clusters upgrade {self.short_cluster_name} "
+                       f"--master --quiet --project {self.gce_project} --zone {self.gce_zone} "
+                       f"--cluster-version {upgrade_version}")
+
+            # Upgrade scylla-related node pools
+            for node_pool in (self.AUXILIARY_POOL_NAME, self.SCYLLA_POOL_NAME):
+                LOGGER.info("Upgrading '%s' node pool to the '%s' version",
+                            node_pool, upgrade_version)
+                # NOTE: one node upgrade takes about 10 minutes
+                gcloud.run(f"container clusters upgrade {self.short_cluster_name} "
+                           f"--quiet --project {self.gce_project} --zone {self.gce_zone} "
+                           f"--node-pool={node_pool}")
+        return upgrade_version
+
 
 class GkeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
     parent_cluster: 'GkeScyllaPodCluster'

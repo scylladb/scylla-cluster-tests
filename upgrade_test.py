@@ -982,6 +982,77 @@ class UpgradeTest(FillDatabaseData):
         self.verify_stress_thread(self.run_stress_thread(
             stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))))
 
+    def test_kubernetes_platform_upgrade(self):
+        self.log.info('Step1 - Populate DB with data')
+        self.prepare_keyspaces_and_tables()
+        self.fill_and_verify_db_data('', pre_fill=True)
+
+        self.log.info('Step2 - Run c-s write workload')
+        self.verify_stress_thread(self.run_stress_thread(
+            stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_w'))))
+
+        self.log.info('Step3 - Run c-s read workload')
+        self.verify_stress_thread(self.run_stress_thread(
+            stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))))
+
+        self.log.info('Step4 - Upgrade kubernetes platform')
+        upgrade_version = self.k8s_cluster.upgrade_kubernetes_platform()
+
+        self.log.info('Step5 - Validate versions after kubernetes platform upgrade')
+        data_plane_versions = self.k8s_cluster.kubectl(
+            f"get nodes --no-headers -l '{self.k8s_cluster.POOL_LABEL_NAME} "
+            f"in ({self.k8s_cluster.AUXILIARY_POOL_NAME},{self.k8s_cluster.SCYLLA_POOL_NAME})' "
+            "-o custom-columns=:.status.nodeInfo.kubeletVersion").stdout.strip().split()
+        # Output example:
+        #   GKE                EKS
+        #   v1.19.13-gke.700   v1.21.2-eks-c1718fb
+        #   v1.19.13-gke.700   v1.21.2-eks-c1718fb
+        assert all(ver.startswith(f"v{upgrade_version}.") for ver in data_plane_versions), (
+            f"Got unexpected K8S data plane version(s): {data_plane_versions}")
+
+        control_plane_versions = self.k8s_cluster.kubectl("version --short").stdout.splitlines()
+        # Output example:
+        # Client Version: v1.20.4
+        # Server Version: v1.19.13-gke.700
+        # WARNING: foo
+        assert any(ver.startswith(f"Server Version: v{upgrade_version}.")
+                   for ver in control_plane_versions), (
+            f"Got unexpected K8S control plane version: {control_plane_versions}")
+
+        self.log.info('Step6 - Check scylla-operator pods after kubernetes platform upgrade')
+        self.k8s_cluster.kubectl_wait(
+            "--all --for=condition=Ready pod",
+            namespace=self.k8s_cluster._scylla_operator_namespace,  # pylint: disable=protected-access
+            timeout=600)
+
+        self.log.info('Step7 - Check scylla pods after kubernetes platform upgrade')
+        self.k8s_cluster.kubectl_wait(
+            "--all --for=condition=Ready pod",
+            namespace=self.k8s_cluster._scylla_namespace,  # pylint: disable=protected-access
+            timeout=600)
+
+        self.log.info('Step8 - Add new member to the Scylla cluster')
+        peer_db_node = self.db_cluster.nodes[0]
+        new_nodes = self.db_cluster.add_nodes(
+            count=1,
+            dc_idx=peer_db_node.dc_idx,
+            rack=peer_db_node.rack,
+            enable_auto_bootstrap=True)
+        self.db_cluster.wait_for_init(node_list=new_nodes, timeout=40 * 60)
+        self.db_cluster.wait_sts_rollout_restart(pods_to_wait=1)
+        self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
+        self.monitors.reconfigure_scylla_monitoring()
+
+        self.log.info('Step9 - Verify data in the Scylla cluster')
+        self.fill_and_verify_db_data(note='after operator upgrade and scylla member addition')
+
+        self.log.info('Step10 - Run c-s read workload')
+        # NOTE: refresh IP addresses of the Scylla nodes because they get changed in current case
+        for db_node in self.db_cluster.nodes:
+            db_node.refresh_ip_address()
+        self.verify_stress_thread(self.run_stress_thread(
+            stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))))
+
     def wait_till_scylla_is_upgraded_on_all_nodes(self, target_version: str) -> None:
         def _is_cluster_upgraded() -> bool:
             for node in self.db_cluster.nodes:

@@ -1271,6 +1271,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def deploy_node_pool(self, pool: CloudK8sNodePool, wait_till_ready=True) -> None:
         pass
 
+    def upgrade_kubernetes_platform(self):
+        raise NotImplementedError("Kubernetes upgrade is not implemented on this backend")
+
 
 class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-methods
     parent_cluster: PodCluster
