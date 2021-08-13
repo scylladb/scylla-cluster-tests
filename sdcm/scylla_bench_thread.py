@@ -50,7 +50,36 @@ class ScyllaBenchStressEventsPublisher(FileFollowerThread):
                         event.add_info(node=self.node, line=line, line_number=line_number).publish()
 
 
-class ScyllaBenchThread:
+class ScyllaBenchThread:  # pylint: disable=too-many-instance-attributes
+    _SB_STATS_MAPPING = {
+        # Mapping for scylla-bench statistic and configuration keys to db stats keys
+        'Mode': 'Mode',
+        'Workload': 'Workload',
+        'Timeout': 'Timeout',
+        'Consistency level': 'Consistency level',
+        'Partition count': 'Partition count',
+        'Clustering rows': 'Clustering rows',
+        'Page size': 'Page size',
+        'Concurrency': 'Concurrency',
+        'Connections': 'Connections',
+        'Maximum rate': 'Maximum rate',
+        'Client compression': 'Client compression',
+        'Clustering row size': 'Clustering row size',
+        'Rows per request': 'Rows per request',
+        'Total rows': 'Total rows',
+        'max': 'latency max',
+        '99.9th': 'latency 99.9th percentile',
+        '99th': 'latency 99th percentile',
+        '95th': 'latency 95th percentile',
+        '90th': '90th',
+        'median': 'latency median',
+        'Operations/s': 'op rate',
+        'Rows/s': 'row rate',
+        'Total ops': 'Total partitions',
+        'Time (avg)': 'Total operation time',
+    }
+
+    # pylint: disable=too-many-arguments
     def __init__(self, stress_cmd, loader_set, timeout, node_list=None, round_robin=False, use_single_loader=False,
                  stop_test_on_failure=False, stress_num=1, credentials=None):
         if not node_list:
@@ -191,8 +220,8 @@ class ScyllaBenchThread:
 
         return self
 
-    @staticmethod
-    def _parse_bench_summary(lines):  # pylint: disable=too-many-branches
+    @classmethod
+    def _parse_bench_summary(cls, lines):
         """
         Parsing bench results, only parse the summary results.
         Collect results of all nodes and return a dictionaries' list,
@@ -201,64 +230,37 @@ class ScyllaBenchThread:
         results = {'keyspace_idx': None, 'stdev gc time(ms)': None, 'Total errors': None,
                    'total gc count': None, 'loader_idx': None, 'total gc time (s)': None,
                    'total gc mb': 0, 'cpu_idx': None, 'avg gc time(ms)': None, 'latency mean': None}
-        enable_parse = False
 
         for line in lines:
             line.strip()
             # Parse load params
             # pylint: disable=too-many-boolean-expressions
-            if line.startswith('Mode:') or line.startswith('Workload:') or line.startswith('Timeout:') or \
-                    line.startswith('Consistency level:') or line.startswith('Partition count') or \
-                    line.startswith('Clustering rows:') or \
-                    line.startswith('Rows per request:') or line.startswith('Page size:') or \
-                    line.startswith('Concurrency:') or line.startswith('Connections:') or \
-                    line.startswith('Maximum rate:') or line.startswith('Client compression:'):
-                split_idx = line.index(':')
-                key = line[:split_idx].strip()
-                value = line[split_idx + 1:].split()[0]
-                results[key] = value
-            elif line.startswith('Clustering row size:'):
-                split_idx = line.index(':')
-                key = line[:split_idx].strip()
-                value = ' '.join(line[split_idx + 1:].split())
-                results[key] = value
-
             if line.startswith('Results'):
-                enable_parse = True
                 continue
-            if line.startswith('Latency:') or ':' not in line or 'EOF' in line:
+            if 'c-o fixed latency' in line:
+                # Ignore C-O Fixed latencies
+                #
+                # c-o fixed latency :
+                #   max:        5.668863ms
+                #   99.9th:	    5.537791ms
+                #   99th:       3.440639ms
+                #   95th:       3.342335ms
+                break
+
+            split = line.split(':', maxsplit=1)
+            if len(split) < 2:
                 continue
-            if not enable_parse:
-                continue
-
-            split_idx = line.index(':')
-            key = line[:split_idx].strip()
-            value = line[split_idx + 1:].split()[0]
-
-            # the value may be in milliseconds(ms) or microseconds(string containing non-ascii character)
-            value = convert_metric_to_ms(value)
-
-            # we try to use the same stats as we have in cassandra
-            if key == 'max':
-                key = 'latency max'
-            elif key == '99.9th':
-                key = 'latency 99.9th percentile'
-            elif key == '99th':
-                key = 'latency 99th percentile'
-            elif key == '95th':
-                key = 'latency 95th percentile'
-            elif key == 'median':
-                key = 'latency median'
-            elif key == 'mean':
-                key = 'latency mean'
-            elif key == 'Operations/s':
-                key = 'op rate'
-            elif key == 'Rows/s':
-                key = 'row rate'
-                results['partition rate'] = value
-            elif key == 'Total ops':  # ==Total rows?
-                key = 'Total partitions'
-            elif key == 'Time (avg)':
-                key = 'Total operation time'
-            results[key] = value
+            key = split[0].strip()
+            value = ' '.join(split[1].split())
+            if target_key := cls._SB_STATS_MAPPING.get(key):
+                if value.isdecimal():
+                    value = int(value)
+                else:
+                    value = convert_metric_to_ms(value)
+                results[target_key] = value
+            else:
+                LOGGER.debug('unknown result key found: `%s` with value `%s`', key, value)
+        row_rate = results.get('row rate')
+        if row_rate is not None:
+            results['partition rate'] = row_rate
         return results
