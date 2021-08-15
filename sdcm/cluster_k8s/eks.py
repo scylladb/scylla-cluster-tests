@@ -239,6 +239,11 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         self.ec2_subnet_ids = ec2_subnet_ids
         self.service_ipv4_cidr = service_ipv4_cidr
         self.vpc_cni_version = vpc_cni_version
+        self.allowed_labels_on_scylla_node = [('name', 'node-setup'),
+                                              ('k8s-app', 'aws-node'),
+                                              ('app', 'local-volume-provisioner'),
+                                              ('k8s-app', 'kube-proxy'),
+                                              ('scylla/cluster', self.k8s_scylla_cluster_name)]
 
     def create_eks_cluster(self, wait_till_functional=True):
         self.eks_client.create_cluster(

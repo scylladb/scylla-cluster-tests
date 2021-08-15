@@ -23,6 +23,7 @@ from multiprocessing import Process, Event
 from sdcm import wait
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.decorators import raise_event_on_failure
+from sdcm.utils.k8s import KubernetesOps
 
 
 class LoggerBase(metaclass=ABCMeta):
@@ -297,6 +298,38 @@ class ScyllaOperatorLogger(CommandClusterLoggerBase):
             "-l app.kubernetes.io/instance=scylla-operator",
             namespace=self._cluster._scylla_operator_namespace)  # pylint: disable=protected-access
         return f"{cmd} >> {self._target_log_file} 2>&1"
+
+
+class KubernetesWrongSchedulingLogger(CommandClusterLoggerBase):
+    restart_delay = 120
+    WRONG_SCHEDULED_PODS_MESSAGE = "Not allowed pods are scheduled on Scylla node found"
+
+    @property
+    def _logger_cmd(self) -> str:
+        if not self._cluster.allowed_labels_on_scylla_node:
+            return ''
+
+        wrong_scheduled_pods_on_scylla_node = []
+
+        node_names = [node.metadata.name for node in self._cluster.pools[self._cluster.SCYLLA_POOL_NAME].nodes.items]
+
+        try:
+            for pod in KubernetesOps.list_pods(self._cluster,
+                                               field_selector=f"spec.nodeName in ({', '.join(node_names)})"):
+                for key, value in self._cluster.allowed_labels_on_scylla_node:
+                    if (key, value) in pod.metadata.labels.items():
+                        break
+                else:
+                    wrong_scheduled_pods_on_scylla_node.append(f"{pod.metadata.name} ({pod.nodeName} node)")
+        except Exception as details:  # pylint: disable=broad-except
+            self._log.debug("Failed to get pods list: %s", str(details))
+
+        if not wrong_scheduled_pods_on_scylla_node:
+            return ''
+
+        joined_info = ', '.join(wrong_scheduled_pods_on_scylla_node)
+        message = f"{self.WRONG_SCHEDULED_PODS_MESSAGE}: {joined_info}"
+        return f"echo \"I`date -u +\"%m%d %H:%M:%S\"`              {message}\" >> {self._target_log_file} 2>&1"
 
 
 def get_system_logging_thread(logs_transport, node, target_log_file):  # pylint: disable=too-many-return-statements
