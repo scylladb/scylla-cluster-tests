@@ -3139,58 +3139,45 @@ class FillDatabaseData(ClusterTester):
         for truncate in truncates:
             session.execute(truncate)
 
-    def get_scylla_version(self):
-        node = self.db_cluster.nodes[0]
-        if not node.scylla_version:
-            node.get_scylla_version()
-        # NOTE: node.get_scylla_version() returns following structure of a scylla version:
-        #       4.4.1-0.20210406.00da6b5e9
-        #       And 'parse_version' behaves differently for full and short scylla versions
-        #       So, keep status quo and use short scylla version here.
-        return node.scylla_version.split("-")[0], node.is_enterprise
+    @property
+    def parsed_scylla_version(self):
+        return parse_version(self.db_cluster.nodes[0].scylla_version)
+
+    @property
+    def is_enterprise(self) -> bool:
+        return self.db_cluster.nodes[0].is_enterprise
 
     def version_null_values_support(self):
-        scylla_version, is_enterprise = self.get_scylla_version()
-        if is_enterprise:
+        if self.is_enterprise:
             version_with_support = self.NULL_VALUES_SUPPORT_ENTERPRISE_MIN_VERSION
         else:
             version_with_support = self.NULL_VALUES_SUPPORT_OS_MIN_VERSION
-        return parse_version(scylla_version) >= parse_version(version_with_support)
+        return self.parsed_scylla_version >= parse_version(version_with_support)
 
     def version_new_sorting_order_with_secondary_indexes(self):
-        scylla_version, is_enterprise = self.get_scylla_version()
-        if is_enterprise:
+        if self.is_enterprise:
             version_with_support = self.NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_ENTERPRISE_MIN_VERSION
         else:
             version_with_support = self.NEW_SORTING_ORDER_WITH_SECONDARY_INDEXES_OS_MIN_VERSION
-        return parse_version(scylla_version) >= parse_version(version_with_support)
+        return self.parsed_scylla_version >= parse_version(version_with_support)
 
     def version_non_frozen_udt_support(self):
         """
         Check if current version supports non-frozen user type
         Issue: https://github.com/scylladb/scylla/pull/4934
         """
-        scylla_version, is_enterprise = self.get_scylla_version()
-        if is_enterprise:
+        if self.is_enterprise:
             version_with_support = self.NON_FROZEN_SUPPORT_ENTERPRISE_MIN_VERSION
         else:
             version_with_support = self.NON_FROZEN_SUPPORT_OS_MIN_VERSION
-
-        if parse_version(scylla_version) < parse_version(version_with_support):
-            return False  # current version doesn't support non-frozen UDT
-        else:
-            return True  # current version supports non-frozen UDT
+        return self.parsed_scylla_version >= parse_version(version_with_support)
 
     def version_cdc_support(self):
-        scylla_version, is_enterprise = self.get_scylla_version()
-        if is_enterprise:
+        if self.is_enterprise:
             version_with_support = self.CDC_SUPPORT_MIN_ENTERPRISE_VERSION
         else:
             version_with_support = self.CDC_SUPPORT_MIN_VERSION
-        if parse_version(scylla_version) < parse_version(version_with_support):
-            return False
-        else:
-            return True
+        return self.parsed_scylla_version >= parse_version(version_with_support)
 
     @retrying(n=3, sleep_time=20, allowed_exceptions=ProtocolException)
     def truncate_table(self, session, truncate):  # pylint: disable=no-self-use
