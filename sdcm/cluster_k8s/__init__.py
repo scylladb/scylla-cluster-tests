@@ -1300,6 +1300,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
     def is_docker() -> bool:
         return True
 
+    @cached_property
     def tags(self) -> Dict[str, str]:
         return {**super().tags,
                 "NodeIndex": str(self.node_index), }
