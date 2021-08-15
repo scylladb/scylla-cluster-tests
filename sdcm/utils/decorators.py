@@ -15,7 +15,7 @@ import sys
 import time
 import logging
 import datetime
-from functools import wraps, partial
+from functools import wraps, partial, cached_property
 
 LOGGER = logging.getLogger(__name__)
 
@@ -192,3 +192,21 @@ def latency_calculator_decorator(func):
         return res
 
     return wrapped
+
+
+class NoValue(Exception):
+    ...
+
+
+class optional_cached_property(cached_property):  # pylint: disable=invalid-name,too-few-public-methods
+    """Extension for cached_property from Lib/functools.py with ability to ignore calculated result.
+
+    To make it to not cache a value on a property call raise NoValue exception: it will be ignored and
+    None will be returned as a result.
+    """
+
+    def __get__(self, instance, owner=None):
+        try:
+            return super().__get__(instance=instance, owner=owner)
+        except NoValue:
+            return None

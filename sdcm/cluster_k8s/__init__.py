@@ -2024,7 +2024,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         pass
 
     def node_setup(self, node: BaseScyllaPodContainer, verbose: bool = False, timeout: int = 3600):
-        self.get_scylla_version()
         if self.test_config.BACKTRACE_DECODING:
             node.install_scylla_debuginfo()
 

@@ -982,18 +982,20 @@ class UpgradeTest(FillDatabaseData):
         self.verify_stress_thread(self.run_stress_thread(
             stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))))
 
-    def wait_till_scylla_is_upgraded_on_all_nodes(self, target_version):
-        def _is_cluster_upgraded():
+    def wait_till_scylla_is_upgraded_on_all_nodes(self, target_version: str) -> None:
+        def _is_cluster_upgraded() -> bool:
             for node in self.db_cluster.nodes:
-                # NOTE: node.get_scylla_version() returns following structure of a scylla version:
-                #       4.4.1-0.20210406.00da6b5e9
-                full_version = node.get_scylla_version()
-                short_version = full_version.split("-")[0]
-                if target_version not in (full_version, short_version) or not node.db_up:
+                node.forget_scylla_version()
+                if node.scylla_version != target_version or not node.db_up:
                     return False
             return True
-        wait.wait_for(func=_is_cluster_upgraded, step=30, timeout=900, throw_exc=True,
-                      text="Waiting until all nodes in the cluster are upgraded")
+        wait.wait_for(
+            func=_is_cluster_upgraded,
+            step=30,
+            text="Waiting until all nodes in the cluster are upgraded",
+            timeout=900,
+            throw_exc=True,
+        )
 
     def wait_till_jmx_on_all_nodes(self):
         for node in self.db_cluster.nodes:

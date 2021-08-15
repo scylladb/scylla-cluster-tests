@@ -76,7 +76,7 @@ from sdcm.utils.docker_utils import ContainerManager, NotFound
 from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_gossip_and_nodetool_status, \
     check_schema_version, check_nulls_in_peers, check_schema_agreement_in_gossip_and_peers, \
     CHECK_NODE_HEALTH_RETRIES, CHECK_NODE_HEALTH_RETRY_DELAY
-from sdcm.utils.decorators import retrying, log_run_info
+from sdcm.utils.decorators import NoValue, retrying, log_run_info, optional_cached_property
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.test_config import TestConfig
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version, get_systemd_version
@@ -247,9 +247,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # if we want to add more nodes when the cluster already exists, then we should
         # enable bootstrap.
         self.enable_auto_bootstrap = True
-
-        self.scylla_version = ''
-        self.scylla_version_detailed = ''
 
         # If node is a replacement for a dead node, store dead node private ip here
         self.replacement_node_ip = None
@@ -2146,16 +2143,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             """)
             self.remoter.run('sudo bash -cxe "%s"' % install_cmds)
 
-    def install_scylla_debuginfo(self):
-        self.log.info("Installing Scylla debug info...")
-        if not self.scylla_version:
-            self.get_scylla_version()
-        if self.is_rhel_like():
-            self.remoter.run(
-                r'sudo yum install -y {0}-debuginfo-{1}\*'.format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
+    def install_scylla_debuginfo(self) -> None:
+        if self.distro.is_rhel_like:
+            cmd = fr"yum install -y {self.scylla_pkg()}-debuginfo-{self.scylla_version}\*"
         else:
-            self.remoter.run(r'sudo apt-get install -y {0}-server-dbg={1}\*'
-                             .format(self.scylla_pkg(), self.scylla_version), ignore_status=True)
+            cmd = fr"apt-get install -y {self.scylla_pkg()}-server-dbg={self.scylla_version}\*"
+
+        self.log.info("Installing Scylla debug info...")
+        self.remoter.sudo(cmd, ignore_status=True)
 
     def is_scylla_installed(self, raise_if_not_installed=False):
         if self.distro.is_rhel_like:
@@ -2170,39 +2165,53 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             raise Exception(f"There is no pre-installed ScyllaDB on {self}")
         return False
 
-    def get_scylla_version(self) -> str:
-        self.scylla_version = self.scylla_version_detailed = ""
-        scylla_path = self.add_install_prefix("/usr/bin/scylla")
-        result = self.remoter.run(f"{scylla_path} --version", ignore_status=True)
+    def get_scylla_binary_version(self) -> Optional[str]:
+        result = self.remoter.run(f"{self.add_install_prefix('/usr/bin/scylla')} --version", ignore_status=True)
         if result.ok:
-            self.scylla_version_detailed = result.stdout.strip()
-            if build_id := self.get_scylla_build_id():
-                self.scylla_version = self.scylla_version_detailed
-                self.scylla_version_detailed += f" with build-id {build_id}"
-                self.log.info(f"Found ScyllaDB version with details: {self.scylla_version_detailed}")
-            self.log.debug(f"self.scylla_version_detailed={self.scylla_version_detailed}")
+            return result.stdout.strip()
+        self.log.debug("Unable to get ScyllaDB version using `%s':\n%s\n%s",
+                       result.command, result.stdout, result.stderr)
+        return None
+
+    def get_scylla_package_version(self) -> Optional[str]:
+        if self.distro.is_rhel_like:
+            cmd = f"rpm --query --queryformat '%{{VERSION}}' {self.scylla_pkg()}"
         else:
-            if self.distro.is_rhel_like:
-                cmd = f"rpm --query --queryformat '%{{VERSION}}' {self.scylla_pkg()}"
-            else:
-                cmd = f"dpkg-query --show --showformat '${{Version}}' {self.scylla_pkg()}"
-            result = self.remoter.run(cmd, ignore_status=True)
+            cmd = f"dpkg-query --show --showformat '${{Version}}' {self.scylla_pkg()}"
+        result = self.remoter.run(cmd, ignore_status=True)
+        if result.ok:
+            return result.stdout.strip()
+        self.log.debug("Unable to get ScyllaDB version using `%s':\n%s\n%s",
+                       result.command, result.stdout, result.stderr)
+        return None
 
-        if match := result.ok and SCYLLA_VERSION_RE.match(result.stdout):
-            self.scylla_version = match.group().replace("~", ".")
-            self.log.info("Found ScyllaDB version: %s", self.scylla_version)
-        else:
-            self.log.debug("Unable to get or parse ScyllaDB version using `%s':\n%s\n%s",
-                           cmd, result.stdout, result.stderr)
+    @optional_cached_property
+    def scylla_version_detailed(self) -> Optional[str]:
+        scylla_version = self.get_scylla_binary_version()
+        if scylla_version is None:
+            if scylla_version := self.get_scylla_package_version():
+                return scylla_version.replace("~", ".")
+            self.log.warning("All attempts to get ScyllaDB version failed. Looks like there is no ScyllaDB installed.")
+            raise NoValue
+        if build_id := self.get_scylla_build_id():
+            scylla_version += f" with build-id {build_id}"
+            self.log.info("Found ScyllaDB version with details: %s", scylla_version)
+        self.log.debug(f"self.scylla_version_detailed={scylla_version}")
+        return scylla_version
 
-        if not self.scylla_version:
-            self.log.warning(
-                "All attempts to get ScyllaDB version failed. Looks like there is no ScyllaDB installed.")
+    @optional_cached_property
+    def scylla_version(self) -> Optional[str]:
+        if scylla_version := self.scylla_version_detailed:
+            if match := SCYLLA_VERSION_RE.match(scylla_version):
+                scylla_version = match.group()
+                self.log.info("Found ScyllaDB version: %s", scylla_version)
+                return scylla_version
+            self.log.debug("Unable to parse ScyllaDB version string: `%s'", scylla_version)
+        raise NoValue
 
-        if not self.scylla_version_detailed:
-            self.scylla_version_detailed = self.scylla_version
-
-        return self.scylla_version_detailed
+    def forget_scylla_version(self) -> None:
+        self.__dict__.pop("scylla_version_detailed", None)
+        self.__dict__.pop("scylla_version", None)
 
     @log_run_info("Detecting disks")
     def detect_disks(self, nvme=True):
@@ -3991,14 +4000,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
     def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None):
         self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 
-    def get_scylla_version(self):
-        if not self.nodes[0].scylla_version:
-            scylla_version = self.nodes[0].get_scylla_version()
-
-            if scylla_version:
-                for node in self.nodes:
-                    node.scylla_version = scylla_version
-
     def get_test_keyspaces(self):
         out = self.nodes[0].run_cqlsh('select keyspace_name from system_schema.keyspaces',
                                       split=True)
@@ -4170,7 +4171,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                                                             verbose=verbose, timeout=timeout)
                 return
 
-            self.get_scylla_version()
             if self.test_config.BACKTRACE_DECODING:
                 node.install_scylla_debuginfo()
 
@@ -4275,22 +4275,17 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         return True
 
     @wait_for_init_wrap
-    def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):  # pylint: disable=unused-argument, too-many-arguments
-        """
-        Scylla cluster setup.
-        :param node_list: List of nodes to watch for init.
-        :param verbose: Whether to print extra info while watching for init.
-        :param timeout: timeout in minutes to wait for init to be finished
-        :param check_node_health: select if run node health check or not
-        :return:
-        """
+    def wait_for_init(self, node_list=None, verbose=False, timeout=None, check_node_health=True):  # pylint: disable=unused-argument
         node_list = node_list or self.nodes
-        self.get_scylla_version()
-
-        wait.wait_for(self.verify_logging_from_nodes, nodes_list=node_list,
-                      text="wait for db logs", step=20, timeout=300, throw_exc=True)
-
-        self.log.info("{} nodes configured and started.".format(node_list))
+        wait.wait_for(
+            func=self.verify_logging_from_nodes,
+            step=20,
+            text="wait for db logs",
+            timeout=300,
+            throw_exc=True,
+            nodes_list=node_list,
+        )
+        self.log.info("%s nodes configured and started.", node_list)
 
         # If wait_for_init is called during cluster initialization we may want this validation will be performed,
         # but if it was called from nemesis, we don't need it in the middle of nemesis. It may cause to not relevant
@@ -4807,22 +4802,13 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         return param_name
 
     @property
-    def scylla_version(self):
-        return self.targets["db_cluster"].nodes[0].scylla_version
-
-    @property
     def monitoring_version(self):
-        self.log.debug("Using %s ScyllaDB version to derive monitoring version" %
-                       self.scylla_version)
-        version = re.match(r"(\d+\.\d+)", self.scylla_version)
-        if not version or 'dev' in self.scylla_version:
-            return 'master'
-        else:
-            return version.group(1)
-
-    @property
-    def is_enterprise(self):
-        return self.targets["db_cluster"].nodes[0].is_enterprise
+        scylla_version = self.targets["db_cluster"].nodes[0].scylla_version
+        self.log.debug("Using %s ScyllaDB version to derive monitoring version", scylla_version)
+        if scylla_version and "dev" not in scylla_version:
+            if version := re.match(r"(\d+\.\d+)", scylla_version):
+                return version.group(1)
+        return "master"
 
     @property
     def sct_dashboard_json_file(self):
