@@ -43,7 +43,7 @@ class DbEventsFilter(BaseFilter):
         result = bool(self.filter_type) and self.filter_type == event.type
 
         if self.filter_line:
-            result &= self.filter_line in getattr(event, "line", "")
+            result &= self.filter_line in (getattr(event, "line", "") or "")
 
         if self.filter_node:
             result &= self.filter_node == getattr(event, "node", "")

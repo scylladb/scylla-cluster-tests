@@ -76,7 +76,7 @@ from sdcm.utils.k8s import (
 from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.decorators import timeout as timeout_wrapper
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \
-    KubectlClusterEventsLogger, ScyllaManagerLogger
+    KubectlClusterEventsLogger, ScyllaManagerLogger, KubernetesWrongSchedulingLogger
 from sdcm.utils.version_utils import get_git_tag_from_helm_chart_version
 from sdcm.wait import wait_for
 from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring
@@ -234,6 +234,14 @@ class CloudK8sNodePool(metaclass=abc.ABCMeta):  # pylint: disable=too-many-insta
     def readiness_timeout(self) -> int:
         return 10 + (10 * self.num_nodes)
 
+    @property
+    def nodes(self):
+        try:
+            return self.k8s_cluster.k8s_core_v1_api.list_node(label_selector=f'{self.pool_label_name}={self.name}')
+        except Exception as details:  # pylint: disable=broad-except
+            LOGGER.debug("Failed to get nodes list: %s", str(details))
+            return {}
+
     def wait_for_nodes_readiness(self):
         readiness_timeout = self.readiness_timeout
 
@@ -270,6 +278,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     _cert_manager_journal_thread: Optional[CertManagerLogger] = None
     _scylla_manager_journal_thread: Optional[ScyllaManagerLogger] = None
     _scylla_operator_journal_thread: Optional[ScyllaOperatorLogger] = None
+    _scylla_operator_scheduling_thread: Optional[KubernetesWrongSchedulingLogger] = None
     _scylla_cluster_events_thread: Optional[KubectlClusterEventsLogger] = None
 
     _scylla_operator_log_monitor_thread: Optional[ScyllaOperatorLogMonitoring] = None
@@ -288,6 +297,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.name = '%s-%s' % (user_prefix, self.shortid)
         self.params = params
         self.api_call_rate_limiter = None
+        self.k8s_scylla_cluster_name = self.params.get('k8s_scylla_cluster_name')
+        # keep pods labels that are allowed to be scheduled on the Scylla node
+        self.allowed_labels_on_scylla_node = []
 
     # NOTE: Following class attr(s) are defined for consumers of this class
     #       such as 'sdcm.utils.remote_logger.ScyllaOperatorLogger'.
@@ -555,6 +567,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def start_scylla_operator_journal_thread(self) -> None:
         self._scylla_operator_journal_thread = ScyllaOperatorLogger(self, self.scylla_operator_log)
         self._scylla_operator_journal_thread.start()
+        self._scylla_operator_scheduling_thread = KubernetesWrongSchedulingLogger(self, self.scylla_operator_log)
+        self._scylla_operator_scheduling_thread.start()
         self._scylla_operator_log_monitor_thread = ScyllaOperatorLogMonitoring(self)
         self._scylla_operator_log_monitor_thread.start()
 
@@ -1075,6 +1089,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             self._scylla_operator_log_monitor_thread.stop()
         if self._scylla_operator_journal_thread:
             self._scylla_operator_journal_thread.stop(timeout)
+        if self._scylla_operator_scheduling_thread:
+            self._scylla_operator_scheduling_thread.stop(timeout)
         if self._scylla_cluster_events_thread:
             self._scylla_cluster_events_thread.stop(timeout)
 

@@ -175,6 +175,14 @@ class GkeCluster(KubernetesCluster):
         self.gce_user = services[0].key
         self.gce_zone = gce_datacenter[0]
         self.gke_cluster_created = False
+        self.allowed_labels_on_scylla_node = [('name', 'cpu-policy'),
+                                              ('app', 'local-volume-provisioner'),
+                                              ('name', 'raid-local-disks'),
+                                              ('k8s-app', 'fluentbit-gke'),
+                                              ('k8s-app', 'gke-metrics-agent'),
+                                              ('component', 'kube-proxy'),
+                                              ('k8s-app', 'gcp-compute-persistent-disk-csi-driver'),
+                                              ('scylla/cluster', self.k8s_scylla_cluster_name)]
 
         self.api_call_rate_limiter = ApiCallRateLimiter(
             rate_limit=GKE_API_CALL_RATE_LIMIT,
