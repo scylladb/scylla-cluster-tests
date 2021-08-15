@@ -13,6 +13,7 @@ LOGGER = logging.getLogger(__name__)
 def get_distro_name(distro_object):
     known_distro_dict = {
         Distro.CENTOS7: "centos7",
+        Distro.CENTOS8: "centos8",
         Distro.DEBIAN9: "debian9",
         Distro.DEBIAN10: "debian10",
         Distro.UBUNTU16: "ubuntu16",
