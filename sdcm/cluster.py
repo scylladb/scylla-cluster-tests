@@ -3470,7 +3470,7 @@ def wait_for_init_wrap(method):
         node_list = kwargs.get('node_list', None) or cl_inst.nodes
         timeout = kwargs.get('timeout', None)
         # remove all arguments which is not supported by BaseScyllaCluster.node_setup method
-        setup_kwargs = {k: kwargs[k] for k in kwargs if k not in ["node_list", "check_node_health"]}
+        setup_kwargs = {k: v for k, v in kwargs.items() if k not in ["node_list", "check_node_health"]}
 
         _queue = queue.Queue()
 
