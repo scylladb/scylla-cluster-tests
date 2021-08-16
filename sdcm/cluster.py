@@ -2285,7 +2285,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.log.debug("Upgrade scylla-manager via repo: %s", scylla_mgmt_repo)
         self.download_scylla_manager_repo(scylla_mgmt_repo)
         if self.distro.is_rhel_like:
-            self.remoter.sudo("yum update scylla-manager -y")
+            self.remoter.sudo("yum update scylla-manager-server scylla-manager-client -y")
         else:
             self.remoter.sudo("apt-get update", ignore_status=True)
             # Upgrade should update packages of:
@@ -2325,7 +2325,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             package_names = f"{package_url}scylla-manager-server* {package_url}scylla-manager-client*"
         else:
             self.download_scylla_manager_repo(scylla_mgmt_repo)
-            package_names = "scylla-manager"
+            package_names = "scylla-manager-server scylla-manager-client"
         self.install_package(package_names)
 
         self.log.debug("Copying TLS files from data_dir to the node")
