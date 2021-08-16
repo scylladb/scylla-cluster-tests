@@ -24,7 +24,6 @@ import boto3
 import libcloud.storage.types
 import libcloud.storage.providers
 from invoke import exceptions
-from azure.storage.blob import BlobServiceClient
 from pkg_resources import parse_version
 
 from sdcm import mgmt
@@ -557,12 +556,12 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     def _get_all_snapshot_files_azure(cluster_id, bucket_name):
         file_set = set()
         credentials = KeyStore().get_backup_azure_blob_credentials()
-        blob_service_client = BlobServiceClient(account_url=f"https://{credentials['account']}.blob.core.windows.net",
-                                                credential=credentials['key'])
-        container_client = blob_service_client.get_container_client(bucket_name)
-        blob_iterator = container_client.list_blobs(name_starts_with=f"backup/sst/cluster/{cluster_id}")
-        for listing_object in blob_iterator:
-            file_set.add(listing_object["name"])
+        azure_driver_object = libcloud.storage.providers.get_driver(libcloud.storage.types.Provider.AZURE_BLOBS)
+        driver = azure_driver_object(key=credentials["account"], secret=credentials["key"])
+        container = driver.get_container(container_name=bucket_name)
+        dir_listing = driver.list_container_objects(container, ex_prefix=f'backup/sst/cluster/{cluster_id}')
+        for listing_object in dir_listing:
+            file_set.add(listing_object.name)
         return file_set
 
     def _get_all_snapshot_files(self, cluster_id):
