@@ -311,7 +311,8 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
         self.install_gemini(node=node)
 
         if 'scylla-bench' in self.params.list_of_stress_tools:
-            self.install_scylla_bench(node)
+            if not node.is_scylla_bench_installed:
+                node.install_scylla_bench()
 
         if self.params.get('client_encrypt'):
             node.config_client_encrypt()
