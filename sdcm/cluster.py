@@ -203,6 +203,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.is_seed = False
 
         self.remoter = None
+        self.is_scylla_bench_installed = False
 
         self._spot_monitoring_thread = None
         self._journal_thread = None
@@ -353,6 +354,26 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return orig_log_path
 
     database_log = system_log
+
+    @retrying(n=5)
+    def install_scylla_bench(self):
+        if self.distro.is_rhel_like:
+            self.remoter.sudo("yum install -y git")
+        else:
+            self.remoter.sudo(shell_script_cmd("""\
+                apt-get update
+                apt-get install -y git
+            """))
+        self.remoter.sudo(shell_script_cmd(f"""\
+            rm -rf /usr/local/go
+            curl -LO https://storage.googleapis.com/golang/go1.16.3.linux-amd64.tar.gz
+            tar -C /usr/local -xvzf go1.16.3.linux-amd64.tar.gz
+            echo 'export GOPATH=$HOME/go' >> $HOME/.bash_profile
+            echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bash_profile
+            source $HOME/.bash_profile
+            GO111MODULE=on go get -v github.com/scylladb/scylla-bench@{self.parent_cluster.params.get('scylla_bench_version')}
+        """))
+        self.is_scylla_bench_installed = True
 
     @property
     def cassandra_stress_version(self):
@@ -4437,15 +4458,17 @@ class BaseLoaderSet():
         if self.params.get('client_encrypt'):
             node.config_client_encrypt()
 
+        if 'scylla-bench' in self.params.list_of_stress_tools:
+            # Update existing scylla-bench to latest
+            if not node.is_scylla_bench_installed:
+                node.install_scylla_bench()
+
         result = node.remoter.run('test -e ~/PREPARED-LOADER', ignore_status=True)
         node.remoter.sudo("bash -cxe \"echo '*\t\thard\tcore\t\tunlimited\n*\t\tsoft\tcore\t\tunlimited' "
                           ">> /etc/security/limits.d/20-coredump.conf\"")
         if result.exit_status == 0:
-            # Update existing scylla-bench to latest
-            if 'scylla-bench' in self.params.list_of_stress_tools:
-                self.install_scylla_bench(node)
-                self.log.debug('Skip loader setup for using a prepared AMI')
-                return
+            self.log.debug('Skip loader setup for using a prepared AMI')
+            return
 
         if node.is_ubuntu14():
             install_java_script = dedent("""
@@ -4498,7 +4521,8 @@ class BaseLoaderSet():
         node.wait_cs_installed(verbose=verbose)
 
         if 'scylla-bench' in self.params.list_of_stress_tools:
-            self.install_scylla_bench(node)
+            if not node.is_scylla_bench_installed:
+                node.install_scylla_bench()
 
         # install docker
         docker_install = dedent("""
@@ -4665,30 +4689,6 @@ class BaseLoaderSet():
                 kill_result = loader.remoter.run('pkill -f -SIGINT gemini', ignore_status=True)
                 if kill_result.exit_status != 0:
                     self.log.warning('Terminate gemini on node %s:\n%s', loader, kill_result)
-
-    @staticmethod
-    def is_scylla_bench_installed(node: BaseNode):
-        return node.remoter.run('ls /$HOME/go/bin/scylla-bench', ignore_status=True).ok
-
-    @staticmethod
-    @retrying(n=5)
-    def install_scylla_bench(node):
-        if node.distro.is_rhel_like:
-            node.remoter.sudo("yum install -y git")
-        else:
-            node.remoter.sudo(shell_script_cmd("""\
-                apt-get update
-                apt-get install -y git
-            """))
-        node.remoter.sudo(shell_script_cmd("""\
-            rm -rf /usr/local/go
-            curl -LO https://storage.googleapis.com/golang/go1.16.3.linux-amd64.tar.gz
-            tar -C /usr/local -xvzf go1.16.3.linux-amd64.tar.gz
-            echo 'export GOPATH=$HOME/go' >> $HOME/.bash_profile
-            echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bash_profile
-            source $HOME/.bash_profile
-            GO111MODULE=on go get -v github.com/scylladb/scylla-bench@v0.1.2
-        """))
 
 
 class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instance-attributes
