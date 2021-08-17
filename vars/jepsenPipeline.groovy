@@ -4,7 +4,7 @@ def completed_stages = [:]
 def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, null)
+    def builder = getJenkinsLabels(params.backend, params.region)
 
     pipeline {
         agent {
@@ -21,6 +21,12 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('backend', 'gce')}",
                    description: 'gce',
                    name: 'backend')
+            string(defaultValue: "${pipelineParams.get('region', 'us-east1')}",
+               description: 'Region value',
+               name: 'region')
+            string(defaultValue: "a",
+               description: 'Availability zone',
+               name: 'availability_zone')
 
             string(defaultValue: '',
                    description: 'a Scylla version to run against',
@@ -99,6 +105,21 @@ def call(Map pipelineParams) {
                     }
                 }
             }
+            stage('Create SCT Runner') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    timeout(time: 5, unit: 'MINUTES') {
+                                        createSctRunner(params, runnerTimeout , builder.region)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             stage('Run SCT Test') {
                 steps {
                     script {
@@ -133,7 +154,13 @@ def call(Map pipelineParams) {
                                 export SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND="${params.instance_provision_fallback_on_demand ? params.instance_provision_fallback_on_demand : ''}"
 
                                 echo "start test ......."
-                                ./docker/env/hydra.sh run-test jepsen_test --backend gce --logdir "`pwd`"
+                                SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
+                                if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
+                                    ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} run-test jepsen_test --backend gce
+                                else
+                                    echo "SCT runner IP file is empty. Probably SCT Runner was not created."
+                                    exit 1
+                                fi
                                 echo "end test ....."
                             """
                         }
@@ -187,20 +214,19 @@ def call(Map pipelineParams) {
                     }
                 }
             }
-//  This stage is not currently used, since we don't currently use SCT Runner in this pipeline
-//             stage('Clean SCT Runners') {
-//                 steps {
-//                     catchError(stageResult: 'FAILURE') {
-//                         script {
-//                             wrap([$class: 'BuildUser']) {
-//                                 dir('scylla-cluster-tests') {
-//                                     cleanSctRunners(params, currentBuild)
-//                                 }
-//                             }
-//                         }
-//                     }
-//                 }
-//             }
+            stage('Clean SCT Runners') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    cleanSctRunners(params, currentBuild)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
         post {
             always {
