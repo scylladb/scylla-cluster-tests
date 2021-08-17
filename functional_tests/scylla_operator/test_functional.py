@@ -12,12 +12,12 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-
 import logging
 import random
 import threading
 import time
 import pytest
+import yaml
 
 from sdcm.cluster_k8s import ScyllaPodCluster
 from sdcm.mgmt import TaskStatus
@@ -332,3 +332,15 @@ def test_scylla_operator_pods(db_cluster: ScyllaPodCluster):
 
     not_running_pods = ','.join([pods_info[0] for pods_info in scylla_operator_pods if pods_info[1] != 'Running'])
     assert not not_running_pods, f'There are pods in state other than running: {not_running_pods}'
+
+
+def test_startup_probe_in_scylla_pods(db_cluster: ScyllaPodCluster):
+    pods = db_cluster.k8s_cluster.kubectl('get pods -A -l "app.kubernetes.io/name=scylla" -o yaml')
+
+    no_startup_probe_pods = []
+    for pod in yaml.load(pods.stdout)["items"]:
+        for container in pod.get("spec", {}).get("containers", []):
+            if container['name'] == "scylla" and not container.get("startupProbe"):
+                no_startup_probe_pods.append(f"pod: {pod['metadata']['name']}, container: {container['name']}")
+
+    assert not no_startup_probe_pods, f"Startup probe is not found in the pods: {no_startup_probe_pods}"
