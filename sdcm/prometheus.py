@@ -23,8 +23,10 @@ from socketserver import ThreadingMixIn
 import requests
 import prometheus_client
 
-from sdcm.utils.decorators import retrying, log_run_info
+from sdcm.sct_events.base import EventPeriod
+from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
+from sdcm.utils.decorators import retrying, log_run_info
 
 
 START = 'start'
@@ -129,6 +131,7 @@ class PrometheusAlertManagerListener(threading.Thread):
         self._stop_flag = stop_flag if stop_flag else threading.Event()
         self._interval = interval
         self._timeout = 600
+        self.event_registry = ContinuousEventsRegistry()
 
     @property
     def is_alert_manager_up(self):
@@ -166,11 +169,13 @@ class PrometheusAlertManagerListener(threading.Thread):
 
     def _publish_new_alerts(self, alerts: dict):  # pylint: disable=no-self-use
         for alert in alerts.values():
-            PrometheusAlertManagerEvent.start(raw_alert=alert).publish()
+            new_event = PrometheusAlertManagerEvent(raw_alert=alert)
+            new_event.begin_event()
 
     def _publish_end_of_alerts(self, alerts: dict):
         all_alerts = self._get_alerts()
         updated_dict = {}
+        event_filter = self.event_registry.get_registry_filter()
         if all_alerts:
             for alert in all_alerts:
                 fingerprint = alert.get('fingerprint', None)
@@ -181,7 +186,29 @@ class PrometheusAlertManagerListener(threading.Thread):
             if not alert.get('endsAt', None):
                 alert['endsAt'] = time.strftime("%Y-%m-%dT%H:%M:%S.0Z", time.gmtime())
             alert = updated_dict.get(alert['fingerprint'], alert)
-            PrometheusAlertManagerEvent.end(raw_alert=alert).publish()
+            labels = alert.get("labels") or {}
+            alert_name = labels.get("alertname", "")
+            node = labels.get("instance", "N/A")
+
+            event_filter.filter_by_attr(base="PrometheusAlertManagerEvent",
+                                        node=node, starts_at=alert.get("startsAt"),
+                                        alert_name=alert_name, period_type=EventPeriod.BEGIN.value)
+
+            begun_events = event_filter.get_filtered()
+            if not begun_events:
+                new_event = PrometheusAlertManagerEvent(raw_alert=alert)
+                new_event.period_type = EventPeriod.INFORMATIONAL.value
+                new_event.end_event()
+            if len(begun_events) > 1:
+                LOGGER.warning("Found {event_count} events of type '{alert}' started at {starts_at} with period "
+                               "{event_period}. Will apply the function to most recent event by default."
+                               .format(event_count=len(begun_events),
+                                       alert=alert_name,
+                                       starts_at=alert.get("startsAt"),
+                                       event_period=EventPeriod.BEGIN.value))
+            if begun_events:
+                event = begun_events[-1]
+                event.end_event()
 
     def run(self):
         self.wait_till_alert_manager_up()
