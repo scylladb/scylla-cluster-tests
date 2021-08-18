@@ -11,13 +11,11 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from typing import Type
-
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import SctEvent, SctEventProtocol
+from sdcm.sct_events.continuous_event import ContinuousEvent
 
 
-class PrometheusAlertManagerEvent(SctEvent, abstract=True):  # pylint: disable=too-many-instance-attributes
+class PrometheusAlertManagerEvent(ContinuousEvent):  # pylint: disable=too-many-instance-attributes
     _eq_attrs = (
         "type",
         "starts_at",
@@ -30,9 +28,6 @@ class PrometheusAlertManagerEvent(SctEvent, abstract=True):  # pylint: disable=t
         "alert_name",
     )
 
-    start: Type[SctEventProtocol]
-    end: Type[SctEventProtocol]
-
     def __init__(self, raw_alert: dict, severity: Severity = Severity.WARNING):
         super().__init__(severity=severity)
 
@@ -43,6 +38,7 @@ class PrometheusAlertManagerEvent(SctEvent, abstract=True):  # pylint: disable=t
         self.fingerprint = raw_alert.get("fingerprint")
         self.status = raw_alert.get("status") or {}
         self.labels = raw_alert.get("labels") or {}
+        self.node = self.labels.get("instance", "N/A")
 
         self.description = self.annotations.get("description", self.annotations.get("summary", ""))
         self.state = self.status.get("state", "")
@@ -55,13 +51,10 @@ class PrometheusAlertManagerEvent(SctEvent, abstract=True):  # pylint: disable=t
 
     @property
     def msgfmt(self) -> str:
-        return super().msgfmt + ": " + "alert_name={0.alert_name} type={0.type} start={0.starts_at} " \
-                                       "end={0.ends_at} description={0.description} updated={0.updated_at} " \
-                                       "state={0.state} fingerprint={0.fingerprint} labels={0.labels}"
+        fmt = super().msgfmt + ": alert_name={0.alert_name} node={0.node} start={0.starts_at} " \
+                               "end={0.ends_at} description={0.description} updated={0.updated_at} " \
+                               "state={0.state} fingerprint={0.fingerprint} labels={0.labels}"
+        return fmt
 
     def __eq__(self, other):
         return all(getattr(self, name, None) == getattr(other, name, None) for name in self._eq_attrs)
-
-
-PrometheusAlertManagerEvent.add_subevent_type("start")
-PrometheusAlertManagerEvent.add_subevent_type("end")
