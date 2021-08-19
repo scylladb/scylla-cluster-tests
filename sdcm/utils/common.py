@@ -55,10 +55,11 @@ import pytz
 import boto3
 from mypy_boto3_s3 import S3Client, S3ServiceResource
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
+from mypy_boto3_ec2.service_resource import Image as EC2Image
 import docker  # pylint: disable=wrong-import-order; false warning because of docker import (local file vs. package)
 import libcloud.storage.providers
 import libcloud.storage.types
-from libcloud.compute.base import Node
+from libcloud.compute.base import Node as GCENode, NodeImage as GCEImage
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 import yaml
@@ -81,6 +82,7 @@ LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
 DOCKER_CGROUP_RE = re.compile("/docker/([0-9a-f]+)")
 SCYLLA_AMI_OWNER_ID = "797456418907"
+SCYLLA_GCE_IMAGES_PROJECT = "scylla-images"
 MAX_SPOT_DURATION_TIME = 360
 
 
@@ -917,14 +919,10 @@ def filter_gce_by_tags(tags_dict, instances):
     return filtered_instances
 
 
-def list_instances_gce(tags_dict=None, running=False, verbose=False) -> list[Node]:
-    """
-    list all instances with specific tags GCE
-
-    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
-
-    :return: None
-    """
+def list_instances_gce(tags_dict: Optional[dict] = None,
+                       running: bool = False,
+                       verbose: bool = False) -> list[GCENode]:
+    """List all instances with specific tags GCE."""
 
     compute_engine = get_gce_driver()
 
@@ -1141,34 +1139,50 @@ def clean_clusters_eks(tags_dict: dict, dry_run: bool = False) -> None:
     ParallelObject(eks_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
 
 
-_SCYLLA_AMI_CACHE = defaultdict(dict)
+_SCYLLA_AMI_CACHE: dict[str, list[EC2Image]] = defaultdict(list)
 
 
-def get_scylla_ami_versions(region):
-    """
-    get the list of all the formal scylla ami from specific region
+def get_scylla_ami_versions(region_name: str) -> list[EC2Image]:
+    """Get the list of all the formal scylla ami from specific region."""
 
-    :param region: the aws region to look in
-    :return: list of ami data
-    :rtype: list
-    """
+    if _SCYLLA_AMI_CACHE[region_name]:
+        return _SCYLLA_AMI_CACHE[region_name]
 
-    if _SCYLLA_AMI_CACHE[region]:
-        return _SCYLLA_AMI_CACHE[region]
-
-    client: EC2Client = boto3.client('ec2', region_name=region)
-    response = client.describe_images(
-        Owners=['797456418907'],  # ScyllaDB
-        Filters=[
-            {'Name': 'name', 'Values': ['ScyllaDB *']},
-        ],
+    ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
+    _SCYLLA_AMI_CACHE[region_name] = sorted(
+        ec2_resource.images.filter(
+            Owners=[SCYLLA_AMI_OWNER_ID, ],
+            Filters=[{'Name': 'name', 'Values': ['ScyllaDB *']}, ],
+        ),
+        key=lambda x: x.creation_date,
+        reverse=True,
     )
+    return _SCYLLA_AMI_CACHE[region_name]
 
-    _SCYLLA_AMI_CACHE[region] = sorted(response['Images'],
-                                       key=lambda x: x['CreationDate'],
-                                       reverse=True)
 
-    return _SCYLLA_AMI_CACHE[region]
+_SCYLLA_GCE_IMAGE_CACHE: list[GCEImage] = []
+
+
+def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT) -> list[GCEImage]:
+    if not _SCYLLA_GCE_IMAGE_CACHE:
+        # Server-side resource filtering described in Google SDK reference docs:
+        #   API reference: https://cloud.google.com/compute/docs/reference/rest/v1/images/list
+        #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
+        # or you can see brief explanation here:
+        #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
+        filters = "(family eq 'scylla(-enterprise)?')(name ne .+-build-.+)"
+        compute_engine = get_gce_driver()
+        _SCYLLA_GCE_IMAGE_CACHE.extend(sorted(
+            itertools.chain.from_iterable(
+                compute_engine.ex_list(
+                    list_fn=compute_engine.list_images,
+                    ex_project=project,
+                ).filter(filters)
+            ),
+            key=lambda x: x.extra["creationTimestamp"],
+            reverse=True,
+        ))
+    return _SCYLLA_GCE_IMAGE_CACHE
 
 
 _S3_SCYLLA_REPOS_CACHE = defaultdict(dict)
@@ -1474,32 +1488,64 @@ def get_branched_repo(scylla_version: str,
     return None
 
 
-def get_branched_ami(ami_version, region_name):
+def get_branched_ami(scylla_version: str, region_name: str) -> list[EC2Image]:
     """
     Get a list of AMIs, based on version match
 
-    :param ami_version: branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:all'
+    :param scylla_version: branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:all'
     :param region_name: the region to look AMIs in
     :return: list of ec2.images
     """
-    branch, build_id = ami_version.split(':', 1)
-    ec2_resource: EC2ServiceResource = boto3.resource('ec2', region_name=region_name)
+    branch, build_id = scylla_version.split(":", 1)
+    filters = [{"Name": "tag:branch", "Values": [branch, ], }, ]
+    if build_id not in ("latest", "all", ):
+        filters.append({'Name': 'tag:build-id', 'Values': [build_id, ], })
 
-    LOGGER.info("Looking for AMI match [%s]", ami_version)
-    if build_id in ('latest', 'all'):
-        filters = [{'Name': 'tag:branch', 'Values': [branch]}]
-    else:
-        filters = [{'Name': 'tag:branch', 'Values': [branch]}, {'Name': 'tag:build-id', 'Values': [build_id]}]
+    LOGGER.info("Looking for AMIs match [%s]", scylla_version)
+    ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
+    images = sorted(
+        ec2_resource.images.filter(Filters=filters),
+        key=lambda x: x.creation_date,
+        reverse=True,
+    )
 
-    amis = list(ec2_resource.images.filter(Filters=filters))
+    assert images, f"AMIs for {scylla_version=} not found in {region_name}"
+    if build_id == "all":
+        return images
+    return images[:1]
 
-    amis = sorted(amis, key=lambda x: x.creation_date, reverse=True)
 
-    assert amis, "AMI matching [{}] wasn't found on {}".format(ami_version, region_name)
-    if build_id == 'all':
-        return amis
-    else:
-        return amis[:1]
+def get_branched_gce_images(scylla_version: str, project: str = SCYLLA_GCE_IMAGES_PROJECT) -> list[GCEImage]:
+    branch, build_id = scylla_version.split(":", 1)
+
+    # Server-side resource filtering described in Google SDK reference docs:
+    #   API reference: https://cloud.google.com/compute/docs/reference/rest/v1/images/list
+    #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
+    # or you can see brief explanation here:
+    #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
+    filters = f"(family eq scylla)(labels.branch eq {branch})"
+
+    if build_id not in ("latest", "all", ):
+        # filters += f"(labels.build-id eq {build_id})"  # asked releng to add `build-id' label too, but
+        filters += f"(name eq .+-build-{build_id})"      # use BUILD_ID from an image name for now
+
+    LOGGER.info("Looking for GCE images match [%s]", scylla_version)
+    compute_engine = get_gce_driver()
+    images = sorted(
+        itertools.chain.from_iterable(
+            compute_engine.ex_list(
+                list_fn=compute_engine.list_images,
+                ex_project=project,
+            ).filter(filters)
+        ),
+        key=lambda x: x.extra["creationTimestamp"],
+        reverse=True,
+    )
+
+    assert images, f"GCE images for {scylla_version=} not found"
+    if build_id == "all":
+        return images
+    return images[:1]
 
 
 @lru_cache()
