@@ -1863,9 +1863,8 @@ def get_post_behavior_actions(config):
         "k8s_cluster": {"NodeType": "k8s", "action": None},
     }
 
-    for key in action_per_type:
-        config_key = 'post_behavior_{}'.format(key)
-        action_per_type[key]["action"] = config.get(config_key)
+    for key, value in action_per_type.items():
+        value["action"] = config.get(f"post_behavior_{key}")
 
     return action_per_type
 
