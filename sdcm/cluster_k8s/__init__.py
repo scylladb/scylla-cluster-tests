@@ -1571,7 +1571,8 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
                             timeout=500, verify_up_timeout=300):
         if verify_down:
             self.wait_db_down(timeout=timeout)
-        self.remoter.run('supervisorctl start scylla', timeout=timeout)
+        self.remoter.run('sh -c "{0} || {0}-server"'.format("supervisorctl start scylla"),
+                         timeout=timeout)
         if verify_up:
             self.wait_db_up(timeout=verify_up_timeout)
 
@@ -1582,7 +1583,7 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
                            ignore_status=False):
         if verify_up:
             self.wait_db_up(timeout=timeout)
-        self.remoter.run('supervisorctl stop scylla',
+        self.remoter.run('sh -c "{0} || {0}-server"'.format("supervisorctl stop scylla"),
                          timeout=timeout, ignore_status=ignore_status)
         if verify_down:
             self.wait_db_down(timeout=timeout)
@@ -1598,7 +1599,8 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
     def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=300, ignore_status=False):
         if verify_up_before:
             self.wait_db_up(timeout=timeout)
-        self.remoter.run("supervisorctl restart scylla", timeout=timeout)
+        self.remoter.run('sh -c "{0} || {0}-server"'.format("supervisorctl restart scylla"),
+                         timeout=timeout)
         if verify_up_after:
             self.wait_db_up(timeout=timeout)
 

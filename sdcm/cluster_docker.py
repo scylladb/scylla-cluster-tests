@@ -101,7 +101,8 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=300):
         if verify_down:
             self.wait_db_down(timeout=timeout)
-        self.remoter.sudo('supervisorctl start scylla', timeout=timeout)
+        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl start scylla"),
+                          timeout=timeout)
         if verify_up:
             self.wait_db_up(timeout=verify_up_timeout)
 
@@ -112,7 +113,8 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
     def stop_scylla_server(self, verify_up=False, verify_down=True, timeout=300, ignore_status=False):
         if verify_up:
             self.wait_db_up(timeout=timeout)
-        self.remoter.sudo('supervisorctl stop scylla', timeout=timeout)
+        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl stop scylla"),
+                          timeout=timeout)
         if verify_down:
             self.wait_db_down(timeout=timeout)
 
@@ -123,7 +125,8 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
     def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=300, ignore_status=False):
         if verify_up_before:
             self.wait_db_up(timeout=timeout)
-        self.remoter.sudo("supervisorctl restart scylla", timeout=timeout)
+        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl restart scylla"),
+                          timeout=timeout)
         if verify_up_after:
             self.wait_db_up(timeout=timeout)
 
