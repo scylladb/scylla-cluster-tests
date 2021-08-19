@@ -36,7 +36,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
         cls.conf = sct_config.SCTConfiguration()
 
-        for k, _ in os.environ.items():
+        for k in os.environ:
             if k.startswith('SCT_'):
                 del os.environ[k]
 
@@ -45,7 +45,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
 
     def tearDown(self):
-        for k, _ in os.environ.items():
+        for k in os.environ:
             if k.startswith('SCT_'):
                 del os.environ[k]
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
@@ -178,7 +178,8 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_SCYLLA_VERSION'] = '99.0.3'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/multi_region_dc_test_case.yaml'
-        self.assertRaisesRegex(ValueError, r"AMI for scylla version 99.0.3 wasn't found", sct_config.SCTConfiguration)
+        self.assertRaisesRegex(
+            ValueError, "AMIs for scylla_version='99.0.3' not found in eu-west-1", sct_config.SCTConfiguration)
 
     @staticmethod
     def test_12_scylla_version_repo():
@@ -423,7 +424,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         with self.assertRaises(ValueError) as context:
             sct_config.SCTConfiguration()
 
-        self.assertIn("oracle_scylla_version and ami_id_db_oracle can't used together", str(context.exception))
+        self.assertIn("'oracle_scylla_version' and 'ami_id_db_oracle' can't used together", str(context.exception))
 
 
 if __name__ == "__main__":

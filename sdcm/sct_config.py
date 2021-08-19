@@ -29,10 +29,22 @@ import anyconfig
 
 from sdcm import sct_abs_path
 from sdcm.utils import alternator
-from sdcm.utils.common import find_scylla_repo, get_scylla_ami_versions, get_branched_ami, get_ami_tags, \
-    ami_built_by_scylla, MAX_SPOT_DURATION_TIME
-from sdcm.utils.version_utils import get_branch_version, get_branch_version_for_multiple_repositories, \
-    get_scylla_docker_repo_from_version, resolve_latest_repo_symlink
+from sdcm.utils.common import (
+    MAX_SPOT_DURATION_TIME,
+    ami_built_by_scylla,
+    find_scylla_repo,
+    get_ami_tags,
+    get_branched_ami,
+    get_branched_gce_images,
+    get_scylla_ami_versions,
+    get_scylla_gce_images_versions,
+)
+from sdcm.utils.version_utils import (
+    get_branch_version,
+    get_branch_version_for_multiple_repositories,
+    get_scylla_docker_repo_from_version,
+    resolve_latest_repo_symlink,
+)
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 
 
@@ -1361,37 +1373,48 @@ class SCTConfiguration(dict):
                             self[key] += " {}".format(value)
 
         # 6) handle scylla_version if exists
-        scylla_version = self.get('scylla_version')
         scylla_linux_distro = self.get('scylla_linux_distro')
         dist_type = scylla_linux_distro.split('-')[0]
         dist_version = scylla_linux_distro.split('-')[-1]
 
-        if scylla_version:
+        if scylla_version := self.get('scylla_version'):  # pylint: disable=too-many-nested-blocks
             if not self.get('docker_image'):
                 self['docker_image'] = get_scylla_docker_repo_from_version(scylla_version)
             if self.get("cluster_backend") in ["docker", "k8s-gce-minikube", "k8s-gke"]:
                 self.log.info("Assume that Scylla Docker image has repo file pre-installed.")
             elif not self.get('ami_id_db_scylla') and self.get('cluster_backend') == 'aws':
+                suffix = f" {scylla_version}"  # ami.name format example: ScyllaDB 4.4.0
                 ami_list = []
                 for region in region_names:
                     if ':' in scylla_version:
-                        amis = get_branched_ami(scylla_version, region_name=region)
-                        ami_list.append(amis[0].id)
-                        continue
-
-                    amis = get_scylla_ami_versions(region)
-                    for ami in amis:
-                        # ami['Name'] format example: ScyllaDB 4.4.0
-                        if f" {scylla_version}" in ami['Name']:
-                            ami_list.append(ami['ImageId'])
+                        ami = get_branched_ami(scylla_version=scylla_version, region_name=region)[0]
+                    else:
+                        for ami in get_scylla_ami_versions(region_name=region):
+                            if ami.name.endswith(suffix):
+                                break
+                        else:
+                            raise ValueError(f"AMIs for {scylla_version=} not found in {region}")
+                    self.log.debug("Found AMI %s for scylla_version='%s' in %s", ami.image_id, scylla_version, region)
+                    ami_list.append(ami)
+                self['ami_id_db_scylla'] = " ".join(ami.image_id for ami in ami_list)
+            elif not self.get("gce_image_db") and self.get("cluster_backend") == "gce":
+                if ":" in scylla_version:
+                    gce_image = get_branched_gce_images(scylla_version=scylla_version)[0]
+                else:
+                    # gce_image.name format examples: scylla-4-3-6 or scylla-enterprise-2021-1-2
+                    suffix = f"-{scylla_version.replace('.', '-')}"
+                    for gce_image in get_scylla_gce_images_versions():
+                        if gce_image.name.endswith(suffix):
                             break
                     else:
-                        raise ValueError("AMI for scylla version {} wasn't found".format(scylla_version))
-                self['ami_id_db_scylla'] = " ".join(ami_list)
+                        raise ValueError(f"GCE images for {scylla_version=} not found")
+                self.log.debug("Found GCE image %s for scylla_version='%s'", gce_image.name, scylla_version)
+                self["gce_image_db"] = gce_image.extra["selfLink"]
             elif not self.get('scylla_repo'):
                 self['scylla_repo'] = find_scylla_repo(scylla_version, dist_type, dist_version)
             else:
-                raise ValueError("'scylla_version' can't used together with  'ami_id_db_scylla' or with 'scylla_repo'")
+                raise ValueError("'scylla_version' can't used together with 'ami_id_db_scylla', 'gce_image_db' "
+                                 "or with 'scylla_repo'")
 
             if self.get("n_loaders") and not self.get("scylla_repo_loader") and self.get("cluster_backend") != "aws":
                 scylla_linux_distro_loader = self.get('scylla_linux_distro_loader')
@@ -1401,29 +1424,29 @@ class SCTConfiguration(dict):
                 scylla_version_for_loader = "nightly" if scylla_version == "latest" else scylla_version
 
                 self['scylla_repo_loader'] = find_scylla_repo(scylla_version_for_loader,
-                                                              dist_type_loader, dist_version_loader)
+                                                              dist_type_loader,
+                                                              dist_version_loader)
 
-        # 6.1) handle oracle scylla_version if exists
-        oracle_scylla_version = self.get('oracle_scylla_version')
-        if oracle_scylla_version:
+        # 6.1) handle oracle_scylla_version if exists
+        if oracle_scylla_version := self.get('oracle_scylla_version'):  # pylint: disable=too-many-nested-blocks
+            suffix = f" {oracle_scylla_version}"  # ami.name format example: ScyllaDB 4.4.0
             if not self.get('ami_id_db_oracle') and self.get('cluster_backend') == 'aws':
                 ami_list = []
                 for region in region_names:
                     if ':' in oracle_scylla_version:
-                        amis = get_branched_ami(oracle_scylla_version, region_name=region)
-                        ami_list.append(amis[0].id)
-                        continue
-
-                    amis = get_scylla_ami_versions(region)
-                    for ami in amis:
-                        if oracle_scylla_version in ami['Name']:
-                            ami_list.append(ami['ImageId'])
-                            break
+                        ami = get_branched_ami(scylla_version=oracle_scylla_version, region_name=region)[0]
                     else:
-                        raise ValueError("AMI for scylla version {} wasn't found".format(scylla_version))
-                self['ami_id_db_oracle'] = " ".join(ami_list)
+                        for ami in get_scylla_ami_versions(region_name=region):
+                            if ami.name.endswith(suffix):
+                                break
+                        else:
+                            raise ValueError(f"AMIs for {oracle_scylla_version=} not found in {region}")
+                    self.log.debug("Found AMI %s for oracle_scylla_version='%s' in %s",
+                                   ami.image_id, oracle_scylla_version, region)
+                    ami_list.append(ami)
+                self["ami_id_db_oracle"] = " ".join(ami.image_id for ami in ami_list)
             else:
-                raise ValueError("oracle_scylla_version and ami_id_db_oracle can't used together")
+                raise ValueError("'oracle_scylla_version' and 'ami_id_db_oracle' can't used together")
 
         # 7) support lookup of repos for upgrade test
         new_scylla_version = self.get('new_version')

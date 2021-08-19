@@ -38,13 +38,31 @@ from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_runner import AwsSctRunner, GceSctRunner
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
-from sdcm.utils.common import (list_instances_aws, list_instances_gce, list_resources_docker, clean_cloud_resources,
-                               all_aws_regions, get_scylla_ami_versions, get_s3_scylla_repos_mapping,
-                               list_logs_by_test_id, get_branched_ami, gce_meta_to_dict,
-                               aws_tags_to_dict, list_elastic_ips_aws, get_builder_by_test_id,
-                               clean_resources_according_post_behavior, clean_sct_runners,
-                               search_test_id_in_latest, get_testrun_dir, format_timestamp, list_clusters_gke,
-                               list_clusters_eks, get_all_gce_regions)
+from sdcm.utils.common import (
+    all_aws_regions,
+    aws_tags_to_dict,
+    clean_cloud_resources,
+    clean_resources_according_post_behavior,
+    clean_sct_runners,
+    format_timestamp,
+    gce_meta_to_dict,
+    get_all_gce_regions,
+    get_branched_ami,
+    get_branched_gce_images,
+    get_builder_by_test_id,
+    get_s3_scylla_repos_mapping,
+    get_scylla_ami_versions,
+    get_scylla_gce_images_versions,
+    get_testrun_dir,
+    list_clusters_eks,
+    list_clusters_gke,
+    list_elastic_ips_aws,
+    list_instances_aws,
+    list_instances_gce,
+    list_logs_by_test_id,
+    list_resources_docker,
+    search_test_id_in_latest,
+)
 from sdcm.utils.jepsen import JepsenResults
 from sdcm.utils.docker_utils import docker_hub_login
 from sdcm.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
@@ -381,14 +399,9 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
 def list_ami_versions(region):
     add_file_logger()
 
-    amis = get_scylla_ami_versions(region)
-
-    tbl = PrettyTable(["Name", "ImageId", "CreationDate"])
-    tbl.align = "l"
-
-    for ami in amis:
-        tbl.add_row([ami['Name'], ami['ImageId'], ami['CreationDate']])
-
+    tbl = PrettyTable(field_names=["Name", "ImageId", "CreationDate"], align="l")
+    for ami in get_scylla_ami_versions(region_name=region):
+        tbl.add_row([ami.name, ami.image_id, ami.creation_date])
     click.echo(tbl.get_string(title="Scylla AMI versions"))
 
 
@@ -405,19 +418,46 @@ def list_ami_branch(region, version):
     if ":" not in version:
         version += ":all"
 
-    amis = get_branched_ami(version, region_name=region)
-    tbl = PrettyTable(["Name", "ImageId", "CreationDate", "BuildId", "Test Status"])
-    tbl.align = "l"
-
-    for ami in amis:
+    tbl = PrettyTable(field_names=["Name", "ImageId", "CreationDate", "BuildId", "Test Status"], align="l")
+    for ami in get_branched_ami(scylla_version=version, region_name=region):
         tags = get_tags(ami)
         test_status = [(k, v) for k, v in tags.items() if k.startswith('JOB:')]
         test_status = [click.style(k, fg='green') for k, v in test_status if v == 'PASSED'] + \
                       [click.style(k, fg='red') for k, v in test_status if not v == 'PASSED']
         test_status = ", ".join(test_status) if test_status else click.style('Unknown', fg='yellow')
-        tbl.add_row([ami.name, ami.id, ami.creation_date, tags['build-id'], test_status])
-
+        tbl.add_row([ami.name, ami.image_id, ami.creation_date, tags['build-id'], test_status])
     click.echo(tbl.get_string(title="Scylla AMI branch versions"))
+
+
+@cli.command("list-gce-images-versions", help="list Scylla formal GCE images versions")
+def list_gce_images_versions():
+    add_file_logger()
+
+    tbl = PrettyTable(field_names=["Name", "ImageId", "CreationDate"], align="l")
+    for image in get_scylla_gce_images_versions():
+        tbl.add_row([image.name, image.extra["selfLink"], image.extra["creationTimestamp"]])
+    click.echo(tbl.get_string(title="Scylla GCE images versions"))
+
+
+@cli.command("list-gce-images-branch", help="""list Scylla branched GCE images versions
+    \n\n[VERSION] is a branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:all'""")
+@click.argument("version", type=str, default="branch-3.1:all")
+def list_gce_images_branch(version):
+    add_file_logger()
+
+    if ":" not in version:
+        version += ":all"
+
+    tbl = PrettyTable(field_names=["Name", "ImageId", "CreationDate", "BuildId", "Test Status"], align="l")
+    for image in get_branched_gce_images(scylla_version=version):
+        tbl.add_row([
+            image.name,
+            image.extra["selfLink"],
+            image.extra["creationTimestamp"],
+            image.extra["labels"].get("build-id") or image.name.rsplit("-build-", maxsplit=1)[-1],
+            click.style("Unknown", fg="yellow"),
+        ])
+    click.echo(tbl.get_string(title="Scylla GCE images branch versions"))
 
 
 @cli.command('list-repos', help='List repos url of Scylla formal versions')
