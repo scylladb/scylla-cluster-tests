@@ -13,7 +13,6 @@
 
 import threading
 import logging
-import re
 from typing import Iterable
 
 from sdcm.utils.file import File
@@ -26,10 +25,6 @@ from sdcm.sct_events.operator import (
 class ScyllaOperatorLogMonitoring(threading.Thread):
     lookup_time = 0.1
     log = logging.getLogger('ScyllaOperatorLogMonitoring')
-    patterns = [
-        re.compile(r'^\s*{\s*"L"\s*:\s*"ERROR"'),
-        re.compile(r'^\s*{\s*"L"\s*:\s*"INFO"'),
-    ]
 
     def __init__(self, kluster):
         self.termination_event = threading.Event()
@@ -39,7 +34,7 @@ class ScyllaOperatorLogMonitoring(threading.Thread):
 
     @timeout(timeout=300, sleep_time=10, message='Wait for file to be available')
     def _get_file_follower(self) -> Iterable[str]:
-        return File(self.kluster.scylla_operator_log, 'r').read_lines_filtered(*self.patterns)
+        return File(self.kluster.scylla_operator_log, 'r').iterate_lines()
 
     def run(self):
         file_follower = self._get_file_follower()
@@ -50,17 +45,11 @@ class ScyllaOperatorLogMonitoring(threading.Thread):
     @staticmethod
     def check_logs(file_follower: Iterable[str]):
         for log_record in file_follower:
-            event_to_log = None
             for pattern, event in SCYLLA_OPERATOR_EVENT_PATTERNS:
                 if pattern.search(log_record):
-                    event_to_log = event.clone().add_info(
-                        node="N/A", line=log_record, line_number=0)
+                    event_to_log = event.clone().add_info(node="N/A", line=log_record, line_number=0)
+                    event_to_log.publish()
                     break
-            if event_to_log is None:
-                # NOTE: here we have log line that doesn't match any pattern, so, move on
-                continue
-            if event_to_log := event_to_log.load_from_json_string(log_record):
-                event_to_log.publish()
 
     def stop(self):
         self.termination_event.set()

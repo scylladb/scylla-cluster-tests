@@ -121,5 +121,11 @@ class File:
                         break
         return ReiterableGenerator(generator=generator)
 
+    def iterate_lines(self) -> Iterable[str]:
+        def generator():
+            for line in self._io:
+                yield line
+        return ReiterableGenerator(generator=generator)
+
     def __getattr__(self, item):
         return getattr(self._io, item)

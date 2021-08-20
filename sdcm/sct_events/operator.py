@@ -10,12 +10,12 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-
+import datetime
 import re
-import json
 import logging
-from datetime import datetime
-from typing import List, Tuple, Type, Optional
+import time
+
+from typing import List, Tuple, Type
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent, LogEventProtocol, T_log_event
@@ -28,63 +28,41 @@ class ScyllaOperatorLogEvent(LogEvent):
     REAPPLY: Type[LogEventProtocol]
     TLS_HANDSHAKE_ERROR: Type[LogEventProtocol]
     OPERATOR_STARTED_INFO: Type[LogEventProtocol]
-    timestamp: str
-    namespace: str
-    cluster: str
     message: str
-    error: str
-    trace_id: str
+    source: str
 
-    event_data_mapping = {
-        'T': 'timestamp',
-        'N': 'namespace',
-        'M': 'message',
-        'cluster': 'cluster',
-        'error': 'error',
-        '_trace_id': 'trace_id'
-    }
+    def __init__(self, message: str = '', source: str = '', regex: str = None, severity=Severity.NORMAL):
+        super().__init__(regex=regex, severity=severity)
+        self.message = message
+        self.source = source
+        self.line_number = None
 
-    # pylint: disable=too-many-arguments
-    def __init__(self, timestamp=None, namespace=None, cluster=None, message=None, error=None, trace_id=None,
-                 regex=None, severity=Severity.ERROR):
-        super().__init__(regex, severity=severity)
-        self.set_params(timestamp=timestamp, namespace=namespace, cluster=cluster, message=message, error=error,
-                        trace_id=trace_id)
+    # pylint: disable=too-many-locals
+    def add_info(self: T_log_event, node, line: str, line_number: int) -> T_log_event:
+        # I0628 15:53:02.269804       1 operator/operator.go:133] <message>
+        # I - Log level = INFO
+        # 06 - Month
+        # 28 - Day
+        splits = line.split(maxsplit=4)
+        if len(splits) != 5 or len(splits[0]) != 5:
+            return self
+        type_month_date, time_string, _, self.source, self.message = splits
+        try:
+            hour_minute_second, milliseconds = time_string.split('.')
+            hour, minute, second = hour_minute_second.split(':')
+            year = datetime.datetime.now().year
+            month = int(type_month_date[1:3])
+            day = int(type_month_date[3:5])
+            self.timestamp = datetime.datetime(
+                year=year, month=month, day=day, hour=int(hour), minute=int(minute), second=int(second),
+                microsecond=int(milliseconds), tzinfo=datetime.timezone.utc).timestamp()
+        except Exception:  # pylint: disable=broad-except
+            self.timestamp = time.time()
+        return self
 
     @property
     def msgfmt(self):
-        cluster = f"/{self.cluster}" if self.cluster else ""
-        return super().msgfmt + " {0.trace_id} {0.namespace}" + cluster + ": {0.message}, {0.error}"
-
-    # pylint: disable=too-many-arguments
-    def set_params(self, timestamp=None, namespace=None, cluster=None, message=None, error=None, trace_id=None):
-        self.namespace = namespace
-        self.cluster = cluster
-        self.message = message
-        self.timestamp = timestamp
-        self.error = error
-        self.trace_id = trace_id
-
-    def load_from_json_string(self: T_log_event, data: str) -> Optional[T_log_event]:
-        try:
-            log_data = json.loads(data)
-        except Exception as exc:  # pylint: disable=broad-except
-            LOGGER.error('Failed to interpret following log line:\n%s\n, due to the: %s', data, exc)
-            return None
-        event_data = {}
-        for log_en_name, attr_name in self.event_data_mapping.items():
-            log_en_data = log_data.get(log_en_name, None)
-            if log_en_data is None:
-                continue
-            if attr_name == 'timestamp':
-                log_en_data = datetime.strptime(log_en_data, "%Y-%m-%dT%H:%M:%S.%fZ").timestamp()
-            event_data[attr_name] = log_en_data
-        try:
-            self.set_params(**event_data)
-        except Exception as exc:  # pylint: disable=broad-except
-            LOGGER.error('Failed to set event parameters %s\n, due to the: %s', data, exc)
-            return None
-        return self
+        return super().msgfmt + ": {0.source} {0.message}"
 
 
 ScyllaOperatorLogEvent.add_subevent_type(
@@ -92,10 +70,10 @@ ScyllaOperatorLogEvent.add_subevent_type(
     regex="please apply your changes to the latest version and try again")
 ScyllaOperatorLogEvent.add_subevent_type(
     "TLS_HANDSHAKE_ERROR", severity=Severity.WARNING,
-    regex="TLS handshake error from .*: EOF")
+    regex="TLS handshake error from .*")
 ScyllaOperatorLogEvent.add_subevent_type(
     "OPERATOR_STARTED_INFO", severity=Severity.NORMAL,
-    regex="Starting the operator...")
+    regex='"Starting controller" controller="ScyllaCluster"')
 
 
 SCYLLA_OPERATOR_EVENTS = [
