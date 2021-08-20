@@ -21,20 +21,20 @@ from sdcm.sct_events.operator import ScyllaOperatorLogEvent
 
 class TestOperatorEvents(unittest.TestCase):
     def test_scylla_operator_log_event(self):
-        event = ScyllaOperatorLogEvent(
-            namespace="scylla", cluster="c1", message="m1", error="e1", trace_id="tid1")
+        event = ScyllaOperatorLogEvent(message="tid1 scylla/c1: m1, e1")
         event.event_id = "9bb2980a-5940-49a7-8b08-d5c323b46aa9"
         self.assertEqual(
-            str(event),
-            "(ScyllaOperatorLogEvent Severity.ERROR) period_type=one-time "
-            "event_id=9bb2980a-5940-49a7-8b08-d5c323b46aa9: line_number=0 tid1 scylla/c1: m1, e1",
+            '(ScyllaOperatorLogEvent Severity.NORMAL) period_type=one-time '
+            'event_id=9bb2980a-5940-49a7-8b08-d5c323b46aa9::  tid1 scylla/c1: m1, e1',
+            str(event)
         )
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
         self.assertTrue(hasattr(event, "TLS_HANDSHAKE_ERROR"))
         self.assertTrue(hasattr(event, "OPERATOR_STARTED_INFO"))
 
     def test_scylla_operator_log_event_tls_handshake_error(self):
-        log_record = "2020/12/22 10:32:23 http: TLS handshake error from 172.17.0.1:50882: EOF"
+        log_record = "I0628 15:53:02.269804       1 operator/operator.go:133] http: " \
+                     "TLS handshake error from 172.17.0.1:50882: EOF"
         event = ScyllaOperatorLogEvent.TLS_HANDSHAKE_ERROR()
         pattern = re.compile(event.regex, re.IGNORECASE)
 
@@ -44,18 +44,18 @@ class TestOperatorEvents(unittest.TestCase):
 
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
         event.event_id = "9bb2980a-5940-49a7-8b08-d5c323b46aa9"
+        assert event.timestamp == 1624895582.269804
         self.assertEqual(
-            "(ScyllaOperatorLogEvent Severity.WARNING) period_type=one-time "
-            "event_id=9bb2980a-5940-49a7-8b08-d5c323b46aa9: "
-            "type=TLS_HANDSHAKE_ERROR regex=TLS handshake error from .*: EOF "
-            f"line_number=0 node=N/A\n{log_record} None None: None, None",
+            '(ScyllaOperatorLogEvent Severity.WARNING) period_type=one-time '
+            'event_id=9bb2980a-5940-49a7-8b08-d5c323b46aa9: '
+            'type=TLS_HANDSHAKE_ERROR regex=TLS handshake error from .*:'
+            ' operator/operator.go:133] http: TLS handshake error from 172.17.0.1:50882: EOF',
             str(event),
         )
 
     def test_scylla_operator_log_event_operator_started_info(self):
         log_record = (
-            """{"L":"INFO","T":"2021-04-16T11:55:44.857Z","""
-            """"M":"Starting the operator...","_trace_id":"37Dr3r67TNudJCiA3UL9ww"}"""
+            "I0628 16:07:43.572294       1 scyllacluster/controller.go:203] \"Starting controller\" controller=\"ScyllaCluster\""
         )
         event = ScyllaOperatorLogEvent.OPERATOR_STARTED_INFO()
         pattern = re.compile(event.regex, re.IGNORECASE)
@@ -66,10 +66,11 @@ class TestOperatorEvents(unittest.TestCase):
 
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
         event.event_id = "9bb2980a-5940-49a7-8b08-d5c323b46aa9"
+        assert event.timestamp == 1624896463.572294
         self.assertEqual(
-            "(ScyllaOperatorLogEvent Severity.NORMAL) period_type=one-time "
-            "event_id=9bb2980a-5940-49a7-8b08-d5c323b46aa9: "
-            "type=OPERATOR_STARTED_INFO regex=Starting the operator... "
-            f"line_number=0 node=N/A\n{log_record} None None: None, None",
+            '(ScyllaOperatorLogEvent Severity.NORMAL) period_type=one-time '
+            'event_id=9bb2980a-5940-49a7-8b08-d5c323b46aa9: type=OPERATOR_STARTED_INFO '
+            'regex="Starting controller" controller="ScyllaCluster": scyllacluster/controller.go:203] '
+            '"Starting controller" controller="ScyllaCluster"',
             str(event),
         )
