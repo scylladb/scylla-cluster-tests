@@ -45,7 +45,10 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
             'load_ssh_config': False,
             'UserKnownHostsFile': self.known_hosts_file,
             'ServerAliveInterval': 300,
-            'StrictHostKeyChecking': 'no'})
+            'StrictHostKeyChecking': 'no',
+            # NOTE: 'gateway' define explicitely to avoid errors reaching the 'gateway' config attr
+            'gateway': None,
+        })
         self.start_ssh_up_thread()
         super()._prepare()
 
