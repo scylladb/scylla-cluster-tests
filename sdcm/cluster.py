@@ -1759,6 +1759,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
             if append_scylla_yaml:
                 scylla_yml.update(yaml.safe_load(append_scylla_yaml))
+            self.log.info('SCYLLA_YAML: ' + str(scylla_yml))
 
         if append_scylla_yaml:
             if any(substr in append_scylla_yaml for substr in ("system_key_directory",
