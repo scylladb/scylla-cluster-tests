@@ -1663,7 +1663,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                      server_encrypt=None,
                      client_encrypt=None,
                      append_scylla_yaml=None,
-                     append_scylla_args=None,
+                     append_scylla_args='',
                      debug_install=False,
                      hinted_handoff="enabled",
                      murmur3_partitioner_ignore_msb_bits=None,
@@ -1798,6 +1798,31 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 """))
                 self.remoter.sudo("md5sum /etc/encrypt_conf/*.pem", ignore_status=True)
 
+        self.process_scylla_args(append_scylla_args)
+
+        if debug_install:
+            if self.distro.is_rhel_like:
+                self.remoter.sudo("yum install -y scylla-gdb", verbose=True, ignore_status=True)
+            elif self.distro.is_sles:
+                self.remoter.sudo("zypper install -y scylla-gdb", verbose=True, ignore_status=True)
+
+        if self.init_system == "systemd":
+            self.fix_scylla_server_systemd_config()
+
+    def fix_scylla_server_systemd_config(self):
+        systemd_version = get_systemd_version(self.remoter.run("systemctl --version", ignore_status=True).stdout)
+        if systemd_version >= 240:
+            self.log.debug("systemd version %d >= 240: we can change FinalKillSignal", systemd_version)
+            self.remoter.sudo(shell_script_cmd("""\
+                mkdir -p /etc/systemd/system/scylla-server.service.d
+                cat <<EOF > /etc/systemd/system/scylla-server.service.d/override.conf
+                [Service]
+                FinalKillSignal=SIGABRT
+                EOF
+                systemctl daemon-reload
+            """))
+
+    def process_scylla_args(self, append_scylla_args=''):
         if append_scylla_args:
             scylla_help = self.remoter.run(
                 f"{self.add_install_prefix('/usr/bin/scylla')} --help", ignore_status=True).stdout
@@ -1821,25 +1846,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.sudo(
                 f"sed -i '/{append_scylla_args}/! s/SCYLLA_ARGS=\"/&{append_scylla_args} /' "
                 f"{self.scylla_server_sysconfig_path}")
-
-        if debug_install:
-            if self.distro.is_rhel_like:
-                self.remoter.sudo("yum install -y scylla-gdb", verbose=True, ignore_status=True)
-            elif self.distro.is_sles:
-                self.remoter.sudo("zypper install -y scylla-gdb", verbose=True, ignore_status=True)
-
-        if self.init_system == "systemd":
-            systemd_version = get_systemd_version(self.remoter.run("systemctl --version", ignore_status=True).stdout)
-            if systemd_version >= 240:
-                self.log.debug("systemd version %d >= 240: we can change FinalKillSignal", systemd_version)
-                self.remoter.sudo(shell_script_cmd("""\
-                    mkdir -p /etc/systemd/system/scylla-server.service.d
-                    cat <<EOF > /etc/systemd/system/scylla-server.service.d/override.conf
-                    [Service]
-                    FinalKillSignal=SIGABRT
-                    EOF
-                    systemctl daemon-reload
-                """))
 
     def config_client_encrypt(self):
         self.remoter.send_files(src='./data_dir/ssl_conf', dst='/tmp/')  # pylint: disable=not-callable
