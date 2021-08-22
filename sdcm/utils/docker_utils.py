@@ -18,6 +18,7 @@ import warnings
 from pprint import pformat
 from types import SimpleNamespace
 from typing import List, Optional, Union, Any, Tuple
+from functools import cache
 
 import docker
 from docker.errors import DockerException, NotFound, ImageNotFound, NullResource, BuildError
@@ -25,7 +26,9 @@ from docker.models.images import Image
 from docker.models.containers import Container
 
 from sdcm.remote import LOCALRUNNER
-from sdcm.keystore import pub_key_from_private_key_file
+from sdcm.remote.base import CommandRunner
+from sdcm.remote.remote_file import remote_file
+from sdcm.keystore import pub_key_from_private_key_file, KeyStore
 from sdcm.utils.decorators import retrying, Retry
 
 DOCKER_API_CALL_TIMEOUT = 180  # seconds
@@ -423,3 +426,26 @@ def get_docker_bridge_gateway(remoter):
     if not match:
         return None
     return match.group()
+
+
+@cache
+def get_docker_hub_credentials() -> dict:
+    LOGGER.info("Get Docker Hub credentials")
+    return KeyStore().get_docker_hub_credentials()
+
+
+def docker_hub_login(remoter: CommandRunner) -> None:
+    docker_info = remoter.run("docker info", ignore_status=True)
+    if docker_info.failed:
+        remoter.log.info("Can't get docker info, probably there is no running Docker daemon on the host")
+        return
+    if match := re.search(r"^\s+Username: (.+)$", docker_info.stdout, re.MULTILINE):
+        remoter.log.info("Docker daemon is already logged in as `%s'.", match.group(1))
+        return
+    docker_hub_creds = get_docker_hub_credentials()
+    password_file = remoter.run("mktemp").stdout.strip()
+    with remote_file(remoter=remoter, remote_path=password_file) as fobj:
+        fobj.write(docker_hub_creds["password"])
+    remoter.log.info("Login to Docker Hub as `%s'", docker_hub_creds["username"])
+    remoter.run(cmd=f"docker login --username {docker_hub_creds['username']} --password-stdin < '{password_file}'")
+    remoter.run(f"rm '{password_file}'")

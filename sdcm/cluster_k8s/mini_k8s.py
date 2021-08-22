@@ -29,7 +29,7 @@ from sdcm.cluster_gce import MonitorSetGCE
 from sdcm.utils.k8s import TokenUpdateThread, HelmValues
 from sdcm.utils.common import get_free_port, wait_for_port
 from sdcm.utils.decorators import retrying
-from sdcm.utils.docker_utils import ContainerManager
+from sdcm.utils.docker_utils import ContainerManager, docker_hub_login
 from sdcm.wait import wait_for
 
 KUBECTL_PROXY_PORT = 8001
@@ -81,6 +81,7 @@ class MinimalK8SOps:
             cls.setup_docker_ubuntu(node, target_user=target_user)
         else:
             raise ValueError(f"{node.distro} is not supported")
+        docker_hub_login(remoter=node.remoter)
 
     @staticmethod
     def setup_docker_ubuntu(node: cluster.BaseNode, target_user: str = None) -> None:
@@ -89,7 +90,7 @@ class MinimalK8SOps:
             curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
             add-apt-repository \\"deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\\"
             apt-get -qq install --no-install-recommends docker-ce docker-ce-cli containerd.io
-            {f'usermod -a -G docker{target_user}' if target_user else ''}
+            {f'usermod -a -G docker {target_user}' if target_user else ''}
             """)
         node.remoter.sudo(f'bash -cxe "{script}"')
 

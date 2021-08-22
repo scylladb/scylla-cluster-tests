@@ -73,7 +73,7 @@ from sdcm.utils.common import (
     change_default_password,
 )
 from sdcm.utils.distro import Distro
-from sdcm.utils.docker_utils import ContainerManager, NotFound
+from sdcm.utils.docker_utils import ContainerManager, NotFound, docker_hub_login
 from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_gossip_and_nodetool_status, \
     check_schema_version, check_nulls_in_peers, check_schema_agreement_in_gossip_and_peers, \
     CHECK_NODE_HEALTH_RETRIES, CHECK_NODE_HEALTH_RETRY_DELAY
@@ -4600,6 +4600,9 @@ class BaseLoaderSet():
 
         node.remoter.run('sudo usermod -aG docker $USER', change_context=True)
 
+        # Login to Docker Hub.
+        docker_hub_login(remoter=node.remoter)
+
     @wait_for_init_wrap
     def wait_for_init(self, verbose=False, db_node_address=None):
         pass
@@ -4970,6 +4973,8 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             node.reboot(hard=False)
         else:
             node.remoter.run(cmd='sudo systemctl restart docker', timeout=60)
+
+        docker_hub_login(remoter=node.remoter)
 
     def download_scylla_monitoring(self, node):
         install_script = dedent("""

@@ -77,6 +77,8 @@ def remote_file(remoter, remote_path, serializer=StringIO.getvalue, deserializer
     if preserve_permissions:
         remoter.sudo(f"chmod {permissions} {remote_path}")
 
+    os.unlink(local_tempfile)
+
 
 def yaml_file_to_dict(fobj):
     return yaml.safe_load(fobj) or {}
