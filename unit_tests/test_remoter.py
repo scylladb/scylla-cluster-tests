@@ -406,7 +406,7 @@ class TestRemoteFile(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         class _Runner:
-            sf_src = sf_dst = rf_src = rf_dst = None
+            sf_data = sf_src = sf_dst = rf_src = rf_dst = None
             hostname = "localhost"
             command_to_run = ""
 
@@ -421,6 +421,8 @@ class TestRemoteFile(unittest.TestCase):
                 return Result(stdout="", stderr="")
 
             def send_files(self, src: str, dst: str, *_, **__) -> bool:
+                with open(src) as fobj:
+                    self.sf_data = fobj.read()
                 self.sf_src = src
                 self.sf_dst = dst
                 return True
@@ -448,8 +450,8 @@ class TestRemoteFile(unittest.TestCase):
         self.assertTrue(remoter.rf_dst.startswith("/tmp/sct"))
         self.assertTrue(remoter.rf_dst.endswith(os.path.basename(some_file)))
         self.assertEqual(remoter.rf_dst, remoter.sf_src)
-        with open(remoter.sf_src) as fobj:
-            self.assertEqual(fobj.read(), "test data")
+        self.assertEqual(remoter.sf_data, "test data")
+        self.assertFalse(os.path.exists(remoter.sf_src))
         self.assertEqual(remoter.command_to_run, f"mv 'temporary' '{some_file}'")
 
     def test_remote_file_preserve_ownership(self):

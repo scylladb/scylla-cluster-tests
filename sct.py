@@ -12,7 +12,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-# pylint: disable=too-many-lines
 
 # pylint: disable=too-many-lines
 
@@ -34,6 +33,7 @@ import click
 import click_completion
 from prettytable import PrettyTable
 
+from sdcm.remote import LOCALRUNNER
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_runner import AwsSctRunner, GceSctRunner
@@ -46,6 +46,7 @@ from sdcm.utils.common import (list_instances_aws, list_instances_gce, list_reso
                                search_test_id_in_latest, get_testrun_dir, format_timestamp, list_clusters_gke,
                                list_clusters_eks, get_all_gce_regions)
 from sdcm.utils.jepsen import JepsenResults
+from sdcm.utils.docker_utils import docker_hub_login
 from sdcm.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
                                kill_running_monitoring_stack_services)
 from sdcm.cluster import TestConfig
@@ -95,13 +96,20 @@ def add_file_logger(level: int = logging.DEBUG) -> None:
 
 
 @click.group()
-@click.option('--install-bash-completion', is_flag=True, callback=install_callback, expose_value=False,
+@click.option("--install-bash-completion",
+              is_flag=True,
+              callback=install_callback,
+              expose_value=False,
               help="Install completion for the current shell. Make sure to have psutil installed.")
-@click.option('--install-package-from-directory', callback=install_package_from_dir, multiple=True, envvar='PACKAGES_PATHS',
-              type=click.Path(), expose_value=False,
+@click.option("--install-package-from-directory",
+              callback=install_package_from_dir,
+              multiple=True,
+              envvar="PACKAGES_PATHS",
+              type=click.Path(),
+              expose_value=False,
               help="Install paths for extra python pacakges to install, scylla-cluster-plugins for example")
 def cli():
-    pass
+    docker_hub_login(remoter=LOCALRUNNER)
 
 
 # '''
