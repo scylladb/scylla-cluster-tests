@@ -158,3 +158,5 @@ k8s_deploy_monitoring: false
 
 scylla_rsyslog_setup: false
 events_limit_in_email: 10
+
+scylla_bench_version: v0.1.3
