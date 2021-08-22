@@ -32,7 +32,6 @@ gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/gl
 scylla_linux_distro: 'ubuntu-bionic'
 
 scylla_linux_distro_loader: 'centos'
-manager_branch: 'master_latest'
 
 space_node_threshold: 644245094
 

@@ -7,7 +7,6 @@ artifactsPipeline(
     test_config: 'test-cases/artifacts/ubuntu1804.yaml',
     backend: 'gce',
     provision_type: 'spot',
-    manager_branch: 'master_latest',
 
     timeout: [time: 30, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy'

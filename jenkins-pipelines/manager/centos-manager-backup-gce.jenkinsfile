@@ -8,7 +8,6 @@ managerPipeline(
     test_name: 'mgmt_cli_test.MgmtCliTest.test_backup_feature',
     test_config: 'test-cases/manager/manager-regression-gce.yaml',
 
-    manager_branch: 'master_latest',
     scylla_version: '4.4',
 
     timeout: [time: 500, unit: 'MINUTES'],

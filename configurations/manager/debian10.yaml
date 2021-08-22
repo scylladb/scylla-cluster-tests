@@ -1,4 +1,2 @@
 ami_id_monitor: 'ami-07d02ee1eeb0c996c'  # Debian buster image - debian-10-amd64-20210208-542
 ami_monitor_user: 'admin'
-
-manager_scylla_backend_branch: '2021'

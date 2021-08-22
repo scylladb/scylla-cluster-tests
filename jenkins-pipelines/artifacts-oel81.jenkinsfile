@@ -8,7 +8,6 @@ artifactsPipeline(
     backend: 'aws',
     region_name: 'eu-west-1',
     provision_type: 'spot_low_price',
-    manager_branch: 'master_latest',
 
     timeout: [time: 60, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy'

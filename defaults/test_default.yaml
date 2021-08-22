@@ -5,12 +5,9 @@ test_duration: 60
 ip_ssh_connections: 'private'
 
 scylla_repo: ''
-scylla_repo_m: ''
-scylla_mgmt_repo: ''
-scylla_mgmt_agent_repo: ''
 
 manager_branch: 'master_latest'
-manager_scylla_backend_branch: '2020'  # Notice: that default (centos) monitors use 2020.1, while other (newer deb) use 2021, since we support both
+manager_scylla_backend_branch: '2021'  # Notice: that centos, ubuntu 20 and debian 10 monitors use 2021, while debian 9, ubuntu 16 and ubuntu 18 use 2020, since we support both
 
 scylla_repo_loader: ''
 

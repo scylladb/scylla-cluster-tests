@@ -1,4 +1,2 @@
 ami_id_monitor: 'ami-042e8287309f5df03'  # Canonical, Ubuntu, 20.04 LTS, amd64 focal image build on 2021-02-23
 ami_monitor_user: 'ubuntu'
-
-manager_scylla_backend_branch: '2021'
