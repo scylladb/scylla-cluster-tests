@@ -304,6 +304,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self._move_kubectl_config()
         self.localhost = self._init_localhost()
+        self.test_config.set_rsyslog_imjournal_rate_limit(
+            interval=self.params.get("rsyslog_imjournal_rate_limit_interval"),
+            burst=self.params.get("rsyslog_imjournal_rate_limit_burst"),
+        )
         if self.params.get("logs_transport") == 'rsyslog':
             self.test_config.configure_rsyslog(self.localhost, enable_ngrok=False)
 
