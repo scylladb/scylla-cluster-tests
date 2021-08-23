@@ -55,7 +55,11 @@ from sdcm.utils.get_username import get_username
 from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
 
+
+SCT_RUNNER_HOST = os.environ.get("RUNNER_IP", "localhost")
+
 LOGGER = setup_stdout_logger()
+
 
 click_completion.init()
 
@@ -607,20 +611,17 @@ def show_monitor(test_id, date_time, kill):
     add_file_logger()
 
     click.echo('Search monitoring stack archive files for test id {} and restoring...'.format(test_id))
-    # if debug_log:
-    #     LOGGER.setLevel(logging.DEBUG)
     try:
         status = restore_monitoring_stack(test_id, date_time)
     except Exception as details:  # pylint: disable=broad-except
-        LOGGER.error("%s", details)
+        LOGGER.error(details)
         status = False
 
-    table = PrettyTable(['Service', 'Container', 'Link'])
-    table.align = 'l'
+    table = PrettyTable(['Service', 'Container', 'Link'], align="l")
     if status:
         click.echo('Monitoring stack restored')
         for docker in get_monitoring_stack_services():
-            table.add_row([docker['service'], docker["name"], 'http://localhost:{}'.format(docker["port"])])
+            table.add_row([docker["service"], docker["name"], f"http://{SCT_RUNNER_HOST}:{docker['port']}"])
         click.echo(table.get_string(title='Monitoring stack services'))
         if kill:
             kill_running_monitoring_stack_services()
@@ -639,12 +640,14 @@ def show_jepsen_results(test_id):
     click.secho(message=f"\nSearch Jepsen results archive files for test id {test_id} and restoring...\n", fg="green")
     jepsen = JepsenResults()
     if jepsen.restore_jepsen_data(test_id):
-        click.secho(
-            message=f"\nJepsen data restored, starting web server on http://localhost:{jepsen.jepsen_results_port}/\n"
-                    f"Press Ctrl-C to stop the server.\n",
-            fg="green",
-        )
-        jepsen.run_jepsen_web_server()
+        click.secho(message=f"\nJepsen data restored, starting web server on "
+                            f"http://{SCT_RUNNER_HOST}:{jepsen.jepsen_results_port}/",
+                    fg="green")
+        detach = SCT_RUNNER_HOST != "localhost"
+        if not detach:
+            click.secho(message="Press Ctrl-C to stop the server.", fg="green")
+        click.echo("")
+        jepsen.run_jepsen_web_server(detach=detach)
 
 
 @investigate.command('search-builder', help='Search builder where test run with test-id located')

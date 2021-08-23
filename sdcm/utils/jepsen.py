@@ -16,7 +16,7 @@ import logging
 from typing import Optional
 from functools import cached_property
 
-from sdcm.utils.common import list_logs_by_test_id
+from sdcm.utils.common import list_logs_by_test_id, get_free_port
 from sdcm.utils.docker_utils import ContainerManager, Container, DockerException
 
 
@@ -33,19 +33,20 @@ class JepsenResults:
     tags = {}
 
     def jepsen_container_run_args(self) -> dict:
+        exposed_port = get_free_port(ports_to_try=(JEPSEN_RESULTS_PORT, 0, ))
         return dict(image=JEPSEN_IMAGE,
                     entrypoint="/bin/cat",
                     tty=True,
                     name=f"{self.name}-jepsen",
-                    ports={f"{JEPSEN_RESULTS_PORT}/tcp": None, })
+                    ports={f"{JEPSEN_RESULTS_PORT}/tcp": {"HostIp": "0.0.0.0", "HostPort": exposed_port, }, })
 
     @cached_property
     def _jepsen_container(self) -> Container:
         return ContainerManager.run_container(self, "jepsen")
 
-    def runcmd(self, command: str) -> str:
+    def runcmd(self, command: str, detach: bool = False) -> None:
         LOGGER.info("Execute `%s' inside Jepsen container", command)
-        res = self._jepsen_container.exec_run(["sh", "-c", command], stream=True)
+        res = self._jepsen_container.exec_run(["sh", "-c", command], stream=True, detach=detach)
         for line in res.output:
             LOGGER.info(line.decode("utf-8").rstrip())
         if res.exit_code:
@@ -72,8 +73,10 @@ class JepsenResults:
             return True
         return False
 
-    def run_jepsen_web_server(self):
-        self.runcmd("cd jepsen-scylla && lein run serve")
+    def run_jepsen_web_server(self, detach: bool = False) -> None:
+        if detach:
+            ContainerManager.set_container_keep_alive(self, "jepsen")
+        self.runcmd(command="cd jepsen-scylla && lein run serve", detach=detach)
 
     def __del__(self):
         ContainerManager.destroy_all_containers(self)
