@@ -41,7 +41,7 @@ from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Any
 from urllib.parse import urlparse
 from unittest.mock import Mock
 from textwrap import dedent
-
+from contextlib import closing
 from functools import wraps, cached_property, lru_cache
 from collections import defaultdict, namedtuple
 import concurrent.futures
@@ -1378,13 +1378,15 @@ class version():  # pylint: disable=invalid-name,too-few-public-methods
         return inner
 
 
-def get_free_port(address: str = ''):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind((address, 0))
-    addr = sock.getsockname()
-    port = addr[1]
-    sock.close()
-    return port
+def get_free_port(address: str = '', ports_to_try: Iterable[int] = (0, )) -> int:
+    for port in ports_to_try:
+        try:
+            with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+                sock.bind((address, port))
+                return sock.getsockname()[1]
+        except OSError:
+            pass
+    raise RuntimeError("Can't allocate a free port")
 
 
 def get_my_ip():

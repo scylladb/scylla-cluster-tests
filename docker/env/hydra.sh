@@ -13,7 +13,10 @@ RUN_BY_USER=$(python3 "${SCT_DIR}/sdcm/utils/get_username.py")
 USER_ID=$(id -u "${USER}")
 HOME_DIR=${HOME}
 
+CREATE_RUNNER_INSTANCE=""
+RUNNER_IP_FILE="${SCT_DIR}/sct_runner_ip"
 RUNNER_IP=""
+
 HYDRA_DRY_RUN=""
 
 export SCT_TEST_ID=${SCT_TEST_ID:-$(uuidgen)}
@@ -25,6 +28,10 @@ SCT_ARGUMENTS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --execute-on-new-runner)
+            CREATE_RUNNER_INSTANCE="1"
+            shift
+            ;;
         --execute-on-runner)
             RUNNER_IP="$2"
             shift
@@ -75,6 +82,41 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ -n "${CREATE_RUNNER_INSTANCE}" ]]; then
+    if [[ -n "${RUNNER_IP}" ]]; then
+        echo "Can't use '--execute-on-new-runner' and '--execute-on-runner IP' options simultaneously"
+        exit 1
+    fi
+    if [[ -f "${RUNNER_IP_FILE}" ]]; then
+        RUNNER_IP=$(<"${RUNNER_IP_FILE}")
+        echo "Looks like there is another SCT runner launched already (Public IP: ${RUNNER_IP})"
+        echo "Please, delete '${RUNNER_IP_FILE}' file first and try again."
+        echo "Or use 'hydra --execute-on-runner ${RUNNER_IP} ...' to run command on existing runner"
+        exit 1
+    fi
+    echo ">>> Create a new SCT runner instance"
+    echo
+    if [[ -z "${HYDRA_DRY_RUN}" ]]; then
+        HYDRA=$0
+    else
+        HYDRA="echo $0"
+    fi
+    ${HYDRA} create-runner-instance \
+      --cloud-provider aws \
+      --region "${RUNNER_REGION:-us-east-1}" \
+      --availability-zone "${RUNNER_AZ:-a}" \
+      --test-id "${SCT_TEST_ID}" \
+      --duration "${RUNNER_DURATION:-1440}"
+    if [[ -z "${HYDRA_DRY_RUN}" ]]; then
+        RUNNER_IP=$(<"${RUNNER_IP_FILE}")
+    else
+        RUNNER_IP="127.0.0.1"  # set it for testing purpose.
+    fi
+    echo
+    echo ">>> Run hydra command on the new SCT runner w/ public IP: ${RUNNER_IP}"
+    echo
+fi
 
 # if running on Build server
 if [[ ${USER} == "jenkins" ]]; then
@@ -157,6 +199,7 @@ function run_in_docker () {
             -e BUILD_NUMBER="${BUILD_NUMBER}" \
             -e _SCT_BASE_DIR="${SCT_DIR}" \
             -e GIT_USER_EMAIL \
+            -e RUNNER_IP \
             -u ${USER_ID} \
             ${DOCKER_GROUP_ARGS[@]} \
             ${SCT_OPTIONS} \
@@ -189,6 +232,7 @@ function run_in_docker () {
             -e BUILD_NUMBER="${BUILD_NUMBER}" \
             -e _SCT_BASE_DIR="${SCT_DIR}" \
             -e GIT_USER_EMAIL \
+            -e RUNNER_IP \
             -u ${USER_ID} \
             ${DOCKER_GROUP_ARGS[@]} \
             ${SCT_OPTIONS} \
@@ -203,6 +247,8 @@ function run_in_docker () {
 }
 
 if [[ -n "$RUNNER_IP" ]]; then
+    export RUNNER_IP  # make it available inside SCT code.
+
     if [[ ! "$RUNNER_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         echo "=========================================================================================================="
         echo "Invalid IP provided for '--execute-on-runner'. Run 'hydra create-runner-instance' or check ./sct_runner_ip"
