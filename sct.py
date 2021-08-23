@@ -607,20 +607,18 @@ def show_monitor(test_id, date_time, kill):
     add_file_logger()
 
     click.echo('Search monitoring stack archive files for test id {} and restoring...'.format(test_id))
-    # if debug_log:
-    #     LOGGER.setLevel(logging.DEBUG)
     try:
         status = restore_monitoring_stack(test_id, date_time)
     except Exception as details:  # pylint: disable=broad-except
-        LOGGER.error("%s", details)
+        LOGGER.error(details)
         status = False
 
-    table = PrettyTable(['Service', 'Container', 'Link'])
-    table.align = 'l'
+    table = PrettyTable(['Service', 'Container', 'Link'], align="l")
     if status:
+        host = os.environ.get("SCT_RUNNER_IP", "localhost")
         click.echo('Monitoring stack restored')
         for docker in get_monitoring_stack_services():
-            table.add_row([docker['service'], docker["name"], 'http://localhost:{}'.format(docker["port"])])
+            table.add_row([docker["service"], docker["name"], f"http://{host}:{docker['port']}"])
         click.echo(table.get_string(title='Monitoring stack services'))
         if kill:
             kill_running_monitoring_stack_services()

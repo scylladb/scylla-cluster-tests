@@ -14,6 +14,8 @@ USER_ID=$(id -u "${USER}")
 HOME_DIR=${HOME}
 
 SCT_RUNNER_IP=""
+SCT_RUNNER_IP_FILE="${SCT_DIR}/sct_runner_ip"
+CREATE_RUNNER_INSTANCE=""
 HYDRA_DRY_RUN=""
 
 export SCT_TEST_ID=${SCT_TEST_ID:-$(uuidgen)}
@@ -25,8 +27,12 @@ SCT_ARGUMENTS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --execute-on-new-runner)
+            CREATE_RUNNER_INSTANCE="1"
+            shift
+            ;;
         --execute-on-runner)
-            SCT_RUNNER_IP="$2"
+            export SCT_RUNNER_IP="$2"
             shift
             shift
             ;;
@@ -75,6 +81,41 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ -n "${CREATE_RUNNER_INSTANCE}" ]]; then
+    if [[ -n "${SCT_RUNNER_IP}" ]]; then
+        echo "Can't use '--execute-on-new-runner' and '--execute-on-runner IP' options simultaneously"
+        exit 1
+    fi
+    if [[ -f "${SCT_RUNNER_IP_FILE}" ]]; then
+        SCT_RUNNER_IP=$(<"${SCT_RUNNER_IP_FILE}")
+        echo "Looks like there is another SCT runner launched already (Public IP: ${SCT_RUNNER_IP})"
+        echo "Please, delete '${SCT_RUNNER_IP_FILE}' file first and try again."
+        echo "Or use 'hydra --execute-on-runner ${SCT_RUNNER_IP} ...' to run command on existing runner"
+        exit 1
+    fi
+    echo ">>> Create a new SCT runner instance"
+    echo
+    if [[ -z "${HYDRA_DRY_RUN}" ]]; then
+        HYDRA=$0
+    else
+        HYDRA="echo $0"
+    fi
+    ${HYDRA} create-runner-instance \
+      --cloud-provider aws \
+      --region ${RUNNER_REGION:-us-east-1} \
+      --availability-zone ${RUNNER_AZ:-a} \
+      --test-id $SCT_TEST_ID \
+      --duration ${RUNNER_DURATION:-1440}
+    if [[ -z "${HYDRA_DRY_RUN}" ]]; then
+        export SCT_RUNNER_IP=$(<"${SCT_RUNNER_IP_FILE}")
+    else
+        SCT_RUNNER_IP="127.0.0.1"  # set it for testing purpose.
+    fi
+    echo
+    echo ">>> Run hydra command on the new SCT runner w/ public IP: ${SCT_RUNNER_IP}"
+    echo
+fi
 
 # if running on Build server
 if [[ ${USER} == "jenkins" ]]; then
