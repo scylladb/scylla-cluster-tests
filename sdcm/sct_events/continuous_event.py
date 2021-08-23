@@ -196,8 +196,7 @@ class ContinuousEvent(SctEvent, abstract=True):
 
     # TODO: rename function to "begin" after the refactor will be done
     def begin_event(self) -> ContinuousEvent:
-        self.timestamp = time.time()
-        self.begin_timestamp = self.timestamp
+        self.begin_timestamp = self.event_timestamp = time.time()
         self.period_type = EventPeriod.BEGIN.value
         self.severity = Severity.NORMAL
         if self.publish_event:
@@ -207,8 +206,7 @@ class ContinuousEvent(SctEvent, abstract=True):
 
     # TODO: rename function to "end" after the refactor will be done
     def end_event(self) -> None:
-        self.timestamp = time.time()
-        self.end_timestamp = self.timestamp
+        self.end_timestamp = self.event_timestamp = time.time()
         self.period_type = EventPeriod.END.value
         if self.publish_event:
             self._ready_to_publish = True
@@ -222,7 +220,7 @@ class ContinuousEvent(SctEvent, abstract=True):
 
     # TODO: rename function to "error" after the refactor will be done
     def event_error(self):
-        self.timestamp = time.time()
+        self.event_timestamp = time.time()
         self.period_type = EventPeriod.INFORMATIONAL.value
         self.duration = None
         if self.publish_event:

@@ -20,6 +20,7 @@ import logging
 import os.path
 import tempfile
 import unittest
+from datetime import datetime
 from weakref import proxy as weakproxy
 
 from invoke import Result
@@ -135,12 +136,19 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
 
     def test_search_power_off(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'power_off.log')
-        self.node._read_system_log_and_publish_events(start_from_beginning=True)
+        with DbEventsFilter(db_event=DatabaseLogEvent.POWER_OFF, node=self.node):
+            self.node._read_system_log_and_publish_events(start_from_beginning=True)
+
+        DatabaseLogEvent.POWER_OFF().add_info(
+            node="A", line_number=22,
+            line=f"{datetime.utcfromtimestamp(time.time() + 1):%Y-%m-%dT%H:%M:%S+00:00} "
+                 "longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd-logind: Powering Off..."
+        ).publish()
 
         time.sleep(0.1)
         with self.get_events_logger().events_logs_by_severity[Severity.CRITICAL].open() as events_file:
             events = [line for line in events_file if 'Powering Off' in line]
-            assert events != []
+            assert events
 
     def test_ignore_power_off(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'power_off.log')
@@ -150,7 +158,7 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             time.sleep(0.1)
             with self.get_events_logger().events_logs_by_severity[Severity.CRITICAL].open() as events_file:
                 events = [line for line in events_file if 'Powering Off' in line]
-                assert events == []
+                assert not events
 
     def test_search_system_suppressed_messages(self):
         self.node.system_log = os.path.join(os.path.dirname(

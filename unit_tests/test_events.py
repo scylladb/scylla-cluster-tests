@@ -200,7 +200,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                               backtrace="asfasdfsdf",
                               node="node xy",
                               download_instructions="test_general_filter",
-                              timestamp=1578998425.0).publish()  # Tue 2020-01-14 10:40:25 UTC
+                              source_timestamp=1578998425.0).publish()  # Tue 2020-01-14 10:40:25 UTC
                 TestFrameworkEvent(source="", source_method="").publish()
 
         log_content = self.get_event_log_file("events.log")
@@ -217,7 +217,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                               download_instructions="gsutil cp gs://upload.scylladb.com/core.scylla-jmx.996.1234567890"
                                                     ".3968.1566979933000/core.scylla-jmx.996.d173729352e34c76aaf8db334"
                                                     "2153c3e.3968.1566979933000000 .",
-                              timestamp=1578998425.0).publish()  # Tue 2020-01-14 10:40:25 UTC
+                              source_timestamp=1578998425.0).publish()  # Tue 2020-01-14 10:40:25 UTC
                 TestFrameworkEvent(source="", source_method="").publish()
 
         log_content = self.get_event_log_file("events.log")
@@ -226,44 +226,62 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         self.assertNotIn("1234567890", log_content)
 
     def test_severity_changer(self):
-        with self.wait_for_n_events(self.get_events_logger(), count=4, timeout=3):
+        extra_time_to_expiration = 10
+        with self.wait_for_n_events(self.get_events_logger(), count=5, timeout=3):
             with EventsSeverityChangerFilter(new_severity=Severity.WARNING,
                                              event_class=TestFrameworkEvent,
-                                             extra_time_to_expiration=10):
+                                             extra_time_to_expiration=extra_time_to_expiration):
                 TestFrameworkEvent(source="critical that should be lowered #1",
                                    source_method="",
                                    severity=Severity.CRITICAL).publish()
             TestFrameworkEvent(source="critical that should be lowered #2",
                                source_method="",
                                severity=Severity.CRITICAL).publish()
+            event = TestFrameworkEvent(
+                source="critical that should not be lowered #3",
+                source_method="",
+                severity=Severity.CRITICAL)
+            event.source_timestamp = time.time() + extra_time_to_expiration
+            event.publish()
 
         log_content = self.get_event_log_file("warning.log")
+        crit_log_content = self.get_event_log_file("critical.log")
 
         self.assertIn("TestFrameworkEvent", log_content)
         self.assertIn("critical that should be lowered #1", log_content)
         self.assertIn("critical that should be lowered #2", log_content)
+        self.assertNotIn("critical that should not be lowered #3", log_content)
+        self.assertIn("critical that should not be lowered #3", crit_log_content)
 
     def test_severity_changer_db_log(self):
         """
             See https://github.com/scylladb/scylla-cluster-tests/issues/2115
         """
+        extra_time_to_expiration = 2
         # 1) Lower DatabaseLogEvent to WARNING for 1 sec.
-        with self.wait_for_n_events(self.get_events_logger(), count=4, timeout=3):
+        with self.wait_for_n_events(self.get_events_logger(), count=5, timeout=3):
             with EventsSeverityChangerFilter(new_severity=Severity.WARNING,
                                              event_class=DatabaseLogEvent,
-                                             extra_time_to_expiration=1):
+                                             extra_time_to_expiration=extra_time_to_expiration):
                 DatabaseLogEvent.NO_SPACE_ERROR() \
-                    .add_info(node="A", line_number=22, line="critical that should be lowered #1") \
+                    .add_info(node="A", line_number=22, line="error that should be lowered #1") \
                     .publish()
             DatabaseLogEvent.NO_SPACE_ERROR() \
-                .add_info(node="A", line_number=22, line="critical that should be lowered #2") \
+                .add_info(node="A", line_number=22, line="error that should be lowered #2") \
                 .publish()
+            event = DatabaseLogEvent.NO_SPACE_ERROR().add_info(
+                node="A", line_number=22, line="error that should not be lowered #3")
+            event.source_timestamp = time.time() + extra_time_to_expiration
+            event.publish()
 
         log_content = self.get_event_log_file("warning.log")
+        error_log_content = self.get_event_log_file("error.log")
 
         self.assertIn("DatabaseLogEvent", log_content)
-        self.assertIn("critical that should be lowered #1", log_content)
-        self.assertIn("critical that should be lowered #2", log_content)
+        self.assertIn("error that should be lowered #1", log_content)
+        self.assertIn("error that should be lowered #2", log_content)
+        self.assertNotIn("error that should not be lowered #3", log_content)
+        self.assertIn("error that should not be lowered #3", error_log_content)
 
         # 2) One of the next DatabaseLogEvent event should expire the EventsSeverityChangerFilter
         #    (and not crash all subscribers)
@@ -271,12 +289,12 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
             for _ in range(2):
                 time.sleep(1)
                 DatabaseLogEvent.NO_SPACE_ERROR() \
-                    .add_info(node="A", line_number=22, line="critical that shouldn't be lowered") \
+                    .add_info(node="A", line_number=22, line="error that shouldn't be lowered") \
                     .publish()
 
         log_content = self.get_event_log_file("error.log")
 
-        self.assertIn("critical that shouldn't be lowered", log_content)
+        self.assertIn("error that shouldn't be lowered", log_content)
 
     def test_ycsb_filter(self):
         with self.wait_for_n_events(self.get_events_logger(), count=4, timeout=3):
@@ -363,7 +381,7 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         self.assertNotIn("this is filtered", log_content)
 
     def test_filter_expiration(self):
-        with self.wait_for_n_events(self.get_events_logger(), count=5, timeout=10):
+        with self.wait_for_n_events(self.get_events_logger(), count=4, timeout=10):
             line_prefix = f"{datetime.utcnow():%Y-%m-%dT%H:%M:%S+00:00}"
 
             with DbEventsFilter(db_event=DatabaseLogEvent.NO_SPACE_ERROR, node="A"):
@@ -371,18 +389,10 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                     .add_info(node="A", line_number=22, line=line_prefix + " this is filtered") \
                     .publish()
 
-            time.sleep(2)
-
+            line_prefix = f"{datetime.utcfromtimestamp(time.time() + 1):%Y-%m-%dT%H:%M:%S+00:00}"
             DatabaseLogEvent.NO_SPACE_ERROR() \
-                .add_info(node="A", line_number=22, line=line_prefix + " this is filtered") \
-                .publish()
-
-            time.sleep(2)
-
-            line_prefix = f"{datetime.utcnow():%Y-%m-%dT%H:%M:%S+00:00}"
-
-            DatabaseLogEvent.NO_SPACE_ERROR() \
-                .add_info(node="A", line_number=22, line=line_prefix + " this is not filtered") \
+                .add_info(node="A", line_number=22,
+                          line=line_prefix + " : this is not filtered") \
                 .publish()
 
         log_content = self.get_event_log_file("events.log")

@@ -19,9 +19,10 @@ import ctypes
 import pickle
 import logging
 import multiprocessing
-from typing import Optional, Generator, Any, Tuple, Callable, cast
+from typing import Optional, Generator, Any, Tuple, Callable, cast, Dict
 from pathlib import Path
 from functools import cached_property, partial
+from uuid import UUID
 
 import zmq
 
@@ -36,6 +37,7 @@ SUB_POLLING_TIMEOUT: int = 1000  # milliseconds
 PUB_QUEUE_WAIT_TIMEOUT: float = 1  # seconds
 PUB_QUEUE_EVENTS_RATE: float = 0  # seconds
 PUBLISH_EVENT_TIMEOUT: float = 5  # seconds
+FILTERS_GC_PERIOD: float = 60  # Cleanup old filters once in a while
 
 EVENTS_LOG_DIR: str = "events_log"
 RAW_EVENTS_LOG: str = "raw_events.log"
@@ -147,7 +149,7 @@ class EventsDevice(multiprocessing.Process):
         from sdcm.sct_events.system import SystemEvent
         from sdcm.sct_events.filters import BaseFilter, EventsFilter
 
-        filters = dict()
+        filters: Dict[UUID, BaseFilter] = {}
 
         with suppress_interrupt():
             for events_counter.value, obj in enumerate(self.inbound_events(stop_event=stop_event), start=1):

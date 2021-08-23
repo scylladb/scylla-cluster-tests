@@ -31,13 +31,11 @@ class DbEventsFilter(BaseFilter):
         self.filter_line = line
         self.filter_node = str(node) if node else None
 
-    def cancel_filter(self) -> None:
-        if self.filter_node:
-            self.expire_time = time.time()
-        super().cancel_filter()
-
     def eval_filter(self, event: LogEventProtocol) -> bool:
         if not isinstance(event, LogEventProtocol):
+            return False
+
+        if self.expire_time and event.timestamp and self.expire_time < event.timestamp:
             return False
 
         result = bool(self.filter_type) and self.filter_type == event.type
@@ -66,7 +64,7 @@ class EventsFilter(BaseFilter):
     def __init__(self,
                  event_class: Optional[Type[SctEventProtocol]] = None,
                  regex: Optional[Union[str, re.Pattern]] = None,
-                 extra_time_to_expiration: Optional[int] = None):
+                 extra_time_to_expiration: Optional[int] = 0):
 
         assert event_class or regex, \
             "Should call with event_class or regex, or both"
@@ -97,6 +95,9 @@ class EventsFilter(BaseFilter):
         super().cancel_filter()
 
     def eval_filter(self, event: SctEventProtocol) -> bool:
+        if self.expire_time and event.timestamp and self.expire_time < event.timestamp:
+            return False
+
         result = not self.event_class or (type(event).__name__ + ".").startswith(self.event_class)
 
         if self._regex:

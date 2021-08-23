@@ -150,7 +150,7 @@ class CoreDumpEvent(InformationalEvent):
                  corefile_url: str,
                  backtrace: str,
                  download_instructions: str,
-                 timestamp: Optional[float] = None):
+                 source_timestamp: Optional[float] = None):
 
         super().__init__(severity=Severity.ERROR)
 
@@ -158,9 +158,8 @@ class CoreDumpEvent(InformationalEvent):
         self.corefile_url = corefile_url
         self.backtrace = backtrace
         self.download_instructions = download_instructions
-
-        if timestamp is not None:
-            self.timestamp = timestamp
+        if source_timestamp is not None:
+            self.source_timestamp = source_timestamp
 
     @property
     def msgfmt(self) -> str:
@@ -189,16 +188,16 @@ class TestResultEvent(InformationalEvent, Exception):
     _head = f"{' TEST RESULTS ':=^{_marker_width}}"
     _ending = "=" * _marker_width
 
-    def __init__(self, test_status: str, events: dict, timestamp: Optional[float] = None):
+    def __init__(self, test_status: str, events: dict, event_timestamp: Optional[float] = None):
         self._ok = test_status == "SUCCESS"
         super().__init__(severity=Severity.NORMAL if self._ok else Severity.ERROR)
 
         self.test_status = test_status
         self.events = events
 
-        # Need to restore the timestamp on unpickling.  See `__reduce__()' also.
-        if timestamp is not None:
-            self.timestamp = timestamp
+        # Need to restore the event_timestamp on unpickling.  See `__reduce__()' also.
+        if event_timestamp is not None:
+            self.event_timestamp = event_timestamp
 
         # We don't publish this event.  Suppress warning about unpublished event on exit.
         self._ready_to_publish = False
@@ -222,4 +221,4 @@ class TestResultEvent(InformationalEvent, Exception):
     def __reduce__(self):
         """Need to define it for pickling because of Exception class in MRO."""
 
-        return type(self), (self.test_status, self.events, self.timestamp)
+        return type(self), (self.test_status, self.events, self.event_timestamp)
