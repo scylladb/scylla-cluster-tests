@@ -21,8 +21,8 @@ import dateutil.parser
 from invoke.runners import Result
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import \
-    SctEvent, LogEvent, LogEventProtocol, T_log_event, BaseStressEvent, StressEvent, StressEventProtocol
+from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event
+from sdcm.sct_events.stress_events import BaseStressEvent, StressEvent, StressEventProtocol
 
 LOGGER = logging.getLogger(__name__)
 

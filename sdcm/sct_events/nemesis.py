@@ -11,7 +11,7 @@
 #
 # Copyright (c) 2020 ScyllaDB
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import ContinuousEvent
+from sdcm.sct_events.continuous_event import ContinuousEvent
 
 
 class DisruptionEvent(ContinuousEvent):

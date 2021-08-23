@@ -17,8 +17,10 @@ from functools import partial
 from typing import Type, List, Tuple, Generic, Optional, NamedTuple, Pattern, Callable, Match
 
 from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event, InformationalEvent, ContinuousEvent, \
-    ContinuousEventsRegistry, ContinuousEventRegistryException, EventPeriod
+from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event, InformationalEvent, \
+    EventPeriod
+
+from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, ContinuousEventRegistryException, ContinuousEvent
 
 TOLERABLE_REACTOR_STALL: int = 1000  # ms
 
