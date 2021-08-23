@@ -116,7 +116,7 @@ class TestSctEvent(SctEventTestCase):
             pass
 
         y, y_other, z = Y(), Y(), Z()
-        z.timestamp = y_other.timestamp = y.timestamp
+        z.event_timestamp = y_other.event_timestamp = y.event_timestamp
         y.event_id = y_other.event_id = z.event_id = "d81c016f-2333-4047-8c91-7cde98c38a15"
         self.assertEqual(y, y)
         self.assertEqual(y, y_other)
@@ -132,7 +132,7 @@ class TestSctEvent(SctEventTestCase):
             pass
 
         y, z = Y(), Z()
-        z.timestamp = y.timestamp
+        z.event_timestamp = y.event_timestamp
         self.assertNotEqual(y, z)
         self.assertNotEqual(z, y)
 
@@ -154,8 +154,8 @@ class TestSctEvent(SctEventTestCase):
         y.event_id = "fa4a84a2-968b-474c-b188-b3bac4be8527"
         self.assertEqual(
             y.to_json(),
-            f'{{"base": "Y", "type": null, "subtype": null, "timestamp": {y.timestamp}, "severity": "UNKNOWN", '
-            f'"event_id": "fa4a84a2-968b-474c-b188-b3bac4be8527"}}'
+            f'{{"base": "Y", "type": null, "subtype": null, "event_timestamp": {y.event_timestamp}, "source_timestamp": null, '
+            f'"severity": "UNKNOWN", "event_id": "fa4a84a2-968b-474c-b188-b3bac4be8527"}}'
         )
 
     def test_publish(self):
@@ -195,15 +195,15 @@ class TestSctEvent(SctEventTestCase):
             y.publish_or_dump()
         mock.assert_not_called()
 
-    def test_formatted_timestamp(self):
+    def test_formatted_event_timestamp(self):
         class Y(SctEvent):
             pass
 
         y = Y()
-        y.timestamp = 0
-        self.assertEqual(y.formatted_timestamp, "1970-01-01 00:00:00.000")
-        y.timestamp = None
-        self.assertEqual(y.formatted_timestamp, "0000-00-00 <UnknownTimestamp>")
+        y.event_timestamp = 0
+        self.assertEqual(y.formatted_event_timestamp, "1970-01-01 00:00:00.000")
+        y.event_timestamp = None
+        self.assertEqual(y.formatted_event_timestamp, "0000-00-00 <UnknownTimestamp>")
 
     def test_add_subevent_type_all_levels_not_abstract(self):
         @runtime_checkable
@@ -541,7 +541,7 @@ class TestLogEvent(SctEventTestCase):
         self.assertIsInstance(y, LogEvent)
 
         y.add_info(node="node2", line="no timestamp", line_number=42)
-        self.assertNotEqual(z.timestamp, y.timestamp)
+        self.assertNotEqual(z.event_timestamp, y.event_timestamp)
         self.assertEqual(y.node, "node2")
         self.assertEqual(y.line, "no timestamp")
         self.assertEqual(y.line_number, 42)

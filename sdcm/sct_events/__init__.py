@@ -31,7 +31,7 @@ class SctEventProtocol(Protocol):
     base: str
     type: Optional[str]
     subtype: Optional[str]
-    timestamp: Optional[float]
+    event_timestamp: Optional[float]
     severity: Severity
 
     # pylint: disable=super-init-not-called
@@ -52,7 +52,11 @@ class SctEventProtocol(Protocol):
         ...
 
     @property
-    def formatted_timestamp(self) -> str:
+    def formatted_event_timestamp(self) -> str:
+        ...
+
+    @property
+    def timestamp(self) -> float:
         ...
 
     def publish(self, warn_not_ready: bool = True) -> None:

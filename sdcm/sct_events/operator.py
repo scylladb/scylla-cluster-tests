@@ -51,12 +51,12 @@ class ScyllaOperatorLogEvent(LogEvent):
             year = datetime.datetime.now().year
             month = int(type_month_date[1:3])
             day = int(type_month_date[3:5])
-            self.timestamp = datetime.datetime(
+            self.source_timestamp = datetime.datetime(
                 year=year, month=month, day=day, hour=int(hour), minute=int(minute), second=int(second),
                 microsecond=int(milliseconds), tzinfo=datetime.timezone.utc).timestamp()
         except Exception:  # pylint: disable=broad-except
-            self.timestamp = time.time()
-
+            pass
+        self.event_timestamp = time.time()
         self.node = str(node)
         self.line = line
         self._ready_to_publish = True

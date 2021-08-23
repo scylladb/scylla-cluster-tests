@@ -42,7 +42,7 @@ class TestNodetoolEvent(unittest.TestCase):
                               options="more options", publish_event=False)
         event.event_id = "ef4aeb1a-c004-40e4-af14-9d87a0526408"
         event.begin_event()
-        event.begin_timestamp = event.timestamp = begin_event_timestamp
+        event.begin_timestamp = event.event_timestamp = begin_event_timestamp
         self.assertEqual(
             str(event),
             '(NodetoolEvent Severity.NORMAL) period_type=begin event_id=ef4aeb1a-c004-40e4-af14-9d87a0526408: '

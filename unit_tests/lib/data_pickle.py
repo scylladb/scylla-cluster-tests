@@ -58,6 +58,9 @@ class Pickler:
                 'node': None,
                 '*': PicklerAction.PASSTHROUGH,
             },
+            'instance_attrs': {
+                'event_timestamp': None,
+            }
         },
         'invoke.exceptions.UnexpectedExit': {
             'init_args': {

@@ -34,7 +34,7 @@ class CoreDumpInfo:
     pid: str
     node: 'BaseNode' = None
     corefile: str = ''
-    timestamp: Optional[float] = None
+    source_timestamp: Optional[float] = None
     coredump_info: str = ''
     download_instructions: str = ''
     download_url: str = ''
@@ -48,7 +48,7 @@ class CoreDumpInfo:
             corefile_url=self.download_url,
             backtrace=self.coredump_info,
             download_instructions=self.download_instructions,
-            timestamp=self.timestamp
+            source_timestamp=self.source_timestamp
         ).publish()
 
     def __str__(self):
@@ -60,7 +60,7 @@ class CoreDumpInfo:
     def update(self,
                node: 'BaseNode' = None,
                corefile: str = None,
-               timestamp: Optional[float] = None,
+               source_timestamp: Optional[float] = None,
                coredump_info: str = None,
                download_instructions: str = None,
                download_url: str = None,
@@ -70,7 +70,7 @@ class CoreDumpInfo:
         for attr_name, attr_value in {
             'node': node,
             'corefile': corefile,
-            'timestamp': timestamp,
+            'source_timestamp': source_timestamp,
             'coredump_info': coredump_info,
             'download_instructions': download_instructions,
             'download_url': download_url,
@@ -323,7 +323,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         corefile = ''
         executable = ''
         command_line = ''
-        timestamp = None
+        event_timestamp = None
         # Extracting Coredump and Timestamp from coredumpctl output:
         #            PID: 37349 (scylla)
         #            UID: 996 (scylla)
@@ -384,11 +384,11 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                         fmt = "%a %Y-%m-%d %H:%M:%S %z"
                     else:
                         raise ValueError(f'Date has unknown format: {timestring}')
-                    timestamp = datetime.strptime(timestring, fmt).timestamp()
+                    event_timestamp = datetime.strptime(timestring, fmt).timestamp()
                 except Exception as exc:  # pylint: disable=broad-except
                     self.log.error(f"Failed to convert date '{line}' ({timestring}), due to error: {str(exc)}")
-        core_info.update(executable=executable, command_line=command_line, corefile=corefile, timestamp=timestamp,
-                         coredump_info=coredump_info)
+        core_info.update(executable=executable, command_line=command_line, corefile=corefile,
+                         source_timestamp=event_timestamp, coredump_info=coredump_info)
 
     # @retrying(n=10, sleep_time=20, allowed_exceptions=NETWORK_EXCEPTIONS,
     #           message="Retrying on getting coredump backtrace")
@@ -437,7 +437,7 @@ class CoredumpExportFileThread(CoredumpThreadBase):
             'u': data[2],
             'g': data[3],
             's': data[4],
-            'timestamp': data[5],
+            'source_timestamp': data[5],
         }
 
     def get_list_of_cores(self) -> Optional[List[CoreDumpInfo]]:
@@ -449,7 +449,7 @@ class CoredumpExportFileThread(CoredumpThreadBase):
                 output.append(
                     CoreDumpInfo(
                         pid=core_data['pid'],
-                        timestamp=float(core_data['timestamp']),
+                        source_timestamp=float(core_data['source_timestamp']),
                         corefile=os.path.join(directory, os.path.basename(corefile)),
                         node=self.node
                     )

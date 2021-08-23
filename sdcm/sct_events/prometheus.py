@@ -43,4 +43,4 @@ class PrometheusDumper(BaseEventsProcess[Tuple[str, Any], None], threading.Threa
                                     getattr(event, "type", ""),
                                     getattr(event, "subtype", ""),
                                     event.severity,
-                                    getattr(event, "node", "")).set(event.timestamp)
+                                    getattr(event, "node", "")).set(event.event_timestamp)

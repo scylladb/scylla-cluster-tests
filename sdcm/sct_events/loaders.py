@@ -183,7 +183,7 @@ SCYLLA_BENCH_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = 
     [(re.compile(event.regex), event) for event in SCYLLA_BENCH_ERROR_EVENTS]
 
 
-class GeminiStressLogEvent(LogEvent[T_log_event], abstract=True):
+class GeminiStressLogEvent(LogEvent[T_log_event], abstract=True):  # pylint: disable=too-many-instance-attributes
     SEVERITY_MAPPING = {
         "INFO": "NORMAL",
         "DEBUG": "NORMAL",
@@ -208,10 +208,11 @@ class GeminiStressLogEvent(LogEvent[T_log_event], abstract=True):
             return self
 
         try:
-            self.timestamp = dateutil.parser.parse(data.pop("T")).timestamp()
+            self.source_timestamp = dateutil.parser.parse(data.pop("T")).timestamp()
         except ValueError:
-            self.timestamp = time.time()
+            pass
 
+        self.event_timestamp = time.time()
         self.severity = Severity[self.SEVERITY_MAPPING[data.pop("L")]]
 
         self.line = data.pop("M")

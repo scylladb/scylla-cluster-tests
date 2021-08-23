@@ -74,7 +74,10 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
                 self.write_event(event=event, tee=LOGGER.info)
 
     def write_event(self, event: SctEvent, tee: Optional[Callable[[str], Any]] = None) -> None:
-        message = f"{event.formatted_timestamp}: {str(event).strip()}"
+        if event.source_timestamp:
+            message = f"{event.formatted_event_timestamp} <{event.formatted_source_timestamp}>: {str(event).strip()}"
+        else:
+            message = f"{event.formatted_event_timestamp}: {str(event).strip()}"
         if tee and not isinstance(event, TestResultEvent):
             with verbose_suppress("%s: failed to tee %s to %s", self, event, tee):
                 tee(message)

@@ -28,7 +28,7 @@ from typing import \
     Any, Optional, Type, Dict, List, Tuple, Callable, Generic, TypeVar, Protocol, runtime_checkable
 from keyword import iskeyword
 from weakref import proxy as weakproxy
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import partialmethod
 
 import yaml
@@ -39,7 +39,7 @@ from sdcm.sct_events import Severity, SctEventProtocol
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
 
 DEFAULT_SEVERITIES = sct_abs_path("defaults/severities.yaml")
-
+FILTER_EVENT_DECAY_TIME = 600.0
 LOGGER = logging.getLogger(__name__)
 
 
@@ -80,7 +80,8 @@ class SctEvent:
     formatter: Callable[[str, SctEvent], str] = staticmethod(str.format)
     msgfmt: str = "({0.base} {0.severity}) period_type={0.period_type} event_id={0.event_id}"
 
-    timestamp: Optional[float] = None  # actual value should be set using __init__()
+    event_timestamp: Optional[float] = None  # actual value should be set using __init__()
+    source_timestamp: Optional[float] = None
     severity: Severity = Severity.UNKNOWN  # actual value should be set using __init__()
 
     _ready_to_publish: bool = False  # set it to True in __init__() and to False in publish() to prevent double-publish
@@ -100,7 +101,8 @@ class SctEvent:
         return super().__new__(cls)
 
     def __init__(self, severity: Severity = Severity.UNKNOWN):
-        self.timestamp = time.time()
+        self.event_timestamp = time.time()
+        self.source_timestamp: Optional[float] = None
         self.severity = severity
         self._ready_to_publish = True
         self.event_id = str(uuid.uuid4())
@@ -149,13 +151,30 @@ class SctEvent:
         # Make the new class available in the base class as an attribute (i.e., `cls.name')
         setattr(cls, name, event_t)
 
-    @property
-    def formatted_timestamp(self) -> str:
+    @staticmethod
+    def _formatted_timestamp(timestamp: float) -> str:
         try:
-            return datetime.fromtimestamp(self.timestamp).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            return datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
         except (TypeError, OverflowError, OSError,):
-            LOGGER.exception("Failed to format a timestamp: %r", self.timestamp)
+            LOGGER.exception("Failed to format a timestamp: %r", timestamp)
             return "0000-00-00 <UnknownTimestamp>"
+
+    @property
+    def formatted_event_timestamp(self) -> str:
+        return self._formatted_timestamp(self.event_timestamp)
+
+    @property
+    def formatted_source_timestamp(self) -> str:
+        return self._formatted_timestamp(self.source_timestamp)
+
+    @property
+    def timestamp(self) -> float:
+        """
+        Some events are sourced from the outside of SCT, for such events we try to catch original time when
+          it was created and store it into source_timestamp
+        This property returns source_timestamp if it is present and timestamp if it is not
+        """
+        return self.source_timestamp or self.event_timestamp
 
     def publish(self, warn_not_ready: bool = True) -> None:
         # pylint: disable=import-outside-toplevel; to avoid cyclic imports
@@ -269,12 +288,12 @@ class SystemEvent(SctEvent, abstract=True):
 
 
 class BaseFilter(SystemEvent, abstract=True):
+    expire_time = None
+    clear_filter = False
+
     def __init__(self, severity: Severity = Severity.NORMAL):
         super().__init__(severity=severity)
-
         self.uuid = str(uuid.uuid4())
-        self.clear_filter = False
-        self.expire_time = None
 
     def __eq__(self, other):
         if not isinstance(self, type(other)):
@@ -282,9 +301,19 @@ class BaseFilter(SystemEvent, abstract=True):
         return self.uuid == other.uuid
 
     def cancel_filter(self) -> None:
+        if self.expire_time is None:
+            self.expire_time = time.time()
         self.clear_filter = True
         self._ready_to_publish = True
         self.publish()
+
+    def is_deceased(self) -> bool:
+        """
+        When filter is expired we keep it in memory in case of getting events with
+          timestamp shifted back in time
+        This property is signaling that filter could be cleaned up
+        """
+        return self.expire_time and time.time() >= self.expire_time + FILTER_EVENT_DECAY_TIME
 
     def __enter__(self):
         self.publish()
@@ -349,9 +378,10 @@ class LogEvent(Generic[T_log_event], InformationalEvent, abstract=True):
                 # 2021-04-06 13:03:28  ...
                 event_time = " ".join(splitted_line[:2])
 
-            self.timestamp = dateutil.parser.parse(event_time).timestamp()
+            self.source_timestamp = dateutil.parser.parse(event_time).timestamp()
         except ValueError:
-            self.timestamp = time.time()
+            pass
+        self.event_timestamp = time.time()
         self.node = str(node)
         self.line = line
         self.line_number = line_number

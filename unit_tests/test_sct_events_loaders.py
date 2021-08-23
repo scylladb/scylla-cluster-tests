@@ -30,10 +30,11 @@ class TestGeminiEvent(unittest.TestCase):
         begin_event_timestamp = 1623596860.1202102
         gemini_stress_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
         begin_event = gemini_stress_event.begin_event()
-        begin_event.timestamp = begin_event.begin_timestamp = begin_event_timestamp
+        begin_event.event_timestamp = begin_event.begin_timestamp = begin_event_timestamp
         self.assertEqual(str(begin_event),
                          '(GeminiStressEvent Severity.NORMAL) period_type=begin '
                          'event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node gemini_cmd=gemini_cmd')
+        self.assertEqual(begin_event.event_timestamp, begin_event_timestamp)
         self.assertEqual(begin_event.timestamp, begin_event_timestamp)
         self.assertEqual(begin_event, pickle.loads(pickle.dumps(gemini_stress_event)))
 
@@ -41,7 +42,7 @@ class TestGeminiEvent(unittest.TestCase):
         gemini_stress_event.severity = Severity.ERROR
 
         gemini_stress_event.end_event()
-        gemini_stress_event.timestamp = gemini_stress_event.end_timestamp = 1623597850.6610544
+        gemini_stress_event.event_timestamp = gemini_stress_event.end_timestamp = 1623597850.6610544
         self.assertEqual(str(gemini_stress_event),
                          '(GeminiStressEvent Severity.ERROR) period_type=end '
                          'event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=16m30s: node=node gemini_cmd=gemini_cmd'
@@ -53,10 +54,11 @@ class TestGeminiEvent(unittest.TestCase):
         begin_event_timestamp = 1623596860.1202102
         gemini_stress_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
         begin_event = gemini_stress_event.begin_event()
-        begin_event.timestamp = begin_event.begin_timestamp = begin_event_timestamp
+        begin_event.event_timestamp = begin_event.begin_timestamp = begin_event_timestamp
         self.assertEqual(str(begin_event),
                          '(GeminiStressEvent Severity.NORMAL) period_type=begin '
                          'event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node gemini_cmd=cat')
+        self.assertEqual(begin_event.event_timestamp, begin_event_timestamp)
         self.assertEqual(begin_event.timestamp, begin_event_timestamp)
         self.assertEqual(begin_event, pickle.loads(pickle.dumps(begin_event)))
 
@@ -65,7 +67,7 @@ class TestGeminiEvent(unittest.TestCase):
 
         result = "Exit code: 1\nCommand output: ['  line2  ', 'line3']\n"
         gemini_stress_event.end_event()
-        gemini_stress_event.timestamp = gemini_stress_event.end_timestamp = 1623599860.1202102
+        gemini_stress_event.event_timestamp = gemini_stress_event.end_timestamp = 1623599860.1202102
         self.assertEqual(gemini_stress_event.result, result)
         self.assertEqual(str(gemini_stress_event),
                          '(GeminiStressEvent Severity.NORMAL) period_type=end '
@@ -80,15 +82,16 @@ class TestGeminiEvent(unittest.TestCase):
         begin_event_timestamp = 1623596860.1202102
         gemini_stress_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
         begin_event = gemini_stress_event.begin_event()
-        begin_event.timestamp = begin_event.begin_timestamp = begin_event_timestamp
+        begin_event.event_timestamp = begin_event.begin_timestamp = begin_event_timestamp
         self.assertEqual(str(begin_event),
                          '(GeminiStressEvent Severity.NORMAL) period_type=begin '
                          'event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node gemini_cmd=cat')
+        self.assertEqual(begin_event.event_timestamp, begin_event_timestamp)
         self.assertEqual(begin_event.timestamp, begin_event_timestamp)
         self.assertEqual(begin_event, pickle.loads(pickle.dumps(begin_event)))
 
         gemini_stress_event.end_event()
-        gemini_stress_event.timestamp = gemini_stress_event.end_timestamp = 1623696860.1202102
+        gemini_stress_event.event_timestamp = gemini_stress_event.end_timestamp = 1623696860.1202102
         self.assertEqual(gemini_stress_event.result, '')
         self.assertEqual(str(gemini_stress_event),
                          '(GeminiStressEvent Severity.NORMAL) period_type=end '
@@ -104,10 +107,11 @@ class TestCassandraStressEvent(unittest.TestCase):
                                         log_file_name="log_file_name", publish_event=False)
         cs_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
         begin_event = cs_event.begin_event()
-        begin_event.timestamp = begin_event.begin_timestamp = begin_event_timestamp
+        begin_event.event_timestamp = begin_event.begin_timestamp = begin_event_timestamp
         self.assertEqual(str(begin_event),
                          "(CassandraStressEvent Severity.NORMAL) period_type=begin "
                          "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd")
+        self.assertEqual(begin_event.event_timestamp, begin_event_timestamp)
         self.assertEqual(begin_event.timestamp, begin_event_timestamp)
         self.assertEqual(begin_event, pickle.loads(pickle.dumps(begin_event)))
 
@@ -116,23 +120,25 @@ class TestCassandraStressEvent(unittest.TestCase):
 
         cs_event.end_event()
         end_event_timestamp = 1623596860.1202102
-        cs_event.timestamp = cs_event.end_timestamp = end_event_timestamp
+        cs_event.event_timestamp = cs_event.end_timestamp = end_event_timestamp
         self.assertEqual(str(cs_event),
                          "(CassandraStressEvent Severity.ERROR) period_type=end "
                          "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=0s: node=node\nstress_cmd=stress_cmd"
                          "\nerrors:\n\nerror1\nerror2")
+        self.assertEqual(cs_event.event_timestamp, end_event_timestamp)
         self.assertEqual(cs_event.timestamp, end_event_timestamp)
 
         cs_event.add_error(["One more error"])
         cs_event.severity = Severity.CRITICAL
         cs_event.event_error()
         error_event_timestamp = 1623596860.1202102
-        cs_event.timestamp = error_event_timestamp
+        cs_event.event_timestamp = error_event_timestamp
         self.assertEqual(str(cs_event),
                          "(CassandraStressEvent Severity.CRITICAL) period_type=one-time "
                          "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=0s: node=node\n"
                          "stress_cmd=stress_cmd\nerrors:\n\nerror1\nerror2\nOne more error")
         self.assertEqual(cs_event.log_file_name, "log_file_name")
+        self.assertEqual(cs_event.event_timestamp, error_event_timestamp)
         self.assertEqual(cs_event.timestamp, error_event_timestamp)
         self.assertEqual(cs_event, pickle.loads(pickle.dumps(cs_event)))
 
@@ -142,20 +148,22 @@ class TestCassandraStressEvent(unittest.TestCase):
                                         log_file_name="log_file_name", publish_event=False)
         cs_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
         begin_event = cs_event.begin_event()
-        begin_event.timestamp = begin_event.begin_timestamp = begin_event_timestamp
+        begin_event.event_timestamp = begin_event.begin_timestamp = begin_event_timestamp
         self.assertEqual(str(begin_event),
                          "(CassandraStressEvent Severity.NORMAL) period_type=begin "
                          "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd")
+        self.assertEqual(begin_event.event_timestamp, begin_event_timestamp)
         self.assertEqual(begin_event.timestamp, begin_event_timestamp)
         self.assertEqual(begin_event, pickle.loads(pickle.dumps(begin_event)))
 
         end_event_timestamp = 1623596870.1202102
         cs_event.end_event()
-        cs_event.timestamp = cs_event.end_timestamp = end_event_timestamp
+        cs_event.event_timestamp = cs_event.end_timestamp = end_event_timestamp
         self.assertEqual(str(cs_event),
                          "(CassandraStressEvent Severity.NORMAL) period_type=end "
                          "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=10s: node=node\n"
                          "stress_cmd=stress_cmd")
+        self.assertEqual(cs_event.event_timestamp, end_event_timestamp)
         self.assertEqual(cs_event.timestamp, end_event_timestamp)
         self.assertEqual(cs_event, pickle.loads(pickle.dumps(cs_event)))
 
@@ -167,10 +175,11 @@ class TestScyllaBenchEvent(unittest.TestCase):
                                               log_file_name="log_file_name", publish_event=False)
         scylla_bench_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
         begin_event = scylla_bench_event.begin_event()
-        begin_event.timestamp = begin_event.begin_timestamp = begin_event_timestamp
+        begin_event.event_timestamp = begin_event.begin_timestamp = begin_event_timestamp
         self.assertEqual(str(begin_event),
                          "(ScyllaBenchEvent Severity.NORMAL) period_type=begin "
                          "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd")
+        self.assertEqual(begin_event.event_timestamp, begin_event_timestamp)
         self.assertEqual(begin_event.timestamp, begin_event_timestamp)
         self.assertEqual(begin_event, pickle.loads(pickle.dumps(begin_event)))
 
@@ -181,7 +190,7 @@ class TestScyllaBenchEvent(unittest.TestCase):
             scylla_bench_event.add_error([str(exc)])
 
         scylla_bench_event.end_event()
-        scylla_bench_event.end_timestamp = scylla_bench_event.timestamp = 1623596960.1202102
+        scylla_bench_event.end_timestamp = scylla_bench_event.event_timestamp = 1623596960.1202102
 
         self.assertEqual(str(scylla_bench_event),
                          '(ScyllaBenchEvent Severity.ERROR) period_type=end '
@@ -198,15 +207,16 @@ class TestScyllaBenchEvent(unittest.TestCase):
                                               log_file_name="log_file_name", publish_event=False)
         scylla_bench_event.event_id = "14f35b64-2fcc-4b6e-a09d-4aeaf4faa543"
         begin_event = scylla_bench_event.begin_event()
-        begin_event.timestamp = begin_event.begin_timestamp = begin_event_timestamp
+        begin_event.event_timestamp = begin_event.begin_timestamp = begin_event_timestamp
         self.assertEqual(str(begin_event),
                          "(ScyllaBenchEvent Severity.NORMAL) period_type=begin "
                          "event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543: node=node\nstress_cmd=stress_cmd")
+        self.assertEqual(begin_event.event_timestamp, begin_event_timestamp)
         self.assertEqual(begin_event.timestamp, begin_event_timestamp)
         self.assertEqual(begin_event, pickle.loads(pickle.dumps(begin_event)))
 
         scylla_bench_event.end_event()
-        scylla_bench_event.timestamp = scylla_bench_event.end_timestamp = 1623596861.1202102
+        scylla_bench_event.event_timestamp = scylla_bench_event.end_timestamp = 1623596861.1202102
         self.assertEqual(str(scylla_bench_event),
                          '(ScyllaBenchEvent Severity.NORMAL) period_type=end '
                          'event_id=14f35b64-2fcc-4b6e-a09d-4aeaf4faa543 duration=1s: '
@@ -456,9 +466,10 @@ class TestGeminiLogEvent(unittest.TestCase):
 
     def test_non_json_line(self):
         event = GeminiStressLogEvent.GeminiEvent()
-        timestamp = event.timestamp
+        event_timestamp = event.event_timestamp
         event.add_info(node="node1", line="1961-04-12T06:07:00+00:00 Poyekhalee!", line_number=1)
-        self.assertEqual(event.timestamp, timestamp)
+        self.assertEqual(event.event_timestamp, event_timestamp)
+        self.assertEqual(event.timestamp, event_timestamp)
         self.assertEqual(event.severity, Severity.CRITICAL)
         self.assertIsNone(event.node)
         self.assertIsNone(event.line)
