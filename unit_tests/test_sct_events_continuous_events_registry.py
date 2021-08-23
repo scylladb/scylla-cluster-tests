@@ -5,7 +5,9 @@ from typing import Generator
 
 import pytest
 
-from sdcm.sct_events.base import ContinuousEventsRegistry, ContinuousEventRegistryException, EventPeriod
+from sdcm.sct_events import Severity
+from sdcm.sct_events.base import EventPeriod
+from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, ContinuousEventRegistryException
 from sdcm.sct_events.database import FullScanEvent
 from sdcm.sct_events.loaders import GeminiStressEvent
 from sdcm.sct_events.nodetool import NodetoolEvent
@@ -17,7 +19,7 @@ class TestContinuousEventsRegistry:
         yield ContinuousEventsRegistry()
 
     @pytest.fixture(scope="function")
-    def nodetool_stress_event(self) -> Generator[NodetoolEvent, None, None]:
+    def nodetool_event(self) -> Generator[NodetoolEvent, None, None]:
         yield NodetoolEvent(nodetool_command="mock_cmd", publish_event=False)
 
     @pytest.fixture(scope="function")
@@ -79,9 +81,24 @@ class TestContinuousEventsRegistry:
 
     def test_get_events_by_period_type(self,
                                        populated_registry: ContinuousEventsRegistry,
-                                       nodetool_stress_event: NodetoolEvent):
+                                       nodetool_event):
         count_of_begun_events_pre = len(populated_registry.get_events_by_period(period_type=EventPeriod.BEGIN))
-        nodetool_stress_event.begin_event()
+        nodetool_event.begin_event()
         found_events = populated_registry.get_events_by_period(period_type=EventPeriod.BEGIN)
 
         assert len(found_events) == count_of_begun_events_pre + 1
+
+    def test_get_events_by_attr(self,
+                                populated_registry: ContinuousEventsRegistry,
+                                nodetool_event):
+        nodetool_event.nodetool_command = 'test_get_events_by_attr'
+        nodetool_event.event_id = 'dc4c854c-6bb5-4689-9af6-a9aae225611a'
+        nodetool_event.begin_event()
+        registry_filter = populated_registry.get_registry_filter()
+        found_events = registry_filter.filter_by_attr(base="NodetoolEvent",
+                                                      severity=Severity.NORMAL,
+                                                      period_type=EventPeriod.BEGIN.value,
+                                                      nodetool_command='test_get_events_by_attr')
+
+        assert len(found_events.get_filtered()) == 1
+        assert found_events.get_filtered()[0] == nodetool_event
