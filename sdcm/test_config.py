@@ -21,6 +21,8 @@ LOGGER = logging.getLogger(__name__)
 class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-methods
     TEST_DURATION = 60
     RSYSLOG_SSH_TUNNEL_LOCAL_PORT = 5000
+    RSYSLOG_IMJOURNAL_RATE_LIMIT_INTERVAL = 600
+    RSYSLOG_IMJOURNAL_RATE_LIMIT_BURST = 20000
     IP_SSH_CONNECTIONS = 'private'
     KEEP_ALIVE_DB_NODES = False
     KEEP_ALIVE_LOADER_NODES = False
@@ -198,32 +200,46 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
         cls.RSYSLOG_ADDRESS = (address, port)
 
     @classmethod
-    def get_startup_script(cls):
-        post_boot_script = '#!/bin/bash'
-        post_boot_script += dedent(r'''
-               sudo sed -i 's/#MaxSessions \(.*\)$/MaxSessions 1000/' /etc/ssh/sshd_config
-               sudo sed -i 's/#MaxStartups \(.*\)$/MaxStartups 60/' /etc/ssh/sshd_config
-               sudo sed -i 's/#LoginGraceTime \(.*\)$/LoginGraceTime 15s/' /etc/ssh/sshd_config
-               sudo systemctl restart sshd
-               ''')
+    def get_startup_script(cls) -> str:
+        post_boot_script = "#!/bin/bash\n"
+
+        # Configure ulimit and sshd.
+        post_boot_script += dedent(r"""
+            sed -i -e 's/^\*[[:blank:]]*soft[[:blank:]]*nproc[[:blank:]]*4096/*\t\tsoft\tnproc\t\tunlimited/' \
+                /etc/security/limits.d/20-nproc.conf
+            echo -e '*\t\thard\tnproc\t\tunlimited' >> /etc/security/limits.d/20-nproc.conf
+
+            sed -i 's/#MaxSessions \(.*\)$/MaxSessions 1000/' /etc/ssh/sshd_config
+            sed -i 's/#MaxStartups \(.*\)$/MaxStartups 60/' /etc/ssh/sshd_config
+            sed -i 's/#LoginGraceTime \(.*\)$/LoginGraceTime 15s/' /etc/ssh/sshd_config
+            systemctl restart sshd
+        """)
+
+        # Configure rsyslog.  Use obsolete legacy format here because it's easier to redefine imjournal parameters.
+        post_boot_script += dedent(fr"""
+            cat <<EOF >> /etc/rsyslog.conf
+
+            #
+            # The following configuration was added by SCT.
+            #
+            \$ModLoad imjournal
+            \$imjournalRatelimitInterval {cls.RSYSLOG_IMJOURNAL_RATE_LIMIT_INTERVAL}
+            \$imjournalRatelimitBurst {cls.RSYSLOG_IMJOURNAL_RATE_LIMIT_BURST}
+        """)
+
         if cls.RSYSLOG_ADDRESS:
-
-            if cls.IP_SSH_CONNECTIONS == 'public' or cls.MULTI_REGION:
-                post_boot_script += dedent('''
-                       sudo echo 'action(type="omfwd" Target="{0}" Port="{1}" Protocol="tcp")'>> /etc/rsyslog.conf
-                       sudo systemctl restart rsyslog
-                       '''.format('127.0.0.1', cls.RSYSLOG_SSH_TUNNEL_LOCAL_PORT))
+            if cls.IP_SSH_CONNECTIONS == "public" or cls.MULTI_REGION:
+                rsyslog_host = "127.0.0.1"
+                rsyslog_port = cls.RSYSLOG_SSH_TUNNEL_LOCAL_PORT
             else:
-                post_boot_script += dedent('''
-                       sudo echo 'action(type="omfwd" Target="{0}" Port="{1}" Protocol="tcp")'>> /etc/rsyslog.conf
-                       sudo systemctl restart rsyslog
-                       '''.format(*cls.RSYSLOG_ADDRESS))  # pylint: disable=not-an-iterable
+                rsyslog_host, rsyslog_port = cls.RSYSLOG_ADDRESS  # pylint: disable=unpacking-non-sequence
+            post_boot_script += f'action(type="omfwd" Target="{rsyslog_host}" Port="{rsyslog_port}" Protocol="tcp")\n'
 
-        post_boot_script += dedent(r'''
-               sed -i -e 's/^\*[[:blank:]]*soft[[:blank:]]*nproc[[:blank:]]*4096/*\t\tsoft\tnproc\t\tunlimited/' \
-               /etc/security/limits.d/20-nproc.conf
-               echo -e '*\t\thard\tnproc\t\tunlimited' >> /etc/security/limits.d/20-nproc.conf
-               ''')
+        post_boot_script += dedent("""\
+            EOF
+            systemctl restart rsyslog
+        """)
+
         return post_boot_script
 
     @classmethod
@@ -233,3 +249,8 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     @classmethod
     def set_duration(cls, duration):
         cls.TEST_DURATION = duration
+
+    @classmethod
+    def set_rsyslog_imjournal_rate_limit(cls, interval: int, burst: int) -> None:
+        cls.RSYSLOG_IMJOURNAL_RATE_LIMIT_INTERVAL = interval
+        cls.RSYSLOG_IMJOURNAL_RATE_LIMIT_BURST = burst

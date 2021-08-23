@@ -1020,6 +1020,12 @@ class SCTConfiguration(dict):
         dict(name="logs_transport", env="SCT_LOGS_TRANSPORT", type=str,
              help="How to transport logs: rsyslog, ssh or docker", choices=("rsyslog", "ssh", "docker")),
 
+        dict(name="rsyslog_imjournal_rate_limit_interval", env="SCT_RSYSLOG_IMJOURNAL_RATE_LIMIT_INTERVAL", type=int,
+             help="Value for rsyslog' imjournal Ratelimit.Interval option (maximum 65535 till rsyslog v8.34)"),
+
+        dict(name="rsyslog_imjournal_rate_limit_burst", env="SCT_RSYSLOG_IMJOURNAL_RATE_LIMIT_BURST", type=int,
+             help="Value for rsyslog' imjournal Ratelimit.Burst option (maximum 65535 till rsyslog v8.34)"),
+
         dict(name="collect_logs", env="SCT_COLLECT_LOGS", type=boolean,
              help="Collect logs from instances and sct runner"),
 
