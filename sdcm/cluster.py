@@ -54,6 +54,7 @@ from sdcm.log import SDCMAdapter
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd
 from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
 from sdcm import wait, mgmt
+from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.utils import alternator, properties
 from sdcm.utils.common import (
     S3Storage,
@@ -81,7 +82,7 @@ from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.test_config import TestConfig
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version, get_systemd_version
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import LogEvent, ContinuousEventsRegistry
+from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.sct_events.filters import DbEventsFilter
