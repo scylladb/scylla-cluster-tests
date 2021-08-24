@@ -31,6 +31,9 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
       https://github.com/scylladb/scylla-cluster-tests/blob/master/docs/sct-events.md
     """
 
+    GRAPHITE_EXPORTER_CONFIG_SRC_PATH = "docker/graphite-exporter/graphite_mapping.conf"
+    GRAPHITE_EXPORTER_CONFIG_DST_PATH = "/tmp/"
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._per_loader_count = {}
@@ -61,7 +64,27 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
         LOGGER.debug("'running: %s", stress_cmd)
         with NoSQLBenchStressEvent(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name) as stress_event:
             try:
-                return loader.remoter.run(cmd=f'docker run {self._nosqlbench_image} {stress_cmd}',
+                # copy graphite-exporter config file to loader
+                loader.remoter.send_files(src=self.GRAPHITE_EXPORTER_CONFIG_SRC_PATH,
+                                          dst=self.GRAPHITE_EXPORTER_CONFIG_DST_PATH,
+                                          verbose=False)
+
+                # create shared network for the containers
+                create_network_cmd = "docker network create --driver bridge nosql"
+
+                graphite_run_cmd = "docker run -d -p 9108:9108 -p 9109:9109 -p 9109:9109/udp " \
+                                   "-v /tmp/graphite_mapping.conf:/tmp/graphite_mapping.conf " \
+                                   "--name=graphite-exporter --network=nosql " \
+                                   "prom/graphite-exporter --graphite.mapping-config=/tmp/graphite_mapping.conf"
+                loader.remoter.run(cmd=create_network_cmd)
+                loader.remoter.run(cmd=graphite_run_cmd,
+                                   timeout=self.timeout + self.shutdown_timeout,
+                                   log_file=log_file_name)
+
+                return loader.remoter.run(cmd=f'docker run '
+                                              f'--name=nb --network=nosql '
+                                              f'{self._nosqlbench_image} '
+                                              f'{stress_cmd} --report-graphite-to graphite-exporter:9109',
                                           timeout=self.timeout + self.shutdown_timeout, log_file=log_file_name)
             except Exception as exc:  # pylint: disable=broad-except
                 stress_event.severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR

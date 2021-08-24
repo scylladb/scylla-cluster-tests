@@ -51,6 +51,9 @@ class RemoteDocker(BaseNode):
     def run(self, cmd, *args, **kwargs):
         return self.node.remoter.run(f'docker exec -i {self.docker_id} /bin/bash -c "{cmd}"', *args, **kwargs)
 
+    def run_plain(self, cmd, *args, **kwargs):
+        return self.node.remoter.run(f'docker exec -i {self.docker_id} {cmd}', *args, **kwargs)
+
     def kill(self):
         return self.node.remoter.run(f"docker rm -f {self.docker_id}", verbose=False, ignore_status=True)
 
