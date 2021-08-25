@@ -82,6 +82,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+COMMAND=${HYDRA_COMMAND[0]}
+
 if [[ -n "${CREATE_RUNNER_INSTANCE}" ]]; then
     if [[ -n "${SCT_RUNNER_IP}" ]]; then
         echo "Can't use '--execute-on-new-runner' and '--execute-on-runner IP' options simultaneously"
@@ -327,6 +329,10 @@ if [[ -n "$SCT_RUNNER_IP" ]]; then
         done
     fi
 
+    if [[ "$COMMAND" == "show-monitor" ]]; then
+        HYDRA_COMMAND[0]="$COMMAND --ip-to-show ${SCT_RUNNER_IP}"
+    fi
+
     DOCKER_HOST="-H ssh://ubuntu@${SCT_RUNNER_IP}"
 else
     if [ -z "${DOCKER_GROUP_ARGS[@]}" ]; then
@@ -336,7 +342,6 @@ else
     fi
 fi
 
-COMMAND=${HYDRA_COMMAND[0]}
 
 if [[ "$COMMAND" == *'bash'* ]] || [[ "$COMMAND" == *'python'* ]]; then
     CMD=${HYDRA_COMMAND[@]}

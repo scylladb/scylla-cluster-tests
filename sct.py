@@ -603,7 +603,8 @@ def show_log(test_id, output_format):
 @click.argument('test_id')
 @click.option("--date-time", type=str, required=False, help='Datetime of monitor-set archive is collected')
 @click.option("--kill", type=bool, required=False, help='Kill and remove containers')
-def show_monitor(test_id, date_time, kill):
+@click.option("--ip-to-show", type=str, required=False, help='Ip of the monitoring stack', default='localhost')
+def show_monitor(test_id, date_time, kill, ip_to_show):
     add_file_logger()
 
     click.echo('Search monitoring stack archive files for test id {} and restoring...'.format(test_id))
@@ -615,10 +616,9 @@ def show_monitor(test_id, date_time, kill):
 
     table = PrettyTable(['Service', 'Container', 'Link'], align="l")
     if status:
-        host = os.environ.get("SCT_RUNNER_IP", "localhost")
         click.echo('Monitoring stack restored')
         for docker in get_monitoring_stack_services():
-            table.add_row([docker["service"], docker["name"], f"http://{host}:{docker['port']}"])
+            table.add_row([docker["service"], docker["name"], f"http://{ip_to_show}:{docker['port']}"])
         click.echo(table.get_string(title='Monitoring stack services'))
         if kill:
             kill_running_monitoring_stack_services()
