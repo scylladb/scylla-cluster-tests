@@ -32,7 +32,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --execute-on-runner)
-            export SCT_RUNNER_IP="$2"
+            SCT_RUNNER_IP="$2"
             shift
             shift
             ;;
@@ -108,7 +108,7 @@ if [[ -n "${CREATE_RUNNER_INSTANCE}" ]]; then
       --test-id $SCT_TEST_ID \
       --duration ${RUNNER_DURATION:-1440}
     if [[ -z "${HYDRA_DRY_RUN}" ]]; then
-        export SCT_RUNNER_IP=$(<"${SCT_RUNNER_IP_FILE}")
+        SCT_RUNNER_IP=$(<"${SCT_RUNNER_IP_FILE}")
     else
         SCT_RUNNER_IP="127.0.0.1"  # set it for testing purpose.
     fi
