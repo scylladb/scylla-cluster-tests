@@ -301,6 +301,8 @@ class SCTConfiguration(dict):
                 for the monitoring of the Nemesis.
                 can only work out of the box in AWS
              """),
+        dict(name="sct_runner_ip", env="SCT_RUNNER_IP", type=str,
+             help="IP address of an SCT runner VM"),
         dict(name="sct_ngrok_name", env="SCT_NGROK_NAME", type=str,
              help="""
             Override the default hostname address of the sct test runner,
