@@ -8,9 +8,9 @@ managerPipeline(
     backend: 'aws',
     aws_region: 'us-east-1',
 
-    target_manager_branch: 'master_latest',
+    target_manager_version: 'master_latest',
 
-    manager_branch: '2.4',
+    manager_version: '2.4',
     scylla_version: '4.4',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',

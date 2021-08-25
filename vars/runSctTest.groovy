@@ -56,8 +56,8 @@ def call(Map params, String region, functional_test = false){
         export SCT_SCYLLA_MGMT_AGENT_VERSION=${params.scylla_mgmt_agent_version}
     fi
 
-    if [[ -n "${params.scylla_mgmt_agent_repo ? params.scylla_mgmt_agent_repo : ''}" ]] ; then
-        export SCT_SCYLLA_MGMT_AGENT_REPO=${params.scylla_mgmt_agent_repo}
+    if [[ -n "${params.scylla_mgmt_agent_address ? params.scylla_mgmt_agent_address : ''}" ]] ; then
+        export SCT_SCYLLA_MGMT_AGENT_ADDRESS=${params.scylla_mgmt_agent_address}
     fi
 
     if [[ -n "${params.scylla_ami_id ? params.scylla_ami_id : ''}" ]] ; then
@@ -117,12 +117,12 @@ def call(Map params, String region, functional_test = false){
         export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
     fi
 
-    if [[ -n "${params.scylla_mgmt_repo ? params.scylla_mgmt_repo : ''}" ]] ; then
-        export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
+    if [[ -n "${params.scylla_mgmt_address ? params.scylla_mgmt_address : ''}" ]] ; then
+        export SCT_SCYLLA_MGMT_ADDRESS="${params.scylla_mgmt_address}"
     fi
 
-    if [[ -n "${params.manager_branch ? params.manager_branch : ''}" ]] ; then
-        export SCT_MANAGER_BRANCH="${params.manager_branch}"
+    if [[ -n "${params.manager_version ? params.manager_version : ''}" ]] ; then
+        export SCT_MANAGER_VERSION="${params.manager_version}"
     fi
 
     echo "start test ......."

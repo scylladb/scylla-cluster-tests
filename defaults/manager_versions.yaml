@@ -1,4 +1,4 @@
-manager_repos_by_branch:
+manager_repos_by_version:
   master_latest:
     centos7: 'http://downloads.scylladb.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo'
     centos8: 'http://downloads.scylladb.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo'
@@ -26,7 +26,7 @@ manager_repos_by_branch:
     ubuntu16: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.2-xenial.list'
     ubuntu18: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.2-bionic.list'
 
-scylla_backend_repo_by_branch:
+scylla_backend_repo_by_version:
   2020:
     centos7: 'http://downloads.scylladb.com/rpm/centos/scylla-2020.1.repo'
     centos8: 'http://downloads.scylladb.com/rpm/centos/scylla-2020.1.repo'

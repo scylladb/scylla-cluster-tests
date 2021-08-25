@@ -1886,11 +1886,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         package_name = "scylla-manager-agent"
         if package_path:
             package_name = f"{package_path}scylla-manager-agent*"
-        elif self.parent_cluster.params.get("scylla_mgmt_agent_repo"):
-            self.download_scylla_manager_repo(self.parent_cluster.params.get("scylla_mgmt_agent_repo"))
+        elif self.parent_cluster.params.get("scylla_mgmt_agent_address"):
+            self.download_scylla_manager_repo(self.parent_cluster.params.get("scylla_mgmt_agent_address"))
         else:
-            manager_branch = self.parent_cluster.params.get("manager_branch")
-            agent_repo_url = get_manager_repo_from_defaults(manager_branch, self.distro)
+            manager_version = self.parent_cluster.params.get("manager_version")
+            agent_repo_url = get_manager_repo_from_defaults(manager_version, self.distro)
             self.download_scylla_manager_repo(agent_repo_url)
 
         self.install_package(package_name)
@@ -1934,8 +1934,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.remoter.sudo("systemctl restart scylla-manager-agent")
         self.wait_manager_agent_up()
 
-    def upgrade_manager_agent(self, scylla_mgmt_repo: str, start_agent_after_upgrade: bool = True) -> None:
-        self.download_scylla_manager_repo(scylla_mgmt_repo)
+    def upgrade_manager_agent(self, scylla_mgmt_address: str, start_agent_after_upgrade: bool = True) -> None:
+        self.download_scylla_manager_repo(scylla_mgmt_address)
         if self.is_rhel_like():
             self.remoter.sudo("yum update scylla-manager-agent -y")
         else:
@@ -2294,9 +2294,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run('sudo systemctl enable scylla-server.service')
             self.remoter.run('sudo systemctl enable scylla-jmx.service')
 
-    def upgrade_mgmt(self, scylla_mgmt_repo, start_manager_after_upgrade=True):
-        self.log.debug("Upgrade scylla-manager via repo: %s", scylla_mgmt_repo)
-        self.download_scylla_manager_repo(scylla_mgmt_repo)
+    def upgrade_mgmt(self, scylla_mgmt_address, start_manager_after_upgrade=True):
+        self.log.debug("Upgrade scylla-manager via repo: %s", scylla_mgmt_address)
+        self.download_scylla_manager_repo(scylla_mgmt_address)
         if self.distro.is_rhel_like:
             self.remoter.sudo("yum update scylla-manager-server scylla-manager-client -y")
         else:
@@ -2337,11 +2337,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         package_names = "scylla-manager-server scylla-manager-client"
         if package_url:
             package_names = f"{package_url}scylla-manager-server* {package_url}scylla-manager-client*"
-        elif self.parent_cluster.params.get("scylla_mgmt_repo"):
-            self.download_scylla_manager_repo(self.parent_cluster.params.get("scylla_mgmt_repo"))
+        elif self.parent_cluster.params.get("scylla_mgmt_address"):
+            self.download_scylla_manager_repo(self.parent_cluster.params.get("scylla_mgmt_address"))
         else:
-            manager_branch = self.parent_cluster.params.get("manager_branch")
-            manager_repo_url = get_manager_repo_from_defaults(manager_branch, self.distro)
+            manager_version = self.parent_cluster.params.get("manager_version")
+            manager_repo_url = get_manager_repo_from_defaults(manager_version, self.distro)
             self.download_scylla_manager_repo(manager_repo_url)
         self.install_package(package_names)
 
@@ -4887,8 +4887,8 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         if self.params.get("scylla_repo_m"):
             scylla_repo = self.params.get("scylla_repo_m")
         else:
-            manager_scylla_backend_branch = self.params.get("manager_scylla_backend_branch")
-            scylla_repo = get_manager_scylla_backend(manager_scylla_backend_branch, node.distro)
+            manager_scylla_backend_version = self.params.get("manager_scylla_backend_version")
+            scylla_repo = get_manager_scylla_backend(manager_scylla_backend_version, node.distro)
         node.install_scylla(scylla_repo=scylla_repo)
         package_path = self.params.get("scylla_mgmt_pkg")
         if package_path:

@@ -6,8 +6,8 @@ ip_ssh_connections: 'private'
 
 scylla_repo: ''
 
-manager_branch: 'master_latest'
-manager_scylla_backend_branch: '2021'  # Notice: that centos, ubuntu 20 and debian 10 monitors use 2021, while debian 9, ubuntu 16 and ubuntu 18 use 2020, since we support both
+manager_version: 'master_latest'
+manager_scylla_backend_version: '2021'  # Notice: that centos, ubuntu 20 and debian 10 monitors use 2021, while debian 9, ubuntu 16 and ubuntu 18 use 2020, since we support both
 
 scylla_repo_loader: ''
 

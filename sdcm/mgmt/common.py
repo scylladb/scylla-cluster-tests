@@ -41,32 +41,32 @@ def duration_to_timedelta(duration_string):
     return datetime.timedelta(seconds=total_seconds)
 
 
-def get_manager_repo_from_defaults(manager_branch_name, distro):
+def get_manager_repo_from_defaults(manager_version_name, distro):
     with open("defaults/manager_versions.yaml", 'r') as mgmt_config:
-        manager_repos_by_branch_dict = yaml.load(mgmt_config, Loader=yaml.BaseLoader)["manager_repos_by_branch"]
+        manager_repos_by_version_dict = yaml.load(mgmt_config, Loader=yaml.BaseLoader)["manager_repos_by_version"]
 
-    branch_specific_repos = manager_repos_by_branch_dict.get(manager_branch_name, None)
-    assert branch_specific_repos, f"Couldn't find manager branch {manager_branch_name} in manager defaults"
+    version_specific_repos = manager_repos_by_version_dict.get(manager_version_name, None)
+    assert version_specific_repos, f"Couldn't find manager version {manager_version_name} in manager defaults"
 
     distro_name = get_distro_name(distro)
 
-    repo_address = branch_specific_repos.get(distro_name, None)
-    assert repo_address, f"Could not find manager repo for distro {distro_name} in branch {manager_branch_name}"
+    repo_address = version_specific_repos.get(distro_name, None)
+    assert repo_address, f"Could not find manager repo for distro {distro_name} in version {manager_version_name}"
 
     return repo_address
 
 
-def get_manager_scylla_backend(scylla_backend_branch_name, distro):
+def get_manager_scylla_backend(scylla_backend_version_name, distro):
     with open("defaults/manager_versions.yaml", 'r') as mgmt_config:
-        scylla_backend_repos_by_branch_dict = yaml.load(mgmt_config,
-                                                        Loader=yaml.BaseLoader)["scylla_backend_repo_by_branch"]
+        scylla_backend_repos_by_version_dict = yaml.load(mgmt_config,
+                                                         Loader=yaml.BaseLoader)["scylla_backend_repo_by_version"]
 
-    branch_specific_repos = scylla_backend_repos_by_branch_dict.get(scylla_backend_branch_name, None)
-    assert branch_specific_repos, f"Couldn't find scylla branch {scylla_backend_branch_name} in manager defaults"
+    version_specific_repos = scylla_backend_repos_by_version_dict.get(scylla_backend_version_name, None)
+    assert version_specific_repos, f"Couldn't find scylla version {scylla_backend_version_name} in manager defaults"
 
     distro_name = get_distro_name(distro)
 
-    backend_repo_address = branch_specific_repos.get(distro_name, None)
+    backend_repo_address = version_specific_repos.get(distro_name, None)
     assert backend_repo_address, f"Could not find manager scylla backend repo for {distro}"
 
     return backend_repo_address

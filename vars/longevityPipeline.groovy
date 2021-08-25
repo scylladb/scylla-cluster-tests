@@ -40,9 +40,9 @@ def call(Map pipelineParams) {
             string(defaultValue: '', description: '', name: 'scylla_version')
             string(defaultValue: '', description: '', name: 'scylla_repo')
             string(defaultValue: '', description: '', name: 'scylla_mgmt_agent_version')
-            string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_repo', '')}",
+            string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_address', '')}",
                    description: 'If empty - the default scylla manager agent repo will be taken',
-                   name: 'scylla_mgmt_agent_repo')
+                   name: 'scylla_mgmt_agent_address')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'spot|on_demand|spot_fleet',
                    name: 'provision_type')
@@ -71,13 +71,13 @@ def call(Map pipelineParams) {
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
 
-            string(defaultValue: "${pipelineParams.get('manager_branch', '')}",
+            string(defaultValue: "${pipelineParams.get('manager_version', '')}",
                    description: 'master_latest|2.4|2.3|2.2',
-                   name: 'manager_branch')
+                   name: 'manager_version')
 
             string(defaultValue: '',
                    description: 'If empty - the default manager version will be taken',
-                   name: 'scylla_mgmt_repo')
+                   name: 'scylla_mgmt_address')
 
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
