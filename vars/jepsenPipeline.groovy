@@ -154,9 +154,9 @@ def call(Map pipelineParams) {
                                 export SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND="${params.instance_provision_fallback_on_demand ? params.instance_provision_fallback_on_demand : ''}"
 
                                 echo "start test ......."
-                                SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
-                                if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
-                                    ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} run-test jepsen_test --backend gce
+                                RUNNER_IP=\$(cat sct_runner_ip||echo "")
+                                if [[ -n "\${RUNNER_IP}" ]] ; then
+                                    ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} run-test jepsen_test --backend gce
                                 else
                                     echo "SCT runner IP file is empty. Probably SCT Runner was not created."
                                     exit 1

@@ -16,8 +16,8 @@ def call(Map params, RunWrapper currentBuild){
 
     echo "Starting to clean runner instances"
     if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" ]]; then
-        export SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
-        ./docker/env/hydra.sh clean-runner-instances --test-status "$test_status" --runner-ip \${SCT_RUNNER_IP}
+        export RUNNER_IP=\$(cat sct_runner_ip||echo "")
+        ./docker/env/hydra.sh clean-runner-instances --test-status "$test_status" --runner-ip \${RUNNER_IP}
 
     else
         echo "Not running on AWS or GCP. Skipping cleaning runner instances."

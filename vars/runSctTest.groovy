@@ -123,9 +123,9 @@ def call(Map params, String region, functional_test = false){
 
     echo "start test ......."
     if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" || "$cloud_provider" == "k8s-local-kind-aws" || "$cloud_provider" == "k8s-local-kind-gce" ]]; then
-        SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
-        if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
-            ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} ${test_cmd} ${params.test_name} --backend ${params.backend}
+        RUNNER_IP=\$(cat sct_runner_ip||echo "")
+        if [[ -n "\${RUNNER_IP}" ]] ; then
+            ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} ${test_cmd} ${params.test_name} --backend ${params.backend}
         else
             echo "SCT runner IP file is empty. Probably SCT Runner was not created."
             exit 1
