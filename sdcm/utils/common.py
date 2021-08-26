@@ -426,6 +426,18 @@ class ParallelObject:
             raise ParallelObjectException(results=results)
         return results
 
+    @classmethod
+    def run_once(cls,
+                 partial_funcs_w_args: list[Callable],
+                 timeout: int = 6,
+                 num_workers: Optional[int] = None,
+                 disable_logging: bool = False,
+                 ignore_exceptions: bool = False) -> "ParallelObjectResult":
+        po = cls(partial_funcs_w_args, num_workers=num_workers, timeout=timeout, disable_logging=disable_logging)
+        result = po.run(lambda x: x(), ignore_exceptions=ignore_exceptions)
+
+        return result
+
     def clean_up(self, futures):
         # if there are futures that didn't run  we cancel them
         for future, _ in futures:
