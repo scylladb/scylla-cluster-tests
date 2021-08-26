@@ -27,7 +27,7 @@ import os
 import re
 import traceback
 import json
-from typing import List, Optional, Type, Callable, Tuple, Dict, Set, Union
+from typing import List, Optional, Type, Callable, Tuple, Dict, Set, Union, Any
 from functools import wraps, partial
 from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
@@ -36,16 +36,20 @@ from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectio
 from invoke import UnexpectedExit
 from cassandra import ConsistencyLevel
 
+from sct import LOGGER
 from sdcm.paths import SCYLLA_YAML_PATH
-from sdcm.cluster import NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady
+from sdcm.cluster import NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady, BaseCluster, BaseNode, \
+    BaseScyllaCluster
 from sdcm.cluster import NodeStayInClusterAfterDecommission
 from sdcm.cluster_k8s.mini_k8s import LocalKindCluster
 from sdcm.mgmt import TaskStatus
+from sdcm.tester import ClusterTester
+from sdcm.utils.compaction_ops import CompactionOps
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR
 from sdcm.utils.common import (get_db_tables, generate_random_string,
                                update_certificates, reach_enospc_on_node, clean_enospc_on_node,
                                parse_nodetool_listsnapshots,
-                               update_authenticator)
+                               update_authenticator, ParallelObject)
 from sdcm.utils import cdc
 from sdcm.utils.decorators import retrying, latency_calculator_decorator
 from sdcm.utils.decorators import timeout as timeout_decor
@@ -140,8 +144,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def __init__(self, tester_obj, termination_event, *args):  # pylint: disable=unused-argument
         # *args -  compatible with CategoricalMonkey
-        self.tester = tester_obj  # ClusterTester object
-        self.cluster = tester_obj.db_cluster
+        self.tester: ClusterTester = tester_obj
+        self.cluster: Union[BaseCluster, BaseScyllaCluster] = tester_obj.db_cluster
         self.loaders = tester_obj.loaders
         self.monitoring_set = tester_obj.monitors
         self.target_node = None
@@ -437,6 +441,129 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_stop_start_scylla_server(self):  # pylint: disable=invalid-name
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
         self.target_node.start_scylla_server(verify_up=True, verify_down=False)
+
+    def disrupt_start_stop_major_compaction(self):
+        node = self.cluster.nodes[0]
+        compaction_ops = CompactionOps(self.cluster)
+        # trigger_func = {"func": compaction_ops.trigger_major_compaction, "kwargs": {}}
+        trigger_func = partial(compaction_ops.trigger_major_compaction)
+        watch_func = partial(compaction_ops.stop_on_user_compaction_logged,
+                             node=node,
+                             watch_for="User initiated compaction",
+                             timeout=120,
+                             stop_func=compaction_ops.stop_major_compaction)
+        # watch_func = {"func": compaction_ops.stop_on_user_compaction_logged,
+        #               "kwargs": {"node": node,
+        #                          "watch_for": "User initiated compaction",
+        #                          "timeout": 120,
+        #                          "stop_func": compaction_ops.stop_major_compaction}}
+        # self._trigger_and_stop_compaction(trigger_func_w_kwargs=trigger_func, watch_func_w_kwargs=watch_func)
+        self.tester.wait_no_compactions_running()
+        ParallelObject.run_once(partial_funcs_w_args=[trigger_func, watch_func],
+                                timeout=120)
+
+    def disrupt_start_stop_scrub_compaction(self):
+        node = self.cluster.nodes[0]
+        compaction_ops = CompactionOps(self.cluster)
+        trigger_func = {"func": compaction_ops.trigger_scrub_compaction, "kwargs": {}}
+        watcher_func = {"func": compaction_ops.stop_on_user_compaction_logged,
+                        "kwargs": {"node": node,
+                                   "watch_for": "Scrubbing",
+                                   "timeout": 120,
+                                   "stop_func": compaction_ops.stop_scrub_compaction}}
+        self._trigger_and_stop_compaction(trigger_func_w_kwargs=trigger_func, watch_func_w_kwargs=watcher_func)
+
+    def disrupt_start_stop_cleanup_compaction(self):
+        node = self.cluster.nodes[0]
+        compaction_ops = CompactionOps(self.cluster)
+        trigger_func = {"func": compaction_ops.trigger_cleanup_compaction, "kwargs": {}}
+        watch_func = {"func": compaction_ops.stop_on_user_compaction_logged,
+                      "kwargs": {"node": node,
+                                 "timeout": 120,
+                                 "watch_for": "Cleaning",
+                                 "stop_func": compaction_ops.stop_cleanup_compaction}}
+        self._trigger_and_stop_compaction(trigger_func_w_kwargs=trigger_func, watch_func_w_kwargs=watch_func)
+
+    def disrupt_start_stop_validation_compaction(self):
+        node = self.cluster.nodes[0]
+        compaction_ops = CompactionOps(self.cluster)
+        trigger_func = {"func": compaction_ops.trigger_validation_compaction, "kwargs": {}}
+        watch_func = {"func": compaction_ops.stop_on_user_compaction_logged,
+                      "kwargs": {"node": node,
+                                 "watch_for": "Scrubbing in validate mode",
+                                 "timeout": 120,
+                                 "stop_func": compaction_ops.stop_validation_compaction}}
+        self._trigger_and_stop_compaction(trigger_func_w_kwargs=trigger_func, watch_func_w_kwargs=watch_func)
+
+    def disrupt_start_stop_upgrade_compaction(self):
+        node1 = self.cluster.nodes[0]
+        upgraded_configuration_options = {"enable_sstables_mc_format": False,
+                                          "enable_sstables_md_format": True}
+
+        def _upgrade_sstables_format(node: BaseNode):
+            LOGGER.info("Upgrading sstables format...")
+            with node.remote_scylla_yaml() as scylla_yaml:
+                scylla_yaml.update(upgraded_configuration_options)
+
+        node = self.cluster.nodes[0]
+        node.run_nodetool("flush")
+        node.stop_scylla()
+        _upgrade_sstables_format(node)
+        node.start_scylla()
+
+        compaction_ops = CompactionOps(self.cluster)
+        trigger_func = {"func": compaction_ops.trigger_upgrade_compaction, "kwargs": {}}
+        watch_func = {"func": compaction_ops.stop_on_user_compaction_logged,
+                      "kwargs": {"node": node1,
+                                 "watch_for": "Upgrade keyspace1.standard1",
+                                 "timeout": 300,
+                                 "stop_func": compaction_ops.stop_upgrade_compaction}}
+        self._trigger_and_stop_compaction(trigger_func_w_kwargs=trigger_func, watch_func_w_kwargs=watch_func)
+
+    def disrupt_start_stop_reshape_compaction(self):
+        node = self.cluster.nodes[0]
+        compaction_ops = CompactionOps(self.cluster)
+
+        def _trigger_reshape(node: BaseNode, tester: ClusterTester, keyspace: str = "keyspace1"):
+            twcs = {'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': 1,
+                    'compaction_window_unit': 'MINUTES', 'max_threshold': 1, 'min_threshold': 1}
+            node.run_nodetool(sub_cmd="flush")
+            tester.wait_no_compactions_running()
+            LOGGER.info("Copying data files to ./staging and ./upload directories...")
+            keyspace_dir = f'/var/lib/scylla/data/{keyspace}'
+            cf_data_dir = node.remoter.run(f"ls {keyspace_dir}").stdout.splitlines()[0]
+            full_dir_path = f"{keyspace_dir}/{cf_data_dir}"
+            upload_dir = f"{full_dir_path}/upload"
+            staging_dir = f"{full_dir_path}/staging"
+            cp_cmd_upload = f"cp -p {full_dir_path}/mc-* {upload_dir}"
+            cp_cmd_staging = f"cp -p {full_dir_path}/mc-* {staging_dir}"
+            node.remoter.sudo(cp_cmd_staging)
+            node.remoter.sudo(cp_cmd_upload)
+            LOGGER.info("Finished copying data files to ./staging and ./upload directories.")
+            cmd = f"ALTER TABLE standard1 WITH compaction={twcs}"
+            node.run_cqlsh(cmd=cmd, keyspace="keyspace1")
+            node.run_nodetool("refresh -- keyspace1 standard1")
+        trigger_func = {"func": _trigger_reshape, "kwargs": {"node": node, "tester": self.tester}}
+        watch_func = {"func": compaction_ops.stop_on_user_compaction_logged,
+                      "kwargs": {"node": node,
+                                 "watch_for": "Reshape keyspace1.standard1",
+                                 "timeout": 300,
+                                 "stop_func": compaction_ops.stop_reshape_compaction}}
+        self._trigger_and_stop_compaction(trigger_func_w_kwargs=trigger_func, watch_func_w_kwargs=watch_func)
+
+    def _trigger_and_stop_compaction(self,
+                                     trigger_func_w_kwargs: dict[str, Any],
+                                     watch_func_w_kwargs: dict[str, Any]):
+        def _run_in_parallel(funcs_with_kwargs: list[dict[str, Any]]):
+            def _run_func(func: Callable, kwargs: Any):
+                return func(**kwargs)
+
+            parallel_obj = ParallelObject(funcs_with_kwargs, timeout=300)
+
+            return parallel_obj.run(_run_func, unpack_objects=True)
+
+
+        _run_in_parallel([trigger_func_w_kwargs, watch_func_w_kwargs])
 
     # This nemesis should be run with "private" ip_ssh_connections till the issue #665 is not fixed
     def disabled_disrupt_restart_then_repair_node(self):  # pylint: disable=invalid-name
@@ -3903,3 +4030,45 @@ class ResetLocalSchemaMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_resetlocalschema()
+
+
+class StartStopMajorCompaction(Nemesis):
+    disruptive = False
+
+    def disrupt(self):
+        self.disrupt_start_stop_major_compaction()
+
+
+class StartStopScrubCompaction(Nemesis):
+    disruptive = False
+
+    def disrupt(self):
+        self.disrupt_start_stop_scrub_compaction()
+
+
+class StartStopCleanupCompaction(Nemesis):
+    disruptive = False
+
+    def disrupt(self):
+        self.disrupt_start_stop_cleanup_compaction()
+
+
+class StartStopValidationCompaction(Nemesis):
+    disruptive = False
+
+    def disrupt(self):
+        self.disrupt_start_stop_validation_compaction()
+
+
+class StartStopUpgradeCompaction(Nemesis):
+    disruptive = True
+
+    def disrupt(self):
+        self.disrupt_start_stop_upgrade_compaction()
+
+
+class StartStopReshapeCompaction(Nemesis):
+    disruptive = True
+
+    def disrupt(self):
+        self.disrupt_start_stop_reshape_compaction()

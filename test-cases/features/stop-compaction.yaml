@@ -1,4 +1,4 @@
-test_duration: 30
+test_duration: 60
 
 stress_cmd: ["cassandra-stress write cl=ONE duration=20m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=10 -pop seq=1..10000000 -log interval=60"]
 
@@ -8,6 +8,9 @@ n_monitor_nodes: 1
 
 instance_type_db: 'i3.large'
 
-nemesis_class_name: 'NoOpMonkey'
+backtrace_decoding: true
 
 user_prefix: 'stop-compaction'
+append_scylla_yaml: |
+  enable_sstables_mc_format: true
+  enable_sstables_md_format: false
