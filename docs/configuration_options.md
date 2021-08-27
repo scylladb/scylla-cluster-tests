@@ -286,3 +286,4 @@
 | **<a href="#user-content-data_volume_disk_type" name="data_volume_disk_type">data_volume_disk_type</a>**  | Type of addtitional volumes: gp2|gp3|io2|io3 | N/A | SCT_DATA_VOLUME_DISK_TYPE
 | **<a href="#user-content-data_volume_disk_size" name="data_volume_disk_size">data_volume_disk_size</a>**  | Size of additional volume in GB | N/A | SCT_DATA_VOLUME_DISK_SIZE
 | **<a href="#user-content-data_volume_disk_iops" name="data_volume_disk_iops">data_volume_disk_iops</a>**  | Number of iops for ebs type io2|io3|gp3 | N/A | SCT_DATA_VOLUME_DISK_IOPS
+| **<a href="#user-content-scylla_bench_version" name="scylla_bench_version">scylla_bench_version</a>**  | A valid tag under the scylla bench repo: https://github.com/scylladb/scylla-bench | N/A | SCT_SCYLLA_BENCH_VERSION
