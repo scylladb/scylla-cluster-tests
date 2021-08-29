@@ -2226,21 +2226,21 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
 
     def _check_kubernetes_monitoring_health(self):
         self.log.debug('Check kubernetes monitoring health')
-        try:
-            PrometheusDBStats(
-                host=self.k8s_cluster.k8s_monitoring_node_ip,
-                port=self.k8s_cluster.k8s_prometheus_external_port,
-            )
-        except Exception as exc:  # pylint: disable=broad-except
-            ClusterHealthValidatorEvent.MonitoringStatus(
-                error=f'Failed to connect to kubernetes prometheus server at '
-                      f'{self.k8s_cluster.k8s_monitoring_node_ip}:'
-                      f'{self.k8s_cluster.k8s_prometheus_external_port},'
-                      f' due to the: \n'
-                      ''.join(traceback.format_exception(type(exc), exc, exc.__traceback__))
-            ).publish()
-        ClusterHealthValidatorEvent.Done(
-            message="Kubernetes monitoring health check finished").publish()
+        with ClusterHealthValidatorEvent() as kmh_event:
+            try:
+                PrometheusDBStats(
+                    host=self.k8s_cluster.k8s_monitoring_node_ip,
+                    port=self.k8s_cluster.k8s_prometheus_external_port,
+                )
+            except Exception as exc:  # pylint: disable=broad-except
+                ClusterHealthValidatorEvent.MonitoringStatus(
+                    error=f'Failed to connect to kubernetes prometheus server at '
+                          f'{self.k8s_cluster.k8s_monitoring_node_ip}:'
+                          f'{self.k8s_cluster.k8s_prometheus_external_port},'
+                          f' due to the: \n'
+                          ''.join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+                ).publish()
+            kmh_event.message = "Kubernetes monitoring health check finished"
 
     def restart_scylla(self, nodes=None, random_order=False):
         # TODO: add support for the "nodes" param to have compatible logic with

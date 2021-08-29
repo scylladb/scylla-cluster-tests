@@ -3917,18 +3917,18 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             self.log.debug('Cluster health check disabled')
             return
 
-        # Don't run health check in case parallel nemesis.
-        # TODO: find how to recognize, that nemesis on the node is running
-        if self.nemesis_count == 1:
-            for node in self.nodes:
-                node.check_node_health()
-        else:
-            ClusterHealthValidatorEvent.Info(
-                message="Test runs with parallel nemesis. Nodes health checks are disabled.",
-            ).publish()
+        with ClusterHealthValidatorEvent() as chc_event:
+            # Don't run health check in case parallel nemesis.
+            # TODO: find how to recognize, that nemesis on the node is running
+            if self.nemesis_count == 1:
+                for node in self.nodes:
+                    node.check_node_health()
+            else:
+                chc_event.message = "Test runs with parallel nemesis. Nodes health checks are disabled."
+                return
 
-        self.check_nodes_running_nemesis_count()
-        ClusterHealthValidatorEvent.Done(message="Cluster health check finished").publish()
+            self.check_nodes_running_nemesis_count()
+            chc_event.message = "Cluster health check finished"
 
     def check_nodes_running_nemesis_count(self):
         nodes_running_nemesis = [node for node in self.nodes if node.running_nemesis]
