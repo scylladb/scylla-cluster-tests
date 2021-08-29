@@ -11,27 +11,29 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
-from typing import Type, Protocol, Optional, runtime_checkable
+from typing import Type, Optional
 
 from sdcm.sct_events import Severity, SctEventProtocol
 from sdcm.sct_events.base import InformationalEvent
+from sdcm.sct_events.continuous_event import ContinuousEvent
 
 
-@runtime_checkable
-class ClusterHealthValidatorEventClusterHealthCheck(SctEventProtocol, Protocol):
-    info: Type[SctEventProtocol]
-    done: Type[SctEventProtocol]
+class ClusterHealthValidatorSubEvents(InformationalEvent, abstract=True):
+
+    def __init__(self, node: str = None, message: str = None, error: str = None, severity: Severity = Severity.UNKNOWN):
+        super().__init__(severity=severity)
+        self.node = str(node) if node else ""
+        self.message = message if message else ""
+        self.error = error if error else ""
 
 
-class ClusterHealthValidatorEvent(InformationalEvent, abstract=True):
+class ClusterHealthValidatorEvent(ContinuousEvent):
     MonitoringStatus: Type[SctEventProtocol]
     NodeStatus: Type[SctEventProtocol]
     NodePeersNulls: Type[SctEventProtocol]
     NodeSchemaVersion: Type[SctEventProtocol]
     NodesNemesis: Type[SctEventProtocol]
     ScyllaCloudClusterServerDiagnostic: Type[SctEventProtocol]
-    Done: Type[SctEventProtocol]
-    Info: Type[SctEventProtocol]
 
     def __init__(self,
                  node=None,
@@ -40,27 +42,35 @@ class ClusterHealthValidatorEvent(InformationalEvent, abstract=True):
                  severity=Severity.ERROR) -> None:
         super().__init__(severity=severity)
 
-        self.node = str(node)
+        self.node = str(node) if node else ""
         self.error = error if error else ""
         self.message = message if message else ""
 
     @property
     def msgfmt(self) -> str:
+        message = super().msgfmt
+        if self.type:
+            message = message + ": type={0.type}"
+        if self.node:
+            message = message + " node={0.node}"
         if self.severity in (Severity.NORMAL, Severity.WARNING, ):
-            return super().msgfmt + ": type={0.type} node={0.node} message={0.message}"
+            if self.message:
+                message = message + " message={0.message}"
+            return message
         elif self.severity in (Severity.ERROR, Severity.CRITICAL, ):
-            return super().msgfmt + ": type={0.type} node={0.node} error={0.error}"
-        return super().msgfmt
+            if self.error:
+                message = message + " error={0.error}"
+            return message
+        return message
 
 
-ClusterHealthValidatorEvent.add_subevent_type("NodeStatus")
-ClusterHealthValidatorEvent.add_subevent_type("NodePeersNulls")
-ClusterHealthValidatorEvent.add_subevent_type("NodeSchemaVersion")
-ClusterHealthValidatorEvent.add_subevent_type("NodesNemesis")
-ClusterHealthValidatorEvent.add_subevent_type("MonitoringStatus")
-ClusterHealthValidatorEvent.add_subevent_type("ScyllaCloudClusterServerDiagnostic")
-ClusterHealthValidatorEvent.add_subevent_type("Done", severity=Severity.NORMAL)
-ClusterHealthValidatorEvent.add_subevent_type("Info", severity=Severity.NORMAL)
+ClusterHealthValidatorEvent.add_subevent_type("NodeStatus", mixin=ClusterHealthValidatorSubEvents)
+ClusterHealthValidatorEvent.add_subevent_type("NodePeersNulls", mixin=ClusterHealthValidatorSubEvents)
+ClusterHealthValidatorEvent.add_subevent_type("NodeSchemaVersion", mixin=ClusterHealthValidatorSubEvents)
+ClusterHealthValidatorEvent.add_subevent_type("NodesNemesis", mixin=ClusterHealthValidatorSubEvents)
+ClusterHealthValidatorEvent.add_subevent_type("MonitoringStatus", mixin=ClusterHealthValidatorSubEvents)
+ClusterHealthValidatorEvent.add_subevent_type("ScyllaCloudClusterServerDiagnostic",
+                                              mixin=ClusterHealthValidatorSubEvents)
 
 
 class DataValidatorEvent(InformationalEvent, abstract=True):

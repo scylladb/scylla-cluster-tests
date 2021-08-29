@@ -4,8 +4,7 @@ ClusterHealthValidatorEvent.NodePeersNulls: ERROR
 ClusterHealthValidatorEvent.NodeSchemaVersion: ERROR
 ClusterHealthValidatorEvent.NodesNemesis: WARNING
 ClusterHealthValidatorEvent.ScyllaCloudClusterServerDiagnostic: CRITICAL
-ClusterHealthValidatorEvent.Done: NORMAL
-ClusterHealthValidatorEvent.Info: NORMAL
+ClusterHealthValidatorEvent: NORMAL
 DataValidatorEvent.DataValidator: ERROR
 DataValidatorEvent.ImmutableRowsValidator: ERROR
 DataValidatorEvent.UpdatedRowsValidator: WARNING
