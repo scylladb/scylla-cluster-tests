@@ -1696,9 +1696,14 @@ class SCTConfiguration(dict):
         """
         Check if ami_id and repo urls are valid
         """
+        backend = self.get('cluster_backend')
+        if backend in ("k8s-eks", "k8s-gke"):
+            return
+
         self._get_target_upgrade_version()
+
         # verify that the AMIs used all have 'user_data_format_version' tag
-        if 'aws' in self.get('cluster_backend'):
+        if backend == 'aws':
             ami_id_db_scylla = self.get('ami_id_db_scylla').split()
             region_names = self.region_names
             ami_id_db_oracle = self.get('ami_id_db_oracle').split()
@@ -1714,9 +1719,16 @@ class SCTConfiguration(dict):
                             f"tags: {tags}"
         # For each Scylla repo file we will check that there is at least one valid URL through which to download a
         # version of SCYLLA, otherwise we will get an error.
-        get_branch_version_for_multiple_repositories(urls=(self.get(url) for url in [
-            'new_scylla_repo', 'scylla_repo_m', 'scylla_repo_loader', 'scylla_mgmt_repo', 'scylla_mgmt_agent_repo',
-            'scylla_mgmt_agent_repo'] if self.get(url)))
+        repos_to_validate = ['scylla_repo_loader']
+        if backend in ("aws", "gce", "baremetal"):
+            repos_to_validate.extend([
+                'new_scylla_repo',
+                'scylla_repo_m',
+                'scylla_mgmt_repo',
+                'scylla_mgmt_agent_repo',
+            ])
+        get_branch_version_for_multiple_repositories(
+            urls=(self.get(url) for url in repos_to_validate if self.get(url)))
 
     def dump_config(self):
         """
