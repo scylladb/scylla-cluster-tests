@@ -33,12 +33,16 @@ class TestValidators(unittest.TestCase):
             ClusterHealthValidatorEvent.ScyllaCloudClusterServerDiagnostic,
             ClusterHealthValidatorEvent
         ))
-        self.assertTrue(hasattr(ClusterHealthValidatorEvent, "Info"))
-        self.assertTrue(issubclass(ClusterHealthValidatorEvent.Info, ClusterHealthValidatorEvent))
-        self.assertTrue(hasattr(ClusterHealthValidatorEvent, "Done"))
-        self.assertTrue(issubclass(ClusterHealthValidatorEvent.Done, ClusterHealthValidatorEvent))
 
     def test_cluster_health_validator_event_msgfmt(self):
+        chc_event = ClusterHealthValidatorEvent()
+        chc_event.publish_event = False
+        chc_event.event_id = "7208cfbb-a083-4b7a-b0db-1982d88f6da0"
+        chc_event.begin_event()
+        self.assertEqual(str(chc_event),
+                         "(ClusterHealthValidatorEvent Severity.NORMAL) period_type=begin "
+                         "event_id=7208cfbb-a083-4b7a-b0db-1982d88f6da0")
+
         critical_event = ClusterHealthValidatorEvent.NodeStatus(severity=Severity.CRITICAL, node="n1", error="e1")
         critical_event.event_id = "712128d0-4837-4213-8a60-d6e2ec106c52"
         self.assertEqual(
@@ -76,23 +80,14 @@ class TestValidators(unittest.TestCase):
         )
         self.assertEqual(info_event, pickle.loads(pickle.dumps(info_event)))
 
-        info_event = ClusterHealthValidatorEvent.Info(node="n4", message="m4")
-        info_event.event_id = "712128d0-4837-4213-8a60-d6e2ec106c52"
+        chc_event.message = "Cluster health check finished"
+        chc_event.duration = 5
+        chc_event.end_event()
         self.assertEqual(
-            str(info_event),
-            "(ClusterHealthValidatorEvent Severity.NORMAL) period_type=one-time "
-            "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=Info node=n4 message=m4"
+            str(chc_event),
+            "(ClusterHealthValidatorEvent Severity.NORMAL) period_type=end "
+            "event_id=7208cfbb-a083-4b7a-b0db-1982d88f6da0 duration=5s message=Cluster health check finished"
         )
-        self.assertEqual(info_event, pickle.loads(pickle.dumps(info_event)))
-
-        info_event = ClusterHealthValidatorEvent.Done(node="n4", message="m4")
-        info_event.event_id = "712128d0-4837-4213-8a60-d6e2ec106c52"
-        self.assertEqual(
-            str(info_event),
-            "(ClusterHealthValidatorEvent Severity.NORMAL) period_type=one-time "
-            "event_id=712128d0-4837-4213-8a60-d6e2ec106c52: type=Done node=n4 message=m4"
-        )
-        self.assertEqual(info_event, pickle.loads(pickle.dumps(info_event)))
 
     def test_data_validator_event(self):
         self.assertTrue(hasattr(DataValidatorEvent, "DataValidator"))
