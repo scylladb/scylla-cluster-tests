@@ -3466,14 +3466,14 @@ class NodeSetupTimeout(Exception):
     pass
 
 
-def wait_for_init_wrap(method):
+def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
     """
     Wraps wait_for_init class method.
     Run setup of nodes simultaneously and wait for all the setups finished.
     Raise exception if setup failed or timeout expired.
     """
     @wraps(method)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args, **kwargs):  # pylint: disable=too-many-statements
         cl_inst = args[0]
         LOGGER.debug('Class instance: %s', cl_inst)
         LOGGER.debug('Method kwargs: %s', kwargs)
@@ -3531,7 +3531,9 @@ def wait_for_init_wrap(method):
                 setup_thread = threading.Thread(target=node_setup, name='NodeSetupThread',
                                                 args=(node,), daemon=True)
                 setup_thread.start()
-                time.sleep(120)
+                if isinstance(cl_inst, BaseScyllaCluster):
+                    cl_inst.log.info("Wait 120 seconds before next node setup")
+                    time.sleep(120)
 
         while len(results) != len(node_list):
             verify_node_setup(start_time)
