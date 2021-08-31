@@ -309,7 +309,7 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
         values = super().get_scylla_cluster_helm_values(cpu_limit, memory_limit, pool_name)
         values.delete('racks.[0].storage.storageClassName')
         values.set('cpuset', False)
-        values.set('developerMode', True)
+        values.set('developerMode', False)
         values.set('hostNetworking', False)
         return values
 
