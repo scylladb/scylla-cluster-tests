@@ -793,7 +793,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             )
         else:
             cpu_limit = 1
-            memory_limit = 2
+            memory_limit = 2.5
 
         cpu_limit = int(cpu_limit)
         memory_limit = convert_memory_units_to_k8s_value(memory_limit)
