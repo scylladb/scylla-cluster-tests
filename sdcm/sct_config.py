@@ -1393,7 +1393,7 @@ class SCTConfiguration(dict):
                             if ami.name.endswith(suffix):
                                 break
                         else:
-                            raise ValueError(f"AMIs for {scylla_version=} not found in {region}")
+                            raise ValueError(f"AMIs for {scylla_version} not found in {region}")
                     self.log.debug("Found AMI %s for scylla_version='%s' in %s", ami.image_id, scylla_version, region)
                     ami_list.append(ami)
                 self['ami_id_db_scylla'] = " ".join(ami.image_id for ami in ami_list)
@@ -1407,7 +1407,7 @@ class SCTConfiguration(dict):
                         if gce_image.name.endswith(suffix):
                             break
                     else:
-                        raise ValueError(f"GCE images for {scylla_version=} not found")
+                        raise ValueError(f"GCE images for {scylla_version} not found")
                 self.log.debug("Found GCE image %s for scylla_version='%s'", gce_image.name, scylla_version)
                 self["gce_image_db"] = gce_image.extra["selfLink"]
             elif not self.get('scylla_repo'):
