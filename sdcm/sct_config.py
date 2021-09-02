@@ -184,6 +184,9 @@ class SCTConfiguration(dict):
         dict(name="nonroot_offline_install", env="SCT_NONROOT_OFFLINE_INSTALL", type=boolean,
              help="Install Scylla without required root priviledge"),
 
+        dict(name="install_mode", env="SCT_INSTALL_MODE", type=str,
+             help="Scylla install mode, repo/offline/web"),
+
         dict(name="scylla_version", env="SCT_SCYLLA_VERSION",
              type=str,
              help="""Version of scylla to install, ex. '2.3.1'
