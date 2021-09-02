@@ -47,7 +47,7 @@ while [[ $# -gt 0 ]]; do
             shift
             shift
             ;;
-        --install-bash-completion)
+        --install-bash-completion|--help)
             SCT_ARGUMENTS+=("$1")
             shift
             ;;
