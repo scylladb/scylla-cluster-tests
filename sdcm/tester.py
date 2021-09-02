@@ -1073,7 +1073,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                           gce_network=self.params.get("gce_network"),
                                           services=services,
                                           user_prefix=self.params.get("user_prefix"),
-                                          n_nodes=1,
+                                          gce_instance_type='n1-standard-2',
+                                          n_nodes=2,
                                           params=self.params,
                                           gce_datacenter=gce_datacenter)
         self.k8s_cluster.deploy()

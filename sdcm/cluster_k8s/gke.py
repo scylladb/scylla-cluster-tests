@@ -151,12 +151,12 @@ class GkeCluster(KubernetesCluster):
                  gce_image_size,
                  gce_network,
                  services,
-                 gce_instance_type='n1-standard-4',
+                 gce_instance_type='n1-standard-2',
                  user_prefix=None,
                  params=None,
                  gce_datacenter=None,
                  cluster_uuid=None,
-                 n_nodes=1
+                 n_nodes=2,
                  ):
         super().__init__(
             params=params,
