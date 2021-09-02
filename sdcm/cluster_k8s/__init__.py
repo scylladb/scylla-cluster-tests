@@ -403,17 +403,30 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self._scylla_manager_journal_thread = ScyllaManagerLogger(self, self.scylla_manager_log)
         self._scylla_manager_journal_thread.start()
 
-    def set_nodeselector_for_kubedns(self, pool_name):
-        # EKS and GKE deploy kube-dns pods, so make it be deployed on default nodes, not any other
+    def set_nodeselector_for_deployments(self, pool_name: str,
+                                         namespace: str = "kube-system",
+                                         selector: str = "") -> None:
+        """Sets node selector for deployment objects in a namespace.
+
+        pool_name: any pool name. For example 'auxiliary-pool' in EKS or 'default-pool' in GKE.
+        namespace: any namespace to look for deployments.
+        selector: any selector to use for filtering deployments in a namespace.
+            Example: 'foo=bar' or '' (empty string means 'all').
+
+        Use case: deploying Scylla cluster on EKS or GKE backends we don't want to have
+        unexpected pods be placed onto Scylla K8S nodes. Also, we don't want to stick
+        to any of deployment names in case it's name or number changes.
+        """
         data = {"spec": {"template": {"spec": {"nodeSelector": {
             self.POOL_LABEL_NAME: pool_name,
         }}}}}
-        deployment_name = self.kubectl(
-            "get deployments -l k8s-app=kube-dns --no-headers -o custom-columns=:.metadata.name",
-            namespace="kube-system").stdout.strip()
-        self.kubectl(
-            f"patch deployments {deployment_name} -p '{json.dumps(data)}'",
-            namespace="kube-system")
+        deployment_names = self.kubectl(
+            f"get deployments -l '{selector}' --no-headers -o custom-columns=:.metadata.name",
+            namespace=namespace).stdout.split()
+        for deployment_name in deployment_names:
+            self.kubectl(
+                f"patch deployments {deployment_name} -p '{json.dumps(data)}'",
+                namespace=namespace)
 
     @log_run_info
     def deploy_cert_manager(self, pool_name: str = None) -> None:
