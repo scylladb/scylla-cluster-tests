@@ -64,6 +64,7 @@ from sdcm.utils.k8s import (
     convert_memory_value_from_k8s_to_units,
     get_helm_pool_affinity_values,
     get_pool_affinity_modifiers,
+    get_preferred_pod_anti_affinity_values,
     ApiCallRateLimiter,
     CordonNodes,
     JSON_PATCH_TYPE,
@@ -595,7 +596,15 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             if pool_name is None:
                 pool_name = self.AUXILIARY_POOL_NAME
 
-            values = HelmValues(**get_helm_pool_affinity_values(self.POOL_LABEL_NAME, pool_name) if pool_name else {})
+            affinity_rules = {
+                "affinity": get_preferred_pod_anti_affinity_values("scylla-operator"),
+                "webhookServerAffinity": get_preferred_pod_anti_affinity_values("webhook-server"),
+            }
+            if pool_name:
+                add_pool_node_affinity(affinity_rules["affinity"], self.POOL_LABEL_NAME, pool_name)
+                affinity_rules["webhookServerAffinity"]["nodeAffinity"] = (
+                    affinity_rules["affinity"]["nodeAffinity"])
+            values = HelmValues(**affinity_rules)
             if version.parse(self._scylla_operator_chart_version.split("-")[0]) > version.parse("v1.3.0"):
                 # NOTE: following is supported starting with operator-1.4
                 values.set("logLevel", 4)

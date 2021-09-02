@@ -813,6 +813,19 @@ def add_pool_node_affinity(value, pool_label_name, pool_name):
     return value
 
 
+def get_preferred_pod_anti_affinity_values(name: str) -> dict:
+    return {"podAntiAffinity": {"preferredDuringSchedulingIgnoredDuringExecution": [{
+        "weight": 1,
+        "podAffinityTerm": {
+            "topologyKey": "kubernetes.io/hostname",
+            "labelSelector": {"matchLabels": {
+                "app.kubernetes.io/name": name,
+                "app.kubernetes.io/instance": name,
+            }},
+        },
+    }]}}
+
+
 def get_helm_pool_affinity_values(pool_label_name, pool_name):
     return {'affinity': add_pool_node_affinity({}, pool_label_name, pool_name)}
 
