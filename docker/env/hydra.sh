@@ -206,6 +206,7 @@ function run_in_docker () {
             ${BUILD_OPTIONS} \
             ${JENKINS_OPTIONS} \
             ${AWS_OPTIONS} \
+            --env GIT_BRANCH \
             --net=host \
             --name="${SCT_TEST_ID}_$(date +%s)" \
             ${DOCKER_REPO}:${VERSION} \
@@ -239,6 +240,7 @@ function run_in_docker () {
             ${BUILD_OPTIONS} \
             ${JENKINS_OPTIONS} \
             ${AWS_OPTIONS} \
+            --env GIT_BRANCH \
             --net=host \
             --name="${SCT_TEST_ID}_$(date +%s)" \
             ${DOCKER_REPO}:${VERSION} \

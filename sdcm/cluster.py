@@ -74,6 +74,7 @@ from sdcm.utils.common import (
     change_default_password,
 )
 from sdcm.utils.distro import Distro
+from sdcm.utils.install import InstallMode
 from sdcm.utils.docker_utils import ContainerManager, NotFound, docker_hub_login
 from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_gossip_and_nodetool_status, \
     check_schema_version, check_nulls_in_peers, check_schema_agreement_in_gossip_and_peers, \
@@ -2146,6 +2147,27 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 rm -f /tmp/scylla.yaml
             """)
             self.remoter.run('sudo bash -cxe "%s"' % install_cmds)
+
+    def web_install_scylla(self, scylla_version: Optional[str] = None) -> None:
+        """
+        Install scylla by Scylla Web Installer Script. Try to use install the latest
+        unstable build for the test branch, generally it should install same version
+        as the unstable scylla_repo.
+
+        https://github.com/scylladb/scylla-web-install
+        """
+
+        # Try to get the major version from the branch name, it will only be used when scylla_version isn't assigned.
+        # It can be switched to RELEASE_BRANCH from upstream job
+        git_branch = os.environ.get('GIT_BRANCH')  # origin/branch-4.5
+        self.log.debug("scylla_version: %s, git_branch: %s", scylla_version, git_branch)
+
+        if match := re.match(r'\D*(\d+\.\d+)', scylla_version or git_branch):
+            version = f"nightly-{match.group(1)}"
+        else:
+            raise Exception("Scylla version for web install isn't identified")
+
+        self.remoter.run(f"curl -sSf get.scylladb.com/server | sudo bash -s -- --scylla-version {version}")
 
     def install_scylla_debuginfo(self) -> None:
         if self.distro.is_rhel_like:
@@ -4235,6 +4257,16 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
     def _scylla_install(self, node):
         node.update_repo_cache()
         node.clean_scylla()
+
+        install_mode = self.params.get('install_mode')
+        try:
+            mode = InstallMode(install_mode)
+        except Exception as ex:
+            raise ValueError(f'Invalid install mode: {install_mode}, err: {ex}') from ex
+
+        if mode == InstallMode.WEB:
+            node.web_install_scylla(scylla_version=self.params.get('scylla_version'))
+
         if self.params.get('unified_package'):
             node.offline_install_scylla(unified_package=self.params.get('unified_package'),
                                         nonroot=self.params.get('nonroot_offline_install'))

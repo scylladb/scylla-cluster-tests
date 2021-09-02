@@ -1,0 +1,3 @@
+# Install Scylla by Web Installer script
+# https://github.com/scylladb/scylla-web-install
+install_mode: 'web'
