@@ -157,6 +157,18 @@ ORACLE_SUPPORT_PRODUCT="Oracle Linux"
 ORACLE_SUPPORT_PRODUCT_VERSION=8.1
 """,
 
+    "SLES 15": """\
+NAME="SLES"
+VERSION="15-SP3"
+VERSION_ID="15.3"
+PRETTY_NAME="SUSE Linux Enterprise Server 15 SP3"
+ID="sles"
+ID_LIKE="suse"
+ANSI_COLOR="0;32"
+CPE_NAME="cpe:/o:suse:sles:15:sp3"
+DOCUMENTATION_URL="https://documentation.suse.com/"
+""",
+
     "Ubuntu 14.04": """\
 NAME="Ubuntu"
 VERSION="14.04.6 LTS, Trusty Tahr"
@@ -290,6 +302,12 @@ class TestDistro(unittest.TestCase):
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["OEL 8.1"])
         self.assertTrue(distro.is_oel8)
         self.assertTrue(distro.is_rhel_like)
+
+    def test_sles15(self):
+        self.assertTrue(Distro.SLES15.is_sles15)
+        distro = Distro.from_os_release(DISTROS_OS_RELEASE["SLES 15"])
+        self.assertTrue(distro.is_sles15)
+        self.assertTrue(distro.is_sles)
 
     def test_ubuntu14(self):
         self.assertTrue(Distro.UBUNTU14.is_ubuntu14)
