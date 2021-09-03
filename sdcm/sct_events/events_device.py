@@ -145,20 +145,21 @@ class EventsDevice(multiprocessing.Process):
     def outbound_events(self,
                         stop_event: StopEvent,
                         events_counter: multiprocessing.Value) -> Generator[Tuple[str, Any], None, None]:
-        from sdcm.sct_events.base import LogEvent, max_severity
+        from sdcm.sct_events.base import max_severity
         from sdcm.sct_events.system import SystemEvent
-        from sdcm.sct_events.filters import BaseFilter, EventsFilter
+        from sdcm.sct_events.filters import BaseFilter
 
         filters: Dict[UUID, BaseFilter] = {}
+        filters_gc_next_hit = time.perf_counter() + FILTERS_GC_PERIOD
 
         with suppress_interrupt():
             for events_counter.value, obj in enumerate(self.inbound_events(stop_event=stop_event), start=1):
-                for filter_key, filter_obj in list(filters.items()):
-                    if filter_obj.expire_time and filter_obj.expire_time < obj.timestamp:
-                        if (isinstance(obj, LogEvent) and getattr(filter_obj, "filter_node", None) == obj.node) or \
-                                isinstance(filter_obj, EventsFilter):
-                            LOGGER.debug("%s: delete filter with uuid=%s", self, filter_key)
+                if filters_gc_next_hit < time.perf_counter():
+                    # Run filter GC once in FILTERS_GC_PERIOD seconds
+                    for filter_key, filter_obj in list(filters.items()):
+                        if filter_obj.is_deceased():
                             del filters[filter_key]
+                    filters_gc_next_hit = time.perf_counter() + FILTERS_GC_PERIOD
 
                 if isinstance(obj, BaseFilter):
                     if obj.clear_filter and not obj.expire_time:
