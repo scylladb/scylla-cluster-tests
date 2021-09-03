@@ -929,6 +929,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def get_cluster_k8s_local_minimal_cluster(
             self,
             cluster_type: Union[Type[mini_k8s.LocalMinikubeCluster], Type[mini_k8s.LocalKindCluster]]):
+        if "minikube" in self.params.get("cluster_backend"):
+            # TODO: remove raising of the exception when our minikube implementation
+            #       gets multi-node support with dedicated nodes for Scylla.
+            raise NotImplementedError(
+                "Minikube backend not fully implemented. Need to add multi-node support")
+
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
 
         container_node_params = dict(
@@ -942,17 +948,24 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             params=self.params,
         )
         self.k8s_cluster.deploy()
-        self.k8s_cluster.deploy_cert_manager(pool_name='')
-        self.k8s_cluster.deploy_scylla_operator(pool_name='')
+        self.k8s_cluster.deploy_cert_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
+        self.k8s_cluster.deploy_scylla_operator(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
         if self.params.get('use_mgmt'):
-            self.k8s_cluster.deploy_scylla_manager(pool_name='')
+            self.k8s_cluster.deploy_scylla_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
 
+        scylla_pool = mini_k8s.MinimalK8SNodePool(
+            k8s_cluster=self.k8s_cluster,
+            name=self.k8s_cluster.SCYLLA_POOL_NAME,
+            num_nodes=int(self.params.get("n_db_nodes")) + 1,
+            image_type="fake-image-type",
+            instance_type="fake-instance-type")
         self.db_cluster = mini_k8s.LocalMinimalScyllaPodCluster(
             k8s_cluster=self.k8s_cluster,
             scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
             user_prefix=self.params.get("user_prefix"),
             n_nodes=self.params.get("n_db_nodes"),
             params=self.params,
+            node_pool=scylla_pool,
         )
 
         if self.params.get('k8s_deploy_monitoring'):

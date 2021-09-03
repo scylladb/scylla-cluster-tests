@@ -811,8 +811,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 LOGGER.info("Install DaemonSets required by scylla nodes")
                 self.apply_file(node_prepare_config, modifiers=affinity_modifiers, envsubst=False)
 
-            LOGGER.info("Install local volume provisioner")
-            self.helm(f"install local-provisioner {LOCAL_PROVISIONER_DIR}", values=node_pool.helm_affinity_values)
+                LOGGER.info("Install local volume provisioner")
+                self.helm(f"install local-provisioner {LOCAL_PROVISIONER_DIR}",
+                          values=node_pool.helm_affinity_values)
 
             # Calculate cpu and memory limits to occupy all available amounts by scylla pods
             cpu_limit, memory_limit = node_pool.cpu_and_memory_capacity
@@ -822,7 +823,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 - OPERATOR_CONTAINERS_RESOURCES['cpu']
                 - COMMON_CONTAINERS_RESOURCES['cpu']
             )
-            memory_limit = int(
+            memory_limit = (
                 memory_limit
                 - OPERATOR_CONTAINERS_RESOURCES['memory']
                 - COMMON_CONTAINERS_RESOURCES['memory']
@@ -831,7 +832,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             cpu_limit = 1
             memory_limit = 2.5
 
-        cpu_limit = int(cpu_limit)
+        cpu_limit = convert_cpu_units_to_k8s_value(cpu_limit)
         memory_limit = convert_memory_units_to_k8s_value(memory_limit)
 
         # Deploy scylla cluster

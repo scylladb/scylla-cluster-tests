@@ -13,7 +13,7 @@
 import abc
 import getpass
 import logging
-from typing import Optional, List, Callable
+from typing import Tuple, Optional, List, Callable
 from textwrap import dedent
 from functools import cached_property
 
@@ -23,7 +23,14 @@ from sdcm import cluster, cluster_gce
 from sdcm.cluster import LocalNode
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.base import CommandRunner
-from sdcm.cluster_k8s import KubernetesCluster, BaseScyllaPodContainer, ScyllaPodCluster
+from sdcm.cluster_k8s import (
+    CloudK8sNodePool,
+    KubernetesCluster,
+    BaseScyllaPodContainer,
+    ScyllaPodCluster,
+    COMMON_CONTAINERS_RESOURCES,
+    OPERATOR_CONTAINERS_RESOURCES,
+)
 from sdcm.cluster_k8s.iptables import IptablesPodPortsRedirectMixin, IptablesClusterOpsMixin
 from sdcm.cluster_gce import MonitorSetGCE
 from sdcm.utils.k8s import TokenUpdateThread, HelmValues
@@ -35,8 +42,29 @@ from sdcm.wait import wait_for
 KUBECTL_PROXY_PORT = 8001
 KUBECTL_PROXY_CONTAINER = "auto_ssh:kubectl_proxy"
 SCYLLA_POD_EXPOSED_PORTS = [3000, 9042, 9180, ]
+POOL_LABEL_NAME = 'minimal-k8s-nodepool'
 
 LOGGER = logging.getLogger(__name__)
+
+
+class MinimalK8SNodePool(CloudK8sNodePool):
+    k8s_cluster: 'LocalKindCluster'
+
+    def deploy(self) -> None:
+        self.is_deployed = True
+
+    def undeploy(self):
+        pass
+
+    def resize(self, num_nodes: int):
+        pass
+
+    @cached_property
+    def cpu_and_memory_capacity(self) -> Tuple[float, float]:
+        return (
+            1 + COMMON_CONTAINERS_RESOURCES['cpu'] + OPERATOR_CONTAINERS_RESOURCES['cpu'],
+            2.5 + COMMON_CONTAINERS_RESOURCES['memory'] + OPERATOR_CONTAINERS_RESOURCES['memory'],
+        )
 
 
 class MinimalK8SOps:
@@ -181,7 +209,7 @@ class KindK8sMixin:
 
     def start_k8s_software(self) -> None:
         LOGGER.info("Start Kind cluster")
-        script = dedent("""
+        script_start_part = f"""
         sysctl fs.protected_regular=0
         ip link set docker0 promisc on
         /var/tmp/kind delete cluster || true
@@ -199,20 +227,31 @@ class KindK8sMixin:
           evictionHard:
             nodefs.available: 0%
         nodes:
-          # the control plane node config
           - role: control-plane
-            # the three workers
           - role: worker
+            labels:
+              {POOL_LABEL_NAME}: {self.AUXILIARY_POOL_NAME}
           - role: worker
+            labels:
+              {POOL_LABEL_NAME}: {self.AUXILIARY_POOL_NAME}
+        """
+        scylla_node_definition = f"""
           - role: worker
-          - role: worker
+            labels:
+              {POOL_LABEL_NAME}: {self.SCYLLA_POOL_NAME}
+        """
+        for _ in range(self.params.get("n_db_nodes") + 1):
+            script_start_part += scylla_node_definition
+        script_end_part = """
         EndOfSpec
         /var/tmp/kind delete cluster || true
         /var/tmp/kind create cluster --config /tmp/kind.cluster.yaml
-        SERVICE_GATEWAY=`docker inspect kind-control-plane -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`
+        SERVICE_GATEWAY=`docker inspect kind-control-plane \
+            -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}'`
         ip ro add 10.96.0.0/16 via $SERVICE_GATEWAY || ip ro change 10.96.0.0/16 via $SERVICE_GATEWAY
         ip ro add 10.224.0.0/16 via $SERVICE_GATEWAY || ip ro change 10.224.0.0/16 via $SERVICE_GATEWAY
-        """)
+        """
+        script = dedent(script_start_part + script_end_part)
         self.host_node.remoter.run(f"sudo -E bash -cxe '{script}'")
 
     def stop_k8s_software(self):
@@ -279,6 +318,8 @@ class MinikubeK8sMixin:
 
 
 class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: disable=too-many-public-methods
+    POOL_LABEL_NAME = POOL_LABEL_NAME
+
     # pylint: disable=too-many-arguments
     def __init__(self, mini_k8s_version, params: dict, user_prefix: str = '', region_name: str = None,
                  cluster_uuid: str = None, **_):
