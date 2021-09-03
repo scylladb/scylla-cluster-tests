@@ -2848,9 +2848,9 @@ def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
                 nemesis_event.add_error([str(details)])
                 nemesis_event.full_traceback = traceback.format_exc()
                 nemesis_event.severity = Severity.ERROR
-                args[0].error_list.append(details)
+                args[0].error_list.append(str(details))
                 args[0].log.error('Unhandled exception in method %s', method, exc_info=True)
-                log_info.update({'error': details, 'full_traceback': traceback.format_exc()})
+                log_info.update({'error': str(details), 'full_traceback': traceback.format_exc()})
                 status = False
 
             finally:
