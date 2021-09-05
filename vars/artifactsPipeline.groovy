@@ -33,7 +33,7 @@ def call(Map pipelineParams) {
                    description: 'manager agent repo',
                    name: 'scylla_mgmt_agent_address')
             string(defaultValue: "${pipelineParams.get('manager_version', '')}",
-                   description: 'master_latest|2.4|2.3|2.2',
+                   description: 'master_latest|2.5|2.4|2.3',
                    name: 'manager_version')
             string(defaultValue: '',
                    description: 'a Scylla AMI to run against (for AMI test, should be blank otherwise)',

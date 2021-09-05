@@ -7,6 +7,14 @@ manager_repos_by_version:
     ubuntu16: 'http://downloads.scylladb.com/manager/deb/unstable/xenial/master/latest/scylla-manager-master/scylla-manager.list'
     ubuntu18: 'http://downloads.scylladb.com/manager/deb/unstable/bionic/master/latest/scylladb-manager-master/scylla-manager.list'
     ubuntu20: 'http://downloads.scylladb.com/manager/deb/unstable/focal/master/latest/scylla-manager-master/scylla-manager.list'
+  2.5:
+    centos7: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.5.repo'
+    centos8: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.5.repo'
+    debian9: 'http://downloads.scylladb.com/deb/debian/scylladb-manager-2.5-stretch.list'
+    debian10: 'http://downloads.scylladb.com/deb/debian/scylladb-manager-2.5-buster.list'
+    ubuntu16: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.5-xenial.list'
+    ubuntu18: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.5-bionic.list'
+    ubuntu20: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.5-focal.list'
   2.4:
     centos7: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.4.repo'
     centos8: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.4.repo'
@@ -20,11 +28,6 @@ manager_repos_by_version:
     debian9: 'http://downloads.scylladb.com/deb/debian/scylladb-manager-2.3-stretch.list'
     ubuntu16: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.3-xenial.list'
     ubuntu18: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.3-bionic.list'
-  2.2:
-    centos7: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.2.repo'
-    debian9: 'http://downloads.scylladb.com/deb/debian/scylladb-manager-2.2-stretch.list'
-    ubuntu16: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.2-xenial.list'
-    ubuntu18: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.2-bionic.list'
 
 scylla_backend_repo_by_version:
   2020:
