@@ -432,9 +432,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         self.log.info("Prepare data for email")
 
         email_data = self._get_common_email_data()
-        email_data.update({"manager_server_repo": self.params.get("scylla_mgmt_repo"),
-                           "manager_agent_repo": self.params.get("scylla_mgmt_agent_repo") or
-                           self.params.get("scylla_mgmt_repo"), })
+        email_data.update({"manager_server_repo": self.params.get("scylla_mgmt_address"),
+                           "manager_agent_repo": self.params.get("scylla_mgmt_agent_address") or
+                           self.params.get("scylla_mgmt_address"), })
 
         return email_data
 
@@ -715,7 +715,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         """
         Test steps:
         1) Run the repair test.
-        2) Run manager upgrade to new version of yaml: 'scylla_mgmt_upgrade_to_repo'. (the 'from' version is: 'scylla_mgmt_repo').
+        2) Run manager upgrade to new version of yaml: 'scylla_mgmt_upgrade_to_repo'. (the 'from' version is: 'scylla_mgmt_address').
         """
         self.log.info('starting test_manager_upgrade')
         scylla_mgmt_upgrade_to_repo = self.params.get('scylla_mgmt_upgrade_to_repo')
@@ -747,16 +747,16 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
     def test_manager_rollback_upgrade(self):
         """
         Test steps:
-        1) Run Upgrade test: scylla_mgmt_repo --> scylla_mgmt_upgrade_to_repo
-        2) Run manager downgrade to pre-upgrade version as in yaml: 'scylla_mgmt_repo'.
+        1) Run Upgrade test: scylla_mgmt_address --> scylla_mgmt_upgrade_to_repo
+        2) Run manager downgrade to pre-upgrade version as in yaml: 'scylla_mgmt_address'.
         """
         self.log.info('starting test_manager_rollback_upgrade')
         self.test_manager_upgrade()
-        scylla_mgmt_repo = self.params.get('scylla_mgmt_repo')
+        scylla_mgmt_address = self.params.get('scylla_mgmt_address')
         manager_node = self.monitors.nodes[0]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
         manager_from_version = manager_tool.version
-        manager_tool.rollback_upgrade(scylla_mgmt_repo=scylla_mgmt_repo)
+        manager_tool.rollback_upgrade(scylla_mgmt_address=scylla_mgmt_address)
         assert manager_from_version[0] != manager_tool.version[0], "Manager version not changed after rollback."
         self.log.info('finishing test_manager_rollback_upgrade')
 

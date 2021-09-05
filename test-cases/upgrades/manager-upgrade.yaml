@@ -19,6 +19,5 @@ space_node_threshold: 6442
 ip_ssh_connections: 'private'
 
 manager_prometheus_port: 10091
-scylla_mgmt_agent_repo: "http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.1.repo"
 
 aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'

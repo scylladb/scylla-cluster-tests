@@ -93,21 +93,29 @@ def call(Map pipelineParams) {
                    description: 'private|public|ipv6',
                    name: 'ip_ssh_connections')
 
-            string(defaultValue: "${pipelineParams.get('scylla_mgmt_repo', '')}",
+            string(defaultValue: "${pipelineParams.get('scylla_mgmt_address', '')}",
                    description: 'If empty - the default manager version will be taken',
-                   name: 'scylla_mgmt_repo')
+                   name: 'scylla_mgmt_address')
 
-            string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_repo', '')}",
+            string(defaultValue: "${pipelineParams.get('manager_version', '')}",
+                   description: 'master_latest|2.5|2.4|2.3',
+                   name: 'manager_version')
+
+            string(defaultValue: "${pipelineParams.get('target_manager_version', '')}",
+                   description: 'master_latest|2.5|2.4|2.3',
+                   name: 'target_manager_version')
+
+            string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_address', '')}",
                    description: 'manager agent repo',
-                   name: 'scylla_mgmt_agent_repo')
+                   name: 'scylla_mgmt_agent_address')
 
-            string(defaultValue: "${pipelineParams.get('target_scylla_mgmt_server_repo', '')}",
+            string(defaultValue: "${pipelineParams.get('target_scylla_mgmt_server_address', '')}",
                    description: 'Link to the repository of the manager that will be used as a target of the manager server in the manager upgrade test',
-                   name: 'target_scylla_mgmt_server_repo')
+                   name: 'target_scylla_mgmt_server_address')
 
-            string(defaultValue: "${pipelineParams.get('target_scylla_mgmt_agent_repo', '')}",
+            string(defaultValue: "${pipelineParams.get('target_scylla_mgmt_agent_address', '')}",
                    description: 'Link to the repository of the manager that will be used as a target of the manager agents in the manager upgrade test',
-                   name: 'target_scylla_mgmt_agent_repo')
+                   name: 'target_scylla_mgmt_agent_address')
 
             string(defaultValue: "'qa@scylladb.com','mgmt@scylladb.com'",
                    description: 'email recipients of email report',
@@ -236,20 +244,28 @@ def call(Map pipelineParams) {
                                         export SCT_TAG_AMI_WITH_RESULT="${params.tag_ami_with_result}"
                                         export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
 
-                                        if [[ ! -z "${params.scylla_mgmt_repo}" ]] ; then
-                                            export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
+                                        if [[ ! -z "${params.scylla_mgmt_address}" ]] ; then
+                                            export SCT_SCYLLA_MGMT_ADDRESS="${params.scylla_mgmt_address}"
                                         fi
 
-                                        if [[ ! -z "${params.target_scylla_mgmt_server_repo}" ]] ; then
-                                            export SCT_TARGET_SCYLLA_MGMT_SERVER_REPO="${params.target_scylla_mgmt_server_repo}"
+                                        if [[ ! -z "${params.manager_version}" ]] ; then
+                                            export SCT_MANAGER_VERSION="${params.manager_version}"
                                         fi
 
-                                        if [[ ! -z "${params.target_scylla_mgmt_agent_repo}" ]] ; then
-                                            export SCT_TARGET_SCYLLA_MGMT_AGENT_REPO="${params.target_scylla_mgmt_agent_repo}"
+                                        if [[ ! -z "${params.target_manager_version}" ]] ; then
+                                            export SCT_TARGET_MANAGER_VERSION="${params.target_manager_version}"
                                         fi
 
-                                        if [[ ! -z "${params.scylla_mgmt_agent_repo}" ]] ; then
-                                            export SCT_SCYLLA_MGMT_AGENT_REPO="${params.scylla_mgmt_agent_repo}"
+                                        if [[ ! -z "${params.target_scylla_mgmt_server_address}" ]] ; then
+                                            export SCT_TARGET_SCYLLA_MGMT_SERVER_ADDRESS="${params.target_scylla_mgmt_server_address}"
+                                        fi
+
+                                        if [[ ! -z "${params.target_scylla_mgmt_agent_address}" ]] ; then
+                                            export SCT_TARGET_SCYLLA_MGMT_AGENT_ADDRESS="${params.target_scylla_mgmt_agent_address}"
+                                        fi
+
+                                        if [[ ! -z "${params.scylla_mgmt_agent_address}" ]] ; then
+                                            export SCT_SCYLLA_MGMT_AGENT_ADDRESS="${params.scylla_mgmt_agent_address}"
                                         fi
 
                                         if [[ ! -z "${params.scylla_mgmt_pkg}" ]] ; then
@@ -288,13 +304,15 @@ def call(Map pipelineParams) {
                                 def repoParams = []
                                 if (downstreamJobName.contains("upgrade")) {
                                     repoParams = [
-                                        [$class: 'StringParameterValue', name: 'target_scylla_mgmt_server_repo', value: params.scylla_mgmt_repo],
-                                        [$class: 'StringParameterValue', name: 'target_scylla_mgmt_agent_repo', value: params.scylla_mgmt_agent_repo]
+                                        [$class: 'StringParameterValue', name: 'target_scylla_mgmt_server_address', value: params.scylla_mgmt_address],
+                                        [$class: 'StringParameterValue', name: 'target_scylla_mgmt_agent_address', value: params.scylla_mgmt_agent_address],
+                                        [$class: 'StringParameterValue', name: 'TARGET_MANAGER_VERSION', value: params.manager_version]
                                     ]
                                 } else {
                                     repoParams = [
-                                        [$class: 'StringParameterValue', name: 'scylla_mgmt_repo', value: params.scylla_mgmt_repo],
-                                        [$class: 'StringParameterValue', name: 'scylla_mgmt_agent_repo', value: params.scylla_mgmt_agent_repo]
+                                        [$class: 'StringParameterValue', name: 'scylla_mgmt_address', value: params.scylla_mgmt_address],
+                                        [$class: 'StringParameterValue', name: 'scylla_mgmt_agent_address', value: params.scylla_mgmt_agent_address],
+                                        [$class: 'StringParameterValue', name: 'manager_version', value: params.manager_version]
                                     ]
                                 }
                                 triggerJob(fullJobPath, repoParams)

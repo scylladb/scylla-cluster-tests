@@ -10,8 +10,6 @@ managerPipeline(
     test_name: 'mgmt_cli_test.MgmtCliTest.test_backup_feature',
     test_config: 'test-cases/manager/manager-regression-multiDC-set-distro.yaml',
 
-    scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo',
-    scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo',
     scylla_version: '4.4',
 
     timeout: [time: 500, unit: 'MINUTES'],

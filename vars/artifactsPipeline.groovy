@@ -26,12 +26,15 @@ def call(Map pipelineParams) {
             booleanParam(defaultValue: "${pipelineParams.get('nonroot_offline_install', false)}",
                    description: 'Install Scylla without required root priviledge',
                    name: 'nonroot_offline_install')
-            string(defaultValue: "${pipelineParams.get('scylla_mgmt_repo', '')}",
+            string(defaultValue: "${pipelineParams.get('scylla_mgmt_address', '')}",
                    description: 'a Scylla Manager repo to run against (for .rpm/.deb tests, should be blank otherwise)',
-                   name: 'scylla_mgmt_repo')
-            string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_repo', '')}",
+                   name: 'scylla_mgmt_address')
+            string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_address', '')}",
                    description: 'manager agent repo',
-                   name: 'scylla_mgmt_agent_repo')
+                   name: 'scylla_mgmt_agent_address')
+            string(defaultValue: "${pipelineParams.get('manager_version', '')}",
+                   description: 'master_latest|2.5|2.4|2.3',
+                   name: 'manager_version')
             string(defaultValue: '',
                    description: 'a Scylla AMI to run against (for AMI test, should be blank otherwise)',
                    name: 'scylla_ami_id')
@@ -133,14 +136,20 @@ def call(Map pipelineParams) {
                                                         exit 1
                                                     fi
 
-                                                    if [[ ! -z "${params.scylla_mgmt_repo}" && -z "${params.unified_package}" ]]; then
+                                                    if [[ ! -z "${params.scylla_mgmt_address}" && -z "${params.unified_package}" ]]; then
                                                         export SCT_USE_MGMT=true
                                                         export SCT_SCYLLA_REPO_M="${params.scylla_repo}"
-                                                        export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
+                                                        export SCT_SCYLLA_MGMT_ADDRESS="${params.scylla_mgmt_address}"
                                                     fi
 
-                                                    if [[ ! -z "${params.scylla_mgmt_agent_repo}" ]] ; then
-                                                        export SCT_SCYLLA_MGMT_AGENT_REPO="${params.scylla_mgmt_agent_repo}"
+                                                    if [[ ! -z "${params.manager_version}" && -z "${params.unified_package}" ]]; then
+                                                        export SCT_USE_MGMT=true
+                                                        export SCT_SCYLLA_REPO_M="${params.scylla_repo}"
+                                                        export SCT_MANAGER_VERSION="${params.manager_version}"
+                                                    fi
+
+                                                    if [[ ! -z "${params.scylla_mgmt_agent_address}" ]] ; then
+                                                        export SCT_SCYLLA_MGMT_AGENT_ADDRESS="${params.scylla_mgmt_agent_address}"
                                                     fi
 
                                                     if [[ ! -z "${params.scylla_docker_image}" ]]; then

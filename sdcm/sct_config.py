@@ -208,13 +208,25 @@ class SCTConfiguration(dict):
         dict(name="scylla_repo_loader", env="SCT_SCYLLA_REPO_LOADER", type=str,
              help="Url to the repo of scylla version to install c-s for loader"),
 
-        dict(name="scylla_mgmt_repo", env="SCT_SCYLLA_MGMT_REPO",
+        dict(name="scylla_mgmt_address", env="SCT_SCYLLA_MGMT_ADDRESS",
              type=str,
              help="Url to the repo of scylla manager version to install for management tests"),
 
-        dict(name="scylla_mgmt_agent_repo", env="SCT_SCYLLA_MGMT_AGENT_REPO",
+        dict(name="scylla_mgmt_agent_address", env="SCT_SCYLLA_MGMT_AGENT_ADDRESS",
              type=str,
              help="Url to the repo of scylla manager agent version to install for management tests"),
+
+        dict(name="manager_version", env="SCT_MANAGER_VERSION",
+             type=str,
+             help="Branch of scylla manager server and agent to install. Options in defaults/manager_versions.yaml"),
+
+        dict(name="target_manager_version", env="SCT_TARGET_MANAGER_VERSION",
+             type=str,
+             help="Branch of scylla manager server and agent to upgrade to. Options in defaults/manager_versions.yaml"),
+
+        dict(name="manager_scylla_backend_version", env="SCT_MANAGER_SCYLLA_BACKEND_VERSION",
+             type=str,
+             help="Branch of scylla db enterprise to install. Options in defaults/manager_versions.yaml"),
 
         dict(name="scylla_mgmt_agent_version", env="SCT_SCYLLA_MGMT_AGENT_VERSION", type=str,
              help=""),
@@ -284,10 +296,10 @@ class SCTConfiguration(dict):
         dict(name="manager_prometheus_port", env="SCT_MANAGER_PROMETHEUS_PORT", type=int,
              help="Port to be used by the manager to contact Prometheus"),
 
-        dict(name="target_scylla_mgmt_server_repo", env="SCT_TARGET_SCYLLA_MGMT_SERVER_REPO", type=str,
+        dict(name="target_scylla_mgmt_server_address", env="SCT_TARGET_SCYLLA_MGMT_SERVER_ADDRESS", type=str,
              help="Url to the repo of scylla manager version used to upgrade the manager server"),
 
-        dict(name="target_scylla_mgmt_agent_repo", env="SCT_TARGET_SCYLLA_MGMT_AGENT_REPO", type=str,
+        dict(name="target_scylla_mgmt_agent_address", env="SCT_TARGET_SCYLLA_MGMT_AGENT_ADDRESS", type=str,
              help="Url to the repo of scylla manager version used to upgrade the manager agents"),
 
         dict(name="update_db_packages", env="SCT_UPDATE_DB_PACKAGES", type=str,
@@ -1747,8 +1759,8 @@ class SCTConfiguration(dict):
             repos_to_validate.extend([
                 'new_scylla_repo',
                 'scylla_repo_m',
-                'scylla_mgmt_repo',
-                'scylla_mgmt_agent_repo',
+                'scylla_mgmt_address',
+                'scylla_mgmt_agent_address',
             ])
         get_branch_version_for_multiple_repositories(
             urls=(self.get(url) for url in repos_to_validate if self.get(url)))

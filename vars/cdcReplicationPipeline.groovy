@@ -47,8 +47,12 @@ def runSctTest(Map params, String region){
     export SCT_TAG_AMI_WITH_RESULT="${params.tag_ami_with_result}"
     export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
 
-    if [[ ! -z "${params.scylla_mgmt_repo}" ]] ; then
-        export SCT_SCYLLA_MGMT_REPO="${params.scylla_mgmt_repo}"
+    if [[ ! -z "${params.scylla_mgmt_address}" ]] ; then
+        export SCT_SCYLLA_MGMT_ADDRESS="${params.scylla_mgmt_address}"
+    fi
+
+    if [[ ! -z "${params.manager_version}" ]] ; then
+        export SCT_MANAGER_VERSION="${params.manager_version}"
     fi
 
     echo "start test ......."
@@ -124,7 +128,11 @@ def call(Map pipelineParams) {
 
             string(defaultValue: '',
                    description: 'If empty - the default manager version will be taken',
-                   name: 'scylla_mgmt_repo')
+                   name: 'scylla_mgmt_address')
+
+            string(defaultValue: '',
+                   description: 'master_latest|2.5|2.4|2.3',
+                   name: 'manager_version')
 
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',

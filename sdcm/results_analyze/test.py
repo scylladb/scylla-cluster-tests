@@ -370,7 +370,7 @@ class TestResultClass(ClassBase):
         'started_by': '_source.test_details.started_by',  # Never there
         'scylla_repo': '_source.setup_details.scylla_repo_m',
         'scylla_repo_uuid': '_source.setup_details.scylla_repo_uuid',  # Never there
-        'scylla_mgmt_repo': '_source.setup_details.scylla_mgmt_repo',
+        'scylla_mgmt_address': '_source.setup_details.scylla_mgmt_address',
         'backend': '_source.setup_details.cluster_backend',
         'ostype': '_source.setup_details.cluster_backend.ostype',  # Never there
         'gemini_version': '_source.setup_details.gemini_version',
@@ -400,7 +400,7 @@ class TestResultClass(ClassBase):
 
     scylla_repo: str = None
     scylla_repo_uuid: str = None
-    scylla_mgmt_repo: str = None
+    scylla_mgmt_address: str = None
     ostype: str = None
     gemini_version: str = None
     status: str = None

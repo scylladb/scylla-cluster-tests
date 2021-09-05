@@ -378,7 +378,7 @@ class ScyllaManagerToolOperator(ScyllaManagerTool):
         self.scylla_cluster = scylla_cluster
         super().__init__(manager_node)
 
-    def rollback_upgrade(self, scylla_mgmt_repo):
+    def rollback_upgrade(self, scylla_mgmt_address):
         raise NotImplementedError()
 
     def add_cluster(self, name, host=None, db_cluster=None, client_encrypt=None, disable_automatic_repair=True,

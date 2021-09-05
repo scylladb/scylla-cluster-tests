@@ -906,12 +906,12 @@ class ScyllaManagerTool(ScyllaManagerBase):
         manager_from_version = self.version
         LOGGER.debug('Running Manager upgrade from: {} to version in repo: {}'.format(
             manager_from_version, scylla_mgmt_upgrade_to_repo))
-        self.manager_node.upgrade_mgmt(scylla_mgmt_repo=scylla_mgmt_upgrade_to_repo)
+        self.manager_node.upgrade_mgmt(scylla_mgmt_address=scylla_mgmt_upgrade_to_repo)
         new_manager_version = self.version
         LOGGER.debug('The Manager version after upgrade is: {}'.format(new_manager_version))
         return new_manager_version
 
-    def rollback_upgrade(self, scylla_mgmt_repo):
+    def rollback_upgrade(self, scylla_mgmt_address):
         raise NotImplementedError
 
 
@@ -921,7 +921,7 @@ class ScyllaManagerToolRedhatLike(ScyllaManagerTool):
         ScyllaManagerTool.__init__(self, manager_node=manager_node)
         self.manager_repo_path = '/etc/yum.repos.d/scylla-manager.repo'
 
-    def rollback_upgrade(self, scylla_mgmt_repo):
+    def rollback_upgrade(self, scylla_mgmt_address):
 
         remove_post_upgrade_repo = dedent("""
                         sudo systemctl stop scylla-manager
@@ -933,7 +933,7 @@ class ScyllaManagerToolRedhatLike(ScyllaManagerTool):
         self.manager_node.remoter.run('sudo bash -cxe "%s"' % remove_post_upgrade_repo)
 
         # Downgrade to pre-upgrade scylla-manager repository
-        self.manager_node.download_scylla_manager_repo(scylla_mgmt_repo)
+        self.manager_node.download_scylla_manager_repo(scylla_mgmt_address)
 
         downgrade_to_pre_upgrade_repo = dedent("""
                                 sudo yum downgrade scylla-manager* -y
@@ -952,7 +952,7 @@ class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
         ScyllaManagerTool.__init__(self, manager_node=manager_node)
         self.manager_repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
 
-    def rollback_upgrade(self, scylla_mgmt_repo):
+    def rollback_upgrade(self, scylla_mgmt_address):
         manager_from_version = self.version[0]
         remove_post_upgrade_repo = dedent("""
                         cqlsh -e 'DROP KEYSPACE scylla_manager'
@@ -968,12 +968,12 @@ class ScyllaManagerToolNonRedhat(ScyllaManagerTool):
         self.manager_node.remoter.run('sudo apt-get update', ignore_status=True)
 
         # Downgrade to pre-upgrade scylla-manager repository
-        self.manager_node.download_scylla_manager_repo(scylla_mgmt_repo)
+        self.manager_node.download_scylla_manager_repo(scylla_mgmt_address)
         res = self.manager_node.remoter.run('sudo apt-get update', ignore_status=True)
         res = self.manager_node.remoter.run('apt-cache  show scylla-manager-client | grep Version:')
         rollback_to_version = res.stdout.split()[1]
         LOGGER.debug("Rolling back manager version from: {} to: {}".format(manager_from_version, rollback_to_version))
-        # self.manager_node.install_mgmt(scylla_mgmt_repo=scylla_mgmt_repo)
+        # self.manager_node.install_mgmt(scylla_mgmt_address=scylla_mgmt_address)
         downgrade_to_pre_upgrade_repo = dedent("""
 
                                 sudo apt-get install scylla-manager -y
