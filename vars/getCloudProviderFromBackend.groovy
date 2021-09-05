@@ -6,6 +6,8 @@ def call(String backend) {
         'k8s-local-kind-aws': 'aws',
         'k8s-local-kind-gce': 'gce',
         'k8s-gce-minikube': 'gce',
+        'aws-siren': 'aws',
+        'gce-siren': 'gce',
         ]
     if (!backend) {
         return backend
