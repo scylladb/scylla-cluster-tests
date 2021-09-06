@@ -15,6 +15,7 @@
 import yaml
 
 from sdcm.cluster_k8s import SCYLLA_NAMESPACE, SCYLLA_OPERATOR_NAMESPACE, ScyllaPodCluster
+from sdcm.wait import wait_for
 
 
 def get_orphaned_services(db_cluster):
@@ -56,6 +57,20 @@ def wait_for_scylla_operator_rollout_complete(db_cluster: ScyllaPodCluster, time
         if f"deployment \"{deployment}\" successfully rolled out" not in deployment_rollout_status.stdout:
             status.append(f"{deployment}: {deployment_rollout_status.stdout}")
     return status
+
+
+def wait_for_resource_absence(db_cluster: ScyllaPodCluster,
+                              resource_type: str, resource_name: str,
+                              step: int = 2, timeout: int = 60) -> None:
+    def resource_is_absent() -> bool:
+        all_resources = db_cluster.k8s_cluster.kubectl(
+            f"get {resource_type} -o=custom-columns=:.metadata.name",
+            namespace=db_cluster.k8s_cluster.SCYLLA_NAMESPACE,
+        ).stdout.split()
+        return resource_name not in all_resources
+
+    wait_for(resource_is_absent, step=step, timeout=timeout, throw_exc=True,
+             text=f"Waiting for the '{resource_name}' {resource_type} be deleted")
 
 
 def scylla_operator_pods_and_statuses(db_cluster):
