@@ -2027,8 +2027,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                     metadata={'name': SCYLLA_CONFIG_NAME}
                 )
             )
-        self.restart_scylla()
-        self.wait_for_nodes_up_and_normal()
 
     @contextlib.contextmanager
     def remote_cassandra_rackdc_properties(self) -> ContextManager:
@@ -2060,6 +2058,8 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                 diff = "".join(unified_diff(original, changed))
                 LOGGER.debug("%s: cassandra-rackdc.properties has been updated:\n%s", self, diff)
                 scylla_config_map['cassandra-rackdc.properties'] = changed_bare
+                self.restart_scylla()
+                self.wait_for_nodes_up_and_normal()
 
     def update_seed_provider(self):
         pass
