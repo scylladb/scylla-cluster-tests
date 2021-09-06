@@ -27,6 +27,7 @@ from functools import wraps, cached_property
 import threading
 import signal
 import sys
+import json
 
 from invoke.exceptions import UnexpectedExit, Failure
 
@@ -423,6 +424,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.result = self.defaultTestResult() if result is None else result
         result = super().run(self.result)
         return result
+
+    @property
+    def latency_results_file(self):
+        return TestConfig.latency_results_file()
 
     @property
     def reliable_replication_factor(self) -> int:
@@ -2550,22 +2555,27 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def check_latency_during_ops(self):
         results_analyzer = LatencyDuringOperationsPerformanceAnalyzer(es_index=self._test_index,
                                                                       es_doc_type=self._es_doc_type,
-                                                                      send_email=self.params.get('send_email'),
                                                                       email_recipients=self.params.get(
                                                                           'email_recipients'),
                                                                       events=get_events_grouped_by_category(
                                                                           _registry=self.events_processes_registry))
-        if self.db_cluster.latency_results and self.create_stats:
-            self.db_cluster.latency_results = calculate_latency(self.db_cluster.latency_results)
-            self.log.debug('collected latency values are: %s', self.db_cluster.latency_results)
-            self.update({"latency_during_ops": self.db_cluster.latency_results})
+        with open(self.latency_results_file, 'r') as file:
+            latency_results = json.load(file)
+        self.log.debug('latency_results were loaded from file %s and its result is %s',
+                       self.latency_results_file, latency_results)
+        if latency_results and self.create_stats:
+            latency_results = calculate_latency(latency_results)
+            with open(self.latency_results_file, 'w') as file:
+                json.dump(latency_results, file)
+            self.log.debug('collected latency values are: %s', latency_results)
+            self.update({"latency_during_ops": latency_results})
 
             self.update_test_details()
-            results_analyzer.check_regression(test_id=self._test_id, data=self.db_cluster.latency_results)
+            results_analyzer.check_regression(test_id=self._test_id, data=latency_results)
 
     def check_regression(self):
-        results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
-                                                      send_email=self.params.get('send_email'),
+        results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index,
+                                                      es_doc_type=self._es_doc_type,
                                                       email_recipients=self.params.get('email_recipients'),
                                                       events=get_events_grouped_by_category(
                                                           _registry=self.events_processes_registry,
@@ -2580,8 +2590,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.exception('Failed to check regression: %s', ex)
 
     def check_regression_with_baseline(self, subtest_baseline):
-        results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
-                                                      send_email=self.params.get('send_email'),
+        results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index,
+                                                      es_doc_type=self._es_doc_type,
                                                       email_recipients=self.params.get('email_recipients'),
                                                       events=get_events_grouped_by_category(
                                                           _registry=self.events_processes_registry,
@@ -2598,8 +2608,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def check_regression_multi_baseline(self, subtests_info=None,  # pylint: disable=inconsistent-return-statements
                                         metrics=None, email_subject=None):
-        results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
-                                                      send_email=self.params.get('send_email'),
+        results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index,
+                                                      es_doc_type=self._es_doc_type,
                                                       email_recipients=self.params.get('email_recipients'),
                                                       events=get_events_grouped_by_category(
                                                           _registry=self.events_processes_registry,
@@ -2616,14 +2626,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 self._create_test_id(doc_id_with_timestamp=False),
                 metrics=metrics,
                 subtests_info=subtests_info,
-                email_subject=email_subject)
+                subject=email_subject)
         except Exception as ex:  # pylint: disable=broad-except
             self.log.exception('Failed to check regression: %s', ex)
             return False
 
     def check_specified_stats_regression(self, stats):
-        perf_analyzer = SpecifiedStatsPerformanceAnalyzer(es_index=self._test_index, es_doc_type=self._es_doc_type,
-                                                          send_email=self.params.get('send_email'),
+        perf_analyzer = SpecifiedStatsPerformanceAnalyzer(es_index=self._test_index,
+                                                          es_doc_type=self._es_doc_type,
                                                           email_recipients=self.params.get('email_recipients'),
                                                           events=get_events_grouped_by_category(
                                                               _registry=self.events_processes_registry))

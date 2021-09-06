@@ -192,12 +192,24 @@
             {% endif %}
         {% endif %}
     </ul>
-        {% if grafana_screenshots %}
-            <h3>Grafana Screenshots:</h3>
-            {% for screenshot in grafana_screenshots %}
-                <img src="{{ screenshot }}"  height="50%" width="50%">
+    {% if logs_links %}
+    <h3>
+        Logs:
+    </h3>
+    <div>
+        <ul>
+            {% for logs_link in logs_links %}
+            <li><a href="{{ logs_link.link }}">{{ logs_link.type }} - {{ logs_link.link }}</a></li>
             {% endfor %}
-        {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+    {% if grafana_screenshots %}
+        <h3>Grafana Screenshots:</h3>
+        {% for screenshot in grafana_screenshots %}
+            <img src="{{ screenshot }}"  height="50%" width="50%">
+        {% endfor %}
+    {% endif %}
     {% endif %}
 {%- endblock -%}
 
