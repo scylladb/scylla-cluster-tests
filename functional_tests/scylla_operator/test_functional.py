@@ -22,10 +22,13 @@ import yaml
 from sdcm.cluster_k8s import ScyllaPodCluster
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.k8s import HelmValues
-from functional_tests.scylla_operator.libs.helpers import (get_orphaned_services,
-                                                           scylla_operator_rollout_restart,
-                                                           wait_for_scylla_operator_rollout_complete,
-                                                           scylla_operator_pods_and_statuses)
+from functional_tests.scylla_operator.libs.helpers import (
+    get_orphaned_services,
+    scylla_operator_pods_and_statuses,
+    scylla_operator_rollout_restart,
+    wait_for_resource_absence,
+    wait_for_scylla_operator_rollout_complete,
+)
 
 log = logging.getLogger()
 
@@ -68,12 +71,6 @@ def test_rolling_restart_cluster(db_cluster):
 
     assert old_force_redeployment_reason != new_force_redeployment_reason, (
         f"'{old_force_redeployment_reason}' must be different than '{new_force_redeployment_reason}'")
-
-
-def test_grow_shrink_cluster(db_cluster):
-    new_node = db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=0)[0]
-    db_cluster.decommission(new_node)
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
 
 @pytest.mark.require_node_terminate('drain_k8s_node')
@@ -230,51 +227,33 @@ def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
 
 def test_orphaned_services_after_shrink_cluster(db_cluster):
     """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
-    log.info("Decommission of two node")
-    db_cluster.decommission(db_cluster.nodes[-1])
+    log.info("Add node to the rack 0")
+    new_node = db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=0)[0]
+    svc_name = new_node.name
+
+    log.info("Decommission newly added node from the rack 0")
+    db_cluster.decommission(new_node)
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
+    log.info("Wait for deletion of the '%s' svc for just deleted pod", svc_name)
+    wait_for_resource_absence(
+        db_cluster=db_cluster, resource_type="svc", resource_name=svc_name, step=2, timeout=60)
     assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
-
-    db_cluster.decommission(db_cluster.nodes[-1])
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-
-    assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
-
-
-@pytest.mark.require_node_terminate('drain_k8s_node')
-def test_orphaned_services_after_drain(db_cluster):
-    """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
-    node_to_remove = random.choice(db_cluster.non_seed_nodes)
-    node_to_remove_uid = node_to_remove.k8s_pod_uid
-    log.info('TerminateNode %s (uid=%s)', node_to_remove, node_to_remove_uid)
-    node_to_remove.drain_k8s_node()
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-    assert not get_orphaned_services(db_cluster), "Orphaned services were found after drain"
-
-    node_to_remove.mark_to_be_replaced()
-    node_to_remove.wait_till_k8s_pod_get_uid(ignore_uid=node_to_remove_uid)
-    node_to_remove.wait_for_pod_readiness()
-    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
-    assert not get_orphaned_services(db_cluster), "Orphaned services were found after replace"
 
 
 def test_orphaned_services_multi_rack(db_cluster):
     """ Issue https://github.com/scylladb/scylla-operator/issues/514 """
-    new_nodes = []
     log.info("Add node to the rack 1")
-    new_nodes.append(db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=1))
+    new_node = db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=1)[0]
 
-    log.info("Add node to the rack 2")
-    new_nodes.append(db_cluster.add_nodes(count=1, dc_idx=0, enable_auto_bootstrap=True, rack=2))
+    log.info("Decommission newly added node from the rack 1")
+    svc_name = new_node.name
+    db_cluster.decommission(new_node)
+    db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
-    assert not get_orphaned_services(db_cluster), "Orphaned services were found after grow cluster with new racks"
-
-    log.info("Decommission of 2 nodes")
-    for node in new_nodes:
-        db_cluster.decommission(node[0])
-
-    db_cluster.wait_for_pods_readiness(pods_to_wait=2, total_pods=len(db_cluster.nodes))
+    log.info("Wait for deletion of the '%s' svc for just deleted pod", svc_name)
+    wait_for_resource_absence(
+        db_cluster=db_cluster, resource_type="svc", resource_name=svc_name, step=2, timeout=60)
     assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
 
 
