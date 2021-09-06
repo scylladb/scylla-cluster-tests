@@ -134,22 +134,26 @@ def _bring_cluster_back_to_original_state(
                 rack['members'] = 0
             original_rack_specs.extend(new_racks)
 
+        # Restore config-map scylla-config
+        with db_cluster.scylla_config_map as recover_config_map:
+            if recover_config_map != config_map:
+                recover_config_map.clear()
+                recover_config_map.update(config_map)
+                restart = True
+
         # NOTE: ignore 'forceRedeploymentReason' field always to avoid redundant restarts
         original_scylla_cluster_spec.pop("forceRedeploymentReason", None)
         current_cluster_spec.pop("forceRedeploymentReason", None)
         if original_scylla_cluster_spec != current_cluster_spec:
-            # If cluster spec we currently have is not equal to what we want replace it and
-            #  remember to restart the cluster afterwards
+            # If cluster spec we currently have is not equal to what we want replace it.
+            # It will cause scylla pods rollout restart on the operator level.
+            # WARNING: if number of nodes differs than we will have incorrect data
+            #          in "db_cluster.nodes". For the moment all changes to node number must
+            #          go though 'add_nodes' and 'decommision' methods only.
             db_cluster.replace_scylla_cluster_value('/spec', original_scylla_cluster_spec)
-            restart = True
+            db_cluster.wait_sts_rollout_restart(len(db_cluster.nodes))
+            restart = False
 
-        # Restore config-map scylla-config
-        with db_cluster.scylla_config_map as recover_config_map:
-            if recover_config_map != config_map:
-                # if config map is changed scylla will be restarted therefore we don't have to explicitly restart it
-                restart = False
-            recover_config_map.clear()
-            recover_config_map.update(config_map)
         if restart:
             db_cluster.restart_scylla()
     except Exception as exc:  # pylint: disable=broad-except
