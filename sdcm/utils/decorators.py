@@ -16,6 +16,8 @@ import time
 import logging
 import datetime
 from functools import wraps, partial, cached_property
+import json
+import os
 
 LOGGER = logging.getLogger(__name__)
 
@@ -158,7 +160,7 @@ def latency_calculator_decorator(func):
     from sdcm.utils import latency  # pylint: disable=import-outside-toplevel
 
     @wraps(func)
-    def wrapped(*args, **kwargs):
+    def wrapped(*args, **kwargs):  # pylint: disable=too-many-branches, too-many-locals
         start = time.time()
         start_node_list = args[0].cluster.nodes[:]
         res = func(*args, **kwargs)
@@ -178,17 +180,29 @@ def latency_calculator_decorator(func):
         else:
             return res
 
-        if "steady" not in func.__name__.lower():
-            if func.__name__ not in args[0].cluster.latency_results:
-                args[0].cluster.latency_results[func.__name__] = dict()
-            if 'cycles' not in args[0].cluster.latency_results[func.__name__]:
-                args[0].cluster.latency_results[func.__name__]['cycles'] = list()
-        result = latency.collect_latency(monitor, start, end, workload, args[0].cluster, all_nodes_list)
-        if "steady" in func.__name__.lower() and \
-                'Steady State' not in args[0].cluster.latency_results:
-            args[0].cluster.latency_results['Steady State'] = result
+        latency_results_file_path = args[0].tester.latency_results_file
+        if not os.path.exists(latency_results_file_path):
+            latency_results = dict()
         else:
-            args[0].cluster.latency_results[func.__name__]['cycles'].append(result)
+            with open(latency_results_file_path, 'r') as file:
+                data = file.read().strip()
+                latency_results = json.loads(data or '{}')
+
+        if "steady" not in func.__name__.lower():
+            if func.__name__ not in latency_results:
+                latency_results[func.__name__] = dict()
+            if 'cycles' not in latency_results[func.__name__]:
+                latency_results[func.__name__]['cycles'] = list()
+        result = latency.collect_latency(monitor, start, end, workload, args[0].cluster, all_nodes_list)
+        if "steady" in func.__name__.lower():
+            if 'Steady State' not in latency_results:
+                latency_results['Steady State'] = result
+        else:
+            latency_results[func.__name__]['cycles'].append(result)
+
+        with open(latency_results_file_path, 'w') as file:
+            json.dump(latency_results, file)
+
         return res
 
     return wrapped

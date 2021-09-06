@@ -17,6 +17,8 @@ import subprocess
 import logging
 import tempfile
 import json
+import copy
+import traceback
 from typing import Optional, Sequence, Tuple
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
@@ -616,6 +618,28 @@ def get_running_instances_for_email_report(test_id: str, ip_filter: str = None):
     return nodes
 
 
+def send_perf_email(reporter, test_results, logs, email_recipients, testrun_dir, start_time):  # pylint: disable=too-many-arguments
+    for subject, content in test_results.items():
+        if 'email_body' not in content:
+            content['email_body'] = dict()
+        if 'attachments' not in content:
+            content['attachments'] = []
+        if 'template' not in content:
+            content['template'] = None
+        email_content = copy.deepcopy(content)
+        email_content['email_body']['logs_links'] = logs
+        html = reporter.render_to_html(email_content['email_body'],
+                                       template=email_content['template'])
+        try:
+            reporter.send_email(subject=subject, content=html, files=email_content['attachments'])
+        except Exception:  # pylint: disable=broad-except
+            LOGGER.error("Failed to create email due to the following error:\n%s", traceback.format_exc())
+            build_reporter("TestAborted", email_recipients, testrun_dir).send_report({
+                "job_url": os.environ.get("BUILD_URL"),
+                "subject": f"FAILED: {os.environ.get('JOB_NAME')}: {start_time}",
+            })
+
+
 def read_email_data_from_file(filename):
     """read email data from file
 
@@ -629,8 +653,9 @@ def read_email_data_from_file(filename):
     email_data = None
     if os.path.exists(filename):
         try:
-            with open(filename, "r") as fp:  # pylint: disable=invalid-name
-                email_data = json.load(fp)  # pylint: disable=invalid-name
+            with open(filename, "r") as file:
+                data = file.read().strip()
+                email_data = json.loads(data or '{}')
         except Exception as details:  # pylint: disable=broad-except
             LOGGER.warning("Error during read email data file %s: %s", filename, details)
     return email_data
