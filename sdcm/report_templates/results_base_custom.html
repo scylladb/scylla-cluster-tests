@@ -192,6 +192,19 @@
             {% endif %}
         {% endif %}
     </ul>
+    {% if logs_links %}
+    <h3>
+        Logs:
+    </h3>
+    <div>
+        <ul>
+            {% for logs_link in logs_links %}
+            <li><a href="{{ logs_link.link }}">{{ logs_link.type }} - {{ logs_link.link }}</a></li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    <h3>Snapshots:</h3>
         {% if grafana_screenshots %}
             <h3>Grafana Screenshots:</h3>
             {% for screenshot in grafana_screenshots %}

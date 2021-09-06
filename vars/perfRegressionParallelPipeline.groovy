@@ -230,6 +230,29 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                         }
+                                        stage("Send email for ${sub_test}") {
+                                            catchError(stageResult: 'FAILURE') {
+                                                script {
+                                                    wrap([$class: 'BuildUser']) {
+                                                        dir('scylla-cluster-tests') {
+                                                            def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
+
+                                                            sh """
+                                                            #!/bin/bash
+
+                                                            set -xe
+                                                            env
+
+                                                            test_id=`cat latest/test_id`
+                                                            echo "start send-email stage ..."
+                                                            ./docker/env/hydra.sh send-email --test-id "`cat latest/test_id`" --email-recipients $email_recipients --logdir "`pwd`"
+                                                            echo "end send-email stage"
+                                                            """
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }

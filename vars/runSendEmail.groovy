@@ -14,6 +14,7 @@ def call(Map params, RunWrapper currentBuild){
 
     def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
     def cloud_provider = getCloudProviderFromBackend(params.backend)
+    def test_name = groovy.json.JsonOutput.toJson(params.test_name)
 
     sh """
     #!/bin/bash
@@ -23,9 +24,10 @@ def call(Map params, RunWrapper currentBuild){
     RUNNER_IP=\$(cat sct_runner_ip||echo "")
     if [[ -n "\${RUNNER_IP}" ]] ; then
         ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} send-email ${test_status} ${start_time} \
-        --runner-ip \${RUNNER_IP} --email-recipients "${email_recipients}"
+        --runner-ip \${RUNNER_IP} --email-recipients "${email_recipients}" --test-name "${test_name}"
     else
-        ./docker/env/hydra.sh send-email ${test_status} ${start_time} --logdir "`pwd`" --email-recipients "${email_recipients}"
+        ./docker/env/hydra.sh send-email ${test_status} ${start_time} --logdir "`pwd`" \
+        --email-recipients "${email_recipients}"  --test-name "${test_name}"
     fi
     echo "Email sent."
     """

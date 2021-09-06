@@ -40,6 +40,8 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     _test_id = None
     _test_name = None
     _logdir = None
+    _latency_results_file_name = 'latency_results.json'
+    _latency_results_file_path = None
     _tester_obj = None
 
     backup_azure_blob_credentials = {}
@@ -91,6 +93,14 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
             cls._logdir = cls.make_new_logdir(update_latest_symlink=True)
             os.environ['_SCT_TEST_LOGDIR'] = cls._logdir
         return cls._logdir
+
+    @classmethod
+    def latency_results_file(cls):
+        if not cls._latency_results_file_path:
+            cls._latency_results_file_path = os.path.join(cls._logdir, cls._latency_results_file_name)
+            with open(cls._latency_results_file_path, 'w'):
+                pass
+        return cls._latency_results_file_path
 
     @classmethod
     def test_name(cls):

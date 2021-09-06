@@ -61,15 +61,8 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
     submetrics = {'frag/s': ['mad f/s', 'max f/s', 'min f/s']}
 
     def __init__(self, email_recipients, db_version=None):
-        super().__init__(
-            es_index="microbenchmarking",
-            es_doc_type="microbenchmark",
-            send_email=True,
-            email_recipients=email_recipients,
-            email_template_fp="results_microbenchmark.html",
-            query_limit=10000,
-            logger=LOGGER
-        )
+        super().__init__(es_index="microbenchmarking", es_doc_type="microbenchmark", email_recipients=email_recipients,
+                         email_template_fp="results_microbenchmark.html", query_limit=10000, logger=LOGGER)
         self.hostname = socket.gethostname()
         self._run_date_pattern = "%Y-%m-%d_%H:%M:%S"
         self.test_run_date = datetime.datetime.now().strftime(self._run_date_pattern)

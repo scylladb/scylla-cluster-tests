@@ -17,6 +17,7 @@
 import os
 import time
 import yaml
+import json
 
 from sdcm.tester import ClusterTester
 
@@ -31,6 +32,12 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
     str_pattern = '%8s%16s%10s%14s%16s%12s%12s%14s%16s%16s'
     ops_threshold_prc = 200
+
+    def __init__(self, *args):
+        # need to remove the email_data.json file, as in the builders, it will accumulate and it will send multiple
+        # emails for each test. When we move to use SCT Runners, it won't be necessary.
+        self._clean_email_data()
+        super().__init__(*args)
 
     # Helpers
     def display_single_result(self, result):
@@ -142,6 +149,12 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
     def _get_total_ops(self):
         return self._stats['results']['stats_total']['op rate']
+
+    @staticmethod
+    def _clean_email_data():
+        email_data_path = 'email_data.json'
+        with open(email_data_path, 'w'):
+            pass
 
     def preload_data(self):
         # if test require a pre-population of data

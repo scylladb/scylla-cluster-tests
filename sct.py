@@ -35,7 +35,7 @@ import click_completion
 from prettytable import PrettyTable
 
 from sdcm.remote import LOCALRUNNER
-from sdcm.results_analyze import PerformanceResultsAnalyzer
+from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_runner, clean_sct_runners
 from sdcm.utils.azure_utils import AzureService
@@ -949,8 +949,10 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
 
     if not email_recipients:
         LOGGER.warning("No email recipients. Email will not be sent")
-        return
+        sys.exit(1)
     LOGGER.info('Email will be sent to next recipients: %s', email_recipients)
+    email_recipients = email_recipients.split(',')
+
     if not logdir:
         logdir = os.path.expanduser('~/sct-results')
     test_results = None
@@ -963,50 +965,78 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
         with open(os.path.join(testrun_dir, 'test_id'), 'r', encoding='utf-8') as file:
             test_id = file.read().strip()
         email_results_file = os.path.join(testrun_dir, "email_data.json")
+        if not os.path.exists(email_results_file):
+            email_results_file = "email_data.json" if os.path.exists("email_data.json") else None
         test_results = read_email_data_from_file(email_results_file)
     else:
         LOGGER.warning("Failed to find test directory for %s", test_id)
 
-    if test_results:
-        reporter = test_results.get("reporter", "")
-        test_results['nodes'] = get_running_instances_for_email_report(test_id, runner_ip)
-    else:
-        LOGGER.warning("Failed to read test results for %s", test_id)
-        reporter = "TestAborted"
-        if not test_status:
-            test_status = 'ABORTED'
-        test_results = {
-            "job_url": os.environ.get("BUILD_URL"),
-            "subject": f"{test_status}: {os.environ.get('JOB_NAME')}: {start_time}",
-            "start_time": start_time,
-            "end_time": format_timestamp(time.time()),
-            "grafana_screenshots": "",
-            "grafana_snapshots": "",
-            "nodes": "",
-            "test_id": "",
-            "username": ""
-        }
-        if started_by:
-            test_results["username"] = started_by
-        if test_id:
-            test_results.update({
-                "test_id": test_id,
-                "nodes": get_running_instances_for_email_report(test_id, runner_ip)
-            })
-    test_results['logs_links'] = list_logs_by_test_id(test_results.get('test_id', test_id))
-    email_recipients = email_recipients.split(',')
-    reporter = build_reporter(reporter, email_recipients, testrun_dir)
-    if not reporter:
-        LOGGER.warning("No reporter found")
+    if not test_results:
+        LOGGER.error("Test Results file not found")
         sys.exit(1)
-    try:
-        reporter.send_report(test_results)
-    except Exception:  # pylint: disable=broad-except
-        LOGGER.error("Failed to create email due to the following error:\n%s", traceback.format_exc())
-        build_reporter("TestAborted", email_recipients, testrun_dir).send_report({
-            "job_url": os.environ.get("BUILD_URL"),
-            "subject": f"FAILED: {os.environ.get('JOB_NAME')}: {start_time}",
-        })
+
+    if 'latency' in os.environ.get('JOB_NAME') or 'throughput' in os.environ.get('JOB_NAME'):
+        reporter = BaseResultsAnalyzer(es_index=test_id, es_doc_type='test_stats', email_recipients=email_recipients)
+        for subject, content in test_results.items():
+            if 'email_body' not in content:
+                content['email_body'] = dict()
+            if 'attachments' not in content:
+                content['attachments'] = []
+            if 'template' not in content:
+                content['template'] = None
+            email_content = content.copy()
+            email_content['email_body']['logs_links'] = list_logs_by_test_id(test_results.get('test_id', test_id))
+            html = reporter.render_to_html(email_content['email_body'],
+                                           template=email_content['template'])
+            try:
+                reporter.send_email(subject=subject, content=html, files=email_content['attachments'])
+            except Exception:  # pylint: disable=broad-except
+                LOGGER.error("Failed to create email due to the following error:\n%s", traceback.format_exc())
+                build_reporter("TestAborted", email_recipients, testrun_dir).send_report({
+                    "job_url": os.environ.get("BUILD_URL"),
+                    "subject": f"FAILED: {os.environ.get('JOB_NAME')}: {start_time}",
+                })
+    else:
+        if test_results:
+            reporter = test_results.get("reporter", "")
+            test_results['nodes'] = get_running_instances_for_email_report(test_id, runner_ip)
+        else:
+            LOGGER.warning("Failed to read test results for %s", test_id)
+            reporter = "TestAborted"
+            if not test_status:
+                test_status = 'ABORTED'
+            test_results = {
+                "job_url": os.environ.get("BUILD_URL"),
+                "subject": f"{test_status}: {os.environ.get('JOB_NAME')}: {start_time}",
+                "start_time": start_time,
+                "end_time": format_timestamp(time.time()),
+                "grafana_screenshots": "",
+                "grafana_snapshots": "",
+                "nodes": "",
+                "test_id": "",
+                "username": ""
+            }
+            if started_by:
+                test_results["username"] = started_by
+            if test_id:
+                test_results.update({
+                    "test_id": test_id,
+                    "nodes": get_running_instances_for_email_report(test_id, runner_ip)
+                })
+        test_results['logs_links'] = list_logs_by_test_id(test_results.get('test_id', test_id))
+
+        reporter = build_reporter(reporter, email_recipients, testrun_dir)
+        if not reporter:
+            LOGGER.warning("No reporter found")
+            sys.exit(1)
+        try:
+            reporter.send_report(test_results)
+        except Exception:  # pylint: disable=broad-except
+            LOGGER.error("Failed to create email due to the following error:\n%s", traceback.format_exc())
+            build_reporter("TestAborted", email_recipients, testrun_dir).send_report({
+                "job_url": os.environ.get("BUILD_URL"),
+                "subject": f"FAILED: {os.environ.get('JOB_NAME')}: {start_time}",
+            })
 
 
 @cli.command('create-operator-test-release-jobs',

@@ -628,8 +628,9 @@ def read_email_data_from_file(filename):
     email_data = None
     if os.path.exists(filename):
         try:
-            with open(filename, "r") as fp:  # pylint: disable=invalid-name
-                email_data = json.load(fp)  # pylint: disable=invalid-name
+            with open(filename, "r") as file:
+                data = file.read().strip()
+                email_data = json.loads(data or '{}')
         except Exception as details:  # pylint: disable=broad-except
             LOGGER.warning("Error during read email data file %s: %s", filename, details)
     return email_data

@@ -1,5 +1,5 @@
 # pylint: disable=too-many-lines
-
+import json
 import os
 import math
 import pprint
@@ -27,14 +27,13 @@ PP = pprint.PrettyPrinter(indent=2)
 
 class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
     # pylint: disable=too-many-arguments
-    def __init__(self, es_index, es_doc_type, send_email=False, email_recipients=(),
-                 email_template_fp="", query_limit=1000, logger=None, events=None):
+    def __init__(self, es_index, es_doc_type, email_recipients=(), email_template_fp="", query_limit=1000, logger=None,
+                 events=None):
         self._es = ES()
         self._conf = self._es._conf  # pylint: disable=protected-access
         self._es_index = es_index
         self._es_doc_type = es_doc_type
         self._limit = query_limit
-        self._send_email = send_email
         self._email_recipients = email_recipients
         self._email_template_fp = email_template_fp
         self.log = logger if logger else LOGGER
@@ -146,19 +145,17 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         return html
 
     def send_email(self, subject, content, html=True, files=()):
-        if self._send_email and self._email_recipients:
+        if self._email_recipients:
             self.log.debug('Send email to {}'.format(self._email_recipients))
             email = Email()
             email.send(subject, content, html=html, recipients=self._email_recipients, files=files)
         else:
-            self.log.warning("Won't send email (send_email: %s, recipients: %s)",
-                             self._send_email, self._email_recipients)
+            self.log.warning("Won't send email (recipients: %s)", self._email_recipients)
 
-    def save_html_to_file(self, results):
+    def save_html_to_file(self, results, file_name, template_file):
         email = BaseEmailReporter()
-        report_file = os.path.join(email.logdir, 'reactor_stall_events_list.html')
+        report_file = os.path.join(email.logdir, file_name)
         self.log.debug('report_file = %s', report_file)
-        template_file = 'results_reactor_stall_events_list.html'
         email.save_html_to_file(results, report_file, template_file=template_file)
         self.log.debug('HTML successfully saved to local file')
         return report_file
@@ -172,15 +169,9 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
     Get latency during operations performance analyzer
     """
 
-    def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None, events=None):   # pylint: disable=too-many-arguments
-        super().__init__(
-            es_index=es_index,
-            es_doc_type=es_doc_type,
-            send_email=send_email,
-            email_recipients=email_recipients,
-            email_template_fp="results_latency_during_ops.html",
-            logger=logger,
-            events=events)
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+        super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
+                         email_template_fp="results_latency_during_ops.html", logger=logger, events=events)
 
     def get_debug_events(self):
         return self.get_events(event_severity=[Severity.DEBUG.name])
@@ -219,9 +210,29 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             grafana_screenshots=self._get_grafana_screenshot(doc),
             job_url=doc['_source']['test_details'].get('job_url', ""),
         )
-        self.save_html_to_file(results)
-        html = self.render_to_html(results=results)
-        self.send_email(subject=subject, content=html)
+        attachment_file = [self.save_html_to_file(results,
+                                                  file_name='reactor_stall_events_list.html',
+                                                  template_file='results_reactor_stall_events_list.html')
+                           ]
+
+        email_data = {'email_body': results,
+                      'attachments': attachment_file,
+                      'template': self._email_template_fp}
+
+        file_path = 'email_data.json'
+        if os.path.exists(file_path):
+            with open(file_path, 'r') as file:
+                data = file.read().strip()
+                file_content = json.loads(data or '{}')
+        else:
+            file_content = dict()
+
+        file_content[subject] = email_data.copy()
+
+        with open(file_path, 'w') as file:
+            json.dump(file_content, file)
+
+        return True
 
 
 class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
@@ -229,15 +240,9 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
     Get specified performance test results from elasticsearch DB and analyze it to find a regression
     """
 
-    def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None, events=None):   # pylint: disable=too-many-arguments
-        super().__init__(
-            es_index=es_index,
-            es_doc_type=es_doc_type,
-            send_email=send_email,
-            email_recipients=email_recipients,
-            email_template_fp="",
-            logger=logger,
-            events=events)
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+        super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
+                         email_template_fp="", logger=logger, events=events)
 
     def _test_stats(self, test_doc):
         # check if stats exists
@@ -364,16 +369,9 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
 
     PARAMS = TestStatsMixin.STRESS_STATS
 
-    def __init__(self, es_index, es_doc_type, send_email, email_recipients, logger=None, events=None):  # pylint: disable=too-many-arguments
-        super().__init__(
-            es_index=es_index,
-            es_doc_type=es_doc_type,
-            send_email=send_email,
-            email_recipients=email_recipients,
-            email_template_fp="results_performance.html",
-            logger=logger,
-            events=events
-        )
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):  # pylint: disable=too-many-arguments
+        super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
+                         email_template_fp="results_performance.html", logger=logger, events=events)
 
     @staticmethod
     def _remove_non_stat_keys(stats):
@@ -604,8 +602,23 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             subject = f'{subject} (ebs volume type {ebs_type})'
         if email_subject_postfix:
             subject = f'{subject} {email_subject_postfix}'
-        html = self.render_to_html(results)
-        self.send_email(subject, html)
+
+        email_data = {'email_body': results,
+                      'attachments': (),
+                      'template': self._email_template_fp}
+
+        file_path = 'email_data.json'
+        if os.path.exists(file_path):
+            with open(file_path, 'r') as file:
+                data = file.read().strip()
+                file_content = json.loads(data or '{}')
+        else:
+            file_content = dict()
+
+        file_content[subject] = email_data.copy()
+
+        with open(file_path, 'w') as file:
+            json.dump(file_content, file)
 
         return True
 
@@ -802,11 +815,28 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         self.log.debug('Regression analysis:')
         self.log.debug(PP.pformat(results))
         test_name = full_test_name.split('.', 1)[1]  # Example: longevity_test.py:LongevityTest.test_custom_time
-        subject = f'Performance Regression Compare Results - {test_name} - {test_version} - {str(test_start_time)}'
         if ycsb:
             subject = f'(Alternator) Performance Regression - {test_name} - {test_version} - {str(test_start_time)}'
-        html = self.render_to_html(results, template='results_performance_baseline.html')
-        self.send_email(subject, html)
+        else:
+            subject = f'Performance Regression Compare Results - {test_name} - {test_version} - {str(test_start_time)}'
+
+        template = 'results_performance_baseline.html'
+        email_data = {'email_body': results,
+                      'attachments': (),
+                      'template': template}
+
+        file_path = 'email_data.json'
+        if os.path.exists(file_path):
+            with open(file_path, 'r') as file:
+                data = file.read().strip()
+                file_content = json.loads(data or '{}')
+        else:
+            file_content = dict()
+
+        file_content[subject] = email_data.copy()
+
+        with open(file_path, 'w') as file:
+            json.dump(file_content, file)
 
         return True
 
@@ -946,7 +976,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             test_id,
             subtests_info: list = None,
             metrics: list = None,
-            email_subject: str = None,
+            subject: str = None,
     ):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """
         Build regression report for subtests.
@@ -986,11 +1016,11 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             self.log.error('Cannot find test with id: {}!'.format(test_id))
             return False
 
-        if email_subject is None:
-            email_subject = 'Performance Regression Compare Results - {test.test_name} - ' \
+        if subject is None:
+            subject = 'Performance Regression Compare Results - {test.test_name} - ' \
                             '{test.software.scylla_server_any.version.as_string}'.format(test=rp_main_test)
         else:
-            email_subject = email_subject.format(test=rp_main_test)
+            subject = subject.format(test=rp_main_test)
 
         rp_main_tests_to_compare = collections.OrderedDict()
         rp_metric_info = {}
@@ -1165,8 +1195,27 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             last_events=last_events
         )
         if len(rp_metric_info) == 1:
-            html = self.render_to_html(results, template='results_performance_multi_baseline_single_metric.html')
+            template = 'results_performance_multi_baseline_single_metric.html'
+            html = self.render_to_html(results, template=template)
         else:
-            html = self.render_to_html(results, template='results_performance_multi_baseline.html')
-        self.send_email(email_subject, html)
+            template = 'results_performance_multi_baseline.html'
+            html = self.render_to_html(results, template=template)
+
+        email_data = {'email_body': results,
+                      'attachments': (),
+                      'template': template}
+
+        file_path = 'email_data.json'
+        if os.path.exists(file_path):
+            with open(file_path, 'r') as file:
+                data = file.read().strip()
+                file_content = json.loads(data or '{}')
+        else:
+            file_content = dict()
+
+        file_content[subject] = email_data.copy()
+
+        with open(file_path, 'w') as file:
+            json.dump(file_content, file)
+
         return True
