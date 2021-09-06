@@ -12,13 +12,16 @@ LOGGER = logging.getLogger(__name__)
 
 def get_distro_name(distro_object):
     known_distro_dict = {
+        Distro.AMAZON2: "centos7",
         Distro.CENTOS7: "centos7",
         Distro.CENTOS8: "centos8",
         Distro.DEBIAN9: "debian9",
         Distro.DEBIAN10: "debian10",
         Distro.UBUNTU16: "ubuntu16",
         Distro.UBUNTU18: "ubuntu18",
-        Distro.UBUNTU20: "ubuntu20"
+        Distro.UBUNTU20: "ubuntu20",
+        Distro.OEL7: "centos7",
+        Distro.OEL8: "centos8"
     }
     distro_name = known_distro_dict.get(distro_object, None)
     assert distro_name, f"Unfamiliar distribution: {distro_object}"
