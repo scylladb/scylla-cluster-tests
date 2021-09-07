@@ -541,7 +541,13 @@ class LocalMinikubeCluster(MinikubeK8sMixin, LocalMinimalClusterBase):
 
 
 class LocalKindCluster(KindK8sMixin, LocalMinimalClusterBase):
-    pass
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.allowed_labels_on_scylla_node = [
+            ('k8s-app', 'kindnet'),
+            ('k8s-app', 'kube-proxy'),
+            ('scylla/cluster', self.k8s_scylla_cluster_name),
+        ]
 
 
 class RemoteMinimalClusterBase(MinimalClusterBase, metaclass=abc.ABCMeta):
