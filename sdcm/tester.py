@@ -948,6 +948,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             params=self.params,
         )
         self.k8s_cluster.deploy()
+        for namespace in ('kube-system', 'local-path-storage'):
+            self.k8s_cluster.set_nodeselector_for_deployments(
+                pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME, namespace=namespace)
         self.k8s_cluster.deploy_cert_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
         self.k8s_cluster.deploy_scylla_operator(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
         if self.params.get('use_mgmt'):
