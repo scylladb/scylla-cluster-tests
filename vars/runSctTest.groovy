@@ -125,6 +125,10 @@ def call(Map params, String region, functional_test = false){
         export SCT_MANAGER_VERSION="${params.manager_version}"
     fi
 
+    if [[ -n "${params.pytest_addopts ? params.pytest_addopts : ''}" ]] ; then
+        export PYTEST_ADDOPTS="${params.pytest_addopts}"
+    fi
+
     echo "start test ......."
     if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" || "$cloud_provider" == "k8s-local-kind-aws" || "$cloud_provider" == "k8s-local-kind-gce" ]]; then
         RUNNER_IP=\$(cat sct_runner_ip||echo "")

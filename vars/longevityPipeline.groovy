@@ -91,6 +91,15 @@ def call(Map pipelineParams) {
                    description: 'Name of the test to run',
                    name: 'test_name')
 
+            string(defaultValue: "${pipelineParams.get('pytest_addopts', '')}",
+                   description: (
+                        '"pytest_addopts" is used by "run_pytest" hydra command. \n' +
+                        'Useful for K8S functional tests which run using pytest. \n' +
+                        'PyTest runner allows to provide any options using "PYTEST_ADDOPTS" ' +
+                        'env var which gets set here if value is provided. \n' +
+                        'Example: "--maxfail=1" - it will stop test run after first failure.'),
+                   name: 'pytest_addopts')
+
             string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_helm_repo', 'https://storage.googleapis.com/scylla-operator-charts/latest')}",
                    description: 'Scylla Operator helm repo',
                    name: 'k8s_scylla_operator_helm_repo')

@@ -164,6 +164,9 @@ fi
 # export all SCT_* env vars into the docker run
 SCT_OPTIONS=$(env | grep SCT_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
 
+# export all PYTEST_* env vars into the docker run
+PYTEST_OPTIONS=$(env | grep PYTEST_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
+
 # export all BUILD_* env vars into the docker run
 BUILD_OPTIONS=$(env | grep BUILD_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
 
@@ -203,6 +206,7 @@ function run_in_docker () {
             -u ${USER_ID} \
             ${DOCKER_GROUP_ARGS[@]} \
             ${SCT_OPTIONS} \
+            ${PYTEST_OPTIONS} \
             ${BUILD_OPTIONS} \
             ${JENKINS_OPTIONS} \
             ${AWS_OPTIONS} \
@@ -236,6 +240,7 @@ function run_in_docker () {
             -u ${USER_ID} \
             ${DOCKER_GROUP_ARGS[@]} \
             ${SCT_OPTIONS} \
+            ${PYTEST_OPTIONS} \
             ${BUILD_OPTIONS} \
             ${JENKINS_OPTIONS} \
             ${AWS_OPTIONS} \
