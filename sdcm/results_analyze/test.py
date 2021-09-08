@@ -475,11 +475,16 @@ class TestResultClass(ClassBase):
     def get_by_params(cls, es_index=es_index, **params):
         es_query = cls._get_es_query_from_instance_data(params)
         filter_path = cls._get_es_filters()
-        es_data = ES().search(
-            index=es_index,
-            q=es_query,
-            filter_path=filter_path,
-            size=10000)
+        try:
+            es_data = ES().search(
+                index=es_index,
+                q=es_query,
+                filter_path=filter_path,
+                size=10000)
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.warning("Unable to find ES data: %s", exc)
+            es_data = None
+
         if not es_data:
             return []
         es_data = es_data.get('hits', {}).get('hits', {})
@@ -538,10 +543,15 @@ class TestResultClass(ClassBase):
 
     def get_prior_tests(self, filter_path=None) -> typing.List['TestResultClass']:
         output = []
-        es_query = self.get_same_tests_query()
-        es_result = ES().search(index=self._es_data['_index'], q=es_query, filter_path=filter_path,
-                                size=10000)  # pylint: disable=unexpected-keyword-arg
-        es_result = es_result.get('hits', {}).get('hits', None) if es_result else None
+        try:
+            es_query = self.get_same_tests_query()
+            es_result = ES().search(index=self._es_data['_index'], q=es_query, filter_path=filter_path,
+                                    size=10000)  # pylint: disable=unexpected-keyword-arg
+            es_result = es_result.get('hits', {}).get('hits', None) if es_result else None
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.warning("Unable to find ES data: %s", exc)
+            es_result = None
+
         if not es_result:
             return output
         for es_data in es_result:
