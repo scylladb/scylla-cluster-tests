@@ -14,10 +14,11 @@ def call(Map pipelineParams) {
             SCT_TEST_ID = UUID.randomUUID().toString()
         }
         parameters {
-            choice(choices: ["${pipelineParams.get('backend', 'k8s-gke')}", 'k8s-gke', 'k8s-gce-minikube'],
+            choice(choices: ["${pipelineParams.get('backend', 'k8s-gke')}", 'k8s-eks', 'k8s-gke'],
                    name: 'backend')
-            choice(choices: ["${pipelineParams.get('aws_region', '')}", 'eu-north-1', 'eu-west-1', 'eu-central-1', 'us-east-1'],
-                   name: 'aws_region')
+            string(defaultValue: "${pipelineParams.get('aws_region', '')}",
+               description: 'Supported: us-east-1|eu-west-1|eu-west-2|eu-north-1|random (randomly select region)',
+               name: 'aws_region')
             string(defaultValue: "a",
                description: 'Availability zone',
                name: 'availability_zone')
