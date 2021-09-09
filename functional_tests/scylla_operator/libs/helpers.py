@@ -65,7 +65,7 @@ def wait_for_resource_absence(db_cluster: ScyllaPodCluster,
     def resource_is_absent() -> bool:
         all_resources = db_cluster.k8s_cluster.kubectl(
             f"get {resource_type} -o=custom-columns=:.metadata.name",
-            namespace=db_cluster.k8s_cluster.SCYLLA_NAMESPACE,
+            namespace=SCYLLA_NAMESPACE,
         ).stdout.split()
         return resource_name not in all_resources
 
