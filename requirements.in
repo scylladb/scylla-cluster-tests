@@ -24,6 +24,7 @@ tenacity==5.0.4
 # this package isn't in pypi
 https://github.com/fruch/repodataParser/archive/py3.zip ; python_version > '3'
 pytest==4.6.4
+pytest-random-order==1.0.4
 tcconfig==0.26.0
 selenium==3.141.0
 mysql-connector-python==8.0.20
