@@ -1395,14 +1395,15 @@ class SCTConfiguration(dict):
             if self.get("cluster_backend") in ["docker", "k8s-gce-minikube", "k8s-gke"]:
                 self.log.info("Assume that Scylla Docker image has repo file pre-installed.")
             elif not self.get('ami_id_db_scylla') and self.get('cluster_backend') == 'aws':
-                suffix = f" {scylla_version}"  # ami.name format example: ScyllaDB 4.4.0
+                # ami.name format examples: ScyllaDB 4.4.0 or ScyllaDB Enterprise 2019.1.1
+                scylla_version_substr = f" {scylla_version}"
                 ami_list = []
                 for region in region_names:
                     if ':' in scylla_version:
                         ami = get_branched_ami(scylla_version=scylla_version, region_name=region)[0]
                     else:
                         for ami in get_scylla_ami_versions(region_name=region):
-                            if ami.name.endswith(suffix):
+                            if scylla_version_substr in ami.name:
                                 break
                         else:
                             raise ValueError(f"AMIs for {scylla_version=} not found in {region}")
@@ -1414,9 +1415,9 @@ class SCTConfiguration(dict):
                     gce_image = get_branched_gce_images(scylla_version=scylla_version)[0]
                 else:
                     # gce_image.name format examples: scylla-4-3-6 or scylla-enterprise-2021-1-2
-                    suffix = f"-{scylla_version.replace('.', '-')}"
+                    scylla_version_substr = f"scylla-{scylla_version.replace('.', '-')}"
                     for gce_image in get_scylla_gce_images_versions():
-                        if gce_image.name.endswith(suffix):
+                        if gce_image.name.replace("-enterprise", "").startswith(scylla_version_substr):
                             break
                     else:
                         raise ValueError(f"GCE images for {scylla_version=} not found")
