@@ -18,6 +18,26 @@ from sdcm.cluster_k8s import SCYLLA_NAMESPACE, SCYLLA_OPERATOR_NAMESPACE, Scylla
 from sdcm.wait import wait_for
 
 
+def get_scylla_sysctl_value(db_cluster: ScyllaPodCluster, sysctl_name: str) -> int:
+    sysctls = db_cluster.get_scylla_cluster_plain_value('/spec/sysctls')
+    for sysctl in sysctls:
+        if sysctl.startswith(f"{sysctl_name}="):
+            return int(sysctl.split("=")[-1])
+    raise ValueError(f"Cannot find '{sysctl_name}' sysctl")
+
+
+def set_scylla_sysctl_value(db_cluster: ScyllaPodCluster, sysctl_name, sysctl_value: str) -> None:
+    sysctls = db_cluster.get_scylla_cluster_plain_value('/spec/sysctls')
+    sysctl_to_set = f"{sysctl_name}={sysctl_value}"
+    for i, _ in enumerate(sysctls):
+        if sysctls[i].startswith(f"{sysctl_name}="):
+            sysctls[i] = sysctl_to_set
+            break
+    else:
+        sysctls.append(sysctl_to_set)
+    db_cluster.replace_scylla_cluster_value("/spec/sysctls", sysctls)
+
+
 def get_orphaned_services(db_cluster):
     pod_names = scylla_pod_names(db_cluster)
     services_names = scylla_services_names(db_cluster)
@@ -35,28 +55,6 @@ def scylla_services_names(db_cluster):
     services = db_cluster.k8s_cluster.kubectl(f"get svc -n {SCYLLA_NAMESPACE} -l scylla/cluster=sct-cluster "
                                               f"-o=custom-columns='NAME:.metadata.name'")
     return [name for name in services.stdout.split() if name not in ('NAME', 'sct-cluster-client')]
-
-
-def rollout_restart(db_cluster: ScyllaPodCluster, namespace: str, deployment: str = None):
-    db_cluster.k8s_cluster.kubectl(f"rollout restart deployment -n {namespace} {deployment if deployment else ''}")
-
-
-def scylla_operator_rollout_restart(db_cluster: ScyllaPodCluster):
-    rollout_restart(db_cluster, namespace=SCYLLA_OPERATOR_NAMESPACE)
-
-
-def get_deployment_rollout_status(db_cluster: ScyllaPodCluster, namespace: str, deployment: str, timeout: str):
-    return db_cluster.k8s_cluster.kubectl(f"rollout status deployment -n {namespace} {deployment} --timeout={timeout}")
-
-
-def wait_for_scylla_operator_rollout_complete(db_cluster: ScyllaPodCluster, timeout: str = '60s'):
-    status = []
-    for deployment in ['scylla-operator', 'webhook-server']:
-        deployment_rollout_status = get_deployment_rollout_status(db_cluster, namespace=SCYLLA_OPERATOR_NAMESPACE,
-                                                                  deployment=deployment, timeout=timeout)
-        if f"deployment \"{deployment}\" successfully rolled out" not in deployment_rollout_status.stdout:
-            status.append(f"{deployment}: {deployment_rollout_status.stdout}")
-    return status
 
 
 def wait_for_resource_absence(db_cluster: ScyllaPodCluster,

@@ -19,15 +19,18 @@ import time
 import pytest
 import yaml
 
-from sdcm.cluster_k8s import ScyllaPodCluster
+from sdcm.cluster_k8s import (
+    ScyllaPodCluster,
+    SCYLLA_OPERATOR_NAMESPACE,
+)
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.k8s import HelmValues
 from functional_tests.scylla_operator.libs.helpers import (
+    get_scylla_sysctl_value,
     get_orphaned_services,
     scylla_operator_pods_and_statuses,
-    scylla_operator_rollout_restart,
+    set_scylla_sysctl_value,
     wait_for_resource_absence,
-    wait_for_scylla_operator_rollout_complete,
 )
 
 log = logging.getLogger()
@@ -260,48 +263,88 @@ def test_orphaned_services_multi_rack(db_cluster):
 def test_ha_update_spec_while_rollout_restart(db_cluster: ScyllaPodCluster):
     """
     Cover the issue https://github.com/scylladb/scylla-operator/issues/410
-    Validate that cluster resources can be updated while the scylla-operator is rolling out.
+    Validate that cluster resources can be updated while the webhook-server is rolling out
+    having scylla-operator not operational at all.
     - update cluster specification a few time
     - start rollout restart in parallel with the update
     - validate that the cluster specification has been updated
     """
-    terminate_change_spec_thread = threading.Event()
-    value = 1048576
-    crd_update_errors = []
+    sysctl_name = "fs.aio-max-nr"
+    log.info("Get existing value of the '%s' sysctl", sysctl_name)
+    original_aio_max_nr_value = expected_aio_max_nr_value = get_scylla_sysctl_value(
+        db_cluster, sysctl_name)
+    terminate_change_spec_thread, crd_update_errors = threading.Event(), []
 
-    def change_cluster_spec():
-        nonlocal value
-        nonlocal crd_update_errors
+    def change_cluster_spec() -> None:
+        nonlocal expected_aio_max_nr_value, crd_update_errors
         while not terminate_change_spec_thread.wait(0.1):
             try:
-                db_cluster.replace_scylla_cluster_value('/spec/sysctls', [f"fs.aio-max-nr={value + 1}"])
-                # increase the value just when the sysctls spec value has been updated - to prevent the situation when
-                # value was increased, but sysctls spec value was not updated
-                value += 1
+                set_scylla_sysctl_value(db_cluster, sysctl_name, expected_aio_max_nr_value + 1)
+                # NOTE: increase the value only when the sysctl spec update is successful
+                #       to avoid false negative results in further assertions
+                expected_aio_max_nr_value += 1
             except Exception as error:  # pylint: disable=broad-except
-                log.debug("Change /spec/sysctls value to %d failed. Error: %s", value, str(error))
-                crd_update_errors.append(str(error))
+                str_error = str(error)
+                log.debug("Change /spec/sysctls value to %d failed. Error: %s",
+                          expected_aio_max_nr_value, str_error)
+                crd_update_errors.append(str_error)
 
+    log.info("Start update of the Scylla cluster sysctl specification")
     change_cluster_spec_thread = threading.Thread(target=change_cluster_spec, daemon=True)
-    log.info("Start update cluster specification")
     change_cluster_spec_thread.start()
+    change_cluster_spec_thread_stopped = False
 
-    log.info("Start rollout restart")
-    scylla_operator_rollout_restart(db_cluster)
-    operator_rollout_errors = wait_for_scylla_operator_rollout_complete(db_cluster)
-    assert not operator_rollout_errors, "Rollout restart failed. Reasons: {}".format('\n'.join(operator_rollout_errors))
+    patch_operator_replicas_cmd = (
+        """patch deployment scylla-operator -p '{"spec": {"replicas": %d}}'""")
+    try:
+        log.info("Bring down scylla-operator pods to avoid triggering of the Scylla pods rollout")
+        db_cluster.k8s_cluster.kubectl(
+            patch_operator_replicas_cmd % 0, namespace=SCYLLA_OPERATOR_NAMESPACE)
+        db_cluster.k8s_cluster.kubectl(
+            "wait -l app.kubernetes.io/name=scylla-operator --for=delete pod",
+            namespace=SCYLLA_OPERATOR_NAMESPACE, timeout=300)
 
-    log.info("Stop update cluster specification")
-    terminate_change_spec_thread.set()
-    change_cluster_spec_thread.join()
+        log.info("Rollout webhook-server pods to verify that it's HA really works")
+        db_cluster.k8s_cluster.kubectl(
+            "rollout restart deployment webhook-server",
+            namespace=SCYLLA_OPERATOR_NAMESPACE)
+        db_cluster.k8s_cluster.kubectl(
+            "rollout status deployment webhook-server --watch=true",
+            namespace=SCYLLA_OPERATOR_NAMESPACE)
 
-    assert not crd_update_errors, \
-        "Found following errors during rollout restart: {}".format("\n".join(crd_update_errors))
+        log.info("Stop update of the Scylla cluster sysctl specification")
+        terminate_change_spec_thread.set()
+        change_cluster_spec_thread.join()
+        change_cluster_spec_thread_stopped = True
 
-    sysctl_value = db_cluster.get_scylla_cluster_plain_value('/spec/sysctls')
-    expected_sysctl_value = [f"fs.aio-max-nr={value}"]
-    assert expected_sysctl_value == sysctl_value, \
-        f"Cluster specification has not been updated. Expected {expected_sysctl_value}, actual {sysctl_value}"
+        current_aio_max_nr_value = get_scylla_sysctl_value(db_cluster, sysctl_name)
+    finally:
+        if not change_cluster_spec_thread_stopped:
+            # NOTE: needed to stop update of the spec when something happens wrong before
+            #       such steps are reached above.
+            terminate_change_spec_thread.set()
+            change_cluster_spec_thread.join()
+
+        set_scylla_sysctl_value(db_cluster, sysctl_name, original_aio_max_nr_value)
+        # NOTE: scylla-operator spawns very fast so we need to wait for some time to avoid races
+        time.sleep(10)
+
+        log.info("Bring back scylla-operator pods to life")
+        db_cluster.k8s_cluster.kubectl(
+            patch_operator_replicas_cmd % 2, namespace=SCYLLA_OPERATOR_NAMESPACE)
+        db_cluster.k8s_cluster.kubectl(
+            "wait -l app.kubernetes.io/name=scylla-operator --for=condition=Ready pod",
+            namespace=SCYLLA_OPERATOR_NAMESPACE, timeout=300)
+
+    try:
+        assert expected_aio_max_nr_value == current_aio_max_nr_value, (
+            "Cluster specification has not been updated correctly. "
+            f"Expected value for '{sysctl_name}' sysctl is {expected_aio_max_nr_value}, "
+            f"actual is {current_aio_max_nr_value}")
+    finally:
+        assert not crd_update_errors, (
+            "Found following errors during webhook-server pods rollout restart: {}".format(
+                "\n".join(crd_update_errors)))
 
 
 def test_scylla_operator_pods(db_cluster: ScyllaPodCluster):
