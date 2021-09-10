@@ -44,17 +44,22 @@ def get_orphaned_services(db_cluster):
     return list(set(services_names) - set(pod_names))
 
 
-def scylla_pod_names(db_cluster):
-    pods = db_cluster.k8s_cluster.kubectl(f"get pods -n {SCYLLA_NAMESPACE} -l scylla/cluster=sct-cluster "
-                                          f"-o=custom-columns='NAME:.metadata.name'")
+def scylla_pod_names(db_cluster: ScyllaPodCluster) -> list:
+    pods = db_cluster.k8s_cluster.kubectl(
+        f"get pods -n {SCYLLA_NAMESPACE} --no-headers "
+        f"-l scylla/cluster={db_cluster.params.get('k8s_scylla_cluster_name')} "
+        f"-o=custom-columns='NAME:.metadata.name'")
+    return pods.stdout.split()
 
-    return [name for name in pods.stdout.split() if name != 'NAME']
 
-
-def scylla_services_names(db_cluster):
-    services = db_cluster.k8s_cluster.kubectl(f"get svc -n {SCYLLA_NAMESPACE} -l scylla/cluster=sct-cluster "
-                                              f"-o=custom-columns='NAME:.metadata.name'")
-    return [name for name in services.stdout.split() if name not in ('NAME', 'sct-cluster-client')]
+def scylla_services_names(db_cluster: ScyllaPodCluster) -> list:
+    scylla_cluster_name = db_cluster.params.get('k8s_scylla_cluster_name')
+    services = db_cluster.k8s_cluster.kubectl(
+        f"get svc -n {SCYLLA_NAMESPACE} --no-headers "
+        f"-l scylla/cluster={scylla_cluster_name} "
+        f"-o=custom-columns='NAME:.metadata.name'")
+    return [name for name in services.stdout.split()
+            if name not in ('NAME', f"{scylla_cluster_name}-client")]
 
 
 def wait_for_resource_absence(db_cluster: ScyllaPodCluster,
