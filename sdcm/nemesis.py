@@ -2055,7 +2055,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         ks_cf_list = self.cluster.get_any_ks_cf_list(self.target_node)
         if not ks_cf_list:
             raise UnsupportedNemesis('User-defined Keyspace and ColumnFamily are not found.')
-        top_partition_api = random.choice([NewApiTopPartitionCmd, OldApiTopPartitionCmd])(ks_cf_list)
+        top_partition_api = OldApiTopPartitionCmd(ks_cf_list)
         # workaround for issue #4519
         self.target_node.run_nodetool('cfstats')
         top_partition_api.generate_cmd_arg_values()
