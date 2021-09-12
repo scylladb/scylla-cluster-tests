@@ -67,8 +67,12 @@ class StaticIPs(CloudResources):
         # identify user by the owner of the resource
         cloud_instances_by_id = {instance.instance_id: instance for instance in self.cloud_instances["aws"]}
         for eip in self["aws"]:
-            if eip.owner == NA and eip.used_by != NA and cloud_instances_by_id.get(eip.used_by):
-                eip.owner = cloud_instances_by_id[eip.used_by].owner
+            if eip.used_by != NA and cloud_instances_by_id.get(eip.used_by):
+                if eip.owner == NA:
+                    eip.owner = cloud_instances_by_id[eip.used_by].owner
+                if eip.name == NA:
+                    # display the used instance name if ip's name is empty
+                    eip.name = f"{NA} ({cloud_instances_by_id[eip.used_by].name})"
         self.all.extend(self["aws"])
 
     def get_gce_static_ips(self):
