@@ -29,6 +29,7 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
         super().__init__(*args, **kwargs)
         self._per_loader_count = {}
         self._per_loader_count_lock = threading.Semaphore()
+        self._nosqlbench_image = self.loader_set.params.get('nosqlbench_image')
 
     def build_stress_cmd(self, loader_idx: int):
         if hasattr(self.node_list[0], 'parent_cluster'):
@@ -54,7 +55,7 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
         LOGGER.debug("'running: %s", stress_cmd)
         with NoSQLBenchStressEvent(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name) as stress_event:
             try:
-                return loader.remoter.run(cmd=f'docker run scylla0dkropachev/nosqlbench:latest {stress_cmd}',
+                return loader.remoter.run(cmd=f'docker run {self._nosqlbench_image} {stress_cmd}',
                                           timeout=self.timeout + self.shutdown_timeout, log_file=log_file_name)
             except Exception as exc:  # pylint: disable=broad-except
                 stress_event.severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR
