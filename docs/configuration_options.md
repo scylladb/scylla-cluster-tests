@@ -287,3 +287,4 @@
 | **<a href="#user-content-data_volume_disk_size" name="data_volume_disk_size">data_volume_disk_size</a>**  | Size of additional volume in GB | N/A | SCT_DATA_VOLUME_DISK_SIZE
 | **<a href="#user-content-data_volume_disk_iops" name="data_volume_disk_iops">data_volume_disk_iops</a>**  | Number of iops for ebs type io2|io3|gp3 | N/A | SCT_DATA_VOLUME_DISK_IOPS
 | **<a href="#user-content-scylla_bench_version" name="scylla_bench_version">scylla_bench_version</a>**  | A valid tag under the scylla bench repo: https://github.com/scylladb/scylla-bench | N/A | SCT_SCYLLA_BENCH_VERSION
+| **<a href="#user-content-nosqlbench_image" name="nosqlbench_image">nosqlbench_image</a>**  | A docker image of NoSQLBench | N/A | SCT_NOSQLBENCH_IMAGE
