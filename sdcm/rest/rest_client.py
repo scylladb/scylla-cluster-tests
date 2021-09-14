@@ -1,4 +1,6 @@
+from functools import cached_property
 from typing import Dict, Literal
+from urllib.parse import urljoin
 
 import requests
 from requests import Response
@@ -14,35 +16,23 @@ class RestClient:
         self._host = host
         self._endpoint = endpoint
 
-    def prepare_get_request(self, path: str, params: dict[str, str]):
-        prepared_request = self._prepare_request(method="GET", path=path, params=params)
-
-        return prepared_request
+    @cached_property
+    def _base_url(self) -> str:
+        return urljoin(f"{self._url_prefix}{self._host}", self._endpoint)
 
     def get(self, path: str, params: Dict[str, str] = None) -> Response:
-        url = self._get_full_url(path)
+        url = f"{self._base_url}/{path}"
         LOGGER.info("Sending a GET request for: %s", url)
 
         return requests.get(url=url, params=params)
 
-    def prepare_post_request(self, path: str, params: dict[str, str]):
-        prepared_request = self._prepare_request(method="POST", path=path, params=params)
-
-        return prepared_request
-
     def post(self, path: str, params: Dict[str, str] = None) -> Response:
-        url = self._get_full_url(path)
+        url = f"{self._base_url}/{path}"
         LOGGER.info("Sending a POST request for: %s", url)
-        requests.Request()
         return requests.post(url=url, params=params)
 
-    def _get_full_url(self, path: str) -> str:
-        full_url = f"{self._url_prefix}{self._host}/{self._endpoint}/{path}"
-
-        return full_url
-
     def _prepare_request(self, method: Literal["GET", "POST"], path: str, params: dict[str, str]):
-        full_url = f"{self._url_prefix}{self._host}/{self._endpoint}/{path}"
+        full_url = f"{self._base_url}/{path}"
         prepared_request = requests.Request(method=method, url=full_url, params=params).prepare()
 
         return prepared_request

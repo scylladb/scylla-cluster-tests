@@ -1,10 +1,10 @@
 import time
-from typing import Callable, Optional, NamedTuple
+from typing import Callable, Optional, NamedTuple, Union
 
 from fabric.runners import Result
 
 from sct import LOGGER
-from sdcm.cluster import BaseNode, BaseCluster
+from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
 from sdcm.rest.storage_service_client import StorageServiceClient
 
 
@@ -28,7 +28,7 @@ class CompactionOps:
     NODETOOL_CMD = NodetoolCommands()
     SCRUB_MODES = ScrubModes()
 
-    def __init__(self, cluster: BaseCluster):
+    def __init__(self, cluster: Union[BaseCluster, BaseScyllaCluster]):
         self.cluster = cluster
         self.node = self.cluster.nodes[0]
         self.storage_service_client = StorageServiceClient(node=self.node)
@@ -99,5 +99,5 @@ class CompactionOps:
                 line = log_file.readline()
                 if watch_for in line:
                     stop_func()
-                    LOGGER.info("Watch for expression found %s in log line %s", watch_for, line)
+                    LOGGER.info("Grepped expression found %s in log line %s", watch_for, line)
                     break

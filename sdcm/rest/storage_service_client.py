@@ -1,36 +1,26 @@
 from typing import Optional
 
 from fabric.runners import Result
-from requests import PreparedRequest
 
 from sdcm.cluster import BaseNode
+from sdcm.rest.remote_curl_client import RemoteCurlClient
 
-from sdcm.rest.rest_client import RestClient
 
-
-class StorageServiceClient:
+class StorageServiceClient(RemoteCurlClient):
     def __init__(self, node: BaseNode):
-        self._node = node
-        self._host = "localhost:10000"
-        self._remoter = self._node.remoter
-        self._endpoint = "storage_service"
-        self.__client = RestClient(host=self._host, endpoint=self._endpoint)
+        super().__init__(host="localhost:10000", endpoint="storage_service", node=node)
 
     def compact_ks_cf(self, keyspace: str, cf: str) -> Result:
         params = {"cf": cf} if cf else {}
-        full_path = f"keyspace_compaction/{keyspace}"
-        prepared_request = self.__client.prepare_post_request(path=full_path, params=params)
-        response = self._run_remoter_curl(prepared_request)
+        path = f"keyspace_compaction/{keyspace}"
 
-        return response
+        return self.run_remoter_curl(method="POST", path=path, params=params)
 
     def cleanup_ks_cf(self, keyspace: str, cf: str) -> Result:
         params = {"cf": cf} if cf else {}
-        full_path = f"keyspace_cleanup/{keyspace}"
-        prepared_request = self.__client.prepare_post_request(path=full_path, params=params)
-        response = self._run_remoter_curl(prepared_request)
+        path = f"keyspace_cleanup/{keyspace}"
 
-        return response
+        return self.run_remoter_curl(method="POST", path=path, params=params)
 
     def scrub_ks_cf(self, keyspace: str, cf: Optional[str], scrub_mode: Optional[str] = None) -> Result:
         params = {"cf": cf} if cf else {}
@@ -38,19 +28,12 @@ class StorageServiceClient:
         if scrub_mode:
             params.update({"scrub_mode": scrub_mode})
 
-        full_path = f"keyspace_scrub/{keyspace}"
-        prepared_request = self.__client.prepare_get_request(path=full_path, params=params)
-        response = self._run_remoter_curl(prepared_request)
+        path = f"keyspace_scrub/{keyspace}"
 
-        return response
+        return self.run_remoter_curl(method="GET", path=path, params=params)
 
     def upgrade_sstables(self, keyspace: str = "ks", cf: str = "cf"):
         params = {"cf": cf} if cf else {}
-        full_path = f"keyspace_upgrade_sstables/{keyspace}"
-        prepared_request = self.__client.prepare_get_request(path=full_path, params=params)
-        response = self._run_remoter_curl(prepared_request)
+        path = f"keyspace_upgrade_sstables/{keyspace}"
 
-        return response
-
-    def _run_remoter_curl(self, prepared_request: PreparedRequest, timeout: int = None):
-        return self._remoter.run(f'curl -v -X {prepared_request.method} "{prepared_request.url}"', timeout=timeout)
+        return self.run_remoter_curl(method="GET", path=path, params=params)
