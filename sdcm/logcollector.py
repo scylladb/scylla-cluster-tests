@@ -51,7 +51,6 @@ from sdcm.utils.docker_utils import get_docker_bridge_gateway
 from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import RemoteBrowser, WebDriverContainerMixin
 
-
 LOGGER = logging.getLogger(__name__)
 
 
@@ -384,33 +383,22 @@ class MonitoringStack(BaseMonitoringEntity):
         return ""
 
     @staticmethod
-    def dashboard_exists(grafana_ip, uid):
-        """Check on Grafana server, that dashboard exists
+    @retrying(n=3, sleep_time=3, message="Search dashboard...", raise_on_exceeded=False)
+    def search_dashboard(grafana_ip: str, port: int, query: str) -> list:
+        search_api_url = f"http://{grafana_ip}:{port}/api/search?query={query}"
+        resp = requests.get(search_api_url)
+        if not resp.ok:
+            LOGGER.error("Search dashboards by query '%s' failed: %s %s", query, resp.status_code, resp.content)
+            return []
+        return resp.json()
 
-        Send request to Grafana and validate that dashboard with uid
-        provided as "uid" parameter is available and could be requested
-
-        Arguments:
-            node {CollectingNode} -- Remote host with grafana server
-            uid {str} -- uid of grafana dashboard
-
-        Returns:
-            bool -- return True if exists, false otherwise
-        """
-        checked_dashboard_url = "http://{grafana_ip}:{grafana_port}/api/dashboards/db/{uid}"
-        try:
-            LOGGER.info(
-                "Check dashboard: %s", checked_dashboard_url.format(grafana_ip=grafana_ip,
-                                                                    grafana_port=MonitoringStack.grafana_port,
-                                                                    uid=uid))
-            res = requests.get(checked_dashboard_url.format(grafana_ip=grafana_ip,
-                                                            grafana_port=MonitoringStack.grafana_port,
-                                                            uid=uid))
-            return bool(res.ok and res.json())
-
-        except Exception as ex:  # pylint: disable=broad-except
-            LOGGER.warning("Error during checking if dashboard is exists. %s", ex)
-            return False
+    @staticmethod
+    def get_dashboard_by_title(grafana_ip: str, port: int, title: str) -> Optional[dict]:
+        dashboards = MonitoringStack.search_dashboard(grafana_ip, port, title)
+        if not dashboards:
+            LOGGER.error("Dashboard with title '%s' was not found", title)
+            return None
+        return next((dashboard for dashboard in dashboards if title in dashboard["title"]), None)
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         local_archive = self.get_monitoring_data_stack(node, local_dst)
@@ -439,7 +427,7 @@ class GrafanaEntity(BaseMonitoringEntity):  # pylint: disable=too-few-public-met
     ]
 
     grafana_port = 3000
-    grafana_entity_url_tmpl = "http://{node_ip}:{grafana_port}/{path}?from={st}&to=now&refresh=1d"
+    grafana_entity_url_tmpl = "http://{node_ip}:{grafana_port}{path}?from={st}&to=now&refresh=1d"
     sct_base_path = get_sct_root_path()
 
     def __init__(self, *args, **kwargs):
@@ -493,20 +481,18 @@ class GrafanaScreenShot(GrafanaEntity):
             self.remote_browser = RemoteBrowser(node)
             for dashboard in self.grafana_dashboards:
                 try:
-                    dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=normalize_ipv6_url(node.grafana_address),
-                                                                        uid="-".join([dashboard.name,
-                                                                                      version])
-                                                                        )
-                    if not dashboard_exists:
-                        version = "master"
+                    dashboard_metadata = MonitoringStack.get_dashboard_by_title(
+                        grafana_ip=normalize_ipv6_url(node.grafana_address),
+                        port=self.grafana_port,
+                        title=dashboard.title)
+                    if not dashboard_metadata:
+                        LOGGER.error("Dashboard with title '%s' was not found", dashboard.title)
+                        continue
 
-                    path = dashboard.path.format(
-                        version=version,
-                        dashboard_name=dashboard.name)
                     grafana_url = self.grafana_entity_url_tmpl.format(
                         node_ip=normalize_ipv6_url(node.grafana_address),
                         grafana_port=self.grafana_port,
-                        path=path,
+                        path=dashboard_metadata["url"],
                         st=self.start_time)
                     screenshot_path = os.path.join(local_dst,
                                                    "%s-%s-%s-%s.png" % (self.name,
@@ -560,18 +546,18 @@ class GrafanaSnapshot(GrafanaEntity):
                                 port=self.grafana_port).use_default_creds()
             for dashboard in self.grafana_dashboards:
                 try:
-                    dashboard_exists = MonitoringStack.dashboard_exists(grafana_ip=normalize_ipv6_url(node.grafana_address),
-                                                                        uid="-".join([dashboard.name, version]))
-                    if not dashboard_exists:
-                        version = "master"
+                    dashboard_metadata = MonitoringStack.get_dashboard_by_title(
+                        grafana_ip=normalize_ipv6_url(node.grafana_address),
+                        port=self.grafana_port,
+                        title=dashboard.title)
+                    if not dashboard_metadata:
+                        LOGGER.error("Dashboard '%s' was not found", dashboard.title)
+                        continue
 
-                    path = dashboard.path.format(
-                        version=version,
-                        dashboard_name=dashboard.name)
                     grafana_url = self.grafana_entity_url_tmpl.format(
                         node_ip=normalize_ipv6_url(node.grafana_address),
                         grafana_port=self.grafana_port,
-                        path=path,
+                        path=dashboard_metadata["url"],
                         st=self.start_time)
                     LOGGER.info("Get snapshot link for url %s", grafana_url)
                     self.remote_browser.open(grafana_url, dashboard.resolution)

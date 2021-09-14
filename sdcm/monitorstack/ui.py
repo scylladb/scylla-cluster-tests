@@ -55,7 +55,7 @@ class Login:
 
 
 class Panel:
-    xpath_tmpl = """//div[contains(@aria-label,'{name}') and contains(@class, 'panel-title-container')]"""
+    xpath_tmpl = """//header[contains(@aria-label,'{name}') and contains(@class, 'panel-title-container')]"""
 
     def __init__(self, name):
         self.name = name
@@ -75,23 +75,17 @@ class Panel:
             WebDriverWait(remote_browser, UI_ELEMENT_LOAD_TIMEOUT).until(EC.invisibility_of_element(loading))
             LOGGER.debug("Panel %s could be without data", self.name)
         except exceptions.NoSuchElementException:
-            LOGGER.debug("Check panel is loaded %s", self.name)
-            list_of_childs = panel_elem.find_elements_by_xpath("child::*")
-            assert len(list_of_childs) == 2, f"num of elements {len(list_of_childs)}"
             LOGGER.debug("Panel %s loaded", self.name)
         except exceptions.TimeoutException:
             LOGGER.warning("Panel %s is still loading. Data on panel could displayed with delay", self.name)
-            list_of_childs = panel_elem.find_elements_by_xpath("child::*")
-            assert len(list_of_childs) == 3, f"num of elements {len(list_of_childs)}"
             LOGGER.debug("Panel %s was not fully loaded", self.name)
         LOGGER.info("Work with panel %s done", self.name)
 
 
 class Snapshot:  # pylint: disable=too-few-public-methods
     locators_sequence = [
-        (By.XPATH,  # full xpath is set, no any explicit ids.
-         """/html/body/grafana-app/div/div/react-container/div/div[1]/div[1]/div[4]/div/button"""),
-        (By.XPATH, """//ul/li[contains(text(), "Snapshot")]"""),
+        (By.XPATH, """//button[contains(@aria-label, "Share dashboard or panel")]"""),
+        (By.XPATH, """//ul/li/a[contains(@aria-label, "Tab Snapshot") and contains(text(), "Snapshot")]"""),
         (By.XPATH, """//button//span[contains(text(), "Publish to snapshot.raintank.io")]"""),
         (By.XPATH, """//a[contains(@href, "https://snapshot.raintank.io")]""")
     ]
@@ -129,6 +123,7 @@ class Dashboard:
     scroll_ready_locator: Tuple[By, str] = (By.XPATH, "//div[@class='scrollbar-view']")
     panels: List[Panel]
     scroll_step: int = 1000
+    title: str
 
     def scroll_to_bottom(self, remote_browser):
         WebDriverWait(remote_browser, UI_ELEMENT_LOAD_TIMEOUT).until(
@@ -154,12 +149,14 @@ class Dashboard:
 class OverviewDashboard(Dashboard):
     name = 'overview'
     path = 'd/overview-{version}/scylla-{dashboard_name}'
+    title = 'Overview'
     resolution = '1920px*4000px'
     panels = [Panel("Disk Size by DC"),
               Panel("Running Compactions"),
               Panel("Writes"),
               Panel("Write Latencies"),
-              Panel("Read/Write Timeouts by DC")]
+              Panel("Read Timeouts by DC"),
+              Panel("Write Timeouts by DC")]
 
 
 class ServerMetricsNemesisDashboard(Dashboard):
@@ -167,6 +164,7 @@ class ServerMetricsNemesisDashboard(Dashboard):
         test_name = f"{test_name.lower()}-"
 
     name = f'{test_name}scylla-per-server-metrics-nemesis'
+    title = 'Scylla Per Server Metrics Nemesis'
     path = 'dashboard/db/{dashboard_name}-{version}'
     resolution = '1920px*8000px'
     panels = [Panel("Total Requests"),
@@ -181,6 +179,7 @@ class ServerMetricsNemesisDashboard(Dashboard):
 
 class AlternatorDashboard(Dashboard):
     name = 'alternator'
+    title = 'Alternator'
     path = 'd/alternator-{version}/{dashboard_name}'
     resolution = '1920px*4000px'
     panels = [Panel("Total Actions"),
