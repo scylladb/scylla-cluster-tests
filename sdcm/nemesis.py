@@ -27,7 +27,7 @@ import os
 import re
 import traceback
 import json
-from typing import List, Optional, Type, Callable, Tuple, Dict, Set, Union, Any
+from typing import List, Optional, Type, Callable, Tuple, Dict, Set, Union
 from functools import wraps, partial
 from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
@@ -445,58 +445,59 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_start_stop_major_compaction(self):
         node = self.cluster.nodes[0]
         compaction_ops = CompactionOps(self.cluster)
-        # trigger_func = {"func": compaction_ops.trigger_major_compaction, "kwargs": {}}
+        timeout = 120
         trigger_func = partial(compaction_ops.trigger_major_compaction)
         watch_func = partial(compaction_ops.stop_on_user_compaction_logged,
                              node=node,
                              watch_for="User initiated compaction",
-                             timeout=120,
+                             timeout=timeout,
                              stop_func=compaction_ops.stop_major_compaction)
-        # watch_func = {"func": compaction_ops.stop_on_user_compaction_logged,
-        #               "kwargs": {"node": node,
-        #                          "watch_for": "User initiated compaction",
-        #                          "timeout": 120,
-        #                          "stop_func": compaction_ops.stop_major_compaction}}
-        # self._trigger_and_stop_compaction(trigger_func_w_kwargs=trigger_func, watch_func_w_kwargs=watch_func)
         self.tester.wait_no_compactions_running()
-        ParallelObject.run_once(partial_funcs_w_args=[trigger_func, watch_func],
-                                timeout=120)
+        ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
 
     def disrupt_start_stop_scrub_compaction(self):
         node = self.cluster.nodes[0]
         compaction_ops = CompactionOps(self.cluster)
-        trigger_func = {"func": compaction_ops.trigger_scrub_compaction, "kwargs": {}}
-        watcher_func = {"func": compaction_ops.stop_on_user_compaction_logged,
-                        "kwargs": {"node": node,
-                                   "watch_for": "Scrubbing",
-                                   "timeout": 120,
-                                   "stop_func": compaction_ops.stop_scrub_compaction}}
-        self._trigger_and_stop_compaction(trigger_func_w_kwargs=trigger_func, watch_func_w_kwargs=watcher_func)
+        timeout = 120
+        trigger_func = partial(compaction_ops.trigger_scrub_compaction)
+        watch_func = partial(compaction_ops.stop_on_user_compaction_logged,
+                             node=node,
+                             watch_for="Scrubbing",
+                             timeout=timeout,
+                             stop_func=compaction_ops.stop_scrub_compaction)
+        self.tester.wait_no_compactions_running()
+        ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
 
     def disrupt_start_stop_cleanup_compaction(self):
         node = self.cluster.nodes[0]
         compaction_ops = CompactionOps(self.cluster)
-        trigger_func = {"func": compaction_ops.trigger_cleanup_compaction, "kwargs": {}}
-        watch_func = {"func": compaction_ops.stop_on_user_compaction_logged,
-                      "kwargs": {"node": node,
-                                 "timeout": 120,
-                                 "watch_for": "Cleaning",
-                                 "stop_func": compaction_ops.stop_cleanup_compaction}}
-        self._trigger_and_stop_compaction(trigger_func_w_kwargs=trigger_func, watch_func_w_kwargs=watch_func)
+        timeout = 120
+        trigger_func = partial(compaction_ops.trigger_cleanup_compaction)
+        watch_func = partial(compaction_ops.stop_on_user_compaction_logged,
+                             node=node,
+                             timeout=timeout,
+                             watch_for="Cleaning",
+                             stop_func=compaction_ops.stop_cleanup_compaction)
+        self.tester.wait_no_compactions_running()
+        ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
 
     def disrupt_start_stop_validation_compaction(self):
         node = self.cluster.nodes[0]
         compaction_ops = CompactionOps(self.cluster)
-        trigger_func = {"func": compaction_ops.trigger_validation_compaction, "kwargs": {}}
-        watch_func = {"func": compaction_ops.stop_on_user_compaction_logged,
-                      "kwargs": {"node": node,
-                                 "watch_for": "Scrubbing in validate mode",
-                                 "timeout": 120,
-                                 "stop_func": compaction_ops.stop_validation_compaction}}
-        self._trigger_and_stop_compaction(trigger_func_w_kwargs=trigger_func, watch_func_w_kwargs=watch_func)
+        timeout = 120
+        trigger_func = partial(compaction_ops.trigger_validation_compaction)
+        watch_func = partial(compaction_ops.stop_on_user_compaction_logged,
+                             node=node,
+                             watch_for="Scrubbing in validate mode",
+                             timeout=timeout,
+                             stop_func=compaction_ops.stop_validation_compaction)
+        self.tester.wait_no_compactions_running()
+        ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
 
     def disrupt_start_stop_upgrade_compaction(self):
-        node1 = self.cluster.nodes[0]
+        node = self.cluster.nodes[0]
+        compaction_ops = CompactionOps(self.cluster)
+        timeout = 300
         upgraded_configuration_options = {"enable_sstables_mc_format": False,
                                           "enable_sstables_md_format": True}
 
@@ -505,24 +506,24 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             with node.remote_scylla_yaml() as scylla_yaml:
                 scylla_yaml.update(upgraded_configuration_options)
 
-        node = self.cluster.nodes[0]
         node.run_nodetool("flush")
         node.stop_scylla()
         _upgrade_sstables_format(node)
         node.start_scylla()
 
-        compaction_ops = CompactionOps(self.cluster)
-        trigger_func = {"func": compaction_ops.trigger_upgrade_compaction, "kwargs": {}}
-        watch_func = {"func": compaction_ops.stop_on_user_compaction_logged,
-                      "kwargs": {"node": node1,
-                                 "watch_for": "Upgrade keyspace1.standard1",
-                                 "timeout": 300,
-                                 "stop_func": compaction_ops.stop_upgrade_compaction}}
-        self._trigger_and_stop_compaction(trigger_func_w_kwargs=trigger_func, watch_func_w_kwargs=watch_func)
+        trigger_func = partial(compaction_ops.trigger_upgrade_compaction)
+        watch_func = partial(compaction_ops.stop_on_user_compaction_logged,
+                             node=node,
+                             watch_for="Upgrade keyspace1.standard1",
+                             timeout=timeout,
+                             stop_func=compaction_ops.stop_upgrade_compaction)
+        self.tester.wait_no_compactions_running()
+        ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
 
     def disrupt_start_stop_reshape_compaction(self):
         node = self.cluster.nodes[0]
         compaction_ops = CompactionOps(self.cluster)
+        timeout = 300
 
         def _trigger_reshape(node: BaseNode, tester: ClusterTester, keyspace: str = "keyspace1"):
             twcs = {'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': 1,
@@ -543,29 +544,21 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             cmd = f"ALTER TABLE standard1 WITH compaction={twcs}"
             node.run_cqlsh(cmd=cmd, keyspace="keyspace1")
             node.run_nodetool("refresh -- keyspace1 standard1")
-        trigger_func = {"func": _trigger_reshape, "kwargs": {"node": node, "tester": self.tester}}
-        watch_func = {"func": compaction_ops.stop_on_user_compaction_logged,
-                      "kwargs": {"node": node,
-                                 "watch_for": "Reshape keyspace1.standard1",
-                                 "timeout": 300,
-                                 "stop_func": compaction_ops.stop_reshape_compaction}}
-        self._trigger_and_stop_compaction(trigger_func_w_kwargs=trigger_func, watch_func_w_kwargs=watch_func)
 
-    def _trigger_and_stop_compaction(self,
-                                     trigger_func_w_kwargs: dict[str, Any],
-                                     watch_func_w_kwargs: dict[str, Any]):
-        def _run_in_parallel(funcs_with_kwargs: list[dict[str, Any]]):
-            def _run_func(func: Callable, kwargs: Any):
-                return func(**kwargs)
+        trigger_func = partial(_trigger_reshape,
+                               node=node,
+                               tester=self.tester)
+        watch_func = partial(compaction_ops.stop_on_user_compaction_logged,
+                             node=node,
+                             watch_for="Reshape keyspace1.standard1",
+                             timeout=timeout,
+                             stop_func=compaction_ops.stop_reshape_compaction)
 
-            parallel_obj = ParallelObject(funcs_with_kwargs, timeout=300)
-
-            return parallel_obj.run(_run_func, unpack_objects=True)
-
-
-        _run_in_parallel([trigger_func_w_kwargs, watch_func_w_kwargs])
+        self.tester.wait_no_compactions_running()
+        ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
 
     # This nemesis should be run with "private" ip_ssh_connections till the issue #665 is not fixed
+
     def disabled_disrupt_restart_then_repair_node(self):  # pylint: disable=invalid-name
         # Task https://trello.com/c/llRuLIOJ/2110-add-dbeventfilter-for-nosuchcolumnfamily-error
         # If this error happens during the first boot with the missing disk this issue is expected and it's not an issue

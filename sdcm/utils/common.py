@@ -426,17 +426,25 @@ class ParallelObject:
             raise ParallelObjectException(results=results)
         return results
 
-    @classmethod
-    def run_once(cls,
-                 partial_funcs_w_args: list[Callable],
-                 timeout: int = 6,
-                 num_workers: Optional[int] = None,
-                 disable_logging: bool = False,
-                 ignore_exceptions: bool = False) -> "ParallelObjectResult":
-        po = cls(partial_funcs_w_args, num_workers=num_workers, timeout=timeout, disable_logging=disable_logging)
-        result = po.run(lambda x: x(), ignore_exceptions=ignore_exceptions)
+    def call_objects(self) -> "ParallelObjectResult":
+        """
+        Use the ParallelObject run() method to call a list of
+        callables in parallel. Rather than running a single function
+        with a number of objects as arguments in parallel, we're
+        calling a list of callables in parallel.
 
-        return result
+        If we need to run multiple callables with some arguments, one
+        solution is to use partial objects to pack the callable with
+        its arguments, e.g.:
+
+        partial_func_1 = partial(print, "lorem")
+        partial_func_2 = partial(sum, (2, 3))
+        ParallelObject(objects=[partial_func_1, partial_func_2]).call_objects()
+
+        This can be useful if we need to tightly synchronise the
+        execution of multiple functions.
+        """
+        return self.run(lambda x: x())
 
     def clean_up(self, futures):
         # if there are futures that didn't run  we cancel them
