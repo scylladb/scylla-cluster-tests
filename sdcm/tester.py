@@ -2383,13 +2383,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             errors=test_events['ERROR'] + test_events['CRITICAL'],
             coredumps=coredumps)
 
-    def populate_data_parallel(self, size_in_gb, blocking=True, read=False):
+    def populate_data_parallel(self, size_in_gb: int, replication_factor: int = 3, blocking=True, read=False):
 
         # pylint: disable=too-many-locals
         base_cmd = "cassandra-stress write cl=QUORUM "
         if read:
             base_cmd = "cassandra-stress read cl=ONE "
-        stress_fixed_params = " -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' " \
+        stress_fixed_params = f" -schema 'replication(factor={replication_factor}) " \
+                              "compaction(strategy=LeveledCompactionStrategy)' " \
                               "-port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(1024) n=FIXED(1)' "
         stress_keys = "n="
         population = " -pop seq="
