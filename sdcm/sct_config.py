@@ -48,7 +48,7 @@ from sdcm.utils.version_utils import (
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 
 
-def str_or_list(value: Union[str, List[str]]) -> List[str]:
+def str_or_list(value: Union[str, List[str]]) -> List[str]:  # pylint: disable=unsubscriptable-object
     """Convert an environment variable into a Python's list."""
 
     if isinstance(value, str):
@@ -1650,6 +1650,7 @@ class SCTConfiguration(dict):
         self._verify_data_volume_configuration(backend)
 
         self._validate_seeds_number()
+        self._validate_nemesis_can_run_on_non_seed()
         if 'extra_network_interface' in self and len(self.region_names) >= 2:
             raise ValueError("extra_network_interface isn't supported for multi region use cases")
         self._check_partition_range_with_data_validation_correctness()
@@ -1704,6 +1705,16 @@ class SCTConfiguration(dict):
         num_of_db_nodes = sum([int(i) for i in str(self.get('n_db_nodes')).split(' ')])
         assert not num_of_db_nodes or seeds_num <= num_of_db_nodes, \
             f"Seeds number ({seeds_num}) should be not more then nodes number ({num_of_db_nodes})"
+
+    def _validate_nemesis_can_run_on_non_seed(self) -> None:
+        nemesis_filter_seeds = self.get('nemesis_filter_seeds')
+        if nemesis_filter_seeds is False:
+            return
+        seeds_num = self.get('seeds_num')
+        num_of_db_nodes = sum([int(i) for i in str(self.get('n_db_nodes')).split(' ')])
+
+        assert num_of_db_nodes > seeds_num, \
+            "Nemesis cannot run when 'nemesis_filter_seeds' is true and seeds number is equal to nodes number"
 
     def _check_per_backend_required_values(self, backend: str):
         if backend in self.available_backends:
