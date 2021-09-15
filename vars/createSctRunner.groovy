@@ -2,6 +2,12 @@
 
 def call(Map params, Integer test_duration, String region) {
     def cloud_provider = getCloudProviderFromBackend(params.backend)
+    def instance_type_arg = ""
+    if ( params.backend == "k8s-local-kind-aws" ) {
+        instance_type_arg = "--instance-type c5.xlarge"
+    } else if ( params.backend == "k8s-local-kind-gce" ) {
+        instance_type_arg = "--instance-type e2-standard-4"
+    }
 
     println(params)
     sh """
@@ -11,7 +17,13 @@ def call(Map params, Integer test_duration, String region) {
 
     if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" ]]; then
         rm -fv sct_runner_ip
-        ./docker/env/hydra.sh create-runner-instance --cloud-provider ${cloud_provider} --region ${region} --availability-zone ${params.availability_zone} --test-id \${SCT_TEST_ID} --duration ${test_duration}
+        ./docker/env/hydra.sh create-runner-instance \
+            --cloud-provider ${cloud_provider} \
+            --region ${region} \
+            --availability-zone ${params.availability_zone} \
+            $instance_type_arg \
+            --test-id \${SCT_TEST_ID} \
+            --duration ${test_duration}
     else
         echo "Currently, <$cloud_provider> not supported to. Will run on regular builder."
     fi
