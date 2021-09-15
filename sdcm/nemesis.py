@@ -3721,6 +3721,11 @@ class KubernetesScyllaOperatorMonkey(Nemesis):
             # So, skip it until it gets stabilized.
             "disrupt_nodetool_refresh",
             "disrupt_restart_with_resharding",
+            # NOTE: skip following methods because operator uses only
+            # stable scylla versions and these methods cover features in un-released scylla versions
+            # such as 4.5-rc.x . Remove following when operator's minimum scylla version becomes 4.5
+            "disrupt_load_and_stream",
+            "show_toppartitions",
         )
         self.disrupt_methods_list = list(
             set(self.get_list_of_methods_compatible_with_backend()) - set(ignore_methods))
