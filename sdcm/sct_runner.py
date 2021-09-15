@@ -152,7 +152,7 @@ class SctRunner(ABC):
     def _get_base_image(self, image=None):
         ...
 
-    def create_instance(self, test_id: str, test_duration: int, region_az: str):
+    def create_instance(self, test_id: str, test_duration: int, region_az: str, instance_type: str = ''):
         """
             :param test_duration: used to set keep-alive flags, measured in MINUTES
         """
@@ -165,7 +165,7 @@ class SctRunner(ABC):
             sys.exit(1)
         lt_datetime = datetime.datetime.now(tz=pytz.utc)
         return self._create_instance(
-            instance_type=self.instance_type(test_duration=test_duration),
+            instance_type=instance_type or self.instance_type(test_duration=test_duration),
             base_image=self._get_base_image(self.image),
             tags_list=[
                 {"Key": "Name", "Value": self.RUNNER_NAME},
@@ -506,4 +506,5 @@ if __name__ == "__main__":
     TEST_ZONE = "a"
     SCT_RUNNER = AwsSctRunner(region_name=TEST_REGION, availability_zone=TEST_ZONE)
     SCT_RUNNER.create_image()
-    SCT_RUNNER.create_instance(test_id="byakabuka", test_duration=60, region_az=f"{TEST_REGION}{TEST_ZONE}")
+    SCT_RUNNER.create_instance(
+        instance_type="", test_id="byakabuka", test_duration=60, region_az=f"{TEST_REGION}{TEST_ZONE}")

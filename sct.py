@@ -1117,9 +1117,11 @@ def create_runner_image(cloud_provider, region, availability_zone):
               help="Name of the region")
 @click.option("-z", "--availability-zone", required=False, default="", type=str,
               help="Name of availability zone, ex. 'a'")
+@click.option("-i", "--instance-type", required=False, type=str, default="", help="Instance type")
 @click.option("-t", "--test-id", required=True, type=str, help="Test ID")
 @click.option("-d", "--duration", required=True, type=int, help="Test duration in MINUTES")
-def create_runner_instance(cloud_provider, region, availability_zone, test_id, duration):
+def create_runner_instance(cloud_provider, region, availability_zone, instance_type,
+                           test_id, duration):
     cloud_provider = cloud_provider.lower()
     if cloud_provider == 'aws' and availability_zone != "":
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
@@ -1135,7 +1137,12 @@ def create_runner_instance(cloud_provider, region, availability_zone, test_id, d
     else:
         raise Exception('Unsupported Cloud provider')
 
-    instance = sct_runner.create_instance(test_id=test_id, test_duration=duration, region_az=region + availability_zone)
+    instance = sct_runner.create_instance(
+        instance_type=instance_type,
+        test_id=test_id,
+        test_duration=duration,
+        region_az=region + availability_zone,
+    )
     if cloud_provider == 'aws':
         runner_public_ip = instance.public_ip_address
     elif cloud_provider == 'gce':
