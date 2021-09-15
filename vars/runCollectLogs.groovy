@@ -17,7 +17,7 @@ def call(Map params, String region){
     export SCT_CONFIG_FILES=${test_config}
 
     echo "start collect logs ..."
-    if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" || "$cloud_provider" == "k8s-local-kind-aws" || "$cloud_provider" == "k8s-local-kind-gce" ]]; then
+    if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" ]]; then
         RUNNER_IP=\$(cat sct_runner_ip||echo "")
         if [[ -n "\${RUNNER_IP}" ]] ; then
             ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} collect-logs
