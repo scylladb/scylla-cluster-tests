@@ -146,7 +146,6 @@ class ContinuousEvent(SctEvent, abstract=True):
                 self.errors.append(traceback.format_exc(limit=None, chain=True))
 
         self.end_event()
-        return self
 
     def skip(self, skip_reason):
         self.is_skipped = True
