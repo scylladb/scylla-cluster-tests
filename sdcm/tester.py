@@ -2396,7 +2396,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         total_keys = size_in_gb * 1024 * 1024
         n_loaders = int(self.params.get('n_loaders'))
-        keys_per_node = total_keys / n_loaders
+        keys_per_node = total_keys // n_loaders
 
         write_queue = list()
         start = 1
