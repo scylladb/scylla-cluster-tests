@@ -1707,8 +1707,7 @@ class SCTConfiguration(dict):
             f"Seeds number ({seeds_num}) should be not more then nodes number ({num_of_db_nodes})"
 
     def _validate_nemesis_can_run_on_non_seed(self) -> None:
-        nemesis_filter_seeds = self.get('nemesis_filter_seeds')
-        if nemesis_filter_seeds is False:
+        if self.get('nemesis_filter_seeds') is False or self.get('nemesis_class_name') == "NoOpMonkey":
             return
         seeds_num = self.get('seeds_num')
         num_of_db_nodes = sum([int(i) for i in str(self.get('n_db_nodes')).split(' ')])
