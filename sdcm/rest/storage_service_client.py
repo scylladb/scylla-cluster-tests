@@ -10,19 +10,19 @@ class StorageServiceClient(RemoteCurlClient):
     def __init__(self, node: BaseNode):
         super().__init__(host="localhost:10000", endpoint="storage_service", node=node)
 
-    def compact_ks_cf(self, keyspace: str, cf: str) -> Result:
+    def compact_ks_cf(self, keyspace: str, cf: Optional[str] = None) -> Result:
         params = {"cf": cf} if cf else {}
         path = f"keyspace_compaction/{keyspace}"
 
         return self.run_remoter_curl(method="POST", path=path, params=params)
 
-    def cleanup_ks_cf(self, keyspace: str, cf: str) -> Result:
+    def cleanup_ks_cf(self, keyspace: str, cf: Optional[str] = None) -> Result:
         params = {"cf": cf} if cf else {}
         path = f"keyspace_cleanup/{keyspace}"
 
         return self.run_remoter_curl(method="POST", path=path, params=params)
 
-    def scrub_ks_cf(self, keyspace: str, cf: Optional[str], scrub_mode: Optional[str] = None) -> Result:
+    def scrub_ks_cf(self, keyspace: str, cf: Optional[str] = None, scrub_mode: Optional[str] = None) -> Result:
         params = {"cf": cf} if cf else {}
 
         if scrub_mode:
@@ -32,7 +32,7 @@ class StorageServiceClient(RemoteCurlClient):
 
         return self.run_remoter_curl(method="GET", path=path, params=params)
 
-    def upgrade_sstables(self, keyspace: str = "ks", cf: str = "cf"):
+    def upgrade_sstables(self, keyspace: str = "ks", cf: Optional[str] = None):
         params = {"cf": cf} if cf else {}
         path = f"keyspace_upgrade_sstables/{keyspace}"
 

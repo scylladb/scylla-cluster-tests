@@ -28,9 +28,9 @@ class CompactionOps:
     NODETOOL_CMD = NodetoolCommands()
     SCRUB_MODES = ScrubModes()
 
-    def __init__(self, cluster: Union[BaseCluster, BaseScyllaCluster]):
+    def __init__(self, cluster: Union[BaseCluster, BaseScyllaCluster], node: Optional[BaseNode] = None):
         self.cluster = cluster
-        self.node = self.cluster.nodes[0]
+        self.node = node if node else self.cluster.nodes[0]
         self.storage_service_client = StorageServiceClient(node=self.node)
 
     def trigger_major_compaction(self, keyspace: str = "keyspace1", cf: str = "standard1") -> Result:
@@ -40,10 +40,7 @@ class CompactionOps:
                                  keyspace: str = "keyspace1",
                                  cf: str = "standard1",
                                  scrub_mode: Optional[str] = None) -> Result:
-        params = {"keyspace": keyspace, "cf": cf}
-
-        if scrub_mode:
-            params.update({"scrub_mode": scrub_mode})
+        params = {"keyspace": keyspace, "cf": cf, "scrub_mode": scrub_mode}
 
         return self.storage_service_client.scrub_ks_cf(**params)
 
@@ -99,5 +96,5 @@ class CompactionOps:
                 line = log_file.readline()
                 if watch_for in line:
                     stop_func()
-                    LOGGER.info("Grepped expression found %s in log line %s", watch_for, line)
+                    LOGGER.info("Grepped expression found: %s in log line %s", watch_for, line)
                     break

@@ -1,3 +1,4 @@
+import logging
 from functools import cached_property
 from typing import Dict, Literal
 from urllib.parse import urljoin
@@ -5,7 +6,8 @@ from urllib.parse import urljoin
 import requests
 from requests import Response
 
-from sct import LOGGER
+
+LOGGER = logging.getLogger(__name__)
 
 
 class RestClient:
