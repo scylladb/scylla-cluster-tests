@@ -10,7 +10,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-
 import time
 import logging
 import unittest
@@ -66,8 +65,8 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
     maxDiff = None
 
     def test_disruption_skipped_event(self):
-        with DisruptionEvent(nemesis_name="DeleteByRowsRange",
-                             node="target_node", publish_event=False) as nemesis_event:
+        with self.assertRaises(UnsupportedNemesis), DisruptionEvent(
+                nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event:
             try:
                 raise UnsupportedNemesis("This nemesis can run on scylla_bench test only")
             except UnsupportedNemesis as exc:
@@ -84,8 +83,8 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         )
 
     def test_disruption_raised_critical_event(self):
-        with DisruptionEvent(nemesis_name="DeleteByRowsRange",
-                             node="target_node", publish_event=False) as nemesis_event:
+        with self.assertRaises(ZeroDivisionError), DisruptionEvent(
+                nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event:
             nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
             self.assertEqual(
                 str(nemesis_event),
@@ -107,8 +106,8 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         self.assertEqual(nemesis_event.duration_formatted, '15s')
 
     def test_disruption_raised_error_event(self):
-        with DisruptionEvent(nemesis_name="DeleteByRowsRange",
-                             node="target_node", publish_event=False) as nemesis_event:
+        with self.assertRaises(ZeroDivisionError), DisruptionEvent(
+                nemesis_name="DeleteByRowsRange", node="target_node", publish_event=False) as nemesis_event:
             nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
             self.assertEqual(
                 str(nemesis_event),
@@ -129,8 +128,8 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
         self.assertEqual(nemesis_event.duration_formatted, '15s')
 
     def test_disruption_error_event(self):
-        with DisruptionEvent(nemesis_name="DeleteByRowsRange",
-                             node="target_node", publish_event=False) as nemesis_event:
+        with DisruptionEvent(nemesis_name="DeleteByRowsRange", node="target_node",
+                             publish_event=False) as nemesis_event:
             nemesis_event.event_id = "c2561d8b-97ca-44fb-b5b1-8bcc0d437318"
             self.assertEqual(
                 str(nemesis_event),
@@ -146,11 +145,10 @@ class SctEventsTests(BaseEventsTest):  # pylint: disable=too-many-public-methods
                 nemesis_event.duration = 15
                 nemesis_event.severity = Severity.ERROR
 
-        self.assertEqual(
-            str(nemesis_event),
+        self.assertIn(
             '(DisruptionEvent Severity.ERROR) period_type=end event_id=c2561d8b-97ca-44fb-b5b1-8bcc0d437318 '
-            'duration=15s: nemesis_name=DeleteByRowsRange target_node=target_node errors=division by zero\n'
-            'traceback.format_exc()'
+            'duration=15s: nemesis_name=DeleteByRowsRange target_node=target_node errors=division by zero\n',
+            str(nemesis_event),
         )
 
     def test_disruption_normal_event(self):
