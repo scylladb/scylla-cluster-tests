@@ -123,6 +123,11 @@ COMMON_CONTAINERS_RESOURCES = {
     'memory': 0.51,
 }
 
+SCYLLA_MANAGER_AGENT_RESOURCES = {
+    'cpu': 0.2,
+    'memory': 0.098,  # 0.098 will give 100Mb as a result
+}
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -710,6 +715,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                           timeout=600, namespace=MINIO_NAMESPACE)
 
     def get_scylla_cluster_helm_values(self, cpu_limit, memory_limit, pool_name: str = None) -> HelmValues:
+        mgmt_agent_cpu_limit = convert_cpu_units_to_k8s_value(SCYLLA_MANAGER_AGENT_RESOURCES['cpu'])
+        mgmt_agent_memory_limit = convert_memory_units_to_k8s_value(
+            SCYLLA_MANAGER_AGENT_RESOURCES['memory'])
         return HelmValues({
             'nameOverride': '',
             'fullnameOverride': self.params.get('k8s_scylla_cluster_name'),
@@ -758,6 +766,16 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                         'requests': {
                             'cpu': cpu_limit,
                             'memory': memory_limit
+                        },
+                    },
+                    'agentResources': {
+                        'limits': {
+                            'cpu': mgmt_agent_cpu_limit,
+                            'memory': mgmt_agent_memory_limit,
+                        },
+                        'requests': {
+                            'cpu': mgmt_agent_cpu_limit,
+                            'memory': mgmt_agent_memory_limit,
                         },
                     },
                     'placement': add_pool_node_affinity({}, self.POOL_LABEL_NAME, pool_name) if pool_name else {}
@@ -822,11 +840,13 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 cpu_limit
                 - OPERATOR_CONTAINERS_RESOURCES['cpu']
                 - COMMON_CONTAINERS_RESOURCES['cpu']
+                - SCYLLA_MANAGER_AGENT_RESOURCES['cpu']
             )
             memory_limit = (
                 memory_limit
                 - OPERATOR_CONTAINERS_RESOURCES['memory']
                 - COMMON_CONTAINERS_RESOURCES['memory']
+                - SCYLLA_MANAGER_AGENT_RESOURCES['memory']
             )
         else:
             cpu_limit = 1

@@ -30,6 +30,7 @@ from sdcm.cluster_k8s import (
     ScyllaPodCluster,
     COMMON_CONTAINERS_RESOURCES,
     OPERATOR_CONTAINERS_RESOURCES,
+    SCYLLA_MANAGER_AGENT_RESOURCES,
 )
 from sdcm.cluster_k8s.iptables import IptablesPodPortsRedirectMixin, IptablesClusterOpsMixin
 from sdcm.cluster_gce import MonitorSetGCE
@@ -62,8 +63,12 @@ class MinimalK8SNodePool(CloudK8sNodePool):
     @cached_property
     def cpu_and_memory_capacity(self) -> Tuple[float, float]:
         return (
-            1 + COMMON_CONTAINERS_RESOURCES['cpu'] + OPERATOR_CONTAINERS_RESOURCES['cpu'],
-            2.5 + COMMON_CONTAINERS_RESOURCES['memory'] + OPERATOR_CONTAINERS_RESOURCES['memory'],
+            1 + COMMON_CONTAINERS_RESOURCES['cpu']
+            + OPERATOR_CONTAINERS_RESOURCES['cpu']
+            + SCYLLA_MANAGER_AGENT_RESOURCES['cpu'],
+            2.5 + COMMON_CONTAINERS_RESOURCES['memory']
+            + OPERATOR_CONTAINERS_RESOURCES['memory']
+            + SCYLLA_MANAGER_AGENT_RESOURCES['memory'],
         )
 
 
