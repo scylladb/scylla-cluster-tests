@@ -58,7 +58,7 @@ class DbEventsFilter(BaseFilter):
         if self.filter_line:
             output.append('line={0.filter_line}')
         if self.filter_node:
-            output.append('type={0.filter_node}')
+            output.append('node={0.filter_node}')
         return '(' + (' '.join(output)) + ')'
 
 

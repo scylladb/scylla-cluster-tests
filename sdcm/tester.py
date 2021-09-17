@@ -271,7 +271,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.debug('Post behavior for db nodes %s', post_behavior_db_nodes)
         self.test_config.keep_cluster(node_type='db_nodes', val=post_behavior_db_nodes)
         post_behavior_monitor_nodes = self.params.get('post_behavior_monitor_nodes')
-        self.log.debug('Post behavior for loader nodes %s', post_behavior_monitor_nodes)
+        self.log.debug('Post behavior for monitor nodes %s', post_behavior_monitor_nodes)
         self.test_config.keep_cluster(node_type='monitor_nodes', val=post_behavior_monitor_nodes)
         post_behavior_loader_nodes = self.params.get('post_behavior_loader_nodes')
         self.log.debug('Post behavior for loader nodes %s', post_behavior_loader_nodes)
