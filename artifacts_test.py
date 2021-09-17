@@ -36,7 +36,7 @@ class ArtifactsTest(ClusterTester):
 
     def check_cluster_name(self):
         with self.node.remote_scylla_yaml() as scylla_yaml:
-            yaml_cluster_name = scylla_yaml.get('cluster_name', '')
+            yaml_cluster_name = scylla_yaml.cluster_name
 
         self.assertTrue(self.db_cluster.name == yaml_cluster_name,
                         f"Cluster name is not as expected. Cluster name in scylla.yaml: {yaml_cluster_name}. "
@@ -94,7 +94,7 @@ class ArtifactsTest(ClusterTester):
 
         describecluster_snitch = self.get_describecluster_info().snitch
         with self.node.remote_scylla_yaml() as scylla_yaml:
-            scylla_yaml_snitch = scylla_yaml['endpoint_snitch']
+            scylla_yaml_snitch = scylla_yaml.endpoint_snitch
         expected_snitches = BACKENDS[backend_name]
 
         snitch_patterns = [re.compile(f"({snitch})") for snitch in expected_snitches]

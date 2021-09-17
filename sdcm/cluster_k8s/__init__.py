@@ -40,12 +40,13 @@ from packaging import version
 
 import yaml
 import kubernetes as k8s
-from kubernetes.client import V1Container, V1ResourceRequirements, V1ConfigMap
+from kubernetes.client import V1ConfigMap
 from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance, ResourceList, Subresource
 from invoke.exceptions import CommandTimedOut
 
 from sdcm import sct_abs_path, cluster, cluster_docker
 from sdcm.cluster import DeadNode, ClusterNodesNotReady
+from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
 from sdcm.test_config import TestConfig
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.remote import NETWORK_EXCEPTIONS
@@ -78,7 +79,6 @@ from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.decorators import timeout as timeout_wrapper
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \
     KubectlClusterEventsLogger, ScyllaManagerLogger, KubernetesWrongSchedulingLogger
-from sdcm.utils.version_utils import get_git_tag_from_helm_chart_version
 from sdcm.wait import wait_for
 from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring
 
@@ -1619,11 +1619,11 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
 
     parent_cluster: ScyllaPodCluster
 
-    def actual_scylla_yaml(self):
+    def actual_scylla_yaml(self) -> ContextManager[ScyllaYaml]:
         return super().remote_scylla_yaml()
 
     @contextlib.contextmanager
-    def remote_scylla_yaml(self) -> ContextManager:
+    def remote_scylla_yaml(self) -> ContextManager[ScyllaYaml]:
         """Update scylla.yaml, k8s way
 
         Scylla Operator handles scylla.yaml updates using ConfigMap resource and we don't need to update it
@@ -1635,13 +1635,13 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
         """
         with self.parent_cluster.scylla_yaml_lock:
             # TBD: Interfere with remote_cassandra_rackdc_properties, needed to be addressed
-            scylla_yaml_copy = deepcopy(self.parent_cluster.scylla_yaml)
+            scylla_yaml_copy = self.parent_cluster.scylla_yaml.copy()
             yield self.parent_cluster.scylla_yaml
             if scylla_yaml_copy == self.parent_cluster.scylla_yaml:
                 LOGGER.debug("%s: scylla.yaml hasn't been changed", self)
                 return
-            original = yaml.safe_dump(scylla_yaml_copy).splitlines(keepends=True)
-            changed = yaml.safe_dump(self.parent_cluster.scylla_yaml).splitlines(keepends=True)
+            original = yaml.safe_dump(scylla_yaml_copy.as_dict()).splitlines(keepends=True)
+            changed = yaml.safe_dump(self.parent_cluster.scylla_yaml.as_dict()).splitlines(keepends=True)
             diff = "".join(unified_diff(original, changed))
             LOGGER.debug("%s: scylla.yaml requires to be updated with:\n%s", self, diff)
             self.parent_cluster.scylla_yaml_update_required = True
@@ -1946,7 +1946,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
             node_prepare_config=self.NODE_PREPARE_FILE
         )
         self.scylla_yaml_lock = RLock()
-        self.scylla_yaml = {}
+        self.scylla_yaml = ScyllaYaml()
         self.scylla_yaml_update_required = False
         self.scylla_cluster_name = scylla_cluster_name
         super().__init__(k8s_cluster=k8s_cluster,
@@ -2288,7 +2288,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
     def update_scylla_config(self):
         with self.scylla_yaml_lock:
             with NamedTemporaryFile("w", delete=False) as tmp:
-                tmp.write(yaml.safe_dump(self.scylla_yaml))
+                tmp.write(yaml.safe_dump(self.scylla_yaml.as_dict()))
                 tmp.flush()
                 self.k8s_cluster.kubectl_multi_cmd(
                     f'kubectl create configmap {SCYLLA_CONFIG_NAME} --from-file=scylla.yaml={tmp.name} ||'

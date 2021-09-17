@@ -151,7 +151,7 @@ def test_listen_address(db_cluster):
             continue
         # If no --listen-address in command line then proceed with scylla.yaml
         with node.actual_scylla_yaml() as scylla_yaml:
-            listen_address = scylla_yaml.get('listen_address')
+            listen_address = scylla_yaml.listen_address
             if not listen_address:
                 all_errors.append(f"Not found listen_address flag in the {node.name} scylla.yaml")
             elif listen_address != '0.0.0.0':

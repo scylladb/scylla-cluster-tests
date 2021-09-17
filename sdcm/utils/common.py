@@ -2294,7 +2294,7 @@ def update_authenticator(nodes, authenticator='AllowAllAuthenticator', restart=T
     """
     for node in nodes:
         with node.remote_scylla_yaml() as scylla_yml:
-            scylla_yml['authenticator'] = authenticator
+            scylla_yml.authenticator = authenticator
         if restart:
             if authenticator == SASLAUTHD_AUTHENTICATOR:
                 node.run_cqlsh(f'ALTER ROLE \'{LDAP_USERS[0]}\' with password=\'{LDAP_PASSWORD}\'')
@@ -2334,7 +2334,7 @@ def prepare_and_start_saslauthd_service(node):
     for key in conf.keys():
         node.remoter.run(f'echo "{key}: {conf[key]}" | sudo tee -a /etc/saslauthd.conf')
     with node.remote_scylla_yaml() as scylla_yml:
-        scylla_yml['saslauthd_socket_path'] = '/run/saslauthd/mux'
+        scylla_yml.saslauthd_socket_path = '/run/saslauthd/mux'
     node.remoter.sudo('systemctl restart saslauthd')
 
 
