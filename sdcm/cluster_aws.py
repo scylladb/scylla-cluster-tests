@@ -36,6 +36,7 @@ from pkg_resources import parse_version
 from botocore.exceptions import WaiterError
 
 from sdcm import ec2_client, cluster
+from sdcm.provision.scylla_yaml import SeedProvider
 from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
 from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
@@ -686,16 +687,13 @@ class AWSNode(cluster.BaseNode):
             other_nodes = list(set(self.parent_cluster.nodes) - {self})
             free_nodes = [node for node in other_nodes if not node.running_nemesis]
             random_node = random.choice(free_nodes)
-
-            seed_provider = [{
-                "class_name": "org.apache.cassandra.locator.SimpleSeedProvider",
-                "parameters": [{
-                    "seeds": f"{random_node.ip_address}"
-                }, ],
-            }, ]
+            seed_provider = SeedProvider(
+                class_name="org.apache.cassandra.locator.SimpleSeedProvider",
+                parameters=[{"seeds": f"{random_node.ip_address}"}]
+            )
 
             with self.remote_scylla_yaml() as scylla_yml:
-                scylla_yml["seed_provider"] = seed_provider
+                scylla_yml.seed_provider = [seed_provider]
 
         with ExitStack() as stack:
             if self.is_data_device_lost_after_reboot:

@@ -534,7 +534,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise UnsupportedNemesis("SaslauthdAuthenticator is only supported by Scylla Enterprise")
 
         with self.target_node.remote_scylla_yaml() as scylla_yml:
-            orig_auth = scylla_yml.get('authenticator')
+            orig_auth = scylla_yml.authenticator
             if orig_auth == SASLAUTHD_AUTHENTICATOR:
                 opposite_auth = 'PasswordAuthenticator'
             elif orig_auth == 'PasswordAuthenticator':
@@ -562,14 +562,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             values_to_toggle = list(filter(lambda value: value != current_compression, values))
             return random.choice(values_to_toggle)
 
-        key = 'internode_compression'
         with self.target_node.remote_scylla_yaml() as scylla_yaml:
-            current = scylla_yaml.get(key, 'dummy_value_no_internode_compression_key_and_value')
+            current = scylla_yaml.internode_compression
         new_value = get_internode_compression_new_value_randomly(current)
         for node in self.cluster.nodes:
             self.log.debug(f"Changing {node} inter node compression to {new_value}")
             with node.remote_scylla_yaml() as scylla_yaml:
-                scylla_yaml[key] = new_value
+                scylla_yaml.internode_compression = new_value
             self.log.info(f"Restarting node {node}")
             node.restart_scylla_server()
 
@@ -723,7 +722,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         def remove_ldap_configuration_from_node(node):
             with node.remote_scylla_yaml() as scylla_yaml:
                 for key in ldap_config:
-                    ldap_config[key] = scylla_yaml.pop(key)
+                    ldap_config[key] = getattr(scylla_yaml, key)
+                    setattr(scylla_yaml, key, None)
             node.restart_scylla_server()
 
         if not ContainerManager.is_running(self.tester.localhost, 'ldap'):
