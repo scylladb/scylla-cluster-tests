@@ -44,6 +44,18 @@ def get_orphaned_services(db_cluster):
     return list(set(services_names) - set(pod_names))
 
 
+def get_pods_without_probe(db_cluster: ScyllaPodCluster,
+                           probe_type: str, selector: str, container_name: str) -> list:
+    pods = db_cluster.k8s_cluster.kubectl(f'get pods -A -l "{selector}" -o yaml')
+    pods_without_probes = []
+    for pod in yaml.load(pods.stdout)["items"]:
+        for container in pod.get("spec", {}).get("containers", []):
+            if container['name'] == container_name and not container.get(probe_type):
+                pods_without_probes.append(
+                    f"pod: {pod['metadata']['name']}, container: {container['name']}")
+    return pods_without_probes
+
+
 def scylla_pod_names(db_cluster: ScyllaPodCluster) -> list:
     pods = db_cluster.k8s_cluster.kubectl(
         f"get pods -n {SCYLLA_NAMESPACE} --no-headers "
