@@ -17,7 +17,6 @@ import random
 import threading
 import time
 import pytest
-import yaml
 
 from sdcm.cluster_k8s import (
     ScyllaPodCluster,
@@ -28,6 +27,7 @@ from sdcm.utils.k8s import HelmValues
 from functional_tests.scylla_operator.libs.helpers import (
     get_scylla_sysctl_value,
     get_orphaned_services,
+    get_pods_without_probe,
     scylla_operator_pods_and_statuses,
     set_scylla_sysctl_value,
     wait_for_resource_absence,
@@ -356,13 +356,24 @@ def test_scylla_operator_pods(db_cluster: ScyllaPodCluster):
     assert not not_running_pods, f'There are pods in state other than running: {not_running_pods}'
 
 
-def test_startup_probe_in_scylla_pods(db_cluster: ScyllaPodCluster):
-    pods = db_cluster.k8s_cluster.kubectl('get pods -A -l "app.kubernetes.io/name=scylla" -o yaml')
+def test_startup_probe_exists_in_scylla_pods(db_cluster: ScyllaPodCluster):
+    pods = get_pods_without_probe(
+        db_cluster=db_cluster,
+        probe_type="startupProbe",
+        selector="app.kubernetes.io/name=scylla",
+        container_name="scylla")
+    assert not pods, f"startupProbe is not found in the following pods: {pods}"
 
-    no_startup_probe_pods = []
-    for pod in yaml.load(pods.stdout)["items"]:
-        for container in pod.get("spec", {}).get("containers", []):
-            if container['name'] == "scylla" and not container.get("startupProbe"):
-                no_startup_probe_pods.append(f"pod: {pod['metadata']['name']}, container: {container['name']}")
 
-    assert not no_startup_probe_pods, f"Startup probe is not found in the pods: {no_startup_probe_pods}"
+@pytest.mark.require_mgmt()
+def test_readiness_probe_exists_in_mgmt_pods(db_cluster: ScyllaPodCluster):
+    """
+    PR: https://github.com/scylladb/scylla-operator/pull/725
+    Issue: https://github.com/scylladb/scylla-operator/issues/718
+    """
+    pods = get_pods_without_probe(
+        db_cluster=db_cluster,
+        probe_type="readinessProbe",
+        selector="app.kubernetes.io/name=scylla-manager",
+        container_name="scylla-manager")
+    assert not pods, f"readinessProbe is not found in the following pods: {pods}"
