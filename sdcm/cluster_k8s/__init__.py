@@ -488,6 +488,23 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 "Using following predefined scylla-operator chart version: %s", chart_version)
         return chart_version
 
+    def get_operator_image(self, repo: str = '', chart_version: str = '') -> str:
+        if image := self.params.get("k8s_scylla_operator_docker_image"):
+            return image
+
+        # Get 'appVersion' field from the Helm chart which stores image's tag
+        repo = repo or self.params.get('k8s_scylla_operator_helm_repo')
+        chart_name = "scylla-operator"
+        chart_version = chart_version or self._scylla_operator_chart_version
+        chart_info = self.helm(
+            f"show chart {chart_name} --devel --repo {repo} --version {chart_version}")
+        for line in chart_info.split("\n"):
+            if line.startswith("appVersion:"):
+                return f"scylladb/scylla-operator:{line.split(':')[-1].strip()}"
+        raise ValueError(
+            f"Cannot get operator image version from the '{chart_name}' chart located at "
+            f"'{repo}' having '{chart_version}' version")
+
     @log_run_info
     def deploy_scylla_manager(self, pool_name: str = None) -> None:
         # Calculate options values which must be set

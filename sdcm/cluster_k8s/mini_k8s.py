@@ -258,9 +258,24 @@ class KindK8sMixin:
         self.host_node.remoter.run('/var/tmp/kind delete cluster', ignore_status=True)
 
     def on_deploy_completed(self):
+        images_to_cache = []
         if self.scylla_image:
-            self.docker_pull(self.scylla_image)
-            self.host_node.remoter.run(f"/var/tmp/kind load docker-image {self.scylla_image}", ignore_status=True)
+            images_to_cache.append(self.scylla_image)
+        if self.params.get("use_mgmt") and self.params.get("mgmt_docker_image"):
+            images_to_cache.append(self.params.get("mgmt_docker_image"))
+        if self.params.get("scylla_mgmt_agent_version"):
+            images_to_cache.append(
+                "scylladb/scylla-manager-agent:" + self.params.get("scylla_mgmt_agent_version"))
+
+        try:
+            images_to_cache.append(self.get_operator_image())
+        except ValueError as exc:
+            LOGGER.warning("scylla-operator image won't be cached. Error: %s", str(exc))
+
+        for image in images_to_cache:
+            self.docker_pull(image)
+            self.host_node.remoter.run(
+                f"/var/tmp/kind load docker-image {image}", ignore_status=True)
 
 
 class MinikubeK8sMixin:
