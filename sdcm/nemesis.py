@@ -761,18 +761,23 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message='StartEvent - Adding new node to cluster').publish()
         new_node = self.cluster.add_nodes(
             count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack)[0]
-        self.monitoring_set.reconfigure_scylla_monitoring()
-        self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
-        new_node.replacement_node_ip = old_node_ip
-        try:
-            self.cluster.wait_for_init(node_list=[new_node], timeout=timeout, check_node_health=False)
-            self.cluster.clean_replacement_node_ip(new_node)
-        except (NodeSetupFailed, NodeSetupTimeout):
-            self.log.warning("TestConfig of the '%s' failed, removing it from list of nodes" % new_node)
-            self.cluster.nodes.remove(new_node)
-            self.log.warning("Node will not be terminated. Please terminate manually!!!")
-            raise
-        self.cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
+        with EventsSeverityChangerFilter(new_severity=Severity.WARNING,
+                                         event_class=DatabaseLogEvent,
+                                         regex='.*Failed to load schema version .*',
+                                         extra_time_to_expiration=5):
+            self.monitoring_set.reconfigure_scylla_monitoring()
+            # prevent to run nemesis on new node when running in parallel
+            self.set_current_running_nemesis(node=new_node)
+            new_node.replacement_node_ip = old_node_ip
+            try:
+                self.cluster.wait_for_init(node_list=[new_node], timeout=timeout, check_node_health=False)
+                self.cluster.clean_replacement_node_ip(new_node)
+            except (NodeSetupFailed, NodeSetupTimeout):
+                self.log.warning("TestConfig of the '%s' failed, removing it from list of nodes" % new_node)
+                self.cluster.nodes.remove(new_node)
+                self.log.warning("Node will not be terminated. Please terminate manually!!!")
+                raise
+            self.cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
         InfoEvent(message="FinishEvent - New Node is up and normal").publish()
         return new_node
 
@@ -797,7 +802,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # When adding node after decommission the node is declared as up only after it completed bootstrapping,
             # increasing the timeout for now
             new_node = self._add_and_init_new_cluster_node(rack=self.target_node.rack)
-            # after decomission and add_node, the left nodes have data that isn't part of their tokens anymore.
+            # after decommission and add_node, the left nodes have data that isn't part of their tokens anymore.
             # In order to eliminate cases that we miss a "data loss" bug because of it, we cleanup this data.
             # This fix important when just user profile is run in the test and "keyspace1" doesn't exist.
             if new_node.is_seed != target_is_seed:
