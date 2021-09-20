@@ -260,6 +260,7 @@ def test_orphaned_services_multi_rack(db_cluster):
     assert not get_orphaned_services(db_cluster), "Orphaned services were found after decommission"
 
 
+# NOTE: may fail from time to time due to the https://github.com/scylladb/scylla-operator/issues/791
 def test_ha_update_spec_while_rollout_restart(db_cluster: ScyllaPodCluster):
     """
     Cover the issue https://github.com/scylladb/scylla-operator/issues/410
@@ -332,8 +333,8 @@ def test_ha_update_spec_while_rollout_restart(db_cluster: ScyllaPodCluster):
         log.info("Bring back scylla-operator pods to life")
         db_cluster.k8s_cluster.kubectl(
             patch_operator_replicas_cmd % 2, namespace=SCYLLA_OPERATOR_NAMESPACE)
-        db_cluster.k8s_cluster.kubectl(
-            "wait -l app.kubernetes.io/name=scylla-operator --for=condition=Ready pod",
+        db_cluster.k8s_cluster.kubectl_wait(
+            "--for=condition=Ready pod -l app.kubernetes.io/name=scylla-operator",
             namespace=SCYLLA_OPERATOR_NAMESPACE, timeout=300)
 
     try:
