@@ -5,16 +5,16 @@ repos:
     rev: v2.0.0
     hooks:
     -   id: trailing-whitespace
-        exclude: .git/*
+        exclude: ^\.git/.*$
     -   id: end-of-file-fixer
-        exclude: .git/*
+        exclude: ^\.git/.*$
     -   id: check-yaml
         args:
         - --allow-multiple-documents
         exclude: >
             (?x)^(
                 tests/.*|
-                data_dir/scylla.yaml|
+                data_dir/scylla\.yaml|
                 sdcm/k8s_configs/minio/templates/.*|
                 sdcm/k8s_configs/provisioner/templates/.*
             )$
@@ -22,7 +22,7 @@ repos:
     -   id: check-json
     -   id: detect-aws-credentials
     -   id: detect-private-key
-        exclude: data_dir/ssl_conf/*
+        exclude: ^data_dir/ssl_conf/.*$
 
 -   repo: local
     hooks:
@@ -36,7 +36,7 @@ repos:
         name: pylint
         entry: pylint -j 2
         language: system
-        exclude: docker/alternator-dns/*
+        exclude: ^docker/alternator-dns/.*$
         types: [python]
 
 - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
