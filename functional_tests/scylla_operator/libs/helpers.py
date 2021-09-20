@@ -14,7 +14,10 @@
 # Copyright (c) 2021 ScyllaDB
 import yaml
 
+from kubernetes.client import exceptions as k8s_exceptions
+
 from sdcm.cluster_k8s import SCYLLA_NAMESPACE, SCYLLA_OPERATOR_NAMESPACE, ScyllaPodCluster
+from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.wait import wait_for
 
 
@@ -26,6 +29,9 @@ def get_scylla_sysctl_value(db_cluster: ScyllaPodCluster, sysctl_name: str) -> i
     raise ValueError(f"Cannot find '{sysctl_name}' sysctl")
 
 
+@log_run_info
+@retrying(n=10, sleep_time=2, allowed_exceptions=(k8s_exceptions.ApiException, ),
+          message="Failed to set scylla sysctl value...")
 def set_scylla_sysctl_value(db_cluster: ScyllaPodCluster, sysctl_name, sysctl_value: str) -> None:
     sysctls = db_cluster.get_scylla_cluster_plain_value('/spec/sysctls')
     sysctl_to_set = f"{sysctl_name}={sysctl_value}"
