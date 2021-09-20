@@ -1,0 +1,70 @@
+#! groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+pipeline {
+    agent {
+        label {
+            label 'sct-builders'
+        }
+    }
+    environment {
+        AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
+        AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+    }
+    parameters {
+        string(defaultValue: '',
+               description: 'ID of a SCT test to restore the monitoring stack',
+               name: 'test_id')
+        string(defaultValue: '1440',
+               description: 'how long to keep an AWS instance with the restored monitoring stack (in minutes)',
+               name: 'duration')
+        string(defaultValue: 'us-east-1',
+               description: 'a region where to deploy an AWS instance',
+               name: 'aws_region')
+        string(defaultValue: 'a',
+               description: 'an availability zone where to deploy an AWS instance',
+               name: 'availability_zone')
+    }
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '50'))
+    }
+    stages {
+        stage('Skip build#1') {  // Because this: https://issues.jenkins-ci.org/browse/JENKINS-41929
+            when { expression { env.BUILD_NUMBER == '1' } }
+            steps {
+                script {
+                    if (currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause') != null) {
+                        currentBuild.description = ('Aborted build#1 not having parameters loaded.\n' +
+                                                    'Build#2 is ready to run')
+                        currentBuild.result = 'ABORTED'
+                        error('Abort build#1 which only loads params')
+                    }
+                }
+            }
+        }
+        stage('Checkout') {
+            steps {
+                dir('scylla-cluster-tests') {
+                    checkout scm
+                }
+            }
+        }
+        stage('Run hydra investigate show-monitor') {
+            steps {
+                sctScript """
+                    rm -fv sct_runner_ip
+
+                    export RUNNER_DURATION="${params.duration}"
+                    export RUNNER_REGION="${params.aws_region}"
+                    export RUNNER_AZ="${params.availability_zone}"
+
+                    ./docker/env/hydra.sh --execute-on-new-runner investigate show-monitor "${params.test_id}"
+                """
+            }
+        }
+    }
+}
