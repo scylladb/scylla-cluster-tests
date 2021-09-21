@@ -69,7 +69,7 @@ from sdcm.monitorstack import (restore_monitoring_stack, get_monitoring_stack_se
                                kill_running_monitoring_stack_services)
 from sdcm.cluster import TestConfig
 from sdcm.utils.log import setup_stdout_logger
-from sdcm.utils.prepare_region import AwsRegion
+from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.get_username import get_username
 from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
