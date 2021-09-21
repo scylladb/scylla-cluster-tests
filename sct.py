@@ -239,7 +239,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
 
     add_file_logger()
 
-    params = dict()
+    params = {}
 
     if user:
         params['RunByUser'] = user
@@ -623,7 +623,7 @@ def perf_regression_report(es_id, emails):
                                                   send_email=True, email_recipients=email_list, logger=LOGGER)
     click.secho(message="Checking regression comparing to: %s" % es_id, fg="green")
     results_analyzer.check_regression(es_id)
-    click.secho(message="Done." % email_list, fg="yellow")
+    click.secho(message="Done.", fg="yellow")
 
 
 @click.group(help="Group of commands for investigating testrun")
@@ -772,7 +772,7 @@ def pre_commit():
 class OutputLogger():
     def __init__(self, filename, terminal):
         self.terminal = terminal
-        self.log = open(filename, "a")  # pylint: disable=consider-using-with
+        self.log = open(filename, "a", encoding="utf-8")  # pylint: disable=consider-using-with
 
     def write(self, message):
         self.terminal.write(message)
@@ -839,7 +839,7 @@ def cloud_usage_report(emails):
     email_list = emails.split(",")
     click.secho(message="Will send Cloud Usage report to %s" % email_list, fg="green")
     cloud_report(mail_to=email_list)
-    click.secho(message="Done." % email_list, fg="yellow")
+    click.secho(message="Done.", fg="yellow")
 
 
 @cli.command("cloud-usage-qa-report", help="Generate and send Cloud usage report")
@@ -851,7 +851,7 @@ def cloud_usage_qa_report(emails, user=None):
     email_list = emails.split(",")
     click.secho(message="Will send Cloud Usage report to %s" % email_list, fg="green")
     cloud_qa_report(mail_to=email_list, user=user)
-    click.secho(message="Done." % email_list, fg="yellow")
+    click.secho(message="Done.", fg="yellow")
 
 
 @cli.command('collect-logs', help='Collect logs from cluster by test-id')
@@ -916,7 +916,7 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
         start_time = format_timestamp(int(start_time))
     testrun_dir = get_testrun_dir(test_id=test_id, base_dir=logdir)
     if testrun_dir:
-        with open(os.path.join(testrun_dir, 'test_id'), 'r') as file:
+        with open(os.path.join(testrun_dir, 'test_id'), 'r', encoding='utf-8') as file:
             test_id = file.read().strip()
         email_results_file = os.path.join(testrun_dir, "email_data.json")
         test_results = read_email_data_from_file(email_results_file)
