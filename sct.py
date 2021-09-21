@@ -37,7 +37,7 @@ from prettytable import PrettyTable
 from sdcm.remote import LOCALRUNNER
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_runner import AwsSctRunner, GceSctRunner
+from sdcm.sct_runner import AwsSctRunner, GceSctRunner, get_sct_runner
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.common import (
     all_aws_regions,
@@ -1140,13 +1140,7 @@ def create_runner_image(cloud_provider, region, availability_zone):
     if cloud_provider == "aws" and availability_zone != "":
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
     add_file_logger()
-    if cloud_provider == 'aws':
-        sct_runner = AwsSctRunner(region_name=region,
-                                  availability_zone=availability_zone)
-    elif cloud_provider == 'gce':
-        sct_runner = GceSctRunner(datacenter=region, availability_zone=availability_zone)
-    else:
-        raise Exception('Unsupported Cloud provider')
+    sct_runner = get_sct_runner(cloud_provider=cloud_provider, region_name=region, availability_zone=availability_zone)
     sct_runner.create_image()
 
 
@@ -1163,29 +1157,19 @@ def create_runner_instance(cloud_provider, region, availability_zone, instance_t
     add_file_logger()
     sct_runner_ip_path = Path("sct_runner_ip")
     sct_runner_ip_path.unlink(missing_ok=True)
-    if cloud_provider == 'aws':
-        sct_runner = AwsSctRunner(region_name=region,
-                                  availability_zone=availability_zone)
-    elif cloud_provider == 'gce':
-        sct_runner = GceSctRunner(datacenter=region,
-                                  availability_zone=availability_zone)
-    else:
-        raise Exception('Unsupported Cloud provider')
-
+    sct_runner = get_sct_runner(cloud_provider=cloud_provider, region_name=region, availability_zone=availability_zone)
     instance = sct_runner.create_instance(
         instance_type=instance_type,
         test_id=test_id,
         test_duration=duration,
-        region_az=region + availability_zone,
     )
-    if cloud_provider == 'aws':
-        runner_public_ip = instance.public_ip_address
-    elif cloud_provider == 'gce':
-        runner_public_ip = instance.public_ips[0]
+    if not instance:
+        sys.exit(1)
+
     LOGGER.info("Verifying SSH connectivity...")
+    runner_public_ip = sct_runner.get_instance_public_ip(instance=instance)
     remoter = sct_runner.get_remoter(host=runner_public_ip, connect_timeout=120)
-    result = remoter.run("true", timeout=100, verbose=False, ignore_status=True)
-    if result.exit_status == 0:
+    if remoter.run("true", timeout=100, verbose=False, ignore_status=True).ok:
         LOGGER.info("Successfully connected the SCT Runner. Public IP: %s", runner_public_ip)
         with sct_runner_ip_path.open("w") as sct_runner_ip_file:
             sct_runner_ip_file.write(runner_public_ip)
