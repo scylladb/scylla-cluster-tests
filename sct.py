@@ -37,14 +37,15 @@ from prettytable import PrettyTable
 from sdcm.remote import LOCALRUNNER
 from sdcm.results_analyze import PerformanceResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_runner import AwsSctRunner, GceSctRunner, get_sct_runner
+from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_runner, clean_sct_runners
+from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.azure_region import AzureRegion, region_name_to_location
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.common import (
     all_aws_regions,
     aws_tags_to_dict,
     clean_cloud_resources,
     clean_resources_according_post_behavior,
-    clean_sct_runners,
     format_timestamp,
     gce_meta_to_dict,
     get_all_gce_regions,
@@ -76,7 +77,7 @@ from sdcm.send_email import get_running_instances_for_email_report, read_email_d
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
 
 
-SUPPORTED_CLOUDS = ("aws", "gce",)
+SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
 
 SCT_RUNNER_HOST = os.environ.get("RUNNER_IP", "localhost")
@@ -140,6 +141,9 @@ class CloudRegion(click.ParamType):
             regions = all_aws_regions()
         elif cloud_provider == "gce":
             regions = get_all_gce_regions()
+        elif cloud_provider == "azure":
+            regions = AzureService().all_regions
+            value = region_name_to_location(value)
         else:
             self.fail(f"unknown cloud provider: {cloud_provider}")
         if value not in regions:
@@ -1123,16 +1127,19 @@ def prepare_region(cloud_provider, region):
     add_file_logger()
     if cloud_provider == "aws":
         region = AwsRegion(region_name=region)
+    elif cloud_provider == "azure":
+        region = AzureRegion(region_name=region)
     else:
         raise Exception(f'Unsupported Cloud provider: `{cloud_provider}')
     region.configure()
 
 
-@cli.command("create-runner-image", help="Create an SCT runner image in selected AWS or GCE region. "
-                                         f"If the requested region is not a source region "
-                                         f"(aws: {AwsSctRunner.SOURCE_IMAGE_REGION}, gce: {GceSctRunner.SOURCE_IMAGE_REGION})"
-                                         f" the image will be first created in the"
-                                         f" source region and then copied to the chosen one.")
+@cli.command("create-runner-image",
+             help=f"Create an SCT runner image in the selected cloud region."
+                  f" If the requested region is not a source region"
+                  f" (aws: {AwsSctRunner.SOURCE_IMAGE_REGION}, gce: {GceSctRunner.SOURCE_IMAGE_REGION},"
+                  f" azure: {AzureSctRunner.SOURCE_IMAGE_REGION}) the image will be first created in the"
+                  f" source region and then copied to the chosen one.")
 @cloud_provider_option
 @click.option("-r", "--region", required=True, type=CloudRegion(), help="Cloud region")
 @click.option("-z", "--availability-zone", default="", type=str, help="Name of availability zone, ex. 'a'")
@@ -1144,7 +1151,7 @@ def create_runner_image(cloud_provider, region, availability_zone):
     sct_runner.create_image()
 
 
-@cli.command("create-runner-instance", help="Create an SCT runner instance in selected AWS or GCE region")
+@cli.command("create-runner-instance", help="Create an SCT runner instance in the selected cloud region")
 @cloud_provider_option
 @click.option("-r", "--region", required=True, type=CloudRegion(), help="Cloud region")
 @click.option("-z", "--availability-zone", default="", type=str, help="Name of availability zone, ex. 'a'")
@@ -1181,9 +1188,10 @@ def create_runner_instance(cloud_provider, region, availability_zone, instance_t
 @cli.command("clean-runner-instances", help="Clean all unused SCT runner instances")
 @click.option("-ts", "--test-status", required=False, type=str, default="FAILED")
 @click.option("-ip", "--runner-ip", required=False, type=str, default="")
-def clean_runner_instances(test_status: str = None, runner_ip: str = None):
+@click.option('--dry-run', is_flag=True, default=False, help='dry run')
+def clean_runner_instances(test_status, runner_ip, dry_run):
     add_file_logger()
-    clean_sct_runners(test_status=test_status, test_runner_ip=runner_ip)
+    clean_sct_runners(test_status=test_status, test_runner_ip=runner_ip, dry_run=dry_run)
 
 
 if __name__ == '__main__':
