@@ -11,27 +11,46 @@
 #
 # Copyright (c) 2021 ScyllaDB
 
+from __future__ import annotations
+
 import logging
 import tempfile
 import time
 import datetime
+from contextlib import suppress
 from enum import Enum
 from functools import cached_property
+from itertools import chain
 from math import ceil
-from typing import Optional, Any
+from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 
+import boto3
 import pytz
 from libcloud.common.google import ResourceNotFoundError as GoogleResourceNotFoundError
+from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
+from azure.mgmt.compute.models import GalleryImageVersion
 
-from sdcm.keystore import KeyStore, SSHKey
+from sdcm.keystore import KeyStore
 from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
+from sdcm.utils.common import list_instances_aws, aws_tags_to_dict, list_instances_gce, gce_meta_to_dict
 from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, ec2_ami_get_root_device_name
-from sdcm.utils.get_username import get_username
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.gce_utils import get_gce_service
+from sdcm.utils.azure_utils import AzureService, list_instances_azure
+from sdcm.utils.azure_region import AzureOsState, AzureRegion, region_name_to_location
+from sdcm.utils.get_username import get_username
 from sdcm.cluster_docker import AIO_MAX_NR_RECOMMENDED_VALUE
 
+if TYPE_CHECKING:
+    # pylint: disable=ungrouped-imports
+    from typing import Optional, Any, Type
+
+    from sdcm.keystore import SSHKey
+
+
+LAUNCH_TIME_FORMAT = "%B %d, %Y, %H:%M:%S"
 
 LOGGER = logging.getLogger(__name__)
 
@@ -41,8 +60,43 @@ class ImageType(Enum):
     GENERAL = "general"
 
 
-def get_current_datetime_formatted():
-    return datetime.datetime.now(tz=pytz.utc).strftime("%B %d, %Y, %H:%M:%S")
+def get_current_datetime_formatted() -> str:
+    return datetime.datetime.now(tz=pytz.utc).strftime(LAUNCH_TIME_FORMAT)
+
+
+def datetime_from_formatted(date_string: str) -> datetime.datetime:
+    return datetime.datetime.strptime(date_string, LAUNCH_TIME_FORMAT).replace(tzinfo=pytz.utc)
+
+
+@dataclass
+class SctRunnerInfo:  # pylint: disable=too-many-instance-attributes
+    sct_runner_class: Type[SctRunner] = field(repr=False)
+    cloud_service_instance: Any = field(repr=False)
+    region_az: str
+    instance: Any = field(repr=False)
+    instance_name: str
+    public_ips: list[str]
+    launch_time: datetime.datetime
+    keep: str
+
+    @property
+    def cloud_provider(self) -> str:
+        return self.sct_runner_class.CLOUD_PROVIDER
+
+    def __str__(self) -> str:
+        bits = [
+            f"[{self.cloud_provider}/{self.region_az}] {self.instance_name}",
+            f"launched at {self.launch_time:{LAUNCH_TIME_FORMAT}} UTC",
+        ]
+        if self.keep:
+            bits.append(f"keep: {self.keep}")
+        if self.public_ips:
+            bits.append(f"public IPs are {self.public_ips}")
+        return ", ".join(bits)
+
+    def terminate(self) -> None:
+        LOGGER.info("Terminate %s", self)
+        self.sct_runner_class.terminate_sct_runner_instance(sct_runner_info=self)
 
 
 class SctRunner(ABC):
@@ -53,14 +107,14 @@ class SctRunner(ABC):
     LOGIN_USER = "ubuntu"
     IMAGE_DESCRIPTION = f"SCT runner image {VERSION}"
 
+    CLOUD_PROVIDER: str
     BASE_IMAGE: Any
     SOURCE_IMAGE_REGION: str
     IMAGE_BUILDER_INSTANCE_TYPE: str
     REGULAR_TEST_INSTANCE_TYPE: str
     LONGTERM_TEST_INSTANCE_TYPE: str
 
-    def __init__(self, cloud_provider: str, region_name: str, availability_zone: str = ""):
-        self.cloud_provider = cloud_provider
+    def __init__(self, region_name: str, availability_zone: str = ""):
         self.region_name = region_name
         self.availability_zone = availability_zone
         self._ssh_pkey_file = None
@@ -69,7 +123,7 @@ class SctRunner(ABC):
     def region_az(self, region_name: str, availability_zone: str) -> str:
         ...
 
-    @property
+    @cached_property
     @abstractmethod
     def image_name(self) -> str:
         ...
@@ -87,7 +141,7 @@ class SctRunner(ABC):
             return disk_size + 40
         return disk_size
 
-    @property
+    @cached_property
     @abstractmethod
     def key_pair(self) -> SSHKey:
         ...
@@ -107,28 +161,37 @@ class SctRunner(ABC):
         login_user = self.LOGIN_USER
         public_key = self.key_pair.public_key.decode()
         result = remoter.sudo(shell_script_cmd(quote="'", cmd=f"""\
+            # Make sure that cloud-init finished running.
+            until [ -f /var/lib/cloud/instance/boot-finished ]; do sleep 1; done
+
             echo "fs.aio-max-nr = {AIO_MAX_NR_RECOMMENDED_VALUE}" >> /etc/sysctl.conf
             echo "{login_user} soft nofile 4096" >> /etc/security/limits.conf
             echo "jenkins soft nofile 4096" >> /etc/security/limits.conf
             echo "root soft nofile 4096" >> /etc/security/limits.conf
+
+            # Configure default user account.
             sudo -u {login_user} mkdir -p /home/{login_user}/.ssh || true
             echo "{public_key}" >> /home/{login_user}/.ssh/authorized_keys
             chmod 600 /home/{login_user}/.ssh/authorized_keys
             mkdir -p -m 777 /home/{login_user}/sct-results
             echo "cd ~/sct-results" >> /home/{login_user}/.bashrc
             chown -R {login_user}:{login_user} /home/{login_user}/
-            apt-get clean
-            apt-get update
-            apt-get install -y python3-pip htop screen tree
+
+             # Disable apt-key warnings and set non-interactive frontend.
+            export APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1
+            export DEBIAN_FRONTEND=noninteractive
+
+            apt-get -qq clean
+            apt-get -qq update
+            apt-get -qq install --no-install-recommends python3-pip htop screen tree
             pip3 install awscli
 
             # Install Docker.
-            apt-get install -y apt-transport-https ca-certificates curl gnupg-agent software-properties-common
+            apt-get -qq install --no-install-recommends \
+                apt-transport-https ca-certificates curl gnupg-agent software-properties-common
             curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
-            apt-key fingerprint 0EBFCD88
             add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-            apt-get update
-            apt-get install -y docker-ce docker-ce-cli containerd.io
+            apt-get -qq install --no-install-recommends docker-ce docker-ce-cli containerd.io
             usermod -aG docker {login_user}
 
             # Install kubectl.
@@ -136,7 +199,7 @@ class SctRunner(ABC):
             install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
             # Configure Jenkins user.
-            apt-get install -y openjdk-11-jre-headless  # https://www.jenkins.io/doc/administration/requirements/java/
+            apt-get -qq install --no-install-recommends openjdk-11-jre-headless  # https://www.jenkins.io/doc/administration/requirements/java/
             adduser --disabled-password --gecos "" jenkins || true
             usermod -aG docker jenkins
             mkdir -p /home/jenkins/.ssh
@@ -260,7 +323,7 @@ class SctRunner(ABC):
             LOGGER.info("Copying %s to %s...\nNOTE: it can take 5-15 minutes.",
                         self.image_name, self.region_name)
             self._copy_source_image_to_region()
-            LOGGER.info("Done.")
+            LOGGER.info("Finished copying %s to %s", self.image_name, self.region_name)
         else:
             LOGGER.info("No need to copy SCT Runner image since it already exists in `%s'", self.region_name)
 
@@ -274,7 +337,7 @@ class SctRunner(ABC):
         if not image:
             LOGGER.error("SCT Runner image was not found in %s! "
                          "Use `hydra create-runner-image --cloud-provider %s --region %s'",
-                         self.region_name, self.cloud_provider, self.region_name)
+                         self.region_name, self.CLOUD_PROVIDER, self.region_name)
             return None
         return self._create_instance(
             instance_type=instance_type or self.instance_type(test_duration=test_duration),
@@ -294,17 +357,28 @@ class SctRunner(ABC):
             test_duration=test_duration,
         )
 
+    @classmethod
+    @abstractmethod
+    def list_sct_runners(cls) -> list[SctRunnerInfo]:
+        ...
+
+    @staticmethod
+    @abstractmethod
+    def terminate_sct_runner_instance(sct_runner_info: SctRunnerInfo) -> None:
+        ...
+
 
 class AwsSctRunner(SctRunner):
     """Provision and configure the SCT Runner on AWS."""
-    BASE_IMAGE = "ami-0ffac660dd0cb2973"  # ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-20200609
+    CLOUD_PROVIDER = "aws"
+    BASE_IMAGE = "ami-0c4a211d2b7c38400"  # ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-20210907
     SOURCE_IMAGE_REGION = "eu-west-2"  # where the source Runner image will be created and copied to other regions
     IMAGE_BUILDER_INSTANCE_TYPE = "t2.small"
-    REGULAR_TEST_INSTANCE_TYPE = "t3.large"  # has 7h 12m CPU burst
-    LONGTERM_TEST_INSTANCE_TYPE = "r5.large"
+    REGULAR_TEST_INSTANCE_TYPE = "t3.large"  # 2 vcpus, 8G, 36 CPU credits/hour
+    LONGTERM_TEST_INSTANCE_TYPE = "r5.large"  # 2 vcpus, 16G
 
-    def __init__(self, region_name: str, availability_zone: str, cloud_provider: str = "aws"):
-        super().__init__(cloud_provider=cloud_provider, region_name=region_name, availability_zone=availability_zone)
+    def __init__(self, region_name: str, availability_zone: str):
+        super().__init__(region_name=region_name, availability_zone=availability_zone)
         self.aws_region = AwsRegion(region_name=region_name)
         self.aws_region_source = AwsRegion(region_name=self.SOURCE_IMAGE_REGION)
 
@@ -325,7 +399,7 @@ class AwsSctRunner(SctRunner):
         elif image_type == ImageType.GENERAL:
             aws_region = self.aws_region
         else:
-            raise ValueError("Unknown Image type")
+            raise ValueError(f"Unknown Image type: {image_type}")
 
         amis = aws_region.client.describe_images(
             Owners=["self"],
@@ -422,7 +496,7 @@ class AwsSctRunner(SctRunner):
         elif image_type == ImageType.GENERAL:
             aws_region = self.aws_region
         else:
-            raise ValueError("Unknown Image type")
+            raise ValueError(f"Unknown Image type: {image_type}")
 
         runner_image = aws_region.resource.Image(image_id)
         runner_image.wait_until_exists()
@@ -458,20 +532,50 @@ class AwsSctRunner(SctRunner):
             image = self.image
         return image.id
 
+    @classmethod
+    def list_sct_runners(cls) -> list[SctRunnerInfo]:
+        all_instances = list_instances_aws(tags_dict={"NodeType": cls.NODE_TYPE}, group_as_region=True, verbose=True)
+        sct_runners = []
+        for region_name, instances in all_instances.items():
+            client = boto3.client("ec2", region_name=region_name)
+            for instance in instances:
+                tags = aws_tags_to_dict(instance.get("Tags"))
+                instance_name = instance["InstanceId"]
+                if "Name" in tags:
+                    instance_name = f"{tags['Name']} ({instance_name})"
+                sct_runners.append(SctRunnerInfo(
+                    sct_runner_class=cls,
+                    cloud_service_instance=client,
+                    region_az=instance["Placement"]["AvailabilityZone"],
+                    instance=instance,
+                    instance_name=instance_name,
+                    public_ips=[instance.get("PublicIpAddress"), ],
+                    launch_time=instance["LaunchTime"],
+                    keep=tags.get("keep"),
+                ))
+        return sct_runners
+
+    @staticmethod
+    def terminate_sct_runner_instance(sct_runner_info: SctRunnerInfo) -> None:
+        sct_runner_info.cloud_service_instance.terminate_instances(
+            InstanceIds=[sct_runner_info.instance["InstanceId"], ],
+        )
+
 
 class GceSctRunner(SctRunner):
     """Provision and configure the SCT runner on GCE."""
+    CLOUD_PROVIDER = "gce"
     BASE_IMAGE = "https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2004-lts"
     SOURCE_IMAGE_REGION = "us-east1"  # where the source Runner image will be created and copied to other regions
     IMAGE_BUILDER_INSTANCE_TYPE = "e2-standard-2"
-    REGULAR_TEST_INSTANCE_TYPE = "e2-standard-4"  # 2 vcpus, 16G
-    LONGTERM_TEST_INSTANCE_TYPE = "e2-standard-2"  # 2 vcpus, 8G
+    REGULAR_TEST_INSTANCE_TYPE = "e2-standard-2"  # 2 vcpus, 8G
+    LONGTERM_TEST_INSTANCE_TYPE = "e2-standard-4"  # 2 vcpus, 16G,
 
     FAMILY = "sct-runner-image"
     SCT_NETWORK = "qa-vpc"
 
-    def __init__(self, region_name: str, availability_zone: str, cloud_provider: str = "gce"):
-        super().__init__(cloud_provider=cloud_provider, region_name=region_name, availability_zone=availability_zone)
+    def __init__(self, region_name: str, availability_zone: str):
+        super().__init__(region_name=region_name, availability_zone=availability_zone)
         self.gce_service = get_gce_service(region=region_name)
         self.gce_service_source = get_gce_service(region=self.SOURCE_IMAGE_REGION)
         self.project_name = self.gce_service.ex_get_project().name
@@ -495,7 +599,7 @@ class GceSctRunner(SctRunner):
         elif image_type == ImageType.GENERAL:
             gce_service = self.gce_service
         else:
-            raise ValueError("Unknown Image type")
+            raise ValueError(f"Unknown Image type: {image_type}")
         try:
             return gce_service.ex_get_image(self.image_name)
         except GoogleResourceNotFoundError:
@@ -588,10 +692,232 @@ class GceSctRunner(SctRunner):
             image = self.image
         return self._get_image_url(image.id)
 
+    @classmethod
+    def list_sct_runners(cls) -> list[SctRunnerInfo]:
+        sct_runners = []
+        for instance in list_instances_gce(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=True):
+            tags = gce_meta_to_dict(instance.extra["metadata"])
+            if "launch_time" not in tags:
+                LOGGER.warning("Skip GCE instance w/o `launch_time' tag: %s", instance.name)
+                continue
+            region = instance.extra["zone"].name
+            sct_runners.append(SctRunnerInfo(
+                sct_runner_class=cls,
+                cloud_service_instance=None,  # we don't need it for GCE
+                region_az=region,
+                instance=instance,
+                instance_name=instance.name,
+                public_ips=instance.public_ips,
+                launch_time=datetime_from_formatted(date_string=tags["launch_time"]),
+                keep=tags.get("keep"),
+            ))
+        return sct_runners
+
+    @staticmethod
+    def terminate_sct_runner_instance(sct_runner_info: SctRunnerInfo) -> None:
+        sct_runner_info.instance.destroy()
+
+
+class AzureSctRunner(SctRunner):
+    """Provision and configure the SCT runner on Azure."""
+    CLOUD_PROVIDER = "azure"
+    GALLERY_IMAGE_NAME = "sct-runner"
+    GALLERY_IMAGE_VERSION = f"{SctRunner.VERSION}.0"  # Azure requires to have it in `X.Y.Z' format
+    BASE_IMAGE = {
+        "publisher": "canonical",
+        "offer": "0001-com-ubuntu-server-focal",
+        "sku": "20_04-lts-gen2",
+        "version": "latest",
+    }
+    SOURCE_IMAGE_REGION = AzureRegion.SCT_GALLERY_REGION
+    IMAGE_BUILDER_INSTANCE_TYPE = "Standard_D2s_v3"
+    REGULAR_TEST_INSTANCE_TYPE = "Standard_D2s_v3"  # 2 vcpus, 8G, recommended by Ubuntu 20.04 LTS image publisher
+    LONGTERM_TEST_INSTANCE_TYPE = "Standard_E2s_v3"  # 2 vcpus, 16G, recommended by Ubuntu 20.04 LTS image publisher
+
+    def __init__(self, region_name: str):
+        super().__init__(region_name=region_name)
+        self.azure_region = AzureRegion(region_name=region_name)
+        self.azure_region_source = AzureRegion(region_name=self.SOURCE_IMAGE_REGION)
+        self.azure_service = self.azure_region.azure_service
+
+    def region_az(self, region_name: str, availability_zone: str) -> str:
+        return region_name
+
+    @cached_property
+    def image_name(self) -> str:
+        return f"sct-runner-{self.VERSION}"
+
+    @cached_property
+    def key_pair(self) -> SSHKey:
+        return KeyStore().get_gce_ssh_key_pair()  # scylla-test
+
+    def _image(self, image_type: ImageType = ImageType.SOURCE) -> Any:
+        with suppress(AzureResourceNotFoundError):
+            gallery_image_version = self.azure_region.get_gallery_image_version(
+                gallery_image_name=self.GALLERY_IMAGE_NAME,
+                gallery_image_version_name=self.GALLERY_IMAGE_VERSION,
+            )
+            if image_type is ImageType.SOURCE:
+                return gallery_image_version
+            elif image_type is ImageType.GENERAL:
+                for target_region in gallery_image_version.publishing_profile.target_regions:
+                    if region_name_to_location(target_region.name) == self.azure_region.location:
+                        return gallery_image_version
+        return None
+
+    def _create_instance(self,  # pylint: disable=too-many-arguments
+                         instance_type: str,
+                         base_image: Any,
+                         tags: dict[str, str],
+                         instance_name: str,
+                         region_az: str = "",
+                         test_duration: Optional[int] = None) -> Any:
+        if base_image is self.BASE_IMAGE:
+            azure_region = self.azure_region_source
+            additional_kwargs = {
+                "os_state": AzureOsState.GENERALIZED,
+                "computer_name": self.image_name.replace(".", "-"),
+                "admin_username": self.LOGIN_USER,
+                "admin_public_key": self.key_pair.public_key.decode(),
+            }
+        else:
+            azure_region = self.azure_region
+            additional_kwargs = {
+                "os_state": AzureOsState.SPECIALIZED,
+            }
+        return azure_region.create_virtual_machine(
+            vm_name=instance_name,
+            vm_size=instance_type,
+            image=base_image,
+            disk_size=self.instance_root_disk_size(test_duration=test_duration),
+            tags=tags | {"launch_time": get_current_datetime_formatted()},
+            **additional_kwargs,
+        )
+
+    def _stop_image_builder_instance(self, instance: Any) -> None:
+        self.azure_region_source.deallocate_virtual_machine(vm_name=instance.name)
+
+    def _terminate_image_builder_instance(self, instance: Any) -> None:
+        self.azure_service.delete_virtual_machine(virtual_machine=instance)
+
+    def _get_instance_id(self, instance: Any) -> Any:
+        return instance.id
+
+    def get_instance_public_ip(self, instance: Any) -> str:
+        return self.azure_service.get_virtual_machine_ips(virtual_machine=instance).public_ip
+
+    def _create_image(self, instance: Any) -> Any:
+        self.azure_region.create_gallery_image(
+            gallery_image_name=self.GALLERY_IMAGE_NAME,
+            os_state=AzureOsState.SPECIALIZED,
+        )
+        self.azure_region.create_gallery_image_version(
+            gallery_image_name=self.GALLERY_IMAGE_NAME,
+            gallery_image_version_name=self.GALLERY_IMAGE_VERSION,
+            source_id=instance.id,
+            tags=self.image_tags,
+        )
+
+    def _get_image_id(self, image: Any) -> Any:
+        return image.id
+
+    def _copy_source_image_to_region(self) -> None:
+        self.azure_region.append_target_region_to_image_version(
+            gallery_image_name=self.GALLERY_IMAGE_NAME,
+            gallery_image_version_name=self.GALLERY_IMAGE_VERSION,
+            region_name=self.region_name,
+        )
+
+    def _get_base_image(self, image: Optional[Any] = None) -> Any:
+        if image is None:
+            image = self.image
+        if isinstance(image, GalleryImageVersion):
+            return {"id": image.id}
+        return image
+
+    @classmethod
+    def list_sct_runners(cls) -> list[SctRunnerInfo]:
+        azure_service = AzureService()
+        sct_runners = []
+        for instance in list_instances_azure(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=True):
+            if "launch_time" not in instance.tags:
+                LOGGER.warning("Skip Azure instance w/o `launch_time' tag: %s", instance.name)
+                continue
+            sct_runners.append(SctRunnerInfo(
+                sct_runner_class=cls,
+                cloud_service_instance=azure_service,
+                region_az=instance.location,
+                instance=instance,
+                instance_name=instance.name,
+                public_ips=[azure_service.get_virtual_machine_ips(virtual_machine=instance).public_ip],
+                launch_time=datetime_from_formatted(date_string=instance.tags["launch_time"]),
+                keep=instance.tags.get("keep"),
+            ))
+        return sct_runners
+
+    @staticmethod
+    def terminate_sct_runner_instance(sct_runner_info: SctRunnerInfo) -> None:
+        sct_runner_info.cloud_service_instance.delete_virtual_machine(virtual_machine=sct_runner_info.instance)
+
 
 def get_sct_runner(cloud_provider: str, region_name: str, availability_zone: str = "") -> SctRunner:
     if cloud_provider == "aws":
         return AwsSctRunner(region_name=region_name, availability_zone=availability_zone)
     if cloud_provider == "gce":
         return GceSctRunner(region_name=region_name, availability_zone=availability_zone)
+    if cloud_provider == "azure":
+        return AzureSctRunner(region_name=region_name)
     raise Exception(f'Unsupported Cloud provider: `{cloud_provider}')
+
+
+def list_sct_runners(test_status: Optional[str] = None, test_runner_ip: str = None) -> list[SctRunnerInfo]:
+    LOGGER.info("Looking for SCT runner instances...")
+    sct_runner_classes = (AwsSctRunner, GceSctRunner, AzureSctRunner, )
+    sct_runners = chain.from_iterable(cls.list_sct_runners() for cls in sct_runner_classes)
+
+    if test_runner_ip:
+        if sct_runner_info := next((runner for runner in sct_runners if test_runner_ip in runner.public_ips), None):
+            if test_status == "SUCCESS":
+                sct_runner_info.keep = None  # force SCT Runner termination
+            sct_runners = [sct_runner_info, ]
+        else:
+            LOGGER.warning("No SCT Runners found to remove (IP: %s)", test_runner_ip)
+            return []
+    else:
+        sct_runners = list(sct_runners)
+
+    LOGGER.info("%d SCT runner(s) found:\n    %s", len(sct_runners), "\n    ".join(map(str, sct_runners)))
+
+    return sct_runners
+
+
+def clean_sct_runners(test_status: Optional[str] = None, test_runner_ip: str = None, dry_run: bool = False) -> None:
+    utc_now = datetime.datetime.now(tz=datetime.timezone.utc)
+    LOGGER.info("UTC now: %s", utc_now)
+
+    runners_cleaned = 0
+
+    for sct_runner_info in list_sct_runners(test_status=test_status, test_runner_ip=test_runner_ip):
+        if sct_runner_info.keep:
+            if "alive" in sct_runner_info.keep:
+                LOGGER.info("Skip %s", sct_runner_info)
+                continue
+            try:
+                if (utc_now - sct_runner_info.launch_time).total_seconds() < int(sct_runner_info.keep) * 3600:
+                    LOGGER.info("Skip %s, too early to terminate", sct_runner_info)
+                    continue
+            except ValueError as exc:
+                LOGGER.warning("Value of `keep' tag is invalid: %s", exc)
+        if dry_run:
+            LOGGER.info("Skip %s because of dry-run", sct_runner_info)
+            continue
+        try:
+            sct_runner_info.terminate()
+            runners_cleaned += 1
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.warning("Exception raised during termination of %s: %s", sct_runner_info, exc)
+
+    if runners_cleaned:
+        LOGGER.info("Cleaned %d runners", runners_cleaned)
+    else:
+        LOGGER.info("No runners have been terminated")

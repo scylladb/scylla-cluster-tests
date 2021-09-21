@@ -50,7 +50,6 @@ from concurrent.futures.thread import _python_exit
 import hashlib
 from pathlib import Path
 import requests
-import pytz
 
 import boto3
 from mypy_boto3_s3 import S3Client, S3ServiceResource
@@ -70,7 +69,6 @@ from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
 from sdcm import wait
 from sdcm.utils.ldap import LDAP_PASSWORD, LDAP_USERS, DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR
-from sdcm.utils.gce_utils import get_gce_service
 from sdcm.keystore import KeyStore
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.gce_utils import GcloudContainerMixin
@@ -715,104 +713,6 @@ def clean_instances_aws(tags_dict, dry_run=False):
             if not dry_run:
                 response = client.terminate_instances(InstanceIds=[instance_id])
                 LOGGER.debug("Done. Result: %s\n", response['TerminatingInstances'])
-
-
-# pylint: disable=too-many-locals,too-many-branches,too-many-statements
-def clean_sct_runners(test_status: Optional[str] = None, test_runner_ip: str = None):
-    LOGGER.info("Looking for SCT runner instances...")
-    sct_runners = []
-    all_instances = list_instances_aws(verbose=True)
-    for instance in all_instances:
-        tags = aws_tags_to_dict(instance.get('Tags'))
-        node_type = tags.get("NodeType", "")
-        if node_type == "sct-runner":
-            sct_runners.append([instance, "aws"])
-    if sct_runners:
-        runners_info = []
-        for i, backend in sct_runners:
-            runners_info.append((i['Placement']['AvailabilityZone'], i['InstanceId'], i['LaunchTime']))
-
-        LOGGER.info("%s SCT Runners found:\n%s", len(sct_runners),
-                    "\n".join(["[%s] (%s), launched at %s UTC" % i for i in runners_info]))
-        LOGGER.info("Checking if there are expired/orphaned Runners...")
-    else:
-        LOGGER.info("No SCT runner instances found! Nothing to clean.")
-
-    gce_runner_instances = list_instances_gce(tags_dict={"NodeType": "sct-runner"})
-    for instance in gce_runner_instances:
-        sct_runners.append([instance, "gce"])
-
-    utc_now = datetime.datetime.now(tz=datetime.timezone.utc)
-    LOGGER.info("UTC now: %s", utc_now)
-    runners_cleaned = []
-
-    def terminate_runner_instance(backend, region, sct_runner):
-        if backend == 'aws':
-            client = boto3.client('ec2', region_name=region)
-            instance_id = sct_runner['InstanceId']
-            response = client.terminate_instances(InstanceIds=[instance_id])
-            LOGGER.debug("Result: %s\n", response['TerminatingInstances'])
-        elif backend == 'gce':
-            driver = get_gce_service(region)
-            LOGGER.debug("Destroy Node: %s", sct_runner.name)
-            driver.destroy_node(sct_runner)
-        LOGGER.info("Done.")
-
-    for sct_runner, backend in sct_runners:
-        if backend == 'aws':
-            tags = aws_tags_to_dict(sct_runner.get('Tags'))
-            keep = tags.get("keep", "")
-            region = sct_runner['Placement']['AvailabilityZone'][:-1]
-            instance_id = sct_runner['InstanceId']
-            launch_time = sct_runner['LaunchTime']
-            LOGGER.info("[%s] %s, launched at %s UTC, keep: %s",
-                        region,
-                        sct_runner["InstanceId"],
-                        tags.get('launch_time'),
-                        tags["keep"])
-        else:
-            tags = gce_meta_to_dict(sct_runner.extra['metadata'])
-            keep = tags.get("keep", "")
-            region = sct_runner.extra['zone'].name
-            instance_id = sct_runner.id
-            if tags.get("launch_time") is None:
-                LOGGER.warning("Skipping gce instance (%s) without launch_time!", sct_runner.name)
-                continue
-            LOGGER.info("[%s] %s, launched at %s UTC, keep: %s",
-                        region,
-                        sct_runner.id,
-                        tags.get('launch_time'),
-                        tags["keep"])
-            launch_time = datetime.datetime.strptime(tags.get("launch_time"), "%B %d, %Y, %H:%M:%S")
-            launch_time = launch_time.replace(tzinfo=pytz.utc)
-
-        seconds_running = (utc_now - launch_time).total_seconds()
-        keep_hours = 0
-        if "alive" in keep:
-            LOGGER.warning("Skipping %s in %s: keep=%s", instance_id, region, keep)
-            continue
-        try:
-            keep_hours = int(keep)
-        except ValueError:
-            LOGGER.warning("keep value <{keep}> is invalid: should be a number or 'alive'!")
-
-        if not keep or seconds_running > keep_hours * 3600:
-            LOGGER.info("[%s] Runner instance '%s'<keep=%s> that launched at '%s' UTC "
-                        "is unused/expired, cleaning ...", region, instance_id, keep, launch_time)
-            terminate_runner_instance(backend=backend, region=region, sct_runner=sct_runner)
-            runners_cleaned.append(sct_runner)
-
-        if test_status == "SUCCESS" and test_runner_ip:
-            LOGGER.info("Removing the sct runner on success...")
-            if backend == "aws" and test_runner_ip == sct_runner["PublicIpAddress"] or \
-                    backend == "gce" and test_runner_ip in sct_runner.public_ips:
-                terminate_runner_instance(backend=backend, region=region, sct_runner=sct_runner)
-                runners_cleaned.append(sct_runner)
-
-    if runners_cleaned:
-        LOGGER.info("Cleaned '%s' runners.", len(runners_cleaned))
-    else:
-        LOGGER.info("There are no runners to clean.")
 
 
 def list_elastic_ips_aws(tags_dict=None, region_name=None, group_as_region=False, verbose=False):

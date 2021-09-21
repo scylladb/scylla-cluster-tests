@@ -38,8 +38,8 @@ class KeyStore:
         return json.loads(self.get_file_contents(json_file))
 
     def download_file(self, filename, dest_filename):
-        with open(dest_filename, 'w') as file_obj:
-            file_obj.write(self.get_file_contents(filename).decode())
+        with open(dest_filename, 'wb') as file_obj:
+            file_obj.write(self.get_file_contents(filename))
 
     def get_email_credentials(self):
         return self.get_json("email_config.json")
@@ -90,6 +90,9 @@ class KeyStore:
 
     def get_docker_hub_credentials(self):
         return self.get_json("docker.json")
+
+    def get_azure_credentials(self):
+        return self.get_json("azure.json")
 
 
 def pub_key_from_private_key_file(key_file):
