@@ -27,6 +27,7 @@ import traceback
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from functools import partial
+from typing import Optional
 
 import pytest
 import click
@@ -75,6 +76,9 @@ from sdcm.send_email import get_running_instances_for_email_report, read_email_d
 from utils.build_system.create_test_release_jobs import JenkinsPipelines
 
 
+SUPPORTED_CLOUDS = ("aws", "gce",)
+DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
+
 SCT_RUNNER_HOST = os.environ.get("RUNNER_IP", "localhost")
 
 LOGGER = setup_stdout_logger()
@@ -111,6 +115,36 @@ def add_file_logger(level: int = logging.DEBUG) -> None:
     handler = logging.FileHandler(os.path.join(logdir, "hydra.log"))
     handler.setLevel(level)
     LOGGER.addHandler(handler)
+
+
+cloud_provider_option = click.option(
+    "-c", "--cloud-provider",
+    required=True,
+    type=click.Choice(choices=SUPPORTED_CLOUDS, case_sensitive=False),
+    default=DEFAULT_CLOUD,
+    is_eager=True,
+    help="Cloud provider",
+)
+
+
+class CloudRegion(click.ParamType):
+    name = "cloud_region"
+
+    def __init__(self, cloud_provider: Optional[str] = None):
+        super().__init__()
+        self.cloud_provider = cloud_provider
+
+    def convert(self, value, param, ctx):
+        cloud_provider = self.cloud_provider or ctx.params["cloud_provider"]
+        if cloud_provider == "aws":
+            regions = all_aws_regions()
+        elif cloud_provider == "gce":
+            regions = get_all_gce_regions()
+        else:
+            self.fail(f"unknown cloud provider: {cloud_provider}")
+        if value not in regions:
+            self.fail(f"invalid region: {value}. (choose from {', '.join(regions)})")
+        return value
 
 
 @click.group()
@@ -395,7 +429,10 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
 
 
 @cli.command('list-ami-versions', help='list Amazon Scylla formal AMI versions')
-@click.option('-r', '--region', type=click.Choice(all_aws_regions(cached=True)), default='eu-west-1')
+@click.option('-r', '--region',
+              type=CloudRegion(cloud_provider="aws"),
+              default='eu-west-1',
+              help="a region to look for AMIs (default: eu-west-1)")
 def list_ami_versions(region):
     add_file_logger()
 
@@ -407,7 +444,10 @@ def list_ami_versions(region):
 
 @cli.command('list-ami-branch', help="""list Amazon Scylla branched AMI versions
     \n\n[VERSION] is a branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:all'""")
-@click.option('-r', '--region', type=click.Choice(all_aws_regions(cached=True)), default='eu-west-1')
+@click.option('-r', '--region',
+              type=CloudRegion(cloud_provider="aws"),
+              default='eu-west-1',
+              help="a region to look for AMIs (default: eu-west-1)")
 @click.argument('version', type=str, default='branch-3.1:all')
 def list_ami_branch(region, version):
     add_file_logger()
@@ -1076,12 +1116,16 @@ def create_test_release_jobs_enterprise(branch, username, password, sct_branch, 
         f'{server.base_sct_dir}/jenkins-pipelines/longevity-in-memory-36gb-1d.jenkinsfile', 'SCT_Enterprise_Features')
 
 
-@cli.command("prepare-aws-region", help="Create and configure VPC in selected AWS region")
-@click.option("-r", "--region", required=True, type=str, help="Name of the region")
-def prepare_aws_region(region):
+@cli.command("prepare-region", help="Configure all required resources for SCT runs in selected cloud region")
+@cloud_provider_option
+@click.option("-r", "--region", required=True, type=CloudRegion(), help="Cloud region")
+def prepare_region(cloud_provider, region):
     add_file_logger()
-    aws_region = AwsRegion(region_name=region)
-    aws_region.configure()
+    if cloud_provider == "aws":
+        region = AwsRegion(region_name=region)
+    else:
+        raise Exception(f'Unsupported Cloud provider: `{cloud_provider}')
+    region.configure()
 
 
 @cli.command("create-runner-image", help="Create an SCT runner image in selected AWS or GCE region. "
@@ -1089,15 +1133,11 @@ def prepare_aws_region(region):
                                          f"(aws: {AwsSctRunner.SOURCE_IMAGE_REGION}, gce: {GceSctRunner.SOURCE_IMAGE_REGION})"
                                          f" the image will be first created in the"
                                          f" source region and then copied to the chosen one.")
-@click.option("-c", "--cloud-provider", required=True, type=click.Choice(['aws', 'gce']), default="aws",
-              help="Cloud provider, currently only AWS and GCE are supported")
-@click.option("-r", "--region", required=True, type=click.Choice(all_aws_regions(cached=True) + get_all_gce_regions()),
-              help="Name of the region")
-@click.option("-z", "--availability-zone", required=False, default="", type=str,
-              help="Name of availability zone, ex. 'a'")
+@cloud_provider_option
+@click.option("-r", "--region", required=True, type=CloudRegion(), help="Cloud region")
+@click.option("-z", "--availability-zone", default="", type=str, help="Name of availability zone, ex. 'a'")
 def create_runner_image(cloud_provider, region, availability_zone):
-    cloud_provider = cloud_provider.lower()
-    if cloud_provider == 'aws' and availability_zone != "":
+    if cloud_provider == "aws" and availability_zone != "":
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
     add_file_logger()
     if cloud_provider == 'aws':
@@ -1111,19 +1151,14 @@ def create_runner_image(cloud_provider, region, availability_zone):
 
 
 @cli.command("create-runner-instance", help="Create an SCT runner instance in selected AWS or GCE region")
-@click.option("-c", "--cloud-provider", required=True, type=click.Choice(['aws', 'gce']), default="aws",
-              help="Cloud provider, currently only AWS and GCE are supported")
-@click.option("-r", "--region", required=True, type=click.Choice(all_aws_regions(cached=True) + get_all_gce_regions()),
-              help="Name of the region")
-@click.option("-z", "--availability-zone", required=False, default="", type=str,
-              help="Name of availability zone, ex. 'a'")
+@cloud_provider_option
+@click.option("-r", "--region", required=True, type=CloudRegion(), help="Cloud region")
+@click.option("-z", "--availability-zone", default="", type=str, help="Name of availability zone, ex. 'a'")
 @click.option("-i", "--instance-type", required=False, type=str, default="", help="Instance type")
 @click.option("-t", "--test-id", required=True, type=str, help="Test ID")
 @click.option("-d", "--duration", required=True, type=int, help="Test duration in MINUTES")
-def create_runner_instance(cloud_provider, region, availability_zone, instance_type,
-                           test_id, duration):
-    cloud_provider = cloud_provider.lower()
-    if cloud_provider == 'aws' and availability_zone != "":
+def create_runner_instance(cloud_provider, region, availability_zone, instance_type, test_id, duration):
+    if cloud_provider == "aws" and availability_zone != "":
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
     add_file_logger()
     sct_runner_ip_path = Path("sct_runner_ip")
