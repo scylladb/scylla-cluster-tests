@@ -19,7 +19,7 @@ from sdcm.keystore import KeyStore, SSHKey
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, ec2_ami_get_root_device_name
 from sdcm.utils.get_username import get_username
-from sdcm.utils.prepare_region import AwsRegion
+from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.gce_utils import get_gce_service
 
 
@@ -245,7 +245,7 @@ class AwsSctRunner(SctRunner):
             InstanceType=instance_type,
             MinCount=1,
             MaxCount=1,
-            KeyName=aws_region.KEY_PAIR_NAME,
+            KeyName=aws_region.SCT_KEY_PAIR_NAME,
             NetworkInterfaces=[{
                 "DeviceIndex": 0,
                 "AssociatePublicIpAddress": True,
