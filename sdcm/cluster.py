@@ -4483,8 +4483,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             raise NodeStayInClusterAfterDecommission(error_msg)
 
         LOGGER.info('Decommission %s PASS', node)
-        with DbEventsFilter(db_event=DatabaseLogEvent.POWER_OFF, node=node):
-            self.terminate_node(node)  # pylint: disable=no-member
+        self.terminate_node(node)  # pylint: disable=no-member
         self.test_config.tester_obj().monitors.reconfigure_scylla_monitoring()
 
     def decommission(self, node):
