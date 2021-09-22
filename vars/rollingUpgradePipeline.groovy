@@ -159,14 +159,9 @@ def call(Map pipelineParams) {
                                                         fi
 
                                                         echo "start test ......."
-                                                        if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" ]]; then
-                                                            SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
-                                                            if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
-                                                                ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} run-test ${pipelineParams.test_name} --backend ${params.backend}
-                                                            else
-                                                                echo "SCT runner IP file is empty. Probably SCT Runner was not created."
-                                                                exit 1
-                                                            fi
+                                                        SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
+                                                        if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
+                                                            ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} run-test ${pipelineParams.test_name} --backend ${params.backend}
                                                         else
                                                             ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir "`pwd`"
                                                         fi

@@ -158,8 +158,7 @@ def call(Map pipelineParams) {
                                 if [[ -n "\${RUNNER_IP}" ]] ; then
                                     ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} run-test jepsen_test --backend gce
                                 else
-                                    echo "SCT runner IP file is empty. Probably SCT Runner was not created."
-                                    exit 1
+                                    ./docker/env/hydra.sh run-test jepsen_test --backend gce --logdir "`pwd`"
                                 fi
                                 echo "end test ....."
                             """

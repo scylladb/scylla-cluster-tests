@@ -59,14 +59,9 @@ def runSctTest(Map params, String region){
     fi
 
     echo "start test ......."
-    if [[ "$cloud_provider" == "aws" ]]; then
-        RUNNER_IP=\$(cat sct_runner_ip||echo "")
-        if [[ ! -z "\${RUNNER_IP}" ]] ; then
-            ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} run-test ${params.test_name} --backend ${params.backend}
-        else
-            echo "SCT runner IP file is empty. Probably SCT Runner was not created."
-            exit 1
-        fi
+    RUNNER_IP=\$(cat sct_runner_ip||echo "")
+    if [[ ! -z "\${RUNNER_IP}" ]] ; then
+        ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} run-test ${params.test_name} --backend ${params.backend}
     else
         ./docker/env/hydra.sh run-test ${params.test_name} --backend ${params.backend}  --logdir "`pwd`"
     fi
