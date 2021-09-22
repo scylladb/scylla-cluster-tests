@@ -87,10 +87,9 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
-from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.grafana import set_grafana_url
-from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, BACKTRACE_RE, DatabaseLogEvent, \
-    ScyllaHelpErrorEvent, get_pattern_to_event_to_func_mapping
+from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, BACKTRACE_RE, ScyllaHelpErrorEvent, \
+    get_pattern_to_event_to_func_mapping
 from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
