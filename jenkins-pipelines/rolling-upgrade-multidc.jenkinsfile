@@ -1,0 +1,18 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+rollingUpgradePipeline(
+    backend: 'aws',
+    aws_region: '["eu-west-1", "eu-west-2"]',
+    base_versions: ['2021.1', '4.5'],
+    linux_distro: 'ubuntu-focal',
+
+    test_name: 'upgrade_test.UpgradeTest.test_generic_cluster_upgrade',
+    test_config: 'test-cases/upgrades/multi-dc-rolling-upgrade.yaml',
+    workaround_kernel_bug_for_iotune: false,
+    internode_compression: 'all',
+
+    timeout: [time: 360, unit: 'MINUTES']
+)
