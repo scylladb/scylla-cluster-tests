@@ -1524,7 +1524,7 @@ def get_branched_gce_images(scylla_version: str, project: str = SCYLLA_GCE_IMAGE
     #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
     # or you can see brief explanation here:
     #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
-    filters = f"(family eq scylla)(labels.branch eq {branch})"
+    filters = f"(family eq scylla)(labels.branch eq {branch})(name ne debug-image-.*)"
 
     if build_id not in ("latest", "all", ):
         # filters += f"(labels.build-id eq {build_id})"  # asked releng to add `build-id' label too, but
