@@ -25,6 +25,12 @@ LOGGER = logging.getLogger(__name__)
 
 
 class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+    """
+    A stress thread that is running NoSQLBench docker on remote loader and getting results back
+    If you have questions regarding NoSQLBench command line please checkout following documentation:
+      https://github.com/scylladb/scylla-cluster-tests/blob/master/docs/sct-events.md
+    """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._per_loader_count = {}
