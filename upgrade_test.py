@@ -14,18 +14,21 @@
 # Copyright (c) 2016 ScyllaDB
 
 # pylint: disable=too-many-lines
-
+from itertools import zip_longest, chain, count as itertools_count
 import json
 from pathlib import Path
 import random
 import time
 import re
 from functools import wraps
+from typing import List
 
 from pkg_resources import parse_version
 
 from sdcm import wait
+from sdcm.cluster import BaseNode
 from sdcm.fill_db_data import FillDatabaseData
+from sdcm.stress_thread import CassandraStressThread
 from sdcm.utils.version_utils import is_enterprise, get_node_supported_sstable_versions
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.database import IndexSpecialColumnErrorEvent
@@ -474,6 +477,18 @@ class UpgradeTest(FillDatabaseData):
                         f'Found error: index special column "idx_token" is not recognized'
             ).publish()
 
+    @staticmethod
+    def shuffle_nodes_and_alternate_dcs(nodes: List[BaseNode]) -> List[BaseNode]:
+        """Shuffles provided nodes based on dc (alternates dc's).
+        based on https://stackoverflow.com/a/21482016/3891194"""
+        dc_nodes = {}
+        for node in nodes:
+            dc_nodes.setdefault(node.dc_idx, []).append(node)
+        for dc in dc_nodes:  # pylint: disable=consider-using-dict-items
+            random.shuffle(dc_nodes[dc])
+
+        return [x for x in chain.from_iterable(zip_longest(*dc_nodes.values())) if x]
+
     def test_rolling_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
         """
         Upgrade half of nodes in the cluster, and start special read workload
@@ -736,87 +751,79 @@ class UpgradeTest(FillDatabaseData):
 
         self.log.info('all nodes were upgraded, and last workaround is verified.')
 
-    def test_generic_cluster_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
+    def _start_and_wait_for_node_upgrade(self, node: BaseNode, step: int) -> None:
+        InfoEvent(
+            message=f"Step {step} - Upgrade {node.name} from dc {node.dc_idx}").publish()
+        self.log.info('Upgrade Node %s begins', node.name)
+        with ignore_ycsb_connection_refused():
+            self.upgrade_node(node, upgrade_sstables=self.params.get('upgrade_sstables'))
+        self.log.info('Upgrade Node %s ended', node.name)
+        node.check_node_health()
+
+    def _start_and_wait_for_node_rollback(self, node: BaseNode, step: int) -> None:
+        InfoEvent(
+            message=f"Step {step} - "
+                    f"Rollback {node.name} from dc {node.dc_idx}"
+        ).publish()
+        self.log.info('Rollback Node %s begin', node)
+        with ignore_ycsb_connection_refused():
+            self.rollback_node(node, upgrade_sstables=self.params.get('upgrade_sstables'))
+        self.log.info('Rollback Node %s ended', node)
+        node.check_node_health()
+
+    def _run_stress_workload(self, workload_name: str, wait_for_finish: bool = False) -> CassandraStressThread:
+        """Runs workload from param name specified in test-case yaml"""
+        InfoEvent(message=f"Starting {workload_name}").publish()
+        stress_before_upgrade = self.params.get(workload_name)
+        workload_thread_pool = self.run_stress_thread(stress_cmd=stress_before_upgrade)
+        if self.params.get('alternator_port'):
+            self.pre_create_alternator_tables()
+        if wait_for_finish is True:
+            InfoEvent(message=f"Waiting for {workload_name} to finish").publish()
+            self.verify_stress_thread(workload_thread_pool)
+        else:
+            self.log.info('Sleeping for 60s to let cassandra-stress start before the next steps...')
+            time.sleep(60)
+        return workload_thread_pool
+
+    def test_generic_cluster_upgrade(self):
         """
-        Upgrade half of nodes in the cluster, and start special read workload
+        Upgrade specified number of nodes in the cluster, and start special read workload
         during the stage. Checksum method is changed to xxhash from Scylla 2.2,
         we want to use this case to verify the read (cl=ALL) workload works
         well, upgrade all nodes to new version in the end.
+
+        For multi-dc upgrades, alternates upgraded nodes between dc's.
         """
-        # prepare workload (stress_before_upgrade)
-        InfoEvent(message="Starting stress_before_upgrade - aka prepare step").publish()
-        stress_before_upgrade = self.params.get('stress_before_upgrade')
-        prepare_thread_pool = self.run_stress_thread(stress_cmd=stress_before_upgrade)
-        if self.params.get('alternator_port'):
-            self.pre_create_alternator_tables()
-        InfoEvent(message="Waiting for stress_before_upgrade to finish").publish()
-        self.verify_stress_thread(prepare_thread_pool)
-
-        # Starting workload during entire upgrade
-        InfoEvent(message="Starting stress_during_entire_upgrade workload").publish()
-        stress_during_entire_upgrade = self.params.get('stress_during_entire_upgrade')
-        stress_thread_pool = self.run_stress_thread(stress_cmd=stress_during_entire_upgrade)
-        self.log.info('Sleeping for 60s to let cassandra-stress start before the rollback...')
-        time.sleep(60)
-
-        num_nodes_to_rollback = self.params.get('num_nodes_to_rollback')
-        upgraded_nodes = []
+        step = itertools_count(start=1)
+        self._run_stress_workload("stress_before_upgrade", wait_for_finish=True)
+        stress_thread_pool = self._run_stress_workload("stress_during_entire_upgrade", wait_for_finish=False)
 
         # generate random order to upgrade
-        nodes_num = len(self.db_cluster.nodes)
-        # prepare an array containing the indexes
-        indexes = list(range(nodes_num))
-        # shuffle it so we will upgrade the nodes in a random order
-        random.shuffle(indexes)
+        nodes_to_upgrade = self.shuffle_nodes_and_alternate_dcs(list(self.db_cluster.nodes))
 
-        upgrade_sstables = self.params.get('upgrade_sstables')
+        # Upgrade all nodes that should be rollback later
+        upgraded_nodes = []
+        for node_to_upgrade in nodes_to_upgrade[:self.params.get('num_nodes_to_rollback')]:
+            self._start_and_wait_for_node_upgrade(node_to_upgrade, step=next(step))
+            upgraded_nodes.append(node_to_upgrade)
 
-        if num_nodes_to_rollback > 0:
-            # Upgrade all nodes that should be rollback later
-            for i in range(num_nodes_to_rollback):
-                InfoEvent(message=f"Step{i + 1} - Upgrade node{i + 1}").publish()
-                self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[i]]
-                self.log.info('Upgrade Node %s begins', self.db_cluster.node_to_upgrade.name)
-                with ignore_ycsb_connection_refused():
-                    self.upgrade_node(self.db_cluster.node_to_upgrade, upgrade_sstables=upgrade_sstables)
-                self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
-                self.db_cluster.node_to_upgrade.check_node_health()
-                upgraded_nodes.append(self.db_cluster.node_to_upgrade)
-
-            # Rollback all nodes that where upgraded (not necessarily in the same order)
-            random.shuffle(upgraded_nodes)
-            self.log.info('Upgraded Nodes to be rollback are: %s', upgraded_nodes)
-            for node in upgraded_nodes:
-                InfoEvent(
-                    message=f"Step{num_nodes_to_rollback + upgraded_nodes.index(node) + 1} - "
-                            f"Rollback node{upgraded_nodes.index(node) + 1}"
-                ).publish()
-                self.log.info('Rollback Node %s begin', node)
-                with ignore_ycsb_connection_refused():
-                    self.rollback_node(node, upgrade_sstables=upgrade_sstables)
-                self.log.info('Rollback Node %s ended', node)
-                node.check_node_health()
+        # Rollback all nodes that where upgraded (not necessarily in the same order)
+        random.shuffle(upgraded_nodes)
+        self.log.info('Upgraded Nodes to be rollback are: %s', upgraded_nodes)
+        for node in upgraded_nodes:
+            self._start_and_wait_for_node_rollback(node, step=next(step))
 
         # Upgrade all nodes
-        for i in range(nodes_num):
-            InfoEvent(message=f"Step{num_nodes_to_rollback * 2 + i + 1} - Upgrade node{i + 1}").publish()
-            self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[i]]
-            self.log.info('Upgrade Node %s begins', self.db_cluster.node_to_upgrade.name)
-            with ignore_ycsb_connection_refused():
-                self.upgrade_node(self.db_cluster.node_to_upgrade, upgrade_sstables=upgrade_sstables)
-            self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
-            self.db_cluster.node_to_upgrade.check_node_health()
-            upgraded_nodes.append(self.db_cluster.node_to_upgrade)
+        for node_to_upgrade in nodes_to_upgrade:
+            self._start_and_wait_for_node_upgrade(node_to_upgrade, step=next(step))
 
         InfoEvent(message="All nodes were upgraded successfully").publish()
 
         InfoEvent(message="Waiting for stress_during_entire_upgrade to finish").publish()
         self.verify_stress_thread(stress_thread_pool)
 
-        InfoEvent(message="Starting stress_after_cluster_upgrade").publish()
-        stress_after_cluster_upgrade = self.params.get('stress_after_cluster_upgrade')
-        stress_after_cluster_upgrade_pool = self.run_stress_thread(stress_cmd=stress_after_cluster_upgrade)
-        self.verify_stress_thread(stress_after_cluster_upgrade_pool)
+        self._run_stress_workload("stress_after_cluster_upgrade", wait_for_finish=True)
 
     def test_kubernetes_scylla_upgrade(self):
         """
