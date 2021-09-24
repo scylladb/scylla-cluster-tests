@@ -240,6 +240,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         self.service_ipv4_cidr = service_ipv4_cidr
         self.vpc_cni_version = vpc_cni_version
         self.allowed_labels_on_scylla_node = [('name', 'node-setup'),
+                                              ('name', 'cpu-policy'),
                                               ('k8s-app', 'aws-node'),
                                               ('app', 'local-volume-provisioner'),
                                               ('k8s-app', 'kube-proxy'),

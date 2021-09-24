@@ -32,8 +32,6 @@ GKE_URLLIB_RETRY = 5  # How many times api request is retried before reporting f
 GKE_URLLIB_BACKOFF_FACTOR = 0.1
 
 LOADER_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/gke-loaders.yaml")
-CPU_POLICY_DAEMONSET = sct_abs_path("sdcm/k8s_configs/cpu-policy-daemonset.yaml")
-RAID_DAEMONSET = sct_abs_path("sdcm/k8s_configs/raid-daemonset.yaml")
 LOGGER = logging.getLogger(__name__)
 
 
