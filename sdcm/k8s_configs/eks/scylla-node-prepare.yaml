@@ -55,6 +55,102 @@ subjects:
   name: node-setup-daemonset
   namespace: default
 ---
+# Daemonset that will change cpuManagerPolicy to static.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: cpu-policy
+spec:
+  selector:
+    matchLabels:
+      name: cpu-policy
+  template:
+    metadata:
+      labels:
+        name: cpu-policy
+    spec:
+      hostPID: true
+      hostIPC: true
+      serviceAccountName: node-setup-daemonset
+      containers:
+      - name: cpu-policy
+        image: bitnami/kubectl:1.21.4
+        imagePullPolicy: Always
+        env:
+          - name: NODE
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: HOSTFS
+            value: /mnt/hostfs
+          - name: KUBELET_CONFIG_PATH
+            value: /etc/kubernetes/kubelet/kubelet-config.json
+        securityContext:
+          privileged: true
+          runAsUser: 0
+        volumeMounts:
+          - name: hostfs
+            mountPath: /mnt/hostfs
+            mountPropagation: Bidirectional
+        command:
+          - "/bin/bash"
+          - "-c"
+          - "--"
+        args:
+          - |
+            set -ex
+            if [ ! -f "$HOSTFS$KUBELET_CONFIG_PATH" ]; then
+                echo "Kublet config not found"
+                exit 1
+            fi
+
+            TOKEN_PATH=$(find / -name token | grep node-setup-daemonset -m1)
+            TOKEN=$(cat $TOKEN_PATH)
+            CA_CRT=$TOKEN_PATH/../ca.crt
+            kubectl config set-cluster scylla --server=https://kubernetes.default --certificate-authority=$CA_CRT
+            kubectl config set-credentials qa@scylladb.com --token=$TOKEN
+            kubectl config set-context scylla --cluster=scylla --user=qa@scylladb.com
+            kubectl config use-context scylla
+
+            if grep "cpuManagerPolicy" $HOSTFS$KUBELET_CONFIG_PATH | grep "static" ; then
+                echo "cpu-manager-policy is already set to be static"
+                echo "uncordoning the node"
+                kubectl uncordon $NODE || true
+                while true; do sleep infinity; done
+            fi
+
+            echo "Change kubelet config and restart it's service"
+            kubectl drain $NODE --force --ignore-daemonsets --delete-local-data --grace-period=60
+            awk 'NR==2{print "  \"cpuManagerPolicy\": \"static\","}1' $HOSTFS$KUBELET_CONFIG_PATH > \
+                tmp-kubelet-config.json && cat tmp-kubelet-config.json > $HOSTFS$KUBELET_CONFIG_PATH
+            rm $HOSTFS/var/lib/kubelet/cpu_manager_state
+            kill -9 $(pidof kubelet)
+      volumes:
+        - name: hostfs
+          hostPath:
+            path: /
+        - name: dbus
+          hostPath:
+            path: /var/run/dbus
+        - name: systemd
+          hostPath:
+            path: /run/systemd
+        - name: systemctl
+          hostPath:
+            path: /bin/systemctl
+        - name: system
+          hostPath:
+            path: /etc/systemd/system
+        - name: usr
+          hostPath:
+            path: /usr
+        - name: lib
+          hostPath:
+            path: /lib/systemd
+        - name: lib-linux
+          hostPath:
+            path: /lib/systemd
+---
 # Daemonset that will configure disks and networking interfaces on node.
 apiVersion: apps/v1
 kind: DaemonSet
