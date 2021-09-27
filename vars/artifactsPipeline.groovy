@@ -115,17 +115,6 @@ def call(Map pipelineParams) {
                                                     checkout scm
                                                 }
                                             }
-                                            stage('Create SCT Runner') {
-                                                catchError(stageResult: 'FAILURE') {
-                                                    wrap([$class: 'BuildUser']) {
-                                                        dir('scylla-cluster-tests') {
-                                                            timeout(time: 5, unit: 'MINUTES') {
-                                                                createSctRunner(params, pipelineParams.timeout.time, builder.region)
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
                                             stage("Run SCT Test (${instance_type})") {
                                                 def cloud_provider = getCloudProviderFromBackend(params.backend)
                                                 sctScript """
@@ -195,12 +184,7 @@ def call(Map pipelineParams) {
                                                     export SCT_INSTANCE_PROVISION="${params.provision_type}"
 
                                                     echo "start test ......."
-                                                    RUNNER_IP=\$(cat sct_runner_ip||echo "")
-                                                    if [[ -n "\${RUNNER_IP}" ]] ; then
-                                                        ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} run-test artifacts_test --backend ${params.backend}
-                                                    else
-                                                        ./docker/env/hydra.sh run-test artifacts_test --backend ${params.backend} --logdir "`pwd`"
-                                                    fi
+                                                    ./docker/env/hydra.sh run-test artifacts_test --backend ${params.backend} --logdir "`pwd`"
                                                     echo "end test ....."
                                                 """
                                             }
@@ -232,15 +216,6 @@ def call(Map pipelineParams) {
                                                             timeout(time: 10, unit: 'MINUTES') {
                                                                 runSendEmail(params, currentBuild)
                                                             }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            stage('Clean SCT Runners') {
-                                                catchError(stageResult: 'FAILURE') {
-                                                    wrap([$class: 'BuildUser']) {
-                                                        dir('scylla-cluster-tests') {
-                                                            cleanSctRunners(params, currentBuild)
                                                         }
                                                     }
                                                 }
