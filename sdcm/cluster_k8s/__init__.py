@@ -1133,9 +1133,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                         continue
                     os.makedirs(resource_dir / res, exist_ok=True)
                     for container_name in container_names:
-                        logfile = resource_dir / res / f"{container_name}.log"
+                        logfile = resource_dir / res / f"{container_name}"
                         # NOTE: ignore status because it may fail when pod is not ready/running
-                        self.kubectl(f"logs pod/{res} -c={container_name} > {logfile}",
+                        self.kubectl(f"logs pod/{res} -c={container_name} > {logfile}.log",
+                                     namespace=namespace, ignore_status=True)
+                        self.kubectl(f"logs pod/{res} -c={container_name} --previous=true > "
+                                     f"{logfile}-previous.log",
                                      namespace=namespace, ignore_status=True)
 
     @log_run_info
