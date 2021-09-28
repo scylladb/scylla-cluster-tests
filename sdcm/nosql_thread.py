@@ -16,6 +16,7 @@ import logging
 import uuid
 import threading
 
+from sdcm.cluster import BaseNode
 from sdcm.sct_events import Severity
 from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
 from sdcm.sct_events.loaders import NoSQLBenchStressEvent
@@ -34,8 +35,9 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
     GRAPHITE_EXPORTER_CONFIG_SRC_PATH = "docker/graphite-exporter/graphite_mapping.conf"
     GRAPHITE_EXPORTER_CONFIG_DST_PATH = "/tmp/"
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, monitors, **kwargs):
         super().__init__(*args, **kwargs)
+        self._monitors = monitors
         self._per_loader_count = {}
         self._per_loader_count_lock = threading.Semaphore()
         self._nosqlbench_image = self.loader_set.params.get('nosqlbench_image')
@@ -68,23 +70,37 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                 loader.remoter.send_files(src=self.GRAPHITE_EXPORTER_CONFIG_SRC_PATH,
                                           dst=self.GRAPHITE_EXPORTER_CONFIG_DST_PATH,
                                           verbose=False)
+                monitor_node = self._monitors.nodes[0]
+                monitor_node.remoter.send_files(src=self.GRAPHITE_EXPORTER_CONFIG_SRC_PATH,
+                                                dst=self.GRAPHITE_EXPORTER_CONFIG_DST_PATH,
+                                                verbose=False)
+                target_monitor_node_ip = self._monitors.nodes[0].public_ip_address
 
                 # create shared network for the containers
-                create_network_cmd = "docker network create --driver bridge nosql"
-
+                # create_network_cmd = "docker network create --driver bridge nosql"
+                #
                 graphite_run_cmd = "docker run -d -p 9108:9108 -p 9109:9109 -p 9109:9109/udp " \
                                    "-v /tmp/graphite_mapping.conf:/tmp/graphite_mapping.conf " \
-                                   "--name=graphite-exporter --network=nosql " \
+                                   "--name=graphite-exporter " \
                                    "prom/graphite-exporter --graphite.mapping-config=/tmp/graphite_mapping.conf"
-                loader.remoter.run(cmd=create_network_cmd)
-                loader.remoter.run(cmd=graphite_run_cmd,
-                                   timeout=self.timeout + self.shutdown_timeout,
-                                   log_file=log_file_name)
-
+                                   # "--network=nosql " \
+                # TODO: get monitoring stack's node ip
+                # TODO: point at the monitoring node ip with docker-metrics-at
+                # TODO: add a control for the graphite container to avoid re-running it
+                # loader.remoter.run(cmd=create_network_cmd)
+                # loader.remoter.run(cmd=graphite_run_cmd,
+                #                    timeout=self.timeout + self.shutdown_timeout,
+                #                    log_file=log_file_name)
+                monitor_node.remoter.run(cmd=graphite_run_cmd,
+                                         timeout=self.timeout + self.shutdown_timeout,
+                                         log_file=log_file_name,
+                                         ignore_status=True)
+                LOGGER.info("Aiming at target monitor node %s", target_monitor_node_ip)
                 return loader.remoter.run(cmd=f'docker run '
-                                              f'--name=nb --network=nosql '
+                                              '-v /var/run/docker.sock:/var/run/docker.sock '
                                               f'{self._nosqlbench_image} '
-                                              f'{stress_cmd} --report-graphite-to graphite-exporter:9109',
+                                              f'-vvv '
+                                              f'{stress_cmd} --docker-metrics-at {target_monitor_node_ip}',
                                           timeout=self.timeout + self.shutdown_timeout, log_file=log_file_name)
             except Exception as exc:  # pylint: disable=broad-except
                 stress_event.severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR
