@@ -2104,6 +2104,14 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
     def install_scylla_manager(self, node):
         pass
 
+    @property
+    def seed_nodes_ips(self):
+        return []
+
+    @property
+    def seed_nodes(self):
+        return []
+
     def node_setup(self, node: BaseScyllaPodContainer, verbose: bool = False, timeout: int = 3600):
         if self.test_config.BACKTRACE_DECODING:
             node.install_scylla_debuginfo()
