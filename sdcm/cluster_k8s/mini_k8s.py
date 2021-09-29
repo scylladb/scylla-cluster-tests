@@ -537,8 +537,8 @@ class LocalMinimalClusterBase(MinimalClusterBase):
 
     @cached_property
     def k8s_server_url(self):
-        host, port = MinimalK8SOps.get_local_kubectl_proxy()
-        return f"http://{host}:{port}"
+        # NOTE: there is no need to use kubectl proxy running only on local machine
+        return ""
 
     def deploy_node_pool(self, pool, wait_till_ready=True) -> None:
         pass
