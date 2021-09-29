@@ -1643,8 +1643,10 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
             if scylla_yaml_copy == self.parent_cluster.scylla_yaml:
                 LOGGER.debug("%s: scylla.yaml hasn't been changed", self)
                 return
-            original = yaml.safe_dump(scylla_yaml_copy.as_dict()).splitlines(keepends=True)
-            changed = yaml.safe_dump(self.parent_cluster.scylla_yaml.as_dict()).splitlines(keepends=True)
+            original = yaml.safe_dump(scylla_yaml_copy.dict(
+                exclude_defaults=True, exclude_unset=True)).splitlines(keepends=True)
+            changed = yaml.safe_dump(self.parent_cluster.scylla_yaml.dict(
+                exclude_defaults=True, exclude_unset=True)).splitlines(keepends=True)
             diff = "".join(unified_diff(original, changed))
             LOGGER.debug("%s: scylla.yaml requires to be updated with:\n%s", self, diff)
             self.parent_cluster.scylla_yaml_update_required = True
