@@ -335,8 +335,6 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
         return self
 
     def __copy__(self):
-        copy_object = self.__class__()
-        copy_object.__setstate__(self.__getstate__())  # pylint: disable=no-member
-        return copy_object
+        return self.__class__(**self.dict(exclude_defaults=True, exclude_unset=True))
 
     copy = __copy__

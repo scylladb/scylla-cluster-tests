@@ -420,3 +420,37 @@ class ScyllaYamlTest(unittest.TestCase):
                                                               truststore='/tmp/trust.pem'),
             client_encryption_options=ClientEncryptionOptions()
         )
+
+    @staticmethod
+    def test_copy():
+        original = ScyllaYaml(
+            redis_keyspace_replication_strategy='SimpleStrategy',
+            client_encryption_options=ClientEncryptionOptions(
+                enabled=True,
+                certificate='/tmp/123.crt',
+                keyfile='/tmp/123.key',
+                truststore='/tmp/trust.pem',
+            ),
+            server_encryption_options=ServerEncryptionOptions(
+                internode_encryption='all',
+                certificate='/tmp/123.crt',
+                keyfile='/tmp/123.key',
+                truststore='/tmp/trust.pem',
+            )
+        )
+        copy_instance = original.copy()
+        assert copy_instance == original
+        assert copy_instance.dict(exclude_unset=True, exclude_defaults=True) == original.dict(
+            exclude_unset=True, exclude_defaults=True)
+        copy_instance.client_encryption_options.enabled = False
+        assert copy_instance.client_encryption_options.enabled is False
+        assert original.client_encryption_options.enabled is True
+        assert copy_instance != original
+        assert copy_instance.dict(exclude_unset=True, exclude_defaults=True) != original.dict(
+            exclude_unset=True, exclude_defaults=True)
+
+        copy_instance = original.copy()
+        copy_instance.client_encryption_options = None
+        assert copy_instance != original
+        assert copy_instance.dict(exclude_unset=True, exclude_defaults=True) != original.dict(
+            exclude_unset=True, exclude_defaults=True)
