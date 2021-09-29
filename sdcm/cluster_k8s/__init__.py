@@ -1620,6 +1620,13 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
     def restart(self):
         pass
 
+    @property
+    def proposed_scylla_yaml(self) -> ScyllaYaml:
+        """
+        For kubernetes there is no node-specific scylla.yaml, only cluster-wide
+        """
+        return self.parent_cluster.proposed_scylla_yaml
+
     parent_cluster: ScyllaPodCluster
 
     def actual_scylla_yaml(self) -> ContextManager[ScyllaYaml]:
