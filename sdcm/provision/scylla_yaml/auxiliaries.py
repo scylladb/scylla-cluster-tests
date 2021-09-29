@@ -15,10 +15,9 @@
 import logging
 from typing import Literal, List, Union, Optional
 
-from pydantic import Field, validator
+from pydantic import Field, validator, BaseModel  # pylint: disable=no-name-in-module
 
 from sdcm.provision.common.builders import AttrBuilder
-from sdcm.provision.common.utils import BaseModel
 from sdcm.sct_config import SCTConfiguration
 
 
