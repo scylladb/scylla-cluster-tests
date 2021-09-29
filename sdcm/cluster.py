@@ -61,6 +61,7 @@ from sdcm.provision.helpers.certificate import install_client_certificate, insta
 from sdcm.remote import RemoteCmdRunnerBase, LOCALRUNNER, NETWORK_EXCEPTIONS, shell_script_cmd
 from sdcm.remote.remote_file import remote_file, yaml_file_to_dict, dict_to_yaml_file
 from sdcm import wait, mgmt
+from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.utils import properties
 from sdcm.utils.common import (
@@ -2496,19 +2497,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if verify_up_after:
             self.wait_jmx_up(timeout=timeout)
 
-    def enable_client_encrypt(self):
-        SCYLLA_YAML_PATH_TMP = "/tmp/scylla.yaml"
-        self.remoter.run("sudo cat {} | grep -v '<client_encrypt>' > {}".format(SCYLLA_YAML_PATH, SCYLLA_YAML_PATH_TMP))
-        self.remoter.run("sudo mv -f {} {}".format(SCYLLA_YAML_PATH_TMP, SCYLLA_YAML_PATH))
-        self.parent_cluster.node_config_setup(node=self, client_encrypt=True)
-        self.stop_scylla()
-        self.start_scylla()
-
-    def disable_client_encrypt(self):
-        self.parent_cluster.node_config_setup(node=self, client_encrypt=False)
-        self.stop_scylla()
-        self.start_scylla()
-
     def prepare_files_for_archive(self, fileslist):
         """Prepare files for creating archives on node
 
@@ -3641,15 +3629,24 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                                                 exp_ips=self.seed_nodes_ips,
                                                 act_ip=ip)
 
+    @contextlib.contextmanager
+    def patch_params(self) -> SCTConfiguration:
+        new_params, old_params = self.params.copy(), self.params
+        yield new_params
+        if new_params != old_params:
+            self.params = new_params
+            for node in self.nodes:
+                node.config_setup()
+                node.restart_scylla()
+
     def enable_client_encrypt(self):
-        for node in self.nodes:
-            self.log.debug("Enabling client encryption on node")
-            node.enable_client_encrypt()
+        self.log.debug("Enabling client encryption on nodes")
+        with self.patch_params() as params:
+            params['client_encrypt'] = True
 
     def disable_client_encrypt(self):
-        for node in self.nodes:
-            self.log.debug("Disabling client encryption on node")
-            node.disable_client_encrypt()
+        with self.patch_params() as params:
+            params['client_encrypt'] = False
 
     def _update_db_binary(self, new_scylla_bin, node_list, start_service=True):
         self.log.debug('User requested to update DB binary...')
