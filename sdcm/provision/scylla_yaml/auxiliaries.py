@@ -106,23 +106,30 @@ class ScyllaYamlAttrBuilderBase(AttrBuilder):
         return None
 
     @property
-    def _region(self) -> str:
+    def _regions(self) -> List[str]:
         if self._cloud_provider == 'aws':
-            return self.params.get('region_name')
+            regions = self.params.get('region_name')
         elif self._cloud_provider == 'gce':
-            return self.params.get('gce_datacenter')
+            regions = self.params.get('gce_datacenter')
         elif self._cloud_provider == 'azure':
-            return self.params.get('region_name')
-        return ''
+            regions = self.params.get('region_name')
+        else:
+            regions = []
+        if isinstance(regions, list):
+            return regions
+        if isinstance(regions, str):
+            return regions.split()
+        else:
+            return []
 
     @property
     def _multi_region(self) -> bool:
         """
         Analog of TestConfig.MULTI_REGION
         """
-        if not self._region:
+        if not self._regions:
             return False
-        return len(self._region.split()) > 1  # pylint: disable=no-member
+        return len(self._regions) > 1  # pylint: disable=no-member
 
     @property
     def _intra_node_comm_public(self) -> bool:
