@@ -36,34 +36,52 @@ from functional_tests.scylla_operator.libs.helpers import (
 log = logging.getLogger()
 
 
-@pytest.mark.skip("Disabled due to the https://github.com/scylladb/scylla-cluster-tests/issues/3786")
-def test_cassandra_rackdc(cassandra_rackdc_properties):
+@pytest.mark.skip("Disabled due to the https://github.com/scylladb/scylla-operator/issues/797")
+def test_cassandra_rackdc(db_cluster, cassandra_rackdc_properties):
     """
     Test of applying cassandra-rackdc.properties via configmap
     """
 
     with cassandra_rackdc_properties() as props:
-        original = props['prefer_local']
+        config_map_props = props
+    with db_cluster.nodes[0].actual_cassandra_rackdc_properties() as props:
+        original_prefer_local = props.get('prefer_local')
 
-    log.info("cassandra-rackdc.properties.prefer_local = %s", original)
+    log.info("configMap's cassandra-rackdc.properties = %s", config_map_props)
 
-    if original == 'false':
-        changed = 'true'
-    elif original == 'true':
-        changed = 'false'
+    if original_prefer_local == 'false':
+        new_prefer_local = 'true'
+    elif original_prefer_local == 'true':
+        new_prefer_local = 'false'
     else:
-        assert False, f'cassandra-rackdc.properties have unexpected prefer_local value {original}'
+        assert False, f"cassandra-rackdc.properties have unexpected prefer_local value: {original_prefer_local}"
 
     with cassandra_rackdc_properties() as props:
-        assert original == props['prefer_local']
-        props['prefer_local'] = changed
+        props['prefer_local'] = new_prefer_local
+    db_cluster.restart_scylla()
+    for node in db_cluster.nodes:
+        with node.actual_cassandra_rackdc_properties() as props:
+            assert props.get('prefer_local') == new_prefer_local
+    # NOTE: check nodes states from all the nodes, because it is possible to have it be inconsistent
+    for node in db_cluster.nodes:
+        db_cluster.wait_for_nodes_up_and_normal(nodes=db_cluster.nodes, verification_node=node)
 
     with cassandra_rackdc_properties() as props:
-        assert changed == props['prefer_local']
-        props['prefer_local'] = original
+        assert new_prefer_local == props.get('prefer_local')
+        if 'prefer_local' not in config_map_props:
+            props.pop('prefer_local', None)
+        else:
+            props['prefer_local'] = config_map_props['prefer_local']
+    db_cluster.restart_scylla()
+    # NOTE: check nodes states from all the nodes, because it is possible to have it be inconsistent
+    for node in db_cluster.nodes:
+        with node.actual_cassandra_rackdc_properties() as props:
+            assert props.get('prefer_local') == original_prefer_local
+    for node in db_cluster.nodes:
+        db_cluster.wait_for_nodes_up_and_normal(nodes=db_cluster.nodes, verification_node=node)
 
     with cassandra_rackdc_properties() as props:
-        assert original == props['prefer_local']
+        assert config_map_props == props
 
 
 def test_rolling_restart_cluster(db_cluster):
