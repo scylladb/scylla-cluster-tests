@@ -304,6 +304,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.params = params
         self.api_call_rate_limiter = None
         self.k8s_scylla_cluster_name = self.params.get('k8s_scylla_cluster_name')
+        self.scylla_config_lock = RLock()
+        self.scylla_restart_required = False
         # keep pods labels that are allowed to be scheduled on the Scylla node
         self.allowed_labels_on_scylla_node = []
 
@@ -872,6 +874,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         cpu_limit = convert_cpu_units_to_k8s_value(cpu_limit)
         memory_limit = convert_memory_units_to_k8s_value(memory_limit)
 
+        # Init 'scylla-config' configMap before installation of Scylla to avoid redundant restart
+        self.init_scylla_config_map()
+        self.scylla_restart_required = False
+
         # Deploy scylla cluster
         LOGGER.debug(self.helm_install(
             target_chart_name="scylla",
@@ -1353,6 +1359,94 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def upgrade_kubernetes_platform(self):
         raise NotImplementedError("Kubernetes upgrade is not implemented on this backend")
 
+    @property
+    @contextlib.contextmanager
+    def scylla_config_map(self) -> dict:
+        with self.scylla_config_lock:
+            try:
+                config_map = self.k8s_core_v1_api.read_namespaced_config_map(
+                    name=SCYLLA_CONFIG_NAME, namespace=SCYLLA_NAMESPACE).data or {}
+                exists = True
+            except:  # pylint: disable=bare-except
+                config_map = {}
+                exists = False
+            original_config_map = deepcopy(config_map)
+            yield config_map
+            if original_config_map == config_map:
+                LOGGER.debug("%s: scylla config map hasn't been changed", self)
+                return
+            if exists:
+                self.k8s_core_v1_api.patch_namespaced_config_map(
+                    name=SCYLLA_CONFIG_NAME,
+                    namespace=SCYLLA_NAMESPACE,
+                    body=[{"op": "replace", "path": '/data', "value": config_map}]
+                )
+            else:
+                self.k8s_core_v1_api.create_namespaced_config_map(
+                    namespace=SCYLLA_NAMESPACE,
+                    body=V1ConfigMap(
+                        data=config_map,
+                        metadata={'name': SCYLLA_CONFIG_NAME}
+                    )
+                )
+
+    @contextlib.contextmanager
+    def manage_file_in_scylla_config_map(self, filename: str) -> ContextManager:
+        """Update scylla.yaml or cassandra-rackdc.properties, k8s way
+
+        Scylla Operator handles file updates using ConfigMap resource
+        and we don't need to update it manually on each node.
+        Only scylla rollout restart is needed to get it applied.
+
+        Details: https://operator.docs.scylladb.com/master/generic#configure-scylla
+        """
+        with self.scylla_config_map as scylla_config_map:
+            old_data = yaml.safe_load(scylla_config_map.get(filename, "")) or {}
+            new_data = deepcopy(old_data)
+            yield new_data
+            if old_data == new_data:
+                LOGGER.debug("%s: '%s' hasn't been changed", self, filename)
+                return
+            old_data_as_list = yaml.safe_dump(old_data).splitlines(keepends=True)
+            new_data_as_str = yaml.safe_dump(new_data)
+            new_data_as_list = new_data_as_str.splitlines(keepends=True)
+            diff = "".join(unified_diff(old_data_as_list, new_data_as_list))
+            LOGGER.debug("%s: '%s' has been updated:\n%s", self, filename, diff)
+            if not new_data:
+                scylla_config_map.pop(filename, None)
+            else:
+                scylla_config_map[filename] = new_data_as_str
+            self.scylla_restart_required = True
+
+    def remote_scylla_yaml(self) -> ContextManager:
+        return self.manage_file_in_scylla_config_map(filename='scylla.yaml')
+
+    def remote_cassandra_rackdc_properties(self) -> ContextManager:
+        return self.manage_file_in_scylla_config_map(filename='cassandra-rackdc.properties')
+
+    def init_scylla_config_map(self, **kwargs):
+        # NOTE: operator sets all the scylla options itself based on the configuration of the ScyllaCluster CRD.
+        #       It allows to redefine options using 'scylla-config' configMap opject.
+        #       So, define some options here by default. It may be extended later if needed.
+        with self.remote_scylla_yaml() as scylla_yml:
+            # Process cluster params
+            if self.params.get("experimental"):
+                scylla_yml["experimental"] = self.params.get("experimental")
+            if self.params.get("hinted_handoff"):
+                scylla_yml["hinted_handoff_enabled"] = self.params.get(
+                    "hinted_handoff").lower() in ("enabled", "true")
+            if self.params.get("endpoint_snitch"):
+                scylla_yml["endpoint_snitch"] = self.params.get("endpoint_snitch")
+
+            # Process method kwargs
+            if kwargs.get("murmur3_partitioner_ignore_msb_bits"):
+                scylla_yml["murmur3_partitioner_ignore_msb_bits"] = int(
+                    kwargs.pop("murmur3_partitioner_ignore_msb_bits"))
+
+            LOGGER.info("K8S SCYLLA_YAML: %s", scylla_yml)
+            if kwargs:
+                LOGGER.warning("K8S SCYLLA_YAML, not applied options: %s", kwargs)
+
 
 class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-methods
     parent_cluster: PodCluster
@@ -1632,31 +1726,22 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
     def actual_scylla_yaml(self) -> ContextManager[ScyllaYaml]:
         return super().remote_scylla_yaml()
 
-    @contextlib.contextmanager
-    def remote_scylla_yaml(self) -> ContextManager[ScyllaYaml]:
-        """Update scylla.yaml, k8s way
+    def actual_cassandra_rackdc_properties(self) -> ContextManager:
+        return super().remote_cassandra_rackdc_properties()
 
-        Scylla Operator handles scylla.yaml updates using ConfigMap resource and we don't need to update it
-        manually on each node.  Just collect all required changes to parent_cluster.scylla_yaml dict and if it
-        differs from previous one, set parent_cluster.scylla_yaml_update_required flag.  No actual changes done here.
-        Need to do cluster rollout restart.
-
-        More details here: https://github.com/scylladb/scylla-operator/blob/master/docs/generic.md#configure-scylla
+    def remote_scylla_yaml(self) -> ContextManager:
         """
-        with self.parent_cluster.scylla_yaml_lock:
-            # TBD: Interfere with remote_cassandra_rackdc_properties, needed to be addressed
-            scylla_yaml_copy = self.parent_cluster.scylla_yaml.copy()
-            yield self.parent_cluster.scylla_yaml
-            if scylla_yaml_copy == self.parent_cluster.scylla_yaml:
-                LOGGER.debug("%s: scylla.yaml hasn't been changed", self)
-                return
-            original = yaml.safe_dump(scylla_yaml_copy.dict(
-                exclude_defaults=True, exclude_unset=True)).splitlines(keepends=True)
-            changed = yaml.safe_dump(self.parent_cluster.scylla_yaml.dict(
-                exclude_defaults=True, exclude_unset=True)).splitlines(keepends=True)
-            diff = "".join(unified_diff(original, changed))
-            LOGGER.debug("%s: scylla.yaml requires to be updated with:\n%s", self, diff)
-            self.parent_cluster.scylla_yaml_update_required = True
+        Scylla Operator handles 'scylla.yaml' file updates using ConfigMap resource
+        and we don't need to update it on each node separately.
+        """
+        return self.parent_cluster.remote_scylla_yaml()
+
+    def remote_cassandra_rackdc_properties(self) -> ContextManager:
+        """
+        Scylla Operator handles 'cassandra-rackdc.properties' file updates using ConfigMap resource
+        and we don't need to update it on each node separately.
+        """
+        return self.parent_cluster.remote_cassandra_rackdc_properties()
 
     @cluster.log_run_info
     def start_scylla_server(self, verify_up=True, verify_down=False,
@@ -1736,7 +1821,6 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
         self.stop_scylla()
         with self.remote_scylla_yaml() as scylla_yml:
             scylla_yml["murmur3_partitioner_ignore_msb_bits"] = murmur3_partitioner_ignore_msb_bits
-        self.parent_cluster.update_scylla_config()
         self.soft_reboot()
         search_reshard = self.follow_system_log(patterns=['Reshard', 'Reshap'])
         self.wait_db_up(timeout=self.pod_readiness_timeout * 60)
@@ -1957,9 +2041,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
             node_pool=node_pool,
             node_prepare_config=self.NODE_PREPARE_FILE
         )
-        self.scylla_yaml_lock = RLock()
-        self.scylla_yaml = ScyllaYaml()
-        self.scylla_yaml_update_required = False
         self.scylla_cluster_name = scylla_cluster_name
         super().__init__(k8s_cluster=k8s_cluster,
                          namespace="scylla",
@@ -1986,11 +2067,9 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
     def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):  # pylint: disable=arguments-differ
         node_list = node_list if node_list else self.nodes
         self.wait_for_nodes_up_and_normal(nodes=node_list)
-        if self.scylla_yaml_update_required:
-            self.update_scylla_config()
-            time.sleep(30)
+        if self.scylla_restart_required:
             self.restart_scylla()
-            self.scylla_yaml_update_required = False
+            self.scylla_restart_required = False
             self.wait_for_nodes_up_and_normal(nodes=node_list)
 
     @property
@@ -2048,67 +2127,22 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         )
 
     @property
-    @contextlib.contextmanager
-    def scylla_config_map(self) -> dict:
-        try:
-            config_map = self.k8s_cluster.k8s_core_v1_api.read_namespaced_config_map(
-                name=SCYLLA_CONFIG_NAME, namespace=self.namespace).data or {}
-            exists = True
-        except:  # pylint: disable=bare-except
-            config_map = {}
-            exists = False
-        original_config_map = deepcopy(config_map)
-        yield config_map
-        if original_config_map == config_map:
-            self.log.debug("%s: scylla config map hasn't been changed", self)
-            return
-        if exists:
-            self.k8s_cluster.k8s_core_v1_api.patch_namespaced_config_map(
-                name=SCYLLA_CONFIG_NAME,
-                namespace=self.namespace,
-                body=[{"op": "replace", "path": '/data', "value": config_map}]
-            )
-        else:
-            self.k8s_cluster.k8s_core_v1_api.create_namespaced_config_map(
-                namespace=self.namespace,
-                body=V1ConfigMap(
-                    data=config_map,
-                    metadata={'name': SCYLLA_CONFIG_NAME}
-                )
-            )
+    def scylla_restart_required(self) -> bool:
+        return self.k8s_cluster.scylla_restart_required
 
-    @contextlib.contextmanager
+    @scylla_restart_required.setter
+    def scylla_restart_required(self, value) -> None:
+        self.k8s_cluster.scylla_restart_required = value
+
+    @property
+    def scylla_config_map(self) -> ContextManager:
+        return self.k8s_cluster.scylla_config_map
+
+    def remote_scylla_yaml(self) -> ContextManager:
+        return self.k8s_cluster.manage_file_in_scylla_config_map()
+
     def remote_cassandra_rackdc_properties(self) -> ContextManager:
-        """Update cassandra-rackdc.properties, k8s way
-
-        Scylla Operator handles cassandra-rackdc.properties updates using ConfigMap resource
-        and we don't need to update it manually on each node.
-        Only rollout restart stateful set is needed to get it updated.
-
-        More details here: https://github.com/scylladb/scylla-operator/blob/master/docs/generic.md#configure-scylla
-        """
-        with self.scylla_yaml_lock:
-            with self.scylla_config_map as scylla_config_map:
-                old_rack_properties = properties.deserialize(
-                    scylla_config_map.get('cassandra-rackdc.properties', ""))
-                if not old_rack_properties and len(self.nodes) > 1:
-                    # If there is no config_map than get properties from the very first node in the cluster
-                    with self.nodes[0].remote_cassandra_rackdc_properties() as node_rack_properties:
-                        old_rack_properties = node_rack_properties
-
-                new_rack_properties = deepcopy(old_rack_properties)
-                yield new_rack_properties
-                if new_rack_properties == old_rack_properties:
-                    self.log.debug("%s: cassandra-rackdc.properties hasn't been changed", self)
-                    return
-                original = properties.serialize(old_rack_properties).splitlines(keepends=True)
-                changed_bare = properties.serialize(new_rack_properties)
-                changed = changed_bare.splitlines(keepends=True)
-                diff = "".join(unified_diff(original, changed))
-                LOGGER.debug("%s: cassandra-rackdc.properties has been updated:\n%s", self, diff)
-                scylla_config_map['cassandra-rackdc.properties'] = changed_bare
-                self.restart_scylla()
-                self.wait_for_nodes_up_and_normal()
+        return self.k8s_cluster.manage_file_in_scylla_config_map(filename='cassandra-rackdc.properties')
 
     def update_seed_provider(self):
         pass
@@ -2183,19 +2217,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
             if any(substr in append_scylla_yaml for substr in unsupported_options):
                 raise NotImplementedError(
                     f"{unsupported_options} are not supported in append_scylla_yaml by k8s-* backends yet")
-
-        node.config_setup(enable_exp=self.params.get("experimental"),
-                          endpoint_snitch=endpoint_snitch,
-                          authenticator=self.params.get("authenticator"),
-                          server_encrypt=self.params.get("server_encrypt"),
-                          append_scylla_yaml=append_scylla_yaml,
-                          hinted_handoff=self.params.get("hinted_handoff"),
-                          authorizer=self.params.get("authorizer"),
-                          alternator_port=self.params.get("alternator_port"),
-                          murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
-                          alternator_enforce_authorization=self.params.get("alternator_enforce_authorization"),
-                          internode_compression=self.params.get("internode_compression"),
-                          ldap=self.params.get('use_ldap_authorization'))
 
     def validate_seeds_on_all_nodes(self):
         pass
@@ -2305,19 +2326,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
 
         self.wait_for_pods_readiness(len(self.nodes), len(self.nodes))
 
-    def update_scylla_config(self):
-        with self.scylla_yaml_lock:
-            with NamedTemporaryFile("w", delete=False) as tmp:
-                tmp.write(yaml.safe_dump(self.scylla_yaml.as_dict()))
-                tmp.flush()
-                self.k8s_cluster.kubectl_multi_cmd(
-                    f'kubectl create configmap {SCYLLA_CONFIG_NAME} --from-file=scylla.yaml={tmp.name} ||'
-                    f'kubectl create configmap {SCYLLA_CONFIG_NAME} --from-file=scylla.yaml={tmp.name} -o yaml '
-                    '--dry-run=client | kubectl replace -f -',
-                    namespace=self.namespace
-                )
-            os.remove(tmp.name)
-
     def check_cluster_health(self):
         if self.params.get('k8s_deploy_monitoring'):
             self._check_kubernetes_monitoring_health()
@@ -2360,6 +2368,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                 f"--watch=true --timeout={readiness_timeout}m",
                 namespace=self.namespace,
                 timeout=readiness_timeout * 60 + 10)
+        self.scylla_restart_required = False
 
 
 class ManagerPodCluser(PodCluster):  # pylint: disable=abstract-method
