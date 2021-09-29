@@ -22,13 +22,19 @@ from unittest.mock import patch
 from parameterized import parameterized
 
 from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
-from sdcm.provision.common.utils import is_builtin
 from sdcm.provision.scylla_yaml import ScyllaYamlNodeAttrBuilder, ScyllaYamlClusterAttrBuilder, ScyllaYaml
 from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase
 from sdcm.sct_config import SCTConfiguration
 from sdcm.test_config import TestConfig
 
 from sdcm.utils.distro import Distro
+
+
+__builtin__ = [].__class__.__module__
+
+
+def is_builtin(inst):
+    return inst.__module__ == __builtin__
 
 
 # pylint: disable=too-few-public-methods

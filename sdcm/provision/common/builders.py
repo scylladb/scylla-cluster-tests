@@ -13,7 +13,7 @@
 
 from typing import Union
 
-from sdcm.provision.common.utils import BaseModel
+from pydantic import BaseModel  # pylint: disable=no-name-in-module
 
 
 OptionalType = type(Union[str, None])

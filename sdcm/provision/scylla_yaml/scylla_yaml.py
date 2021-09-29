@@ -14,9 +14,8 @@
 
 from typing import List, Literal, Union
 
-from pydantic import Field, validator
+from pydantic import Field, validator, BaseModel  # pylint: disable=no-name-in-module
 
-from sdcm.provision.common.utils import BaseModel
 from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions, EndPointSnitchType, SeedProvider, \
     ServerEncryptionOptions, ClientEncryptionOptions
 
