@@ -21,12 +21,12 @@ class QueryFilter:
         self.use_wide_query = use_wide_query
         self.lastyear = lastyear
 
-    def setup_instance_params(self):
+    def setup_instance_parameters(self):
         return ['gce_' + param for param in self.SETUP_INSTANCE_PARAMS] if self.is_gce else self.SETUP_INSTANCE_PARAMS
 
     def filter_setup_details(self):
         setup_details = ''
-        for param in self.SETUP_PARAMS + self.setup_instance_params():
+        for param in self.SETUP_PARAMS + self.setup_instance_parameters():
             if setup_details:
                 setup_details += ' AND '
             setup_details += 'setup_details.{}: {}'.format(param, self.test_doc['_source']['setup_details'][param])

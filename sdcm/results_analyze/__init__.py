@@ -98,7 +98,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         if setup_details['cluster_backend'] == "aws":
             setup_details['ami_id_db_scylla'] = test_doc['_source']['setup_details']['ami_id_db_scylla']
             setup_details['region_name'] = test_doc['_source']['setup_details']['region_name']
-        for setup_param in QueryFilter(test_doc, is_gce).setup_instance_params():
+        for setup_param in QueryFilter(test_doc, is_gce).setup_instance_parameters():
             setup_details.update(
                 [(setup_param.replace('gce_', ''), test_doc['_source']['setup_details'].get(setup_param))])
         return setup_details
