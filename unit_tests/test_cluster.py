@@ -29,7 +29,7 @@ from sdcm.cluster import BaseNode, BaseCluster, BaseMonitorSet
 from sdcm.sct_events import Severity
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
 from sdcm.sct_events.filters import DbEventsFilter
-from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.system import InstanceStatusEvent
 from sdcm.utils.distro import Distro
 
 from unit_tests.dummy_remote import DummyRemote
@@ -136,10 +136,10 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
 
     def test_search_power_off(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'power_off.log')
-        with DbEventsFilter(db_event=DatabaseLogEvent.POWER_OFF, node=self.node):
+        with DbEventsFilter(db_event=InstanceStatusEvent.POWER_OFF, node=self.node):
             self.node._read_system_log_and_publish_events(start_from_beginning=True)
 
-        DatabaseLogEvent.POWER_OFF().add_info(
+        InstanceStatusEvent.POWER_OFF().add_info(
             node="A", line_number=22,
             line=f"{datetime.utcfromtimestamp(time.time() + 1):%Y-%m-%dT%H:%M:%S+00:00} "
                  "longevity-large-collections-12h-mas-db-node-c6a4e04e-1 !INFO    | systemd-logind: Powering Off..."

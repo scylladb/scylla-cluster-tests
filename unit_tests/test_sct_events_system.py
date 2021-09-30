@@ -10,14 +10,16 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+import os
 
 import pickle
 import unittest
 from textwrap import dedent
 
+from sdcm.sct_events import Severity
 from sdcm.sct_events.system import \
     StartupTestEvent, TestFrameworkEvent, ElasticsearchEvent, SpotTerminationEvent, ScyllaRepoEvent, InfoEvent, \
-    ThreadFailedEvent, CoreDumpEvent, TestResultEvent
+    ThreadFailedEvent, CoreDumpEvent, TestResultEvent, InstanceStatusEvent, INSTANCE_STATUS_EVENTS_PATTERNS
 
 
 class TestSystemEvents(unittest.TestCase):
@@ -132,3 +134,64 @@ class TestSystemEvents(unittest.TestCase):
         loaded_event = pickle.loads(pickle.dumps(event))
         loaded_event.event_id = "aff29bce-d75c-4f86-9890-c6d9c1c25d3e"
         self.assertEqual(event, loaded_event)
+
+
+class TestInstanceStatusEvent(unittest.TestCase):
+    def test_known_system_status_events(self):
+        self.assertTrue(issubclass(InstanceStatusEvent.STARTUP, InstanceStatusEvent))
+        self.assertTrue(issubclass(InstanceStatusEvent.REBOOT, InstanceStatusEvent))
+        self.assertTrue(issubclass(InstanceStatusEvent.POWER_OFF, InstanceStatusEvent))
+
+    def test_instance_startup_event(self):
+        event1 = InstanceStatusEvent.STARTUP()
+        self.assertEqual(event1.severity, Severity.WARNING)
+
+        self.assertIs(event1, event1.add_info(node="n1", line="kernel: Linux version", line_number=0))
+        self.assertEqual(event1.severity, Severity.WARNING)
+        self.assertEqual(event1.node, "n1")
+        self.assertEqual(event1.line, "kernel: Linux version")
+        self.assertEqual(event1.line_number, 0)
+
+    def test_instance_reboot_event(self):
+        event1 = InstanceStatusEvent.REBOOT()
+        self.assertEqual(event1.severity, Severity.WARNING)
+
+        self.assertIs(event1, event1.add_info(node="n1", line="Stopped target Host and Network Name Lookups",
+                                              line_number=0))
+        self.assertEqual(event1.severity, Severity.WARNING)
+        self.assertEqual(event1.node, "n1")
+        self.assertEqual(event1.line, "Stopped target Host and Network Name Lookups")
+        self.assertEqual(event1.line_number, 0)
+
+    def test_instance_poweroff_event(self):
+        event1 = InstanceStatusEvent.POWER_OFF()
+        self.assertEqual(event1.severity, Severity.WARNING)
+        self.assertIs(event1, event1.add_info(node="n1", line="Powering Off", line_number=0))
+        self.assertEqual(event1.severity, Severity.WARNING)
+        self.assertEqual(event1.node, "n1")
+        self.assertEqual(event1.line, "Powering Off")
+        self.assertEqual(event1.line_number, 0)
+
+    def test_instance_status_events_patterns(self):
+        cloned_events = []
+        with open(os.path.join(os.path.dirname(__file__), 'test_data/system_status_events.log'), 'r') as sct_log:
+            for index, line in enumerate(sct_log.readlines()):
+                for pattern, event in INSTANCE_STATUS_EVENTS_PATTERNS:
+                    match = pattern.search(line)
+                    if match:
+                        cloned_events.append(event.clone().add_info(node=self, line_number=index, line=line))
+                        break
+
+        self.assertEqual(len(cloned_events), 3)
+
+        self.assertEqual(cloned_events[0].type, 'STARTUP')
+        self.assertEqual(cloned_events[0].regex, 'kernel: Linux version')
+        self.assertEqual(cloned_events[0].severity, Severity.WARNING)
+
+        self.assertEqual(cloned_events[1].type, 'REBOOT')
+        self.assertEqual(cloned_events[1].regex, 'Stopped target Host and Network Name Lookups')
+        self.assertEqual(cloned_events[1].severity, Severity.WARNING)
+
+        self.assertEqual(cloned_events[2].type, 'POWER_OFF')
+        self.assertEqual(cloned_events[2].regex, 'Reached target Power-Off')
+        self.assertEqual(cloned_events[2].severity, Severity.WARNING)
