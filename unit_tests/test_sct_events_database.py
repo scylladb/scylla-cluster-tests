@@ -41,7 +41,6 @@ class TestDatabaseLogEvent(unittest.TestCase):
         self.assertTrue(issubclass(DatabaseLogEvent.REACTOR_STALLED, DatabaseLogEvent))
         self.assertTrue(issubclass(DatabaseLogEvent.SUPPRESSED_MESSAGES, DatabaseLogEvent))
         self.assertTrue(issubclass(DatabaseLogEvent.stream_exception, DatabaseLogEvent))
-        self.assertTrue(issubclass(DatabaseLogEvent.POWER_OFF, DatabaseLogEvent))
 
     def test_reactor_stalled_severity(self):
         event1 = DatabaseLogEvent.REACTOR_STALLED()

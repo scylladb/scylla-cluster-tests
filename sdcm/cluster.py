@@ -93,7 +93,7 @@ from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version, get_
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
-from sdcm.sct_events.system import TestFrameworkEvent
+from sdcm.sct_events.system import TestFrameworkEvent, INSTANCE_STATUS_EVENTS_PATTERNS
 from sdcm.sct_events.grafana import set_grafana_url
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, BACKTRACE_RE, ScyllaHelpErrorEvent, \
     get_pattern_to_event_to_func_mapping
@@ -202,6 +202,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                                   'shutdown'  # when node was removed it may take more time to update the gossip info
                                   ]
 
+    SYSTEM_EVENTS_PATTERNS = SYSTEM_ERROR_EVENTS_PATTERNS + INSTANCE_STATUS_EVENTS_PATTERNS
+
     def __init__(self, name, parent_cluster, ssh_login_info=None, base_logdir=None, node_prefix=None, dc_idx=0, rack=0):  # pylint: disable=too-many-arguments,unused-argument
         self.name = name
         self.rack = rack
@@ -239,7 +241,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self._short_hostname = None
         self._alert_manager: Optional[PrometheusAlertManagerListener] = None
 
-        self._system_log_errors_index = []
+        self._system_log_errors_and_status_events_index = []
         self._exclude_system_log_from_being_logged = [
             ' !INFO    | sshd[',
             ' !INFO    | systemd:',
@@ -1417,7 +1419,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                         if trace_line.startswith('0x') or 'scylladb/lib' in trace_line:
                             one_line_backtrace.append(trace_line)
 
-                if index not in self._system_log_errors_index or start_from_beginning:
+                if index not in self._system_log_errors_and_status_events_index or start_from_beginning:
                     # for each line, if it matches a continuous event pattern,
                     # call the appropriate function with the class tied to that pattern
                     db_event_pattern_func_map = get_pattern_to_event_to_func_mapping(node=self.name)
@@ -1427,10 +1429,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                             item.period_func(match=event_match)
 
                     # for each line use all regexes to match, and if found send an event
-                    for pattern, event in SYSTEM_ERROR_EVENTS_PATTERNS:
+                    for pattern, event in self.SYSTEM_EVENTS_PATTERNS:
                         match = pattern.search(line)
                         if match:
-                            self._system_log_errors_index.append(index)
+                            self._system_log_errors_and_status_events_index.append(index)
                             cloned_event = event.clone().add_info(node=self, line_number=index, line=line)
                             backtraces.append(dict(event=cloned_event, backtrace=[]))
                             break  # Stop iterating patterns to avoid creating two events for one line of the log

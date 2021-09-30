@@ -11,12 +11,13 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
+import re
 import time
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, Type, List, Tuple
 from traceback import format_stack
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import SctEvent, SystemEvent, InformationalEvent
+from sdcm.sct_events.base import SctEvent, SystemEvent, InformationalEvent, LogEvent, LogEventProtocol
 
 
 class StartupTestEvent(SystemEvent):
@@ -222,3 +223,24 @@ class TestResultEvent(InformationalEvent, Exception):
         """Need to define it for pickling because of Exception class in MRO."""
 
         return type(self), (self.test_status, self.events, self.event_timestamp)
+
+
+class InstanceStatusEvent(LogEvent, abstract=True):
+    STARTUP: Type[LogEventProtocol]
+    REBOOT: Type[LogEventProtocol]
+    POWER_OFF: Type[LogEventProtocol]
+
+
+InstanceStatusEvent.add_subevent_type("STARTUP", severity=Severity.WARNING, regex="kernel: Linux version")
+InstanceStatusEvent.add_subevent_type("REBOOT", severity=Severity.WARNING,
+                                      regex="Stopped target Host and Network Name Lookups")
+InstanceStatusEvent.add_subevent_type("POWER_OFF", severity=Severity.WARNING, regex="Reached target Power-Off")
+
+INSTANCE_STATUS_EVENTS = (
+    InstanceStatusEvent.STARTUP(),
+    InstanceStatusEvent.REBOOT(),
+    InstanceStatusEvent.POWER_OFF(),
+)
+
+INSTANCE_STATUS_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
+    [(re.compile(event.regex, re.IGNORECASE), event) for event in INSTANCE_STATUS_EVENTS]

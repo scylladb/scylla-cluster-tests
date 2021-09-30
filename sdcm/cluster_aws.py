@@ -702,7 +702,6 @@ class AWSNode(cluster.BaseNode):
                                   DbEventsFilter(db_event=DatabaseLogEvent.SCHEMA_FAILURE, node=self),
                                   DbEventsFilter(db_event=DatabaseLogEvent.NO_SPACE_ERROR, node=self),
                                   DbEventsFilter(db_event=DatabaseLogEvent.FILESYSTEM_ERROR, node=self),
-                                  DbEventsFilter(db_event=DatabaseLogEvent.POWER_OFF, node=self),
                                   DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, node=self), ):
                     stack.enter_context(db_filter)
 
