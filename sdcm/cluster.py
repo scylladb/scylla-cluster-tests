@@ -1626,16 +1626,23 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     @contextlib.contextmanager
     def remote_scylla_yaml(self) -> ContextManager[ScyllaYaml]:
         with self._remote_yaml(path=self.add_install_prefix(abs_path=SCYLLA_YAML_PATH)) as scylla_yaml:
-            scylla_yaml_object = ScyllaYaml(**scylla_yaml)
-            yield scylla_yaml_object
+            new_scylla_yaml = ScyllaYaml(**scylla_yaml)
+            old_scylla_yaml = new_scylla_yaml.copy()
+            yield new_scylla_yaml
+            diff = old_scylla_yaml.diff(new_scylla_yaml)
+            if not diff:
+                LOGGER.debug("%s: scylla.yaml hasn't been changed", self)
+                return
             scylla_yaml.clear()
-            scylla_yaml.update(scylla_yaml_object.dict(
-                exclude_defaults=True,
-                exclude_unset=True,
-                # NOTE: explicit fields included into yaml no matter what,
-                #  they are needed for nodetool to operate properly
-                explicit=['partitioner', 'commitlog_sync', 'commitlog_sync_period_in_ms']
-            ))
+            scylla_yaml.update(
+                new_scylla_yaml.dict(
+                    exclude_none=True, exclude_unset=True, exclude_defaults=True,
+                    # NOTE: explicit fields included into yaml no matter what,
+                    #  they are needed for nodetool to operate properly
+                    explicit=['partitioner', 'commitlog_sync', 'commitlog_sync_period_in_ms']
+                )
+            )
+            LOGGER.debug("%s: scylla.yaml will be updated to:\n%s", self, scylla_yaml)
 
     def remote_manager_yaml(self):
         return self._remote_yaml(path=SCYLLA_MANAGER_YAML_PATH)
@@ -1729,7 +1736,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.parent_cluster.proposed_scylla_yaml,
                 self.proposed_scylla_yaml
             )
-            self.log.debug('SCYLLA_YAML: ' + str(scylla_yml))
 
         self.process_scylla_args(append_scylla_args)
 

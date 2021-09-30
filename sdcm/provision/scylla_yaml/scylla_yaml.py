@@ -10,10 +10,10 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-
-
+from difflib import unified_diff
 from typing import List, Literal, Union
 
+import yaml
 from pydantic import Field, validator, BaseModel  # pylint: disable=no-name-in-module
 
 from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions, EndPointSnitchType, SeedProvider, \
@@ -356,6 +356,13 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
             else:
                 raise ValueError("Only dict or ScyllaYaml is accepted")
         return self
+
+    def diff(self, other: 'ScyllaYaml') -> str:
+        self_str = yaml.safe_dump(self.dict(
+            exclude_defaults=True, exclude_unset=True, exclude_none=True)).splitlines(keepends=True)
+        other_str = yaml.safe_dump(other.dict(
+            exclude_defaults=True, exclude_unset=True, exclude_none=True)).splitlines(keepends=True)
+        return "".join(unified_diff(self_str, other_str))
 
     def __copy__(self):
         return self.__class__(**self.dict(exclude_defaults=True, exclude_unset=True))
