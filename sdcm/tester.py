@@ -1405,7 +1405,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             return self.run_hydra_kcl_thread(**params)
         elif stress_cmd.startswith('nosqlbench'):
             params['stop_test_on_failure'] = stop_test_on_failure
-            return self.run_nosqlbench_thread(monitors=self.monitors, **params)
+            return self.run_nosqlbench_thread(**params)
         elif stress_cmd.startswith('table_compare'):
             return self.run_table_compare_thread(**params)
         else:
@@ -1527,7 +1527,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                round_robin=round_robin, params=self.params).run()
 
     # pylint: disable=too-many-arguments
-    def run_nosqlbench_thread(self, monitors, stress_cmd, duration=None, stress_num=1, prefix='', round_robin=False,
+    def run_nosqlbench_thread(self, stress_cmd, duration=None, stress_num=1, prefix='', round_robin=False,
                               stats_aggregate_cmds=True, stop_test_on_failure=True, **_):
 
         timeout = self.get_duration(duration)
@@ -1537,7 +1537,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
         return NoSQLBenchStressThread(
-            monitors=monitors,
             loader_set=self.loaders,
             stress_cmd=stress_cmd,
             timeout=timeout,
