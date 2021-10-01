@@ -30,9 +30,10 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @property
     def hinted_handoff_enabled(self) -> Optional[str]:
-        if self.params.get('hinted_handoff') == 'enabled':
+        param_hinted_handoff = str(self.params.get('hinted_handoff')).lower()
+        if param_hinted_handoff in ('enabled', 'true', '1'):
             return 'enabled'
-        if self.params.get('hinted_handoff') == 'disabled':
+        if param_hinted_handoff in ('disabled', 'false', '0'):
             return 'disabled'
         return None
 
