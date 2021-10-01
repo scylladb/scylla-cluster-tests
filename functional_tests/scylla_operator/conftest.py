@@ -156,9 +156,11 @@ def _bring_cluster_back_to_original_state(
 
         if restart:
             db_cluster.restart_scylla()
+        db_cluster.wait_for_nodes_up_and_normal(
+            nodes=db_cluster.nodes, verification_node=db_cluster.nodes[0])
     except Exception as exc:  # pylint: disable=broad-except
         tester.healthy_flag = False
-        pytest.fail("Failed to bring cluster nodes back to original number due to :\n" +
+        pytest.fail("Failed to bring cluster nodes back to original state due to :\n" +
                     "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
 
 
