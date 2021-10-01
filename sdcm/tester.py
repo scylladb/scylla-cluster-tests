@@ -87,10 +87,12 @@ from sdcm.utils.gce_utils import get_gce_services
 from sdcm.keystore import KeyStore
 from sdcm.utils.latency import calculate_latency
 
+CLUSTER_CLOUD_IMPORT_ERROR = ""
 try:
     import cluster_cloud
-except ImportError:
+except ImportError as exc:
     cluster_cloud = None
+    CLUSTER_CLOUD_IMPORT_ERROR = str(exc)
 
 configure_logging(exception_handler=handle_exception, variables={'log_dir': TestConfig().logdir()})
 
@@ -717,7 +719,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 params=self.params,
             )
             if not cluster_cloud:
-                raise ImportError("cluster_cloud isn't installed")
+                raise ImportError(f"cluster_cloud isn't installed. {CLUSTER_CLOUD_IMPORT_ERROR}")
             self.db_cluster = cluster_cloud.ScyllaCloudCluster(**params)
         else:
             self.db_cluster = ScyllaGCECluster(gce_image=gce_image_db,
@@ -844,7 +846,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     params=self.params,
                 )
                 if not cluster_cloud:
-                    raise ImportError("cluster_cloud isn't installed")
+                    raise ImportError(f"cluster_cloud isn't installed. {CLUSTER_CLOUD_IMPORT_ERROR}")
                 return cluster_cloud.ScyllaCloudCluster(**params)
             return None
 
