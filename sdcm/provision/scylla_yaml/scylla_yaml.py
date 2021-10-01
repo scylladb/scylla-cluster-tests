@@ -156,7 +156,10 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
     dynamic_snitch_badness_threshold: int = 0
     dynamic_snitch_reset_interval_in_ms: int = 60000
     dynamic_snitch_update_interval_in_ms: int = 100
-    hinted_handoff_enabled: Literal['enabled', 'disabled'] = 'enabled'
+    hinted_handoff_enabled: Literal[
+        'enabled', 'true', 'True', '1', True,
+        'disabled', 'false', 'False', '0', False,
+    ] = 'enabled'
     hinted_handoff_throttle_in_kb: int = 1024
     max_hint_window_in_ms: int = 10800000
     max_hints_delivery_threads: int = 2
