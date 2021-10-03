@@ -53,25 +53,27 @@
                         {% for cycle in results['cycles'] %}
                             {% for key, value in cycle.items() %}
                                 {% if key not in lat_type_list %}
-                                    {{ lat_type_list.append(key) }}
+                                    {% if key == 'c-s P99' %}
+                                        {% do lat_type_list.append(key) %}
+                                    {% endif %}
                                 {% endif %}
                             {% endfor %}
                         {% endfor %}
 
                         {% for lat_type in lat_type_list|sort %}
-                            {% if 'color' in results and lat_type in results['color'] and results['color'][lat_type] == 'red' %}
-                                <tr style ="background-color: red">
-                            {% else %}
-                                   <tr>
-                            {% endif %}
-                                <td>{{ lat_type }}</td>
-                                {% for cycle in results['cycles'] %}
-                                    <td>{{ cycle[lat_type] }}</td>
-                                {% endfor %}
-                                <td>{{ results['Cycles Average'][lat_type] }}</td>
-                                <td>{{ stats['Steady State'][lat_type] }}</td>
-                                <td>{{ results['Relative to Steady'][lat_type] }}</td>
-                            </tr>
+                                {% if 'color' in results and lat_type in results['color'] and results['color'][lat_type] == 'red' %}
+                                    <tr style ="background-color: red">
+                                {% else %}
+                                       <tr>
+                                {% endif %}
+                                    <td>{{ lat_type }}</td>
+                                    {% for cycle in results['cycles'] %}
+                                        <td>{{ cycle[lat_type] }}</td>
+                                    {% endfor %}
+                                    <td>{{ results['Cycles Average'][lat_type] }}</td>
+                                    <td>{{ stats['Steady State'][lat_type] }}</td>
+                                    <td>{{ results['Relative to Steady'][lat_type] }}</td>
+                                </tr>
                         {% endfor %}
                     </table>
                     <span STYLE="font-size:12px" class="red">* All latency values are in ms.</span>
