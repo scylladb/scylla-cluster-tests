@@ -189,36 +189,30 @@ def call(Map pipelineParams) {
                                                 """
                                             }
                                             stage("Collect log data (${instance_type})") {
-                                                catchError(stageResult: 'FAILURE') {
-                                                    wrap([$class: 'BuildUser']) {
-                                                        dir('scylla-cluster-tests') {
-                                                            runCollectLogs(params, builder.region)
-                                                        }
-                                                    }
-                                                }
+                                                sctScript """
+                                                    export SCT_CONFIG_FILES=${test_config}
+                                                    echo "start collect logs ..."
+                                                    ./docker/env/hydra.sh collect-logs --backend ${params.backend} --logdir "`pwd`"
+                                                    echo "end collect logs"
+                                                """
                                             }
                                             stage("Clean resources (${instance_type})") {
-                                                catchError(stageResult: 'FAILURE') {
-                                                    wrap([$class: 'BuildUser']) {
-                                                        dir('scylla-cluster-tests') {
-                                                            timeout(time: 10, unit: 'MINUTES') {
-                                                                runCleanupResource(params, builder.region)
-                                                            }
-                                                        }
-                                                    }
-                                                }
+                                                sctScript """
+                                                    export SCT_CONFIG_FILES=${test_config}
+                                                    export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                                    export SCT_CLUSTER_BACKEND="${params.backend}"
+                                                    echo "start clean resources ..."
+                                                    ./docker/env/hydra.sh clean-resources --post-behavior --logdir "`pwd`"
+                                                    echo "end clean resources"
+                                                """
                                             }
                                             stage("Send email with result ${instance_type}") {
                                                 def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
-                                                catchError(stageResult: 'FAILURE') {
-                                                    wrap([$class: 'BuildUser']) {
-                                                        dir('scylla-cluster-tests') {
-                                                            timeout(time: 10, unit: 'MINUTES') {
-                                                                runSendEmail(params, currentBuild)
-                                                            }
-                                                        }
-                                                    }
-                                                }
+                                                sctScript """
+                                                    echo "Start send email ..."
+                                                    ./docker/env/hydra.sh send-email --logdir "`pwd`" --email-recipients "${email_recipients}"
+                                                    echo "Email sent"
+                                                """
                                             }
                                         }
                                     }
