@@ -127,7 +127,11 @@ def call(Map pipelineParams) {
                                                         rm -fv ./latest
 
                                                         export SCT_CLUSTER_BACKEND=${params.backend}
-                                                        export SCT_REGION_NAME=${pipelineParams.aws_region}
+                                                        if [[ -n "${params.aws_region}" ]]; then
+                                                            export SCT_REGION_NAME=${params.aws_region}
+                                                        else
+                                                            export SCT_REGION_NAME=${pipelineParams.aws_region}
+                                                        fi
                                                         export SCT_CONFIG_FILES=${test_config}
 
                                                         if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
