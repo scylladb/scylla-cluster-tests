@@ -97,7 +97,11 @@ def call(Map pipelineParams) {
                                                         rm -fv ./latest
 
                                                         export SCT_CLUSTER_BACKEND=${params.backend}
-                                                        export SCT_REGION_NAME=${pipelineParams.aws_region}
+                                                        if [[ -n "${params.aws_region}" ]]; then
+                                                            export SCT_REGION_NAME=${params.aws_region}
+                                                        else
+                                                            export SCT_REGION_NAME=${pipelineParams.aws_region}
+                                                        fi
                                                         export SCT_CONFIG_FILES=${pipelineParams.test_config}
                                                         export SCT_SCYLLA_MGMT_AGENT_REPO=${pipelineParams.mgmt_agent_repo}
                                                         export SCT_EMAIL_RECIPIENTS="${email_recipients}"
