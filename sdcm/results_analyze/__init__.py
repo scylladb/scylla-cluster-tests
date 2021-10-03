@@ -203,7 +203,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
 
     def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
         super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
-                         email_template_fp="results_latency_during_ops.html", logger=logger, events=events)
+                         email_template_fp="results_latency_during_ops_short.html", logger=logger, events=events)
 
     def get_debug_events(self):
         return self.get_events(event_severity=[Severity.DEBUG.name])
@@ -226,35 +226,33 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         reactor_stall_events, reactor_stall_events_summary = self.get_debug_events()
         subject = f'Performance Regression Compare Results (latency during operations) -' \
                   f' {test_name} - {test_version} - {str(test_start_time)}'
-        results = {
-            "events_summary": events_summary,
-            "last_events": last_events,
-            "debug_events": reactor_stall_events,
-            "debug_events_summary": reactor_stall_events_summary,
-            "stats": data,
-            "test_name": full_test_name,
-            "test_start_time": str(test_start_time),
-            "test_id": doc["_source"]["test_details"].get("test_id", doc["_id"]),
-            "test_version": test_version,
-            "build_id": build_id,
-            "setup_details": self._get_setup_details(doc, is_gce),
-            "grafana_snapshots": self._get_grafana_snapshot(doc),
-            "grafana_screenshots": self._get_grafana_screenshot(doc),
-            "job_url": doc["_source"]["test_details"].get("job_url", ""),
-        }
-        attachment_file = [
-            self.save_html_to_file(
-                results=results,
-                file_name='reactor_stall_events_list.html',
-                template_file='results_reactor_stall_events_list.html',
-            ),
-        ]
-        email_data = {
-            "email_body": results,
-            "attachments": attachment_file,
-            "template": self._email_template_fp,
-        }
-        self.save_email_data_file(subject=subject, email_data=email_data, file_path='email_data.json')
+        results = dict(
+            events_summary=events_summary,
+            last_events=last_events,
+            debug_events=reactor_stall_events,
+            debug_events_summary=reactor_stall_events_summary,
+            stats=data,
+            test_name=full_test_name,
+            test_start_time=str(test_start_time),
+            test_id=doc['_source']['test_details'].get('test_id', doc["_id"]),
+            test_version=test_version,
+            build_id=build_id,
+            setup_details=self._get_setup_details(doc, is_gce),
+            grafana_snapshots=self._get_grafana_snapshot(doc),
+            grafana_screenshots=self._get_grafana_screenshot(doc),
+            job_url=doc['_source']['test_details'].get('job_url', ""),
+        )
+        attachment_file = [self.save_html_to_file(results,
+                                                  file_name='reactor_stall_events_list.html',
+                                                  template_file='results_reactor_stall_events_list.html'),
+                           self.save_html_to_file(results,
+                                                  file_name='full_email_report.html',
+                                                  template_file='results_latency_during_ops.html')
+                           ]
+        email_data = {'email_body': results,
+                      'attachments': attachment_file,
+                      'template': self._email_template_fp}
+        self.save_email_data_file(subject, email_data, file_path='email_data.json')
 
         return True
 
