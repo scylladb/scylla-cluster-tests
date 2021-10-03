@@ -120,6 +120,9 @@ def call(Map pipelineParams) {
                                                 sctScript """
                                                     rm -fv ./latest
 
+                                                    # clean the old sct_runner_ip file
+                                                    rm -fv ./sct_runner_ip
+
                                                     export SCT_COLLECT_LOGS=false
                                                     export SCT_CONFIG_FILES=${test_config}
 
