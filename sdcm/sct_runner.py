@@ -697,8 +697,8 @@ class GceSctRunner(SctRunner):
         sct_runners = []
         for instance in list_instances_gce(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=True):
             tags = gce_meta_to_dict(instance.extra["metadata"])
-            if "launch_time" not in tags:
-                LOGGER.warning("Skip GCE instance w/o `launch_time' tag: %s", instance.name)
+            if not tags.get("launch_time"):
+                LOGGER.warning("Skip GCE instance w/o or empty `launch_time' tag: %s", instance.name)
                 continue
             region = instance.extra["zone"].name
             sct_runners.append(SctRunnerInfo(
@@ -840,8 +840,8 @@ class AzureSctRunner(SctRunner):
         azure_service = AzureService()
         sct_runners = []
         for instance in list_instances_azure(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=True):
-            if "launch_time" not in instance.tags:
-                LOGGER.warning("Skip Azure instance w/o `launch_time' tag: %s", instance.name)
+            if not instance.tags.get("launch_time"):
+                LOGGER.warning("Skip Azure instance w/o or empty `launch_time' tag: %s", instance.name)
                 continue
             sct_runners.append(SctRunnerInfo(
                 sct_runner_class=cls,
