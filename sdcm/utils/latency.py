@@ -44,9 +44,9 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
             max_latency_values_lst.extend(sequence)
 
         if latency_values_lst:
-            res[metric] = format(avg(latency_values_lst), '.2f')
+            res[metric] = float(format(avg(latency_values_lst), '.2f'))
         if max_latency_values_lst:
-            res[f'{metric} max'] = format(max(max_latency_values_lst), '.2f')
+            res[f'{metric} max'] = float(format(max(max_latency_values_lst), '.2f'))
 
     if load_type == 'mixed':
         load_type = ['read', 'write']
@@ -75,7 +75,7 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
                     continue
                 sequence = [float(val[-1]) for val in entry['values'] if not val[-1].lower() == 'nan']
                 if sequence:
-                    res[metric] = format(avg(sequence) / 1000, '.2f')
+                    res[metric] = float(format(avg(sequence) / 1000, '.2f'))
 
     return res
 
@@ -102,18 +102,18 @@ def calculate_latency(latency_results):
         for temp_key, temp_val in temp_dict.items():
             if 'Cycles Average' not in result_dict[key]:
                 result_dict[key]['Cycles Average'] = {}
-            average = format(avg([float(val) for val in temp_val]), '.2f')
-            result_dict[key]['Cycles Average'][temp_key] = float(f'{average}')
+            average = float(format(avg([float(val) for val in temp_val]), '.2f'))
+            result_dict[key]['Cycles Average'][temp_key] = average
             if 'Relative to Steady' not in result_dict[key]:
                 result_dict[key]['Relative to Steady'] = {}
             if temp_key in latency_results[steady_key]:
                 steady_val = float(latency_results[steady_key][temp_key])
                 if steady_val != 0:
                     result_dict[key]['Relative to Steady'][temp_key] = \
-                        format((float(average) - steady_val), '.2f')
+                        float(format((average - steady_val), '.2f'))
                 if 'color' not in result_dict[key]:
                     result_dict[key]['color'] = {}
-                if float(average) >= 3 * steady_val:  # right now it is only a 10% difference, to test if it works
+                if average >= 3 * steady_val:  # right now it is only a 10% difference, to test if it works
                     result_dict[key]['color'][temp_key] = 'red'
                 else:
                     result_dict[key]['color'][temp_key] = 'blue'
