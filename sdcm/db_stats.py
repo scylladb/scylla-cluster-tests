@@ -554,11 +554,14 @@ class TestStatsMixin(Stats):
         return test_details
 
     def create_test_stats(self, sub_type=None, specific_tested_stats=None,  # pylint: disable=too-many-arguments
-                          doc_id_with_timestamp=False, append_sub_test_to_name=True, test_name=None):
+                          doc_id_with_timestamp=False, append_sub_test_to_name=True, test_name=None, test_index=None):
 
         if not self.create_stats:
             return
-        self._test_index = self.__class__.__name__.lower()
+        if not test_index:
+            self._test_index = self.__class__.__name__.lower()
+        else:
+            self._test_index = test_index
         self._test_id = self._create_test_id(doc_id_with_timestamp)
         self._stats = self._init_stats()
         self._stats['setup_details'] = self.get_setup_details()
