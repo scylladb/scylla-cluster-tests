@@ -17,9 +17,12 @@ import random
 import threading
 import time
 import pytest
+import yaml
 
 from sdcm.cluster_k8s import (
     ScyllaPodCluster,
+    SCYLLA_NAMESPACE,
+    SCYLLA_MANAGER_NAMESPACE,
     SCYLLA_OPERATOR_NAMESPACE,
 )
 from sdcm.mgmt import TaskStatus
@@ -34,6 +37,32 @@ from functional_tests.scylla_operator.libs.helpers import (
 )
 
 log = logging.getLogger()
+
+
+def test_single_operator_image_tag_is_everywhere(db_cluster):
+    expected_operator_tag = db_cluster.k8s_cluster.get_operator_image().split(":")[-1]
+    pods_with_wrong_image_tags = []
+
+    # NOTE: operator's image is used in many places. So, walk through all of the related namespaces
+    for namespace in (SCYLLA_NAMESPACE, SCYLLA_MANAGER_NAMESPACE, SCYLLA_OPERATOR_NAMESPACE):
+        pods = yaml.safe_load(db_cluster.k8s_cluster.kubectl(
+            "get pods -o yaml", namespace=namespace).stdout)["items"]
+        for pod in pods:
+            for container_type in ("c", "initC"):
+                for container in pod.get("status", {}).get(f"{container_type}ontainerStatuses", []):
+                    image = container["image"].split("/")[-1]
+                    if image.startswith("scylla-operator:") and image.split(":")[-1] != expected_operator_tag:
+                        pods_with_wrong_image_tags.append({
+                            "namespace": namespace,
+                            "pod_name": pod["metadata"]["name"],
+                            "container_name": container["name"],
+                            "image": image,
+                        })
+
+    assert not pods_with_wrong_image_tags, (
+        f"Found pods that have unexpected scylla-operator image tags.\n"
+        f"Expected is '{expected_operator_tag}'.\n"
+        f"Pods: {yaml.safe_dump(pods_with_wrong_image_tags, indent=2)}")
 
 
 @pytest.mark.skip("Disabled due to the https://github.com/scylladb/scylla-operator/issues/797")
