@@ -1159,7 +1159,7 @@ def create_runner_image(cloud_provider, region, availability_zone):
 @click.option("-t", "--test-id", required=True, type=str, help="Test ID")
 @click.option("-d", "--duration", required=True, type=int, help="Test duration in MINUTES")
 def create_runner_instance(cloud_provider, region, availability_zone, instance_type, test_id, duration):
-    if cloud_provider == "aws" and availability_zone != "":
+    if cloud_provider == "aws":
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
     add_file_logger()
     sct_runner_ip_path = Path("sct_runner_ip")
