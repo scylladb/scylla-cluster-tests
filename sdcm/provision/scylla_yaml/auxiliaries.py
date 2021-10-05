@@ -28,6 +28,12 @@ SEED_PROVIDERS = [
     'org.apache.cassandra.locator.Ec2MultiRegionSnitch',
     'org.apache.cassandra.locator.GoogleCloudSnitch',
     'org.apache.cassandra.locator.RackInferringSnitch',
+    'SimpleSeedProvider',
+    'GossipingPropertyFileSnitch',
+    'Ec2Snitch',
+    'Ec2MultiRegionSnitch',
+    'GoogleCloudSnitch',
+    'RackInferringSnitch',
 ]
 SASLAUTHD_AUTHENTICATOR = 'com.scylladb.auth.SaslauthdAuthenticator'
 LOGGER = logging.getLogger(__file__)
@@ -41,6 +47,12 @@ class SeedProvider(BaseModel):  # pylint: disable=too-few-public-methods
         'org.apache.cassandra.locator.Ec2MultiRegionSnitch',
         'org.apache.cassandra.locator.GoogleCloudSnitch',
         'org.apache.cassandra.locator.RackInferringSnitch',
+        'SimpleSeedProvider',
+        'GossipingPropertyFileSnitch',
+        'Ec2Snitch',
+        'Ec2MultiRegionSnitch',
+        'GoogleCloudSnitch',
+        'RackInferringSnitch',
     ]
     parameters: List[dict] = None
 
@@ -82,7 +94,13 @@ EndPointSnitchType = Literal[
     'org.apache.cassandra.locator.PropertyFileSnitch',
     'org.apache.cassandra.locator.Ec2Snitch',
     'org.apache.cassandra.locator.Ec2MultiRegionSnitch',
-    'org.apache.cassandra.locator.RackInferringSnitch'
+    'org.apache.cassandra.locator.RackInferringSnitch',
+    'SimpleSnitch',
+    'GossipingPropertyFileSnitch',
+    'PropertyFileSnitch',
+    'Ec2Snitch',
+    'Ec2MultiRegionSnitch',
+    'RackInferringSnitch',
 ]
 
 
