@@ -123,7 +123,7 @@ def test_rolling_restart_cluster(db_cluster):
         f"'{old_force_redeployment_reason}' must be different than '{new_force_redeployment_reason}'")
 
 
-@pytest.mark.require_node_terminate('drain_k8s_node')
+@pytest.mark.requires_node_termination_support('drain_k8s_node')
 def test_drain_and_replace_node_kubernetes(db_cluster):
     target_node = random.choice(db_cluster.non_seed_nodes)
     old_uid = target_node.k8s_pod_uid
@@ -136,7 +136,7 @@ def test_drain_and_replace_node_kubernetes(db_cluster):
     target_node.refresh_ip_address()
 
 
-@pytest.mark.require_node_terminate('drain_k8s_node')
+@pytest.mark.requires_node_termination_support('drain_k8s_node')
 def test_drain_wait_and_replace_node_kubernetes(db_cluster):
     target_node = random.choice(db_cluster.non_seed_nodes)
     old_uid = target_node.k8s_pod_uid
@@ -152,7 +152,7 @@ def test_drain_wait_and_replace_node_kubernetes(db_cluster):
     target_node.refresh_ip_address()
 
 
-@pytest.mark.require_node_terminate('drain_k8s_node')
+@pytest.mark.requires_node_termination_support('drain_k8s_node')
 def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
     target_rack = random.choice([*db_cluster.racks])
     target_node = db_cluster.get_rack_nodes(target_rack)[-1]
@@ -162,7 +162,7 @@ def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
 
-@pytest.mark.require_mgmt()
+@pytest.mark.requires_mgmt
 def test_mgmt_repair(db_cluster):
     mgr_cluster = db_cluster.get_cluster_manager()
     mgr_task = mgr_cluster.create_repair_task()
@@ -172,7 +172,7 @@ def test_mgmt_repair(db_cluster):
         mgr_task.id, str(mgr_task.status))
 
 
-@pytest.mark.require_mgmt()
+@pytest.mark.requires_mgmt
 def test_mgmt_backup(db_cluster):
     mgr_cluster = db_cluster.get_cluster_manager()
     backup_bucket_location = db_cluster.params.get('backup_bucket_location')
@@ -415,7 +415,7 @@ def test_startup_probe_exists_in_scylla_pods(db_cluster: ScyllaPodCluster):
     assert not pods, f"startupProbe is not found in the following pods: {pods}"
 
 
-@pytest.mark.require_mgmt()
+@pytest.mark.requires_mgmt
 def test_readiness_probe_exists_in_mgmt_pods(db_cluster: ScyllaPodCluster):
     """
     PR: https://github.com/scylladb/scylla-operator/pull/725

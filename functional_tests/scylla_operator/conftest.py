@@ -30,6 +30,14 @@ TESTER: Optional[ScyllaOperatorFunctionalClusterTester] = None
 LOGGER = logging.getLogger(__name__)
 
 
+# NOTE: fixtures which have "fixture_" prefix can be used without it.
+#       it is added to avoid following pylint error:
+#
+#           W0621: Redefining name %r from outer scope (line %s)
+#
+#       Which appears when we define and use fixtures in one single module like we do here.
+
+
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):  # pylint: disable=unused-argument
     # Populate test result to test function instance
@@ -41,9 +49,8 @@ def pytest_runtest_makereport(item, call):  # pylint: disable=unused-argument
         item._test_result = ('FAILED', str(rep.longrepr))  # pylint: disable=protected-access
 
 
-@pytest.fixture(autouse=True)
-def harvest_test_results(
-        request, tester: ScyllaOperatorFunctionalClusterTester):  # pylint: disable=redefined-outer-name
+@pytest.fixture(autouse=True, name="harvest_test_results")
+def fixture_harvest_test_results(request, tester: ScyllaOperatorFunctionalClusterTester):
     # Pickup test results at the end of the test and submit it to the tester
 
     def publish_test_result():
@@ -54,8 +61,8 @@ def harvest_test_results(
     request.addfinalizer(publish_test_result)
 
 
-@pytest.fixture(autouse=True, scope='package')
-def tester() -> ScyllaOperatorFunctionalClusterTester:
+@pytest.fixture(autouse=True, scope='package', name="tester")
+def fixture_tester() -> ScyllaOperatorFunctionalClusterTester:
     os.chdir(sct_abs_path())
     tester_inst = ScyllaOperatorFunctionalClusterTester()
     tester_inst.setUpClass()
@@ -67,32 +74,32 @@ def tester() -> ScyllaOperatorFunctionalClusterTester:
         tester_inst.tearDownClass()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(autouse=True, scope="function")
 def change_test_dir(request):
     os.chdir(sct_abs_path())
     yield
     os.chdir(request.config.invocation_dir)
 
 
-# pylint: disable=redefined-outer-name
-def skip_if_cluster_requirements_not_met(
-        request,
-        tester: ScyllaOperatorFunctionalClusterTester,
-        db_cluster: ScyllaPodCluster):
-    require_node_terminate = request.node.get_closest_marker('require_node_terminate')
-    require_mgmt = request.node.get_closest_marker('require_mgmt')
-    if require_node_terminate and require_node_terminate.args:
-        supported_methods = getattr(db_cluster, 'node_terminate_methods', None) or []
-        for terminate_method in require_node_terminate.args:
+@pytest.fixture(autouse=True)
+def skip_if_node_termination_method_not_supported(request, db_cluster: ScyllaPodCluster) -> None:
+    marker = request.node.get_closest_marker('requires_node_termination_support')
+    if marker and marker.args:
+        supported_methods = getattr(db_cluster, 'node_terminate_methods', [])
+        for terminate_method in marker.args:
             if terminate_method not in supported_methods:
                 pytest.skip(f'cluster {type(db_cluster).__name__} does not support {terminate_method} '
                             'node termination method')
-    if require_mgmt and not tester.params.get('use_mgmt'):
-        pytest.skip('test require scylla manager to be deployed')
 
 
-@pytest.fixture()
-def db_cluster(tester: ScyllaOperatorFunctionalClusterTester):  # pylint: disable=redefined-outer-name
+@pytest.fixture(autouse=True)
+def skip_if_scylla_manager_required_and_absent(request, tester: ScyllaOperatorFunctionalClusterTester) -> None:
+    if request.node.get_closest_marker('requires_mgmt') and not tester.params.get('use_mgmt'):
+        pytest.skip('test requires scylla manager to exist')
+
+
+@pytest.fixture(name="db_cluster")
+def fixture_db_cluster(tester: ScyllaOperatorFunctionalClusterTester):
     if not tester.healthy_flag:
         pytest.skip('cluster is not healthy, skipping rest of the tests')
 
@@ -104,19 +111,19 @@ def db_cluster(tester: ScyllaOperatorFunctionalClusterTester):  # pylint: disabl
 
     if tester.healthy_flag:
         _bring_cluster_back_to_original_state(
-            tester.db_cluster,
+            tester,
             config_map=original_scylla_config_map,
             original_scylla_cluster_spec=original_scylla_cluster_spec
         )
 
 
-# pylint: disable=redefined-outer-name
 def _bring_cluster_back_to_original_state(
-        db_cluster: ScyllaPodCluster,
+        tester: ScyllaOperatorFunctionalClusterTester,
         config_map: dict,
         original_scylla_cluster_spec: dict
 ):
     restart = False
+    db_cluster = tester.db_cluster
     try:
         # Restore cluster spec, there is one problem though:
         #  s-o does not support rack removal, so if we see an extra rack we need to remove members form it
@@ -164,6 +171,6 @@ def _bring_cluster_back_to_original_state(
                     "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
 
 
-@pytest.fixture()
-def cassandra_rackdc_properties(db_cluster: ScyllaPodCluster):  # pylint: disable=redefined-outer-name
+@pytest.fixture(name="cassandra_rackdc_properties")
+def fixture_cassandra_rackdc_properties(db_cluster: ScyllaPodCluster):
     return db_cluster.remote_cassandra_rackdc_properties
