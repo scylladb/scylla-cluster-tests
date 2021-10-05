@@ -82,7 +82,7 @@ from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylin
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
 
-SCT_RUNNER_HOST = os.environ.get("RUNNER_IP", "localhost")
+SCT_RUNNER_HOST = os.environ.get("RUNNER_IP", "localhost")  # TODO: replace with get_runner_ip (check "localhost" usage)
 
 LOGGER = setup_stdout_logger()
 

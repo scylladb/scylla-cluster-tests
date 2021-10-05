@@ -17,6 +17,7 @@ import logging
 import tempfile
 import time
 import unittest.mock
+from unittest.mock import MagicMock
 from time import sleep
 
 from sdcm.tester import ClusterTester, silence, TestResultEvent
@@ -62,6 +63,10 @@ class ClusterTesterForTests(ClusterTester):
             variables={'log_dir': self.logdir}
         )
         super().__init__(*args)
+
+    @property
+    def argus_test_run(self):
+        return MagicMock()
 
     def _init_params(self):
         self.log = logging.getLogger(self.__class__.__name__)

@@ -69,8 +69,10 @@ from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.cluster_k8s import PodCluster, ScyllaPodCluster
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
+from sdcm.argus_test_run import ArgusTestRun, ArgusTestRunError
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
+from argus.db.db_types import NemesisStatus, NemesisRunInfo, NodeDescription
 
 
 class NoFilesFoundToDestroy(Exception):
@@ -2820,6 +2822,7 @@ def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
     @wraps(method)
     def wrapper(*args, **kwargs):  # pylint: disable=too-many-statements
         # pylint: disable=too-many-locals
+        # pylint: disable=too-many-branches
         args[0].set_target_node()
         method_name = method.__name__
         args[0].current_disruption = "".join(p.capitalize() for p in method_name.replace("disrupt_", "").split("_"))
@@ -2848,6 +2851,20 @@ def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
 
         with DisruptionEvent(nemesis_name=args[0].get_disrupt_name(),
                              node=args[0].target_node, publish_event=True) as nemesis_event:
+            nemesis_info = None
+            try:
+                run = ArgusTestRun.get()
+                node_desc = NodeDescription(ip=args[0].target_node.public_ip_address,
+                                            name=args[0].target_node.name, shards=args[0].target_node.scylla_shards)
+                nemesis_info = NemesisRunInfo(class_name=class_name, nemesis_name=method_name,
+                                              duration=0, start_time=int(start_time), target_node=node_desc,
+                                              status=NemesisStatus.RUNNING)
+                run.run_info.results.add_nemesis(nemesis_info)
+                run.save()  # TODO: Thread Safety
+            except ArgusTestRunError:
+                args[0].log.error("Argus failed to initialize!", exc_info=True)
+            except Exception:  # pylint: disable=broad-except
+                args[0].log.error("Error saving nemesis_info to Argus", exc_info=True)
             try:
                 result = method(*args, **kwargs)
             except (UnsupportedNemesis, MethodVersionNotFound) as exp:
@@ -2865,6 +2882,7 @@ def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
                 status = False
 
             finally:
+
                 end_time = time.time()
                 time_elapsed = int(end_time - start_time)
                 log_info.update({
@@ -2895,6 +2913,18 @@ def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
                 if num_nodes_before != num_nodes_after:
                     args[0].log.error('num nodes before %s and nodes after %s does not match' %
                                       (num_nodes_before, num_nodes_after))
+
+                try:
+                    if nemesis_info:
+                        run = ArgusTestRun.get()
+                        if not nemesis_event.severity == Severity.ERROR:
+                            nemesis_info.complete()
+                        else:
+                            nemesis_info.complete(nemesis_event.full_traceback)
+                        nemesis_info.duration = time_elapsed
+                        run.save()
+                except Exception:  # pylint: disable=broad-except
+                    args[0].log.error("Error saving nemesis_info to Argus", exc_info=True)
                 # TODO: Temporary print. Will be removed later
                 data_validation_prints(args=args)
         return result

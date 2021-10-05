@@ -21,6 +21,7 @@ import os
 import logging
 import random
 import socket
+import subprocess
 import time
 import datetime
 import errno
@@ -74,7 +75,6 @@ from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.gce_utils import GcloudContainerMixin
 from sdcm.remote import LocalCmdRunner
 from sdcm.remote import RemoteCmdRunnerBase
-
 
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
@@ -152,11 +152,37 @@ def get_sct_root_path():
     return os.path.abspath(sct_root_dir)
 
 
-def get_job_name():
+def get_sct_runner_ip() -> str:  # TODO: Replace all occurences of env variable
+    return os.environ.get("RUNNER_IP", "127.0.0.1")
+
+
+def get_job_name() -> str:  # TODO: Move to build_system module
     return os.environ.get('JOB_NAME', 'local_run')
 
 
-def get_test_name():
+def get_job_url() -> str:  # TODO: Move to build_system module
+    return os.environ.get('BUILD_URL', '')
+
+
+def get_git_commit_id() -> str:
+    try:
+        proc = subprocess.run(args=["git", "rev-parse", "HEAD"], check=True, capture_output=True)
+    except subprocess.CalledProcessError:
+        LOGGER.warning("Error running git command", exc_info=True)
+        return ""
+    return proc.stdout.decode(encoding="utf-8").strip()
+
+
+def get_git_current_branch() -> str:
+    try:
+        proc = subprocess.run(args=["git", "branch", "--show-current"], check=True, capture_output=True)
+    except subprocess.CalledProcessError:
+        LOGGER.warning("Error running git command", exc_info=True)
+        return ""
+    return proc.stdout.decode(encoding="utf-8").strip()
+
+
+def get_test_name() -> str:
     job_name = get_job_name()
     if job_name and job_name != 'local_run':
         return job_name.split("/")[-1]
@@ -164,7 +190,7 @@ def get_test_name():
     if config_files := os.environ.get("SCT_CONFIG_FILES"):
         # Example: 'test-cases/gemini/gemini-1tb-10h.yaml,test-cases/gemini/gemini-10tb-10h.yaml'
         config_file = config_files[0] if isinstance(config_files, list) else config_files.split(",")[0].strip()
-        return config_file.split("/")[-1].replace('.yaml', '').replace('"', '').replace("'", "")
+        return config_file.split("/")[-1].replace('.yaml', '').replace('"', '').replace("'", "").rstrip("]")
 
     return ""
 
@@ -187,7 +213,6 @@ def verify_scylla_repo_file(content, is_rhel_like=True):
 
 
 class S3Storage():
-
     bucket_name = 'cloudius-jenkins-test'
     enable_multipart_threshold_size = 1024 * 1024 * 1024  # 1GB
     multipart_chunksize = 50 * 1024 * 1024  # 50 MB
@@ -197,9 +222,10 @@ class S3Storage():
         if bucket:
             self.bucket_name = bucket
         self._bucket: S3ServiceResource.Bucket = boto3.resource("s3").Bucket(name=self.bucket_name)
-        self.transfer_config = boto3.s3.transfer.TransferConfig(multipart_threshold=self.enable_multipart_threshold_size,
-                                                                multipart_chunksize=self.multipart_chunksize,
-                                                                num_download_attempts=self.num_download_attempts)
+        self.transfer_config = boto3.s3.transfer.TransferConfig(
+            multipart_threshold=self.enable_multipart_threshold_size,
+            multipart_chunksize=self.multipart_chunksize,
+            num_download_attempts=self.num_download_attempts)
 
     def get_s3_fileojb(self, key):
         objects = []
@@ -401,6 +427,7 @@ class ParallelObject:
                 return_val = fun(*args, **kwargs)
                 LOGGER.debug("[{thread_name}] Done.".format(thread_name=thread_name))
                 return return_val
+
             return inner
 
         results = []
@@ -793,7 +820,6 @@ def get_gce_driver():
 
 
 def get_all_gce_regions():
-
     compute_engine = get_gce_driver()
     all_gce_regions = [region_obj.name for region_obj in compute_engine.region_list]
     return all_gce_regions
@@ -952,7 +978,6 @@ class EksCluster(EksClusterCleanupMixin):
 
 
 def list_clusters_eks(tags_dict: Optional[dict] = None, verbose: bool = False) -> List[EksCluster]:
-
     class EksCleaner:
         name = f"eks-cleaner-{uuid.uuid4()!s:.8}"
         _containers = {}
@@ -989,7 +1014,8 @@ def list_clusters_eks(tags_dict: Optional[dict] = None, verbose: bool = False) -
 
 
 def filter_k8s_clusters_by_tags(tags_dict: dict,
-                                clusters: list[Union["EksCluster", "GkeCluster"]]) -> list[Union["EksCluster", "GkeCluster"]]:
+                                clusters: list[Union["EksCluster", "GkeCluster"]]) -> list[
+        Union["EksCluster", "GkeCluster"]]:
     if "NodeType" in tags_dict and tags_dict.get("NodeType") != "k8s":
         return []
 
@@ -1017,6 +1043,7 @@ def clean_instances_gce(tags_dict, dry_run=False):
             # https://libcloud.readthedocs.io/en/latest/compute/api.html#libcloud.compute.base.Node.destroy
             res = instance.destroy()
             LOGGER.info("%s deleted=%s", instance.name, res)
+
     ParallelObject(gce_instances_to_clean, timeout=60).run(delete_instance, ignore_exceptions=True)
 
 
@@ -1036,6 +1063,7 @@ def clean_clusters_gke(tags_dict: dict, dry_run: bool = False) -> None:
                 LOGGER.info("%s deleted=%s", cluster.name, res)
             except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.error(exc)
+
     ParallelObject(gke_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
 
 
@@ -1069,6 +1097,7 @@ def clean_clusters_eks(tags_dict: dict, dry_run: bool = False) -> None:
                 LOGGER.info("%s deleted=%s", cluster.name, res)
             except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.error(exc)
+
     ParallelObject(eks_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
 
 
@@ -1146,8 +1175,9 @@ def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
             if filename.startswith('scylla-') and filename.endswith('.repo'):
                 version_prefix = filename.replace('.repo', '').split('-')[-1]
                 _S3_SCYLLA_REPOS_CACHE[(
-                    dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket,
-                                                                                                                  path=repo_file['Key'])
+                    dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(
+                    bucket=bucket,
+                    path=repo_file['Key'])
 
     elif dist_type in ('ubuntu', 'debian'):
         response = s3_client.list_objects(Bucket=bucket, Prefix='deb/{}/'.format(dist_type), Delimiter='/')
@@ -1156,11 +1186,11 @@ def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
 
             # only if path look like 'deb/debian/scylla-3.0-jessie.list', we deem it formal one
             if filename.startswith('scylla-') and filename.endswith('-{}.list'.format(dist_version)):
-
                 version_prefix = filename.replace('-{}.list'.format(dist_version), '').split('-')[-1]
                 _S3_SCYLLA_REPOS_CACHE[(
-                    dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(bucket=bucket,
-                                                                                                                  path=repo_file['Key'])
+                    dist_type, dist_version)][version_prefix] = "https://s3.amazonaws.com/{bucket}/{path}".format(
+                    bucket=bucket,
+                    path=repo_file['Key'])
 
     else:
         raise NotImplementedError("[{}] is not yet supported".format(dist_type))
@@ -1271,7 +1301,7 @@ class ScyllaCQLSession:
         self.cluster.shutdown()
 
 
-def get_free_port(address: str = '', ports_to_try: Iterable[int] = (0, )) -> int:
+def get_free_port(address: str = '', ports_to_try: Iterable[int] = (0,)) -> int:
     for port in ports_to_try:
         try:
             with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
@@ -1290,7 +1320,7 @@ def get_my_ip():
     return ip
 
 
-@retrying(n=60, sleep_time=5, allowed_exceptions=(OSError, ))
+@retrying(n=60, sleep_time=5, allowed_exceptions=(OSError,))
 def wait_for_port(host, port):
     socket.create_connection((host, port)).close()
 
@@ -1348,7 +1378,7 @@ def get_branched_repo(scylla_version: str,
     if dist_type == "centos":
         prefix = f"unstable/scylla/{branch}/rpm/centos/{branch_version}/"
         filename = "scylla.repo"
-    elif dist_type in ("ubuntu", "debian", ):
+    elif dist_type in ("ubuntu", "debian",):
         prefix = f"unstable/scylla/{branch}/deb/unified/{branch_version}/scylladb-master/"
         filename = "scylla.list"
     else:
@@ -1377,7 +1407,7 @@ def get_branched_ami(scylla_version: str, region_name: str) -> list[EC2Image]:
     """
     branch, build_id = scylla_version.split(":", 1)
     filters = [{"Name": "tag:branch", "Values": [branch, ], }, ]
-    if build_id not in ("latest", "all", ):
+    if build_id not in ("latest", "all",):
         filters.append({'Name': 'tag:build-id', 'Values': [build_id, ], })
 
     LOGGER.info("Looking for AMIs match [%s]", scylla_version)
@@ -1405,9 +1435,9 @@ def get_branched_gce_images(scylla_version: str, project: str = SCYLLA_GCE_IMAGE
     #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
     filters = f"(family eq scylla)(labels.branch eq {branch})(name ne debug-image-.*)"
 
-    if build_id not in ("latest", "all", ):
+    if build_id not in ("latest", "all",):
         # filters += f"(labels.build-id eq {build_id})"  # asked releng to add `build-id' label too, but
-        filters += f"(name eq .+-build-{build_id})"      # use BUILD_ID from an image name for now
+        filters += f"(name eq .+-build-{build_id})"  # use BUILD_ID from an image name for now
 
     LOGGER.info("Looking for GCE images match [%s]", scylla_version)
     compute_engine = get_gce_driver()
@@ -1480,6 +1510,7 @@ def get_db_tables(session, ks, with_compact_storage=True):
         elif ("with compact storage" in table_code.lower()) == with_compact_storage:
             output.append(table)
     return output
+
 
 # Add @retrying to prevent situation when nemesis failed on connection timeout when try to receive the
 # keyspace and table for the test
@@ -1747,7 +1778,6 @@ def list_builders(running=False):
 
 
 def get_builder_by_test_id(test_id):
-
     base_path_on_builder = "/home/jenkins/slave/workspace"
     found_builders = []
 
@@ -1826,7 +1856,6 @@ def clean_resources_according_post_behavior(params, config, logdir, dry_run=Fals
 
 
 def search_test_id_in_latest(logdir):
-
     test_id = None
     result = LocalCmdRunner().run('cat {0}/latest/test_id'.format(logdir), ignore_status=True)
     if not result.exited and result.stdout:
@@ -1839,7 +1868,6 @@ def search_test_id_in_latest(logdir):
 
 
 def get_testrun_dir(base_dir, test_id=None):
-
     if not test_id:
         test_id = search_test_id_in_latest(base_dir)
     LOGGER.info('Search dir with logs locally for test id: %s', test_id)
@@ -1995,6 +2023,7 @@ class PageFetcher:
 
         Raises RuntimeError if seconds is exceeded.
         """
+
         def error_message(msg):
             return "{}. Requested: {}; retrieved: {}; empty retrieved {}".format(
                 msg, self.requested_pages, self.retrieved_pages, self.retrieved_empty_pages)
@@ -2145,6 +2174,7 @@ def convert_metric_to_ms(metric: str) -> float:
         "950µs"
         "30ms"
     """
+
     def _convert_to_ms(units, value):
         if not value:
             return 0

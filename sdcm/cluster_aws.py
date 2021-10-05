@@ -50,6 +50,7 @@ from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.database import DatabaseLogEvent
 
+
 LOGGER = logging.getLogger(__name__)
 
 INSTANCE_PROVISION_ON_DEMAND = 'on_demand'
