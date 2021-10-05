@@ -1925,7 +1925,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if append_scylla_args:
             scylla_help = self.remoter.run(
                 f"{self.add_install_prefix('/usr/bin/scylla')} --help", ignore_status=True).stdout
-            scylla_arg_parser = ScyllaArgParser.from_scylla_help(scylla_help)
+            scylla_help_seastar = self.remoter.run(
+                f"{self.add_install_prefix('/usr/bin/scylla')} --help-seastar", ignore_status=True).stdout
+            scylla_arg_parser = \
+                ScyllaArgParser.from_scylla_help(f"{scylla_help}\n{scylla_help_seastar}")
             append_scylla_args = scylla_arg_parser.filter_args(append_scylla_args)
 
         if self.parent_cluster.params.get('db_nodes_shards_selection') == 'random':
