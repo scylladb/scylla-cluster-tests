@@ -11,7 +11,7 @@ class QueryFilter:
     Definition of query filtering parameters
     """
     SETUP_PARAMS = ['n_db_nodes', 'n_loaders', 'n_monitor_nodes']
-    SETUP_INSTANCE_PARAMS = ['instance_type_db', 'instance_type_loader', 'instance_type_monitor']
+    SETUP_INSTANCE_PARAMS = ['instance_type_db', 'instance_type_loader', 'instance_type_monitor', 'append_scylla_args']
 
     def __init__(self, test_doc, is_gce=False, use_wide_query=False, lastyear=False):
         self.test_doc = test_doc
