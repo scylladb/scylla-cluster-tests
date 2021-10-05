@@ -39,6 +39,7 @@ from functional_tests.scylla_operator.libs.helpers import (
 log = logging.getLogger()
 
 
+@pytest.mark.readonly
 def test_single_operator_image_tag_is_everywhere(db_cluster):
     expected_operator_tag = db_cluster.k8s_cluster.get_operator_image().split(":")[-1]
     pods_with_wrong_image_tags = []
@@ -183,6 +184,7 @@ def test_mgmt_backup(db_cluster):
     assert TaskStatus.DONE == status
 
 
+@pytest.mark.readonly
 def test_listen_address(db_cluster):
     """
     Issues: https://github.com/scylladb/scylla-operator/issues/484
@@ -397,6 +399,7 @@ def test_ha_update_spec_while_rollout_restart(db_cluster: ScyllaPodCluster):
                 "\n".join(crd_update_errors)))
 
 
+@pytest.mark.readonly
 def test_scylla_operator_pods(db_cluster: ScyllaPodCluster):
     scylla_operator_pods = scylla_operator_pods_and_statuses(db_cluster)
 
@@ -406,6 +409,7 @@ def test_scylla_operator_pods(db_cluster: ScyllaPodCluster):
     assert not not_running_pods, f'There are pods in state other than running: {not_running_pods}'
 
 
+@pytest.mark.readonly
 def test_startup_probe_exists_in_scylla_pods(db_cluster: ScyllaPodCluster):
     pods = get_pods_without_probe(
         db_cluster=db_cluster,
@@ -415,6 +419,7 @@ def test_startup_probe_exists_in_scylla_pods(db_cluster: ScyllaPodCluster):
     assert not pods, f"startupProbe is not found in the following pods: {pods}"
 
 
+@pytest.mark.readonly
 @pytest.mark.requires_mgmt
 def test_readiness_probe_exists_in_mgmt_pods(db_cluster: ScyllaPodCluster):
     """
