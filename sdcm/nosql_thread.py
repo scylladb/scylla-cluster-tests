@@ -13,15 +13,38 @@
 
 import os
 import logging
+import time
 import uuid
 import threading
 
+from sdcm.cluster import BaseNode
 from sdcm.sct_events import Severity
 from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
-from sdcm.sct_events.loaders import NoSQLBenchStressEvent
-
+from sdcm.sct_events.loaders import NoSQLBenchStressEvent, NOSQLBENCH_EVENT_PATTERNS
+from sdcm.utils.common import FileFollowerThread
 
 LOGGER = logging.getLogger(__name__)
+
+
+class NoSQLBenchEventsPublisher(FileFollowerThread):
+    def __init__(self, node: BaseNode, log_filename: str):
+        super().__init__()
+        self.nb_log_filename = log_filename
+        self.node = node
+
+    def run(self) -> None:
+        while not self.stopped():
+            if not os.path.isfile(self.nb_log_filename):
+                time.sleep(0.5)
+                continue
+
+            for line_number, line in enumerate(self.follow_file(self.nb_log_filename)):
+                if self.stopped():
+                    break
+
+                for pattern, event in NOSQLBENCH_EVENT_PATTERNS:
+                    if pattern.search(line):
+                        event.clone().add_info(node=self.node, line=line, line_number=line_number).publish()
 
 
 class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
@@ -62,7 +85,8 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                                      (loader_idx, cpu_idx, uuid.uuid4()))
         LOGGER.debug('nosql-bench-stress local log: %s', log_file_name)
         LOGGER.debug("'running: %s", stress_cmd)
-        with NoSQLBenchStressEvent(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name) as stress_event:
+        with NoSQLBenchStressEvent(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name) as stress_event, \
+                NoSQLBenchEventsPublisher(node=loader, log_filename=log_file_name):
             try:
                 # copy graphite-exporter config file to loader
                 loader.remoter.send_files(src=self.GRAPHITE_EXPORTER_CONFIG_SRC_PATH,

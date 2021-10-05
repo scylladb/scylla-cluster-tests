@@ -273,3 +273,37 @@ class GeminiStressLogEvent(LogEvent[T_log_event], abstract=True):  # pylint: dis
 
 
 GeminiStressLogEvent.add_subevent_type("GeminiEvent")
+
+
+class NoSQLBenchStressLogEvents(LogEvent, abstract=True):
+    ProgressIndicatorStoppedEvent: Type[LogEventProtocol]
+    ProgressIndicatorRunningEvent: Type[LogEventProtocol]
+    ProgressIndicatorFinishedEvent: Type[LogEventProtocol]
+
+
+NoSQLBenchStressLogEvents.add_subevent_type(
+    "ProgressIndicatorStoppedEvent",
+    severity=Severity.CRITICAL,
+    regex=r'\d*\s+INFO\s+\[ProgressIndicator/logonly:\ds\]\s+PROGRESS\s+\w+:\s+\d{2}.\d{2}%/Stopped.*'
+)
+
+NoSQLBenchStressLogEvents.add_subevent_type(
+    "ProgressIndicatorRunningEvent",
+    severity=Severity.DEBUG,
+    regex=r'\d*\s+INFO\s+\[ProgressIndicator/logonly:\ds\]\s+PROGRESS\s+\w+:\s+\d{2}.\d{2}%/Running.*'
+)
+
+NoSQLBenchStressLogEvents.add_subevent_type(
+    "ProgressIndicatorFinishedEvent",
+    severity=Severity.NORMAL,
+    regex=r'\d*\s+INFO\s+\[ProgressIndicator/logonly:\ds\]\s+PROGRESS\s+\w+:\s+100.0%/Stopped\s+.*'
+)
+
+
+NOSQLBENCH_LOG_EVENTS = (
+    NoSQLBenchStressLogEvents.ProgressIndicatorStoppedEvent(),
+    NoSQLBenchStressLogEvents.ProgressIndicatorFinishedEvent(),
+    NoSQLBenchStressLogEvents.ProgressIndicatorRunningEvent()
+)
+
+NOSQLBENCH_EVENT_PATTERNS = [(re.compile(event.regex), event) for event in NOSQLBENCH_LOG_EVENTS]
