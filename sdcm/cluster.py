@@ -47,6 +47,8 @@ from cassandra.cluster import NoHostAvailable  # pylint: disable=no-name-in-modu
 from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy
 
+from argus.db.cloud_types import ResourceState, CloudInstanceDetails, CloudResource
+from sdcm.argus_test_run import ArgusTestRun, ArgusTestRunError
 from sdcm.collectd import ScyllaCollectdSetup
 from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
 from sdcm.mgmt.common import get_manager_repo_from_defaults, get_manager_scylla_backend
@@ -213,6 +215,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.logdir = os.path.join(base_logdir, self.name) if base_logdir else None
         self.dc_idx = dc_idx
 
+        self.argus_resource = None
         self._containers = {}
         self.is_seed = False
 
@@ -283,6 +286,22 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self._init_port_mapping()
 
         self.set_keep_alive()
+
+        try:
+            run = ArgusTestRun.get()
+            instance_details = CloudInstanceDetails(ip=self.public_ip_address, region=self.region,
+                                                    provider=self.parent_cluster.cluster_backend,
+                                                    private_ip=self.ip_address)
+            resource = CloudResource(name=self.name, resource_state=ResourceState.RUNNING,
+                                     instance_info=instance_details)
+            self.argus_resource = resource
+            run.run_info.resources.attach_resource(resource)
+
+            run.save()
+        except ArgusTestRunError:
+            LOGGER.error("Unable to init Argus Resource - skipping...", exc_info=True)
+        except Exception:  # pylint: disable=broad-except
+            LOGGER.error("Encountered an unhandled exception while interacting with Argus", exc_info=True)
 
     def _init_remoter(self, ssh_login_info):
         self.remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
@@ -1091,6 +1110,16 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.stop_task_threads()
         ContainerManager.destroy_all_containers(self)
         LOGGER.info("%s destroyed", self)
+        try:
+            run = ArgusTestRun.get()
+            if self.argus_resource in run.run_info.resources.leftover_resources:
+                run.run_info.resources.detach_resource(self.argus_resource)
+                self.argus_resource.resource_state = ResourceState.TERMINATED
+                run.save()
+        except ArgusTestRunError:
+            LOGGER.error("Unable to init argus - skipping...", exc_info=True)
+        except Exception:  # pylint: disable=broad-except
+            self.log.error("Error saving resource state to Argus", exc_info=True)
 
     def wait_ssh_up(self, verbose=True, timeout=500):
         text = None
@@ -3092,6 +3121,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.use_saslauthd_authenticator = self.params.get('use_saslauthd_authenticator')
         # default 'cassandra' password is weak password, MS AD doesn't allow to use it.
         self.added_password_suffix = False
+        self._cluster_backend = self.params.get("cluster_backend")
 
         if self.test_config.REUSE_CLUSTER:
             # get_node_ips_param should be defined in child
@@ -3460,6 +3490,10 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.log.debug(ks_tables_with_cdc)
 
         return ks_tables_with_cdc
+
+    @property
+    def cluster_backend(self):
+        return self._cluster_backend
 
 
 class NodeSetupFailed(Exception):

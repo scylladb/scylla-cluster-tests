@@ -22,7 +22,7 @@ import time
 import unittest
 import warnings
 from typing import NamedTuple, Optional, Union, List, Dict, Any
-from uuid import uuid4
+from uuid import uuid4, UUID
 from functools import wraps, cached_property
 import threading
 import signal
@@ -34,9 +34,11 @@ from invoke.exceptions import UnexpectedExit, Failure
 from cassandra.concurrent import execute_concurrent_with_args  # pylint: disable=no-name-in-module
 from cassandra import ConsistencyLevel
 
+from argus.db.db_types import TestStatus, PackageVersion
 from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_stats, wait
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR, TestConfig, UserRemoteCredentials, BaseLoaderSet, BaseMonitorSet, \
     BaseScyllaCluster, BaseNode
+from sdcm.argus_test_run import ArgusTestRun
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_gce import LoaderSetGCE
 from sdcm.cluster_gce import MonitorSetGCE
@@ -184,6 +186,7 @@ class silence:  # pylint: disable=invalid-name
                 self.log.debug("Finished '%s'. %s exception was silenced.", name, str(type(exc)))
                 self._store_test_result(args[0], exc, exc.__traceback__, name)
             return result
+
         return decor
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -305,7 +308,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.email_reporter = build_reporter(self.__class__.__name__,
                                              self.params.get('email_recipients'),
                                              self.logdir)
-
+        self._argus_test_run = None
+        self.log.info("Initializing Argus TestRun with test id %s", self.argus_test_run.id)
         self._move_kubectl_config()
         self.localhost = self._init_localhost()
         self.test_config.set_rsyslog_imjournal_rate_limit(
@@ -358,6 +362,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         time.sleep(0.5)
         InfoEvent(message=f"TEST_START test_id={self.test_config.test_id()}").publish()
 
+    @property
+    def argus_test_run(self):
+        if not self._argus_test_run:
+            try:
+                self._argus_test_run = ArgusTestRun.from_sct_config(test_id=UUID(self.test_id),
+                                                                    test_module_path=self.test_config.test_name(),
+                                                                    sct_config=self.params)
+                self._argus_test_run.save()
+            except Exception:  # pylint: disable=broad-except
+                self.log.error("Error setting up argus connection", exc_info=True)
+        return self._argus_test_run
+
     def configure_ldap(self, node, use_ssl=False):
         self.test_config.configure_ldap(node=node, use_ssl=use_ssl)
         ldap_role = LDAP_ROLE
@@ -377,6 +393,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         end_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time + int(self.test_duration) * 60))
         self.log.info('Test start time %s, duration is %s and timeout set to %s',
                       start_time, self.test_duration, end_time)
+
+        if self.argus_test_run:
+            self.argus_test_run.run_info.results.status = TestStatus.RUNNING
+            self.argus_test_run.save()
 
         def kill_the_test():
             TestTimeoutEvent(start_time=self.start_time, duration=self.test_duration).publish()
@@ -517,7 +537,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @teardown_on_exception
     @log_run_info
-    def setUp(self):
+    def setUp(self):  # pylint: disable=too-many-branches,too-many-statements
         self.credentials = []
         self.db_cluster = None
         self.cs_db_cluster = None
@@ -570,6 +590,20 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         if self.monitors:
             self.monitors.wait_for_init()
+
+        if self.argus_test_run:
+            try:
+                self.log.info("Collecting packages for Argus...")
+                versions = self.get_scylla_versions()
+                for package_name, package_info in versions.items():
+                    package = PackageVersion(name=package_name, date=package_info.get("date", "#NO_DATE"),
+                                             version=package_info.get("version", "#NO_VERSION"),
+                                             revision_id=package_info.get("commit_id", "#NO_COMMIT"))
+                    self.argus_test_run.run_info.details.packages.append(package)
+                self.log.info("Saving collected packages...")
+                self.argus_test_run.save()
+            except Exception:  # pylint: disable=broad-except
+                self.log.error("Unable to collect package versions for Argus - skipping...", exc_info=True)
 
         # cancel reuse cluster - for new nodes added during the test
         self.test_config.reuse_cluster(False)
@@ -1858,7 +1892,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         return result
 
-    def create_table_as(self, node, src_keyspace, src_table,  # pylint: disable=too-many-arguments,too-many-locals,inconsistent-return-statements
+    def create_table_as(self, node, src_keyspace, src_table,
+                        # pylint: disable=too-many-arguments,too-many-locals,inconsistent-return-statements
                         dest_keyspace, dest_table, create_statement,
                         columns_list=None):
         """ Create table with same structure as another table or view
@@ -2252,7 +2287,28 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.stop_event_device()
         if self.params.get('collect_logs'):
             self.collect_sct_logs()
+
         self.finalize_teardown()
+
+        if self.argus_test_run:
+            try:
+                stat_map = {
+                    "SUCCESS": TestStatus.PASSED,
+                    "FAILED": TestStatus.FAILED
+                }
+                self.argus_test_run.run_info.results.status = stat_map.get(self.get_test_status(), TestStatus.FAILED)
+                self.argus_test_run.run_info.details.set_test_end_time()
+                last_events = get_events_grouped_by_category(limit=100, _registry=self.events_processes_registry)
+                for severity, messages in last_events.items():
+                    for message in messages:
+                        self.argus_test_run.run_info.results.max_stored_events = 100
+                        self.argus_test_run.run_info.results.add_event(severity, message)
+
+                    self.argus_test_run.save()
+                ArgusTestRun.destroy()
+            except Exception:  # pylint: disable=broad-except
+                self.log.error("Error commiting test events to Argus", exc_info=True)
+
         self.log.info('Test ID: {}'.format(self.test_config.test_id()))
         self._check_alive_routines_and_report_them()
         self.remove_python_exit_hooks()
@@ -2313,6 +2369,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         ).collect_logs(self.logdir)
         if s3_link:
             self.log.info(s3_link)
+            try:
+                if self.argus_test_run:
+                    for link in s3_link:
+                        self.argus_test_run.run_info.logs.add_log("sct_job_log", link)
+                    self.argus_test_run.save()
+            except Exception:  # pylint: disable=broad-except
+                self.log.error("Error saving logs to Argus.", exc_info=True)
+
             if self.create_stats:
                 self.update({'test_details': {'log_files': {'job_log': s3_link}}})
 
@@ -2643,6 +2707,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     logs_dict[cluster["logname"]] = s3_link
                 else:
                     self.log.warning("There are no logs for %s uploaded", cluster["name"])
+        if self.argus_test_run:
+            try:
+                for name, link in logs_dict.items():
+                    if isinstance(link, str):
+                        self.argus_test_run.run_info.logs.add_log(name, link)
+                    if isinstance(link, list):
+                        for log_inner_link in link:
+                            self.argus_test_run.run_info.logs.add_log(name, log_inner_link)
+
+                self.argus_test_run.save()
+            except Exception:  # pylint: disable=broad-except
+                self.log.error("Error saving logs to Argus", exc_info=True)
 
         if self.create_stats:
             with silence(parent=self, name="Publish log links"):

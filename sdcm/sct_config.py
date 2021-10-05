@@ -1505,6 +1505,10 @@ class SCTConfiguration(dict):
         return output
 
     @property
+    def environment(self) -> dict:
+        return self._env
+
+    @property
     def _env(self) -> dict:
         return self._load_environment_variables()
 

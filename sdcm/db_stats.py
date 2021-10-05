@@ -15,7 +15,6 @@ import re
 import datetime
 import time
 import os
-import subprocess
 import platform
 import logging
 import json
@@ -32,7 +31,7 @@ import requests
 
 from sdcm.es import ES
 from sdcm.test_config import TestConfig
-from sdcm.utils.common import get_job_name, normalize_ipv6_url
+from sdcm.utils.common import get_job_name, normalize_ipv6_url, get_git_commit_id, get_job_url
 from sdcm.utils.decorators import retrying
 from sdcm.sct_events.system import ElasticsearchEvent
 
@@ -539,9 +538,9 @@ class TestStatsMixin(Stats):
 
     def get_test_details(self):
         test_details = {}
-        test_details['sct_git_commit'] = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+        test_details['sct_git_commit'] = get_git_commit_id()
         test_details['job_name'] = get_job_name()
-        test_details['job_url'] = os.environ.get('BUILD_URL', '')
+        test_details['job_url'] = get_job_url()
         test_details['start_host'] = platform.node()
         test_details['test_duration'] = self.params.get(key='test_duration')
         test_details['start_time'] = time.time()

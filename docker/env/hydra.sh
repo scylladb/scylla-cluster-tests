@@ -214,7 +214,7 @@ function run_in_docker () {
             --net=host \
             --name="${SCT_TEST_ID}_$(date +%s)" \
             ${DOCKER_REPO}:${VERSION} \
-            /bin/bash -c "sudo ln -s '${SCT_DIR}' '${WORK_DIR}'; /sct/get-qa-ssh-keys.sh; ${TERM_SET_SIZE} eval '${CMD_TO_RUN}'"
+            /bin/bash -c "sudo ln -s '${SCT_DIR}' '${WORK_DIR}'; /sct/get-qa-ssh-keys.sh; /sct/install_argus.sh; ${TERM_SET_SIZE} eval '${CMD_TO_RUN}'"
     else
         echo docker ${REMOTE_DOCKER_HOST} run --rm ${TTY_STDIN} --privileged \
             -h ${HOST_NAME} \
@@ -249,7 +249,7 @@ function run_in_docker () {
             --net=host \
             --name="${SCT_TEST_ID}_$(date +%s)" \
             ${DOCKER_REPO}:${VERSION} \
-            /bin/bash -c "sudo ln -s '${SCT_DIR}' '${WORK_DIR}'; /sct/get-qa-ssh-keys.sh; ${TERM_SET_SIZE} eval '${CMD_TO_RUN}'"
+            /bin/bash -c "sudo ln -s '${SCT_DIR}' '${WORK_DIR}'; /sct/get-qa-ssh-keys.sh; /sct/install_argus.sh; ${TERM_SET_SIZE} eval '${CMD_TO_RUN}'"
     fi
 }
 
