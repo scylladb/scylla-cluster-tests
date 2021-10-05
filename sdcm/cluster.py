@@ -1751,8 +1751,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if append_scylla_args:
             scylla_help = self.remoter.run(
                 f"{self.add_install_prefix('/usr/bin/scylla')} --help", ignore_status=True).stdout
+            scylla_help_seastar = self.remoter.run(
+                f"{self.add_install_prefix('/usr/bin/scylla')} --help-seastar", ignore_status=True).stdout
             scylla_arg_parser = ScyllaArgParser.from_scylla_help(
-                scylla_help,
+                help_text=f"{scylla_help}\n{scylla_help_seastar}",
                 duplicate_cb=lambda dups: ScyllaHelpErrorEvent.duplicate(
                     message=f"Scylla help contains duplicate for the following arguments: {','.join(dups)}"
                 ).publish()
