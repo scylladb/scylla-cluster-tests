@@ -2139,10 +2139,10 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         return self.k8s_cluster.scylla_config_map
 
     def remote_scylla_yaml(self) -> ContextManager:
-        return self.k8s_cluster.manage_file_in_scylla_config_map()
+        return self.k8s_cluster.remote_scylla_yaml()
 
     def remote_cassandra_rackdc_properties(self) -> ContextManager:
-        return self.k8s_cluster.manage_file_in_scylla_config_map(filename='cassandra-rackdc.properties')
+        return self.k8s_cluster.remote_cassandra_rackdc_properties()
 
     def update_seed_provider(self):
         pass
