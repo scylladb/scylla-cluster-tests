@@ -66,24 +66,25 @@ class TestDatabaseLogEvent(unittest.TestCase):
 
 
 class TestFullScanEvent(unittest.TestCase):
+    NODE_NAME = "db-node-1"
+    KS_CF = "ks_cf"
+    MSG = "msg"
+
     def test_no_message(self):
-        event = FullScanEvent.start(db_node_ip="127.0.0.1", ks_cf="ks")
-        self.assertFalse(hasattr(event, "message"))
-        event.event_id = "743c4ad7-7d83-4b07-9602-120bb6c98fd6"
-        self.assertEqual(str(event),
-                         "(FullScanEvent Severity.NORMAL) period_type=not-set "
-                         "event_id=743c4ad7-7d83-4b07-9602-120bb6c98fd6: type=start select_from=ks on "
-                         "db_node=127.0.0.1")
+        event = FullScanEvent(node=self.NODE_NAME, ks_cf=self.KS_CF)
+        self.assertIsNone(event.message)
+        self.assertRegex(
+            str(event),
+            r"\(FullScanEvent Severity\.NORMAL\) period_type=not-set event_id=([\d\w-]{36}) "
+            f"node={self.NODE_NAME} select_from={self.KS_CF}")
 
     def test_with_message(self):
-        event = FullScanEvent.finish(db_node_ip="127.0.0.1", ks_cf="ks", message="m1")
-        self.assertEqual(event.message, "m1")
-        event.event_id = "743c4ad7-7d83-4b07-9602-120bb6c98fd6"
-        self.assertEqual(
+        event = FullScanEvent(node=self.NODE_NAME, ks_cf=self.KS_CF, message=self.MSG)
+        self.assertEqual(event.message, self.MSG)
+        self.assertRegex(
             str(event),
-            "(FullScanEvent Severity.NORMAL) period_type=not-set event_id=743c4ad7-7d83-4b07-9602-120bb6c98fd6: "
-            "type=finish select_from=ks on db_node=127.0.0.1 message=m1"
-        )
+            r"\(FullScanEvent Severity\.NORMAL\) period_type=not-set event_id=([\d\w-]{36}) "
+            f"node={self.NODE_NAME} select_from={self.KS_CF} message={self.MSG}")
 
 
 class TestIndexSpecialColumnErrorEvent(unittest.TestCase):

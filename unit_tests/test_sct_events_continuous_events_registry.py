@@ -9,9 +9,10 @@ import pytest
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import EventPeriod
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, ContinuousEventRegistryException
-from sdcm.sct_events.database import FullScanEvent, get_pattern_to_event_to_func_mapping
+from sdcm.sct_events.database import get_pattern_to_event_to_func_mapping
 from sdcm.sct_events.loaders import GeminiStressEvent
 from sdcm.sct_events.nodetool import NodetoolEvent
+from sdcm.sct_events.system import InfoEvent
 
 
 class TestContinuousEventsRegistry:
@@ -28,9 +29,8 @@ class TestContinuousEventsRegistry:
         yield GeminiStressEvent(node="mock_node", cmd="gemini mock cmd", publish_event=False)
 
     @pytest.fixture(scope="function")
-    def full_scan_event(self) -> Generator[FullScanEvent, None, None]:
-        full_scan_event = FullScanEvent
-        yield full_scan_event.start(db_node_ip="124.5.2.1", ks_cf="mock_cf")
+    def info_event(self) -> Generator[InfoEvent, None, None]:
+        yield InfoEvent(message="This is a mock InfoEvent")
 
     @pytest.fixture(scope="function")
     def populated_registry(self,
@@ -58,9 +58,9 @@ class TestContinuousEventsRegistry:
 
     def test_adding_a_non_continuous_event_raises_error(self,
                                                         registry: ContinuousEventsRegistry,
-                                                        full_scan_event: FullScanEvent):
+                                                        info_event):
         with pytest.raises(ContinuousEventRegistryException):
-            registry.add_event(full_scan_event)
+            registry.add_event(info_event)
 
     def test_get_event_by_id(self,
                              populated_registry: ContinuousEventsRegistry):

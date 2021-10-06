@@ -11,6 +11,9 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.database import FullScanEvent
 
 
+ERROR_SUBSTRINGS = ("timed out", "unpack requires", "timeout")
+
+
 # pylint: disable=too-many-instance-attributes
 class FullScanThread:
     query_options = (
@@ -39,16 +42,6 @@ class FullScanThread:
         return self.ks_cf
 
     @staticmethod
-    def get_error_severity_from_exception(msg: str, db_node: BaseNode):
-        # 'unpack requires a string argument of length 4' error is received when cassandra.connection return
-        # "Error decoding response from Cassandra":
-        # failure like:
-        #   Operation failed for keyspace1.standard1 - received 0 responses and 1 failures from 1 CL=ONE
-        if db_node.running_nemesis or any(s in msg for s in ("timed out", "unpack requires", "timeout")):
-            return Severity.WARNING
-        return Severity.ERROR
-
-    @staticmethod
     def randomly_add_timeout(cmd) -> str:
         if random.choice([True] * 2 + [False]):
             cql_timeout_seconds = str(random.choice([2, 4, 8, 30, 120, 300]))
@@ -68,33 +61,35 @@ class FullScanThread:
     def run_fullscan(self, db_node: BaseNode):  # pylint: disable=too-many-locals
         ks_cf = self.get_ks_cs(db_node)
         read_pages = random.choice([100, 1000, 0])
-        FullScanEvent.start(db_node_ip=db_node.ip_address, ks_cf=ks_cf).publish()
-        stop_event_severity = None
-        stop_event_message = 'finished successfully'
-        cmd = self.randomly_form_cql_statement(ks_cf)
-        try:
+        with FullScanEvent(node=db_node.name, ks_cf=ks_cf, message="") as fs_event:
+            cmd = self.randomly_form_cql_statement(ks_cf)
+
             with self.create_session(db_node) as session:
-                self.log.info('Will run command "{}"'.format(cmd))
-                result = session.execute(SimpleStatement(
-                    cmd,
-                    fetch_size=self.page_size,
-                    consistency_level=ConsistencyLevel.ONE))
-                pages = 0
-                while result.has_more_pages and pages <= read_pages:
-                    if self.termination_event.is_set():
-                        stop_event_message = 'terminated'
-                        return
-                    result.fetch_next_page()
-                    if read_pages > 0:
-                        pages += 1
-        except Exception as exc:  # pylint: disable=broad-except
-            stop_event_message = str(exc)
-            stop_event_severity = self.get_error_severity_from_exception(stop_event_message, db_node)
-        finally:
-            FullScanEvent.finish(
-                db_node_ip=db_node.ip_address, ks_cf=self.ks_cf,
-                message=stop_event_message, **{'severity': stop_event_severity} if stop_event_severity else {}
-            ).publish()
+
+                if self.termination_event.is_set():
+                    return
+
+                try:
+                    self.log.info('Will run command "%s"', cmd)
+                    result = session.execute(SimpleStatement(
+                        cmd,
+                        fetch_size=self.page_size,
+                        consistency_level=ConsistencyLevel.ONE))
+                    pages = 0
+                    while result.has_more_pages and pages <= read_pages:
+                        result.fetch_next_page()
+                        if read_pages > 0:
+                            pages += 1
+                    fs_event.message = "full scan ended successfully"
+                except Exception as exc:  # pylint: disable=broad-except
+                    msg = str(exc)
+                    msg = f"{msg} while running Nemesis: {db_node.running_nemesis}" if db_node.running_nemesis else msg
+                    fs_event.message = msg
+
+                    if db_node.running_nemesis or any(s in msg.lower() for s in ERROR_SUBSTRINGS):
+                        fs_event.severity = Severity.WARNING
+                    else:
+                        fs_event.severity = Severity.ERROR
 
     def run(self):
         end_time = time.time() + self.duration
