@@ -11,8 +11,7 @@ DataValidatorEvent.UpdatedRowsValidator: WARNING
 DataValidatorEvent.DeletedRowsValidator: ERROR
 ScyllaHelpErrorEvent.duplicate: ERROR
 ScyllaHelpErrorEvent.filtered: ERROR
-FullScanEvent.start: NORMAL
-FullScanEvent.finish: ERROR
+FullScanEvent: ERROR
 DatabaseLogEvent.NO_SPACE_ERROR: ERROR
 DatabaseLogEvent.UNKNOWN_VERB: WARNING
 DatabaseLogEvent.CLIENT_DISCONNECT: WARNING

@@ -172,34 +172,6 @@ ScyllaHelpErrorEvent.add_subevent_type("duplicate")
 ScyllaHelpErrorEvent.add_subevent_type("filtered")
 
 
-class FullScanEvent(SctEvent, abstract=True):
-    start: Type[SctEventProtocol]
-    finish: Type[SctEventProtocol]
-
-    message: str
-
-    def __init__(self, db_node_ip: str, ks_cf, message: Optional[str] = None, severity=Severity.NORMAL):
-        super().__init__(severity=severity)
-
-        self.db_node_ip = db_node_ip
-        self.ks_cf = ks_cf
-
-        # Don't include `message' to the state if it's None.
-        if message is not None:
-            self.message = message
-
-    @property
-    def msgfmt(self):
-        fmt = super().msgfmt + ": type={0.type} select_from={0.ks_cf} on db_node={0.db_node_ip}"
-        if hasattr(self, "message"):
-            fmt += " message={0.message}"
-        return fmt
-
-
-FullScanEvent.add_subevent_type("start")
-FullScanEvent.add_subevent_type("finish")
-
-
 class IndexSpecialColumnErrorEvent(InformationalEvent):
     def __init__(self, message: str, severity: Severity = Severity.ERROR):
         super().__init__(severity=severity)
@@ -254,6 +226,20 @@ class BootstrapEvent(ScyllaDatabaseContinuousEvent):
 
     def __init__(self, node: str, severity=Severity.NORMAL, **__):
         super().__init__(node=node, severity=severity)
+
+
+class FullScanEvent(ScyllaDatabaseContinuousEvent):
+    def __init__(self, node: str, ks_cf: str, message: Optional[str] = None, severity=Severity.NORMAL, **__):
+        super().__init__(node=node, severity=severity)
+        self.ks_cf = ks_cf
+        self.message = message
+
+    @property
+    def msgfmt(self):
+        fmt = super().msgfmt + " select_from={0.ks_cf}"
+        if self.message:
+            fmt += " message={0.message}"
+        return fmt
 
 
 class RepairEvent(ScyllaDatabaseContinuousEvent):
