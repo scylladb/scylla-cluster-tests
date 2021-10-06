@@ -12,13 +12,19 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
+from enum import Enum
 import yaml
 
 from kubernetes.client import exceptions as k8s_exceptions
 
-from sdcm.cluster_k8s import SCYLLA_NAMESPACE, SCYLLA_OPERATOR_NAMESPACE, ScyllaPodCluster
+from sdcm.cluster_k8s import SCYLLA_NAMESPACE, ScyllaPodCluster
 from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.wait import wait_for
+
+
+class PodStatuses(Enum):
+    RUNNING = 'Running'
+    CRASH_LOOP_BACK_OFF = 'CrashLoopBackOff'
 
 
 def get_scylla_sysctl_value(db_cluster: ScyllaPodCluster, sysctl_name: str) -> int:
@@ -94,9 +100,21 @@ def wait_for_resource_absence(db_cluster: ScyllaPodCluster,
              text=f"Waiting for the '{resource_name}' {resource_type} be deleted")
 
 
-def scylla_operator_pods_and_statuses(db_cluster):
-    pods = db_cluster.k8s_cluster.kubectl(f"get pods -n {SCYLLA_OPERATOR_NAMESPACE} "
-                                          f"-l app.kubernetes.io/instance=scylla-operator "
-                                          f"-o=custom-columns='NAME:.metadata.name,STATUS:.status.phase' -o yaml")
+def get_pods_and_statuses(db_cluster: ScyllaPodCluster, namespace: str, label: str = None):
+    pods = db_cluster.k8s_cluster.kubectl(f"get pods {'-l ' + label if label else ''} -o yaml", namespace=namespace)
+    return [{"name": pod["metadata"]["name"], "status": pod["status"]["phase"]} for pod in
+            yaml.load(pods.stdout)["items"] if pod]
 
-    return [[pod["metadata"]["name"], pod["status"]["phase"]] for pod in yaml.load(pods.stdout)["items"] if pod]
+
+def get_pod_storage_capacity(db_cluster: ScyllaPodCluster, namespace: str, pod_name: str = None, label: str = None):
+    pods_storage_capacity = []
+    label = " -l " + label if label else ''
+    persistent_volume_info = db_cluster.k8s_cluster.kubectl(f"get pvc {label} -o yaml", namespace=namespace)
+    for pod in yaml.load(persistent_volume_info.stdout)["items"]:
+        if pod_name and pod_name not in pod["metadata"]["name"]:
+            continue
+
+        pods_storage_capacity.append({"name": pod["metadata"]["name"],
+                                      "capacity": pod["status"]["capacity"]["storage"]})
+
+    return pods_storage_capacity
