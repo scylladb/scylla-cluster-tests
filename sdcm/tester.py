@@ -580,7 +580,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def set_system_auth_rf(self):
         # No need to change system tables when running via scylla-cloud
         # Also, when running a Alternator via scylla-cloud, we don't have CQL access to the cluster
-        if self.params.get("cluster_backend") == 'aws-siren':
+        if self.params.get('db_type') == 'cloud_scylla':
             # TODO: move this skip to siren-tools when possible
             self.log.warning("Skipping this function due this job run from Siren cloud!")
             return

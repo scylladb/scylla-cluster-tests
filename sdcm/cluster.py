@@ -3598,7 +3598,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
     def set_seeds(self, wait_for_timeout=300, first_only=False):
         seeds_selector = self.params.get('seeds_selector')
         seeds_num = self.params.get('seeds_num')
-        cluster_backend = self.params.get('cluster_backend')
 
         seed_nodes_ips = None
         if first_only:
@@ -3606,7 +3605,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.wait_ssh_up()
             seed_nodes_ips = [node.ip_address]
 
-        elif seeds_selector == 'reflector' or self.test_config.REUSE_CLUSTER or cluster_backend == 'aws-siren':
+        elif (seeds_selector == 'reflector'
+                or self.test_config.REUSE_CLUSTER
+                or self.params.get('db_type') == 'cloud_scylla'):
             node = self.nodes[0]
             node.wait_ssh_up()
             # When cluster just started, seed IP in the scylla.yaml may be like '127.0.0.1'
