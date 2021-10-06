@@ -102,6 +102,9 @@ class SCTConfiguration(dict):
     available_backends = [
         'baremetal',
         'docker',
+        # TODO: remove 'aws-siren' and 'gce-siren' backends completely when
+        #       'siren-tests' project gets switched to the 'aws' and 'gce' ones.
+        #       Such a switch must be fast change.
         'aws', 'aws-siren', 'k8s-local-kind-aws', 'k8s-eks',
         'gce', 'gce-siren', 'k8s-local-kind-gce', 'k8s-gke', 'k8s-gce-minikube',
         'k8s-local-minikube', 'k8s-local-kind',
