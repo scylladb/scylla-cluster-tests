@@ -23,7 +23,7 @@ from sdcm.cluster_k8s import (
     ScyllaPodCluster,
     SCYLLA_NAMESPACE,
     SCYLLA_MANAGER_NAMESPACE,
-    SCYLLA_OPERATOR_NAMESPACE,
+    SCYLLA_OPERATOR_NAMESPACE
 )
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.k8s import HelmValues
@@ -31,7 +31,9 @@ from functional_tests.scylla_operator.libs.helpers import (
     get_scylla_sysctl_value,
     get_orphaned_services,
     get_pods_without_probe,
-    scylla_operator_pods_and_statuses,
+    get_pods_and_statuses,
+    get_pod_storage_capacity,
+    PodStatuses,
     set_scylla_sysctl_value,
     wait_for_resource_absence,
 )
@@ -401,11 +403,13 @@ def test_ha_update_spec_while_rollout_restart(db_cluster: ScyllaPodCluster):
 
 @pytest.mark.readonly
 def test_scylla_operator_pods(db_cluster: ScyllaPodCluster):
-    scylla_operator_pods = scylla_operator_pods_and_statuses(db_cluster)
+    scylla_operator_pods = get_pods_and_statuses(db_cluster=db_cluster, namespace=SCYLLA_OPERATOR_NAMESPACE,
+                                                 label='app.kubernetes.io/instance=scylla-operator')
 
     assert len(scylla_operator_pods) == 2, f'Expected 2 scylla-operator pods, but exists {len(scylla_operator_pods)}'
 
-    not_running_pods = ','.join([pods_info[0] for pods_info in scylla_operator_pods if pods_info[1] != 'Running'])
+    not_running_pods = ','.join(
+        [pods_info['name'] for pods_info in scylla_operator_pods if pods_info['status'] != 'Running'])
     assert not not_running_pods, f'There are pods in state other than running: {not_running_pods}'
 
 
@@ -432,3 +436,68 @@ def test_readiness_probe_exists_in_mgmt_pods(db_cluster: ScyllaPodCluster):
         selector="app.kubernetes.io/name=scylla-manager",
         container_name="scylla-manager")
     assert not pods, f"readinessProbe is not found in the following pods: {pods}"
+
+
+def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
+    """
+    https://github.com/scylladb/scylla-operator/issues/501
+    https://github.com/scylladb/scylla-operator/pull/502
+
+    Deploy Scylla using helm chart with only default values.
+    Storage capacity expected to be 10Gi
+    """
+    target_chart_name, namespace = ("t-default-values",) * 2
+    expected_capacity = '10Gi'
+
+    log.info("Create %s namespace", namespace)
+
+    namespaces = yaml.load(db_cluster.k8s_cluster.kubectl("get namespaces -o yaml").stdout)
+
+    if not [ns["metadata"]["name"] for ns in namespaces["items"] if ns["metadata"]["name"] == namespace]:
+        db_cluster.k8s_cluster.kubectl(f"create namespace {namespace}")
+
+    db_cluster.k8s_cluster.create_scylla_manager_agent_config(namespace=namespace)
+
+    log.debug('Deploy cluster with default storage capacity (expected "%s")', expected_capacity)
+    log.debug(db_cluster.k8s_cluster.helm_install(
+        target_chart_name=target_chart_name,
+        source_chart_name="scylla-operator/scylla",
+        namespace=namespace,
+    ))
+
+    try:
+        db_cluster.k8s_cluster.kubectl_wait(
+            "--all --for=condition=Ready pod",
+            namespace=namespace,
+            timeout=1200,
+        )
+
+        pods_name_and_status = get_pods_and_statuses(db_cluster, namespace=namespace)
+
+        assert len(pods_name_and_status) == 3, (
+            f"Expected 3 pods to be created in {namespace} namespace "
+            f"but actually {len(pods_name_and_status)}: {pods_name_and_status}")
+
+        for pod_name_and_status in pods_name_and_status:
+            assert pod_name_and_status['status'] == PodStatuses.RUNNING.value, (
+                f"Expected '{PodStatuses.RUNNING.value}' status of pod '{pod_name_and_status['name']}' "
+                f"but actually it's {pod_name_and_status['status']}")
+
+            storage_capacity = get_pod_storage_capacity(db_cluster, namespace=namespace,
+                                                        pod_name=pod_name_and_status['name'],
+                                                        label="app.kubernetes.io/name=scylla")
+            assert storage_capacity[0]['capacity'] == expected_capacity, (
+                f"Expected capacity is {expected_capacity}, actual capacity of pod "
+                f"'{pod_name_and_status['name']}' is {storage_capacity[0]['capacity']}")
+
+            scylla_version = db_cluster.k8s_cluster.kubectl(f"exec {pod_name_and_status['name']} "
+                                                            f"-c scylla -- scylla --version", namespace=namespace)
+            assert not scylla_version.stderr, (
+                f"Failed to get scylla version from {pod_name_and_status['name']}. Error: {scylla_version.stderr}")
+            assert scylla_version.stdout, (
+                f"Failed to get scylla version from {pod_name_and_status['name']}. "
+                f"Output of command 'scylla --version' is empty")
+
+    finally:
+        db_cluster.k8s_cluster.helm(f"uninstall {target_chart_name} --timeout 120s", namespace=namespace)
+        db_cluster.k8s_cluster.kubectl(f"delete namespace {namespace}")

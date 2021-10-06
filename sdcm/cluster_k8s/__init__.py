@@ -799,7 +799,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 self.api_call_rate_limiter.wait_till_api_become_stable(self)
         self.wait_all_node_pools_to_be_ready()
 
-    def create_scylla_manager_agent_config(self):
+    def create_scylla_manager_agent_config(self, namespace=SCYLLA_NAMESPACE):
         data = {}
         if self.params['use_mgmt']:
             data["s3"] = {
@@ -810,7 +810,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             }
 
         # Create kubernetes secret that holds scylla manager agent configuration
-        self.update_secret_from_data(SCYLLA_AGENT_CONFIG_NAME, SCYLLA_NAMESPACE, {
+        self.update_secret_from_data(SCYLLA_AGENT_CONFIG_NAME, namespace, {
             'scylla-manager-agent.yaml': data,
         })
 
