@@ -1,4 +1,4 @@
-ARG PYTHON_IMAGE_TAG=3.9.1-slim-buster
+ARG PYTHON_IMAGE_TAG=3.10.0-slim-buster
 
 FROM python:$PYTHON_IMAGE_TAG as apt_base
 ENV DEBIAN_FRONTEND=noninteractive
@@ -13,13 +13,13 @@ RUN add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debia
 # Download, build and install Python packages.
 FROM apt_base as python_packages
 ENV PIP_NO_CACHE_DIR=1
-RUN apt-get install -y --no-install-recommends build-essential cmake libssl-dev zlib1g-dev
+RUN apt-get install -y --no-install-recommends build-essential cmake libssl-dev zlib1g-dev libffi-dev
 ADD requirements.txt .
 RUN mkdir /build && \
     pip3 install -r requirements.txt --root=/build --prefix=./ --ignore-installed --no-warn-script-location
 
 FROM python:$PYTHON_IMAGE_TAG
-ARG KUBECTL_VERSION=1.21.2
+ARG KUBECTL_VERSION=1.22.2
 ENV PYTHONWARNINGS=ignore:unclosed \
     PYTHONFAULTHANDLER=1 \
     PYTHONUNBUFFERED=1 \
