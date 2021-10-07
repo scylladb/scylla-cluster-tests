@@ -1939,9 +1939,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.remoter.sudo('rm -rf /var/cache/yum/')
                 self.remoter.sudo('yum makecache', retry=3)
             elif self.distro.is_sles:
-                self.remoter.sudo('zypper clean all')
+                self.remoter.sudo('zypper clean all', retry=5)
                 self.remoter.sudo('rm -rf /var/cache/zypp/')
-                self.remoter.sudo('zypper refresh', retry=3)
             else:
                 self.remoter.sudo('apt-get clean all')
                 self.remoter.sudo('rm -rf /var/cache/apt/')
@@ -1959,7 +1958,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             else:
                 self.remoter.run('sudo yum update -y --skip-broken', retry=3)
         elif self.distro.is_sles:
-            self.remoter.sudo('zypper update -y -l')
+            self.remoter.sudo('zypper update -y -l', retry=5)
         else:
             self.remoter.run(
                 'sudo DEBIAN_FRONTEND=noninteractive apt-get '
@@ -1986,17 +1985,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
             self.remoter.run('sudo yum install -y scylla-gdb', ignore_status=True)
         elif self.distro.is_sles15:
-            self.remoter.sudo('zypper install -y rsync tcpdump screen')
+            self.install_package('rsync tcpdump screen')
             self.download_scylla_repo(scylla_repo)
-            # self.remoter.sudo('zypper mr -e Python_2_Module_x86_64:SLE-Module-Python2-15-SP3-Pool')
-            # self.remoter.sudo('zypper mr -e Python_2_Module_x86_64:SLE-Module-Python2-15-SP3-Updates')
-            # self.remoter.sudo('zypper mr -e Legacy_Module_x86_64:SLE-Module-Legacy15-SP3-Updates')
-            # self.remoter.sudo('zypper mr -e Legacy_Module_x86_64:SLE-Module-Legacy15-SP3-Pool')
             self.remoter.sudo('SUSEConnect --product sle-module-legacy/15.3/x86_64')
             self.remoter.sudo('SUSEConnect --product sle-module-python2/15.3/x86_64')
             self.remoter.sudo('zypper install -y python2-PyYAML', ignore_status=True)
             self.remoter.sudo('zypper install -y python3-PyYAML', ignore_status=True)
-            self.remoter.sudo('zypper install -y {}'.format(self.scylla_pkg()))
+            self.install_package(self.scylla_pkg())
             self.remoter.sudo('zypper install -y scylla-gdb', ignore_status=True)
         else:
             if self.is_ubuntu14():
