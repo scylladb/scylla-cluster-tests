@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SCT Events Timeline</title>
+    <style>
+        body {
+            font-family: Calibri, sans-serif;
+        }
+        p, h3, h4 {
+            text-align: center
+        }
+    </style>
+    <script src="https://unpkg.com/timelines-chart"></script>
+</head>
+<body>
+    <h3>Scylla Cluster Tests events timeline chart</h3>
+    <h4>Test ID: {{ test_id }}</h4>
+    <h4>Cluster name: {{ cluster_name }}</h4>
+    <div id="categoricalPlot">
+    </div>
+    <script>
+        jsonChartData = '{{ chart_data | tojson }}';
+        eventsData = JSON.parse(jsonChartData);
+
+        TimelinesChart()
+          .data(eventsData)
+          .zQualitative(true)
+          .timeFormat('%Y-%m-%d %-H:%M:%S.%f')
+          .useUtc(true)
+          .leftMargin(400)
+          .rightMargin(400)
+          .maxHeight({{ max_height }})
+          .maxLineHeight({{ max_line_height }})
+          (document.getElementById('categoricalPlot'));
+    </script>
+    <p>Created using <a href="https://github.com/vasturiano/timelines-chart">Timelines Chart project</a></p>
+</body>
+</html>
