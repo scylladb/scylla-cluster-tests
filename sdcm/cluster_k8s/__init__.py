@@ -300,7 +300,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             self.uuid = cluster_uuid
         self.region_name = region_name
         self.shortid = str(self.uuid)[:8]
-        self.name = '%s-%s' % (user_prefix, self.shortid)
+        self.name = f"{user_prefix}-{self.shortid}"
         self.params = params
         self.api_call_rate_limiter = None
         self.k8s_scylla_cluster_name = self.params.get('k8s_scylla_cluster_name')
@@ -944,7 +944,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 tag='scylla-monitoring-3.6.0',
                 dst_dir=scylla_monitoring_dir)
 
-            with open(KUBE_PROMETHEUS_STACK_CHART_VALUES_PATH, "r") as values_stream:
+            with open(KUBE_PROMETHEUS_STACK_CHART_VALUES_PATH, "rb") as values_stream:
                 values_data = yaml.safe_load(values_stream)
                 # NOTE: we need to unset all the tags because latest chart version may be
                 # incompatible with old versions of apps.
@@ -1094,7 +1094,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.kubectl(f"describe nodes > {logdir / cluster_scope_dir / 'nodes.desc'}")
 
         # Read all the namespaces from already saved file
-        with open(logdir / cluster_scope_dir / "namespaces.wide", mode="r") as namespaces_file:
+        with open(logdir / cluster_scope_dir / "namespaces.wide", mode="r", encoding="utf-8") as namespaces_file:
             # Reverse order of namespaces because preferred once are there
             namespaces = [n.split()[0] for n in namespaces_file.readlines()[1:]][::-1]
 
@@ -1238,12 +1238,16 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         prepared_data = {key: base64.b64encode(json.dumps(value).encode('utf-8')).decode('utf-8')
                          for key, value in data.items()}
         secret = k8s.client.V1Secret(
-            'v1',
-            prepared_data,
-            'Secret',
-            {'name': secret_name, 'namespace': namespace},
-            type=secret_type)
-        self.k8s_core_v1_api.create_namespaced_secret(namespace, secret)
+            api_version="v1",
+            data=prepared_data,
+            kind="Secret",
+            metadata={
+                "name": secret_name,
+                "namespace": namespace,
+            },
+            type=secret_type,
+        )
+        self.k8s_core_v1_api.create_namespaced_secret(namespace=namespace, body=secret)
 
     def update_secret_from_data(self, secret_name: str, namespace: str, data: dict, secret_type: str = 'Opaque'):
         existing = None
@@ -1279,7 +1283,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         wait_for(self.check_if_token_is_valid, timeout=120, throw_exc=True)
 
     def check_if_token_is_valid(self) -> bool:
-        with open(self.kubectl_token_path, mode='r') as token_file:
+        with open(self.kubectl_token_path, mode='rb') as token_file:
             return bool(json.load(token_file))
 
     def start_token_update_thread(self):
@@ -1748,7 +1752,7 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
                             timeout=500, verify_up_timeout=300):
         if verify_down:
             self.wait_db_down(timeout=timeout)
-        self.remoter.run('sh -c "{0} || {0}-server"'.format("supervisorctl start scylla"),
+        self.remoter.run('sh -c "supervisorctl start scylla || supervisorctl start scylla-server"',
                          timeout=timeout)
         if verify_up:
             self.wait_db_up(timeout=verify_up_timeout)
@@ -1760,7 +1764,7 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
                            ignore_status=False):
         if verify_up:
             self.wait_db_up(timeout=timeout)
-        self.remoter.run('sh -c "{0} || {0}-server"'.format("supervisorctl stop scylla"),
+        self.remoter.run('sh -c "supervisorctl stop scylla || supervisorctl stop scylla-server"',
                          timeout=timeout, ignore_status=ignore_status)
         if verify_down:
             self.wait_db_down(timeout=timeout)
@@ -1776,7 +1780,7 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
     def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=300, ignore_status=False):
         if verify_up_before:
             self.wait_db_up(timeout=timeout)
-        self.remoter.run('sh -c "{0} || {0}-server"'.format("supervisorctl restart scylla"),
+        self.remoter.run('sh -c "supervisorctl restart scylla || supervisorctl restart scylla-server"',
                          timeout=timeout)
         if verify_up_after:
             self.wait_db_up(timeout=timeout)

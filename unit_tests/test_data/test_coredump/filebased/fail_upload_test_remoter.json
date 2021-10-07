@@ -88,15 +88,6 @@
       "exit_status": 1
     }
   ],
-  "file": [
-    {
-      "__instance__": "fabric.runners.Result",
-      "stdout": "sage: file [-bcCdEhikLlNnprsSvzZ0] [--apple] [--extension] [--mime-encoding]\n            [--mime-type] [-e <testname>] [-F <separator>]  [-f <namefile>]\n            [-m <magicfiles>] [-P <parameter=value>] <file> ...\n       file -C [-m <magicfiles>]\n       file [--help]",
-      "stderr": "",
-      "exited": 1,
-      "exit_status": 1
-    }
-  ],
   "cat /etc/os-release": [
     {
       "__instance__": "fabric.runners.Result",
