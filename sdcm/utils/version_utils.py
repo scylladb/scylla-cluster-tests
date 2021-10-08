@@ -362,7 +362,7 @@ class MethodVersionNotFound(Exception):
     pass
 
 
-class scylla_versions():  # pylint: disable=invalid-name,too-few-public-methods
+class scylla_versions:  # pylint: disable=invalid-name,too-few-public-methods
     """Runs a versioned method that is suitable for the configured scylla version.
 
     Limitations:

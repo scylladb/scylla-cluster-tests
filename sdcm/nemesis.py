@@ -65,6 +65,7 @@ from sdcm.sct_events.group_common_events import (ignore_alternator_client_errors
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
+from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.cluster_k8s import PodCluster, ScyllaPodCluster
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
@@ -293,7 +294,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             cur_interval = self.interval
             try:
                 self.disrupt()
-            except UnsupportedNemesis:
+            except (UnsupportedNemesis, MethodVersionNotFound) as exc:
+                self.log.warning("Skipping unsupported nemesis: %s", exc)
                 cur_interval = 0
             finally:
                 self.unset_current_running_nemesis(self.target_node)
@@ -941,6 +943,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_major_compaction(self):
         self.target_node.run_nodetool("compact")
 
+    # NOTE: '2022.1.rc0' is set in advance, not guaranteed to match when appears
+    @scylla_versions(("4.5.rc1", None), ("2022.1.rc0", None))
     def disrupt_load_and_stream(self):
         # Checking the columns number of keyspace1.standard1
         self.log.debug('Prepare keyspace1.standard1 if it does not exist')
@@ -2001,6 +2005,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         result = self.target_node.run_nodetool('clearsnapshot')
         self.log.debug(result)
 
+    # NOTE: '2022.1.rc0' is set in advance, not guaranteed to match when appears
+    # NOTE: current variant of the toppartitions feature is supported since 4.5 OSS
+    @scylla_versions(("4.5.rc1", None), ("2022.1.rc0", None))
     def disrupt_show_toppartitions(self):
         result = self.target_node.run_nodetool(sub_cmd='help', args='toppartitions')
         if 'Unknown command toppartitions' in result.stdout:
@@ -2838,7 +2845,7 @@ def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
                              node=args[0].target_node, publish_event=True) as nemesis_event:
             try:
                 result = method(*args, **kwargs)
-            except UnsupportedNemesis as exp:
+            except (UnsupportedNemesis, MethodVersionNotFound) as exp:
                 skip_reason = str(exp)
                 log_info.update({'subtype': 'skipped', 'skip_reason': skip_reason})
                 nemesis_event.skip(skip_reason=skip_reason)
@@ -3720,11 +3727,6 @@ class KubernetesScyllaOperatorMonkey(Nemesis):
             # So, skip it until it gets stabilized.
             "disrupt_nodetool_refresh",
             "disrupt_restart_with_resharding",
-            # NOTE: skip following methods because operator uses only
-            # stable scylla versions and these methods cover features in un-released scylla versions
-            # such as 4.5-rc.x . Remove following when operator's minimum scylla version becomes 4.5
-            "disrupt_load_and_stream",
-            "show_toppartitions",
         )
         self.disrupt_methods_list = list(
             set(self.get_list_of_methods_compatible_with_backend()) - set(ignore_methods))
