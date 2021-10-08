@@ -18,7 +18,7 @@ from string import Template
 from typing import List, Optional
 from collections import namedtuple
 from urllib.parse import urlparse
-from functools import lru_cache
+from functools import lru_cache, wraps
 
 import boto3
 import requests
@@ -356,3 +356,67 @@ def get_git_tag_from_helm_chart_version(chart_version: str) -> str:
     else:
         raise ValueError(f"Got wrong chart version: {chart_version}")
     return git_tag
+
+
+class MethodVersionNotFound(Exception):
+    pass
+
+
+class scylla_versions():  # pylint: disable=invalid-name,too-few-public-methods
+    """Runs a versioned method that is suitable for the configured scylla version.
+
+    Limitations:
+        - Can't work if the same method name in the same file is used in different classes
+        - Can't work with 'static' and 'class' methods. Only 'class instance' ones.
+        - Depends on the 'params' or 'cluster.params' attributes presence
+          which store SCT configuration.
+    Example:
+        # Having "scylla_version" be set to "4.4.4" in the sct config
+
+        In [3]: class Foo():
+           ...:
+           ...:     @scylla_versions((None, "4.3"))
+           ...:     def foo(self):
+           ...:         return "any 4.3.x and lower"
+           ...:
+           ...:     @scylla_versions(("4.4.rc1", "4.4.rc1"), ("4.4.rc4", "4.5"))
+           ...:     def foo(self):
+           ...:         return "all 4.4 and 4.5 except 4.4.rc2 and 4.4.rc3"
+           ...:
+           ...:     @scylla_versions(("4.6.rc1", None))
+           ...:     def foo(self):
+           ...:         return "4.6.rc1 and higher"
+
+        In [4]: Foo().foo()
+        Out[4]: 'all 4.4 and 4.5 except 4.4.rc2 and 4.4.rc3'
+    """
+    VERSIONS = {}
+
+    def __init__(self, *min_max_version_pairs: tuple):
+        self.min_max_version_pairs = min_max_version_pairs
+
+    def __call__(self, func):
+        if (func.__name__, func.__code__.co_filename) not in self.VERSIONS:
+            self.VERSIONS[(func.__name__, func.__code__.co_filename)] = {}
+        for min_v, max_v in self.min_max_version_pairs:
+            scylla_type = "enterprise" if any((is_enterprise(v) for v in (min_v, max_v) if v)) else "oss"
+            min_v = min_v or ("3.0.0" if scylla_type == "oss" else "2019.1.rc0")
+            max_v = max_v or ("99.99.99" if scylla_type == "oss" else "2099.99.99")
+            if max_v.count(".") == 1:
+                # NOTE: 'parse_version' function considers 4.4 as lower than 4.4.1,
+                #       but we expect it to be any of the 4.4.x versions.
+                #       So, update all such short versions with the patch part and make it to be huge.
+                max_v = f"{max_v}.999"
+            self.VERSIONS[(func.__name__, func.__code__.co_filename)].update({(min_v, max_v): func})
+
+        @wraps(func)
+        def inner(*args, **kwargs):
+            cls_self = args[0]
+            scylla_version = getattr(cls_self, 'cluster', cls_self).params.get("scylla_version")
+            func_version_mapping = self.VERSIONS.get((func.__name__, func.__code__.co_filename), {})
+            for (min_v, max_v), mapped_func in func_version_mapping.items():
+                if parse_version(min_v) <= parse_version(scylla_version) <= parse_version(max_v):
+                    return mapped_func(*args, **kwargs)
+            raise MethodVersionNotFound("Method '{}' with version '{}' is not supported in '{}'!".format(
+                func.__name__, scylla_version, cls_self.__class__.__name__))
+        return inner
