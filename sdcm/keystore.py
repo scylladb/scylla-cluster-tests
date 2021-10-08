@@ -94,6 +94,9 @@ class KeyStore:
     def get_azure_credentials(self):
         return self.get_json("azure.json")
 
+    def get_argusdb_credentials(self):
+        return self.get_json("argusdb_config.json")
+
 
 def pub_key_from_private_key_file(key_file):
     return paramiko.rsakey.RSAKey.from_private_key_file(os.path.expanduser(key_file)).get_base64()
