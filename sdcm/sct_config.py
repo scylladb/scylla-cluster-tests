@@ -1685,7 +1685,7 @@ class SCTConfiguration(dict):
         if self.get('nemesis_filter_seeds') is False or self.get('nemesis_class_name') == "NoOpMonkey":
             return
         seeds_num = self.get('seeds_num')
-        num_of_db_nodes = sum([int(i) for i in str(self.get('n_db_nodes')).split(' ')])
+        num_of_db_nodes = sum([int(i) for i in str(self.get('n_db_nodes')).split(' ')]) + int(self.get('add_node_cnt'))
 
         assert num_of_db_nodes > seeds_num, \
             "Nemesis cannot run when 'nemesis_filter_seeds' is true and seeds number is equal to nodes number"
