@@ -5,12 +5,16 @@ import pytest
 
 import sdcm
 from sdcm.utils.version_utils import (
-    get_scylla_urls_from_repository,
     get_branch_version,
     get_branch_version_for_multiple_repositories,
     get_git_tag_from_helm_chart_version,
+    get_scylla_urls_from_repository,
     is_enterprise,
-    VERSION_NOT_FOUND_ERROR, RepositoryDetails, ScyllaFileType,
+    MethodVersionNotFound,
+    RepositoryDetails,
+    ScyllaFileType,
+    scylla_versions,
+    VERSION_NOT_FOUND_ERROR,
 )
 
 BASE_S3_DOWNLOAD_URL = 'https://s3.amazonaws.com/downloads.scylladb.com'
@@ -150,3 +154,117 @@ def test_07_get_git_tag_from_helm_chart_version__wrong_input(chart_version):
     except ValueError:
         return
     assert False, f"'ValueError' was expected, but absent. Returned value: {git_tag}"
+
+
+class ClassWithVersiondMethods:  # pylint: disable=too-few-public-methods
+    def __init__(self, scylla_version, nemesis_like_class):
+        params = {"scylla_version": scylla_version}
+        if nemesis_like_class:
+            self.cluster = type("Cluster", (object,), {"params": params})
+        else:
+            self.params = params
+
+    @scylla_versions((None, "4.3"))
+    def oss_method(self):  # pylint: disable=no-self-use
+        return "any 4.3.x and lower"
+
+    @scylla_versions(("4.4.rc1", "4.4.rc1"), ("4.4.rc4", "4.5"))
+    def oss_method(self):  # pylint: disable=no-self-use,function-redefined
+        return "all 4.4 and 4.5 except 4.4.rc2 and 4.4.rc3"
+
+    @scylla_versions(("4.6.rc1", None))
+    def oss_method(self):  # pylint: disable=no-self-use,function-redefined
+        return "4.6.rc1 and higher"
+
+    @scylla_versions((None, "2019.1"))
+    def es_method(self):  # pylint: disable=no-self-use
+        return "any 2019.1.x and lower"
+
+    @scylla_versions(("2020.1.rc1", "2020.1.rc1"), ("2020.1.rc4", "2021.1"))
+    def es_method(self):  # pylint: disable=no-self-use,function-redefined
+        return "all 2020.1 and 2021.1 except 2020.1.rc2 and 2020.1.rc3"
+
+    @scylla_versions(("2022.1.rc1", None))
+    def es_method(self):  # pylint: disable=no-self-use,function-redefined
+        return "2022.1.rc1 and higher"
+
+    @scylla_versions((None, "4.3"), (None, "2019.1"))
+    def mixed_method(self):  # pylint: disable=no-self-use
+        return "any 4.3.x and lower, any 2019.1.x and lower"
+
+    @scylla_versions(("4.4.rc1", "4.4.rc1"), ("4.4.rc4", "4.5"),
+                     ("2020.1.rc1", "2020.1.rc1"), ("2020.1.rc4", "2021.1"))
+    def mixed_method(self):  # pylint: disable=no-self-use,function-redefined
+        return "all 4.4, 4.5, 2020.1 and 2021.1 except 4.4.rc2, 4.4.rc3, 2020.1.rc2 and 2020.1.rc3"
+
+    @scylla_versions(("4.6.rc1", None), ("2022.1.rc1", None))
+    def mixed_method(self):  # pylint: disable=no-self-use,function-redefined
+        return "4.6.rc1 and higher, 2022.1.rc1 and higher"
+
+    @scylla_versions(("4.6.rc1", None))
+    def new_oss_method(self):  # pylint: disable=no-self-use,function-redefined
+        return "4.6.rc1 and higher"
+
+    @scylla_versions(("2022.1.rc1", None))
+    def new_es_method(self):  # pylint: disable=no-self-use,function-redefined
+        return "4.6.rc1 and higher"
+
+    @scylla_versions(("4.6.rc1", None), ("2022.1.rc1", None))
+    def new_mixed_method(self):  # pylint: disable=no-self-use,function-redefined
+        return "4.6.rc1 and higher"
+
+
+@pytest.mark.parametrize("scylla_version,method", [(scylla_version, method) for scylla_version in (
+    "4.2.rc1", "4.2", "4.2.0", "4.2.1",
+    "4.3.rc1", "4.3", "4.3.0", "4.3.1",
+    "4.4.rc1", "4.4.rc4", "4.4", "4.4.0", "4.4.4",
+    "4.5.rc1", "4.5", "4.5.0", "4.5.1",
+    "4.6.rc1", "4.6", "4.6.0", "4.6.1",
+    "4.7.rc1", "4.7", "4.7.0", "4.7.1",
+    "5.0.rc1", "5.0", "5.0.0", "5.0.1",
+) for method in ("oss_method", "mixed_method")] + [(scylla_version, method) for scylla_version in (
+    "2019.1", "2019.1.0", "2019.1.1",
+    "2020.1", "2020.1.0", "2020.1.1",
+    "2021.1", "2021.1.0", "2021.1.1",
+    "2022.1", "2022.1.0", "2022.1.1",
+) for method in ("es_method", "mixed_method")] + [(scylla_version, method) for scylla_version in (
+    "4.6.rc1", "4.6", "4.6.0", "4.6.1"
+) for method in ("new_oss_method", "new_mixed_method")] + [(scylla_version, method) for scylla_version in (
+    "2022.1.rc1", "2022.1", "2022.1.0", "2022.1.1",
+) for method in ("new_es_method", "new_mixed_method")])
+def test_scylla_versions_decorator_positive(scylla_version, method):
+    for nemesis_like_class in (True, False):
+        cls_instance = ClassWithVersiondMethods(
+            scylla_version=scylla_version, nemesis_like_class=nemesis_like_class)
+        assert getattr(cls_instance, method)()
+
+
+@pytest.mark.parametrize("scylla_version,method", (
+    ("4.4.rc2", "oss_method"),
+    ("4.4.rc2", "mixed_method"),
+    ("4.4.rc3", "oss_method"),
+    ("4.4.rc3", "mixed_method"),
+    ("2020.1.rc2", "es_method"),
+    ("2020.1.rc2", "mixed_method"),
+    ("2020.1.rc3", "es_method"),
+    ("2020.1.rc3", "mixed_method"),
+    ("4.4", "es_method"),
+    ("2020.1", "oss_method"),
+    ("4.5", "new_oss_method"),
+    ("4.5", "new_mixed_method"),
+    ("4.6.rc1", "new_es_method"),
+    ("2021.1", "new_es_method"),
+    ("2021.1", "new_mixed_method"),
+    ("2022.1.rc1", "new_oss_method"),
+))
+def test_scylla_versions_decorator_negative(scylla_version, method):
+    for nemesis_like_class in (True, False):
+        try:
+            cls_instance = ClassWithVersiondMethods(
+                scylla_version=scylla_version, nemesis_like_class=nemesis_like_class)
+            getattr(cls_instance, method)()
+        except MethodVersionNotFound as exc:
+            assert "Method '{}' with version '{}' is not supported in '{}'!".format(
+                method, scylla_version, cls_instance.__class__.__name__) in str(exc)
+        else:
+            assert False, f"Versioned method must have been not found for the '{scylla_version}' scylla version"
