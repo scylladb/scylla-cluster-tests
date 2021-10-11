@@ -12,7 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 from typing import Optional, List, Union
-from sdcm.remote.remote_base import StreamWatcher, Result
+from sdcm.remote.remote_base import StreamWatcher, Result, CommandRunner
 from unit_tests.lib.data_pickle import Pickler
 
 
@@ -69,27 +69,4 @@ class MockRemoter:
         else:
             raise RuntimeError('Wrong response value, could be Result or Exception')
 
-    # pylint: disable=too-many-arguments
-    def sudo(self,
-             cmd: str,
-             timeout: Optional[float] = None,
-             ignore_status: bool = False,
-             verbose: bool = True,
-             new_session: bool = False,
-             log_file: Optional[str] = None,
-             retry: int = 1,
-             watchers: Optional[List[StreamWatcher]] = None,
-             user: Optional[str] = 'root') -> Result:
-        if user != self.user:
-            if user == 'root':
-                cmd = f"sudo {cmd}"
-            else:
-                cmd = f"sudo -u {user} {cmd}"
-        return self.run(cmd=cmd,
-                        timeout=timeout,
-                        ignore_status=ignore_status,
-                        verbose=verbose,
-                        new_session=new_session,
-                        log_file=log_file,
-                        retry=retry,
-                        watchers=watchers)
+    sudo = CommandRunner.sudo

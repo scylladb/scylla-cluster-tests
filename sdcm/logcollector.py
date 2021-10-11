@@ -435,7 +435,7 @@ class GrafanaEntity(BaseMonitoringEntity):  # pylint: disable=too-few-public-met
         if not test_start_time:
             # set test start time previous 6 hours
             test_start_time = time.time() - (6 * 3600)
-        self.start_time = str(test_start_time).split('.')[0] + '000'
+        self.start_time = str(test_start_time).split('.', maxsplit=1)[0] + '000'
         self.grafana_dashboards = self.base_grafana_dashboards + kwargs.pop("extra_entities", [])
         self.remote_browser = None
         super().__init__(*args, **kwargs)

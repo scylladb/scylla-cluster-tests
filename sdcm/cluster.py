@@ -835,7 +835,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def spot_monitoring_thread(self):
         while True:
-            if self.termination_event.isSet():
+            if self.termination_event.is_set():
                 break
             try:
                 self.wait_ssh_up(verbose=False)
@@ -889,7 +889,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         """
         Keep reporting new events from db log, every 30 seconds.
         """
-        while not self.termination_event.isSet():
+        while not self.termination_event.is_set():
             self.termination_event.wait(15)
             try:
                 self._read_system_log_and_publish_events(start_from_beginning=False,
@@ -1025,7 +1025,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @log_run_info
     def stop_task_threads(self):
-        if self.termination_event.isSet():
+        if self.termination_event.is_set():
             return
         self.log.info('Set termination_event')
         self.termination_event.set()
@@ -1514,7 +1514,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 if event:
                     event.publish()
 
-            if self.termination_event.isSet() and self.test_config.DECODING_QUEUE.empty():
+            if self.termination_event.is_set() and self.test_config.DECODING_QUEUE.empty():
                 break
 
     def copy_scylla_debug_info(self, node, debug_file):
@@ -2395,7 +2395,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.remoter.run(cmd, ignore_status=True, verbose=True, log_file=mgmt_log_name)
 
     def scylla_manager_log_thread(self):
-        while not self.termination_event.isSet():
+        while not self.termination_event.is_set():
             self.retrieve_scylla_manager_log()
 
     def start_scylla_manager_log_capture(self):
@@ -3088,7 +3088,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             self.add_nodes(n_nodes, enable_auto_bootstrap=self.auto_bootstrap)
         else:
             raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
-        self.coredumps = dict()
+        self.coredumps = {}
         super().__init__()
 
     @cached_property
@@ -4743,7 +4743,7 @@ class BaseLoaderSet():
 
     @staticmethod
     def _parse_cs_results(lines):
-        results = dict()
+        results = {}
         results['time'] = []
         results['ops'] = []
         results['totalops'] = []

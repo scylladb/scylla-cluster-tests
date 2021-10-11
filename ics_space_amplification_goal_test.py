@@ -226,7 +226,7 @@ class IcsSpaceAmplificationTest(LongevityTest):
                 additional_compaction_params.update({'space_amplification_goal': sag})
             # (3) Altering compaction with SAG=None,1.5,1.2,1.5,None
             self._alter_table_compaction(additional_compaction_params=additional_compaction_params)
-            stress_queue = list()
+            stress_queue = []
             InfoEvent(message=f"Starting C-S over-write load: {stress_cmd}").publish()
 
             start_time = time.time()

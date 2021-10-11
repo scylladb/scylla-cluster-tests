@@ -33,16 +33,16 @@ class NdBenchStressEventsPublisher(FileFollowerThread):
         super().__init__()
 
         self.node = str(node)
-        self.cs_log_filename = ndbench_log_filename
+        self.ndbench_log_filename = ndbench_log_filename
         self.event_id = event_id
 
     def run(self) -> None:
         while not self.stopped():
-            if not os.path.isfile(self.cs_log_filename):
+            if not os.path.isfile(self.ndbench_log_filename):
                 time.sleep(0.5)
                 continue
 
-            for line_number, line in enumerate(self.follow_file(self.cs_log_filename)):
+            for line_number, line in enumerate(self.follow_file(self.ndbench_log_filename)):
                 if self.stopped():
                     break
 
@@ -57,7 +57,7 @@ class NdBenchStressEventsPublisher(FileFollowerThread):
 
 
 class NdBenchStatsPublisher(FileFollowerThread):
-    METRICS = dict()
+    METRICS = {}
     collectible_ops = ['read', 'write']
 
     def __init__(self, loader_node, loader_idx, ndbench_log_filename):

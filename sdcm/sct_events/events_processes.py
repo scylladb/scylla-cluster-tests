@@ -132,7 +132,7 @@ class EventsProcessesRegistry:
         self.log_dir = Path(log_dir)
         self.default = _default
         self._registry_dict_lock = threading.RLock()
-        self._registry_dict = dict()
+        self._registry_dict = {}
         LOGGER.debug("New events processes registry created: %s", self)
 
     def start_events_process(self, name: str, klass: Type[EventsProcess]) -> None:

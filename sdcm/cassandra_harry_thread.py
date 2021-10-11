@@ -54,18 +54,16 @@ class CassandraHarryThread:
     #  pylint: disable=too-many-arguments
     def __init__(self, stress_cmd, loader_set, timeout, node_list=None, round_robin=False, use_single_loader=False,
                  stop_test_on_failure=False, stress_num=1, credentials=None):
-        if not node_list:
-            node_list = []
-        self.loader_set = loader_set
         self.stress_cmd = stress_cmd
-        self.timeout = timeout
-        self.use_single_loader = use_single_loader
-        self.round_robin = round_robin
-        self.node_list = node_list
-        self.stress_num = stress_num
-        if credentials and 'username=' not in self.stress_cmd:
+        if credentials and "username=" not in self.stress_cmd:
             self.stress_cmd += " -username {} -password {}".format(*credentials)
+        self.loader_set = loader_set
+        self.timeout = timeout
+        self.node_list = node_list or []
+        self.round_robin = round_robin
+        self.use_single_loader = use_single_loader
         self.stop_test_on_failure = stop_test_on_failure
+        self.stress_num = stress_num
 
         self.executor = None
         self.results_futures = []
@@ -124,6 +122,25 @@ class CassandraHarryThread:
 
         return harry_summary, errors
 
+    def run(self):
+        if self.round_robin:
+            loaders = [self.loader_set.get_loader()]
+        else:
+            loaders = self.loader_set.nodes if not self.use_single_loader else [self.loader_set.nodes[0]]
+        LOGGER.debug("Round-Robin through loaders, Selected loader is {} ".format(loaders))
+
+        self.max_workers = (os.cpu_count() or 1) * 5
+        LOGGER.debug("Starting %d cassandra-harry Worker threads", self.max_workers)
+        # pylint: disable=consider-using-with
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers)
+
+        for loader_idx, loader in enumerate(loaders):
+            self.results_futures += [self.executor.submit(self._run_stress_harry,
+                                                          *(loader, loader_idx, self.stress_cmd, self.node_list))]
+            time.sleep(60)
+
+        return self
+
     def _run_stress_harry(self, node, loader_idx, stress_cmd, node_list):
 
         CassandraHarryEvent.start(node=node, stress_cmd=stress_cmd).publish()
@@ -163,25 +180,6 @@ class CassandraHarryThread:
                 CassandraHarryEvent.finish(node=node, stress_cmd=stress_cmd, log_file_name=log_file_name).publish()
 
         return node, result
-
-    def run(self):
-        if self.round_robin:
-            loaders = [self.loader_set.get_loader()]
-        else:
-            loaders = self.loader_set.nodes if not self.use_single_loader else [self.loader_set.nodes[0]]
-        LOGGER.debug("Round-Robin through loaders, Selected loader is {} ".format(loaders))
-
-        self.max_workers = (os.cpu_count() or 1) * 5
-        LOGGER.debug("Starting %d cassandra-harry Worker threads", self.max_workers)
-        # pylint: disable=consider-using-with
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers)
-
-        for loader_idx, loader in enumerate(loaders):
-            self.results_futures += [self.executor.submit(self._run_stress_harry,
-                                                          *(loader, loader_idx, self.stress_cmd, self.node_list))]
-            time.sleep(60)
-
-        return self
 
     @staticmethod
     def _parse_harry_summary(lines):  # pylint: disable=too-many-branches

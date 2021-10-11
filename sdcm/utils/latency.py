@@ -20,7 +20,7 @@ def avg(values):
 
 # pylint: disable=too-many-arguments,too-many-locals,too-many-nested-blocks,too-many-branches
 def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
-    res = dict()
+    res = {}
     prometheus = PrometheusDBStats(host=monitor_node.external_address)
     duration = int(end - start)
     cassandra_stress_precision = ['99', '95']  # in the future should include also 'max'
@@ -32,8 +32,8 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
             precision = f'perc_{precision}'
         query = f'collectd_cassandra_stress_{load_type}_gauge{{type="lat_{precision}"}}'
         query_res = prometheus.query(query, start, end)
-        latency_values_lst = list()
-        max_latency_values_lst = list()
+        latency_values_lst = []
+        max_latency_values_lst = []
         for entry in query_res:
             if not entry['values']:
                 continue
@@ -81,7 +81,7 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
 
 
 def calculate_latency(latency_results):
-    result_dict = dict()
+    result_dict = {}
     all_keys = list(latency_results.keys())
     steady_key = ''
     if all_keys:
@@ -93,19 +93,19 @@ def calculate_latency(latency_results):
     result_dict[steady_key] = latency_results[steady_key].copy()
     for key in all_keys:
         result_dict[key] = latency_results[key].copy()
-        temp_dict = dict()
+        temp_dict = {}
         for cycle in latency_results[key]['cycles']:
             for metric, value in cycle.items():
                 if metric not in temp_dict:
-                    temp_dict[metric] = list()
+                    temp_dict[metric] = []
                 temp_dict[metric].append(value)
         for temp_key, temp_val in temp_dict.items():
             if 'Cycles Average' not in result_dict[key]:
-                result_dict[key]['Cycles Average'] = dict()
+                result_dict[key]['Cycles Average'] = {}
             average = format(avg([float(val) for val in temp_val]), '.2f')
             result_dict[key]['Cycles Average'][temp_key] = float(f'{average}')
             if 'Relative to Steady' not in result_dict[key]:
-                result_dict[key]['Relative to Steady'] = dict()
+                result_dict[key]['Relative to Steady'] = {}
             if temp_key in latency_results[steady_key]:
                 steady_val = float(latency_results[steady_key][temp_key])
                 if steady_val != 0:

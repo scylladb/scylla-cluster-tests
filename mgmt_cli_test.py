@@ -221,7 +221,7 @@ class BackupFunctionsMixIn:
         # starts - due to the heavy load, the schema propogation can take long time and c-s fails.
         prepare_write_cmd = self.params.get('prepare_write_cmd')
         keyspace_num = self.params.get('keyspace_num')
-        write_queue = list()
+        write_queue = []
 
         # When the load is too heavy for one loader when using MULTI-KEYSPACES, the load is spreaded evenly across
         # the loaders (round_robin).

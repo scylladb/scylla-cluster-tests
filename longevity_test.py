@@ -113,8 +113,8 @@ class LongevityTest(ClusterTester):
         # starts - due to the heavy load, the schema propogation can take long time and c-s fails.
         prepare_write_cmd = self.params.get('prepare_write_cmd')
         keyspace_num = self.params.get('keyspace_num')
-        write_queue = list()
-        verify_queue = list()
+        write_queue = []
+        verify_queue = []
 
         if not prepare_write_cmd:
             self.log.debug("No prepare write commands are configured to run. Continue with stress commands")
@@ -182,7 +182,7 @@ class LongevityTest(ClusterTester):
 
         self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
                                     tester_obj=self)
-        stress_queue = list()
+        stress_queue = []
 
         # prepare write workload
         prepare_write_cmd = self.params.get('prepare_write_cmd')
@@ -336,7 +336,7 @@ class LongevityTest(ClusterTester):
 
         self.db_cluster.start_nemesis()
 
-        stress_params_list = list()
+        stress_params_list = []
 
         customer_profiles = self.params.get('cs_user_profiles')
 
@@ -373,7 +373,7 @@ class LongevityTest(ClusterTester):
 
         for batch, _, _, extra_tables_idx in list(chunks(stress_params_list, batch_size)):
 
-            stress_queue = list()
+            stress_queue = []
             batch_params = dict(round_robin=True, stress_cmd=[])
 
             # add few stress threads with tables that weren't pre-created
@@ -394,7 +394,7 @@ class LongevityTest(ClusterTester):
                 self.verify_stress_thread(cs_thread_pool=stress)
 
     def _run_stress_in_batches(self, total_stress, batch_size, stress_cmd):
-        stress_queue = list()
+        stress_queue = []
         pre_create_schema = self.params.get('pre_create_schema')
 
         if pre_create_schema:
@@ -500,7 +500,8 @@ class LongevityTest(ClusterTester):
         cs_user_profiles = self.params.get('cs_user_profiles')
         # read user-profile
         for profile_file in cs_user_profiles:
-            profile_yaml = yaml.safe_load(open(profile_file))
+            with open(profile_file) as fobj:
+                profile_yaml = yaml.safe_load(fobj)
             keyspace_definition = profile_yaml['keyspace_definition']
             keyspace_name = profile_yaml['keyspace']
             table_template = string.Template(profile_yaml['table_definition'])

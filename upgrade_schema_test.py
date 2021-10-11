@@ -28,7 +28,7 @@ from sdcm.tester import ClusterTester
 from thrift_bindings.v22.Cassandra import *
 from thrift_bindings.v22.ttypes import NotFoundException
 
-tests = list()
+tests = []
 ks_name = 'test_upgrade_schema_ks'
 thrift_client = None
 cql_client = None

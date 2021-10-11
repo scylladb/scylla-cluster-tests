@@ -308,24 +308,15 @@ class ManagerTask:
 
 class RepairTask(ManagerTask):
     @property
-    def per_keyspace_progress(self):
+    def per_keyspace_progress(self) -> dict[str, float]:
         """
         Since, as of now, the progress table of a repair task shows the progress of every table,
         this function will create an average for each keyspace and return the progress of all of the keyspaces in a dict
-        :return: dict
         """
-        progress_table_lines = self.detailed_progress[1:]  # Removing headers
         inclusive_table_progress_dict = {}
-        for line in progress_table_lines:
-            keyspace_name, _, progress_percentage, _ = line
-            if keyspace_name not in inclusive_table_progress_dict:
-                inclusive_table_progress_dict[keyspace_name] = []
-            inclusive_table_progress_dict[keyspace_name].append(int(progress_percentage.strip()[:-1]))
-        per_keyspace_progress = {}
-        for keyspace_name in inclusive_table_progress_dict:
-            average_progress = mean(inclusive_table_progress_dict[keyspace_name])
-            per_keyspace_progress[keyspace_name] = average_progress
-        return per_keyspace_progress
+        for keyspace_name, _, progress_percentage, _ in self.detailed_progress[1:]:  # skip headers
+            inclusive_table_progress_dict.setdefault(keyspace_name, []).append(int(progress_percentage.strip()[:-1]))
+        return {keyspace_name: mean(progress) for keyspace_name, progress in inclusive_table_progress_dict.items()}
 
 
 class HealthcheckTask(ManagerTask):

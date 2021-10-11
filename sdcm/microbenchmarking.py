@@ -1,5 +1,18 @@
 #!/usr/bin/env python3
-from __future__ import absolute_import
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2020 ScyllaDB
+
 import os
 import sys
 import logging
@@ -75,11 +88,12 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
         query = f"hostname:'{self.hostname}' AND versions.scylla-server.version:{self.db_version[:3]}*"
         if additional_filter:
             query += " AND " + additional_filter
-        output = self._es.search(
+        output = self._es.search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
             index=self._es_index,
+            q=query,
+            size=self._limit,
             filter_path=filter_path,
-            size=self._limit,  # pylint: disable=unexpected-keyword-arg
-            q=query)
+        )
         return output
 
     def check_regression(self, current_results):  # pylint: disable=arguments-differ

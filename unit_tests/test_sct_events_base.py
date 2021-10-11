@@ -137,7 +137,7 @@ class TestSctEvent(SctEventTestCase):
         self.assertNotEqual(z, y)
 
     def test_equal_pickle_unpickle(self):
-        global Y
+        global Y  # pylint: disable=global-variable-not-assigned; assigned by class definition
 
         class Y(SctEvent):
             pass
@@ -370,7 +370,7 @@ class TestSctEvent(SctEventTestCase):
         self.assertEqual(yt.attr1, "value1")
 
     def test_add_subevent_type_pickle(self):
-        global Y
+        global Y  # pylint: disable=global-variable-not-assigned; assigned by class definition
 
         class Y(SctEvent):
             T: Type[SctEvent]
@@ -491,7 +491,7 @@ class TestLogEvent(SctEventTestCase):
         self.assertTrue(y._ready_to_publish)
 
     def test_clone_fresh(self):
-        global Y
+        global Y  # pylint: disable=global-variable-not-assigned; assigned by class definition
 
         class Y(LogEvent):
             pass
@@ -514,7 +514,7 @@ class TestLogEvent(SctEventTestCase):
         self.assertIsInstance(y, SctEventProtocol)
 
     def test_clone_with_info(self):
-        global Y
+        global Y  # pylint: disable=global-variable-not-assigned; assigned by class definition
 
         class Y(LogEvent):
             pass

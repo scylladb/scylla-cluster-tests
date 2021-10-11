@@ -39,7 +39,7 @@ class NemesisElasticSearchPublisher:
 
     @cached_property
     def stats(self):
-        _stats = dict()
+        _stats = {}
         _stats['versions'] = self.tester.get_scylla_versions()
         _stats['test_details'] = self.tester.get_test_details()
         _stats['test_details']['test_name'] = self.tester.id()

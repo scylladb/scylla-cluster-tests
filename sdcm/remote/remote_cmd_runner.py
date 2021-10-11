@@ -70,7 +70,7 @@ class RemoteCmdRunner(RemoteCmdRunnerBase, ssh_transport='fabric', default=True)
             return False
 
     def ssh_ping_thread(self):
-        while not self.ssh_up_thread_termination.isSet():
+        while not self.ssh_up_thread_termination.is_set():
             result = self._ssh_ping()
             if result:
                 self.ssh_is_up.set()
