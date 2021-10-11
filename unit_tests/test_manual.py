@@ -1,20 +1,38 @@
-from __future__ import absolute_import
-from __future__ import print_function
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2021 ScyllaDB
+
+from __future__ import annotations
+
 import time
 import unittest
 import tempfile
 import logging
+from typing import TYPE_CHECKING
 
+import boto3
 import requests
 
 from sdcm.prometheus import start_metrics_server, nemesis_metrics_obj
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.setup import start_events_device, stop_events_device
 
-from sdcm.ec2_client import EC2Client
 from sdcm.stress_thread import CassandraStressThread, CassandraStressEventsPublisher
 from sdcm.loader import CassandraStressExporter
 from sdcm.ycsb_thread import YcsbStressThread
+
+if TYPE_CHECKING:
+    from mypy_boto3_ec2 import EC2Client
+
 
 logging.basicConfig(format="%(asctime)s - %(levelname)-8s - %(name)-10s: %(message)s", level=logging.DEBUG)
 
@@ -58,7 +76,7 @@ class EC2ClientTests(unittest.TestCase):
                        'Groups': ['sg-5e79983a']}]
         user_data = '--clustername cluster-scale-test-xxx --bootstrap true --totalnodes 3'
 
-        ec2 = EC2Client(region_name='us-east1')
+        ec2: EC2Client = boto3.client("ec2", region_name="us-east1")
         instance_type = 'm3.medium'
         image_id = 'ami-56373b2d'
         avail_zone = ec2.get_subnet_info(network_if[0]['SubnetId'])['AvailabilityZone']

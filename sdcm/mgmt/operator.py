@@ -1,3 +1,16 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2021 ScyllaDB
+
 import logging
 from typing import List, Optional
 from dataclasses import dataclass, asdict, fields
@@ -370,8 +383,8 @@ class ScyllaManagerToolOperator(ScyllaManagerTool):
             cluster = self.clusterClass(
                 manager_node=self.manager_node, cluster_name=cluster_name, scylla_cluster=self.scylla_cluster)
         else:
-            cluster.set_scylla_cluster(self.scylla_cluster)
-            cluster.set_cluster_name(cluster_name)
+            cluster.set_scylla_cluster(self.scylla_cluster)  # pylint: disable=no-member
+            cluster.set_cluster_name(cluster_name)  # pylint: disable=no-member
         return cluster
 
     def __init__(self, manager_node, scylla_cluster):

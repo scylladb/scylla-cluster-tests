@@ -182,7 +182,7 @@ def latency_calculator_decorator(func):
 
         latency_results_file_path = args[0].tester.latency_results_file
         if not os.path.exists(latency_results_file_path):
-            latency_results = dict()
+            latency_results = {}
         else:
             with open(latency_results_file_path, 'r') as file:
                 data = file.read().strip()
@@ -190,9 +190,9 @@ def latency_calculator_decorator(func):
 
         if "steady" not in func.__name__.lower():
             if func.__name__ not in latency_results:
-                latency_results[func.__name__] = dict()
+                latency_results[func.__name__] = {}
             if 'cycles' not in latency_results[func.__name__]:
-                latency_results[func.__name__]['cycles'] = list()
+                latency_results[func.__name__]['cycles'] = []
         result = latency.collect_latency(monitor, start, end, workload, args[0].cluster, all_nodes_list)
         if "steady" in func.__name__.lower():
             if 'Steady State' not in latency_results:

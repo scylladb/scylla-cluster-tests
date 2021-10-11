@@ -69,7 +69,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         prepare_write_cmd = self.params.get('prepare_write_cmd')
         if prepare_write_cmd:
             self.create_test_stats(sub_type='write-prepare')
-            stress_queue = list()
+            stress_queue = []
             params = {'prefix': 'preload-'}
             # Check if the prepare_cmd is a list of commands
             if not isinstance(prepare_write_cmd, six.string_types) and len(prepare_write_cmd) > 1:
@@ -264,7 +264,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         partitions_per_loader = partition_count // n_loaders
         str_additional_args = "-partition-count={} -clustering-row-count={} -consistency-level={}".format(
             partitions_per_loader, clustering_row_count, consistency_level)
-        write_queue = list()
+        write_queue = []
         offset = 0
         for _ in range(n_loaders):
             str_offset = "-partition-offset {}".format(offset)
@@ -361,7 +361,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.print_nodes_used_capacity()
 
         self.log.debug("Start a background stress load")
-        stress_queue = list()
+        stress_queue = []
         params = {'prefix': 'background-load-'}
         params.update({'stress_num': 1, 'round_robin': True})
         for stress_cmd in background_stress_cmds:

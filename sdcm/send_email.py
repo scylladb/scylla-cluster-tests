@@ -621,7 +621,7 @@ def get_running_instances_for_email_report(test_id: str, ip_filter: str = None):
 def send_perf_email(reporter, test_results, logs, email_recipients, testrun_dir, start_time):  # pylint: disable=too-many-arguments
     for subject, content in test_results.items():
         if 'email_body' not in content:
-            content['email_body'] = dict()
+            content['email_body'] = {}
         if 'attachments' not in content:
             content['attachments'] = []
         if 'template' not in content:

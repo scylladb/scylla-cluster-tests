@@ -32,7 +32,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class YcsbStatsPublisher(FileFollowerThread):
-    METRICS = dict()
+    METRICS = {}
     collectible_ops = ['read', 'insert', 'update', 'read-failed', 'update-failed', 'verify']
 
     def __init__(self, loader_node, loader_idx, ycsb_log_filename):
@@ -74,7 +74,7 @@ class YcsbStatsPublisher(FileFollowerThread):
         # [CLEANUP: Count=5, Max=3, Min=0, Avg=0.6, 90=3, 99=3, 99.9=3, 99.99=3]
         # [UPDATE: Count=490, Max=190975, Min=2004, Avg=3866.96, 90=4395, 99=6755, 99.9=190975, 99.99=190975]
 
-        regex_dict = dict()
+        regex_dict = {}
         for operation in self.collectible_ops:
             regex_dict[operation] = re.compile(
                 fr'\[{operation.upper()}:\sCount=(?P<count>\d*?),'

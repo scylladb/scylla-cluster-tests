@@ -91,9 +91,9 @@ from sdcm.utils.latency import calculate_latency
 CLUSTER_CLOUD_IMPORT_ERROR = ""
 try:
     import cluster_cloud
-except ImportError as exc:
+except ImportError as import_exc:
     cluster_cloud = None
-    CLUSTER_CLOUD_IMPORT_ERROR = str(exc)
+    CLUSTER_CLOUD_IMPORT_ERROR = str(import_exc)
 
 configure_logging(exception_handler=handle_exception, variables={'log_dir': TestConfig().logdir()})
 
@@ -2436,7 +2436,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         n_loaders = int(self.params.get('n_loaders'))
         keys_per_node = total_keys // n_loaders
 
-        write_queue = list()
+        write_queue = []
         start = 1
         for i in range(1, n_loaders + 1):
             stress_cmd = base_cmd + stress_keys + str(keys_per_node) + population + str(start) + ".." + \

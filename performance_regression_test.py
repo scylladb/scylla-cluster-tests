@@ -162,7 +162,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             # create new document in ES with doc_id = test_id + timestamp
             # allow to correctly save results for future compare
             self.create_test_stats(sub_type='write-prepare', doc_id_with_timestamp=True)
-            stress_queue = list()
+            stress_queue = []
             params = {'prefix': 'preload-'}
             # Check if the prepare_cmd is a list of commands
             if isinstance(prepare_write_cmd, list):
@@ -555,7 +555,8 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
             # Get materialized view name from user profile
 
-            user_profile_yaml = yaml.safe_load(open(user_profile))
+            with open(user_profile) as fobj:
+                user_profile_yaml = yaml.safe_load(fobj)
             mv_name = ''
 
             for k in user_profile_yaml:

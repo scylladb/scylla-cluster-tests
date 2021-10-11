@@ -1,3 +1,16 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2021 ScyllaDB
+
 import logging
 from pathlib import Path
 
@@ -6,8 +19,8 @@ import jenkins
 from sdcm.wait import wait_for
 
 
-DIR_TEMPLATE = open(Path(__file__).parent / 'folder-template.xml').read()
-JOB_TEMPLATE = open(Path(__file__).parent / 'template.xml').read()
+DIR_TEMPLATE = Path(__file__).parent.joinpath("folder-template.xml").read_text()
+JOB_TEMPLATE = Path(__file__).parent.joinpath("template.xml").read_text()
 LOGGER = logging.getLogger(__name__)
 
 

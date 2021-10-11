@@ -443,13 +443,13 @@ class TestStatsMixin(Stats):
     This mixin is responsible for saving test details and statistics in database.
     """
     KEYS = {
-        'test_details': dict(),
-        'setup_details': dict(),
-        'versions': dict(),
-        'results': dict(),
-        'nemesis': dict(),
-        'errors': list(),
-        'coredumps': dict(),
+        'test_details': {},
+        'setup_details': {},
+        'versions': {},
+        'results': {},
+        'nemesis': {},
+        'errors': [],
+        'coredumps': {},
     }
     PROMETHEUS_STATS = ('throughput', 'latency_read_99', 'latency_write_99')
     PROMETHEUS_STATS_UNITS = {'throughput': "op/s", 'latency_read_99': "us", 'latency_write_99': "us"}

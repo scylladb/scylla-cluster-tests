@@ -296,9 +296,9 @@ class DockerBasedStressThread:
         self.stress_cmd = stress_cmd
         self.timeout = timeout
         self.stress_num = stress_num
-        self.node_list = node_list if node_list else []
+        self.node_list = node_list or []
         self.round_robin = round_robin
-        self.params = params if params else dict()
+        self.params = params or {}
         self.loaders = []
 
         self.executor = None

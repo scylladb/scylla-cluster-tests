@@ -205,9 +205,8 @@ def validate_previous_task_details(task, previous_task_details):
     """
     Compares the details of the task next run and history to the previously extracted next run and history
     """
-    current_task_details = wait_until_task_finishes_return_details(task, wait=False)
-    for detail_name in current_task_details:
-        assert current_task_details[detail_name] == previous_task_details[detail_name],\
+    for detail_name, current_value in wait_until_task_finishes_return_details(task, wait=False).items():
+        assert current_value == previous_task_details[detail_name], \
             f"previous task {detail_name} is not identical to the current history"
 
 

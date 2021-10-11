@@ -75,7 +75,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             # create new document in ES with doc_id = test_id + timestamp
             # allow to correctly save results for future compare
             self.create_test_stats(sub_type='write-prepare', doc_id_with_timestamp=True)
-            stress_queue = list()
+            stress_queue = []
             params = {'prefix': 'preload-'}
             for stress_type in ['dynamodb', 'cassandra-cql']:
                 # Check if the prepare_cmd is a list of commands

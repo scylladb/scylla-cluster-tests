@@ -29,7 +29,7 @@ from unit_tests.lib.events_utils import EventsUtilsMixin
 # pylint: disable=protected-access
 
 
-class TestFileLogger(unittest.TestCase, EventsUtilsMixin):
+class TestGrafana(unittest.TestCase, EventsUtilsMixin):
     @classmethod
     def setUpClass(cls) -> None:
         cls.setup_events_processes(events_device=False, events_main_device=True, registry_patcher=False)
