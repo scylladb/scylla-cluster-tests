@@ -1629,7 +1629,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             scylla_yaml_object = ScyllaYaml(**scylla_yaml)
             yield scylla_yaml_object
             scylla_yaml.clear()
-            scylla_yaml.update(scylla_yaml_object.dict(exclude_defaults=True, exclude_unset=True))
+            scylla_yaml.update(scylla_yaml_object.dict(
+                exclude_defaults=True,
+                exclude_unset=True,
+                # NOTE: explicit fields included into yaml no matter what,
+                #  they are needed for nodetool to operate properly
+                explicit=['partitioner', 'commitlog_sync', 'commitlog_sync_period_in_ms']
+            ))
 
     def remote_manager_yaml(self):
         return self._remote_yaml(path=SCYLLA_MANAGER_YAML_PATH)
