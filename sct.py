@@ -36,6 +36,7 @@ from prettytable import PrettyTable
 from sdcm.remote import LOCALRUNNER
 from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
+from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_configuration
 from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_runner, clean_sct_runners
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.azure_region import AzureRegion, region_name_to_location
@@ -169,24 +170,20 @@ def cli():
     docker_hub_login(remoter=LOCALRUNNER)
 
 
-# '''
-# Work in progress
+@cli.command('provision-resources', help="Provision resources for the test")
+@click.option('-b', '--backend', type=click.Choice(SCTConfiguration.available_backends), help="Backend to use")
+@click.option('-t', '--test-name', type=str, help="Test name")
+@click.option('-c', '--config', multiple=True, type=click.Path(exists=True), help="Test config .yaml to use, can have multiple of those")
+def provision_resources(backend, test_name: str, config: str):
+    if config:
+        os.environ['SCT_CONFIG_FILES'] = str(list(config))
+    if backend:
+        os.environ['SCT_CLUSTER_BACKEND'] = backend
 
-# from sdcm.tester import ClusterTester
+    add_file_logger()
 
-# @cli.command()
-# @click.option('--scylla-version', type=str, default='3.0.3')
-# @sct_option('--db-nodes', 'n_db_nodes')
-# @sct_option('--loader-nodes', 'n_loaders')
-# @sct_option('--monitor-nodes', 'n_monitor_nodes')
-# def provision(**kwargs):
-#     logging.basicConfig(level=logging.INFO)
-#     # click.secho('Going to install scylla cluster version={}'.format(kwargs['scylla_version']), reverse=True, fg='bright_yellow')
-#     # TODO: find a better way for ctrl+c to kill this process
-#     test = ClusterTester(methodName='setUp')
-#     test._setup_environment_variables()
-#     test.setUp()
-# '''  # pylint: disable=pointless-string-statement
+    layout = SCTProvisionLayout(params=create_sct_configuration(test_name=test_name))
+    layout.provision()
 
 
 @cli.command('clean-resources', help='clean tagged instances in both clouds (AWS/GCE)')
