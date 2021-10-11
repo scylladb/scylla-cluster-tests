@@ -2,13 +2,14 @@
 
 import random
 from typing import Generator
+from pathlib import Path
 
 import pytest
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import EventPeriod
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, ContinuousEventRegistryException
-from sdcm.sct_events.database import FullScanEvent
+from sdcm.sct_events.database import FullScanEvent, get_pattern_to_event_to_func_mapping
 from sdcm.sct_events.loaders import GeminiStressEvent
 from sdcm.sct_events.nodetool import NodetoolEvent
 
@@ -102,3 +103,27 @@ class TestContinuousEventsRegistry:
 
         assert len(found_events.get_filtered()) == 1
         assert found_events.get_filtered()[0] == nodetool_event
+
+    def test_get_compact_events_by_attr_from_log(self, populated_registry: ContinuousEventsRegistry):
+        with Path(__file__).parent.joinpath("test_data/compaction_event.log").open(encoding="utf-8") as sct_log:
+            for line in sct_log.readlines():
+                db_event_pattern_func_map = get_pattern_to_event_to_func_mapping(node='node1')
+                for item in db_event_pattern_func_map:
+                    event_match = item.pattern.search(line)
+                    if event_match:
+                        try:
+                            item.period_func(match=event_match)
+                        except RuntimeError as rex:
+                            # Ignore the fact that the event is not published. It still will be created
+                            if 'You should create default EventsProcessRegistry first' in str(rex):
+                                pass
+
+        registry_filter = populated_registry.get_registry_filter()
+        found_events = registry_filter.filter_by_attr(base="CompactionEvent",
+                                                      severity=Severity.NORMAL,
+                                                      period_type=EventPeriod.END.value,
+                                                      table='system.local').get_filtered()
+
+        assert len(found_events) == 2, f"Found events: {found_events}"
+        assert sorted([event.compaction_process_id for event in found_events]) == \
+            ['7c58a350-2a65-11ec-b5b3-d14f790022cc', 'edc49670-2a65-11ec-a8b8-b62621e7624c']

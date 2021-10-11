@@ -260,8 +260,30 @@ class RepairEvent(ScyllaDatabaseContinuousEvent):
     begin_pattern = r'Repair 1 out of \d+ ranges, id=\[id=\d+, uuid=[\d\w-]{36}\], shard=(?P<shard>\d+)'
     end_pattern = r'repair id \[id=\d+, uuid=[\d\w-]{36}\] on shard (?P<shard>\d+) completed'
 
-    def __init__(self, node: str, shard: int, severity=Severity.NORMAL):
+    def __init__(self, node: str, shard: int, severity=Severity.NORMAL, **__):
         super().__init__(node=node, shard=shard, severity=severity)
+
+
+class CompactionEvent(ScyllaDatabaseContinuousEvent):
+    begin_pattern = r'\[shard (?P<shard>\d+)\] compaction - \[Compact (?P<table>\w+.\w+) ' \
+                    r'(?P<compaction_process_id>.+)\] Compacting .*'
+    end_pattern = r'\[shard (?P<shard>\d+)\] compaction - \[Compact (?P<table>\w+.\w+) ' \
+                  r'(?P<compaction_process_id>.+)\] Compacted .*'
+
+    def __init__(self, node: str, shard: int, table: str, compaction_process_id: str,  # pylint: disable=too-many-arguments
+                 severity=Severity.NORMAL, **__):
+        super().__init__(node=node, shard=shard, severity=severity)
+        self.table = table
+        self.compaction_process_id = compaction_process_id
+
+    @property
+    def msgfmt(self):
+        table = " table={0.table}" if self.table is not None else ""
+        compaction_process_id = " compaction_process_id={0.compaction_process_id}" \
+            if self.compaction_process_id is not None else ""
+        fmt = f"{super().msgfmt}{table}{compaction_process_id}"
+
+        return fmt
 
 
 class JMXServiceEvent(ScyllaDatabaseContinuousEvent):
@@ -276,7 +298,8 @@ SCYLLA_DATABASE_CONTINUOUS_EVENTS = [
     ScyllaServerStatusEvent,
     BootstrapEvent,
     RepairEvent,
-    JMXServiceEvent
+    JMXServiceEvent,
+    CompactionEvent
 ]
 
 
@@ -292,20 +315,30 @@ def get_pattern_to_event_to_func_mapping(node: str) \
     event_registry = ContinuousEventsRegistry()
 
     def _add_event(event_type: Type[ScyllaDatabaseContinuousEvent], match: Match):
-        shard = int(match.groupdict()["shard"]) if "shard" in match.groupdict().keys() else None
-        new_event = event_type(node=node, shard=shard)
+        kwargs = match.groupdict()
+        if "shard" in kwargs:
+            kwargs["shard"] = int(kwargs["shard"])
+
+        new_event = event_type(node=node, **kwargs)
         new_event.begin_event()
 
     def _end_event(event_type: Type[ScyllaDatabaseContinuousEvent], match: Match):
-        shard = int(match.groupdict()["shard"]) if "shard" in match.groupdict().keys() else None
+        kwargs = match.groupdict()
+
         event_filter = event_registry.get_registry_filter()
         event_filter \
             .filter_by_node(node=node) \
             .filter_by_type(event_type=event_type) \
             .filter_by_period(period_type=EventPeriod.BEGIN.value)
 
-        if shard is not None:
-            event_filter.filter_by_shard(shard)
+        if kwargs.get("shard"):
+            event_filter.filter_by_shard(int(kwargs["shard"]))
+
+        if kwargs.get("table"):
+            event_filter.filter_by_attr(base="CompactionEvent", table=kwargs["table"])
+
+        if kwargs.get("compaction_process_id"):
+            event_filter.filter_by_attr(base="CompactionEvent", compaction_process_id=kwargs["compaction_process_id"])
 
         begun_events = event_filter.get_filtered()
 
