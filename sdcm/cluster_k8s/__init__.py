@@ -67,7 +67,6 @@ from sdcm.utils.k8s import (
     get_pool_affinity_modifiers,
     get_preferred_pod_anti_affinity_values,
     ApiCallRateLimiter,
-    CordonNodes,
     JSON_PATCH_TYPE,
     KubernetesOps,
     KUBECTL_TIMEOUT,
@@ -534,10 +533,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 "racks": [{
                     "name": "manager-rack",
                     "members": 1,
-                    # TODO: uncomment 'placement' field when it is allowed to be provided
-                    #       as part of the scylla-manager helm chart.
-                    #       https://github.com/scylladb/scylla-operator/issues/631
-                    # "placement": {"nodeAffinity": helm_affinity["affinity"]},
+                    "placement": helm_affinity["affinity"],
                     "storage": {"capacity": "10Gi"},
                     "resources": {
                         "limits": {"cpu": 1, "memory": "200Mi"},
@@ -562,21 +558,15 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
             self.kubectl(f'create namespace {SCYLLA_MANAGER_NAMESPACE}')
 
-            # TODO: usage of 'cordon' feature below is a workaround for the scylla-operator issue
-            #       https://github.com/scylladb/scylla-operator/issues/631
-            #       where it is not possible to provide node/pod affinity for the scylla server
-            #       which gets installed for the scylla-manager deployed by scylla-operator.
-            to_cordon = ", ".join(['loader-pool', 'monitoring-pool', 'scylla-pool'])
-            with CordonNodes(self.kubectl, f"{self.POOL_LABEL_NAME} in ({to_cordon})"):
-                # Install and wait for initialization of the Scylla Manager chart
-                LOGGER.debug(self.helm_install(
-                    target_chart_name="scylla-manager",
-                    source_chart_name="scylla-operator/scylla-manager",
-                    version=self._scylla_operator_chart_version,
-                    use_devel=True,
-                    values=values,
-                    namespace=SCYLLA_MANAGER_NAMESPACE,
-                ))
+            # Install and wait for initialization of the Scylla Manager chart
+            LOGGER.debug(self.helm_install(
+                target_chart_name="scylla-manager",
+                source_chart_name="scylla-operator/scylla-manager",
+                version=self._scylla_operator_chart_version,
+                use_devel=True,
+                values=values,
+                namespace=SCYLLA_MANAGER_NAMESPACE,
+            ))
 
         self.kubectl_wait(
             "--all --for=condition=Ready pod",
