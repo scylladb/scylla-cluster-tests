@@ -1,24 +1,15 @@
 #!groovy
 
-def call(Map params, String region, functional_test = false){
-    // handle params which can be a json list
+def call(Map params, String region){
     def aws_region = initAwsRegionParam(params.aws_region, region)
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = getCloudProviderFromBackend(params.backend)
-    def test_cmd
-
-    if (functional_test != null && functional_test) {
-        test_cmd = "run-pytest"
-    } else {
-        test_cmd = "run-test"
-    }
 
     sh """
     #!/bin/bash
+
     set -xe
     env
-
-    rm -fv ./latest
 
     export SCT_CLUSTER_BACKEND="${params.backend}"
     export SCT_CONFIG_FILES=${test_config}
@@ -131,13 +122,13 @@ def call(Map params, String region, functional_test = false){
         export PYTEST_ADDOPTS="${params.pytest_addopts}"
     fi
 
-    echo "start test ......."
+    echo "Starting to resource provision ..."
     RUNNER_IP=\$(cat sct_runner_ip||echo "")
     if [[ -n "\${RUNNER_IP}" ]] ; then
-        ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} ${test_cmd} ${params.test_name} --backend ${params.backend}
+        ./docker/env/hydra.sh --execute-on-runner \${RUNNER_IP} provision-resources -b "${params.backend}" -t "${params.test_name}"
     else
-        ./docker/env/hydra.sh ${test_cmd} ${params.test_name} --backend ${params.backend}  --logdir "`pwd`"
+        ./docker/env/hydra.sh provision-resources -b "${params.backend}" -t "${params.test_name}" --logdir "`pwd`"
     fi
-    echo "end test ....."
+    echo "Finished resource provision"
     """
 }

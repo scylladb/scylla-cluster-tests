@@ -186,6 +186,21 @@ def call(Map pipelineParams) {
                     }
                 }
             }
+            stage('Provision Resources') {
+                steps {
+                    catchError() {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    timeout(time: 30, unit: 'MINUTES') {
+                                        provisionResources(params, builder.region)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             stage('Run SCT Test') {
                 steps {
                     catchError(stageResult: 'FAILURE') {
