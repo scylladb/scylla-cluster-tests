@@ -3606,7 +3606,7 @@ class ClusterNodesNotReady(Exception):
     pass
 
 
-class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-instance-attributes
+class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-instance-attributes, too-many-statements
     node_setup_requires_scylla_restart = True
     name: str
     nodes: List[BaseNode]
@@ -3809,23 +3809,31 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.remoter.run('tar -xvf /tmp/scylla/*.tar.gz -C /tmp/scylla/', ignore_status=True, verbose=True)
 
             # replace the packages
-            self.log.debug(f'Node distro is {node.distro}, will check the package suffix received')
+            node.log.debug('Node distro is %s, will check the package suffix received', node.distro)
             if node.distro.is_rhel_like:
                 check_package_suites_distro(node, 'rpm')
-                self.log.info('Installed RPMs before replacing with new RPM files')
+                node.log.info('Installed RPMs before replacing with new RPM files')
                 node.remoter.run('yum list installed | grep scylla', verbose=True)
-                self.log.debug('Will replace the RPM files with the ones provided as a parameter to the test')
+                node.log.debug('Will replace the RPM files with the ones provided as a parameter to the test')
                 node.remoter.sudo('rpm -URvh --replacefiles /tmp/scylla/*.rpm', ignore_status=False, verbose=True)
-                self.log.info('Installed RPMs after replacing with new RPM files')
+                node.log.info('Installed RPMs after replacing with new RPM files')
                 node.remoter.run('yum list installed | grep scylla', verbose=True)
             elif node.distro.is_ubuntu:
                 check_package_suites_distro(node, 'deb')
-                self.log.info('Installed .deb packages before replacing with new .DEB files')
-                node.remoter.run('apt list --installed | grep scylla', verbose=True)
-                node.remoter.sudo('sh -c \'yes Y | dpkg --force-depends -i /tmp/scylla/scylla*\'',
-                                  ignore_status=False, verbose=True)
-                self.log.info('Installed .deb packages after replacing with new .DEB files')
-                node.remoter.run('apt list --installed | grep scylla', verbose=True)
+
+                def list_installed_packages():
+                    node.scylla_packages_installed()
+
+                @retrying(n=6, sleep_time=10, allowed_exceptions=(UnexpectedExit,))
+                def dpkg_force_install():
+                    node.remoter.sudo(shell_script_cmd("yes Y | dpkg --force-depends -i /tmp/scylla/scylla*"),
+                                      ignore_status=False, verbose=True)
+
+                node.log.info('Installed .deb packages before replacing with new .DEB files')
+                list_installed_packages()
+                dpkg_force_install()
+                node.log.info('Installed .deb packages after replacing with new .DEB files')
+                list_installed_packages()
             _queue.put(node)
             _queue.task_done()
 
