@@ -1373,8 +1373,7 @@ def get_branched_gce_images(scylla_version: str, project: str = SCYLLA_GCE_IMAGE
     filters = f"(family eq scylla)(labels.branch eq {branch})(name ne debug-image-.*)"
 
     if build_id not in ("latest", "all", ):
-        # filters += f"(labels.build-id eq {build_id})"  # asked releng to add `build-id' label too, but
-        filters += f"(name eq .+-build-{build_id})"      # use BUILD_ID from an image name for now
+        filters += f"(labels.build-id eq {build_id})"
 
     LOGGER.info("Looking for GCE images match [%s]", scylla_version)
     compute_engine = get_gce_driver()
