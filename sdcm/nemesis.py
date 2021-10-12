@@ -2456,6 +2456,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                             node=self.target_node), \
             DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
                            line="Fail to send STREAM_MUTATION_DONE",
+                           node=self.target_node), \
+            DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,
+                           line="streaming::stream_exception",
                            node=self.target_node):
             self.target_node.reboot(hard=True, verify_ssh=True)
             streaming_thread.join(60)
