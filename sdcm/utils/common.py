@@ -1440,7 +1440,7 @@ def get_db_tables(session, ks, with_compact_storage=True):
 
     """
     output = []
-    for table in session.cluster.metadata.keyspaces[ks].tables.keys():
+    for table in list(session.cluster.metadata.keyspaces[ks].tables.keys()):
         table_code = session.cluster.metadata.keyspaces[ks].tables[table].as_cql_query()
         if with_compact_storage is None:
             output.append(table)
