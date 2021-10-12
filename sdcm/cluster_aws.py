@@ -441,8 +441,22 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
             fi
         """)
-    # pylint: disable=too-many-arguments
 
+    def _create_or_find_instances(self, count, ec2_user_data, dc_idx):
+        if self.nodes:
+            return self._create_instances(count, ec2_user_data, dc_idx)
+        if self.test_config.REUSE_CLUSTER:
+            instances = self._get_instances(dc_idx)
+            assert len(instances) == count, f"Found {len(instances)} instances, while expect {count}"
+            self.log.info('Found instances to be reused from test [%s] = %s', self.test_config.REUSE_CLUSTER, instances)
+            return instances
+        if instances := self._get_instances(dc_idx):
+            self.log.info('Found provisioned instances = %s', instances)
+            return instances
+        self.log.info('Found no provisioned instances. Provision them.')
+        return self._create_instances(count, ec2_user_data, dc_idx)
+
+    # pylint: disable=too-many-arguments
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
         post_boot_script = self.test_config.get_startup_script()
         if self.extra_network_interface:
@@ -462,11 +476,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             else:
                 ec2_user_data = post_boot_script
 
-        if self.test_config.REUSE_CLUSTER:
-            instances = self._get_instances(dc_idx)
-        else:
-            instances = self._create_instances(count, ec2_user_data, dc_idx)
-
+        instances = self._create_or_find_instances(count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx)
         added_nodes = [self._create_node(instance, self._ec2_ami_username,
                                          self.node_prefix, node_index,
                                          self.logdir, dc_idx=dc_idx)
