@@ -1,5 +1,6 @@
 #!groovy
 
+// TODO: fix it by adding creation of SCT Runner
 def call(Map pipelineParams) {
 
     def builder = getJenkinsLabels('gce', null)
@@ -13,7 +14,7 @@ def call(Map pipelineParams) {
         environment {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
-            SCT_CLUSTER_BACKEND   = 'k8s-gce-minikube'
+            SCT_CLUSTER_BACKEND   = 'k8s-local-kind-gce'
 		}
         parameters {
             string(defaultValue: 'https://storage.googleapis.com/scylla-operator-charts/latest',

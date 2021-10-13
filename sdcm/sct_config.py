@@ -106,8 +106,8 @@ class SCTConfiguration(dict):
         #       'siren-tests' project gets switched to the 'aws' and 'gce' ones.
         #       Such a switch must be fast change.
         'aws', 'aws-siren', 'k8s-local-kind-aws', 'k8s-eks',
-        'gce', 'gce-siren', 'k8s-local-kind-gce', 'k8s-gke', 'k8s-gce-minikube',
-        'k8s-local-minikube', 'k8s-local-kind',
+        'gce', 'gce-siren', 'k8s-local-kind-gce', 'k8s-gke',
+        'k8s-local-kind',
     ]
 
     config_options = [
@@ -675,21 +675,7 @@ class SCTConfiguration(dict):
         dict(name="gce_pd_ssd_disk_size_monitor", env="SCT_GCE_SSD_DISK_SIZE_MONITOR", type=int,
              help=""),
 
-        # k8s-gce-minikube options
-        dict(name="gce_image_minikube", env="SCT_GCE_IMAGE_MINIKUBE", type=str,
-             help=""),
-
-        dict(name="gce_instance_type_minikube", env="SCT_GCE_INSTANCE_TYPE_MINIKUBE", type=str,
-             help=""),
-
-        dict(name="gce_root_disk_type_minikube", env="SCT_GCE_ROOT_DISK_TYPE_MINIKUBE", type=str,
-             help=""),
-
-        dict(name="gce_root_disk_size_minikube", env="SCT_GCE_ROOT_DISK_SIZE_MINIKUBE", type=int,
-             help=""),
-
         # k8s-eks options
-
         dict(name="eks_service_ipv4_cidr", env="SCT_EKS_SERVICE_IPV4_CIDR", type=str,
              help=""),
 
@@ -1249,11 +1235,6 @@ class SCTConfiguration(dict):
                       'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'gce_root_disk_size_monitor',
                       'gce_n_local_ssd_disk_monitor', 'gce_datacenter'],
 
-        'k8s-local-minikube': ['user_credentials_path', 'scylla_version', 'scylla_mgmt_agent_version',
-                               'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter', 'k8s_scylla_rack',
-                               'k8s_scylla_cluster_name', 'k8s_scylla_disk_gi', 'mini_k8s_version',
-                               'mgmt_docker_image'],
-
         'k8s-local-kind': ['user_credentials_path', 'scylla_version', 'scylla_mgmt_agent_version',
                            'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter', 'k8s_scylla_rack',
                            'k8s_scylla_cluster_name', 'k8s_scylla_disk_gi', 'mini_k8s_version',
@@ -1268,15 +1249,6 @@ class SCTConfiguration(dict):
                                'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter', 'k8s_scylla_rack',
                                'k8s_scylla_cluster_name', 'k8s_scylla_disk_gi', 'mini_k8s_version',
                                'mgmt_docker_image'],
-
-        'k8s-gce-minikube': ['gce_image_minikube', 'gce_instance_type_minikube', 'gce_root_disk_type_minikube',
-                             'gce_root_disk_size_minikube', 'user_credentials_path', 'scylla_version',
-                             'scylla_mgmt_agent_version', 'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter',
-                             'k8s_scylla_rack', 'k8s_scylla_cluster_name',
-                             'k8s_scylla_disk_gi', 'gce_image', 'gce_instance_type_loader', 'gce_root_disk_type_loader',
-                             'gce_n_local_ssd_disk_loader', 'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
-                             'gce_root_disk_size_monitor', 'gce_n_local_ssd_disk_monitor', 'mini_k8s_version',
-                             'mgmt_docker_image'],
 
         'k8s-gke': ['gke_cluster_version', 'gce_instance_type_db', 'gce_root_disk_type_db',
                     'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db', 'user_credentials_path', 'scylla_version',
@@ -1303,8 +1275,6 @@ class SCTConfiguration(dict):
         "baremetal": [sct_abs_path('defaults/baremetal_config.yaml')],
         "aws-siren": [sct_abs_path('defaults/aws_config.yaml')],
         "gce-siren": [sct_abs_path('defaults/gce_config.yaml')],
-        "k8s-gce-minikube": [sct_abs_path('defaults/k8s_gce_minikube_config.yaml')],
-        "k8s-local-minikube": [sct_abs_path('defaults/k8s_local_minikube_config.yaml')],
         "k8s-local-kind": [sct_abs_path('defaults/k8s_local_kind_config.yaml')],
         "k8s-local-kind-aws": [
             sct_abs_path('defaults/aws_config.yaml'), sct_abs_path('defaults/k8s_local_kind_config.yaml')],
@@ -1401,7 +1371,9 @@ class SCTConfiguration(dict):
         if scylla_version := self.get('scylla_version'):  # pylint: disable=too-many-nested-blocks
             if not self.get('docker_image'):
                 self['docker_image'] = get_scylla_docker_repo_from_version(scylla_version)
-            if self.get("cluster_backend") in ["docker", "k8s-gce-minikube", "k8s-gke"]:
+            if self.get("cluster_backend") in (
+                    "docker", "k8s-eks", "k8s-gke",
+                    "k8s-local-kind", "k8s-local-kind-aws", "k8s-local-kind-gce"):
                 self.log.info("Assume that Scylla Docker image has repo file pre-installed.")
             elif not self.get('ami_id_db_scylla') and self.get('cluster_backend') == 'aws':
                 # ami.name format examples: ScyllaDB 4.4.0 or ScyllaDB Enterprise 2019.1.1

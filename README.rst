@@ -566,7 +566,7 @@ on Local kind cluster::
 Running via sct.py
 ------------------
 
-The benefit of running in this mode, is that you can reuse your local kind/minikube binary
+The benefit of running in this mode, is that you can reuse your local kind binary
 
 on EKS::
 
@@ -579,7 +579,7 @@ on Local kind cluster::
 Running via python
 ------------------
 
-The benefit of running in this mode, is that not only you can reuse your local kind/minikube binary
+The benefit of running in this mode, is that not only you can reuse your local kind binary
 But you also can use breakpoints to debug tests
 
 on EKS::
