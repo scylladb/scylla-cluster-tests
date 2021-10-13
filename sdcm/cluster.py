@@ -286,6 +286,15 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self._init_port_mapping()
 
         self.set_keep_alive()
+        if self.node_type == "db":
+            try:
+                self.remoter.sudo(shell_script_cmd("""\
+                echo 'kernel.perf_event_paranoid = 0' >> /etc/sysctl.conf
+                sysctl -p
+                """), verbose=True)
+            except Exception:  # pylint: disable=broad-except
+                LOGGER.error("Encountered an unhadled exception while changing 'perf_event_paranoid' value",
+                             exc_info=True)
         self._init_argus_resource()
 
     def _init_argus_resource(self):
