@@ -608,15 +608,15 @@ class ManagerCluster(ScyllaManagerBase):
         # │ task                                        │ next run                      │ ret. │ properties │ status │
         # ├─────────────────────────────────────────────┼───────────────────────────────┼──────┼────────────┼────────┤
         # │ repair/2a4125d6-5d5a-45b9-9d8d-dec038b3732d │ 26 Nov 18 00:00 UTC (+7 days) │ 3    │            │ DONE   │
-        # │ repair/dd98f6ae-bcf4-4c98-8949-573d533bb789 │                               │ 3    │            │ DONE   │
+        # │ backup/dd98f6ae-bcf4-4c98-8949-573d533bb789 │                               │ 3    │            │ DONE   │
         # ╰─────────────────────────────────────────────┴───────────────────────────────┴──────┴────────────┴────────╯
-        repair_task_list = []
+        task_list = []
         table_res = self._get_task_list()
-        if len(table_res) > 1:  # if there are any tasks in list - add them as RepairTask generated objects.
-            repair_task_rows_list = [row for row in table_res[1:] if row[0].startswith(f"{prefix}/")]
-            for row in repair_task_rows_list:
-                repair_task_list.append(task_class(task_id=row[0], cluster_id=self.id, manager_node=self.manager_node))
-        return repair_task_list
+        if len(table_res) > 1:
+            task_row_list = [row for row in table_res[1:] if row[0].startswith(f"{prefix}/")]
+            for row in task_row_list:
+                task_list.append(task_class(task_id=row[0], cluster_id=self.id, manager_node=self.manager_node))
+        return task_list
 
     @property
     def repair_task_list(self):
