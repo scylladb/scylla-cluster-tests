@@ -305,16 +305,16 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
     ldap_url_template: str = None
     saslauthd_socket_path: str = None
 
-    def dict(
+    def dict(  # pylint: disable=arguments-differ
         self,
         *,
-        include: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
-        exclude: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
+        include: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
+        exclude: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
         by_alias: bool = False,
         skip_defaults: bool = None,
-        exclude_unset: bool = False,
         exclude_defaults: bool = False,
         exclude_none: bool = False,
+        exclude_unset: bool = False,
         explicit: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
     ) -> 'DictStrAny':
         to_dict = super().dict(
