@@ -126,6 +126,7 @@ class CleanCloudResourcesTest(unittest.TestCase):
         "sdcm.utils.common.clean_instances_aws",
         "sdcm.utils.common.clean_elastic_ips_aws",
         "sdcm.utils.common.clean_clusters_gke",
+        "sdcm.utils.common.clean_clusters_eks",
         "sdcm.utils.common.clean_instances_gce",
         "sdcm.utils.common.clean_resources_docker",
     )
