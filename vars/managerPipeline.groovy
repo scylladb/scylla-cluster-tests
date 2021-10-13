@@ -169,7 +169,7 @@ def call(Map pipelineParams) {
             }
             stage('Get test duration') {
                 options {
-                    timeout(time: 1, unit: 'MINUTES')
+                    timeout(time: 2, unit: 'MINUTES')
                 }
                 steps {
                     catchError(stageResult: 'FAILURE') {
