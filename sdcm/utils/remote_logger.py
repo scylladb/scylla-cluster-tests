@@ -309,20 +309,28 @@ class KubernetesWrongSchedulingLogger(CommandClusterLoggerBase):
         if not self._cluster.allowed_labels_on_scylla_node:
             return ''
 
-        wrong_scheduled_pods_on_scylla_node = []
-
-        node_names = [node.metadata.name for node in self._cluster.pools[self._cluster.SCYLLA_POOL_NAME].nodes.items]
-
+        wrong_scheduled_pods_on_scylla_node, node_names = [], []
+        if self._cluster.SCYLLA_POOL_NAME in self._cluster.pools:
+            node_names = [
+                node.metadata.name
+                for node in self._cluster.pools[self._cluster.SCYLLA_POOL_NAME].nodes.items]
+        else:
+            self._log.warning(
+                "'%s' pool is not registered. Can not get node names to check pods scheduling",
+                self._cluster.SCYLLA_POOL_NAME)
+            return ''
         try:
-            for pod in KubernetesOps.list_pods(self._cluster,
-                                               field_selector=f"spec.nodeName in ({', '.join(node_names)})"):
+            for pod in KubernetesOps.list_pods(self._cluster):
+                if pod.spec.node_name not in node_names:
+                    continue
                 for key, value in self._cluster.allowed_labels_on_scylla_node:
                     if (key, value) in pod.metadata.labels.items():
                         break
                 else:
-                    wrong_scheduled_pods_on_scylla_node.append(f"{pod.metadata.name} ({pod.nodeName} node)")
+                    wrong_scheduled_pods_on_scylla_node.append(
+                        f"{pod.metadata.name} ({pod.spec.node_name} node)")
         except Exception as details:  # pylint: disable=broad-except
-            self._log.debug("Failed to get pods list: %s", str(details))
+            self._log.warning("Failed to get pods list: %s", str(details))
 
         if not wrong_scheduled_pods_on_scylla_node:
             return ''
