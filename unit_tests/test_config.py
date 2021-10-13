@@ -233,7 +233,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
                          "https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-3.0.repo")
 
     def test_12_k8s_scylla_version_ubuntu_loader_centos(self):  # pylint: disable=invalid-name
-        os.environ['SCT_CLUSTER_BACKEND'] = 'k8s-gce-minikube'
+        os.environ['SCT_CLUSTER_BACKEND'] = 'k8s-local-kind'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'centos'
         os.environ['SCT_SCYLLA_VERSION'] = 'latest'

@@ -39,7 +39,7 @@ from cassandra import ConsistencyLevel
 from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.cluster import NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady
 from sdcm.cluster import NodeStayInClusterAfterDecommission
-from sdcm.cluster_k8s.mini_k8s import MinikubeK8sMixin
+from sdcm.cluster_k8s.mini_k8s import LocalKindCluster
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR
 from sdcm.utils.common import (get_db_tables, generate_random_string,
@@ -1007,10 +1007,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             assert '(1 rows)' in result.stdout, f'The key {key} is not loaded by `nodetool refresh`'
 
     def disrupt_nodetool_enospc(self, sleep_time=30, all_nodes=False):
-        if isinstance(self.cluster, MinikubeK8sMixin):
-            # Minikube cluster has shared file system, it is shared not only between cluster nodes
-            # but also between kubernetes services too, which make kubernetes inoperational once enospc is reached
-            raise UnsupportedNemesis('disrupt_nodetool_enospc is not supported on minikube cluster')
+        if isinstance(self.cluster, LocalKindCluster):
+            # Kind cluster has shared file system, it is shared not only among cluster nodes, but
+            # also among kubernetes services which make kubernetes inoperational once enospc is reached.
+            # Moreover, it will cause host system's /var hosting disk go out of free space too
+            # which may cause unpredictable failures.
+            raise UnsupportedNemesis('disrupt_nodetool_enospc is not supported on local K8S clusters')
 
         if all_nodes:
             nodes = self.cluster.nodes

@@ -154,10 +154,6 @@
 | **<a href="#user-content-gce_pd_ssd_disk_size_db" name="gce_pd_ssd_disk_size_db">gce_pd_ssd_disk_size_db</a>**  |  | N/A | SCT_GCE_PD_SSD_DISK_SIZE_DB
 | **<a href="#user-content-gce_pd_ssd_disk_size_loader" name="gce_pd_ssd_disk_size_loader">gce_pd_ssd_disk_size_loader</a>**  |  | N/A | SCT_GCE_PD_SSD_DISK_SIZE_LOADER
 | **<a href="#user-content-gce_pd_ssd_disk_size_monitor" name="gce_pd_ssd_disk_size_monitor">gce_pd_ssd_disk_size_monitor</a>**  |  | N/A | SCT_GCE_SSD_DISK_SIZE_MONITOR
-| **<a href="#user-content-gce_image_minikube" name="gce_image_minikube">gce_image_minikube</a>**  |  | N/A | SCT_GCE_IMAGE_MINIKUBE
-| **<a href="#user-content-gce_instance_type_minikube" name="gce_instance_type_minikube">gce_instance_type_minikube</a>**  |  | N/A | SCT_GCE_INSTANCE_TYPE_MINIKUBE
-| **<a href="#user-content-gce_root_disk_type_minikube" name="gce_root_disk_type_minikube">gce_root_disk_type_minikube</a>**  |  | N/A | SCT_GCE_ROOT_DISK_TYPE_MINIKUBE
-| **<a href="#user-content-gce_root_disk_size_minikube" name="gce_root_disk_size_minikube">gce_root_disk_size_minikube</a>**  |  | N/A | SCT_GCE_ROOT_DISK_SIZE_MINIKUBE
 | **<a href="#user-content-gke_cluster_version" name="gke_cluster_version">gke_cluster_version</a>**  |  | N/A | SCT_GKE_CLUSTER_VERSION
 | **<a href="#user-content-gke_k8s_release_channel" name="gke_k8s_release_channel">gke_k8s_release_channel</a>**  |  | N/A | SCT_GKE_K8S_RELEASE_CHANNEL
 | **<a href="#user-content-k8s_deploy_monitoring" name="k8s_deploy_monitoring">k8s_deploy_monitoring</a>**  |  | N/A | SCT_K8S_DEPLOY_MONITORING

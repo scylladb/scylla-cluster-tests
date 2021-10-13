@@ -2,7 +2,6 @@ from collections import namedtuple
 import sdcm.utils.cloud_monitor  # pylint: disable=unused-import # import only to avoid cyclic dependency
 from sdcm.nemesis import Nemesis, CategoricalMonkey
 from sdcm.cluster_k8s.mini_k8s import LocalMinimalScyllaPodCluster
-from sdcm.cluster_k8s.mini_k8s import RemoteMinimalScyllaPodCluster
 from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
 from sdcm.cluster_k8s.eks import EksScyllaPodCluster
 from sdcm.cluster_gce import ScyllaGCECluster
@@ -70,10 +69,6 @@ def test_is_it_on_kubernetes():
         def __init__(self, params: dict = None):
             self.params = params
 
-    class FakeRemoteMinimalScyllaPodCluster(RemoteMinimalScyllaPodCluster):
-        def __init__(self, params: dict = None):
-            self.params = params
-
     class FakeGkeScyllaPodCluster(GkeScyllaPodCluster):
         def __init__(self, params: dict = None):
             self.params = params
@@ -104,7 +99,6 @@ def test_is_it_on_kubernetes():
             self.monitors = None
 
     assert FakeNemesis(FakeTester(FakeLocalMinimalScyllaPodCluster()), None)._is_it_on_kubernetes()
-    assert FakeNemesis(FakeTester(FakeRemoteMinimalScyllaPodCluster()), None)._is_it_on_kubernetes()
     assert FakeNemesis(FakeTester(FakeGkeScyllaPodCluster()), None)._is_it_on_kubernetes()
     assert FakeNemesis(FakeTester(FakeEksScyllaPodCluster()), None)._is_it_on_kubernetes()
 

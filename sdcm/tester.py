@@ -21,7 +21,7 @@ import stat
 import time
 import unittest
 import warnings
-from typing import NamedTuple, Optional, Union, List, Dict, Any, Type
+from typing import NamedTuple, Optional, Union, List, Dict, Any
 from uuid import uuid4
 from functools import wraps, cached_property
 import threading
@@ -238,8 +238,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     monitors: BaseMonitorSet = None
     loaders: BaseLoaderSet = None
     db_cluster: BaseScyllaCluster = None
-    k8s_cluster: Union[None, gke.GkeCluster, eks.EksCluster, mini_k8s.GceMinikubeCluster,
-                       mini_k8s.LocalMinikubeCluster] = None
+    k8s_cluster: Union[eks.EksCluster, gke.GkeCluster, mini_k8s.LocalKindCluster, None] = None
 
     def __init__(self, *args):  # pylint: disable=too-many-statements,too-many-locals,too-many-branches
         super().__init__(*args)
@@ -935,15 +934,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         params['private_ips'] = self.params.get('monitor_nodes_private_ip')
         self.monitors = cluster_baremetal.MonitorSetPhysical(**params)
 
-    def get_cluster_k8s_local_minimal_cluster(
-            self,
-            cluster_type: Union[Type[mini_k8s.LocalMinikubeCluster], Type[mini_k8s.LocalKindCluster]]):
-        if "minikube" in self.params.get("cluster_backend"):
-            # TODO: remove raising of the exception when our minikube implementation
-            #       gets multi-node support with dedicated nodes for Scylla.
-            raise NotImplementedError(
-                "Minikube backend not fully implemented. Need to add multi-node support")
-
+    def get_cluster_k8s_local_kind_cluster(self):
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
 
         container_node_params = dict(
@@ -951,7 +942,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             docker_image_tag=self.params.get('scylla_version'),
             node_key_file=self.credentials[0].key_file,
         )
-        self.k8s_cluster = cluster_type(
+        self.k8s_cluster = mini_k8s.LocalKindCluster(
             software_version=self.params.get("mini_k8s_version"),
             user_prefix=self.params.get("user_prefix"),
             params=self.params,
@@ -960,10 +951,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         for namespace in ('kube-system', 'local-path-storage'):
             self.k8s_cluster.set_nodeselector_for_deployments(
                 pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME, namespace=namespace)
-        self.k8s_cluster.deploy_cert_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
-        self.k8s_cluster.deploy_scylla_operator(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
-        if self.params.get('use_mgmt'):
-            self.k8s_cluster.deploy_scylla_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
 
         scylla_pool = mini_k8s.MinimalK8SNodePool(
             k8s_cluster=self.k8s_cluster,
@@ -971,6 +958,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             num_nodes=int(self.params.get("n_db_nodes")) + 1,
             image_type="fake-image-type",
             instance_type="fake-instance-type")
+        self.k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
+
+        self.k8s_cluster.deploy_cert_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
+        self.k8s_cluster.deploy_scylla_operator(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
+        if self.params.get('use_mgmt'):
+            self.k8s_cluster.deploy_scylla_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
+
         self.db_cluster = mini_k8s.LocalMinimalScyllaPodCluster(
             k8s_cluster=self.k8s_cluster,
             scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
@@ -1001,86 +995,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 user_prefix=self.params.get("user_prefix"),
                 params=self.params,
             )
-        else:
-            self.monitors = NoMonitorSet()
-
-    def get_cluster_k8s_gce_minikube(self):
-        self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
-
-        services = get_gce_services(self.params.get('gce_datacenter').split())
-        assert len(services) == 1, "Doesn't support multi DC setup for `k8s-gce-minikube' backend"
-
-        services, gce_datacenter = list(services.values()), list(services.keys())
-
-        self.k8s_cluster = \
-            mini_k8s.GceMinikubeCluster(mini_k8s_version=self.params.get("mini_k8s_version"),
-                                        gce_image=self.params.get("gce_image_minikube"),
-                                        gce_image_type=self.params.get("gce_root_disk_type_minikube"),
-                                        gce_image_size=self.params.get("gce_root_disk_size_minikube"),
-                                        gce_network=self.params.get("gce_network"),
-                                        services=services,
-                                        credentials=self.credentials,
-                                        gce_instance_type=self.params.get("gce_instance_type_minikube"),
-                                        gce_image_username=self.params.get("gce_image_username"),
-                                        user_prefix=self.params.get("user_prefix"),
-                                        params=self.params,
-                                        gce_datacenter=gce_datacenter)
-        self.k8s_cluster.wait_for_init()
-
-        if self.params.get('k8s_deploy_monitoring'):
-            self.k8s_cluster.deploy_monitoring_cluster(
-                is_manager_deployed=self.params.get('use_mgmt')
-            )
-
-        self.k8s_cluster.deploy_cert_manager()
-        self.k8s_cluster.deploy_scylla_operator()
-        if self.params.get('use_mgmt'):
-            self.k8s_cluster.deploy_scylla_manager()
-
-        # This should remove some of the unpredictability of pods startup time.
-        self.k8s_cluster.docker_pull(f"{self.params.get('docker_image')}:{self.params.get('scylla_version')}")
-
-        self.db_cluster = mini_k8s.RemoteMinimalScyllaPodCluster(
-            k8s_cluster=self.k8s_cluster,
-            scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
-            user_prefix=self.params.get("user_prefix"),
-            n_nodes=self.params.get("n_db_nodes"),
-            params=self.params)
-
-        self.log.debug("Update startup script with iptables rules")
-        startup_script = "\n".join((self.test_config.get_startup_script(),
-                                    *self.db_cluster.nodes_iptables_redirect_rules(),))
-        self.test_config.get_startup_script = lambda: startup_script
-
-        self.loaders = LoaderSetGCE(gce_image=self.params.get("gce_image"),
-                                    gce_image_type=self.params.get("gce_root_disk_type_loader"),
-                                    gce_image_size=None,
-                                    gce_network=self.params.get("gce_network"),
-                                    service=services[:1],
-                                    credentials=self.credentials,
-                                    gce_instance_type=self.params.get("gce_instance_type_loader"),
-                                    gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_loader"),
-                                    gce_image_username=self.params.get("gce_image_username"),
-                                    user_prefix=self.params.get("user_prefix"),
-                                    n_nodes=self.params.get('n_loaders'),
-                                    params=self.params,
-                                    gce_datacenter=gce_datacenter)
-        if self.params.get("n_monitor_nodes") > 0:
-            self.monitors = mini_k8s.MonitorSetMinikube(
-                gce_image=self.params.get("gce_image"),
-                gce_image_type=self.params.get("gce_root_disk_type_monitor"),
-                gce_image_size=self.params.get('gce_root_disk_size_monitor'),
-                gce_network=self.params.get("gce_network"),
-                service=services[:1],
-                credentials=self.credentials,
-                gce_instance_type=self.params.get("gce_instance_type_monitor"),
-                gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_monitor"),
-                gce_image_username=self.params.get("gce_image_username"),
-                user_prefix=self.params.get("user_prefix"),
-                n_nodes=self.params.get('n_monitor_nodes'),
-                targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
-                params=self.params,
-                gce_datacenter=gce_datacenter)
         else:
             self.monitors = NoMonitorSet()
 
@@ -1353,12 +1267,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.get_cluster_docker()
         elif cluster_backend == 'baremetal':
             self.get_cluster_baremetal()
-        elif cluster_backend == 'k8s-gce-minikube':
-            self.get_cluster_k8s_gce_minikube()
-        elif cluster_backend == 'k8s-local-minikube':
-            self.get_cluster_k8s_local_minimal_cluster(mini_k8s.LocalMinikubeCluster)
         elif cluster_backend in ('k8s-local-kind', 'k8s-local-kind-aws', 'k8s-local-kind-gce'):
-            self.get_cluster_k8s_local_minimal_cluster(mini_k8s.LocalKindCluster)
+            self.get_cluster_k8s_local_kind_cluster()
         elif cluster_backend == 'k8s-gke':
             self.get_cluster_k8s_gke()
         elif cluster_backend == 'k8s-eks':
@@ -2719,9 +2629,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                      "collector": MonitorLogCollector,
                      "logname": "monitoring_log", },
                     {"name": "k8s_cluster",
-                     "nodes": getattr(self, "k8s_cluster", None) and self.k8s_cluster.nodes,
+                     "nodes": [],
                      "collector": KubernetesLogCollector,
-                     "logname": "k8s_minikube_log", },)
+                     "logname": "k8s_log", },)
 
         for cluster in clusters:
             if not cluster["nodes"]:
@@ -2967,8 +2877,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             scylla_instance_type = self.params.get("instance_type_db") or "Unknown"
         elif backend in ("gce", "gce-siren", "k8s-gke"):
             scylla_instance_type = self.params.get("gce_instance_type_db") or "Unknown"
-        elif backend == "k8s-gce-minikube":
-            scylla_instance_type = self.params.get("gce_instance_type_minikube") or "Unknown"
         elif backend in ("baremetal", "docker"):
             scylla_instance_type = "N/A"
         else:
