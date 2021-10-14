@@ -187,7 +187,7 @@ class ArgusTestRun:
         backend = sct_config.get("cluster_backend")
         regions = sct_config.region_names
 
-        sct_runner_info = CloudInstanceDetails(ip=get_sct_runner_ip(), provider=backend,
+        sct_runner_info = CloudInstanceDetails(public_ip=get_sct_runner_ip(), provider=backend,
                                                region=regions[0], private_ip=get_my_ip())
 
         cloud_setup = cls.BACKEND_MAP.get(backend, _prepare_unknown_resource_setup)(sct_config)
