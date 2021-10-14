@@ -43,6 +43,18 @@ SUPPORT_URL="https://www.debian.org/support"
 BUG_REPORT_URL="https://bugs.debian.org/"
 """,
 
+    "Debian 11": """\
+PRETTY_NAME="Debian GNU/Linux 11 (bullseye)"
+NAME="Debian GNU/Linux"
+VERSION_ID="11"
+VERSION="11 (bullseye)"
+VERSION_CODENAME=bullseye
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+""",
+
     "CentOS 7": """\
 NAME="CentOS Linux"
 VERSION="7 (Core)"
@@ -265,6 +277,12 @@ class TestDistro(unittest.TestCase):
         self.assertTrue(Distro.DEBIAN10.is_debian10)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 10"])
         self.assertTrue(distro.is_debian10)
+        self.assertTrue(distro.is_debian)
+
+    def test_debian11(self):
+        self.assertTrue(Distro.DEBIAN11.is_debian11)
+        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Debian 11"])
+        self.assertTrue(distro.is_debian11)
         self.assertTrue(distro.is_debian)
 
     def test_centos7(self):

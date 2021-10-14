@@ -36,6 +36,7 @@ class Distro(enum.Enum):
     DEBIAN8 = ("debian", "8")
     DEBIAN9 = ("debian", "9")
     DEBIAN10 = ("debian", "10")
+    DEBIAN11 = ("debian", "11")
     UBUNTU14 = ("ubuntu", "14.04")
     UBUNTU16 = ("ubuntu", "16.04")
     UBUNTU18 = ("ubuntu", "18.04")
@@ -166,6 +167,10 @@ class Distro(enum.Enum):
     @property
     def is_debian10(self):
         return self == self.DEBIAN10
+
+    @property
+    def is_debian11(self):
+        return self == self.DEBIAN11
 
     @property
     def is_debian(self):
