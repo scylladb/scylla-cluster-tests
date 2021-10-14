@@ -105,7 +105,7 @@ class Event:
         if name_to_parse:
             if result := re.match(r"(.*\s)?(.*)(-\d+)", name_to_parse):
                 node_name = f"node{result.group(3)}"
-                cluster_name = result.group(2)
+                cluster_name = result.group(2).replace("node", "cluster")
                 return node_name, cluster_name
         return name_to_parse, None
 
