@@ -24,7 +24,7 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
     """
     Builds scylla yaml attributes that stays persistent across the cluster
     """
-
+    cluster_name: str
     test_config: Any = Field(as_dict=False)
     msldap_server_info: dict = Field(as_dict=False, default=None)
 

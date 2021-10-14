@@ -3,6 +3,7 @@
   "listen_address": "0.0.0.0",
   "endpoint_snitch": "org.apache.cassandra.locator.Ec2MultiRegionSnitch",
   "rpc_address": "0.0.0.0",
+  "cluster_name": "dummy_cluster",
   "seed_provider": [
     {
       "class_name": "org.apache.cassandra.locator.SimpleSeedProvider",

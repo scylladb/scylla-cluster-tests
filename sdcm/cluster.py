@@ -3602,6 +3602,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         and TestConfig is providing LDAP-related information
         """
         cluster_params_builder = ScyllaYamlClusterAttrBuilder(
+            cluster_name=self.name,
             params=self.params,
             test_config=self.test_config,
             msldap_server_info=KeyStore().get_ldap_ms_ad_credentials()

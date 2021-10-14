@@ -77,6 +77,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
         self._run_test(
             builder_params={
                 'node': FakeNode(),
+                'cluster_name': 'test-cluster',
                 'params': {
                     'cluster_backend': 'aws',
                     'region_name': 'eu-west-1',
@@ -91,6 +92,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                     'hinted_handoff': None,
                 }},
             expected_as_dict={
+                'cluster_name': 'test-cluster',
                 'alternator_enforce_authorization': False,
                 'enable_ipv6_dns_lookup': False,
             }
@@ -100,6 +102,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
         self._run_test(
             builder_params={
                 'test_config': TestConfigWithLdap,
+                'cluster_name': 'test-cluster',
                 'params': {
                     'cluster_backend': 'aws',
                     'region_name': 'eu-west-1 eu-west-2',
@@ -115,6 +118,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 }
             },
             expected_as_dict={
+                'cluster_name': 'test-cluster',
                 'alternator_enforce_authorization': False,
                 'authenticator': 'com.scylladb.auth.SaslauthdAuthenticator',
                 'authorizer': 'AllowAllAuthorizer',
@@ -132,6 +136,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
         self._run_test(
             builder_params={
                 'test_config': TestConfigWithLdap,
+                'cluster_name': 'test-cluster',
                 'params': {
                     'cluster_backend': 'gce',
                     'gce_datacenter': 'eu-west-1',
@@ -147,6 +152,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 }
             },
             expected_as_dict={
+                'cluster_name': 'test-cluster',
                 'alternator_enforce_authorization': False,
                 'alternator_port': True,
                 'alternator_write_isolation': 'always_use_lwt',
@@ -165,6 +171,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
         self._run_test(
             builder_params={
                 'test_config': TestConfigWithLdap,
+                'cluster_name': 'test-cluster',
                 'msldap_server_info': {
                     'ldap_bind_dn': 'SOMEDN',
                     'admin_password': 'PASSWORD',
@@ -185,6 +192,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 }
             },
             expected_as_dict={
+                'cluster_name': 'test-cluster',
                 'alternator_enforce_authorization': False,
                 'alternator_port': False,
                 'authenticator': 'com.scylladb.auth.SaslauthdAuthenticator',
@@ -203,6 +211,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
             self._run_test(
                 builder_params={
                     'test_config': TestConfigWithLdap,
+                    'cluster_name': 'test-cluster',
                     'params': {
                         'cluster_backend': 'gce',
                         'use_ldap_authorization': True,
@@ -216,6 +225,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
             self._run_test(
                 builder_params={
                     'test_config': TestConfigWithoutLdap,
+                    'cluster_name': 'test-cluster',
                     'params': {
                         'cluster_backend': 'aws',
                         'use_ldap_authorization': True,
