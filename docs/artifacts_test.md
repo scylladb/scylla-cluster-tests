@@ -20,6 +20,7 @@ jenkins-pipelines
 |-- artifacts-centos8.jenkinsfile
 |-- artifacts-debian9.jenkinsfile
 |-- artifacts-debian10.jenkinsfile
+|-- artifacts-debian11.jenkinsfile
 |-- artifacts-docker.jenkinsfile
 |-- artifacts-oel76.jenkinsfile
 |-- artifacts-ubuntu1604.jenkinsfile
@@ -73,6 +74,11 @@ hydra run-test artifacts_test --backend gce --config test-cases/artifacts/debian
 ## Debian 10 (buster)
 ```sh
 hydra run-test artifacts_test --backend gce --config test-cases/artifacts/debian10.yaml
+```
+
+## Debian 11 (bullseye)
+```sh
+hydra run-test artifacts_test --backend gce --config test-cases/artifacts/debian11.yaml
 ```
 
 ## RHEL 7

@@ -17,6 +17,7 @@ def get_distro_name(distro_object):
         Distro.CENTOS8: "centos8",
         Distro.DEBIAN9: "debian9",
         Distro.DEBIAN10: "debian10",
+        Distro.DEBIAN11: "debian11",
         Distro.UBUNTU16: "ubuntu16",
         Distro.UBUNTU18: "ubuntu18",
         Distro.UBUNTU20: "ubuntu20",

@@ -509,7 +509,7 @@ def list_gce_images_branch(version):
 @click.option('-d', '--dist-type', type=click.Choice(['centos', 'ubuntu', 'debian']),
               default='centos', help='Distribution type')
 @click.option('-v', '--dist-version', type=click.Choice(['xenial', 'trusty', 'bionic', 'focal',  # Ubuntu
-                                                         'jessie', 'stretch', 'buster']),       # Debian
+                                                         'jessie', 'stretch', 'buster', 'bullseye']),  # Debian
               default=None, help='deb style versions')
 def list_repos(dist_type, dist_version):
     add_file_logger()

@@ -634,10 +634,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         deprecation("consider to use node.distro.is_ubuntu18 property instead")
         return self.distro.is_ubuntu18
 
-    def is_ubuntu20(self):
-        deprecation("consider to use node.distro.is_ubuntu20 property instead")
-        return self.distro.is_ubuntu20
-
     def is_ubuntu(self):
         deprecation("consider to use node.distro.is_ubuntu property instead")
         return self.distro.is_ubuntu
@@ -649,10 +645,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def is_debian9(self):
         deprecation("consider to use node.distro.is_debian9 property instead")
         return self.distro.is_debian9
-
-    def is_debian10(self):
-        deprecation("consider to use node.distro.is_debian10 property instead")
-        return self.distro.is_debian10
 
     def is_debian(self):
         deprecation("consider to use node.distro.is_debian property instead")
@@ -2057,7 +2049,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     echo 'deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-stretch/Debian_9.0/ /' > /etc/apt/sources.list.d/scylla-3rdparty.list
                 """)
                 self.remoter.run('sudo bash -cxe "%s"' % install_debian_9_prereqs)
-            elif self.distro.is_debian10:
+            elif self.distro.is_debian10 or self.distro.is_debian11:
                 install_debian_10_prereqs = dedent("""
                     export DEBIAN_FRONTEND=noninteractive
                     apt-get update
@@ -2101,7 +2093,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run(f'sudo yum install -y java-1.8.0-openjdk {additional_pkgs}')
         elif self.distro.is_sles:
             raise Exception("Offline install on SLES isn't supported")
-        elif self.distro.is_debian10:
+        elif self.distro.is_debian10 or self.distro.is_debian11:
             self.remoter.run(f'sudo apt-get install -y openjdk-11-jre-headless {additional_pkgs}')
         else:
             self.remoter.run(f'sudo apt-get install -y openjdk-8-jre-headless {additional_pkgs}')
@@ -4595,7 +4587,7 @@ class BaseLoaderSet():
                 update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64
             """)
             node.remoter.run('sudo bash -cxe "%s"' % install_java_script)
-        elif node.distro.is_debian10:
+        elif node.distro.is_debian10 or node.distro.is_debian11:
             node.remoter.sudo(shell_script_cmd("""\
                 apt-get update
                 apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5E08FBD8B5D6EC9C
@@ -4991,7 +4983,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                 pip3 install -I -U psutil
                 systemctl start docker
             """)
-        elif node.is_debian9() or node.is_debian10():
+        elif node.distro.is_debian9 or node.distro.is_debian10 or node.distro.is_debian11:
             node.remoter.run(
                 cmd="sudo apt install -y apt-transport-https ca-certificates curl software-properties-common gnupg2")
             node.remoter.run('curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -', retry=3)
