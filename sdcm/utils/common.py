@@ -1880,11 +1880,16 @@ def get_testrun_status(test_id=None, logdir=None, only_critical=False):
     if not testrun_dir:
         return None
 
-    with open(os.path.join(testrun_dir, 'events_log/critical.log')) as f:  # pylint: disable=invalid-name
-        status = f.readlines()
+    status = ""
+    critical_log = os.path.join(testrun_dir, 'events_log/critical.log')
+    error_log = os.path.join(testrun_dir, 'events_log/error.log')
 
-    if not only_critical:
-        with open(os.path.join(testrun_dir, 'events_log/error.log')) as f:  # pylint: disable=invalid-name
+    if os.path.exists(critical_log):
+        with open(critical_log) as f:  # pylint: disable=invalid-name
+            status = f.readlines()
+
+    if not only_critical and os.path.exists(error_log):
+        with open(error_log) as f:  # pylint: disable=invalid-name
             status += f.readlines()
 
     return status
