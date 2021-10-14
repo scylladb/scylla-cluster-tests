@@ -34,7 +34,7 @@ env = Environment(
 
 class EventGroup(Enum):
     NODES_RELATED_EVENTS = ["ScyllaServerStatusEvent", "RepairEvent", "JMXServiceEvent", "DatabaseLogEvent",
-                            "BootstrapEvent", "NodetoolEvent", "DisruptionEvent"]
+                            "BootstrapEvent", "NodetoolEvent", "DisruptionEvent", "InstanceStatusEvent"]
     PROMETHEUS_EVENTS = ["PrometheusAlertManagerEvent"]
     SCT_EVENTS = ["InfoEvent", "ClusterHealthValidatorEvent"]
     STRESS_EVENTS = ["CassandraStressEvent", "CassandraStressLogEvent"]
@@ -137,7 +137,7 @@ class Event:
             label_string = f"nodetool_command: {self.event_dict['nodetool_command']}"
         elif self.event_dict["base"] == "DisruptionEvent":
             label_string = f"nemesis: {self.event_dict['nemesis_name']}"
-        elif self.event_dict["base"] == "DatabaseLogEvent":
+        elif self.event_dict["base"] in ["DatabaseLogEvent", "InstanceStatusEvent"]:
             label_string = f"type: {self.event_dict['type']}"
         else:
             label_string = self.event_dict['base']
