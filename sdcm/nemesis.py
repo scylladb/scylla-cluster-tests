@@ -2856,7 +2856,7 @@ def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
                 run = ArgusTestRun.get()
                 node_desc = NodeDescription(ip=args[0].target_node.public_ip_address,
                                             name=args[0].target_node.name, shards=args[0].target_node.scylla_shards)
-                nemesis_info = NemesisRunInfo(class_name=class_name, nemesis_name=method_name,
+                nemesis_info = NemesisRunInfo(class_name=class_name, name=method_name,
                                               duration=0, start_time=int(start_time), target_node=node_desc,
                                               status=NemesisStatus.RUNNING)
                 run.run_info.results.add_nemesis(nemesis_info)
@@ -2917,10 +2917,13 @@ def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
                 try:
                     if nemesis_info:
                         run = ArgusTestRun.get()
-                        if not nemesis_event.severity == Severity.ERROR:
-                            nemesis_info.complete()
-                        else:
+                        if nemesis_event.severity == Severity.ERROR:
                             nemesis_info.complete(nemesis_event.full_traceback)
+                        elif nemesis_event.is_skipped:
+                            nemesis_info.complete(nemesis_event.skip_reason)
+                            nemesis_info.status = NemesisStatus.SKIPPED
+                        else:
+                            nemesis_info.complete()
                         nemesis_info.duration = time_elapsed
                         run.save()
                 except Exception:  # pylint: disable=broad-except

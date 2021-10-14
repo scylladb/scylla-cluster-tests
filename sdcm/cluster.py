@@ -289,10 +289,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         try:
             run = ArgusTestRun.get()
-            instance_details = CloudInstanceDetails(ip=self.public_ip_address, region=self.region,
+            instance_details = CloudInstanceDetails(public_ip=self.public_ip_address, region=self.region,
                                                     provider=self.parent_cluster.cluster_backend,
                                                     private_ip=self.ip_address)
-            resource = CloudResource(name=self.name, resource_state=ResourceState.RUNNING,
+            resource = CloudResource(name=self.name, state=ResourceState.RUNNING,
                                      instance_info=instance_details)
             self.argus_resource = resource
             run.run_info.resources.attach_resource(resource)
@@ -1114,7 +1114,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             run = ArgusTestRun.get()
             if self.argus_resource in run.run_info.resources.leftover_resources:
                 run.run_info.resources.detach_resource(self.argus_resource)
-                self.argus_resource.resource_state = ResourceState.TERMINATED
                 run.save()
         except ArgusTestRunError:
             LOGGER.error("Unable to init argus - skipping...", exc_info=True)
@@ -3121,7 +3120,6 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.use_saslauthd_authenticator = self.params.get('use_saslauthd_authenticator')
         # default 'cassandra' password is weak password, MS AD doesn't allow to use it.
         self.added_password_suffix = False
-        self._cluster_backend = self.params.get("cluster_backend")
 
         if self.test_config.REUSE_CLUSTER:
             # get_node_ips_param should be defined in child
@@ -3493,7 +3491,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
     @property
     def cluster_backend(self):
-        return self._cluster_backend
+        return self.params.get("cluster_backend")
 
 
 class NodeSetupFailed(Exception):
