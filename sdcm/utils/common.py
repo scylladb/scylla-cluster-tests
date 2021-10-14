@@ -1734,7 +1734,7 @@ def get_post_behavior_actions(config):
 
 
 def clean_resources_according_post_behavior(params, config, logdir, dry_run=False):
-    success = get_testrun_status(params.get('TestId'), logdir, only_critical=True)
+    critical_events = get_testrun_status(params.get('TestId'), logdir, only_critical=True)
     actions_per_type = get_post_behavior_actions(config)
     LOGGER.debug(actions_per_type)
     for cluster_nodes_type, action_type in actions_per_type.items():
@@ -1744,7 +1744,7 @@ def clean_resources_according_post_behavior(params, config, logdir, dry_run=Fals
             LOGGER.info("Post behavior %s for %s. Clean resources", action_type["action"], cluster_nodes_type)
             clean_cloud_resources({**params, "NodeType": action_type["NodeType"]}, dry_run=dry_run)
             continue
-        elif action_type["action"] == "keep-on-failure" and not success:
+        elif action_type["action"] == "keep-on-failure" and not critical_events:
             LOGGER.info("Post behavior %s for %s. Test run Successful. Clean resources",
                         action_type["action"], cluster_nodes_type)
             clean_cloud_resources({**params, "NodeType": action_type["NodeType"]}, dry_run=dry_run)
@@ -1796,12 +1796,12 @@ def get_testrun_status(test_id=None, logdir=None, only_critical=False):
     error_log = os.path.join(testrun_dir, 'events_log/error.log')
 
     if os.path.exists(critical_log):
-        with open(critical_log) as f:  # pylint: disable=invalid-name
-            status = f.readlines()
+        with open(critical_log) as file:
+            status = file.readlines()
 
     if not only_critical and os.path.exists(error_log):
-        with open(error_log) as f:  # pylint: disable=invalid-name
-            status += f.readlines()
+        with open(error_log) as file:
+            status += file.readlines()
 
     return status
 
