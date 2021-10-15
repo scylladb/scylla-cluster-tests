@@ -570,13 +570,13 @@ class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-a
     # pylint: disable=too-many-arguments
     def run(self,
             cmd: str,
-            timeout: Optional[float] = None,
+            timeout: float | None = None,
             ignore_status: bool = False,
             verbose: bool = True,
             new_session: bool = False,
-            log_file: Optional[str] = None,
+            log_file: str | None = None,
             retry: int = 1,
-            watchers: Optional[List[StreamWatcher]] = None,
+            watchers: List[StreamWatcher] | None = None,
             change_context: bool = False
             ) -> Result:
         """

@@ -2223,20 +2223,20 @@ def download_from_github(repo: str, tag: str, dst_dir: str):
 
 
 def walk_thru_data(data, path: str) -> Any:
-    current = data
+    current_value = data
     for name in path.split('/'):
-        if current is None:
+        if current_value is None:
             return None
         if not name:
             continue
-        if name.isalnum() and isinstance(current, (list, tuple, set)):
+        if name.isalnum() and isinstance(current_value, (list, tuple, set)):
             try:
-                current = current[int(name)]
+                current_value = current_value[int(name)]
             except Exception:  # pylint: disable=broad-except
-                current = None
+                current_value = None
             continue
-        current = current.get(name, None)
-    return current
+        current_value = current_value.get(name, None)
+    return current_value
 
 
 def update_authenticator(nodes, authenticator='AllowAllAuthenticator', restart=True):
