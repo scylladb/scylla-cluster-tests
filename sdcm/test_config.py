@@ -6,7 +6,10 @@ from datetime import datetime
 from typing import Optional, Dict
 
 import requests
+
 from sdcm.keystore import KeyStore
+from sdcm.provision.common.utils import configure_sshd_script, configure_rsyslog_rate_limits_script, \
+    configure_rsyslog_target_script, restart_sshd_service, restart_rsyslog_service
 from sdcm.utils.common import get_my_ip
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import ContainerManager
@@ -211,46 +214,27 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
 
     @classmethod
     def get_startup_script(cls) -> str:
-        post_boot_script = "#!/bin/bash\n"
+        script = "#!/bin/bash\n"
+        script += configure_sshd_script()
+        script += restart_sshd_service()
+        script += cls.get_rsyslog_configuration_script()
+        script += restart_rsyslog_service()
+        return script
 
-        # Configure ulimit and sshd.
-        post_boot_script += dedent(r"""
-            sed -i -e 's/^\*[[:blank:]]*soft[[:blank:]]*nproc[[:blank:]]*4096/*\t\tsoft\tnproc\t\tunlimited/' \
-                /etc/security/limits.d/20-nproc.conf
-            echo -e '*\t\thard\tnproc\t\tunlimited' >> /etc/security/limits.d/20-nproc.conf
-
-            sed -i 's/#MaxSessions \(.*\)$/MaxSessions 1000/' /etc/ssh/sshd_config
-            sed -i 's/#MaxStartups \(.*\)$/MaxStartups 60/' /etc/ssh/sshd_config
-            sed -i 's/#LoginGraceTime \(.*\)$/LoginGraceTime 15s/' /etc/ssh/sshd_config
-            systemctl restart sshd
-        """)
-
-        # Configure rsyslog.  Use obsolete legacy format here because it's easier to redefine imjournal parameters.
-        post_boot_script += dedent(fr"""
-            cat <<EOF >> /etc/rsyslog.conf
-
-            #
-            # The following configuration was added by SCT.
-            #
-            \$ModLoad imjournal
-            \$imjournalRatelimitInterval {cls.RSYSLOG_IMJOURNAL_RATE_LIMIT_INTERVAL}
-            \$imjournalRatelimitBurst {cls.RSYSLOG_IMJOURNAL_RATE_LIMIT_BURST}
-        """)
-
+    @classmethod
+    def get_rsyslog_configuration_script(cls) -> str:
+        script = configure_rsyslog_rate_limits_script(
+            interval=cls.RSYSLOG_IMJOURNAL_RATE_LIMIT_INTERVAL,
+            burst=cls.RSYSLOG_IMJOURNAL_RATE_LIMIT_BURST,
+        )
         if cls.RSYSLOG_ADDRESS:
             if cls.IP_SSH_CONNECTIONS == "public" or cls.MULTI_REGION:
                 rsyslog_host = "127.0.0.1"
                 rsyslog_port = cls.RSYSLOG_SSH_TUNNEL_LOCAL_PORT
             else:
                 rsyslog_host, rsyslog_port = cls.RSYSLOG_ADDRESS  # pylint: disable=unpacking-non-sequence
-            post_boot_script += f'action(type="omfwd" Target="{rsyslog_host}" Port="{rsyslog_port}" Protocol="tcp")\n'
-
-        post_boot_script += dedent("""\
-            EOF
-            systemctl restart rsyslog
-        """)
-
-        return post_boot_script
+            script += configure_rsyslog_target_script(host=rsyslog_host, port=rsyslog_port)
+        return script
 
     @classmethod
     def set_ip_ssh_connections(cls, ip_type):
