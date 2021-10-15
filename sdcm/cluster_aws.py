@@ -35,7 +35,11 @@ from mypy_boto3_ec2 import EC2Client
 from pkg_resources import parse_version
 from botocore.exceptions import WaiterError
 
-from sdcm import ec2_client, cluster
+from sdcm import ec2_client, cluster, wait
+from sdcm.provision.aws.utils import configure_eth1_script, network_config_ipv6_workaround_script, \
+    configure_set_preserve_hostname_script
+from sdcm.provision.common.utils import configure_rsyslog_set_hostname_script, configure_hosts_set_hostname_script, \
+    restart_rsyslog_service
 from sdcm.provision.scylla_yaml import SeedProvider
 from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
 from sdcm.ec2_client import CreateSpotInstancesError
@@ -368,80 +372,6 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             fi
         """)
 
-    @staticmethod
-    def configure_eth1_script():
-        return dedent(r"""
-            if `grep -qi "ubuntu" /etc/os-release`; then
-
-                ETH1_IP_ADDRESS=`ip route show | grep eth1 | grep -oPm1 'src \K[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*'`
-                ETH1_CIDR_BLOCK=`ip route show | grep eth1 | grep -oPm1 '\K[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*/[0-9]*'`
-                ETH1_SUBNET=`echo ${ETH1_CIDR_BLOCK} | grep -oP '\\K/\\d+'`
-
-                sudo bash -c "echo '
-                network:
-                  version: 2
-                  renderer: networkd
-                  ethernets:
-                    eth0:
-                      dhcp4: yes
-                      dhcp6: yes
-                    eth1:
-                      addresses:
-                       - ${ETH1_IP_ADDRESS}${ETH1_SUBNET}
-                      dhcp4: no
-                      dhcp6: no
-                      routes:
-                       - to: 0.0.0.0/0
-                         via: 10.0.0.1 # Default gateway
-                         table: 2
-                       - to: ${ETH1_CIDR_BLOCK}
-                         scope: link
-                         table: 2
-                      routing-policy:
-                        - from: ${ETH1_IP_ADDRESS}/32
-                          table: 2
-                ' > /etc/netplan/51-eth1.yaml"
-
-                netplan --debug apply
-
-            else
-
-                BASE_EC2_NETWORK_URL=http://169.254.169.254/latest/meta-data/network/interfaces/macs/
-                NUMBER_OF_ENI=`curl -s ${BASE_EC2_NETWORK_URL} | wc -w`
-                for mac in `curl -s ${BASE_EC2_NETWORK_URL}`
-                do
-                    DEVICE_NUMBER=`curl -s ${BASE_EC2_NETWORK_URL}${mac}/device-number`
-                    if [[ "$DEVICE_NUMBER" == "1" ]]; then
-                       ETH1_MAC=${mac}
-                    fi
-                done
-                if [[ ! "${DEVICE_NUMBER}x" == "x" ]]; then
-                   ETH1_IP_ADDRESS=`curl -s ${BASE_EC2_NETWORK_URL}${ETH1_MAC}/local-ipv4s`
-                   ETH1_CIDR_BLOCK=`curl -s ${BASE_EC2_NETWORK_URL}${ETH1_MAC}/subnet-ipv4-cidr-block`
-                fi
-                sudo bash -c "echo 'GATEWAYDEV=eth0' >> /etc/sysconfig/network"
-                echo "
-                DEVICE="eth1"
-                BOOTPROTO="dhcp"
-                ONBOOT="yes"
-                TYPE="Ethernet"
-                USERCTL="yes"
-                PEERDNS="yes"
-                IPV6INIT="no"
-                PERSISTENT_DHCLIENT="1"
-                " > /etc/sysconfig/network-scripts/ifcfg-eth1
-                echo "
-                default via 10.0.0.1 dev eth1 table 2
-                ${ETH1_CIDR_BLOCK} dev eth1 src ${ETH1_IP_ADDRESS} table 2
-                " > /etc/sysconfig/network-scripts/route-eth1
-                echo "
-                from ${ETH1_IP_ADDRESS}/32 table 2
-                " > /etc/sysconfig/network-scripts/rule-eth1
-                sudo systemctl restart network
-
-            fi
-        """)
-
     def _create_or_find_instances(self, count, ec2_user_data, dc_idx):
         if self.nodes:
             return self._create_instances(count, ec2_user_data, dc_idx)
@@ -460,10 +390,10 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
         post_boot_script = self.test_config.get_startup_script()
         if self.extra_network_interface:
-            post_boot_script += self.configure_eth1_script()
+            post_boot_script += configure_eth1_script()
 
         if self.params.get('ip_ssh_connections') == 'ipv6':
-            post_boot_script += self.network_config_ipv6_workaround_script()
+            post_boot_script += network_config_ipv6_workaround_script()
 
         if isinstance(ec2_user_data, dict):
             ec2_user_data['post_configuration_script'] = base64.b64encode(
@@ -541,7 +471,6 @@ class AWSNode(cluster.BaseNode):
             self._ec2_service.create_tags(Resources=resources_to_tag, Tags=tags_as_ec2_tags(self.tags))
 
         self._wait_public_ip()
-
         super().init()
 
     @cached_property
@@ -557,29 +486,27 @@ class AWSNode(cluster.BaseNode):
     def region(self):
         return self._ec2_service.meta.client.meta.region_name
 
-    @retrying(n=10, sleep_time=5, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying set_hostname")
+    def _set_hostname(self) -> bool:
+        return self.remoter.sudo(f"hostnamectl set-hostname --static {self.name}").ok
+
+    @retrying(n=3, sleep_time=5, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying set_hostname")
     def set_hostname(self):
         self.log.info('Changing hostname to %s', self.name)
         # Using https://aws.amazon.com/premiumsupport/knowledge-center/linux-static-hostname-rhel7-centos7/
         # FIXME: workaround to avoid host rename generating errors on other commands
         if self.is_debian():
             return
-        result = self.remoter.run(f"sudo hostnamectl set-hostname --static {self.name}", ignore_status=True)
-        if result.ok:
+        script = configure_rsyslog_set_hostname_script(self.name)
+        script += self.test_config.get_rsyslog_configuration_script()
+        script += restart_rsyslog_service()
+        if wait.wait_for(func=self._set_hostname, step=10, text='Retrying set hostname on the node', timeout=300):
             self.log.debug('Hostname has been changed succesfully. Apply')
-            apply_hostname_change_script = dedent(f"""
-                if ! grep "\\$LocalHostname {self.name}" /etc/rsyslog.conf; then
-                    echo "" >> /etc/rsyslog.conf
-                    echo "\\$LocalHostname {self.name}" >> /etc/rsyslog.conf
-                fi
-                grep -P "127.0.0.1[^\\\\n]+{self.name}" /etc/hosts || sed -ri "s/(127.0.0.1[ \\t]+localhost[^\\n]*)$/\\1\\t{self.name}/" /etc/hosts
-                grep "preserve_hostname: true" /etc/cloud/cloud.cfg 1>/dev/null 2>&1 || echo "preserve_hostname: true" >> /etc/cloud/cloud.cfg
-                systemctl restart rsyslog
-            """)
-            self.remoter.run(f"sudo bash -cxe '{apply_hostname_change_script}'")
-            self.log.debug('Continue node %s set up', self.name)
+            script += configure_hosts_set_hostname_script(self.name)
+            script += configure_set_preserve_hostname_script()
         else:
-            self.log.warning('Hostname has not been changed. Error: %s.\n Continue with old name', result.stderr)
+            self.log.warning('Hostname has not been changed. Continue with old name')
+        self.remoter.sudo(f"bash -cxe '{script}'")
+        self.log.debug('Continue node %s set up', self.name)
 
     @property
     def is_spot(self):
