@@ -274,7 +274,7 @@ class CompactionEvent(ScyllaDatabaseContinuousEvent):
 
 class JMXServiceEvent(ScyllaDatabaseContinuousEvent):
     begin_pattern = r'Starting the JMX server'
-    end_pattern = r'JMX is enabled to receive remote connections on port: \d+'
+    end_pattern = r'Stopped Scylla JMX'
 
     def __init__(self, node: str, severity=Severity.NORMAL, **__):
         super().__init__(node=node, severity=severity)
