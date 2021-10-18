@@ -74,19 +74,56 @@ spec:
       serviceAccountName: cpu-policy-daemonset
       containers:
       - name: cpu-policy
-        image: scylladb/kubectl:1.11.5
+        image: bitnami/kubectl:1.21.4
         imagePullPolicy: Always
         env:
           - name: NODE
             valueFrom:
               fieldRef:
                 fieldPath: spec.nodeName
+          - name: HOSTFS
+            value: /mnt/hostfs
+          - name: KUBELET_CONFIG_PATH
+            value: /home/kubernetes/kubelet-config.yaml
         securityContext:
           privileged: true
+          runAsUser: 0
         volumeMounts:
           - name: hostfs
             mountPath: /mnt/hostfs
             mountPropagation: Bidirectional
+        command:
+          - "/bin/bash"
+          - "-c"
+          - "--"
+        args:
+          - |
+            set -ex
+            if [ ! -f "$HOSTFS$KUBELET_CONFIG_PATH" ]; then
+                echo "Kublet config not found"
+                exit 1
+            fi
+
+            TOKEN_PATH=$(find / -name token | grep cpu-policy-daemonset -m1)
+            TOKEN=$(cat $TOKEN_PATH)
+            CA_CRT=$TOKEN_PATH/../ca.crt
+            kubectl config set-cluster scylla --server=https://kubernetes.default --certificate-authority=$CA_CRT
+            kubectl config set-credentials qa@scylladb.com --token=$TOKEN
+            kubectl config set-context scylla --cluster=scylla --user=qa@scylladb.com
+            kubectl config use-context scylla
+
+            if grep "cpuManagerPolicy" $HOSTFS$KUBELET_CONFIG_PATH | grep "static" ; then
+                echo "cpu-manager-policy is already set to be static"
+                echo "uncordoning the node"
+                kubectl uncordon $NODE || true
+                while true; do sleep infinity; done
+            fi
+
+            echo "Change kubelet config and restart it's service"
+            kubectl drain $NODE --force --ignore-daemonsets --delete-local-data --grace-period=60
+            echo cpuManagerPolicy: static | tee -a $HOSTFS$KUBELET_CONFIG_PATH
+            rm $HOSTFS/var/lib/kubelet/cpu_manager_state
+            kill -9 $(pidof kubelet)
       volumes:
         - name: hostfs
           hostPath:
