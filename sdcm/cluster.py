@@ -5078,7 +5078,8 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                 scrape_configs.append(dict(job_name="gemini_metrics", honor_labels=True,
                                            static_configs=[dict(targets=gemini_loader_targets_list)]))
 
-            if "nosqlbench" in self.params.get('stress_cmd')[0]:
+            nosqlbench_cmds = self.params.get('stress_cmd')
+            if nosqlbench_cmds and "nosqlbench" in nosqlbench_cmds[0]:
                 graphite_exporter_target_list = [f"{node.ip_address}:9108" for node in self.targets["loaders"].nodes]
                 scrape_configs.append(dict(job_name="nosqlbench_metrics", honor_labels=True,
                                            static_configs=[dict(targets=graphite_exporter_target_list)]))
