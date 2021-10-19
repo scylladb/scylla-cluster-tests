@@ -83,7 +83,7 @@ def restore_monitoring_stack(test_id, date_time=None):  # pylint: disable=too-ma
     if not status:
         return False
 
-    status = verify_monitoring_stack(scylla_version)
+    status = verify_monitoring_stack()
     if not status:
         remove_files(monitoring_stack_base_dir)
         return False
@@ -369,10 +369,10 @@ def is_docker_available():
         return False
 
 
-def verify_monitoring_stack(scylla_version):
+def verify_monitoring_stack():
     checked_statuses = []
     checked_statuses.append(verify_dockers_are_running())
-    checked_statuses.append(verify_grafana_is_available(scylla_version))
+    checked_statuses.append(verify_grafana_is_available())
     checked_statuses.append(verify_prometheus_is_available())
     return all(checked_statuses)
 
@@ -389,21 +389,20 @@ def verify_dockers_are_running():
     return False
 
 
-def verify_grafana_is_available(version):  # pylint: disable=no-member
+def verify_grafana_is_available():
     # pylint: disable=import-outside-toplevel
-    from sdcm.logcollector import GrafanaEntity
+    from sdcm.logcollector import GrafanaEntity, MonitoringStack
     grafana_statuses = []
     for dashboard in GrafanaEntity.base_grafana_dashboards:
-        path = dashboard.path.format(version=version.replace('.', '-'),  # pylint: disable=no-member
-                                     dashboard_name=dashboard.name)  # pylint: disable=no-member
-        url = f"http://localhost:{GRAFANA_DOCKER_PORT}/{path}"
         try:
-            LOGGER.info("Test url {}".format(url))
-            result = requests.get(url)
-            grafana_statuses.append(result.status_code == 200)
-            LOGGER.info("Dashboard {} is available".format(path))
+            LOGGER.info("Check dashboard %s", dashboard.title)
+            result = MonitoringStack.get_dashboard_by_title(grafana_ip="localhost",
+                                                            port=GRAFANA_DOCKER_PORT,
+                                                            title=dashboard.title)
+            grafana_statuses.append(result)
+            LOGGER.info("Dashboard {} is available".format(dashboard.title))
         except Exception as details:  # pylint: disable=broad-except
-            LOGGER.error("Error during check url %s. Error: %s", url, details)
+            LOGGER.error("Dashboard %s is not available. Error: %s", dashboard.title, details)
             grafana_statuses.append(False)
 
     return all(grafana_statuses)
