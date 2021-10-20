@@ -59,6 +59,7 @@ class CompactionOps:
         self.node.run_nodetool(self.NODETOOL_CMD.flush)
 
     def stop_major_compaction(self):
+        LOGGER.info("Stopping major compaction with <nodetool stop>")
         self._stop_compaction(self.NODETOOL_CMD.stop_major_compaction)
 
     def stop_scrub_compaction(self):
@@ -87,6 +88,7 @@ class CompactionOps:
     @staticmethod
     def stop_on_user_compaction_logged(node: BaseNode, watch_for: str, timeout: int,
                                        stop_func: Callable, mark: Optional[int] = None):
+        LOGGER.info("Starting to watch for user compaction logged...")
         start_time = time.time()
         with open(node.system_log, "r") as log_file:
             if mark:
@@ -94,6 +96,7 @@ class CompactionOps:
 
             while time.time() - start_time < timeout:
                 line = log_file.readline()
+
                 if watch_for in line:
                     stop_func()
                     LOGGER.info("Grepped expression found: %s in log line %s", watch_for, line)

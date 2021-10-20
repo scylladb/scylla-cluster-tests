@@ -29,7 +29,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class StopCompactionTest(ClusterTester):
-    GREP_PATTERN = r'Compaction for keyspace1/standard1 was stopped due to: user request'
+    GREP_PATTERN = r"Compaction for ([\w/\d]+) was stopped"
 
     def setUp(self):
         super().setUp()
@@ -241,7 +241,7 @@ class StopCompactionTest(ClusterTester):
         with open(node.system_log, "r") as logfile:
             pattern = re.compile(self.GREP_PATTERN)
             for line in logfile.readlines():
-                if pattern.findall(line):
+                if pattern.search(line):
                     found_grepped_expression = True
 
         self.assertTrue(found_grepped_expression, msg=f'Did not find the expected "{self.GREP_PATTERN}" '

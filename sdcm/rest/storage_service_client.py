@@ -14,7 +14,7 @@ class StorageServiceClient(RemoteCurlClient):
         params = {"cf": cf} if cf else {}
         path = f"keyspace_compaction/{keyspace}"
 
-        return self.run_remoter_curl(method="POST", path=path, params=params)
+        return self.run_remoter_curl(method="POST", path=path, params=params, timeout=360)
 
     def cleanup_ks_cf(self, keyspace: str, cf: Optional[str] = None) -> Result:
         params = {"cf": cf} if cf else {}
