@@ -982,7 +982,7 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
     click.echo(table.get_string(title="Collected logs by test-id: {}".format(collector.test_id)))
 
     try:
-        test_run = ArgusTestRun.get(test_id=UUID(test_id))
+        test_run = ArgusTestRun.get(test_id=UUID(collector.test_id))
         if test_run:
             for cluster_type, s3_links in collected_logs.items():
                 for link in s3_links:

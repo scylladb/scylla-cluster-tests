@@ -343,7 +343,8 @@ class SCTConfiguration(dict):
         dict(name="instance_provision", env="SCT_INSTANCE_PROVISION", type=str,
              help="instance_provision: spot|on_demand|spot_fleet"),
 
-        dict(name="instance_provision_fallback_on_demand", env="SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND", type=boolean,
+        dict(name="instance_provision_fallback_on_demand", env="SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND",
+             type=boolean,
              help="instance_provision_fallback_on_demand: create instance on_demand provision type if instance with selected "
                   "'instance_provision' type creation failed. "
                   "Expected values: true|false (default - false"),
@@ -1452,7 +1453,7 @@ class SCTConfiguration(dict):
                 self['new_scylla_repo'] = find_scylla_repo(new_scylla_version, dist_type, dist_version)
 
         # 8) resolve repo symlinks
-        for repo_key in ("scylla_repo", "scylla_repo_loader", "new_scylla_repo", ):
+        for repo_key in ("scylla_repo", "scylla_repo_loader", "new_scylla_repo",):
             if self.get(repo_key):
                 self[repo_key] = resolve_latest_repo_symlink(self[repo_key])
 
@@ -1492,7 +1493,7 @@ class SCTConfiguration(dict):
 
     @property
     def region_names(self) -> List[str]:
-        region_names = self._env.get('region_name')
+        region_names = self.environment.get('region_name')
         if region_names is None:
             region_names = self.get('region_name')
         if region_names is None:
@@ -1506,10 +1507,6 @@ class SCTConfiguration(dict):
 
     @property
     def environment(self) -> dict:
-        return self._env
-
-    @property
-    def _env(self) -> dict:
         return self._load_environment_variables()
 
     @classmethod
