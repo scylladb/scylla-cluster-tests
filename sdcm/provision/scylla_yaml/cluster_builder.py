@@ -146,15 +146,15 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @property
     def _ms_ldap_bind_dn(self) -> str:
-        return self._msldap_server_info['ldap_bind_dn']
+        return self._msldap_server_info['ldap_bind_dn']  # pylint: disable=unsubscriptable-object
 
     @property
     def _ms_ldap_bind_passwd(self) -> str:
-        return self._msldap_server_info['admin_password']
+        return self._msldap_server_info['admin_password']  # pylint: disable=unsubscriptable-object
 
     @property
     def _ms_ldap_server_address_port(self) -> str:
-        return f'{self._msldap_server_info["server_address"]}:389'
+        return f'{self._msldap_server_info["server_address"]}:389'  # pylint: disable=unsubscriptable-object
 
     @property
     def _open_ldap_bind_dn(self) -> str:
@@ -174,17 +174,17 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @cached_property
     def _openldap_server_address_port(self) -> str:
-        if (not self.test_config.LDAP_ADDRESS or
-                not self.test_config.LDAP_ADDRESS[0] or
-                not self.test_config.LDAP_ADDRESS[1]):
+        ldap_address = self.test_config.LDAP_ADDRESS   # pylint: disable=no-member
+        if not ldap_address or not ldap_address[0] or not ldap_address[1]:
             raise RuntimeError("OPENLDAP has not been started")
-        return str(self.test_config.LDAP_ADDRESS[0]) + ':' + str(self.test_config.LDAP_ADDRESS[1])
+        return str(ldap_address[0]) + ':' + str(ldap_address[1])
 
     @cached_property
     def _msldap_server_info(self) -> dict:
         if not self.msldap_server_info:
             raise RuntimeError('MSLDAP is configured, but not `msldap_server_info` is provided')
-        if missing_keys := {'ldap_bind_dn', 'admin_password', 'server_address'} - set(self.msldap_server_info.keys()):
+        msldap_server_info_keys = set(self.msldap_server_info.keys())  # pylint: disable=no-member
+        if missing_keys := {'ldap_bind_dn', 'admin_password', 'server_address'} - msldap_server_info_keys:
             raise RuntimeError("MSLDAP is configured, but `msldap_server_info` lack of following keys: "
                                f"{','.join(missing_keys)}")
         return self.msldap_server_info
