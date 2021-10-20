@@ -443,30 +443,29 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.set_target_node()
         node = self.target_node
         compaction_ops = CompactionOps(cluster=self.cluster, node=node)
-        timeout = 120
+        timeout = 360
         trigger_func = partial(compaction_ops.trigger_major_compaction)
         watch_func = partial(compaction_ops.stop_on_user_compaction_logged,
                              node=node,
-                             mark=node.mark_log(),
-                             watch_for="User initiated compaction",
+                             mark=1,
+                             watch_for="User initiated compaction started on behalf of",
                              timeout=timeout,
                              stop_func=compaction_ops.stop_major_compaction)
-        # self.tester.wait_no_compactions_running()
+        self.tester.wait_no_compactions_running()
         ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
 
     def disrupt_start_stop_scrub_compaction(self):
         self.set_target_node()
         node = self.target_node
         compaction_ops = CompactionOps(cluster=self.cluster, node=node)
-        timeout = 120
+        timeout = 360
         trigger_func = partial(compaction_ops.trigger_scrub_compaction)
         watch_func = partial(compaction_ops.stop_on_user_compaction_logged,
                              node=node,
-                             mark=node.mark_log(),
                              watch_for="Scrubbing",
                              timeout=timeout,
                              stop_func=compaction_ops.stop_scrub_compaction)
-        # self.tester.wait_no_compactions_running()
+        self.tester.wait_no_compactions_running()
         ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
 
     def disrupt_start_stop_cleanup_compaction(self):
@@ -488,12 +487,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.set_target_node()
         node = self.target_node
         compaction_ops = CompactionOps(cluster=self.cluster, node=node)
-        timeout = 120
+        timeout = 360
         trigger_func = partial(compaction_ops.trigger_validation_compaction)
         watch_func = partial(compaction_ops.stop_on_user_compaction_logged,
                              node=node,
                              mark=node.mark_log(),
-                             watch_for="Scrubbing in validate mode",
+                             watch_for="Scrubbing ",
                              timeout=timeout,
                              stop_func=compaction_ops.stop_validation_compaction)
         # self.tester.wait_no_compactions_running()
@@ -3989,13 +3988,6 @@ class StartStopCleanupCompaction(Nemesis):
 
 
 class StartStopValidationCompaction(Nemesis):
-    disruptive = False
-
-    def disrupt(self):
-        self.disrupt_start_stop_validation_compaction()
-
-
-class StartStopCompactionMonkey(Nemesis):
     disruptive = False
 
     def disrupt(self):

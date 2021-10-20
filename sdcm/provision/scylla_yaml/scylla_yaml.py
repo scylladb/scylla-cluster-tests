@@ -13,11 +13,15 @@
 from difflib import unified_diff
 from typing import List, Literal, Union
 
+import logging
 import yaml
 from pydantic import Field, validator, BaseModel  # pylint: disable=no-name-in-module
 
 from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions, EndPointSnitchType, SeedProvider, \
     ServerEncryptionOptions, ClientEncryptionOptions
+
+
+logger = logging.getLogger(__name__)
 
 
 class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
