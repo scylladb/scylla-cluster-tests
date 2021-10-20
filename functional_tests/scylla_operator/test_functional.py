@@ -462,6 +462,8 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
     log.debug(db_cluster.k8s_cluster.helm_install(
         target_chart_name=target_chart_name,
         source_chart_name="scylla-operator/scylla",
+        version=db_cluster.k8s_cluster._scylla_operator_chart_version,  # pylint: disable=protected-access
+        use_devel=True,
         namespace=namespace,
     ))
 
