@@ -27,12 +27,14 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from functools import partial
 from typing import Optional
+from uuid import UUID
 
 import pytest
 import click
 import click_completion
 from prettytable import PrettyTable
 
+from sdcm.argus_test_run import ArgusTestRun
 from sdcm.remote import LOCALRUNNER
 from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
@@ -951,6 +953,7 @@ def cloud_usage_qa_report(emails, user=None):
 @click.option('--backend', help='Cloud where search nodes', default=None)
 @click.option('--config-file', type=str, help='config test file path')
 def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
+    # pylint: disable=too-many-nested-blocks,too-many-branches
     add_file_logger()
 
     from sdcm.logcollector import Collector  # pylint: disable=import-outside-toplevel
@@ -977,6 +980,21 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
             table.add_row([cluster_type, link])
 
     click.echo(table.get_string(title="Collected logs by test-id: {}".format(collector.test_id)))
+
+    try:
+        test_run = ArgusTestRun.get(test_id=UUID(test_id))
+        if test_run:
+            for cluster_type, s3_links in collected_logs.items():
+                for link in s3_links:
+                    if isinstance(link, str):
+                        test_run.run_info.logs.add_log(cluster_type, link)
+                    if isinstance(link, list):
+                        for sub_link in link:
+                            test_run.run_info.logs.add_log(cluster_type, sub_link)
+            test_run.save()
+        ArgusTestRun.destroy()
+    except Exception:  # pylint: disable=broad-except
+        LOGGER.error("Error saving logs to argus", exc_info=True)
 
 
 def get_test_results_for_failed_test(test_status, start_time):

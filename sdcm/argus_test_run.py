@@ -159,18 +159,29 @@ class ArgusTestRun:
         "docker": _prepare_docker_resource_setup,
         "unknown": _prepare_unknown_resource_setup,
     }
+    db_init = False
 
     def __init__(self):
         pass
+
+    @classmethod
+    def init_db(cls):
+        if cls.db_init:
+            LOGGER.warning("ArgusDB already initialized.")
+            return
+        LOGGER.info("Initializing ScyllaDB connection session...")
+        ks = KeyStore()
+        ArgusDatabase.from_config(Config(**ks.get_argusdb_credentials(), keyspace_name="argus"))
+        cls.db_init = True
 
     @classmethod
     def from_sct_config(cls, test_id: UUID, test_module_path: str, sct_config: SCTConfiguration) -> TestRun:  # pylint: disable=too-many-locals
         if cls.TESTRUN_INSTANCE:
             raise ArgusTestRunError("Instance already initialized")
 
-        LOGGER.info("Initializing ScyllaDB connection session...")
-        ks = KeyStore()
-        ArgusDatabase.from_config(Config(**ks.get_argusdb_credentials(), keyspace_name="argus"))
+        if not cls.db_init:
+            cls.init_db()
+
         LOGGER.info("Preparing Test Details...")
         test_group, *_ = test_module_path.split(".")
         config_files = sct_config.get("config_files")
@@ -207,16 +218,24 @@ class ArgusTestRun:
         return cls.TESTRUN_INSTANCE
 
     @classmethod
-    def get(cls) -> TestRun:
+    def get(cls, test_id: UUID = None) -> TestRun:
+        if not cls.db_init:
+            cls.init_db()
+
+        if test_id and not cls.TESTRUN_INSTANCE:
+            cls.TESTRUN_INSTANCE = TestRun.from_id(test_id)
+
         if not cls.TESTRUN_INSTANCE:
-            raise ArgusTestRunError("No instance configured")
+            raise ArgusTestRunError("No instance available")
 
         return cls.TESTRUN_INSTANCE
 
     @classmethod
     def destroy(cls):
+        ArgusDatabase.destroy()
+        cls.db_init = False
         if not cls.TESTRUN_INSTANCE:
-            raise ArgusTestRunError("No instance configured")
+            return False
 
         cls.TESTRUN_INSTANCE = None
-        ArgusDatabase.destroy()
+        return True
