@@ -178,7 +178,7 @@ def get_git_current_branch() -> str:
         proc = subprocess.run(args=["git", "branch", "--show-current"], check=True, capture_output=True)
     except subprocess.CalledProcessError:
         LOGGER.warning("Error running git command", exc_info=True)
-        return ""
+        return "#ERROR"
     return proc.stdout.decode(encoding="utf-8").strip()
 
 

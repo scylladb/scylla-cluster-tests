@@ -309,6 +309,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                              self.params.get('email_recipients'),
                                              self.logdir)
         self._argus_test_run = None
+        self._use_argus = True
         self.log.info("Initializing Argus TestRun with test id %s", self.argus_test_run.id)
         self._move_kubectl_config()
         self.localhost = self._init_localhost()
@@ -364,7 +365,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @property
     def argus_test_run(self):
-        if not self._argus_test_run:
+        if not self._argus_test_run and self._use_argus:
             try:
                 argus_test_run = ArgusTestRun.from_sct_config(test_id=UUID(self.test_id),
                                                               test_module_path=self.test_config.test_name(),
@@ -372,6 +373,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 argus_test_run.save()
                 self._argus_test_run = argus_test_run
             except Exception:  # pylint: disable=broad-except
+                self._use_argus = False
                 self.log.error("Error setting up argus connection", exc_info=True)
         return self._argus_test_run
 
