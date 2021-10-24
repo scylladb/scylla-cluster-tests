@@ -906,42 +906,6 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         )
         return added_nodes
 
-    def node_config_setup(self, node, seed_address=None, endpoint_snitch=None,
-                          murmur3_partitioner_ignore_msb_bits=None, client_encrypt=None):  # pylint: disable=too-many-arguments
-        setup_params = dict(
-            enable_exp=self.params.get('experimental'),
-            endpoint_snitch=endpoint_snitch,
-            authenticator=self.params.get('authenticator'),
-            server_encrypt=self.params.get('server_encrypt'),
-            client_encrypt=client_encrypt if client_encrypt is not None else self.params.get('client_encrypt'),
-            append_scylla_args=self.get_scylla_args(),
-            authorizer=self.params.get('authorizer'),
-            hinted_handoff=self.params.get('hinted_handoff'),
-            alternator_port=self.params.get('alternator_port'),
-            seed_address=seed_address,
-            append_scylla_yaml=self.params.get('append_scylla_yaml'),
-            murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
-            ip_ssh_connections=self.params.get('ip_ssh_connections'),
-            alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'),
-            internode_compression=self.params.get('internode_compression'),
-            internode_encryption=self.params.get('internode_encryption'),
-            ldap=self.params.get('use_ldap_authorization'),
-            ms_ad_ldap=self.params.get('use_ms_ad_ldap'),
-        )
-        if self.test_config.INTRA_NODE_COMM_PUBLIC:
-            setup_params.update(dict(
-                broadcast=node.public_ip_address,
-            ))
-
-        if self.extra_network_interface:
-            setup_params.update(dict(
-                seed_address=seed_address,
-                broadcast=node.private_ip_address,
-                listen_on_all_interfaces=True,
-            ))
-
-        node.config_setup(**setup_params)
-
     @staticmethod
     def _wait_for_preinstalled_scylla(node):
         node.wait_for_machine_image_configured()

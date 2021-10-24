@@ -2051,17 +2051,8 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
 
         if self.test_config.MULTI_REGION:
             node.datacenter_setup(self.datacenter)  # pylint: disable=no-member
-        try:
-            # NOTE: case of seedful scylla (operator v1.3.0-)
-            seed_nodes = ','.join(self.seed_nodes_ips)
-        except AssertionError:
-            # NOTE: case of seedless scylla (operator v1.4.0+)
-            seed_nodes = None
-        self.node_config_setup(
-            node,
-            seed_address=seed_nodes,
-            endpoint_snitch=self.get_endpoint_snitch(),
-        )
+
+        self.node_config_setup()
 
     @cached_property
     def scylla_manager_cluster_name(self):  # pylint: disable=invalid-overridden-method
@@ -2080,10 +2071,6 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         raise NotImplementedError('Scylla manager should not be manipulated on kubernetes manually')
 
     def node_config_setup(self,
-                          node,
-                          seed_address=None,
-                          endpoint_snitch=None,
-                          murmur3_partitioner_ignore_msb_bits=None,
                           client_encrypt=None):  # pylint: disable=too-many-arguments,invalid-name
         if client_encrypt is None:
             client_encrypt = self.params.get("client_encrypt")

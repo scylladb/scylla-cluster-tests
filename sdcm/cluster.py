@@ -3666,7 +3666,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if new_params != old_params:
             self.params = new_params
             for node in self.nodes:
-                node.config_setup()
+                node.config_setup(append_scylla_args=self.get_scylla_args())
                 node.restart_scylla()
 
     def enable_client_encrypt(self):
@@ -4106,28 +4106,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             nemesis_thread.join(timeout)
         self.nemesis_threads = []
 
-    def node_config_setup(self, node, seed_address=None,  # pylint: disable=too-many-arguments,invalid-name
-                          endpoint_snitch=None, murmur3_partitioner_ignore_msb_bits=None, client_encrypt=None):
-        node.config_setup(seed_address=seed_address,
-                          cluster_name=self.name,  # pylint: disable=no-member
-                          enable_exp=self.params.get('experimental'),
-                          endpoint_snitch=endpoint_snitch,
-                          authenticator=self.params.get('authenticator'),
-                          server_encrypt=self.params.get('server_encrypt'),
-                          client_encrypt=client_encrypt if client_encrypt is not None else self.params.get(
-                              'client_encrypt'),
-                          append_scylla_yaml=self.params.get('append_scylla_yaml'),
-                          append_scylla_args=self.get_scylla_args(),
-                          hinted_handoff=self.params.get('hinted_handoff'),
-                          authorizer=self.params.get('authorizer'),
-                          alternator_port=self.params.get('alternator_port'),
-                          murmur3_partitioner_ignore_msb_bits=murmur3_partitioner_ignore_msb_bits,
-                          alternator_enforce_authorization=self.params.get('alternator_enforce_authorization'),
-                          internode_compression=self.params.get('internode_compression'),
-                          internode_encryption=self.params.get('internode_encryption'),
-                          ldap=self.params.get('use_ldap_authorization'),
-                          ms_ad_ldap=self.params.get('use_ms_ad_ldap'))
-
     def scylla_configure_non_root_installation(self, node, devname, verbose, timeout):
         node.stop_scylla_server(verify_down=False)
         node.remoter.run(f'{INSTALL_DIR}/sbin/scylla_setup --nic {devname} --no-raid-setup --no-io-setup',
@@ -4196,7 +4174,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
             if self.test_config.MULTI_REGION:
                 node.datacenter_setup(self.datacenter)  # pylint: disable=no-member
-            self.node_config_setup(node, ','.join(self.seed_nodes_ips), self.get_endpoint_snitch())
+            node.config_setup(append_scylla_args=self.get_scylla_args())
 
             self._scylla_post_install(node, install_scylla, nic_devname)
 
