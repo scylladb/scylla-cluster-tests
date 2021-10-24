@@ -387,7 +387,7 @@ class DummyCluster(BaseScyllaCluster, BaseCluster):  # pylint: disable=too-few-p
 
     def init_nodes(self):
         for node in self.nodes:
-            self.node_config_setup(node, ','.join(self.seed_nodes_ips), self.get_endpoint_snitch())
+            node.config_setup(append_scylla_args=self.get_scylla_args())
 
     # pylint: disable=too-many-arguments
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):

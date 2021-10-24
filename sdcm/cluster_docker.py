@@ -238,9 +238,6 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
                          params=params)
 
     def node_setup(self, node, verbose=False, timeout=3600):
-        endpoint_snitch = self.params.get('endpoint_snitch')
-        seed_address = ','.join(self.seed_nodes_ips)
-
         node.wait_ssh_up(verbose=verbose)
 
         node.is_scylla_installed(raise_if_not_installed=True)
@@ -250,7 +247,7 @@ class ScyllaDockerCluster(cluster.BaseScyllaCluster, DockerCluster):  # pylint: 
         if self.test_config.BACKTRACE_DECODING:
             node.install_scylla_debuginfo()
 
-        self.node_config_setup(node, seed_address, endpoint_snitch)
+        node.config_setup(append_scylla_args=self.get_scylla_args())
 
         node.stop_scylla_server(verify_down=False)
         node.remoter.sudo('rm -Rf /var/lib/scylla/data/*')  # Clear data folder to drop wrong cluster name data.
