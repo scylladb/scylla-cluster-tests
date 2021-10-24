@@ -39,10 +39,6 @@ class EksClusterCleanupMixin:
     def ec2_client(self):
         return boto3.client('ec2', region_name=self.region_name)
 
-    @cached_property
-    def elb_client(self):
-        return boto3.client('elb', region_name=self.region_name)
-
     @property
     def owned_object_tag_name(self):
         return f'kubernetes.io/cluster/{self.short_cluster_name}'
@@ -79,21 +75,6 @@ class EksClusterCleanupMixin:
         return output
 
     @property
-    def all_load_balancers_names(self) -> List[str]:
-        return [elb_desc['LoadBalancerName'] for elb_desc in
-                self.elb_client.describe_load_balancers()['LoadBalancerDescriptions']]
-
-    @property
-    def attached_load_balancers_names(self) -> List[str]:
-        output = []
-        for tags_data in self.elb_client.describe_tags(
-                LoadBalancerNames=self.all_load_balancers_names)['TagDescriptions']:
-            for tag_data in tags_data['Tags']:
-                if tag_data['Key'] == self.owned_object_tag_name:
-                    output.append(tags_data['LoadBalancerName'])
-        return output
-
-    @property
     def cluster_exists(self) -> bool:
         if self.short_cluster_name in self.eks_client.list_clusters()['clusters']:
             return True
@@ -105,7 +86,6 @@ class EksClusterCleanupMixin:
             if self.failed_to_delete_nodegroup_names:
                 self.destroy_nodegroups(status='DELETE_FAILED')
             self.destroy_cluster()
-            self.destroy_attached_load_balancers()
             # Destroying of the security groups will affect load balancers and node groups that is why
             # in order to do not distract load balancers cleaning process we should have
             # destroy_attached_security_groups performed after destroy_attached_load_balancers
@@ -186,20 +166,6 @@ class EksClusterCleanupMixin:
                             throw_exc=False)
 
         wait_for(_destroy_attached_nodegroups, timeout=400, throw_exc=False)
-
-    def destroy_attached_load_balancers(self):
-        # EKS infra does not cleanup load balancers and some of them can be left alive even when cluster is gone
-        try:
-            elb_names = self.attached_load_balancers_names
-        except Exception as exc:  # pylint: disable=broad-except
-            LOGGER.debug("Failed to get list of load balancers:\n%s", exc)
-            return
-
-        for elb_name in elb_names:
-            try:
-                self.elb_client.delete_load_balancer(LoadBalancerName=elb_name)
-            except Exception as exc:  # pylint: disable=broad-except
-                LOGGER.debug("Failed to delete load balancer %s, due to the following error:\n%s", elb_name, exc)
 
     def destroy_cluster(self):
         try:

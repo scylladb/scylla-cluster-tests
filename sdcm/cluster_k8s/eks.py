@@ -210,8 +210,6 @@ class EksTokenUpdateThread(TokenUpdateThread):
 # pylint: disable=too-many-instance-attributes
 class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
     POOL_LABEL_NAME = 'eks.amazonaws.com/nodegroup'
-    USE_MONITORING_EXPOSE_SERVICE = False
-    USE_POD_RESOLVER = True
     pools: Dict[str, EksNodePool]
     short_cluster_name: str
 
@@ -441,7 +439,6 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
 
 class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
     parent_cluster: 'EksScyllaPodCluster'
-    public_ip_via_service = False
 
     pod_readiness_delay = 30  # seconds
     pod_readiness_timeout = 30  # minutes
