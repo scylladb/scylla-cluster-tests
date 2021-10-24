@@ -71,7 +71,6 @@ from sdcm.utils.k8s import (
     KubernetesOps,
     KUBECTL_TIMEOUT,
     HelmValues,
-    PortExposeService,
     TokenUpdateThread,
 )
 from sdcm.utils.decorators import log_run_info, retrying
@@ -128,34 +127,6 @@ SCYLLA_MANAGER_AGENT_RESOURCES = {
 }
 
 LOGGER = logging.getLogger(__name__)
-
-
-class DnsPodResolver:
-    DNS_RESOLVER_CONFIG = sct_abs_path("sdcm/k8s_configs/dns-resolver-pod.yaml")
-
-    def __init__(self, k8s_cluster: KubernetesCluster, pod_name: str, pool: CloudK8sNodePool = None):
-        self.pod_name = pod_name
-        self.pool = pool
-        self.k8s_cluster = k8s_cluster
-
-    def deploy(self):
-        if self.pool:
-            affinity_modifiers = self.pool.affinity_modifiers
-        else:
-            affinity_modifiers = []
-
-        self.k8s_cluster.apply_file(
-            self.DNS_RESOLVER_CONFIG,
-            modifiers=affinity_modifiers,
-            environ={'POD_NAME': self.pod_name})
-
-    def resolve(self, hostname: str) -> str:
-        result = self.k8s_cluster.kubectl(f'exec {self.pod_name} -- host {hostname}', verbose=False).stdout
-        tmp = result.split()
-        # result = self.k8s_cluster.kubectl(f'exec {self.pod_name} -- dig +short {hostname}').stdout.splitlines()
-        if len(tmp) < 4:
-            raise RuntimeError(f"Got wrong result: {result}")
-        return tmp[3]
 
 
 class CloudK8sNodePool(metaclass=abc.ABCMeta):  # pylint: disable=too-many-instance-attributes
@@ -271,13 +242,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     SCYLLA_POOL_NAME = 'scylla-pool'
     MONITORING_POOL_NAME = 'monitoring-pool'
     LOADER_POOL_NAME = 'loader-pool'
-    DNS_RESOLVER_POD_NAME = 'dns-resolver-pod'
     POOL_LABEL_NAME: str = None
-    USE_POD_RESOLVER = False
-    USE_MONITORING_EXPOSE_SERVICE = False
 
     api_call_rate_limiter: Optional[ApiCallRateLimiter] = None
-    k8s_monitoring_prometheus_expose_service: Optional[PortExposeService] = None
 
     datacenter = ()
     _cert_manager_journal_thread: Optional[CertManagerLogger] = None
@@ -1050,17 +1017,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def check_k8s_monitoring_cluster_health(self, namespace: str):
         LOGGER.info("Check the monitoring cluster")
         self.kubectl_wait("--all --for=condition=Ready pod", timeout=900, namespace=namespace)
-        if self.USE_MONITORING_EXPOSE_SERVICE:
-            LOGGER.info("Expose ports for prometheus of the monitoring cluster")
-            self.k8s_monitoring_prometheus_expose_service = PortExposeService(
-                name='prometheus-expose-ports-service',
-                namespace='monitoring',
-                selector_key='operator.prometheus.io/name',
-                selector_value='monitoring-kube-prometheus-prometheus',
-                core_v1_api=self.k8s_core_v1_api,
-                resolver=self.resolve_dns_to_ip
-            )
-            self.k8s_monitoring_prometheus_expose_service.deploy()
 
         self.kubectl("get statefulset", namespace=namespace)
         self.kubectl("get pods", namespace=namespace)
@@ -1297,43 +1253,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         for node_pool in self.pools.values():
             node_pool.wait_for_nodes_readiness()
 
-    def resolve_dns_to_ip(self, hostname: str, timeout: int = None, step: int = 1) -> str:
-
-        def resolve_ip():
-            try:
-                return self._resolve_dns_to_ip(hostname)
-            except Exception as exc:
-                raise RuntimeError(f"Failed to resolve {hostname} due to the {exc}") from None
-
-        if not timeout:
-            return resolve_ip()
-
-        return wait_for(resolve_ip, timeout=timeout, step=step, throw_exc=True)
-
-    def _resolve_dns_to_ip(self, hostname: str) -> str:
-        if self.USE_POD_RESOLVER:
-            return self._resolve_dns_to_ip_via_resolver(hostname)
-        return self._resolve_dns_to_ip_directly(hostname)
-
-    def _resolve_dns_to_ip_directly(self, hostname: str) -> str:  # pylint: disable=no-self-use
-        ip_address = socket.gethostbyname(hostname)
-        if ip_address == '0.0.0.0':
-            raise RuntimeError('Failed to resolve')
-        return ip_address
-
-    def _resolve_dns_to_ip_via_resolver(self, hostname: str) -> str:
-        return self.dns_resolver.resolve(hostname)
-
-    @cached_property
-    def dns_resolver(self):
-        resolver = DnsPodResolver(
-            k8s_cluster=self,
-            pod_name=self.DNS_RESOLVER_POD_NAME,
-            pool=self.pools.get(self.AUXILIARY_POOL_NAME, None)
-        )
-        resolver.deploy()
-        return resolver
-
     @abc.abstractmethod
     def deploy(self):
         pass
@@ -1444,8 +1363,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
 class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-methods
     parent_cluster: PodCluster
-    expose_ports_service: Optional[PortExposeService] = None
-    public_ip_via_service: bool = False
 
     pod_readiness_delay = 30  # seconds
     pod_readiness_timeout = 5  # minutes
@@ -1483,11 +1400,6 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
 
     def _init_port_mapping(self):
         pass
-
-    def init(self) -> None:
-        if self.public_ip_via_service:
-            self.expose_ports()
-        super().init()
 
     @property
     def system_log(self):
@@ -1551,9 +1463,6 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
         public_ips = []
         private_ips = []
 
-        if self.expose_ports_service and self.expose_ports_service.is_deployed:
-            public_ips.append(self.expose_ports_service.service_ip)
-
         if cluster_ip_service := self._cluster_ip_service:
             private_ips.append(cluster_ip_service.spec.cluster_ip)
 
@@ -1572,16 +1481,6 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
     @property
     def k8s_pod_name(self) -> str:
         return str(self._pod.metadata.name)
-
-    def expose_ports(self):
-        self.expose_ports_service = PortExposeService(
-            name=f'{self.k8s_pod_name}-lbc',
-            namespace='scylla',
-            selector_value=self.k8s_pod_name,
-            core_v1_api=self.parent_cluster.k8s_cluster.k8s_core_v1_api,
-            resolver=self.parent_cluster.k8s_cluster.resolve_dns_to_ip,
-        )
-        self.expose_ports_service.deploy()
 
     def wait_till_k8s_pod_get_uid(self, timeout: int = None, ignore_uid=None) -> str:
         """
@@ -2010,12 +1909,6 @@ class PodCluster(cluster.BaseCluster):
             readiness_timeout=self.get_nodes_reboot_timeout(pods_to_wait),
             namespace=self.namespace
         )
-
-    def expose_ports(self, nodes=None):
-        if nodes is None:
-            nodes = self.nodes
-        for node in nodes:
-            node.expose_ports()
 
 
 class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disable=too-many-public-methods

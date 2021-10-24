@@ -443,7 +443,6 @@ class LocalKindCluster(LocalMinimalClusterBase):
 
 
 class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
-    public_ip_via_service: bool = False
     parent_cluster: 'LocalMinimalScyllaPodCluster'
 
     pod_readiness_delay = 30  # seconds
