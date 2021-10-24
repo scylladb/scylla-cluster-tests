@@ -130,34 +130,6 @@ SCYLLA_MANAGER_AGENT_RESOURCES = {
 LOGGER = logging.getLogger(__name__)
 
 
-class DnsPodResolver:
-    DNS_RESOLVER_CONFIG = sct_abs_path("sdcm/k8s_configs/dns-resolver-pod.yaml")
-
-    def __init__(self, k8s_cluster: KubernetesCluster, pod_name: str, pool: CloudK8sNodePool = None):
-        self.pod_name = pod_name
-        self.pool = pool
-        self.k8s_cluster = k8s_cluster
-
-    def deploy(self):
-        if self.pool:
-            affinity_modifiers = self.pool.affinity_modifiers
-        else:
-            affinity_modifiers = []
-
-        self.k8s_cluster.apply_file(
-            self.DNS_RESOLVER_CONFIG,
-            modifiers=affinity_modifiers,
-            environ={'POD_NAME': self.pod_name})
-
-    def resolve(self, hostname: str) -> str:
-        result = self.k8s_cluster.kubectl(f'exec {self.pod_name} -- host {hostname}', verbose=False).stdout
-        tmp = result.split()
-        # result = self.k8s_cluster.kubectl(f'exec {self.pod_name} -- dig +short {hostname}').stdout.splitlines()
-        if len(tmp) < 4:
-            raise RuntimeError(f"Got wrong result: {result}")
-        return tmp[3]
-
-
 class CloudK8sNodePool(metaclass=abc.ABCMeta):  # pylint: disable=too-many-instance-attributes
     def __init__(
             self,
@@ -271,9 +243,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     SCYLLA_POOL_NAME = 'scylla-pool'
     MONITORING_POOL_NAME = 'monitoring-pool'
     LOADER_POOL_NAME = 'loader-pool'
-    DNS_RESOLVER_POD_NAME = 'dns-resolver-pod'
     POOL_LABEL_NAME: str = None
-    USE_POD_RESOLVER = False
     USE_MONITORING_EXPOSE_SERVICE = False
 
     api_call_rate_limiter: Optional[ApiCallRateLimiter] = None
@@ -1311,8 +1281,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         return wait_for(resolve_ip, timeout=timeout, step=step, throw_exc=True)
 
     def _resolve_dns_to_ip(self, hostname: str) -> str:
-        if self.USE_POD_RESOLVER:
-            return self._resolve_dns_to_ip_via_resolver(hostname)
         return self._resolve_dns_to_ip_directly(hostname)
 
     def _resolve_dns_to_ip_directly(self, hostname: str) -> str:  # pylint: disable=no-self-use
@@ -1320,19 +1288,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         if ip_address == '0.0.0.0':
             raise RuntimeError('Failed to resolve')
         return ip_address
-
-    def _resolve_dns_to_ip_via_resolver(self, hostname: str) -> str:
-        return self.dns_resolver.resolve(hostname)
-
-    @cached_property
-    def dns_resolver(self):
-        resolver = DnsPodResolver(
-            k8s_cluster=self,
-            pod_name=self.DNS_RESOLVER_POD_NAME,
-            pool=self.pools.get(self.AUXILIARY_POOL_NAME, None)
-        )
-        resolver.deploy()
-        return resolver
 
     @abc.abstractmethod
     def deploy(self):
