@@ -12,6 +12,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
+# pylint: disable=too-many-lines
 
 # pylint: disable=too-many-lines
 
@@ -33,6 +34,7 @@ from pkg_resources import parse_version
 from sdcm import mgmt
 from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
 from sdcm.mgmt.cli import ScyllaManagerTool
+from sdcm.mgmt.common import alter_manager_yaml_and_restart
 from sdcm.remote import shell_script_cmd
 from sdcm.tester import ClusterTester
 from sdcm.cluster import TestConfig
@@ -370,7 +372,10 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self.test_mgmt_cluster_crud()
         with self.subTest('Mgmt cluster Health Check'):
             self.test_mgmt_cluster_healthcheck()
-        self.test_suspend_and_resume()
+        with self.subTest('Basic test healthcheck change max timeout'):
+            self.test_healthcheck_change_max_timeout()
+        with self.subTest('Basic test suspend and resume'):
+            self.test_suspend_and_resume()
         with self.subTest('Client Encryption'):
             # Since this test activates encryption, it has to be the last test in the sanity
             self.test_client_encryption()
@@ -694,6 +699,52 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
         mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info('finishing test_mgmt_cluster_healthcheck')
+
+    def test_healthcheck_change_max_timeout(self):
+        """
+        New in manager 2.6
+        'max_timeout' is new parameter in the scylla manager yaml. It decides the maximum
+        amount of time the manager healthcheck function will wait for a ping response before
+        it will announce the node as timed out.
+
+        The test sets the timeout as such that the latency of the nodes that exist in the
+        local region (us-east-1) will not be longer than the set timeout, and therefore
+        will appear as UP in the healthcheck, while the latency of the node that is the
+        distant region (us-west-2) will be longer than the set timeout, and therefore the
+        healthcheck will report it as TIMEOUT.
+
+        The test makes sure that the healthcheck reports those statuses correctly.
+        """
+        self.log.info('starting test_healthcheck_change_max_timeout')
+
+        nodes_from_local_dc = self.db_cluster.nodes[:2]
+        nodes_from_distant_dc = self.db_cluster.nodes[2:]
+        manager_node = self.monitors.nodes[0]
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) or manager_tool.add_cluster(
+            name=self.CLUSTER_NAME, db_cluster=self.db_cluster, auth_token=self.monitors.mgmt_auth_token)
+
+        try:
+            alter_manager_yaml_and_restart(manager_node=manager_node, logger=self.log,
+                                           values_to_update=[{"healthcheck": {"max_timeout": "20ms"}}])
+            sleep = 40
+            self.log.debug('Sleep %s seconds, waiting for health-check task to rerun', sleep)
+            time.sleep(sleep)
+            dict_host_health = mgr_cluster.get_hosts_health()
+            for node in nodes_from_distant_dc:
+                assert dict_host_health[node.ip_address].status == HostStatus.TIMEOUT, \
+                    f'After setting "max_timeout" to a value shorter than the latency of the distant dc nodes, ' \
+                    f'the healthcheck status of {node.ip_address} was not {HostStatus.TIMEOUT} as expected, but ' \
+                    f'instead it was {dict_host_health[node.ip_address].status}'
+            for node in nodes_from_local_dc:
+                assert dict_host_health[node.ip_address].status == HostStatus.UP, \
+                    f'After setting "max_timeout" to a value longer than the latency of the local dc nodes, ' \
+                    f'the healthcheck status of {node.ip_address} is not {HostStatus.UP} as expected, but ' \
+                    f'instead it was {dict_host_health[node.ip_address].status}'
+        finally:
+            alter_manager_yaml_and_restart(manager_node=manager_node, logger=self.log, values_to_remove=['healthcheck'])
+            mgr_cluster.delete()  # remove cluster at the end of the test
+        self.log.info('finishing test_healthcheck_change_max_timeout')
 
     def test_ssh_setup_script(self):
         self.log.info('starting test_ssh_setup_script')

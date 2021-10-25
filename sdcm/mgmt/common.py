@@ -75,6 +75,17 @@ def get_manager_scylla_backend(scylla_backend_version_name, distro):
     return backend_repo_address
 
 
+def alter_manager_yaml_and_restart(manager_node, logger, values_to_update=(), values_to_remove=()):
+    with manager_node.remote_manager_yaml() as scylla_manager_yaml:
+        for value in values_to_update:
+            scylla_manager_yaml.update(value)
+        for value in values_to_remove:
+            del scylla_manager_yaml[value]
+        logger.info("The new Scylla Manager is:\n%s", scylla_manager_yaml)
+    manager_node.remoter.sudo("systemctl restart scylla-manager")
+    manager_node.wait_manager_server_up()
+
+
 class ScyllaManagerError(Exception):
     """
     A custom exception for Manager related errors
