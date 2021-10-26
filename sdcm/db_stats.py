@@ -31,10 +31,10 @@ import requests
 
 from sdcm.es import ES
 from sdcm.test_config import TestConfig
-from sdcm.utils.common import get_job_name, normalize_ipv6_url, get_git_commit_id, get_job_url
+from sdcm.utils.common import normalize_ipv6_url, get_git_commit_id
 from sdcm.utils.decorators import retrying
 from sdcm.sct_events.system import ElasticsearchEvent
-
+from utils.build_system import get_job_name, get_job_url
 
 LOGGER = logging.getLogger(__name__)
 

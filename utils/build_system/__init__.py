@@ -12,3 +12,15 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
+import logging
+import os
+
+LOGGER = logging.getLogger(__name__)
+
+
+def get_job_name() -> str:
+    return os.environ.get('JOB_NAME', 'local_run')
+
+
+def get_job_url() -> str:
+    return os.environ.get('BUILD_URL', '')
