@@ -46,9 +46,9 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
             target_address = self.node_list[0].parent_cluster.get_node().ip_address
         else:
             target_address = self.node_list[0].ip_address
-        stress_cmd = f"./gradlew run --args=\' {self.stress_cmd.replace('hydra-kcl', '')} " \
-                     f"-e http://{target_address}:{self.params.get('alternator_port')} \'"
-        return stress_cmd
+        stream_args = f'-e http://{target_address}:{self.params.get("alternator_port")} ' \
+            f'{self.stress_cmd.replace("hydra-kcl", "")}'
+        return stream_args
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
         # KCS Dockers list:
@@ -56,9 +56,10 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
         # scylladb/hydra-loaders:kcl-jdk8-20210310-ShardSyncStrategyType-PERIODIC
         # scylladb/hydra-loaders:kcl-jdk8-20210215
         # scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC
-        docker = cleanup_context = RemoteDocker(loader, "yarongilor/alternator:kcl-jdk8-20210810",
+        # TODO: i have no permissions to upload the docker image to scylla QA repository. should be fixed by maintainers
+        docker = cleanup_context = RemoteDocker(loader, "yarongilor/alternator:kcl-jdk8-20211026",
                                                 extra_docker_opts=f'--label shell_marker={self.shell_marker}')
-        stress_cmd = self.build_stress_cmd()
+        stream_args = self.build_stress_cmd()
 
         if not os.path.exists(loader.logdir):
             os.makedirs(loader.logdir, exist_ok=True)
@@ -66,16 +67,12 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
                                      (loader_idx, cpu_idx, uuid.uuid4()))
         LOGGER.debug('kcl-stress local log: %s', log_file_name)
 
-        LOGGER.debug("'running: %s", stress_cmd)
+        LOGGER.debug("'running: %s", stream_args)
 
-        if self.stress_num > 1:
-            node_cmd = 'taskset -c %s bash -c "%s"' % (cpu_idx, stress_cmd)
-        else:
-            node_cmd = stress_cmd
+        java_cmd = 'java -jar kraken-dynamo-syncer-0.0.1-SNAPSHOT-jar-with-dependencies.jar'
+        node_cmd = f'cd /kraken-dynamo/syncer/target && {java_cmd} {stream_args}'
 
-        node_cmd = 'cd /hydra-kcl && {}'.format(node_cmd)
-
-        KclStressEvent.start(node=loader, stress_cmd=stress_cmd).publish()
+        KclStressEvent.start(node=loader, stress_cmd=node_cmd).publish()
 
         try:
             with cleanup_context:
@@ -97,7 +94,7 @@ class KclStressThread(DockerBasedStressThread):  # pylint: disable=too-many-inst
             ).publish()
             raise
         finally:
-            KclStressEvent.finish(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name).publish()
+            KclStressEvent.finish(node=loader, stress_cmd=node_cmd, log_file_name=log_file_name).publish()
 
 
 class CompareTablesSizesThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
