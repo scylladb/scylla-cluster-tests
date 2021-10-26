@@ -441,7 +441,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         all_versions = yaml.safe_load(self.helm(
             f"search repo {local_chart_path} --devel --versions -o yaml"))
         assert isinstance(all_versions, list), f"Expected list of data, got: {type(all_versions)}"
-        return str(max((version.parse(chart_data["version"]) for chart_data in all_versions)))
+        return str(max((version.LegacyVersion(chart_data["version"]) for chart_data in all_versions)))
 
     @cached_property
     def _scylla_operator_chart_version(self):
