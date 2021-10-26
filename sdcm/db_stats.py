@@ -13,11 +13,19 @@ from collections import defaultdict
 import yaml
 import requests
 
+from elasticsearch.exceptions import ConnectionError as ES_ConnectionError, ConnectionTimeout as ES_ConnectionTimeout, \
+    RequestError as ES_RequestError
+from urllib3.exceptions import ReadTimeoutError, MaxRetryError, ConnectTimeoutError
+
 from sdcm.es import ES
 from sdcm.utils.common import get_job_name, normalize_ipv6_url
 from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)
+
+
+connection_exception = (ES_RequestError, ES_ConnectionTimeout, ES_ConnectionError,
+                        ReadTimeoutError, MaxRetryError, ConnectTimeoutError)
 
 
 class CassandraStressCmdParseError(Exception):
@@ -347,10 +355,16 @@ class Stats():
     def get_doc_id(self):
         return self._test_id
 
+    @retrying(n=5, sleep_time=5, allowed_exceptions=connection_exception, message="Create es document")
     def create(self):
-        self.elasticsearch.create_doc(index=self._test_index, doc_type=self._es_doc_type,
-                                      doc_id=self._test_id, body=self._stats)
+        try:
+            self.elasticsearch.create_doc(index=self._test_index, doc_type=self._es_doc_type,
+                                          doc_id=self._test_id, body=self._stats)
+        except Exception as details:  # pylint: disable=broad-except
+            LOGGER.error("Failed to create document with test-id: %s; Error: %s", self._test_id, details)
+            raise
 
+    @retrying(n=5, sleep_time=5, allowed_exceptions=connection_exception, message="Update es document", raise_on_exceeded=False)
     def update(self, data):
         """
         Update document
@@ -361,6 +375,7 @@ class Stats():
                                           doc_id=self._test_id, body=data)
         except Exception as ex:  # pylint: disable=broad-except
             LOGGER.error('Failed to update test stats: test_id: %s, error: %s', self._test_id, ex)
+            raise
 
     def exists(self):
         return self.elasticsearch.exists(index=self._test_index, doc_type=self._es_doc_type, id=self._test_id)
