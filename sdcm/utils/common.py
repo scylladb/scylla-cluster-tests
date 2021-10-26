@@ -21,7 +21,6 @@ import os
 import logging
 import random
 import socket
-import subprocess
 import time
 import datetime
 import errno
@@ -155,24 +154,6 @@ def get_sct_root_path():
 
 def get_sct_runner_ip() -> str:
     return os.environ.get("RUNNER_IP", "127.0.0.1")
-
-
-def get_git_commit_id() -> str:
-    try:
-        proc = subprocess.run(args=["git", "rev-parse", "HEAD"], check=True, capture_output=True)
-    except subprocess.CalledProcessError:
-        LOGGER.warning("Error running git command", exc_info=True)
-        return ""
-    return proc.stdout.decode(encoding="utf-8").strip()
-
-
-def get_git_current_branch() -> str:
-    try:
-        proc = subprocess.run(args=["git", "rev-parse", "--abbrev-ref=loose", "HEAD"], check=True, capture_output=True)
-    except subprocess.CalledProcessError:
-        LOGGER.warning("Error running git command", exc_info=True)
-        return "#ERROR"
-    return proc.stdout.decode(encoding="utf-8").strip()
 
 
 def get_test_name() -> str:
