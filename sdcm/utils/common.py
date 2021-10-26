@@ -75,6 +75,7 @@ from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.gce_utils import GcloudContainerMixin
 from sdcm.remote import LocalCmdRunner
 from sdcm.remote import RemoteCmdRunnerBase
+from utils.build_system import get_job_name
 
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
@@ -152,16 +153,8 @@ def get_sct_root_path():
     return os.path.abspath(sct_root_dir)
 
 
-def get_sct_runner_ip() -> str:  # TODO: Replace all occurences of env variable
+def get_sct_runner_ip() -> str:
     return os.environ.get("RUNNER_IP", "127.0.0.1")
-
-
-def get_job_name() -> str:  # TODO: Move to build_system module
-    return os.environ.get('JOB_NAME', 'local_run')
-
-
-def get_job_url() -> str:  # TODO: Move to build_system module
-    return os.environ.get('BUILD_URL', '')
 
 
 def get_git_commit_id() -> str:
@@ -175,7 +168,7 @@ def get_git_commit_id() -> str:
 
 def get_git_current_branch() -> str:
     try:
-        proc = subprocess.run(args=["git", "branch", "--show-current"], check=True, capture_output=True)
+        proc = subprocess.run(args=["git", "rev-parse", "--abbrev-ref=loose", "HEAD"], check=True, capture_output=True)
     except subprocess.CalledProcessError:
         LOGGER.warning("Error running git command", exc_info=True)
         return "#ERROR"

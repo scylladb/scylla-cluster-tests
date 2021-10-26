@@ -12,9 +12,10 @@ from argus.db.config import Config
 
 from sdcm.keystore import KeyStore
 from sdcm.sct_config import SCTConfiguration
-from sdcm.utils.common import get_job_name, get_job_url, get_test_name, get_git_commit_id, get_git_current_branch, \
+from sdcm.utils.common import get_test_name, get_git_commit_id, get_git_current_branch, \
     get_sct_runner_ip, get_my_ip
 from sdcm.utils.get_username import get_username
+from utils.build_system import get_job_url, get_job_name
 
 LOGGER = logging.getLogger(__name__)
 
