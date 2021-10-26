@@ -66,6 +66,7 @@ from sdcm.utils.common import (
     list_logs_by_test_id,
     list_resources_docker,
     search_test_id_in_latest,
+    get_sct_runner_ip,
 )
 from sdcm.utils.jepsen import JepsenResults
 from sdcm.utils.docker_utils import docker_hub_login
@@ -84,7 +85,7 @@ from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylin
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
 
-SCT_RUNNER_HOST = os.environ.get("RUNNER_IP", "localhost")  # TODO: replace with get_runner_ip (check "localhost" usage)
+SCT_RUNNER_HOST = get_sct_runner_ip()
 
 LOGGER = setup_stdout_logger()
 
@@ -784,7 +785,7 @@ def show_jepsen_results(test_id):
         click.secho(message=f"\nJepsen data restored, starting web server on "
                             f"http://{SCT_RUNNER_HOST}:{jepsen.jepsen_results_port}/",
                     fg="green")
-        detach = SCT_RUNNER_HOST != "localhost"
+        detach = SCT_RUNNER_HOST != "127.0.0.1"
         if not detach:
             click.secho(message="Press Ctrl-C to stop the server.", fg="green")
         click.echo("")
