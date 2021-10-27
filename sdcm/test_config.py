@@ -9,7 +9,7 @@ import requests
 from sdcm.keystore import KeyStore
 from sdcm.provision.common.utils import configure_sshd_script, configure_rsyslog_rate_limits_script, \
     configure_rsyslog_target_script, restart_sshd_service, restart_rsyslog_service
-from sdcm.utils.common import get_my_ip
+from sdcm.utils.net import get_my_ip
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.get_username import get_username

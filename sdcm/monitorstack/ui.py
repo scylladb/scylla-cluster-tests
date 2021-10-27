@@ -8,7 +8,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.common import exceptions
 
-from sdcm.utils.common import get_test_name
+from sdcm.utils.ci_tools import get_test_name
 
 
 LOGGER = logging.getLogger(__name__)

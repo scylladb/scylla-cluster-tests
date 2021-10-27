@@ -74,7 +74,6 @@ from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.gce_utils import GcloudContainerMixin
 from sdcm.remote import LocalCmdRunner
 from sdcm.remote import RemoteCmdRunnerBase
-from sdcm.utils.ci_tools import get_job_name
 
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
@@ -150,23 +149,6 @@ def get_sct_root_path():
     sdcm_path = os.path.realpath(sdcm.__path__[0])
     sct_root_dir = os.path.join(sdcm_path, "..")
     return os.path.abspath(sct_root_dir)
-
-
-def get_sct_runner_ip() -> str:
-    return os.environ.get("RUNNER_IP", "127.0.0.1")
-
-
-def get_test_name() -> str:
-    job_name = get_job_name()
-    if job_name and job_name != 'local_run':
-        return job_name.split("/")[-1]
-
-    if config_files := os.environ.get("SCT_CONFIG_FILES"):
-        # Example: 'test-cases/gemini/gemini-1tb-10h.yaml,test-cases/gemini/gemini-10tb-10h.yaml'
-        config_file = config_files[0] if isinstance(config_files, list) else config_files.split(",")[0].strip()
-        return config_file.split("/")[-1].replace('.yaml', '').replace('"', '').replace("'", "").rstrip("]")
-
-    return ""
 
 
 def verify_scylla_repo_file(content, is_rhel_like=True):
@@ -1284,14 +1266,6 @@ def get_free_port(address: str = '', ports_to_try: Iterable[int] = (0,)) -> int:
         except OSError:
             pass
     raise RuntimeError("Can't allocate a free port")
-
-
-def get_my_ip():
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.connect(("8.8.8.8", 80))
-    ip = sock.getsockname()[0]
-    sock.close()
-    return ip
 
 
 @retrying(n=60, sleep_time=5, allowed_exceptions=(OSError,))
