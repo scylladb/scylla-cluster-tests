@@ -451,7 +451,7 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
 
     log.info("Create %s namespace", namespace)
 
-    namespaces = yaml.load(db_cluster.k8s_cluster.kubectl("get namespaces -o yaml").stdout)
+    namespaces = yaml.safe_load(db_cluster.k8s_cluster.kubectl("get namespaces -o yaml").stdout)
 
     if not [ns["metadata"]["name"] for ns in namespaces["items"] if ns["metadata"]["name"] == namespace]:
         db_cluster.k8s_cluster.kubectl(f"create namespace {namespace}")

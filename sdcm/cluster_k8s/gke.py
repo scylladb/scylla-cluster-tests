@@ -109,7 +109,7 @@ class GkeNodePool(CloudK8sNodePool):
     @property
     def instance_group_name(self) -> str:
         try:
-            group_link = yaml.load(
+            group_link = yaml.safe_load(
                 self.k8s_cluster.gcloud.run(
                     f'container node-pools describe {self.name} '
                     f'--zone {self.gce_zone} --project {self.gce_project} '
@@ -257,7 +257,7 @@ class GkeCluster(KubernetesCluster):
 
     def get_instance_group_name_for_pool(self, pool_name: str, default=None) -> str:
         try:
-            group_link = yaml.load(
+            group_link = yaml.safe_load(
                 self.gcloud.run(
                     f'container node-pools describe {pool_name} '
                     f'--zone {self.gce_zone} --project {self.gce_project} '

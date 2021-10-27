@@ -330,7 +330,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             else:
                 with open(config_path, 'r') as config_file_stream:
                     data = config_file_stream.read()
-            file_content = yaml.load_all(data)
+            file_content = yaml.safe_load_all(data)
 
             for doc in file_content:
                 if modifiers:
