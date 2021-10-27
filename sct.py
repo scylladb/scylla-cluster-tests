@@ -66,8 +66,8 @@ from sdcm.utils.common import (
     list_logs_by_test_id,
     list_resources_docker,
     search_test_id_in_latest,
-    get_sct_runner_ip,
 )
+from sdcm.utils.net import get_sct_runner_ip
 from sdcm.utils.jepsen import JepsenResults
 from sdcm.utils.docker_utils import docker_hub_login
 from sdcm.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,

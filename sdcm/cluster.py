@@ -77,11 +77,11 @@ from sdcm.utils.common import (
     normalize_ipv6_url,
     download_dir_from_cloud,
     generate_random_string,
-    get_test_name,
     update_authenticator,
     prepare_and_start_saslauthd_service,
     change_default_password,
 )
+from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.distro import Distro
 from sdcm.utils.install import InstallMode
 from sdcm.utils.docker_utils import ContainerManager, NotFound, docker_hub_login
