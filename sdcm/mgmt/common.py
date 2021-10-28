@@ -75,7 +75,7 @@ def get_manager_scylla_backend(scylla_backend_version_name, distro):
     return backend_repo_address
 
 
-def alter_manager_yaml_and_restart(manager_node, logger, values_to_update=(), values_to_remove=()):
+def reconfigure_scylla_manager(manager_node, logger, values_to_update=(), values_to_remove=()):
     with manager_node.remote_manager_yaml() as scylla_manager_yaml:
         for value in values_to_update:
             scylla_manager_yaml.update(value)
