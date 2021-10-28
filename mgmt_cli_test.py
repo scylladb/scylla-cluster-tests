@@ -30,7 +30,7 @@ from pkg_resources import parse_version
 from sdcm import mgmt
 from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
 from sdcm.mgmt.cli import ScyllaManagerTool
-from sdcm.mgmt.common import alter_manager_yaml_and_restart
+from sdcm.mgmt.common import reconfigure_scylla_manager
 from sdcm.remote import shell_script_cmd
 from sdcm.tester import ClusterTester
 from sdcm.cluster import TestConfig
@@ -711,8 +711,8 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             name=self.CLUSTER_NAME, db_cluster=self.db_cluster, auth_token=self.monitors.mgmt_auth_token)
 
         try:
-            alter_manager_yaml_and_restart(manager_node=manager_node, logger=self.log,
-                                           values_to_update=[{"healthcheck": {"max_timeout": "20ms"}}])
+            reconfigure_scylla_manager(manager_node=manager_node, logger=self.log,
+                                       values_to_update=[{"healthcheck": {"max_timeout": "20ms"}}])
             sleep = 40
             self.log.debug('Sleep %s seconds, waiting for health-check task to rerun', sleep)
             time.sleep(sleep)
@@ -728,7 +728,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
                     f'the healthcheck status of {node.ip_address} is not {HostStatus.UP} as expected, but ' \
                     f'instead it was {dict_host_health[node.ip_address].status}'
         finally:
-            alter_manager_yaml_and_restart(manager_node=manager_node, logger=self.log, values_to_remove=['healthcheck'])
+            reconfigure_scylla_manager(manager_node=manager_node, logger=self.log, values_to_remove=['healthcheck'])
             mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info('finishing test_healthcheck_change_max_timeout')
 
