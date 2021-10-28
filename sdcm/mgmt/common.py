@@ -82,8 +82,7 @@ def reconfigure_scylla_manager(manager_node, logger, values_to_update=(), values
         for value in values_to_remove:
             del scylla_manager_yaml[value]
         logger.info("The new Scylla Manager is:\n%s", scylla_manager_yaml)
-    manager_node.remoter.sudo("systemctl restart scylla-manager")
-    manager_node.wait_manager_server_up()
+    manager_node.restart_manager_server()
 
 
 class ScyllaManagerError(Exception):
