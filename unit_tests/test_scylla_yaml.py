@@ -10,9 +10,10 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-
-
 import unittest
+from pathlib import Path
+
+import yaml
 
 from sdcm.provision.scylla_yaml import ServerEncryptionOptions, ClientEncryptionOptions, SeedProvider, ScyllaYaml
 from sdcm.provision.scylla_yaml.auxiliaries import RequestSchedulerOptions
@@ -350,6 +351,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'cpu_scheduler': True,
                 'view_building': True,
                 'enable_sstables_mc_format': True,
+                'enable_sstables_md_format': False,
                 'enable_dangerous_direct_import_of_cassandra_counters': False,
                 'enable_shard_aware_drivers': True,
                 'enable_ipv6_dns_lookup': False,
@@ -391,7 +393,7 @@ class ScyllaYamlTest(unittest.TestCase):
         )
 
     @staticmethod
-    def test_update():
+    def test_update_with_scylla_yaml_object():
         yaml1 = ScyllaYaml(cluster_name='cluster1', redis_keyspace_replication_strategy='NetworkTopologyStrategy')
         yaml2 = ScyllaYaml(
             redis_keyspace_replication_strategy='SimpleStrategy',
@@ -420,6 +422,17 @@ class ScyllaYamlTest(unittest.TestCase):
                                                               truststore='/tmp/trust.pem'),
             client_encryption_options=ClientEncryptionOptions()
         )
+
+    @staticmethod
+    def test_update_with_dict_object():
+        yaml1 = ScyllaYaml(cluster_name='cluster1', redis_keyspace_replication_strategy='NetworkTopologyStrategy')
+        test_config_file = Path(__file__).parent / 'test_data' / 'scylla_yaml_update.yaml'
+        with open(test_config_file, "r") as test_file:
+            test_config_file_yaml = yaml.load(test_file)
+            append_scylla_args_dict = yaml.load(test_config_file_yaml["append_scylla_yaml"])
+        yaml1.update(append_scylla_args_dict)
+        assert yaml1.enable_sstables_mc_format == append_scylla_args_dict["enable_sstables_mc_format"]
+        assert yaml1.enable_sstables_md_format == append_scylla_args_dict["enable_sstables_md_format"]
 
     @staticmethod
     def test_copy():
