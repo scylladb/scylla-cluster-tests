@@ -265,6 +265,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
     cpu_scheduler: bool = True
     view_building: bool = True
     enable_sstables_mc_format: bool = True
+    enable_sstables_md_format: bool = False
     enable_dangerous_direct_import_of_cassandra_counters: bool = False
     enable_shard_aware_drivers: bool = True
     enable_ipv6_dns_lookup: bool = False
@@ -330,7 +331,7 @@ class ScyllaYaml(BaseModel):  # pylint: disable=too-few-public-methods
             attr_info = fields_data.get(attr_name, None)
             if attr_info is None:
                 raise ValueError("Provided unknown attribute `%s`" % (attr_name,))
-            if hasattr(attr_info.type, "__attrs_attrs__"):
+            if hasattr(attr_info.type_, "__attrs_attrs__"):
                 if attr_value is not None:
                     if not isinstance(attr_value, dict):
                         raise ValueError("Unexpected data `%s` in attribute `%s`" % (
