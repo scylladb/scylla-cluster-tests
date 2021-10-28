@@ -70,8 +70,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
             scylla_manager_yaml["http"] = f"{node_ip}:{new_manager_http_port}"
             scylla_manager_yaml["prometheus"] = f"{node_ip}:{self.params['manager_prometheus_port']}"
             LOGGER.info("The new Scylla Manager is:\n{}".format(scylla_manager_yaml))
-        manager_node.remoter.sudo("systemctl restart scylla-manager")
-        manager_node.wait_manager_server_up(port=new_manager_http_port)
+        manager_node.restart_manager_server(port=new_manager_http_port)
         manager_tool = get_scylla_manager_tool(manager_node=manager_node)
         manager_tool.add_cluster(name="cluster_under_test", db_cluster=self.db_cluster,
                                  auth_token=self.monitors.mgmt_auth_token)
