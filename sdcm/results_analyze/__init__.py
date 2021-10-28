@@ -409,7 +409,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         elif test_doc['_source']['test_details'].get('ycsb'):
             return PerformanceFilterYCSB(test_doc, is_gce)()
         elif "cdc" in test_doc['_source']['test_details'].get('sub_type'):
-            return CDCQueryFilterCS(test_doc, is_gce)()
+            return CDCQueryFilterCS(test_doc, is_gce, use_wide_query=True)()
         else:
             return PerformanceFilterCS(test_doc, is_gce)()
 
