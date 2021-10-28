@@ -30,7 +30,6 @@ nemesis_filter_seeds: false
 
 gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1804-lts'
 scylla_linux_distro: 'ubuntu-bionic'
-scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/deb/unstable/bionic/master/latest/scylladb-manager-master/scylla-manager.list'
 
 scylla_linux_distro_loader: 'centos'
 scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/rpm/unstable/centos/master/latest/scylla-manager.repo'
