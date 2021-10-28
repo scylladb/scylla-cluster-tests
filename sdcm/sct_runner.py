@@ -76,8 +76,9 @@ class SctRunnerInfo:  # pylint: disable=too-many-instance-attributes
     instance: Any = field(repr=False)
     instance_name: str
     public_ips: list[str]
-    launch_time: datetime.datetime
-    keep: str
+    launch_time: Optional[datetime.datetime] = None
+    keep: Optional[str] = None
+    keep_action: Optional[str] = None
 
     @property
     def cloud_provider(self) -> str:
@@ -86,10 +87,13 @@ class SctRunnerInfo:  # pylint: disable=too-many-instance-attributes
     def __str__(self) -> str:
         bits = [
             f"[{self.cloud_provider}/{self.region_az}] {self.instance_name}",
-            f"launched at {self.launch_time:{LAUNCH_TIME_FORMAT}} UTC",
         ]
+        if self.launch_time:
+            bits.append(f"launched at {self.launch_time:{LAUNCH_TIME_FORMAT}} UTC")
         if self.keep:
             bits.append(f"keep: {self.keep}")
+        if self.keep_action:
+            bits.append(f"keep_action: {self.keep_action}")
         if self.public_ips:
             bits.append(f"public IPs are {self.public_ips}")
         return ", ".join(bits)
@@ -552,6 +556,7 @@ class AwsSctRunner(SctRunner):
                     public_ips=[instance.get("PublicIpAddress"), ],
                     launch_time=instance["LaunchTime"],
                     keep=tags.get("keep"),
+                    keep_action=tags.get("keep_action"),
                 ))
         return sct_runners
 
@@ -697,10 +702,17 @@ class GceSctRunner(SctRunner):
         sct_runners = []
         for instance in list_instances_gce(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=True):
             tags = gce_meta_to_dict(instance.extra["metadata"])
-            if not tags.get("launch_time"):
-                LOGGER.warning("Skip GCE instance w/o or empty `launch_time' tag: %s", instance.name)
-                continue
             region = instance.extra["zone"].name
+            if launch_time := tags.get("launch_time"):
+                try:
+                    launch_time = datetime_from_formatted(date_string=launch_time)
+                except ValueError as exc:
+                    LOGGER.warning("Value of `launch_time' tag is invalid: %s", exc)
+                    launch_time = None
+            if not launch_time:
+                create_time = instance.extra["creationTimestamp"]
+                LOGGER.info("`launch_time' tag is empty or invalid, fallback to creation time: %s", create_time)
+                launch_time = datetime.datetime.fromisoformat(create_time)
             sct_runners.append(SctRunnerInfo(
                 sct_runner_class=cls,
                 cloud_service_instance=None,  # we don't need it for GCE
@@ -708,8 +720,9 @@ class GceSctRunner(SctRunner):
                 instance=instance,
                 instance_name=instance.name,
                 public_ips=instance.public_ips,
-                launch_time=datetime_from_formatted(date_string=tags["launch_time"]),
+                launch_time=launch_time,
                 keep=tags.get("keep"),
+                keep_action=tags.get("keep_action"),
             ))
         return sct_runners
 
@@ -840,9 +853,12 @@ class AzureSctRunner(SctRunner):
         azure_service = AzureService()
         sct_runners = []
         for instance in list_instances_azure(tags_dict={"NodeType": cls.NODE_TYPE}, verbose=True):
-            if not instance.tags.get("launch_time"):
-                LOGGER.warning("Skip Azure instance w/o or empty `launch_time' tag: %s", instance.name)
-                continue
+            if launch_time := instance.tags.get("launch_time") or None:
+                try:
+                    launch_time = datetime_from_formatted(date_string=launch_time)
+                except ValueError as exc:
+                    LOGGER.warning("Value of `launch_time' tag is invalid: %s", exc)
+                    launch_time = None
             sct_runners.append(SctRunnerInfo(
                 sct_runner_class=cls,
                 cloud_service_instance=azure_service,
@@ -850,8 +866,9 @@ class AzureSctRunner(SctRunner):
                 instance=instance,
                 instance_name=instance.name,
                 public_ips=[azure_service.get_virtual_machine_ips(virtual_machine=instance).public_ip],
-                launch_time=datetime_from_formatted(date_string=instance.tags["launch_time"]),
+                launch_time=launch_time,
                 keep=instance.tags.get("keep"),
+                keep_action=instance.tags.get("keep_action"),
             ))
         return sct_runners
 
@@ -900,7 +917,13 @@ def clean_sct_runners(test_status: Optional[str] = None, test_runner_ip: str = N
     for sct_runner_info in list_sct_runners(test_status=test_status, test_runner_ip=test_runner_ip):
         if sct_runner_info.keep:
             if "alive" in sct_runner_info.keep:
-                LOGGER.info("Skip %s", sct_runner_info)
+                LOGGER.info("Skip %s because `keep' == `alive'", sct_runner_info)
+                continue
+            if sct_runner_info.keep_action != "terminate":
+                LOGGER.info("Skip %s because keep_action `keep_action' != `terminate'", sct_runner_info)
+                continue
+            if sct_runner_info.launch_time is None:
+                LOGGER.info("Skip %s because `launch_time' is not set", sct_runner_info)
                 continue
             try:
                 if (utc_now - sct_runner_info.launch_time).total_seconds() < int(sct_runner_info.keep) * 3600:
