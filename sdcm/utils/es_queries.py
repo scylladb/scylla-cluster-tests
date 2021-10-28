@@ -251,7 +251,8 @@ class CDCQueryFilter(QueryFilter):
     def filter_test_details(self):
         test_details = 'test_details.job_name: \"{}\" '.format(
             self.test_doc['_source']['test_details']['job_name'].split('/')[0])
-        test_details += self.test_cmd_details()
+        if not self.use_wide_query:
+            test_details += self.test_cmd_details()
         test_details += ' AND test_details.time_completed: {}'.format(self.date_re)
         test_details += r' AND test_details.sub_type: cdc* '
         return test_details
