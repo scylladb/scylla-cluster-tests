@@ -304,7 +304,7 @@ class ParallelTimelinesReportGenerator:
             # If endless events exist, evaluate end_timestamp for them
             endless_events = list(filter(lambda x: x.event_id in endless_event_id_set, begin_events))
             for event in endless_events:
-                if event.base == "ScyllaServerStatusEvent":
+                if event.base in ["ScyllaServerStatusEvent", "JMXServiceEvent"]:
                     event.end_timestamp = self.max_end_timestamp
                 else:
                     event.end_timestamp = event.begin_timestamp
