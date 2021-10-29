@@ -492,6 +492,7 @@ def clean_cloud_resources(tags_dict, dry_run=False):
     clean_instances_aws(tags_dict, dry_run=dry_run)
     clean_elastic_ips_aws(tags_dict, dry_run=dry_run)
     clean_clusters_gke(tags_dict, dry_run=dry_run)
+    clean_orphaned_gke_disks(dry_run=dry_run)
     clean_clusters_eks(tags_dict, dry_run=dry_run)
     clean_instances_gce(tags_dict, dry_run=dry_run)
     clean_resources_docker(tags_dict, dry_run=dry_run)
@@ -861,57 +862,75 @@ def list_static_ips_gce(region_name="all", group_by_region=False, verbose=False)
     return all_static_ips
 
 
-def list_clusters_gke(tags_dict: Optional[dict] = None, verbose: bool = False) -> list:
+class GkeCluster:
+    def __init__(self, cluster_info: dict, cleaner: "GkeCleaner"):
+        self.cluster_info = cluster_info
+        self.cleaner = cleaner
 
-    class GkeCluster:
-        def __init__(self, cluster_info: dict, cleaner: "GkeCleaner"):
-            self.cluster_info = cluster_info
-            self.cleaner = cleaner
+    @cached_property
+    def extra(self) -> dict:
+        metadata = self.cluster_info["nodeConfig"]["metadata"].items()
+        return {"metadata": {"items": [{"key": key, "value": value} for key, value in metadata], }, }
 
-        @cached_property
-        def extra(self) -> dict:
-            metadata = self.cluster_info["nodeConfig"]["metadata"].items()
-            return {"metadata": {"items": [{"key": key, "value": value} for key, value in metadata], }, }
+    @cached_property
+    def name(self) -> str:
+        return self.cluster_info["name"]
 
-        @cached_property
-        def name(self) -> str:
-            return self.cluster_info["name"]
+    @cached_property
+    def zone(self) -> str:
+        return self.cluster_info["zone"]
 
-        @cached_property
-        def zone(self) -> str:
-            return self.cluster_info["zone"]
+    def destroy(self):
+        return self.cleaner.gcloud.run(f"container clusters delete {self.name} --zone {self.zone} --quiet")
 
-        def destroy(self):
-            return self.cleaner.gcloud.run(f"container clusters delete {self.name} --zone {self.zone} --quiet")
 
-    class GkeCleaner(GcloudContainerMixin):
-        name = f"gke-cleaner-{uuid.uuid4()!s:.8}"
-        _containers = {}
-        tags = {}
+class GkeCleaner(GcloudContainerMixin):
+    name = f"gke-cleaner-{uuid.uuid4()!s:.8}"
+    _containers = {}
+    tags = {}
 
-        def list_gke_clusters(self) -> list:
+    def list_gke_clusters(self) -> list:
+        try:
+            output = self.gcloud.run("container clusters list --format json")
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.error("`gcloud container clusters list --format json' failed to run: %s", exc)
+        else:
             try:
-                output = self.gcloud.run("container clusters list --format json")
-            except Exception as exc:  # pylint: disable=broad-except
-                LOGGER.error("`gcloud container clusters list --format json' failed to run: %s", exc)
-            else:
-                try:
-                    return [GkeCluster(info, self) for info in json.loads(output)]
-                except json.JSONDecodeError as exc:
-                    LOGGER.error("Unable to parse output of `gcloud container clusters list --format json': %s", exc)
-            return []
+                return [GkeCluster(info, self) for info in json.loads(output)]
+            except json.JSONDecodeError as exc:
+                LOGGER.error(
+                    "Unable to parse output of `gcloud container clusters list --format json': %s",
+                    exc)
+        return []
 
-        def __del__(self):
-            ContainerManager.destroy_all_containers(self)
+    def list_orphaned_gke_disks(self) -> dict:
+        disks_per_zone = {}
+        try:
+            disks = json.loads(self.gcloud.run(
+                'compute disks list --format="json(name,zone)" --filter="name~^gke-.*-pvc-.* AND -users:*"'))
+        except Exception as exc:  # pylint: disable=broad-except
+            LOGGER.error("`gcloud compute disks list' failed to run: %s", exc)
+        else:
+            for disk in disks:
+                zone = disk["zone"].split("/")[-1]
+                if zone not in disks_per_zone:
+                    disks_per_zone[zone] = []
+                disks_per_zone[zone].append(disk["name"])
+        return disks_per_zone
 
+    def clean_disks(self, disk_names: list[str], zone: str) -> None:
+        self.gcloud.run(f"compute disks delete {' '.join(disk_names)} --zone {zone}")
+
+    def __del__(self):
+        ContainerManager.destroy_all_containers(self)
+
+
+def list_clusters_gke(tags_dict: Optional[dict] = None, verbose: bool = False) -> list:
     clusters = GkeCleaner().list_gke_clusters()
-
     if tags_dict:
         clusters = filter_k8s_clusters_by_tags(tags_dict, clusters)
-
     if verbose:
         LOGGER.info("Done. Found total of %s GKE clusters.", len(clusters))
-
     return clusters
 
 
@@ -1018,6 +1037,20 @@ def clean_clusters_gke(tags_dict: dict, dry_run: bool = False) -> None:
             except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.error(exc)
     ParallelObject(gke_clusters_to_clean, timeout=180).run(delete_cluster, ignore_exceptions=True)
+
+
+def clean_orphaned_gke_disks(dry_run: bool = False) -> None:
+    try:
+        gke_cleaner = GkeCleaner()
+        orphaned_disks = gke_cleaner.list_orphaned_gke_disks()
+        LOGGER.info("Found following orphaned GKE disks: %s", orphaned_disks)
+        if not dry_run:
+            for zone, disk_names in orphaned_disks.items():
+                gke_cleaner.clean_disks(disk_names=disk_names, zone=zone)
+                LOGGER.info("Deleted following orphaned GKE disks in the '%s' zone: %s",
+                            zone, disk_names)
+    except Exception as exc:  # pylint: disable=broad-except
+        LOGGER.error(exc)
 
 
 def clean_clusters_eks(tags_dict: dict, dry_run: bool = False) -> None:
