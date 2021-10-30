@@ -3,7 +3,7 @@ import logging
 from uuid import UUID
 
 from argus.db.db_types import TestStatus
-from argus.db.testrun import TestRun, TestRunInfo, TestDetails, TestResources, TestLogs, TestResults, \
+from argus.db.testrun import TestRunWithHeartbeat, TestRunInfo, TestDetails, TestResources, TestLogs, TestResults, \
     TestResourcesSetup
 from argus.db.cloud_types import CloudInstanceDetails, AWSSetupDetails, GCESetupDetails, BaseCloudSetupDetails, \
     CloudNodesInfo
@@ -147,7 +147,7 @@ def _prepare_docker_resource_setup(sct_config: SCTConfiguration):
 
 
 class ArgusTestRun:
-    TESTRUN_INSTANCE = None
+    TESTRUN_INSTANCE: TestRunWithHeartbeat | None = None
     BACKEND_MAP = {
         "aws": _prepare_aws_resource_setup,
         "aws-siren": _prepare_aws_resource_setup,
@@ -176,7 +176,7 @@ class ArgusTestRun:
         cls.db_init = True
 
     @classmethod
-    def from_sct_config(cls, test_id: UUID, test_module_path: str, sct_config: SCTConfiguration) -> TestRun:  # pylint: disable=too-many-locals
+    def from_sct_config(cls, test_id: UUID, test_module_path: str, sct_config: SCTConfiguration) -> TestRunWithHeartbeat:  # pylint: disable=too-many-locals
         if cls.TESTRUN_INSTANCE:
             raise ArgusTestRunError("Instance already initialized")
 
@@ -213,18 +213,18 @@ class ArgusTestRun:
 
         run_info = TestRunInfo(details=details, setup=setup_details, resources=resources, logs=logs, results=results)
         LOGGER.info("Initializing TestRun...")
-        cls.TESTRUN_INSTANCE = TestRun(test_id=test_id, group=test_group, release_name=release_name, assignee="",
-                                       run_info=run_info)
+        cls.TESTRUN_INSTANCE = TestRunWithHeartbeat(test_id=test_id, group=test_group, release_name=release_name, assignee="",
+                                                    run_info=run_info)
 
         return cls.TESTRUN_INSTANCE
 
     @classmethod
-    def get(cls, test_id: UUID = None) -> TestRun:
+    def get(cls, test_id: UUID = None) -> TestRunWithHeartbeat:
         if not cls.db_init:
             cls.init_db()
 
         if test_id and not cls.TESTRUN_INSTANCE:
-            cls.TESTRUN_INSTANCE = TestRun.from_id(test_id)
+            cls.TESTRUN_INSTANCE = TestRunWithHeartbeat.from_id(test_id)
 
         if not cls.TESTRUN_INSTANCE:
             raise ArgusTestRunError("No instance available")
@@ -237,6 +237,6 @@ class ArgusTestRun:
         cls.db_init = False
         if not cls.TESTRUN_INSTANCE:
             return False
-
+        cls.TESTRUN_INSTANCE.shutdown()
         cls.TESTRUN_INSTANCE = None
         return True
