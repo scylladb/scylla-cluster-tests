@@ -215,7 +215,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.logdir = os.path.join(base_logdir, self.name) if base_logdir else None
         self.dc_idx = dc_idx
 
-        self.argus_resource = None
+        self.argus_resource: CloudResource | None = None
         self._containers = {}
         self.is_seed = False
 
@@ -291,7 +291,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             run = ArgusTestRun.get()
             instance_details = CloudInstanceDetails(public_ip=self.public_ip_address, region=self.region,
                                                     provider=self.parent_cluster.cluster_backend,
-                                                    private_ip=self.ip_address)
+                                                    private_ip=self.ip_address, creation_time=int(time.time()))
             resource = CloudResource(name=self.name, state=ResourceState.RUNNING,
                                      instance_info=instance_details)
             self.argus_resource = resource
@@ -1113,6 +1113,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         try:
             run = ArgusTestRun.get()
             if self.argus_resource in run.run_info.resources.leftover_resources:
+                self.argus_resource.instance_info.termination_time = int(time.time())
+                self.argus_resource.instance_info.termination_reason = self.running_nemesis \
+                    if self.running_nemesis else "GracefulShutdown"
                 run.run_info.resources.detach_resource(self.argus_resource)
                 run.save()
         except ArgusTestRunError:
