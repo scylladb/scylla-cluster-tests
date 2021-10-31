@@ -2808,6 +2808,37 @@ def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
     :return: Wrapped method.
     """
 
+    def argus_create_nemesis_info(nemesis: Nemesis, class_name: str,
+                                  method_name: str, start_time: int | float) -> NemesisRunInfo | None:
+        try:
+            run = ArgusTestRun.get()
+            node_desc = NodeDescription(ip=nemesis.target_node.public_ip_address,
+                                        name=nemesis.target_node.name, shards=nemesis.target_node.scylla_shards)
+            nemesis_info = NemesisRunInfo(class_name=class_name, name=method_name,
+                                          duration=0, start_time=int(start_time), target_node=node_desc,
+                                          status=NemesisStatus.RUNNING)
+            run.run_info.results.add_nemesis(nemesis_info)
+            run.save()
+            return nemesis_info
+        except Exception:  # pylint: disable=broad-except
+            nemesis.log.error("Error saving nemesis_info to Argus", exc_info=True)
+        return None
+
+    def argus_finalize_nemesis_info(nemesis: Nemesis, nemesis_info: NemesisRunInfo, nemesis_event: DisruptionEvent):
+        try:
+            run = ArgusTestRun.get()
+            if nemesis_event.severity == Severity.ERROR:
+                nemesis_info.complete(nemesis_event.full_traceback)
+            elif nemesis_event.is_skipped:
+                nemesis_info.complete(nemesis_event.skip_reason)
+                nemesis_info.status = NemesisStatus.SKIPPED
+            else:
+                nemesis_info.complete()
+            nemesis_info.duration = nemesis_info.start_time - nemesis_info.end_time
+            run.save()
+        except Exception:  # pylint: disable=broad-except
+            nemesis.log.error("Error saving nemesis_info to Argus", exc_info=True)
+
     def data_validation_prints(args):
         try:
             if hasattr(args[0].tester, 'data_validator') and args[0].tester.data_validator:
@@ -2851,25 +2882,14 @@ def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
 
         with DisruptionEvent(nemesis_name=args[0].get_disrupt_name(),
                              node=args[0].target_node, publish_event=True) as nemesis_event:
-            nemesis_info = None
-            try:
-                run = ArgusTestRun.get()
-                node_desc = NodeDescription(ip=args[0].target_node.public_ip_address,
-                                            name=args[0].target_node.name, shards=args[0].target_node.scylla_shards)
-                nemesis_info = NemesisRunInfo(class_name=class_name, name=method_name,
-                                              duration=0, start_time=int(start_time), target_node=node_desc,
-                                              status=NemesisStatus.RUNNING)
-                run.run_info.results.add_nemesis(nemesis_info)
-                run.save()  # TODO: Thread Safety
-            except Exception:  # pylint: disable=broad-except
-                args[0].log.error("Error saving nemesis_info to Argus", exc_info=True)
+            nemesis_info = argus_create_nemesis_info(nemesis=args[0], class_name=class_name,
+                                                     method_name=method_name, start_time=start_time)
             try:
                 result = method(*args, **kwargs)
             except (UnsupportedNemesis, MethodVersionNotFound) as exp:
                 skip_reason = str(exp)
                 log_info.update({'subtype': 'skipped', 'skip_reason': skip_reason})
                 nemesis_event.skip(skip_reason=skip_reason)
-
             except Exception as details:  # pylint: disable=broad-except
                 nemesis_event.add_error([str(details)])
                 nemesis_event.full_traceback = traceback.format_exc()
@@ -2911,21 +2931,8 @@ def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
                 if num_nodes_before != num_nodes_after:
                     args[0].log.error('num nodes before %s and nodes after %s does not match' %
                                       (num_nodes_before, num_nodes_after))
-
-                try:
-                    if nemesis_info:
-                        run = ArgusTestRun.get()
-                        if nemesis_event.severity == Severity.ERROR:
-                            nemesis_info.complete(nemesis_event.full_traceback)
-                        elif nemesis_event.is_skipped:
-                            nemesis_info.complete(nemesis_event.skip_reason)
-                            nemesis_info.status = NemesisStatus.SKIPPED
-                        else:
-                            nemesis_info.complete()
-                        nemesis_info.duration = time_elapsed
-                        run.save()
-                except Exception:  # pylint: disable=broad-except
-                    args[0].log.error("Error saving nemesis_info to Argus", exc_info=True)
+                if nemesis_info:
+                    argus_finalize_nemesis_info(nemesis=args[0], nemesis_info=nemesis_info, nemesis_event=nemesis_event)
                 # TODO: Temporary print. Will be removed later
                 data_validation_prints(args=args)
         return result
