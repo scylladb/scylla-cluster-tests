@@ -69,7 +69,7 @@ from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
 from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
 from sdcm.cluster_k8s import PodCluster, ScyllaPodCluster
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
-from sdcm.argus_test_run import ArgusTestRun, ArgusTestRunError
+from sdcm.argus_test_run import ArgusTestRun
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
 from argus.db.db_types import NemesisStatus, NemesisRunInfo, NodeDescription
@@ -2861,8 +2861,6 @@ def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
                                               status=NemesisStatus.RUNNING)
                 run.run_info.results.add_nemesis(nemesis_info)
                 run.save()  # TODO: Thread Safety
-            except ArgusTestRunError:
-                args[0].log.error("Argus failed to initialize!", exc_info=True)
             except Exception:  # pylint: disable=broad-except
                 args[0].log.error("Error saving nemesis_info to Argus", exc_info=True)
             try:

@@ -1,5 +1,6 @@
 import time
 import logging
+import unittest.mock
 from uuid import UUID
 
 from argus.db.db_types import TestStatus
@@ -227,7 +228,7 @@ class ArgusTestRun:
             cls.TESTRUN_INSTANCE = TestRunWithHeartbeat.from_id(test_id)
 
         if not cls.TESTRUN_INSTANCE:
-            raise ArgusTestRunError("No instance available")
+            return unittest.mock.MagicMock()
 
         return cls.TESTRUN_INSTANCE
 

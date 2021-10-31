@@ -20,6 +20,7 @@ import re
 import stat
 import time
 import unittest
+import unittest.mock
 import warnings
 from typing import NamedTuple, Optional, Union, List, Dict, Any
 from uuid import uuid4, UUID
@@ -370,8 +371,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             argus_test_run.save()
             return argus_test_run
         except Exception:  # pylint: disable=broad-except
-            self.log.error("Error setting up argus connection", exc_info=True)
-            return None
+            self.log.error("ERROR SETTING UP ARGUS CONNECTION", exc_info=True)
+            return unittest.mock.MagicMock()
 
     def configure_ldap(self, node, use_ssl=False):
         self.test_config.configure_ldap(node=node, use_ssl=use_ssl)
@@ -392,10 +393,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         end_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time + int(self.test_duration) * 60))
         self.log.info('Test start time %s, duration is %s and timeout set to %s',
                       start_time, self.test_duration, end_time)
-
-        if self.argus_test_run:
+        try:
             self.argus_test_run.run_info.results.status = TestStatus.RUNNING
             self.argus_test_run.save()
+        except Exception:  # pylint: disable=broad-except
+            self.log.error("Error saving test status to Argus", exc_info=True)
 
         def kill_the_test():
             TestTimeoutEvent(start_time=self.start_time, duration=self.test_duration).publish()
@@ -590,19 +592,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.monitors:
             self.monitors.wait_for_init()
 
-        if self.argus_test_run:
-            try:
-                self.log.info("Collecting packages for Argus...")
-                versions = self.get_scylla_versions()
-                for package_name, package_info in versions.items():
-                    package = PackageVersion(name=package_name, date=package_info.get("date", "#NO_DATE"),
-                                             version=package_info.get("version", "#NO_VERSION"),
-                                             revision_id=package_info.get("commit_id", "#NO_COMMIT"))
-                    self.argus_test_run.run_info.details.packages.append(package)
-                self.log.info("Saving collected packages...")
-                self.argus_test_run.save()
-            except Exception:  # pylint: disable=broad-except
-                self.log.error("Unable to collect package versions for Argus - skipping...", exc_info=True)
+        try:
+            self.log.info("Collecting packages for Argus...")
+            versions = self.get_scylla_versions()
+            for package_name, package_info in versions.items():
+                package = PackageVersion(name=package_name, date=package_info.get("date", "#NO_DATE"),
+                                         version=package_info.get("version", "#NO_VERSION"),
+                                         revision_id=package_info.get("commit_id", "#NO_COMMIT"))
+                self.argus_test_run.run_info.details.packages.append(package)
+            self.log.info("Saving collected packages...")
+            self.argus_test_run.save()
+        except Exception:  # pylint: disable=broad-except
+            self.log.error("Unable to collect package versions for Argus - skipping...", exc_info=True)
 
         # cancel reuse cluster - for new nodes added during the test
         self.test_config.reuse_cluster(False)
@@ -2289,24 +2290,23 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.finalize_teardown()
 
-        if self.argus_test_run:
-            try:
-                stat_map = {
-                    "SUCCESS": TestStatus.PASSED,
-                    "FAILED": TestStatus.FAILED
-                }
-                self.argus_test_run.run_info.results.status = stat_map.get(self.get_test_status(), TestStatus.FAILED)
-                self.argus_test_run.run_info.details.set_test_end_time()
-                last_events = get_events_grouped_by_category(limit=100, _registry=self.events_processes_registry)
-                for severity, messages in last_events.items():
-                    for message in messages:
-                        self.argus_test_run.run_info.results.max_stored_events = 100
-                        self.argus_test_run.run_info.results.add_event(severity, message)
+        try:
+            stat_map = {
+                "SUCCESS": TestStatus.PASSED,
+                "FAILED": TestStatus.FAILED
+            }
+            self.argus_test_run.run_info.results.status = stat_map.get(self.get_test_status(), TestStatus.FAILED)
+            self.argus_test_run.run_info.details.set_test_end_time()
+            last_events = get_events_grouped_by_category(limit=100, _registry=self.events_processes_registry)
+            for severity, messages in last_events.items():
+                for message in messages:
+                    self.argus_test_run.run_info.results.max_stored_events = 100
+                    self.argus_test_run.run_info.results.add_event(severity, message)
 
-                    self.argus_test_run.save()
-                ArgusTestRun.destroy()
-            except Exception:  # pylint: disable=broad-except
-                self.log.error("Error commiting test events to Argus", exc_info=True)
+                self.argus_test_run.save()
+            ArgusTestRun.destroy()
+        except Exception:  # pylint: disable=broad-except
+            self.log.error("Error commiting test events to Argus", exc_info=True)
 
         self.log.info('Test ID: {}'.format(self.test_config.test_id()))
         self._check_alive_routines_and_report_them()
@@ -2369,10 +2369,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if s3_link:
             self.log.info(s3_link)
             try:
-                if self.argus_test_run:
-                    for link in s3_link:
-                        self.argus_test_run.run_info.logs.add_log("sct_job_log", link)
-                    self.argus_test_run.save()
+                for link in s3_link:
+                    self.argus_test_run.run_info.logs.add_log("sct_job_log", link)
+                self.argus_test_run.save()
             except Exception:  # pylint: disable=broad-except
                 self.log.error("Error saving logs to Argus.", exc_info=True)
 
@@ -2706,18 +2705,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     logs_dict[cluster["logname"]] = s3_link
                 else:
                     self.log.warning("There are no logs for %s uploaded", cluster["name"])
-        if self.argus_test_run:
-            try:
-                for name, link in logs_dict.items():
-                    if isinstance(link, str):
-                        self.argus_test_run.run_info.logs.add_log(name, link)
-                    if isinstance(link, list):
-                        for log_inner_link in link:
-                            self.argus_test_run.run_info.logs.add_log(name, log_inner_link)
+        try:
+            for name, link in logs_dict.items():
+                if isinstance(link, str):
+                    self.argus_test_run.run_info.logs.add_log(name, link)
+                if isinstance(link, list):
+                    for log_inner_link in link:
+                        self.argus_test_run.run_info.logs.add_log(name, log_inner_link)
 
                 self.argus_test_run.save()
-            except Exception:  # pylint: disable=broad-except
-                self.log.error("Error saving logs to Argus", exc_info=True)
+        except Exception:  # pylint: disable=broad-except
+            self.log.error("Error saving logs to Argus", exc_info=True)
 
         if self.create_stats:
             with silence(parent=self, name="Publish log links"):
