@@ -125,13 +125,12 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
     def restart_scylla_server(self, verify_up_before=False, verify_up_after=True, timeout=300, ignore_status=False):
         if verify_up_before:
             self.wait_db_up(timeout=timeout)
-        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl restart scylla"),
-                          timeout=timeout)
+        self.remoter.sudo('sh -c "{0} || {0}-server"'.format("supervisorctl restart scylla"), timeout=timeout)
         if verify_up_after:
             self.wait_db_up(timeout=timeout)
 
     @cluster.log_run_info
-    def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=300):
+    def restart_scylla(self, verify_up_before=False, verify_up_after=True, timeout=300) -> None:
         self.restart_scylla_server(verify_up_before=verify_up_before, verify_up_after=verify_up_after, timeout=timeout)
 
     @property
@@ -337,9 +336,8 @@ class DockerMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method
         return True
 
     @cached_property
-    def tags(self) -> Dict[str, str]:
-        return {**super().tags,
-                "NodeIndex": str(self.node_index), }
+    def tags(self) -> dict[str, str]:
+        return {**super().tags, "NodeIndex": str(self.node_index), }
 
     def _init_remoter(self, ssh_login_info):  # pylint: disable=no-self-use
         self.remoter = LOCALRUNNER
