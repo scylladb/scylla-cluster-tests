@@ -981,18 +981,16 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
             table.add_row([cluster_type, link])
 
     click.echo(table.get_string(title="Collected logs by test-id: {}".format(collector.test_id)))
+    store_logs_in_argus(test_id=UUID(collector.test_id), logs=collected_logs)
 
+
+def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]]):
     try:
-        test_run = ArgusTestRun.get(test_id=UUID(collector.test_id))
-        if test_run:
-            for cluster_type, s3_links in collected_logs.items():
-                for link in s3_links:
-                    if isinstance(link, str):
-                        test_run.run_info.logs.add_log(cluster_type, link)
-                    if isinstance(link, list):
-                        for sub_link in link:
-                            test_run.run_info.logs.add_log(cluster_type, sub_link)
-            test_run.save()
+        test_run = ArgusTestRun.get(test_id=test_id)
+        for cluster_type, s3_links in logs.items():
+            for link in s3_links:
+                test_run.run_info.logs.add_log(cluster_type, link)
+        test_run.save()
         ArgusTestRun.destroy()
     except Exception:  # pylint: disable=broad-except
         LOGGER.error("Error saving logs to argus", exc_info=True)

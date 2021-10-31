@@ -414,16 +414,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error committing test events to Argus", exc_info=True)
 
-    def argus_collect_logs(self, log_links: dict[str, list[str] | str]):
+    def argus_collect_logs(self, log_links: dict[str, list[list[str] | str]]):
         try:
             for name, link in log_links.items():
-                if isinstance(link, str):
-                    self.argus_test_run.run_info.logs.add_log(name, link)
-                elif isinstance(link, list):
-                    for log_inner_link in link:
-                        self.argus_test_run.run_info.logs.add_log(name, log_inner_link)
-                else:
-                    self.log.warning("Unknown log type encountered: %s", link)
+                self.argus_test_run.run_info.logs.add_log(name, link)
             self.argus_test_run.save()
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error saving logs to Argus", exc_info=True)
