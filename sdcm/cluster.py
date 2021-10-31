@@ -286,7 +286,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self._init_port_mapping()
 
         self.set_keep_alive()
+        self._init_argus_resource()
 
+    def _init_argus_resource(self):
         try:
             run = ArgusTestRun.get()
             instance_details = CloudInstanceDetails(public_ip=self.public_ip_address, region=self.region,
@@ -300,6 +302,18 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             run.save()
         except Exception:  # pylint: disable=broad-except
             LOGGER.error("Encountered an unhandled exception while interacting with Argus", exc_info=True)
+
+    def _destroy_argus_resource(self):
+        try:
+            run = ArgusTestRun.get()
+            if self.argus_resource in run.run_info.resources.leftover_resources:
+                self.argus_resource.instance_info.termination_time = int(time.time())
+                self.argus_resource.instance_info.termination_reason = self.running_nemesis \
+                    if self.running_nemesis else "GracefulShutdown"
+                run.run_info.resources.detach_resource(self.argus_resource)
+                run.save()
+        except Exception:  # pylint: disable=broad-except
+            self.log.error("Error saving resource state to Argus", exc_info=True)
 
     def _init_remoter(self, ssh_login_info):
         self.remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
@@ -1107,17 +1121,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def destroy(self):
         self.stop_task_threads()
         ContainerManager.destroy_all_containers(self)
+        self._destroy_argus_resource()
         LOGGER.info("%s destroyed", self)
-        try:
-            run = ArgusTestRun.get()
-            if self.argus_resource in run.run_info.resources.leftover_resources:
-                self.argus_resource.instance_info.termination_time = int(time.time())
-                self.argus_resource.instance_info.termination_reason = self.running_nemesis \
-                    if self.running_nemesis else "GracefulShutdown"
-                run.run_info.resources.detach_resource(self.argus_resource)
-                run.save()
-        except Exception:  # pylint: disable=broad-except
-            self.log.error("Error saving resource state to Argus", exc_info=True)
 
     def wait_ssh_up(self, verbose=True, timeout=500):
         text = None
