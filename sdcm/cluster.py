@@ -48,7 +48,7 @@ from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy
 
 from argus.db.cloud_types import ResourceState, CloudInstanceDetails, CloudResource
-from sdcm.argus_test_run import ArgusTestRun, ArgusTestRunError
+from sdcm.argus_test_run import ArgusTestRun
 from sdcm.collectd import ScyllaCollectdSetup
 from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
 from sdcm.mgmt.common import get_manager_repo_from_defaults, get_manager_scylla_backend
@@ -298,8 +298,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             run.run_info.resources.attach_resource(resource)
 
             run.save()
-        except ArgusTestRunError:
-            LOGGER.error("Unable to init Argus Resource - skipping...", exc_info=True)
         except Exception:  # pylint: disable=broad-except
             LOGGER.error("Encountered an unhandled exception while interacting with Argus", exc_info=True)
 
@@ -1118,8 +1116,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     if self.running_nemesis else "GracefulShutdown"
                 run.run_info.resources.detach_resource(self.argus_resource)
                 run.save()
-        except ArgusTestRunError:
-            LOGGER.error("Unable to init argus - skipping...", exc_info=True)
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error saving resource state to Argus", exc_info=True)
 
