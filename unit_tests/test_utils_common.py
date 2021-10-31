@@ -94,32 +94,32 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
     is_enterprise = False
     distro = Distro.CENTOS7
 
-    def _get_private_ip_address(self):
+    def _get_private_ip_address(self) -> str:
         return '127.0.0.1'
 
-    def _get_public_ip_address(self):
+    def _get_public_ip_address(self) -> str:
         return '127.0.0.1'
 
-    def start_task_threads(self):
+    def start_task_threads(self) -> None:
         # disable all background threads
         pass
 
     @property
-    def system_log(self):
+    def system_log(self) -> str:
         return self._system_log
 
     @system_log.setter
-    def system_log(self, log):
+    def system_log(self, log: str):
         self._system_log = log
 
-    def set_hostname(self):
+    def set_hostname(self) -> None:
         pass
 
-    def wait_ssh_up(self, verbose=True, timeout=500):
+    def wait_ssh_up(self, verbose=True, timeout=500) -> None:
         pass
 
     @property
-    def is_nonroot_install(self):  # pylint: disable=invalid-overridden-method
+    def is_nonroot_install(self) -> bool:  # pylint: disable=invalid-overridden-method
         return False
 
 
