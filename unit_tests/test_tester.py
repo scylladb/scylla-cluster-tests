@@ -17,6 +17,7 @@ import logging
 import tempfile
 import time
 import unittest.mock
+from functools import cached_property
 from unittest.mock import MagicMock
 from time import sleep
 
@@ -64,7 +65,7 @@ class ClusterTesterForTests(ClusterTester):
         )
         super().__init__(*args)
 
-    @property
+    @cached_property
     def argus_test_run(self):
         return MagicMock()
 
