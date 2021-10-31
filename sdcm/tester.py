@@ -395,26 +395,25 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception:  # pylint: disable=broad-except
             self.log.error("Unable to collect package versions for Argus - skipping...", exc_info=True)
 
-    def argus_collect_events(self):
+    def argus_finalize_test_run(self):
         try:
             stat_map = {
                 "SUCCESS": TestStatus.PASSED,
                 "FAILED": TestStatus.FAILED
             }
+            self.argus_test_run.run_info.details.set_test_end_time()
             self.argus_update_status(stat_map.get(self.get_test_status(), TestStatus.FAILED))
             last_events = get_events_grouped_by_category(limit=100, _registry=self.events_processes_registry)
             for severity, messages in last_events.items():
                 for message in messages:
                     self.argus_test_run.run_info.results.max_stored_events = 100
                     self.argus_test_run.run_info.results.add_event(severity, message)
-
-            self.argus_test_run.run_info.details.set_test_end_time()
             self.argus_test_run.save()
             ArgusTestRun.destroy()
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error committing test events to Argus", exc_info=True)
 
-    def argus_collect_logs(self, log_links: dict[str, list[list[str] | str]]):
+    def argus_collect_logs(self, log_links: dict[str, list[str] | str]):
         try:
             for name, link in log_links.items():
                 self.argus_test_run.run_info.logs.add_log(name, link)
@@ -2322,7 +2321,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.collect_sct_logs()
 
         self.finalize_teardown()
-        self.argus_collect_events()
+        self.argus_finalize_test_run()
 
         self.log.info('Test ID: {}'.format(self.test_config.test_id()))
         self._check_alive_routines_and_report_them()
