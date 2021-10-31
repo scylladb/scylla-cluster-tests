@@ -308,8 +308,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.email_reporter = build_reporter(self.__class__.__name__,
                                              self.params.get('email_recipients'),
                                              self.logdir)
-        self._argus_test_run = None
-        self._use_argus = True
         self.log.info("Initializing Argus TestRun with test id %s", self.argus_test_run.id)
         self._move_kubectl_config()
         self.localhost = self._init_localhost()
@@ -363,19 +361,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         time.sleep(0.5)
         InfoEvent(message=f"TEST_START test_id={self.test_config.test_id()}").publish()
 
-    @property
+    @cached_property
     def argus_test_run(self):
-        if not self._argus_test_run and self._use_argus:
-            try:
-                argus_test_run = ArgusTestRun.from_sct_config(test_id=UUID(self.test_id),
-                                                              test_module_path=self.test_config.test_name(),
-                                                              sct_config=self.params)
-                argus_test_run.save()
-                self._argus_test_run = argus_test_run
-            except Exception:  # pylint: disable=broad-except
-                self._use_argus = False
-                self.log.error("Error setting up argus connection", exc_info=True)
-        return self._argus_test_run
+        try:
+            argus_test_run = ArgusTestRun.from_sct_config(test_id=UUID(self.test_id),
+                                                          test_module_path=self.test_config.test_name(),
+                                                          sct_config=self.params)
+            argus_test_run.save()
+            return argus_test_run
+        except Exception:  # pylint: disable=broad-except
+            self.log.error("Error setting up argus connection", exc_info=True)
+            return None
 
     def configure_ldap(self, node, use_ssl=False):
         self.test_config.configure_ldap(node=node, use_ssl=use_ssl)
