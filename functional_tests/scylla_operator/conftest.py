@@ -174,3 +174,8 @@ def _bring_cluster_back_to_original_state(
 @pytest.fixture(name="cassandra_rackdc_properties")
 def fixture_cassandra_rackdc_properties(db_cluster: ScyllaPodCluster):
     return db_cluster.remote_cassandra_rackdc_properties
+
+
+@pytest.fixture(name="scylla_yaml")
+def fixture_scylla_yaml(db_cluster: ScyllaPodCluster):
+    return db_cluster.remote_scylla_yaml
