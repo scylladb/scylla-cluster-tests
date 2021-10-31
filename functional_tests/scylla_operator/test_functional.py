@@ -503,3 +503,81 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
     finally:
         db_cluster.k8s_cluster.helm(f"uninstall {target_chart_name} --timeout 120s", namespace=namespace)
         db_cluster.k8s_cluster.kubectl(f"delete namespace {namespace}")
+
+
+def test_scylla_yaml_override(db_cluster, scylla_yaml):  # pylint: disable=too-many-branches
+    """
+    Test of applying scylla.yaml via configmap
+    - update parameter that exists in scylla.yaml
+    - add parameter
+    """
+    hh_enabled_option_name = "hinted_handoff_enabled"
+    hh_throttle_option_name = "hinted_handoff_throttle_in_kb"
+
+    with scylla_yaml() as props:
+        configmap_scylla_yaml_content = props
+
+    original_hinted_handoff_throttle_in_kb, new_hinted_handoff_throttle_in_kb = None, None
+
+    with db_cluster.nodes[0].actual_scylla_yaml() as props:
+        original_hinted_handoff = dict(props).get(hh_enabled_option_name)
+        if not configmap_scylla_yaml_content.get(hh_throttle_option_name):
+            original_hinted_handoff_throttle_in_kb = dict(props).get(hh_throttle_option_name)
+
+    log.info("configMap's scylla.yaml = %s", configmap_scylla_yaml_content)
+
+    assert isinstance(original_hinted_handoff, bool), (
+        f"configMap scylla.yaml have unexpected '{hh_enabled_option_name}' type: {type(original_hinted_handoff)}. "
+        "Expected 'bool'")
+    new_hinted_handoff = not original_hinted_handoff
+
+    if original_hinted_handoff_throttle_in_kb:
+        assert isinstance(original_hinted_handoff_throttle_in_kb, int), (
+            f"Node scylla.yaml have unexpected '{hh_throttle_option_name}' type: "
+            f"{type(original_hinted_handoff_throttle_in_kb)}. Expected 'int'")
+        new_hinted_handoff_throttle_in_kb = original_hinted_handoff_throttle_in_kb * 2
+
+    with scylla_yaml() as props:
+        props[hh_enabled_option_name] = new_hinted_handoff
+        if new_hinted_handoff_throttle_in_kb:
+            props[hh_throttle_option_name] = new_hinted_handoff_throttle_in_kb
+        else:
+            dict(props).pop(hh_throttle_option_name)
+
+    db_cluster.restart_scylla()
+    for node in db_cluster.nodes:
+        with node.actual_scylla_yaml() as props:
+            assert dict(props).get(hh_enabled_option_name) == new_hinted_handoff
+            if new_hinted_handoff_throttle_in_kb:
+                assert dict(props).get(hh_throttle_option_name) == new_hinted_handoff_throttle_in_kb
+            else:
+                assert not dict(props).get(hh_throttle_option_name)
+
+    # NOTE: check nodes states from all the nodes, because it is possible to have it be inconsistent
+    for node in db_cluster.nodes:
+        db_cluster.wait_for_nodes_up_and_normal(nodes=db_cluster.nodes, verification_node=node)
+
+    with scylla_yaml() as props:
+        assert dict(props).get(hh_enabled_option_name) == new_hinted_handoff
+        if hh_enabled_option_name not in configmap_scylla_yaml_content:
+            props.pop(hh_enabled_option_name, None)
+        else:
+            props[hh_enabled_option_name] = configmap_scylla_yaml_content[hh_enabled_option_name]
+
+        if new_hinted_handoff_throttle_in_kb:
+            props.pop(hh_throttle_option_name, None)
+        else:
+            props[hh_throttle_option_name] = configmap_scylla_yaml_content[hh_throttle_option_name]
+
+    db_cluster.restart_scylla()
+
+    for node in db_cluster.nodes:
+        with node.actual_scylla_yaml() as props:
+            assert dict(props).get(hh_enabled_option_name) == original_hinted_handoff
+            assert dict(props).get(hh_throttle_option_name) == original_hinted_handoff_throttle_in_kb
+
+    for node in db_cluster.nodes:
+        db_cluster.wait_for_nodes_up_and_normal(nodes=db_cluster.nodes, verification_node=node)
+
+    with scylla_yaml() as props:
+        assert configmap_scylla_yaml_content == props
