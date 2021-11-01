@@ -3,6 +3,7 @@ import logging
 import unittest.mock
 from uuid import UUID
 
+from cassandra import ConsistencyLevel
 from argus.db.db_types import TestStatus
 from argus.db.testrun import TestRunWithHeartbeat, TestRunInfo, TestDetails, TestResources, TestLogs, TestResults, \
     TestResourcesSetup
@@ -173,7 +174,8 @@ class ArgusTestRun:
             return
         LOGGER.info("Initializing ScyllaDB connection session...")
         ks = KeyStore()
-        ArgusDatabase.from_config(Config(**ks.get_argusdb_credentials(), keyspace_name="argus"))
+        database = ArgusDatabase.from_config(Config(**ks.get_argusdb_credentials(), keyspace_name="argus"))
+        database.session.default_consistency_level = ConsistencyLevel.QUORUM
         cls.db_init = True
 
     @classmethod
