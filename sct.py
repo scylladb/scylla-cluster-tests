@@ -75,8 +75,8 @@ from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.get_username import get_username
 from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter, \
     send_perf_email
-from utils.build_system.create_test_release_jobs import JenkinsPipelines
-from utils.get_supported_scylla_base_versions import UpgradeBaseVersion
+from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module
+from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module
 
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
