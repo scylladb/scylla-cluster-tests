@@ -2834,7 +2834,7 @@ def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
                 nemesis_info.status = NemesisStatus.SKIPPED
             else:
                 nemesis_info.complete()
-            nemesis_info.duration = nemesis_info.start_time - nemesis_info.end_time
+            nemesis_info.duration = nemesis_info.end_time - nemesis_info.start_time
             run.save()
         except Exception:  # pylint: disable=broad-except
             nemesis.log.error("Error saving nemesis_info to Argus", exc_info=True)
