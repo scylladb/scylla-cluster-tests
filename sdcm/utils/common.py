@@ -2222,13 +2222,33 @@ def download_from_github(repo: str, tag: str, dst_dir: str):
             os.rename(os.path.join(base_dir, file), os.path.join(dst_dir, file))
 
 
-def walk_thru_data(data, path: str) -> Any:
+def walk_thru_data(data, path: str, separator: str = '/') -> Any:
+    """Allows to get a value of an element in some data structure.
+
+    Example from K8S API:
+    object_dict = {
+        "spec": {
+            "automaticOrphanedNodeCleanup": True,
+            "datacenter": {
+                "name": "dc-1",
+                racks: [...],
+            },
+        },
+    }
+
+    And to get the DC name out of it we can call this function like following:
+
+        walk_thru_data(data=object_dict, path='spec.datacenter.name', separator=".")
+
+    """
     current_value = data
-    for name in path.split('/'):
+    for name in path.split(separator):
         if current_value is None:
             return None
         if not name:
             continue
+        if name[0] == '[' and name[-1] == ']':
+            name = name[1:-1]
         if name.isalnum() and isinstance(current_value, (list, tuple, set)):
             try:
                 current_value = current_value[int(name)]

@@ -34,6 +34,7 @@ from urllib3.util.retry import Retry
 
 from sdcm import sct_abs_path
 from sdcm.remote import LOCALRUNNER
+from sdcm.utils.common import walk_thru_data
 from sdcm.utils.decorators import timeout as timeout_decor, retrying
 from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
 from sdcm.wait import wait_for
@@ -699,20 +700,7 @@ class HelmValues:
             self._data = dict(**kwargs)
 
     def get(self, path):
-        current = self._data
-        for name in path.split('.'):
-            if current is None:
-                return None
-            if name[0] == '[' and name[-1] == ']':
-                name = name[1:-1]
-            if name.isalnum() and isinstance(current, (list, tuple, set)):
-                try:
-                    current = current[int(name)]
-                except Exception:  # pylint: disable=broad-except
-                    current = None
-                continue
-            current = current.get(name, None)
-        return current
+        return walk_thru_data(data=self._data, path=path, separator=".")
 
     def _path_to_dict(self, path, value):
         keys = path.split(".")
