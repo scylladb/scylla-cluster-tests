@@ -58,7 +58,7 @@ prepare_write_cmd: >-2
 #   -p scylla.readconsistencylevel=QUORUM -p scylla.writeconsistencylevel=ONE
 #
 # $ bin/ycsb run scylla -s -t -P workloads/workloada -target 120000 -threads 840 -p recordcount=1000000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000 -p scylla.coreconnections=280 -p scylla.maxconnections=280 -p scylla.username=cassandra -p scylla.password=cassandra -p scylla.hosts=10.0.2.51,10.0.3.133,10.0.3.67 -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE -p scylla.tokenaware=true
-base_latency_cmd: >-2
+stress_cmd_m: >-2
   bin/ycsb run scylla -P workloads/WORKLOADS_TYPE -target TARGET_SIZE -threads THREADS_SIZE -p recordcount=RECORDS_SIZE
   -p fieldcount=10 -p fieldlength=128
   -p operationcount=300000000 -p scylla.coreconnections=SCYLLA_CONNECTIONS -p scylla.maxconnections=SCYLLA_CONNECTIONS

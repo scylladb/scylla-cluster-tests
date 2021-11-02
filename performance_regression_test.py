@@ -661,7 +661,7 @@ class YCSBPerformanceRegressionTest(BasePerformanceRegression):
         self.params["prepare_write_cmd"] = create_dynamic_ycsb_cmd(self.params["prepare_write_cmd"])
         for workload_type in self.ycsb_workloads:
             self.params[self.latency_stress_format.format(workload_type)] = \
-                create_dynamic_ycsb_cmd(self.params["base_latency_cmd"])
+                create_dynamic_ycsb_cmd(self.params["stress_cmd_m"])
 
     def test_latency(self):
         """
