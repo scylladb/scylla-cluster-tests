@@ -647,6 +647,7 @@ class YCSBPerformanceRegressionTest(BasePerformanceRegression):
 
     def __init__(self, *args):
         super().__init__(*args)
+        self.params["records_size"] = 1_000_000
         self.yaml_params["THREADS_SIZE"] = self.params.get("n_db_nodes") * int(self.yaml_params["SCYLLA_CONNECTIONS"])
         self.yaml_params["RECORDS_SIZE"] = self.params.get("records_size")
         self.prepare_ycsb_commands()
