@@ -34,8 +34,7 @@ import click
 import click_completion
 from prettytable import PrettyTable
 
-from sdcm.argus_test_run import ArgusTestRun, ArgusConfig
-from sdcm.keystore import KeyStore
+from sdcm.argus_test_run import ArgusTestRun
 from sdcm.remote import LOCALRUNNER
 from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
@@ -987,8 +986,7 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
 
 def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]]):
     try:
-        test_run = ArgusTestRun.get(test_id=test_id, config=ArgusConfig(**KeyStore().get_argusdb_credentials(),
-                                                                        keyspace_name="argus"))
+        test_run = ArgusTestRun.get(test_id=test_id)
         for cluster_type, s3_links in logs.items():
             for link in s3_links:
                 test_run.run_info.logs.add_log(cluster_type, link)
