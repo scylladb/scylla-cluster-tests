@@ -655,7 +655,7 @@ class YCSBPerformanceRegressionTest(BasePerformanceRegression):
     def prepare_ycsb_commands(self):
         def create_dynamic_ycsb_cmd(cmd):
             for key, value in self.yaml_params.items():
-                cmd = cmd.replace(key, value)
+                cmd = cmd.replace(key, str(value))
             return cmd
 
         self.params["prepare_write_cmd"] = create_dynamic_ycsb_cmd(self.params["prepare_write_cmd"])
