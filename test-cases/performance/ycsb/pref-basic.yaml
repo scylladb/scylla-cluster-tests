@@ -1,0 +1,88 @@
+# [Ivan]: I am currently testing CRDB vs ScyllaDB with YCSB workloads.
+#         This scenario shows how to run YCSB workload A against Scylla.
+#         It can be run with Jenkins BYO as in https://jenkins.scylladb.com/view/staging/job/scylla-staging/job/ivan/job/ivan-byo-longevity/23/:
+#         test_name: longevity_test.LongevityTest.test_custom_time.
+#
+#         README about Scylla native binding for YCSB and
+#         how to pick correct numbers for benchmark tests see at:
+#         https://github.com/brianfrankcooper/YCSB/tree/master/scylla#scylla-cql-binding
+#         or README.md.
+#
+#         For --target 100K data load is:
+#
+#           - 10M  / 100K = ~100   seconds
+#           - 100M / 100K = ~1000  seconds = ~16  minutes
+#           - 1B   / 100K = ~10000 seconds = ~166 minutes = ~2.7hours
+#
+#         On 3 nodes i3.x4large cluster with CL=QUORUM, RF=3 100K TPS is maximum.
+#         Rather it will about around 80K.
+#
+#         16 vCPU loader instance (for example c5.4xlarge) would not be able to give
+#         away more than 150K target TPS with 840 threads. It will cap loader CPU.
+#         Even with 150K target the latency will struggle due to the overload.
+#         Either split load between loaders or use at least c5.9xlarge to produce
+#         around 200K TPS for 3 nodes Scylla cluster.
+
+pre_create_keyspace: [
+  "CREATE KEYSPACE ycsb WITH REPLICATION = {'class' : 'SimpleStrategy', 'replication_factor': 3 };",
+  "CREATE TABLE ycsb.usertable (y_id varchar primary key, field0 varchar, field1 varchar, field2 varchar, field3 varchar, field4 varchar, field5 varchar, field6 varchar, field7 varchar, field8 varchar, field9 varchar);"
+]
+
+
+# there is no sense to use more than 1 loader for 3 nodes cluster,
+# but this is just for example
+prepare_write_cmd: >-2
+  bin/ycsb load cassandra-cql -P workloads/workloadc -threads THREADS_SIZE -p recordcount=RECORDS_SIZE
+  -p cassandra.readconsistencylevel=ONE -p cassandra.writeconsistencylevel=ONE
+  -p readproportion=0 -p insertproportion=1
+  -p fieldcount=10 -p fieldlength=128
+  -p insertstart=0 -p insertcount=RECORDS_SIZE
+  -p cassandra.coreconnections=14 -p cassandra.maxconnections=14
+  -p cassandra.username=cassandra -p cassandra.password=cassandra
+
+# --target must be set to have correct latency results for const throughput - see coordinated omission avoidance problem
+#
+# we need high concurrency per shard to at least somewhat load request queues
+# number of core connections must match number of vCPU (16) on a db node - 2
+#
+# 16 vCPU per node = 14 shards per node =>
+# 14 vCPUs * 20 parallelism factor = 280 connections per host
+#
+# 840 threads = 280 conns / host * 3 nodes = 840 total threads
+# ops count 300 * 10^6 * / 60 = 40 minutes for workload
+#
+# ycsb workloads use zipfian distribution so we will use a single loader with 32 vCPUs
+# fix framework to support custom CL:
+#   -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE
+# or at least
+#   -p scylla.readconsistencylevel=QUORUM -p scylla.writeconsistencylevel=ONE
+#
+# $ bin/ycsb run scylla -s -t -P workloads/workloada -target 120000 -threads 840 -p recordcount=1000000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000 -p scylla.coreconnections=280 -p scylla.maxconnections=280 -p scylla.username=cassandra -p scylla.password=cassandra -p scylla.hosts=10.0.2.51,10.0.3.133,10.0.3.67 -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE -p scylla.tokenaware=true
+base_latency_cmd: >-2
+  bin/ycsb run scylla -P workloads/WORKLOADS_TYPE -target TARGET_SIZE -threads THREADS_SIZE -p recordcount=RECORDS_SIZE
+  -p fieldcount=10 -p fieldlength=128
+  -p operationcount=300_000_000 -p scylla.coreconnections=SCYLLA_CONNECTIONS -p scylla.maxconnections=SCYLLA_CONNECTIONS
+  -p scylla.username=cassandra -p scylla.password=cassandra
+  -p scylla.tokenaware=true
+  -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.4xlarge'
+instance_type_monitor: 't3.large'
+instance_type_loader: 'c5.9xlarge' # 32 vCPU, 72 GB RAM, 10GiB
+
+nemesis_class_name: 'NemesisSequence'
+nemesis_interval: 30
+nemesis_sequence_sleep_between_ops: 10
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'
+
+user_prefix: 'perf-ycsb-latency-nemesis'
+space_node_threshold: 644245094
+ami_id_db_scylla_desc: 'VERSION_DESC'

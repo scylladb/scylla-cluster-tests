@@ -18,25 +18,62 @@ import os
 import time
 import yaml
 
+from sdcm.sct_events.system import InfoEvent
 from sdcm.tester import ClusterTester
 
 KB = 1024
 
 
-class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-public-methods
-
-    """
-    Test Scylla performance regression with cassandra-stress.
-    """
-
+class BasePerformanceRegression(ClusterTester):
     str_pattern = '%8s%16s%10s%14s%16s%12s%12s%14s%16s%16s'
-    ops_threshold_prc = 200
 
     def __init__(self, *args):
         # need to remove the email_data.json file, as in the builders, it will accumulate and it will send multiple
         # emails for each test. When we move to use SCT Runners, it won't be necessary.
         self._clean_email_data()
         super().__init__(*args)
+
+    @staticmethod
+    def _clean_email_data():
+        email_data_path = 'email_data.json'
+        with open(file=email_data_path, mode='w', encoding="utf-8"):
+            pass
+
+    def preload_data(self, prepare_write_cmd: str = "", *args, **kwargs):
+        # if test require a pre-population of data
+        if not prepare_write_cmd:
+            self.log.warning("No prepare command defined in YAML!")
+            return
+
+        # create new document in ES with doc_id = test_id + timestamp
+        # allow to correctly save results for future compare
+        self.create_test_stats(sub_type='write-prepare', doc_id_with_timestamp=True)
+        stress_queue = []
+        params = {'prefix': 'preload-'}
+        # Check if the prepare_cmd is a list of commands
+        if isinstance(prepare_write_cmd, list) and len(prepare_write_cmd) == 1:
+            # One stress cmd command
+            stress_queue.append(
+                self.run_stress_thread(stress_cmd=prepare_write_cmd[0], stress_num=1, prefix='preload-',
+                                       stats_aggregate_cmds=False))
+            prepare_write_cmd = prepare_write_cmd[0]
+        elif isinstance(prepare_write_cmd, list):
+            # Check if it should be round_robin across loaders
+            if self.params.get('round_robin'):
+                self.log.debug('Populating data using round_robin')
+                params.update({'stress_num': 1, 'round_robin': True})
+
+            for stress_cmd in prepare_write_cmd:
+                params.update({'stress_cmd': stress_cmd})
+                # Run all stress commands
+                params.update(dict(stats_aggregate_cmds=False))
+                self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd))
+                stress_queue.append(self.run_stress_thread(**params))
+
+        for stress in stress_queue:
+            self.get_stress_results(queue=stress, store_results=False)
+
+        self.update_test_details()
 
     # Helpers
     def display_single_result(self, result):
@@ -119,12 +156,54 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
                 self.display_single_result(single_result)
                 test_xml += self.get_test_xml(single_result, test_name=test_name)
 
-            with open(os.path.join(self.logdir, 'jenkins_perf_PerfPublisher.xml'), 'w') as pref_file:
+            file_path = os.path.join(self.logdir, 'jenkins_perf_PerfPublisher.xml')
+            with open(file=file_path, mode='w', encoding='utf-8') as pref_file:
                 content = """<report name="%s report" categ="none">%s</report>""" % (test_name, test_xml)
                 pref_file.write(content)
         except Exception as ex:  # pylint: disable=broad-except
             self.log.debug('Failed to display results: {0}'.format(results))
             self.log.debug('Exception: {0}'.format(ex))
+
+    def _run_workload(self, stress_cmd: str, sub_type: str, nemesis: bool = False, scylla_conf: bool = False,
+                      scrap_metrics_step: int = None):
+        # create new document in ES with doc_id = test_id + timestamp
+        # allow to correctly save results for future compare
+        self.create_test_stats(sub_type=sub_type, doc_id_with_timestamp=True)
+        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
+        if nemesis:
+            interval = self.params.get('nemesis_interval')
+            time.sleep(interval * 60)  # Sleeping one interval (in minutes) before starting the nemesis
+            self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
+            self.db_cluster.start_nemesis(interval=interval)
+        results = self.get_stress_results(queue=stress_queue)
+        self.update_test_details(scylla_conf=scylla_conf, scrap_metrics_step=scrap_metrics_step)
+        self.display_results(results, test_name='test_latency' if not nemesis else 'test_latency_with_nemesis')
+        if nemesis:
+            self.check_latency_during_ops()
+        else:
+            self.check_regression()
+
+    def run_workload(self, stress_cmd: str, sub_type: str, nemesis: bool = False, scylla_conf: bool = False,
+                     scrap_metrics_step: int = None):
+        self.wait_no_compactions_running()
+        self.run_fstrim_on_all_db_nodes()
+        self._run_workload(stress_cmd=stress_cmd, sub_type=sub_type, nemesis=nemesis, scylla_conf=scylla_conf,
+                           scrap_metrics_step=scrap_metrics_step)
+
+    def _latency_read_with_nemesis(self, stress_cmd: str, sub_type: str, scrap_metrics_step: int = 60):
+        self.run_fstrim_on_all_db_nodes()
+        self.preload_data()
+        self.run_workload(stress_cmd=self.params.get(stress_cmd), sub_type=sub_type, nemesis=True,
+                          scrap_metrics_step=scrap_metrics_step)
+
+
+class PerformanceRegressionTest(BasePerformanceRegression):  # pylint: disable=too-many-public-methods
+
+    """
+    Test Scylla performance regression with cassandra-stress.
+    """
+
+    ops_threshold_prc = 200
 
     def _workload(self, stress_cmd, stress_num, test_name, sub_type=None, keyspace_num=1, prefix='', debug_message='',  # pylint: disable=too-many-arguments
                   save_stats=True):
@@ -148,111 +227,6 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
     def _get_total_ops(self):
         return self._stats['results']['stats_total']['op rate']
-
-    @staticmethod
-    def _clean_email_data():
-        email_data_path = 'email_data.json'
-        with open(email_data_path, 'w'):
-            pass
-
-    def preload_data(self):
-        # if test require a pre-population of data
-        prepare_write_cmd = self.params.get('prepare_write_cmd')
-        if prepare_write_cmd:
-            # create new document in ES with doc_id = test_id + timestamp
-            # allow to correctly save results for future compare
-            self.create_test_stats(sub_type='write-prepare', doc_id_with_timestamp=True)
-            stress_queue = []
-            params = {'prefix': 'preload-'}
-            # Check if the prepare_cmd is a list of commands
-            if isinstance(prepare_write_cmd, list):
-                if len(prepare_write_cmd) == 1:
-                    prepare_write_cmd = prepare_write_cmd[0]
-            if isinstance(prepare_write_cmd, list):
-                # Check if it should be round_robin across loaders
-                if self.params.get('round_robin'):
-                    self.log.debug('Populating data using round_robin')
-                    params.update({'stress_num': 1, 'round_robin': True})
-
-                for stress_cmd in prepare_write_cmd:
-                    params.update({'stress_cmd': stress_cmd})
-                    # Run all stress commands
-                    params.update(dict(stats_aggregate_cmds=False))
-                    self.log.debug('RUNNING stress cmd: {}'.format(stress_cmd))
-                    stress_queue.append(self.run_stress_thread(**params))
-            # One stress cmd command
-            else:
-                stress_queue.append(self.run_stress_thread(stress_cmd=prepare_write_cmd, stress_num=1,
-                                                           prefix='preload-', stats_aggregate_cmds=False))
-
-            for stress in stress_queue:
-                self.get_stress_results(queue=stress, store_results=False)
-
-            self.update_test_details()
-        else:
-            self.log.warning("No prepare command defined in YAML!")
-
-    def run_read_workload(self, nemesis=False):
-        base_cmd_r = self.params.get('stress_cmd_r')
-        # create new document in ES with doc_id = test_id + timestamp
-        # allow to correctly save results for future compare
-        self.create_test_stats(sub_type='read', doc_id_with_timestamp=True)
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_r, stress_num=1, stats_aggregate_cmds=False)
-        if nemesis:
-            interval = self.params.get('nemesis_interval')
-            time.sleep(interval)  # Sleeping one interval before starting the nemesis
-            self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
-            self.db_cluster.start_nemesis(interval=interval)
-        results = self.get_stress_results(queue=stress_queue)
-        self.update_test_details()
-        self.display_results(results, test_name='test_latency' if not nemesis else 'test_latency_with_nemesis')
-        self.check_regression()
-
-    def run_write_workload(self, nemesis=False):
-        base_cmd_w = self.params.get('stress_cmd_w')
-        # create new document in ES with doc_id = test_id + timestamp
-        # allow to correctly save results for future compare
-        self.create_test_stats(sub_type='write', doc_id_with_timestamp=True)
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_w, stress_num=1, stats_aggregate_cmds=False)
-        if nemesis:
-            self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
-            self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
-        results = self.get_stress_results(queue=stress_queue)
-        self.update_test_details()
-        self.display_results(results, test_name='test_latency')
-        self.check_regression()
-
-    def run_mixed_workload(self, nemesis=False):
-        base_cmd_m = self.params.get('stress_cmd_m')
-        # create new document in ES with doc_id = test_id + timestamp
-        # allow to correctly save results for future compare
-        self.create_test_stats(sub_type='mixed', doc_id_with_timestamp=True)
-        stress_queue = self.run_stress_thread(stress_cmd=base_cmd_m, stress_num=1, stats_aggregate_cmds=False)
-        if nemesis:
-            self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
-            self.db_cluster.start_nemesis(interval=self.params.get('nemesis_interval'))
-        results = self.get_stress_results(queue=stress_queue)
-        self.update_test_details(scylla_conf=True)
-        self.display_results(results, test_name='test_latency')
-        self.check_regression()
-
-    def run_workload(self, stress_cmd, nemesis=False):
-        # create new document in ES with doc_id = test_id
-        # allow to correctly save results for future compare
-        sub_type = 'read' if ' read ' in stress_cmd else 'write' if ' write ' in stress_cmd else 'mixed'
-        test_index = f'latency-during-ops-{sub_type}'
-        self.create_test_stats(sub_type=sub_type, append_sub_test_to_name=False, test_index=test_index)
-        stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
-        if nemesis:
-            interval = self.params.get('nemesis_interval')
-            time.sleep(interval * 60)  # Sleeping one interval (in minutes) before starting the nemesis
-            self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
-            self.db_cluster.start_nemesis(interval=interval)
-        results = self.get_stress_results(queue=stress_queue)
-        self.update_test_details(scrap_metrics_step=60)
-        self.display_results(results, test_name='test_latency' if not nemesis else 'test_latency_with_nemesis')
-        check_latency = self.check_regression if not nemesis else self.check_latency_during_ops
-        check_latency()
 
     def prepare_mv(self, on_populated=False):
         with self.db_cluster.cql_connection_patient_exclusive(self.db_cluster.nodes[0]) as session:
@@ -498,36 +472,18 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         """
         self.run_fstrim_on_all_db_nodes()
         self.preload_data()
-        self.wait_no_compactions_running()
-        self.run_fstrim_on_all_db_nodes()
-        self.run_read_workload()
-        self.wait_no_compactions_running()
-        self.run_fstrim_on_all_db_nodes()
-        self.run_write_workload()
-        self.wait_no_compactions_running()
-        self.run_fstrim_on_all_db_nodes()
-        self.run_mixed_workload()
+        self.run_workload(stress_cmd="stress_cmd_r", sub_type="read")
+        self.run_workload(stress_cmd="stress_cmd_w", sub_type="write")
+        self.run_workload(stress_cmd="stress_cmd_m",  sub_type="mixed", scylla_conf=True)
 
     def test_latency_read_with_nemesis(self):
-        self.run_fstrim_on_all_db_nodes()
-        self.preload_data()
-        self.wait_no_compactions_running()
-        self.run_fstrim_on_all_db_nodes()
-        self.run_workload(stress_cmd=self.params.get('stress_cmd_r'), nemesis=True)
+        self._latency_read_with_nemesis(stress_cmd="stress_cmd_r", sub_type="read")
 
     def test_latency_write_with_nemesis(self):
-        self.run_fstrim_on_all_db_nodes()
-        self.preload_data()
-        self.wait_no_compactions_running()
-        self.run_fstrim_on_all_db_nodes()
-        self.run_workload(stress_cmd=self.params.get('stress_cmd_w'), nemesis=True)
+        self._latency_read_with_nemesis(stress_cmd="stress_cmd_w", sub_type="write")
 
     def test_latency_mixed_with_nemesis(self):
-        self.run_fstrim_on_all_db_nodes()
-        self.preload_data()
-        self.wait_no_compactions_running()
-        self.run_fstrim_on_all_db_nodes()
-        self.run_workload(stress_cmd=self.params.get('stress_cmd_m'), nemesis=True)
+        self._latency_read_with_nemesis(stress_cmd="stress_cmd_m", sub_type="mixed")
 
     # MV Tests
     def test_mv_write(self):
@@ -672,3 +628,75 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.display_results(results, test_name='test_timeseries_read_bench')
         self.check_regression()
         self.kill_stress_thread()
+
+
+class YCSBPerformanceRegressionTest(BasePerformanceRegression):
+    yaml_params = {
+        "SCYLLA_CONNECTIONS": str(240),  # number of connections per node
+        "TARGET_SIZE": "120000",  # 120K operation per seconds
+    }
+    ycsb_workloads = {
+        "a": "Update Heavy (50/50 read/write ratio)",
+        "b": "Read Mostly (95/5 read/write ratio)",
+        "c": "Read Only (100/0 read/write ratio)",
+        "d": "Read Latest (95/0/5 read/update/insert ratio)",
+        "e": "Short Range (95/5 scan/insert ratio)",
+        "f": "Read-Modify-Write (50/50 read/read-modify-write ratio)",
+    }
+    latency_stress_format = "stress_latency_workload{}"
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.yaml_params["THREADS_SIZE"] = self.params.get("n_db_nodes") * int(self.yaml_params["SCYLLA_CONNECTIONS"])
+        self.yaml_params["RECORDS_SIZE"] = self.params.get("records_size")
+        self.prepare_ycsb_commands()
+
+    def prepare_ycsb_commands(self):
+        def create_dynamic_ycsb_cmd(cmd):
+            for key, value in self.yaml_params.items():
+                cmd = cmd.replace(key, value)
+            return cmd
+
+        self.params["prepare_write_cmd"] = create_dynamic_ycsb_cmd(self.params["prepare_write_cmd"])
+        for workload_type in self.ycsb_workloads:
+            self.params[self.latency_stress_format.format(workload_type)] = \
+                create_dynamic_ycsb_cmd(self.params["base_latency_cmd"])
+
+    def test_latency(self):
+        """
+        Test steps:
+
+        1. Prepare cluster with data (reach steady_stet of compactions and ~x10 capacity than RAM.
+        with round_robin and list of stress_cmd - the data will load several times faster.
+        2. Run WRITE workload with gauss population.
+        """
+        self.run_fstrim_on_all_db_nodes()
+        self.preload_data()
+
+        for workload_type, workload_details in self.ycsb_workloads.items():
+            InfoEvent(message=f"Starting YCSB workload{workload_type} ({workload_details})").publish()
+            self.run_workload(stress_cmd=self.latency_stress_format.format(workload_type), sub_type=workload_details)
+
+    def test_latency_workarounda_with_nemesis(self):
+        self._latency_read_with_nemesis(
+            stress_cmd=self.latency_stress_format.format("a"), sub_type=self.ycsb_workloads["a"])
+
+    def test_latency_workaroundb_with_nemesis(self):
+        self._latency_read_with_nemesis(
+            stress_cmd=self.latency_stress_format.format("b"), sub_type=self.ycsb_workloads["b"])
+
+    def test_latency_workaroundc_with_nemesis(self):
+        self._latency_read_with_nemesis(
+            stress_cmd=self.latency_stress_format.format("c"), sub_type=self.ycsb_workloads["c"])
+
+    def test_latency_workaroundd_with_nemesis(self):
+        self._latency_read_with_nemesis(
+            stress_cmd=self.latency_stress_format.format("d"), sub_type=self.ycsb_workloads["d"])
+
+    def test_latency_workarounde_with_nemesis(self):
+        self._latency_read_with_nemesis(
+            stress_cmd=self.latency_stress_format.format("e"), sub_type=self.ycsb_workloads["e"])
+
+    def test_latency_workaroundf_with_nemesis(self):
+        self._latency_read_with_nemesis(
+            stress_cmd=self.latency_stress_format.format("f"), sub_type=self.ycsb_workloads["f"])

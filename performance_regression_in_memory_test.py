@@ -22,4 +22,4 @@ class InMemoryPerformanceRegressionTest(PerformanceRegressionTest):
         # restart needed to load data to in-memory store
         self.run_compaction_on_all_nodes()
         self.db_cluster.restart_scylla()
-        self.run_read_workload()
+        self._run_workload(stress_cmd="stress_cmd_r", sub_type="read")
