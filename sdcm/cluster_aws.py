@@ -473,6 +473,13 @@ class AWSNode(cluster.BaseNode):
         self._wait_public_ip()
         super().init()
 
+    @property
+    def short_hostname(self):
+        """
+        Don't need to get hostname from the system since we already know what it should be
+        """
+        return self.name
+
     @cached_property
     def tags(self) -> Dict[str, str]:
         return {**super().tags,
