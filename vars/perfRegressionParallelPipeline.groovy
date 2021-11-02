@@ -5,7 +5,7 @@ def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCl
 
 def call(Map pipelineParams) {
 
-    def builder = getJenkinsLabels(params.backend, params.aws_region, params.gce_datacenter)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
 
     pipeline {
         agent {
@@ -22,9 +22,9 @@ def call(Map pipelineParams) {
                description: 'aws|gce',
                name: 'backend')
 
-            string(defaultValue: "${pipelineParams.get('aws_region', 'eu-west-1')}",
+            string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
                description: 'us-east-1|eu-west-1',
-               name: 'aws_region')
+               name: 'region')
 
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
@@ -148,10 +148,10 @@ def call(Map pipelineParams) {
                                                         rm -fv ./latest
 
                                                         export SCT_CLUSTER_BACKEND=${params.backend}
-                                                        if [[ -n "${params.aws_region}" ]]; then
-                                                            export SCT_REGION_NAME=${params.aws_region}
+                                                        if [[ -n "${params.region}" ]]; then
+                                                            export SCT_REGION_NAME=${params.region}
                                                         else
-                                                            export SCT_REGION_NAME=${pipelineParams.aws_region}
+                                                            export SCT_REGION_NAME=${pipelineParams.region}
                                                         fi
                                                         export SCT_CONFIG_FILES=${test_config}
 
@@ -211,7 +211,7 @@ def call(Map pipelineParams) {
                                                         env
 
                                                         export SCT_CLUSTER_BACKEND="${params.backend}"
-                                                        export SCT_REGION_NAME=${aws_region}
+                                                        export SCT_REGION_NAME=${region}
                                                         if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
                                                             export SCT_GCE_DATACENTER=${params.gce_datacenter}
                                                         fi
@@ -230,7 +230,7 @@ def call(Map pipelineParams) {
                                                 timeout(time: resourceCleanupTimeout, unit: 'MINUTES') { script {
                                                     wrap([$class: 'BuildUser']) {
                                                         dir('scylla-cluster-tests') {
-                                                            def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
+                                                            def region = groovy.json.JsonOutput.toJson(params.region)
                                                             def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
 
                                                             sh """
@@ -241,7 +241,7 @@ def call(Map pipelineParams) {
 
                                                             export SCT_CONFIG_FILES=${test_config}
                                                             export SCT_CLUSTER_BACKEND="${params.backend}"
-                                                            export SCT_REGION_NAME=${aws_region}
+                                                            export SCT_REGION_NAME=${region}
                                                             export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                                             export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
                                                             export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"

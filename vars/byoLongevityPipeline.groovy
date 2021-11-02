@@ -3,7 +3,7 @@
 
 def call() {
 
-    def builder = getJenkinsLabels(params.backend, params.aws_region, params.gce_datacenter)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
 
     pipeline {
 
@@ -40,7 +40,7 @@ def call() {
                name: 'backend')
             string(defaultValue: "eu-west-1",
                description: 'Supported: us-east-1|eu-west-1|eu-west-2|eu-north-1|random (randomly select region)',
-               name: 'aws_region')
+               name: 'region')
             string(defaultValue: "us-east1",
                    description: 'GCE datacenter supported: us-east1',
                    name: 'gce_datacenter')

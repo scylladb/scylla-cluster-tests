@@ -1,7 +1,7 @@
 #!groovy
 
 def call(Map params, String region){
-    def aws_region = initAwsRegionParam(params.aws_region, region)
+    def region = initAwsRegionParam(params.region, region)
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = getCloudProviderFromBackend(params.backend)
 
@@ -15,8 +15,8 @@ def call(Map params, String region){
     export SCT_CONFIG_FILES=${test_config}
     export SCT_COLLECT_LOGS=false
 
-    if [[ -n "${params.aws_region ? params.aws_region : ''}" ]] ; then
-        export SCT_REGION_NAME=${aws_region}
+    if [[ -n "${params.region ? params.region : ''}" ]] ; then
+        export SCT_REGION_NAME=${region}
     fi
     if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
         export SCT_GCE_DATACENTER=${params.gce_datacenter}

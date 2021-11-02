@@ -15,7 +15,7 @@
 
 ```groovy
 longevityPipeline(
-    aws_region: 'eu-west-1',
+    region: 'eu-west-1',
     test_name: 'longevity_test.py:LongevityTest.test_custom_time',
     test_config: 'test-cases/longevity/longevity-10gb-3h.yaml',
 

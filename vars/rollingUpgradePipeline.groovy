@@ -2,7 +2,7 @@
 
 def call(Map pipelineParams) {
 
-    def builder = getJenkinsLabels(params.backend, params.aws_region, params.gce_datacenter)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
 
     pipeline {
         agent {
@@ -19,9 +19,9 @@ def call(Map pipelineParams) {
                description: 'aws|gce',
                name: 'backend')
 
-            string(defaultValue: "${pipelineParams.get('aws_region', 'eu-west-1')}",
+            string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
                description: 'Supported: us-east-1|eu-west-1|eu-west-2|eu-north-1|random (randomly select region)',
-               name: 'aws_region')
+               name: 'region')
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
@@ -123,8 +123,8 @@ def call(Map pipelineParams) {
 
                                                         export SCT_CLUSTER_BACKEND=${params.backend}
 
-                                                        if [[ -n "${params.aws_region ? params.aws_region : ''}" ]] ; then
-                                                            export SCT_REGION_NAME='${params.aws_region}'
+                                                        if [[ -n "${params.region ? params.region : ''}" ]] ; then
+                                                            export SCT_REGION_NAME='${params.region}'
                                                         fi
                                                         if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
                                                             export SCT_GCE_DATACENTER=${params.gce_datacenter}

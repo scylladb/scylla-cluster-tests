@@ -5,7 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
     backend: 'aws',
-    aws_region: 'eu-west-1',
+    region: 'eu-west-1',
     test_name: 'sla_per_user_system_test.SlaPerUserTest.test_read_throughput_1to5_ratio',
     test_config: 'test-cases/features/system-sla-test.yaml',
 

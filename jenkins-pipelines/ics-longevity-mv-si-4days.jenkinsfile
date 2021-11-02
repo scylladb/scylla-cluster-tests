@@ -5,7 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
     backend: 'aws',
-    aws_region: 'eu-west-1',
+    region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: '''["test-cases/longevity/longevity-mv-si-4days.yaml", "test-cases/enterprise-features/ics/longevity/ics-longevity-mv-si-4days.yaml"]''',
 
