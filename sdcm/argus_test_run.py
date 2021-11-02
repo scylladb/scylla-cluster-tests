@@ -161,6 +161,7 @@ class ArgusTestRun:
         "docker": _prepare_docker_resource_setup,
         "unknown": _prepare_unknown_resource_setup,
     }
+    CONFIG = ArgusConfig(**KeyStore().get_argusdb_credentials(), keyspace_name="argus")
 
     def __init__(self):
         pass
@@ -212,15 +213,14 @@ class ArgusTestRun:
         cls.TESTRUN_INSTANCE = TestRunWithHeartbeat(test_id=test_id, group=test_group, release_name=release_name,
                                                     assignee="",
                                                     run_info=run_info,
-                                                    config=ArgusConfig(**KeyStore().get_argusdb_credentials(),
-                                                                       keyspace_name="argus"))
+                                                    config=cls.CONFIG)
 
         return cls.TESTRUN_INSTANCE
 
     @classmethod
-    def get(cls, test_id: UUID = None, config: ArgusConfig = None) -> TestRunWithHeartbeat:
-        if test_id and not cls.TESTRUN_INSTANCE and config:
-            cls.TESTRUN_INSTANCE = TestRunWithHeartbeat.from_id(test_id, config=config)
+    def get(cls, test_id: UUID = None) -> TestRunWithHeartbeat:
+        if test_id and not cls.TESTRUN_INSTANCE:
+            cls.TESTRUN_INSTANCE = TestRunWithHeartbeat.from_id(test_id, config=cls.CONFIG)
 
         if not cls.TESTRUN_INSTANCE:
             cls.warn_once("Returning MagicMock from ArgusTestRun.get() as we are unable to acquire Argus connection")
