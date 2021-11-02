@@ -3,14 +3,12 @@ import logging
 import unittest.mock
 from uuid import UUID
 
-from cassandra import ConsistencyLevel
 from argus.db.db_types import TestStatus
 from argus.db.testrun import TestRunWithHeartbeat, TestRunInfo, TestDetails, TestResources, TestLogs, TestResults, \
     TestResourcesSetup
 from argus.db.cloud_types import CloudInstanceDetails, AWSSetupDetails, GCESetupDetails, BaseCloudSetupDetails, \
     CloudNodesInfo
-from argus.db.interface import ArgusDatabase
-from argus.db.config import Config
+from argus.db.config import Config as ArgusConfig
 
 from sdcm.keystore import KeyStore
 from sdcm.sct_config import SCTConfiguration
@@ -149,6 +147,7 @@ def _prepare_docker_resource_setup(sct_config: SCTConfiguration):
 
 
 class ArgusTestRun:
+    WARNINGS_SENT = set()
     TESTRUN_INSTANCE: TestRunWithHeartbeat | None = None
     BACKEND_MAP = {
         "aws": _prepare_aws_resource_setup,
@@ -162,29 +161,23 @@ class ArgusTestRun:
         "docker": _prepare_docker_resource_setup,
         "unknown": _prepare_unknown_resource_setup,
     }
-    db_init = False
 
     def __init__(self):
         pass
 
     @classmethod
-    def init_db(cls):
-        if cls.db_init:
-            LOGGER.warning("ArgusDB already initialized.")
+    def warn_once(cls, message: str, *args: list):
+        if message in cls.WARNINGS_SENT:
             return
-        LOGGER.info("Initializing ScyllaDB connection session...")
-        ks = KeyStore()
-        database = ArgusDatabase.from_config(Config(**ks.get_argusdb_credentials(), keyspace_name="argus"))
-        database.session.default_consistency_level = ConsistencyLevel.QUORUM
-        cls.db_init = True
+        cls.WARNINGS_SENT.add(message)
+        LOGGER.warning(message, *args)
 
     @classmethod
-    def from_sct_config(cls, test_id: UUID, test_module_path: str, sct_config: SCTConfiguration) -> TestRunWithHeartbeat:  # pylint: disable=too-many-locals
+    def from_sct_config(cls, test_id: UUID, test_module_path: str,
+                        sct_config: SCTConfiguration) -> TestRunWithHeartbeat:
+        # pylint: disable=too-many-locals
         if cls.TESTRUN_INSTANCE:
             raise ArgusTestRunError("Instance already initialized")
-
-        if not cls.db_init:
-            cls.init_db()
 
         LOGGER.info("Preparing Test Details...")
         test_group, *_ = test_module_path.split(".")
@@ -216,28 +209,27 @@ class ArgusTestRun:
 
         run_info = TestRunInfo(details=details, setup=setup_details, resources=resources, logs=logs, results=results)
         LOGGER.info("Initializing TestRun...")
-        cls.TESTRUN_INSTANCE = TestRunWithHeartbeat(test_id=test_id, group=test_group, release_name=release_name, assignee="",
-                                                    run_info=run_info)
+        cls.TESTRUN_INSTANCE = TestRunWithHeartbeat(test_id=test_id, group=test_group, release_name=release_name,
+                                                    assignee="",
+                                                    run_info=run_info,
+                                                    config=ArgusConfig(**KeyStore().get_argusdb_credentials(),
+                                                                       keyspace_name="argus"))
 
         return cls.TESTRUN_INSTANCE
 
     @classmethod
-    def get(cls, test_id: UUID = None) -> TestRunWithHeartbeat:
-        if not cls.db_init:
-            cls.init_db()
-
-        if test_id and not cls.TESTRUN_INSTANCE:
-            cls.TESTRUN_INSTANCE = TestRunWithHeartbeat.from_id(test_id)
+    def get(cls, test_id: UUID = None, config: ArgusConfig = None) -> TestRunWithHeartbeat:
+        if test_id and not cls.TESTRUN_INSTANCE and config:
+            cls.TESTRUN_INSTANCE = TestRunWithHeartbeat.from_id(test_id, config=config)
 
         if not cls.TESTRUN_INSTANCE:
+            cls.warn_once("Returning MagicMock from ArgusTestRun.get() as we are unable to acquire Argus connection")
             return unittest.mock.MagicMock()
 
         return cls.TESTRUN_INSTANCE
 
     @classmethod
     def destroy(cls):
-        ArgusDatabase.destroy()
-        cls.db_init = False
         if not cls.TESTRUN_INSTANCE:
             return False
         cls.TESTRUN_INSTANCE.shutdown()
