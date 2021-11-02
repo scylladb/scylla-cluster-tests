@@ -1,4 +1,4 @@
-test_duration: 300
+test_duration: 360
 prepare_write_cmd:
   - >-
     bin/ycsb load dynamodb -P workloads/workloadc -threads 80 -p recordcount=6990500
