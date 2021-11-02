@@ -1,7 +1,7 @@
 #! groovy
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.aws_region, params.gce_datacenter)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
 
     pipeline {
         agent {
@@ -41,9 +41,9 @@ def call(Map pipelineParams) {
             string(defaultValue: '',
                    description: 'a GCE Image to run against',
                    name: 'gce_image_db')
-            string(defaultValue: "${pipelineParams.get('region_name', '')}",
+            string(defaultValue: "${pipelineParams.get('region', '')}",
                    description: 'AWS region with Scylla AMI (for AMI test, ignored otherwise)',
-                   name: 'aws_region')
+                   name: 'region')
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
@@ -128,7 +128,7 @@ def call(Map pipelineParams) {
 
                                                     if [[ ! -z "${params.scylla_ami_id}" ]]; then
                                                         export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
-                                                        export SCT_REGION_NAME="${params.aws_region}"
+                                                        export SCT_REGION_NAME="${params.region}"
                                                     elif [[ ! -z "${params.gce_image_db}" ]]; then
                                                         export SCT_GCE_IMAGE_DB="${params.gce_image_db}"
                                                         if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then

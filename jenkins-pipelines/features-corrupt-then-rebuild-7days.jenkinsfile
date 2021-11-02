@@ -5,7 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
     backend: 'aws',
-    aws_region: 'eu-west-1',
+    region: 'eu-west-1',
     test_name: 'corrupt_then_rebuild.CorruptThenRebuildTest.test_corrupt_then_rebuild_nodes',
     test_config: 'test-cases/features/corrupt-then-rebuild.yaml',
 

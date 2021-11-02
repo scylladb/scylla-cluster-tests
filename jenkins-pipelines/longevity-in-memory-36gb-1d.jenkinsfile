@@ -5,7 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
     backend: 'aws',
-    aws_region: 'eu-west-1',
+    region: 'eu-west-1',
     test_name: 'longevity_in_memory_test.InMemoryLongevityTest.test_in_mem_longevity',
     test_config: 'test-cases/longevity/longevity-in-memory-36GB-1day.yaml',
 

@@ -5,7 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
     backend: 'aws',
-    aws_region: 'eu-west-1',
+    region: 'eu-west-1',
     test_name: 'full_cluster_stop_start_test.FullClusterStopStart.test_full_cluster_stop_start',
     test_config: 'test-cases/features/full-cluster-stop-start.yaml',
 

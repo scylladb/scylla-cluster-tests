@@ -22,7 +22,7 @@ pipeline {
                name: 'duration')
         string(defaultValue: 'us-east-1',
                description: 'a region where to deploy an AWS instance',
-               name: 'aws_region')
+               name: 'region')
         string(defaultValue: 'a',
                description: 'an availability zone where to deploy an AWS instance',
                name: 'availability_zone')
@@ -59,7 +59,7 @@ pipeline {
                     rm -fv sct_runner_ip
 
                     export RUNNER_DURATION="${params.duration}"
-                    export RUNNER_REGION="${params.aws_region}"
+                    export RUNNER_REGION="${params.region}"
                     export RUNNER_AZ="${params.availability_zone}"
 
                     ./docker/env/hydra.sh --execute-on-new-runner investigate show-monitor "${params.test_id}"

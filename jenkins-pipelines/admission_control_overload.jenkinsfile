@@ -4,7 +4,7 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
-    aws_region: 'eu-west-1',
+    region: 'eu-west-1',
     test_name: 'admission_control_overload_test.AdmissionControlOverloadTest',
     test_config: 'test-cases/load/admission_control_overload_test.yaml',
 

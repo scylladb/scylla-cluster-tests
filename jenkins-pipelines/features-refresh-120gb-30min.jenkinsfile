@@ -5,7 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
     backend: 'aws',
-    aws_region: 'eu-west-1',
+    region: 'eu-west-1',
     test_name: 'refresh_test.RefreshTest.test_refresh_node',
     test_config: 'test-cases/features/refresh-30mins-120gb.yaml',
 

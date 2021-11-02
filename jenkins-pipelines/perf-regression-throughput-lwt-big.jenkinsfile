@@ -5,7 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 perfRegressionParallelPipeline(
     backend: 'aws',
-    aws_region: 'eu-west-1',
+    region: 'eu-west-1',
     test_name: 'performance_regression_lwt_test.PerformanceRegressionLWTTest',
     test_config: 'test-cases/performance/perf-regression-throughput-lwt-big.yaml',
     sub_tests: ["test_throughput"],

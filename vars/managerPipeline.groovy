@@ -37,7 +37,7 @@ def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCl
 
 def call(Map pipelineParams) {
 
-    def builder = getJenkinsLabels(params.backend, params.aws_region, params.gce_datacenter)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
 
     pipeline {
         agent {
@@ -57,9 +57,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
                description: 'aws|gce',
                name: 'backend')
-            string(defaultValue: "${pipelineParams.get('aws_region', 'eu-west-1')}",
+            string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
                description: 'Supported: us-east-1|eu-west-1|eu-west-2|eu-north-1|random (randomly select region)',
-               name: 'aws_region')
+               name: 'region')
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
@@ -208,7 +208,7 @@ def call(Map pipelineParams) {
                                     dir('scylla-cluster-tests') {
 
                                         // handle params which can be a json list
-                                        def aws_region = initAwsRegionParam(params.aws_region, builder.region)
+                                        def region = initAwsRegionParam(params.region, builder.region)
                                         def test_config = groovy.json.JsonOutput.toJson(params.test_config)
                                         def cloud_provider = params.backend.trim().toLowerCase()
 
@@ -219,7 +219,7 @@ def call(Map pipelineParams) {
                                         rm -fv ./latest
 
                                         export SCT_CLUSTER_BACKEND="${params.backend}"
-                                        export SCT_REGION_NAME=${aws_region}
+                                        export SCT_REGION_NAME=${region}
                                         if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
                                             export SCT_GCE_DATACENTER=${params.gce_datacenter}
                                         fi

@@ -5,7 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 rollingUpgradePipeline(
     backend: 'aws',
-    aws_region: '["eu-west-1", "eu-west-2"]',
+    region: '["eu-west-1", "eu-west-2"]',
     base_versions: ['2021.1', '4.5'],
     linux_distro: 'ubuntu-focal',
 

@@ -5,7 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 perfRegressionParallelPipeline(
     backend: "aws",
-    aws_region: "us-east-1",
+    region: "us-east-1",
     test_name: "performance_regression_cdc_test.PerformanceRegressionCDCTest",
     test_config: "test-cases/performance/perf-regression-throughput-cdc-mixed-poll-batching.yaml",
     sub_tests: ["test_mixed_throughput"],
