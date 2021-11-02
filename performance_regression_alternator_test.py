@@ -68,9 +68,9 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
                                 y_id varchar primary key,
                                 {fields});""")
 
-    def preload_data(self):
+    def preload_data(self, prepare_write_cmd: str = "prepare_write_cmd"):
         # if test require a pre-population of data
-        prepare_write_cmd = self.params.get('prepare_write_cmd')
+        prepare_write_cmd = self.params.get(prepare_write_cmd)
         if prepare_write_cmd:
             # create new document in ES with doc_id = test_id + timestamp
             # allow to correctly save results for future compare

@@ -39,7 +39,7 @@ class BasePerformanceRegression(ClusterTester):
         with open(file=email_data_path, mode='w', encoding="utf-8"):
             pass
 
-    def preload_data(self, prepare_write_cmd: str = "", *args, **kwargs):
+    def preload_data(self, prepare_write_cmd: str = ""):
         # if test require a pre-population of data
         if not prepare_write_cmd:
             self.log.warning("No prepare command defined in YAML!")
@@ -164,8 +164,8 @@ class BasePerformanceRegression(ClusterTester):
             self.log.debug('Failed to display results: {0}'.format(results))
             self.log.debug('Exception: {0}'.format(ex))
 
-    def _run_workload(self, stress_cmd: str, sub_type: str, nemesis: bool = False, scylla_conf: bool = False,
-                      scrap_metrics_step: int = None):
+    def _run_workload(self, stress_cmd: str, sub_type: str, nemesis: bool = False,  # pylint: disable=too-many-arguments
+                      scylla_conf: bool = False, scrap_metrics_step: int = None):
         # create new document in ES with doc_id = test_id + timestamp
         # allow to correctly save results for future compare
         self.create_test_stats(sub_type=sub_type, doc_id_with_timestamp=True)
@@ -183,8 +183,8 @@ class BasePerformanceRegression(ClusterTester):
         else:
             self.check_regression()
 
-    def run_workload(self, stress_cmd: str, sub_type: str, nemesis: bool = False, scylla_conf: bool = False,
-                     scrap_metrics_step: int = None):
+    def run_workload(self, stress_cmd: str, sub_type: str, nemesis: bool = False,  # pylint: disable=too-many-arguments
+                     scylla_conf: bool = False, scrap_metrics_step: int = None):
         self.wait_no_compactions_running()
         self.run_fstrim_on_all_db_nodes()
         self._run_workload(stress_cmd=stress_cmd, sub_type=sub_type, nemesis=nemesis, scylla_conf=scylla_conf,
@@ -512,7 +512,7 @@ class PerformanceRegressionTest(BasePerformanceRegression):  # pylint: disable=t
 
             # Get materialized view name from user profile
 
-            with open(user_profile) as fobj:
+            with open(user_profile, encoding="utf-8") as fobj:
                 user_profile_yaml = yaml.safe_load(fobj)
             mv_name = ''
 
@@ -674,7 +674,7 @@ class YCSBPerformanceRegressionTest(BasePerformanceRegression):
         self.preload_data()
 
         for workload_type, workload_details in self.ycsb_workloads.items():
-            InfoEvent(message=f"Starting YCSB workload{workload_type} ({workload_details})").publish()
+            InfoEvent(message="Starting YCSB workload%s (%s)" % (workload_type, workload_details)).publish()
             self.run_workload(stress_cmd=self.latency_stress_format.format(workload_type), sub_type=workload_details)
 
     def test_latency_workarounda_with_nemesis(self):

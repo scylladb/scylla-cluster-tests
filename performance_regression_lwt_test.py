@@ -109,7 +109,7 @@ class PerformanceRegressionLWTTest(PerformanceRegressionTest):
             node.run_nodetool("compact", warning_event_on_exception=(UnexpectedExit, Failure),
                               error_message="Expected exception. ")
 
-    def _run_workload(self, param_name, subtype, keyspace_num=1):
+    def _run_workload(self, param_name, subtype, *_, keyspace_num=1):  # pylint: disable=arguments-differ
         cmd = self.params.get(param_name)
         self.wait_no_compactions_running()
         self.run_fstrim_on_all_db_nodes()
