@@ -61,7 +61,7 @@ prepare_write_cmd: >-2
 base_latency_cmd: >-2
   bin/ycsb run scylla -P workloads/WORKLOADS_TYPE -target TARGET_SIZE -threads THREADS_SIZE -p recordcount=RECORDS_SIZE
   -p fieldcount=10 -p fieldlength=128
-  -p operationcount=300_000_000 -p scylla.coreconnections=SCYLLA_CONNECTIONS -p scylla.maxconnections=SCYLLA_CONNECTIONS
+  -p operationcount=300000000 -p scylla.coreconnections=SCYLLA_CONNECTIONS -p scylla.maxconnections=SCYLLA_CONNECTIONS
   -p scylla.username=cassandra -p scylla.password=cassandra
   -p scylla.tokenaware=true
   -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE

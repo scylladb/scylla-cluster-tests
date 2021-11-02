@@ -632,7 +632,7 @@ class PerformanceRegressionTest(BasePerformanceRegression):  # pylint: disable=t
 
 class YCSBPerformanceRegressionTest(BasePerformanceRegression):
     yaml_params = {
-        "SCYLLA_CONNECTIONS": str(240),  # number of connections per node
+        "SCYLLA_CONNECTIONS": "240",  # number of connections per node
         "TARGET_SIZE": "120000",  # 120K operation per seconds
     }
     ycsb_workloads = {
@@ -677,26 +677,26 @@ class YCSBPerformanceRegressionTest(BasePerformanceRegression):
             InfoEvent(message="Starting YCSB workload%s (%s)" % (workload_type, workload_details)).publish()
             self.run_workload(stress_cmd=self.latency_stress_format.format(workload_type), sub_type=workload_details)
 
-    def test_latency_workarounda_with_nemesis(self):
+    def test_latency_workload_a_with_nemesis(self):
         self._latency_read_with_nemesis(
             stress_cmd=self.latency_stress_format.format("a"), sub_type=self.ycsb_workloads["a"])
 
-    def test_latency_workaroundb_with_nemesis(self):
+    def test_latency_workload_b_with_nemesis(self):
         self._latency_read_with_nemesis(
             stress_cmd=self.latency_stress_format.format("b"), sub_type=self.ycsb_workloads["b"])
 
-    def test_latency_workaroundc_with_nemesis(self):
+    def test_latency_workload_c_with_nemesis(self):
         self._latency_read_with_nemesis(
             stress_cmd=self.latency_stress_format.format("c"), sub_type=self.ycsb_workloads["c"])
 
-    def test_latency_workaroundd_with_nemesis(self):
+    def test_latency_workload_d_with_nemesis(self):
         self._latency_read_with_nemesis(
             stress_cmd=self.latency_stress_format.format("d"), sub_type=self.ycsb_workloads["d"])
 
-    def test_latency_workarounde_with_nemesis(self):
+    def test_latency_workload_e_with_nemesis(self):
         self._latency_read_with_nemesis(
             stress_cmd=self.latency_stress_format.format("e"), sub_type=self.ycsb_workloads["e"])
 
-    def test_latency_workaroundf_with_nemesis(self):
+    def test_latency_workload_f_with_nemesis(self):
         self._latency_read_with_nemesis(
             stress_cmd=self.latency_stress_format.format("f"), sub_type=self.ycsb_workloads["f"])

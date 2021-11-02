@@ -7,8 +7,8 @@ perfRegressionParallelPipeline(
     backend: "aws",
     aws_region: "us-east-1",
     test_name: "performance_regression_test.YCSBPerformanceRegressionTest",
-    test_config: ["test-cases/performance/ycsb/pref-basic.yaml", "test-cases/performance/ycsb/pref-regression-ycsb-1M-records.yaml"],
-    sub_tests: ["test_latency"],
+    test_config: '''["test-cases/performance/ycsb/perf-basic.yaml", "test-cases/performance/ycsb/perf-regression-ycsb-1M-records.yaml"]''',
+    sub_tests: ["test_latency_workload_a_with_nemesis"],
 
     timeout: [time: 600, unit: "MINUTES"]
 )
