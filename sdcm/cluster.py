@@ -4291,10 +4291,16 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
     @staticmethod
     def verify_logging_from_nodes(nodes_list):
+        absent = []
         for node in nodes_list:
             if not os.path.exists(node.system_log):
-                error_msg = "No db log from node [%s] " % node
-                raise Exception(error_msg)
+                absent.append(node)
+        if absent:
+            raise Exception(
+                "No db log from the following nodes:\n%s\nfiles expected to be find:\n%s" % (
+                    '\n'.join(map(lambda node: node.name, absent)),
+                    '\n'.join(map(lambda node: node.system_log, absent))
+                ))
         return True
 
     @wait_for_init_wrap
