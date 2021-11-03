@@ -1,6 +1,3 @@
 test_duration: 480
 
-# Dynamic params to create dynamic YSCB stress commands
-records_size:  10000000
-
 user_prefix: 'longevity-ycsb-10M'

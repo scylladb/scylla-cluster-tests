@@ -670,7 +670,7 @@ class BaseYCSBPerformanceRegressionTest(BasePerformanceRegression):
                 f" -p recordcount={self.records_size}" \
                 f" -p scylla.coreconnections={self.scylla_connection}" \
                 f" -p scylla.maxconnections={self.scylla_connection}"
-            self.params[self.stress_cmd.format(workload_type)] = workload_stress + self.params["stress_cmd_m"]
+            self.params[self.stress_cmd.format(workload_type)] = f"{workload_stress} {self.params['stress_cmd_m']}"
 
     def test_latency(self):
         """
