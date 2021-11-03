@@ -664,13 +664,13 @@ class BaseYCSBPerformanceRegressionTest(BasePerformanceRegression):
 
         for workload_type in self.ycsb_workloads:
             workload_stress = \
-                f" -P workloads/workload{workload_type}" \
+                f"bin/ycsb run scylla -s -P workloads/workload{workload_type}" \
                 f" -target {self.target_size}" \
                 f" -threads {threads_size}" \
                 f" -p recordcount={self.records_size}" \
                 f" -p scylla.coreconnections={self.scylla_connection}" \
                 f" -p scylla.maxconnections={self.scylla_connection}"
-            self.params[self.stress_cmd.format(workload_type)] = self.params["stress_cmd_m"] + workload_stress
+            self.params[self.stress_cmd.format(workload_type)] = workload_stress + self.params["stress_cmd_m"]
 
     def test_latency(self):
         """
