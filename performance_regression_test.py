@@ -650,7 +650,7 @@ class BaseYCSBPerformanceRegressionTest(BasePerformanceRegression):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.create_ycsb_commands()
+        # self.create_ycsb_commands()
 
     def create_ycsb_commands(self):
         threads_size = self.params.get("n_db_nodes") * self.scylla_connection
