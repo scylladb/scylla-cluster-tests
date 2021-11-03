@@ -16,6 +16,8 @@
 
 import os
 import time
+from typing import Dict
+
 import yaml
 
 from sdcm.sct_events.system import InfoEvent
@@ -184,7 +186,10 @@ class BasePerformanceRegression(ClusterTester):
             self.check_regression()
 
     def run_workload(self, stress_cmd: str, sub_type: str, nemesis: bool = False,  # pylint: disable=too-many-arguments
-                     scylla_conf: bool = False, scrap_metrics_step: int = None):
+                     scylla_conf: bool = False, scrap_metrics_step: int = None, is_preload_data: bool = False):
+        if is_preload_data:
+            self.run_fstrim_on_all_db_nodes()
+            self.preload_data()
         self.wait_no_compactions_running()
         self.run_fstrim_on_all_db_nodes()
         self._run_workload(stress_cmd=stress_cmd, sub_type=sub_type, nemesis=nemesis, scylla_conf=scylla_conf,
@@ -202,7 +207,6 @@ class PerformanceRegressionTest(BasePerformanceRegression):  # pylint: disable=t
     """
     Test Scylla performance regression with cassandra-stress.
     """
-
     ops_threshold_prc = 200
 
     def _workload(self, stress_cmd, stress_num, test_name, sub_type=None, keyspace_num=1, prefix='', debug_message='',  # pylint: disable=too-many-arguments
@@ -630,12 +634,8 @@ class PerformanceRegressionTest(BasePerformanceRegression):  # pylint: disable=t
         self.kill_stress_thread()
 
 
-class YCSBPerformanceRegressionTest(BasePerformanceRegression):
-    yaml_params = {
-        "SCYLLA_CONNECTIONS": "240",  # number of connections per node
-        "TARGET_SIZE": "120000",  # 120K operation per seconds
-    }
-    ycsb_workloads = {
+class BaseYCSBPerformanceRegressionTest(BasePerformanceRegression):
+    ycsb_workloads: Dict[str, str] = {
         "a": "Update Heavy (50/50 read/write ratio)",
         "b": "Read Mostly (95/5 read/write ratio)",
         "c": "Read Only (100/0 read/write ratio)",
@@ -643,25 +643,34 @@ class YCSBPerformanceRegressionTest(BasePerformanceRegression):
         "e": "Short Range (95/5 scan/insert ratio)",
         "f": "Read-Modify-Write (50/50 read/read-modify-write ratio)",
     }
-    latency_stress_format = "stress_latency_workload{}"
+    scylla_connection: int = 280  # number of connections per node
+    target_size: int = 120_000  # 120K operation per seconds
+    stress_cmd: str = "stress_latency_workload{}"
+    records_size: int
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.params["records_size"] = 1_000_000
-        self.yaml_params["THREADS_SIZE"] = self.params.get("n_db_nodes") * int(self.yaml_params["SCYLLA_CONNECTIONS"])
-        self.yaml_params["RECORDS_SIZE"] = self.params.get("records_size")
-        self.prepare_ycsb_commands()
+        self.create_ycsb_commands()
 
-    def prepare_ycsb_commands(self):
-        def create_dynamic_ycsb_cmd(cmd):
-            for key, value in self.yaml_params.items():
-                cmd = cmd.replace(key, str(value))
-            return cmd
+    def create_ycsb_commands(self):
+        threads_size = self.params.get("n_db_nodes") * self.scylla_connection
+        self.params["prepare_write_cmd"] += \
+            f" -target {self.target_size}" \
+            f" -threads {threads_size}" \
+            f" -p recordcount={self.records_size}" \
+            f" -p insertcount={self.records_size}" \
+            f" -p scylla.coreconnections={self.scylla_connection}" \
+            f" -p scylla.maxconnections={self.scylla_connection}"
 
-        self.params["prepare_write_cmd"] = create_dynamic_ycsb_cmd(self.params["prepare_write_cmd"])
         for workload_type in self.ycsb_workloads:
-            self.params[self.latency_stress_format.format(workload_type)] = \
-                create_dynamic_ycsb_cmd(self.params["stress_cmd_m"])
+            workload_stress = \
+                f" -P workloads/workload{workload_type}" \
+                f" -target {self.target_size}" \
+                f" -threads {threads_size}" \
+                f" -p recordcount={self.records_size}" \
+                f" -p scylla.coreconnections={self.scylla_connection}" \
+                f" -p scylla.maxconnections={self.scylla_connection}"
+            self.params[self.stress_cmd.format(workload_type)] = self.params["stress_cmd_m"] + workload_stress
 
     def test_latency(self):
         """
@@ -676,28 +685,68 @@ class YCSBPerformanceRegressionTest(BasePerformanceRegression):
 
         for workload_type, workload_details in self.ycsb_workloads.items():
             InfoEvent(message="Starting YCSB workload%s (%s)" % (workload_type, workload_details)).publish()
-            self.run_workload(stress_cmd=self.latency_stress_format.format(workload_type), sub_type=workload_details)
+            self.run_workload(stress_cmd=self.stress_cmd.format(workload_type), sub_type=workload_details)
 
     def test_latency_workload_a_with_nemesis(self):
         self._latency_read_with_nemesis(
-            stress_cmd=self.latency_stress_format.format("a"), sub_type=self.ycsb_workloads["a"])
+            stress_cmd=self.stress_cmd.format("a"), sub_type=self.ycsb_workloads["a"])
+
+    def test_latency_workload_a_without_nemesis(self):
+        self.run_workload(
+            stress_cmd=self.stress_cmd.format("a"), sub_type=self.ycsb_workloads["a"], is_preload_data=True)
 
     def test_latency_workload_b_with_nemesis(self):
         self._latency_read_with_nemesis(
-            stress_cmd=self.latency_stress_format.format("b"), sub_type=self.ycsb_workloads["b"])
+            stress_cmd=self.stress_cmd.format("b"), sub_type=self.ycsb_workloads["b"])
+
+    def test_latency_workload_b_without_nemesis(self):
+        self.run_workload(
+            stress_cmd=self.stress_cmd.format("b"), sub_type=self.ycsb_workloads["b"], is_preload_data=True)
 
     def test_latency_workload_c_with_nemesis(self):
         self._latency_read_with_nemesis(
-            stress_cmd=self.latency_stress_format.format("c"), sub_type=self.ycsb_workloads["c"])
+            stress_cmd=self.stress_cmd.format("c"), sub_type=self.ycsb_workloads["c"])
+
+    def test_latency_workload_c_without_nemesis(self):
+        self.run_workload(
+            stress_cmd=self.stress_cmd.format("c"), sub_type=self.ycsb_workloads["c"], is_preload_data=True)
 
     def test_latency_workload_d_with_nemesis(self):
         self._latency_read_with_nemesis(
-            stress_cmd=self.latency_stress_format.format("d"), sub_type=self.ycsb_workloads["d"])
+            stress_cmd=self.stress_cmd.format("d"), sub_type=self.ycsb_workloads["d"])
+
+    def test_latency_workload_d_without_nemesis(self):
+        self.run_workload(
+            stress_cmd=self.stress_cmd.format("d"), sub_type=self.ycsb_workloads["d"], is_preload_data=True)
 
     def test_latency_workload_e_with_nemesis(self):
         self._latency_read_with_nemesis(
-            stress_cmd=self.latency_stress_format.format("e"), sub_type=self.ycsb_workloads["e"])
+            stress_cmd=self.stress_cmd.format("e"), sub_type=self.ycsb_workloads["e"])
+
+    def test_latency_workload_e_without_nemesis(self):
+        self.run_workload(
+            stress_cmd=self.stress_cmd.format("e"), sub_type=self.ycsb_workloads["e"], is_preload_data=True)
 
     def test_latency_workload_f_with_nemesis(self):
         self._latency_read_with_nemesis(
-            stress_cmd=self.latency_stress_format.format("f"), sub_type=self.ycsb_workloads["f"])
+            stress_cmd=self.stress_cmd.format("f"), sub_type=self.ycsb_workloads["f"])
+
+    def test_latency_workload_f_without_nemesis(self):
+        self.run_workload(
+            stress_cmd=self.stress_cmd.format("f"), sub_type=self.ycsb_workloads["f"], is_preload_data=True)
+
+
+class YCSBPerformanceRegression1MRecordsTest(BaseYCSBPerformanceRegressionTest):
+    records_size: int = 10 ** 6  # create database with 1M records
+
+
+class YCSBPerformanceRegression10MRecordsTest(BaseYCSBPerformanceRegressionTest):
+    records_size: int = 10 ** 7  # create database with 10M records
+
+
+class YCSBPerformanceRegression100MRecordsTest(BaseYCSBPerformanceRegressionTest):
+    records_size: int = 10 ** 8  # create database with 100M records
+
+
+class YCSBPerformanceRegression1BRecordsTest(BaseYCSBPerformanceRegressionTest):
+    records_size: int = 10 ** 9  # create database with 1 billion records
