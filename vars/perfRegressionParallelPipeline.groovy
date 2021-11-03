@@ -1,6 +1,8 @@
 #!groovy
 import groovy.json.JsonSlurper
 
+def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
+
 def call(Map pipelineParams) {
 
     def builder = getJenkinsLabels(params.backend, params.aws_region, params.gce_datacenter)
@@ -55,6 +57,10 @@ def call(Map pipelineParams) {
                    description: 'email recipients of email report',
                    name: 'email_recipients')
 
+            string(defaultValue: "${pipelineParams.get('test_config', '')}",
+                   description: 'Test configuration file',
+                   name: 'test_config')
+
             string(defaultValue: "${pipelineParams.get('k8s_scylla_operator_helm_repo', 'https://storage.googleapis.com/scylla-operator-charts/latest')}",
                    description: 'Scylla Operator helm repo',
                    name: 'k8s_scylla_operator_helm_repo')
@@ -68,7 +74,6 @@ def call(Map pipelineParams) {
         options {
             timestamps()
             disableConcurrentBuilds()
-            timeout(pipelineParams.timeout)
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
         stages {
@@ -84,6 +89,22 @@ def call(Map pipelineParams) {
                             currentBuild.result = 'ABORTED'
 
                             error('Abort build#1 which only loads params')
+                        }
+                    }
+                }
+            }
+            stage('Get test duration') {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        timeout(time: 1, unit: 'MINUTES') {
+                            script {
+                                wrap([$class: 'BuildUser']) {
+                                    dir('scylla-cluster-tests') {
+                                        checkout scm
+                                        (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -116,7 +137,7 @@ def call(Map pipelineParams) {
                                                 wrap([$class: 'BuildUser']) {
                                                     def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
                                                     def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
-                                                    dir('scylla-cluster-tests') {
+                                                    timeout(time: testRunTimeout, unit: 'MINUTES') { dir('scylla-cluster-tests') {
                                                         checkout scm
 
                                                         sh """
@@ -174,14 +195,14 @@ def call(Map pipelineParams) {
                                                         ./docker/env/hydra.sh run-test ${perf_test} --backend ${params.backend}  --logdir "`pwd`"
                                                         echo "end test ....."
                                                         """
-                                                    }
+                                                    }}
                                                 }
                                             }
                                         }
                                         stage("Collect logs for ${sub_test}") {
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
-                                                    dir('scylla-cluster-tests') {
+                                                    timeout(time: collectLogsTimeout, unit: 'MINUTES') { dir('scylla-cluster-tests') {
                                                         def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
                                                         sh """
                                                         #!/bin/bash
@@ -200,13 +221,13 @@ def call(Map pipelineParams) {
                                                         ./docker/env/hydra.sh collect-logs --logdir "`pwd`"
                                                         echo "end collect logs"
                                                         """
-                                                    }
+                                                    }}
                                                 }
                                             }
                                         }
                                         stage("Clean resources for ${sub_test}") {
                                             catchError(stageResult: 'FAILURE') {
-                                                script {
+                                                timeout(time: resourceCleanupTimeout, unit: 'MINUTES') { script {
                                                     wrap([$class: 'BuildUser']) {
                                                         dir('scylla-cluster-tests') {
                                                             def aws_region = groovy.json.JsonOutput.toJson(params.aws_region)
@@ -231,12 +252,12 @@ def call(Map pipelineParams) {
                                                             """
                                                         }
                                                     }
-                                                }
+                                                }}
                                             }
                                         }
                                         stage("Send email for ${sub_test}") {
                                             catchError(stageResult: 'FAILURE') {
-                                                script {
+                                                timeout(time: 10, unit: 'MINUTES') { script {
                                                     wrap([$class: 'BuildUser']) {
                                                         dir('scylla-cluster-tests') {
                                                             def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
@@ -253,7 +274,7 @@ def call(Map pipelineParams) {
                                                             """
                                                         }
                                                     }
-                                                }
+                                                }}
                                             }
                                         }
                                     }
