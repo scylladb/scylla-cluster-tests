@@ -104,18 +104,19 @@ To run SCT tests locally run following::
     sudo ./install-prereqs.sh
     ./get-qa-ssh-keys.sh
 
-    # install python3.8 via pyenv
+    # install python3.10 via pyenv
     curl https://pyenv.run | bash
     exec $SHELL
     # go to: https://github.com/pyenv/pyenv/wiki/Common-build-problems#prerequisites
     # and follow the instructions for your distribution, to install the prerequisites
     # for compiling python from source
-    pyenv install 3.8.3
+    pyenv install 3.10.0
 
     # create a virtualenv for SCT
-    pyenv virtualenv 3.8.3 sct38
-    pyenv activate sct38
-    pip install -r requirements.txt
+    pyenv virtualenv 3.10.0 sct310
+    pyenv activate sct310
+    pip install -r requirements.in
+    pip install -e git+https://github.com/bentsi/argus#egg=argus
 
 
 Preparing AWS Cloud environment
