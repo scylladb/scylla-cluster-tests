@@ -646,7 +646,7 @@ class BaseYCSBPerformanceRegressionTest(BasePerformanceRegression):
     scylla_connection: int = 280  # number of connections per node
     target_size: int = 120_000  # 120K operation per seconds
     stress_cmd: str = "stress_latency_workload{}"
-    records_size: int
+    records_size: int = 1_000_000
 
     def __init__(self, *args):
         super().__init__(*args)
