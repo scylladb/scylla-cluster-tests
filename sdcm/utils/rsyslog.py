@@ -14,16 +14,28 @@
 import os
 import logging
 import getpass
+from functools import cached_property
 from tempfile import mkstemp
+from typing import Optional
 
+from sdcm.utils.docker_utils import ContainerManager
 
 RSYSLOG_IMAGE = "rsyslog/syslog_appliance_alpine:latest"
 RSYSLOG_PORT = 514
+
 
 LOGGER = logging.getLogger(__name__)
 
 
 class RSyslogContainerMixin:  # pylint: disable=too-few-public-methods
+    @cached_property
+    def rsyslog_confpath(self) -> str:
+        return generate_rsyslog_conf_file()
+
+    @property
+    def rsyslog_port(self) -> Optional[int]:
+        return ContainerManager.get_container_port(self, "rsyslog", RSYSLOG_PORT)
+
     def rsyslog_container_run_args(self, logdir: str) -> dict:
         basedir, logdir = os.path.split(logdir)
         logdir = os.path.abspath(os.path.join(os.environ.get("_SCT_LOGDIR", basedir), logdir))

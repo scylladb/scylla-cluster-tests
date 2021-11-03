@@ -1038,7 +1038,7 @@ class SCTConfiguration(dict):
              help="options will be used for enable encryption at-rest for tables"),
 
         dict(name="logs_transport", env="SCT_LOGS_TRANSPORT", type=str,
-             help="How to transport logs: rsyslog, ssh or docker", choices=("rsyslog", "ssh", "docker")),
+             help="How to transport logs: rsyslog, ssh or docker", choices=("rsyslog", "ssh", "docker", "syslog-ng")),
 
         dict(name="rsyslog_imjournal_rate_limit_interval", env="SCT_RSYSLOG_IMJOURNAL_RATE_LIMIT_INTERVAL", type=int,
              help="Value for rsyslog' imjournal Ratelimit.Interval option (maximum 65535 till rsyslog v8.34)"),

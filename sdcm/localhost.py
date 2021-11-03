@@ -17,24 +17,19 @@ from typing import Optional
 
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.k8s import HelmContainerMixin
-from sdcm.utils.rsyslog import RSYSLOG_PORT, RSyslogContainerMixin, generate_rsyslog_conf_file
+from sdcm.utils.rsyslog import RSyslogContainerMixin
 from sdcm.utils.gce_utils import GcloudContainerMixin
 from sdcm.utils.ldap import LDAP_PORT, LDAP_SSL_PORT, LdapContainerMixin
-
+from sdcm.utils.syslogng import SyslogNGContainerMixin
 
 LOGGER = logging.getLogger(__name__)
 
 
-class LocalHost(RSyslogContainerMixin, GcloudContainerMixin, HelmContainerMixin, LdapContainerMixin):
+class LocalHost(SyslogNGContainerMixin, RSyslogContainerMixin, GcloudContainerMixin, HelmContainerMixin, LdapContainerMixin):
     def __init__(self, user_prefix: Optional[str] = None, test_id: Optional[str] = None) -> None:
         self._containers = {}
         self.tags = {}
         self.name = (f"{user_prefix}-" if user_prefix else "") + "localhost" + (f"-{test_id}" if test_id else "")
-        self.rsyslog_confpath = generate_rsyslog_conf_file()
-
-    @property
-    def rsyslog_port(self) -> Optional[int]:
-        return ContainerManager.get_container_port(self, "rsyslog", RSYSLOG_PORT)
 
     @property
     def ldap_ports(self) -> Optional[dict]:
