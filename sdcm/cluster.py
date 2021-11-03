@@ -924,6 +924,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         else:
             if log_transport == 'rsyslog':
                 self.log.info("Use no logging daemon since log transport is rsyslog")
+            elif log_transport == 'syslog-ng':
+                self.log.info("Use no logging daemon since log transport is syslog-ng")
             else:
                 TestFrameworkEvent(
                     source=self.__class__.__name__,

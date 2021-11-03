@@ -192,6 +192,14 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
             raise LdapServerNotReady("LDAP server didn't finish its startup yet...")
 
     @classmethod
+    def configure_syslogng(cls, node):
+        ContainerManager.run_container(node, "syslogng", logdir=cls.logdir())
+        port = node.syslogng_port
+        LOGGER.info("syslog-ng listen on port %s (config: %s)", port, node.syslogng_confpath)
+        address = get_my_ip()
+        cls.RSYSLOG_ADDRESS = (address, port)
+
+    @classmethod
     def configure_rsyslog(cls, node, enable_ngrok=False):
         ContainerManager.run_container(node, "rsyslog", logdir=cls.logdir())
         port = node.rsyslog_port
