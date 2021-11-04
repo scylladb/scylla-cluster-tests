@@ -581,3 +581,24 @@ def test_scylla_yaml_override(db_cluster, scylla_yaml):  # pylint: disable=too-m
 
     with scylla_yaml() as props:
         assert configmap_scylla_yaml_content == props
+
+
+@pytest.mark.readonly
+def test_default_dns_policy(db_cluster: ScyllaPodCluster):
+    expected_policy = "ClusterFirstWithHostNet"
+    pods = db_cluster.k8s_cluster.kubectl("get pods -l scylla/cluster="
+                                          f"{db_cluster.params.get('k8s_scylla_cluster_name')} -o yaml",
+                                          namespace=SCYLLA_NAMESPACE)
+
+    pods_with_wrong_dns_policy = []
+    for pod in yaml.safe_load(pods.stdout)["items"]:
+        dns_policy = pod["spec"]["dnsPolicy"]
+        if dns_policy != expected_policy:
+            pods_with_wrong_dns_policy.append({"pod_name": pod["metadata"]["name"],
+                                               "dnsPolicy": dns_policy,
+                                               })
+
+    assert not pods_with_wrong_dns_policy, (
+        f"Found pods that have unexpected dnsPolicy.\n"
+        f"Expected is '{expected_policy}'.\n"
+        f"Pods: {yaml.safe_dump(pods_with_wrong_dns_policy, indent=2)}")
