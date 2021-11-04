@@ -69,7 +69,8 @@ def call(Map pipelineParams) {
 
 
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
-            string(defaultValue: "${pipelineParams.get('scylla_version', '')}", description: '', name: 'scylla_version')
+            string(defaultValue: "${pipelineParams.get('scylla_version', 'master:latest')}", description: '', name: 'scylla_version')
+            // When branching to manager version branch, set scylla_version to the latest release
             string(defaultValue: '', description: '', name: 'scylla_repo')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'spot|on_demand|spot_fleet',
