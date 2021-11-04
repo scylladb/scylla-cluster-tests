@@ -6,7 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 perfRegressionParallelPipeline(
     backend: "aws",
     aws_region: "us-east-1",
-    test_name: "performance_regression_test.YCSBPerformanceRegression1MRecordsTest",
+    test_name: "ycsb_performance_regression_test.YCSBPerformanceRegression1MRecordsTest",
     test_config: '''["test-cases/performance/ycsb/perf-basic.yaml", "test-cases/performance/ycsb/perf-regression-ycsb-1M-records.yaml"]''',
     sub_tests: ["test_latency_workload_a_with_nemesis"],
 
