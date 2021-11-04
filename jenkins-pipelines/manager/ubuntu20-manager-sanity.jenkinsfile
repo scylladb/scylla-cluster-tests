@@ -9,7 +9,6 @@ managerPipeline(
     aws_region: '''["us-east-1", "us-west-2"]''',
     test_name: 'mgmt_cli_test.MgmtCliTest.test_manager_sanity',
     test_config: '''["test-cases/manager/manager-regression-multiDC-set-distro.yaml", "configurations/manager/ubuntu20.yaml"]''',
-    scylla_version: '4.4',
 
     timeout: [time: 120, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy',
