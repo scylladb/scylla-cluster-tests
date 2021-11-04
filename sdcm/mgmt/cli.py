@@ -165,7 +165,8 @@ class ManagerTask:
         # The manager will sometimes retry a task a few times if it's defined this way, and so in the case of
         # a failure in the task the manager can present the task's status as 'ERROR (#/4)'
         tmp = str_status.split()
-        if 'ERROR (4/4)' == ' '.join(tmp[0:1]):
+        # We don't examine the whole string, since sometimes error messages can appear after the status
+        if ' '.join(tmp[0:2]) == 'ERROR (4/4)':
             return TaskStatus.ERROR_FINAL
         return TaskStatus.from_str(tmp[0])
 

@@ -1814,8 +1814,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         status = mgr_task.wait_and_get_final_status(timeout=54000, step=5, only_final=True)
         if status == TaskStatus.DONE:
-            self.log.info('Task: {} is done.'.format(mgr_task.id))
-        elif status == TaskStatus.ERROR:
+            self.log.info("Task: %s is done.", mgr_task.id)
+        elif status in (TaskStatus.ERROR, TaskStatus.ERROR_FINAL):
             assert False, f'Backup task {mgr_task.id} failed'
         else:
             mgr_task.stop()
