@@ -224,7 +224,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         if self.stress_num > 1:
             cpu_options = '--cpuset-cpus="{cpu_idx}"'
 
-        docker = RemoteDocker(loader, "scylladb/hydra-loaders:ycsb-jdk8-20200326",
+        docker = RemoteDocker(loader, "scylladb/hydra-loaders:ycsb-jdk8-20211104",
                               extra_docker_opts=f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker}')
         self.copy_template(docker)
         stress_cmd = self.build_stress_cmd()

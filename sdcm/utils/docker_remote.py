@@ -43,7 +43,7 @@ class RemoteDocker(BaseNode):
         :return: the external port automatically open by docker
         """
         external_port = self.node.remoter.run(f"docker port {self.docker_id} {internal_port}").stdout.strip()
-        return external_port
+        return external_port.splitlines()[0]
 
     def get_log(self):
         return self.node.remoter.run(f"docker logs {self.docker_id}").stdout.strip()

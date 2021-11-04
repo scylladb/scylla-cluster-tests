@@ -167,8 +167,8 @@ def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, eve
 def test_03_cql(request, docker_scylla, prom_address):
     loader_set = LocalLoaderSetDummy()
 
-    cmd = 'bin/ycsb load cassandra-cql -P workloads/workloada -threads 5 -p recordcount=1000000 ' \
-          '-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -s'
+    cmd = 'bin/ycsb load scylla -P workloads/workloada -threads 5 -p recordcount=1000000 ' \
+          f'-p fieldcount=10 -p fieldlength=1024 -p operationcount=200200300 -p scylla.hosts={docker_scylla.ip_address} -s'
     ycsb_thread = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=5, params=TEST_PARAMS)
 
     def cleanup_thread():
