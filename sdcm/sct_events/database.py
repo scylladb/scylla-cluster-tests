@@ -334,11 +334,9 @@ def get_pattern_to_event_to_func_mapping(node: str) \
                                                    .format(event_type=event_type,
                                                            period_type=EventPeriod.BEGIN.value))
         if len(begun_events) > 1:
-            LOGGER.warning("Found {event_count} events of type {event_type} with period {event_period}. "
-                           "Will apply the function to most recent event by default."
-                           .format(event_count=len(begun_events),
-                                   event_type=event_type,
-                                   event_period=EventPeriod.BEGIN.value))
+            LOGGER.debug("Found %s events of type %s with period %s. "
+                         "Will apply the function to most recent event by default.",
+                         len(begun_events), event_type, EventPeriod.BEGIN.value)
         event = begun_events[-1]
         event.end_event()
 
