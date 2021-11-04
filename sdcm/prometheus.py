@@ -200,12 +200,9 @@ class PrometheusAlertManagerListener(threading.Thread):
                 new_event.period_type = EventPeriod.INFORMATIONAL.value
                 new_event.end_event()
             if len(begun_events) > 1:
-                LOGGER.warning("Found {event_count} events of type '{alert}' started at {starts_at} with period "
-                               "{event_period}. Will apply the function to most recent event by default."
-                               .format(event_count=len(begun_events),
-                                       alert=alert_name,
-                                       starts_at=alert.get("startsAt"),
-                                       event_period=EventPeriod.BEGIN.value))
+                LOGGER.debug("Found %s events of type '%s' started at %s with period %s. "
+                             "Will apply the function to most recent event by default.",
+                             len(begun_events), alert_name, alert.get("startsAt"), EventPeriod.BEGIN.value)
             if begun_events:
                 event = begun_events[-1]
                 event.end_event()
