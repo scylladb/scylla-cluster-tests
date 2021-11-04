@@ -166,12 +166,16 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                 docker.send_files(tmp_file.name, os.path.join('/tmp', 'aws_empty_file'))
 
     def build_stress_cmd(self):
+        hosts = ",".join([node.ip_address for node in self.node_list])
         stress_cmd = f'{self.stress_cmd} -s '
         if 'dynamodb' in self.stress_cmd:
             stress_cmd += ' -P /tmp/dynamodb.properties'
         if 'cassandra-cql' in self.stress_cmd:
-            hosts = ",".join([i.ip_address for i in self.node_list])
-            stress_cmd += f' -p hosts={hosts} -p cassandra.readconsistencylevel=QUORUM -p cassandra.writeconsistencylevel=QUORUM'
+            stress_cmd += f' -p hosts={hosts}' \
+                          f' -p cassandra.readconsistencylevel=QUORUM' \
+                          f' -p cassandra.writeconsistencylevel=QUORUM'
+        if "scylla" in self.stress_cmd:
+            stress_cmd += f" -p scylla.hosts={hosts}"
         if 'maxexecutiontime' not in stress_cmd:
             stress_cmd += f' -p maxexecutiontime={self.timeout}'
         return stress_cmd

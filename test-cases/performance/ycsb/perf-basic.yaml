@@ -32,24 +32,10 @@ pre_create_keyspace: [
 # there is no sense to use more than 1 loader for 3 nodes cluster,
 # but this is just for example
 prepare_write_cmd: >-2
-  bin/ycsb load scylla -P workloads/workloada
-  -threads 84 -p recordcount=1000000
-  -p readproportion=0 -p updateproportion=0
+  bin/ycsb load scylla -P workloads/workloadc
+  -p readproportion=0 -p insertproportion=1
   -p fieldcount=10 -p fieldlength=128
-  -p insertstart=0 -p insertcount=1000000
   -p scylla.username=cassandra -p scylla.password=cassandra
-
-#  bin/ycsb run dynamodb -P workloads/workloada -threads 100 -p recordcount=30000000
-#  -p requestdistribution=uniform -p fieldcount=10 -p fieldlength=256
-#  -p readproportion=0 -p updateproportion=0 -p scanproportion=0 -p insertproportion=1
-#  -p maxexecutiontime=1200 -p operationcount=60000000
-
-
-#  >-2
-#  bin/ycsb load scylla -s -P workloads/workloadc
-#  -p readproportion=0 -p insertproportion=1
-#  -p fieldcount=10 -p fieldlength=128 -p insertstart=0
-#  -p cassandra.username=cassandra -p cassandra.password=cassandra
 
 # --target must be set to have correct latency results for const throughput - see coordinated omission avoidance problem
 #
@@ -70,15 +56,9 @@ prepare_write_cmd: >-2
 #
 # $ bin/ycsb run scylla -s -t -P workloads/workloada -target 120000 -threads 840 -p recordcount=1000000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000 -p scylla.coreconnections=280 -p scylla.maxconnections=280 -p scylla.username=cassandra -p scylla.password=cassandra -p scylla.hosts=10.0.2.51,10.0.3.133,10.0.3.67 -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE -p scylla.tokenaware=true
 stress_cmd_m: >-2
-  bin/ycsb run scylla -P workloads/workloada -target 120000 -threads 840
-  -p recordcount=1000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000
-  -p scylla.coreconnections=280 -p scylla.maxconnections=280
-  -p scylla.username=cassandra -p scylla.password=cassandra
-  -p scylla.tokenaware=true -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE
-
-#  -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000
-#  -p scylla.username=cassandra -p scylla.password=cassandra -p scylla.tokenaware=true
-#  -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE
+  -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000
+  -p scylla.username=cassandra -p scylla.password=cassandra -p scylla.tokenaware=true
+  -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE
 
 n_db_nodes: 3
 n_loaders: 1
