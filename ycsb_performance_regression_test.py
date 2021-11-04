@@ -39,30 +39,24 @@ class BaseYCSBPerformanceRegressionTest(BasePerformanceRegression):
 
     def create_ycsb_commands(self):
         threads_size = self.params.get("n_db_nodes") * self.scylla_connection
-        setattr(
-            self.params,
-            "prepare_write_cmd",
-            f"{self.params['prepare_write_cmd']} "
-            f" -target {self.target_size}"
-            f" -threads {threads_size}"
-            f" -p recordcount={self.records_size}"
-            f" -p insertcount={self.records_size}"
-            f" -p scylla.coreconnections={self.scylla_connection}"
+        self.params["prepare_write_cmd"] = \
+            f"{self.params['prepare_write_cmd']}" \
+            f" -target {self.target_size}" \
+            f" -threads {threads_size}" \
+            f" -p recordcount={self.records_size}" \
+            f" -p insertcount={self.records_size}" \
+            f" -p scylla.coreconnections={self.scylla_connection}" \
             f" -p scylla.maxconnections={self.scylla_connection}"
-        )
 
         for workload_type in self.ycsb_workloads:
-            setattr(
-                self.params,
-                self.stress_cmd.format(workload_type),
-                f"bin/ycsb run scylla -s -P workloads/workload{workload_type}"
-                f" -target {self.target_size}"
-                f" -threads {threads_size}"
-                f" -p recordcount={self.records_size}"
-                f" -p scylla.coreconnections={self.scylla_connection}"
-                f" -p scylla.maxconnections={self.scylla_connection}"
+            self.params[self.stress_cmd.format(workload_type)] = \
+                f"bin/ycsb run scylla -s -P workloads/workload{workload_type}" \
+                f" -target {self.target_size}" \
+                f" -threads {threads_size}" \
+                f" -p recordcount={self.records_size}" \
+                f" -p scylla.coreconnections={self.scylla_connection}" \
+                f" -p scylla.maxconnections={self.scylla_connection}" \
                 f" {self.params['stress_cmd_m']}"
-            )
 
         InfoEvent(message="All params:\n(%s)" % pformat(self.params)).publish()
 
