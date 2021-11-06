@@ -21,8 +21,7 @@ from sdcm import cluster
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
 from sdcm.provision.aws.provisioner import AWSProvisioner
 from sdcm.provision.aws.constants import MAX_SPOT_DURATION_TIME
-from sdcm.provision.common.provisioner import ProvisionNotGuaranteedParams, ProvisionGuaranteedParams, TagsType, \
-    ProvisionParamsBase
+from sdcm.provision.common.provisioner import ProvisionParameters, TagsType
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.aws.instance_parameters_builder import ScyllaInstanceParamsBuilder, \
     LoaderInstanceParamsBuilder, MonitorInstanceParamsBuilder, OracleScyllaInstanceParamsBuilder
@@ -183,52 +182,57 @@ class ClusterBase(BaseModel):
         ))
         return on_demand_price * self.params.get('spot_max_price')
 
-    def _provision_request_spot(self, region_id: int) -> ProvisionParamsBase:
-        return ProvisionNotGuaranteedParams(
+    def _provision_request_spot(self, region_id: int) -> ProvisionParameters:
+        return ProvisionParameters(
             name='Spot',
+            spot=True,
             region_name=self._region(region_id),
             availability_zone=self._az(region_id),
         )
 
-    def _provision_request_spot_low_price(self, region_id: int) -> ProvisionParamsBase:
-        return ProvisionNotGuaranteedParams(
+    def _provision_request_spot_low_price(self, region_id: int) -> ProvisionParameters:
+        return ProvisionParameters(
             name='Spot(Low Price)',
+            spot=True,
             region_name=self._region(region_id),
             availability_zone=self._az(region_id),
             price=self._spot_low_price(region_id)
         )
 
-    def _provision_request_spot_duration(self, region_id: int) -> Optional[ProvisionParamsBase]:
+    def _provision_request_spot_duration(self, region_id: int) -> Optional[ProvisionParameters]:
         if self._spot_duration is None:
             return None
-        return ProvisionNotGuaranteedParams(
+        return ProvisionParameters(
             name='Spot(Duration)',
+            spot=True,
             region_name=self._region(region_id),
             availability_zone=self._az(region_id),
             duration=self._spot_duration
         )
 
-    def _provision_request_spot_duration_low_price(self, region_id: int) -> Optional[ProvisionParamsBase]:
+    def _provision_request_spot_duration_low_price(self, region_id: int) -> Optional[ProvisionParameters]:
         if self._spot_duration is None:
             return None
-        return ProvisionNotGuaranteedParams(
+        return ProvisionParameters(
             name='Spot(Duration, Low Price)',
+            spot=True,
             region_name=self._region(region_id),
             availability_zone=self._az(region_id),
             price=self._spot_low_price(region_id),
             duration=self._spot_duration
         )
 
-    def _provision_request_on_demand(self, region_id: int) -> Optional[ProvisionParamsBase]:
+    def _provision_request_on_demand(self, region_id: int) -> Optional[ProvisionParameters]:
         if self._spot_duration is None:
             return None
-        return ProvisionGuaranteedParams(
+        return ProvisionParameters(
             name='On Demand',
+            spot=False,
             region_name=self._region(region_id),
             availability_zone=self._az(region_id),
         )
 
-    def provision_plan(self, region_id: int) -> List[ProvisionParamsBase]:
+    def provision_plan(self, region_id: int) -> List[ProvisionParameters]:
         if self._instance_provision == INSTANCE_PROVISION_ON_DEMAND:
             return [self._provision_request_on_demand(region_id)]
         provision_plan = []
