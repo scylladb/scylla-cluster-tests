@@ -26,8 +26,7 @@ from sdcm.provision.aws.utils import ec2_services, ec2_clients, find_instance_by
     create_spot_instance_request
 from sdcm.provision.aws.constants import SPOT_CNT_LIMIT, SPOT_FLEET_LIMIT, SPOT_REQUEST_TIMEOUT, STATUS_FULFILLED, \
     SPOT_STATUS_UNEXPECTED_ERROR, FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR, MAX_SPOT_DURATION_TIME
-from sdcm.provision.common.provisioner import TagsType, ProvisionGuaranteedParams, ProvisionerBase, \
-    ProvisionNotGuaranteedParams, ProvisionParamsBase
+from sdcm.provision.common.provisioner import TagsType, ProvisionParameters, ProvisionerBase
 
 LOGGER = logging.getLogger(__name__)
 
@@ -39,7 +38,7 @@ class AWSProvisioner(ProvisionerBase):  # pylint: disable=too-few-public-methods
 
     def provision(  # pylint: disable=too-many-arguments
             self,
-            provision_parameters: ProvisionParamsBase,
+            provision_parameters: ProvisionParameters,
             instance_parameters: AWSInstanceParams,
             count: int,
             tags: Union[List[TagsType], TagsType] = None,
@@ -59,25 +58,24 @@ class AWSProvisioner(ProvisionerBase):  # pylint: disable=too-few-public-methods
             tag = tags[node_id]
             tag['Name'] = name
 
-        if isinstance(provision_parameters, ProvisionGuaranteedParams):
-            if provision_parameters.price:
-                raise ValueError("AWS ProvisionGuaranteed(on-demand) does not support price targeting")
-            if provision_parameters.duration:
-                LOGGER.info("AWS ProvisionGuaranteed(on-demand) does not support duration")
-            return self._provision_guaranteed(
+        if provision_parameters.spot:
+            return self._provision_spot_instances(
                 provision_parameters=provision_parameters,
                 instance_parameters=instance_parameters,
                 count=count,
                 tags=tags,
             )
-        if isinstance(provision_parameters, ProvisionNotGuaranteedParams):
-            return self._provision_not_guaranteed(
-                provision_parameters=provision_parameters,
-                instance_parameters=instance_parameters,
-                count=count,
-                tags=tags,
-            )
-        raise RuntimeError("Unexpected provision_parameters type")
+        # None spot instances are called On-Demand instances in AWS naming
+        if provision_parameters.price:
+            raise ValueError("AWS does not support price targeting for on-demand instances")
+        if provision_parameters.duration:
+            LOGGER.info("AWS does not support duration for on-demand instances")
+        return self._provision_on_demand_instances(
+            provision_parameters=provision_parameters,
+            instance_parameters=instance_parameters,
+            count=count,
+            tags=tags,
+        )
 
     @staticmethod
     def _is_provision_type_fleet(count: int) -> bool:
@@ -91,15 +89,15 @@ class AWSProvisioner(ProvisionerBase):  # pylint: disable=too-few-public-methods
         return datetime.datetime.now() + datetime.timedelta(minutes=SPOT_REQUEST_TIMEOUT / 60 + 5)
 
     @staticmethod
-    def _ec2_client(provision_parameters: ProvisionParamsBase) -> EC2Client:
+    def _ec2_client(provision_parameters: ProvisionParameters) -> EC2Client:
         return ec2_clients[provision_parameters.region_name]
 
     @staticmethod
-    def _full_availability_zone_name(provision_parameters: ProvisionParamsBase) -> str:
+    def _full_availability_zone_name(provision_parameters: ProvisionParameters) -> str:
         return provision_parameters.region_name + provision_parameters.availability_zone
 
     @staticmethod
-    def _spot_block_duration(provision_parameters: ProvisionParamsBase) -> Optional[int]:
+    def _spot_block_duration(provision_parameters: ProvisionParameters) -> Optional[int]:
         """
         A period in minutes AWS will hold spot instance for us.
         AWS have limit on it, if test is going to be run
@@ -115,8 +113,8 @@ class AWSProvisioner(ProvisionerBase):  # pylint: disable=too-few-public-methods
         return int(provision_parameters.duration)
 
     @staticmethod
-    def _provision_guaranteed(
-            provision_parameters: ProvisionParamsBase,
+    def _provision_on_demand_instances(
+            provision_parameters: ProvisionParameters,
             instance_parameters: AWSInstanceParams,
             count: int,
             tags: List[TagsType]) -> List[Instance]:
@@ -140,9 +138,9 @@ class AWSProvisioner(ProvisionerBase):  # pylint: disable=too-few-public-methods
                 )
         return instances
 
-    def _provision_not_guaranteed(
+    def _provision_spot_instances(
             self,
-            provision_parameters: ProvisionParamsBase,
+            provision_parameters: ProvisionParameters,
             instance_parameters: AWSInstanceParams,
             count: int,
             tags: Union[List[TagsType], TagsType]) -> List[Instance]:
@@ -155,13 +153,13 @@ class AWSProvisioner(ProvisionerBase):  # pylint: disable=too-few-public-methods
                 instances_to_provision = rest_to_provision
 
             if self._is_provision_type_fleet(count) and instances_to_provision > 1:
-                new_instances = self._provision_spot_fleet(
+                new_instances = self._execute_spot_fleet_instance_request(
                     provision_parameters=provision_parameters,
                     instance_parameters=instance_parameters,
                     count=instances_to_provision,
                     tags=tags)
             else:
-                new_instances = self._provision_spot_instances(
+                new_instances = self._execute_spot_instance_request(
                     provision_parameters=provision_parameters,
                     instance_parameters=instance_parameters,
                     count=instances_to_provision,
@@ -170,9 +168,9 @@ class AWSProvisioner(ProvisionerBase):  # pylint: disable=too-few-public-methods
             rest_to_provision -= instances_to_provision
         return provisioned_instances
 
-    def _provision_spot_fleet(
+    def _execute_spot_fleet_instance_request(
             self,
-            provision_parameters: ProvisionParamsBase,
+            provision_parameters: ProvisionParameters,
             instance_parameters: AWSInstanceParams,
             count: int,
             tags: List[TagsType]) -> List[Instance]:
@@ -208,7 +206,7 @@ class AWSProvisioner(ProvisionerBase):  # pylint: disable=too-few-public-methods
 
     def _get_provisioned_fleet_instance_ids(
             self,
-            provision_parameters: ProvisionParamsBase,
+            provision_parameters: ProvisionParameters,
             request_ids: List[str]) -> Optional[List[str]]:
         try:
             resp = self._ec2_client(provision_parameters).describe_spot_fleet_requests(SpotFleetRequestIds=request_ids)
@@ -237,7 +235,7 @@ class AWSProvisioner(ProvisionerBase):  # pylint: disable=too-few-public-methods
             return []
         return [inst['InstanceId'] for inst in resp['ActiveInstances']]
 
-    def _wait_for_fleet_request_done(self, provision_parameters: ProvisionParamsBase, request_id: str):
+    def _wait_for_fleet_request_done(self, provision_parameters: ProvisionParameters, request_id: str):
         """
         Wait for spot fleet request fulfilled
         :param request_id: spot fleet request id
@@ -258,9 +256,9 @@ class AWSProvisioner(ProvisionerBase):  # pylint: disable=too-few-public-methods
                     SpotFleetRequestIds=[request_id], TerminateInstances=True)
         return provisioned_instance_ids
 
-    def _provision_spot_instances(
+    def _execute_spot_instance_request(
             self,
-            provision_parameters: ProvisionParamsBase,
+            provision_parameters: ProvisionParameters,
             instance_parameters: AWSInstanceParams,
             count: int,
             tags: List[TagsType]) -> List[Instance]:
