@@ -13,12 +13,16 @@
 #
 # Copyright (c) 2016 ScyllaDB
 
+# pylint: disable=too-many-lines
+
 from random import randint
 from pathlib import Path
 from functools import cached_property
 import os
 import re
 import time
+from textwrap import dedent
+
 import boto3
 
 import libcloud.storage.types
@@ -64,12 +68,22 @@ class BackupFunctionsMixIn:
                 self.log.debug("cmd %s failed with error %s, will retry", cmd, ex)
 
     def install_awscli_dependencies(self, node):
-        self._run_cmd_with_retry(executor=node.remoter.sudo, cmd=shell_script_cmd("""\
+        if node.is_ubuntu() or node.is_debian():
+            cmd = dedent("""
+            apt update
+            apt install -y python3-pip
+            pip install awscli==1.18.140
+            """)
+        elif node.is_rhel_like():
+            cmd = dedent("""
             yum install -y epel-release
             yum install -y python-pip
             yum remove -y epel-release
             pip install awscli==1.18.140
-        """))
+            """)
+        else:
+            raise RuntimeError("This distro is not supported")
+        self._run_cmd_with_retry(executor=node.remoter.sudo, cmd=shell_script_cmd(cmd))
 
     def install_gsutil_dependencies(self, node):
         self._run_cmd_with_retry(executor=node.remoter.run, cmd=shell_script_cmd("""\
