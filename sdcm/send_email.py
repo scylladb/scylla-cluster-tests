@@ -147,6 +147,7 @@ class BaseEmailReporter:
         "test_name",
         "test_status",
         "username",
+        "restore_monitor_job_base_link",
     )
     _fields = ()
     email_template_file = 'results_base.html'
