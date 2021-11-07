@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2021 ScyllaDB
 import time
+import os
 import logging
 import unittest.mock
 from uuid import UUID
@@ -174,6 +175,14 @@ class ArgusTestRun:
         "unknown": _prepare_unknown_resource_setup,
     }
     CONFIG = ArgusConfig(**KeyStore().get_argusdb_credentials(), keyspace_name="argus")
+    AVAILABLE_RELEASES = [
+        "argus-integration",
+        "master",
+        "branch-2022.1",
+        "branch-4.6",
+        "manager-2.7",
+        "operator-1.6",
+    ]
 
     def __init__(self):
         pass
@@ -192,13 +201,15 @@ class ArgusTestRun:
         if cls.TESTRUN_INSTANCE:
             raise ArgusTestRunError("Instance already initialized")
 
+        release_name = os.getenv("GIT_BRANCH", get_git_current_branch()).split("/")[-1]
+        if release_name not in cls.AVAILABLE_RELEASES:
+            raise ArgusTestRunError("Refusing to track a non-whitelisted branch", release_name, cls.AVAILABLE_RELEASES)
         LOGGER.info("Preparing Test Details...")
         test_group, *_ = test_module_path.split(".")
         config_files = sct_config.get("config_files")
         job_name = get_job_name()
         job_url = get_job_url()
         started_by = get_username()
-        release_name = sct_config.environment.get("release_name", get_git_current_branch())
 
         details = TestDetails(name=get_test_name(), scm_revision_id=get_git_commit_id(), started_by=started_by,
                               build_job_name=job_name, build_job_url=job_url,
