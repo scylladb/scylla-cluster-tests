@@ -85,6 +85,7 @@
     {% if test_id %}
     <div>
         Restore Monitor Stack command: `$ hydra investigate show-monitor {{ test_id }}`<br>
+        Restore monitor on AWS instance using [Jenkins job]({{ restore_monitor_job_base_link }}test_id={{ test_id }})<br>
         Show all stored logs command: `$ hydra investigate show-logs {{ test_id }}`<br>
         <br>
         Test id: `{{ test_id }}`<br>

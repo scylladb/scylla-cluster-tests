@@ -241,11 +241,12 @@
 
 {%- block hydra_commands -%}
     <h3>
-        Hydra commands:
+        Restore commands:
     </h3>
     <div>
         <ul>
             <li>Restore Monitor Stack command: $ hydra investigate show-monitor {{ current_main_test.test_id }}</li>
+            <li>Restore monitor on AWS instance using <a href="{{ restore_monitor_job_base_link }}test_id={{ test_id }}"> Jenkins job </a></li>
             <li>Show all stored logs command: $ hydra investigate show-logs {{ current_main_test.test_id }}</li>
         </ul>
     </div>

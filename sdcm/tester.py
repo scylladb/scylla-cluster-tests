@@ -2629,6 +2629,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             scylla_instance_type = "N/A"
         job_name = os.environ.get('JOB_NAME').split("/")[-1] if os.environ.get('JOB_NAME') else config_file_name
         nodes_shards = self.all_nodes_scylla_shards()
+        restore_monitor_job_base_link = \
+            "https://jenkins.scylladb.com/view/QA/job/QA-tools/job/hydra-show-monitor/parambuild/?"
 
         return {"backend": backend,
                 "build_id": os.environ.get('BUILD_NUMBER', ''),
@@ -2651,7 +2653,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 "test_id": self.test_id,
                 "test_name": self.id(),
                 "test_status": test_status,
-                "username": get_username(), }
+                "username": get_username(),
+                "restore_monitor_job_base_link": restore_monitor_job_base_link}
 
     @silence()
     def tag_ami_with_result(self):
