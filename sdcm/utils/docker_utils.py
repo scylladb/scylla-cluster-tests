@@ -194,6 +194,8 @@ class ContainerManager:
             name = _Name(name)
             run_args = {"detach": True,
                         "labels": instance.tags, }
+            if image_tag := cls._get_container_image_tag(instance, name):
+                run_args["image"] = image_tag
             run_args.update(getattr(instance, f"{name.family}_container_run_args", cls._run_args)(**extra_run_args))
             docker_client = cls._get_docker_client_for_new_container(instance, name)
             if name.member and "name" in run_args:
@@ -203,6 +205,8 @@ class ContainerManager:
                 LOGGER.info("Found container %s, re-use it and re-run", container)
                 container.start()
             except (NotFound, NullResource, ):
+                if run_args.pop("pull", None):
+                    docker_client.images.pull(*image_tag.split(":", maxsplit=1))
                 container = docker_client.containers.run(**run_args)
             instance._containers[name.full] = container
             LOGGER.info("Container %s started.", container)

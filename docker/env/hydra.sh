@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
+
 set -e
+
 CMD=$@
 DOCKER_ENV_DIR=$(readlink -f "$0")
 DOCKER_ENV_DIR=$(dirname "${DOCKER_ENV_DIR}")
@@ -16,8 +18,11 @@ HOME_DIR=${HOME}
 CREATE_RUNNER_INSTANCE=""
 RUNNER_IP_FILE="${SCT_DIR}/sct_runner_ip"
 RUNNER_IP=""
+RUNNER_CMD=""
+AWS_MOCK=""
 
 HYDRA_DRY_RUN=""
+HYDRA_HELP=""
 
 export SCT_TEST_ID=${SCT_TEST_ID:-$(uuidgen)}
 export GIT_USER_EMAIL=$(git config --get user.email)
@@ -34,7 +39,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --execute-on-runner)
             RUNNER_IP="$2"
-            shift
+            shift 2
+            ;;
+        --aws-mock)
+            AWS_MOCK="1"
             shift
             ;;
         --dry-run-hydra)
@@ -42,20 +50,21 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --install-package-from-directory)
-            SCT_ARGUMENTS+=("$1")
-            SCT_ARGUMENTS+=("$2")
-            shift
-            shift
+            SCT_ARGUMENTS+=("$1" "$2")
+            shift 2
             ;;
-        --install-bash-completion|--help)
+        --install-bash-completion)
             SCT_ARGUMENTS+=("$1")
             shift
             ;;
-        -*|--*)
+        --help)
+            HYDRA_HELP="1"
+            SCT_ARGUMENTS+=("$1")
+            shift
+            ;;
+        -*)
             echo "Unknown argument '$1'"
             exit 1
-            shift
-            shift
             ;;
         *)
             break
@@ -71,9 +80,12 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         -b|--backend)
             SCT_CLUSTER_BACKEND="$2"
+            HYDRA_COMMAND+=("$1" "$2")
+            shift 2
+            ;;
+        --help)
+            HYDRA_HELP="1"
             HYDRA_COMMAND+=("$1")
-            HYDRA_COMMAND+=("$2")
-            shift
             shift
             ;;
         *)
@@ -142,10 +154,12 @@ else
 fi
 
 # Check for SSH keys
-if [ -z "$HYDRA_DRY_RUN" ]; then
-    ${SCT_DIR}/get-qa-ssh-keys.sh
-else
-    echo ${SCT_DIR}/get-qa-ssh-keys.sh
+if [[ -z "$HYDRA_HELP" ]]; then
+    if [ -z "$HYDRA_DRY_RUN" ]; then
+        ${SCT_DIR}/get-qa-ssh-keys.sh
+    else
+        echo ${SCT_DIR}/get-qa-ssh-keys.sh
+    fi
 fi
 
 # change ownership of results directories
@@ -160,6 +174,8 @@ else
     # Setting it for testing purpose
     DOCKER_GROUP_ARGS='--group-add 1 --group-add 2 --group-add 3'
 fi
+
+DOCKER_ADD_HOST_ARGS=()
 
 # export all SCT_* env vars into the docker run
 SCT_OPTIONS=$(env | grep SCT_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
@@ -180,77 +196,42 @@ function run_in_docker () {
     CMD_TO_RUN=$1
     REMOTE_DOCKER_HOST=$2
     echo "Going to run '${CMD_TO_RUN}'..."
-    if [ -z "$HYDRA_DRY_RUN" ]; then
-        docker ${REMOTE_DOCKER_HOST} run --rm ${TTY_STDIN} --privileged \
-            ${HOST_NAME_PARAM} \
-            -l "TestId=${SCT_TEST_ID}" \
-            -l "RunByUser=${RUN_BY_USER}" \
-            -v /var/run:/run \
-            -v "${SCT_DIR}:${SCT_DIR}" \
-            -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
-            -v /tmp:/tmp \
-            -v /var/tmp:/var/tmp \
-            -v "${HOME_DIR}:${HOME_DIR}" \
-            -v /etc/passwd:/etc/passwd:ro \
-            -v /etc/group:/etc/group:ro \
-            -v /etc/sudoers:/etc/sudoers:ro \
-            -v /etc/sudoers.d/:/etc/sudoers.d:ro \
-            -v /etc/shadow:/etc/shadow:ro \
-            -w "${SCT_DIR}" \
-            -e JOB_NAME="${JOB_NAME}" \
-            -e BUILD_URL="${BUILD_URL}" \
-            -e BUILD_NUMBER="${BUILD_NUMBER}" \
-            -e _SCT_BASE_DIR="${SCT_DIR}" \
-            -e GIT_USER_EMAIL \
-            -e RUNNER_IP \
-            -u ${USER_ID} \
-            ${DOCKER_GROUP_ARGS[@]} \
-            ${SCT_OPTIONS} \
-            ${PYTEST_OPTIONS} \
-            ${BUILD_OPTIONS} \
-            ${JENKINS_OPTIONS} \
-            ${AWS_OPTIONS} \
-            --env GIT_BRANCH \
-            --net=host \
-            --name="${SCT_TEST_ID}_$(date +%s)" \
-            ${DOCKER_REPO}:${VERSION} \
-            /bin/bash -c "sudo ln -s '${SCT_DIR}' '${WORK_DIR}'; /sct/get-qa-ssh-keys.sh; /sct/install_argus.sh; ${TERM_SET_SIZE} eval '${CMD_TO_RUN}'"
-    else
-        echo docker ${REMOTE_DOCKER_HOST} run --rm ${TTY_STDIN} --privileged \
-            ${HOST_NAME_PARAM} \
-            -l "TestId=${SCT_TEST_ID}" \
-            -l "RunByUser=${RUN_BY_USER}" \
-            -v /var/run:/run \
-            -v "${SCT_DIR}:${SCT_DIR}" \
-            -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
-            -v /tmp:/tmp \
-            -v /var/tmp:/var/tmp \
-            -v "${HOME_DIR}:${HOME_DIR}" \
-            -v /etc/passwd:/etc/passwd:ro \
-            -v /etc/group:/etc/group:ro \
-            -v /etc/sudoers:/etc/sudoers:ro \
-            -v /etc/sudoers.d/:/etc/sudoers.d:ro \
-            -v /etc/shadow:/etc/shadow:ro \
-            -w "${SCT_DIR}" \
-            -e JOB_NAME="${JOB_NAME}" \
-            -e BUILD_URL="${BUILD_URL}" \
-            -e BUILD_NUMBER="${BUILD_NUMBER}" \
-            -e _SCT_BASE_DIR="${SCT_DIR}" \
-            -e GIT_USER_EMAIL \
-            -e RUNNER_IP \
-            -u ${USER_ID} \
-            ${DOCKER_GROUP_ARGS[@]} \
-            ${SCT_OPTIONS} \
-            ${PYTEST_OPTIONS} \
-            ${BUILD_OPTIONS} \
-            ${JENKINS_OPTIONS} \
-            ${AWS_OPTIONS} \
-            --env GIT_BRANCH \
-            --net=host \
-            --name="${SCT_TEST_ID}_$(date +%s)" \
-            ${DOCKER_REPO}:${VERSION} \
-            /bin/bash -c "sudo ln -s '${SCT_DIR}' '${WORK_DIR}'; /sct/get-qa-ssh-keys.sh; /sct/install_argus.sh; ${TERM_SET_SIZE} eval '${CMD_TO_RUN}'"
-    fi
+    $([[ -n "$HYDRA_DRY_RUN" ]] && echo echo) \
+    docker ${REMOTE_DOCKER_HOST} run --rm ${TTY_STDIN} --privileged \
+        -h ${HOST_NAME} \
+        -l "TestId=${SCT_TEST_ID}" \
+        -l "RunByUser=${RUN_BY_USER}" \
+        -v /var/run:/run \
+        -v "${SCT_DIR}:${SCT_DIR}" \
+        -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
+        -v /tmp:/tmp \
+        -v /var/tmp:/var/tmp \
+        -v "${HOME_DIR}:${HOME_DIR}" \
+        -v /etc/passwd:/etc/passwd:ro \
+        -v /etc/group:/etc/group:ro \
+        -v /etc/sudoers:/etc/sudoers:ro \
+        -v /etc/sudoers.d/:/etc/sudoers.d:ro \
+        -v /etc/shadow:/etc/shadow:ro \
+        -w "${SCT_DIR}" \
+        -e JOB_NAME="${JOB_NAME}" \
+        -e BUILD_URL="${BUILD_URL}" \
+        -e BUILD_NUMBER="${BUILD_NUMBER}" \
+        -e _SCT_BASE_DIR="${SCT_DIR}" \
+        -e GIT_USER_EMAIL \
+        -e RUNNER_IP \
+        -u ${USER_ID} \
+        ${DOCKER_GROUP_ARGS[@]} \
+        ${DOCKER_ADD_HOST_ARGS[@]} \
+        ${SCT_OPTIONS} \
+        ${PYTEST_OPTIONS} \
+        ${BUILD_OPTIONS} \
+        ${JENKINS_OPTIONS} \
+        ${AWS_OPTIONS} \
+        --env GIT_BRANCH \
+        --net=host \
+        --name="${SCT_TEST_ID}_$(date +%s)" \
+        ${DOCKER_REPO}:${VERSION} \
+        /bin/bash -c "${PREPARE_CMD}; ${TERM_SET_SIZE} eval '${CMD_TO_RUN}'"
 }
 
 if [[ -n "$RUNNER_IP" ]]; then
@@ -332,22 +313,39 @@ if [[ -n "$RUNNER_IP" ]]; then
     fi
 
     SCT_DIR="/home/ubuntu/scylla-cluster-tests"
+    HOST_NAME="ip-${RUNNER_IP//./-}"
     USER_ID=1000
-    if [ -z "${DOCKER_GROUP_ARGS[@]}" ]; then
-        for gid in $(ssh -o StrictHostKeyChecking=no ubuntu@${RUNNER_IP} id -G); do
-            DOCKER_GROUP_ARGS+=(--group-add "$gid")
-        done
-    fi
-
+    RUNNER_CMD="ssh -o StrictHostKeyChecking=no ubuntu@${RUNNER_IP}"
     DOCKER_HOST="-H ssh://ubuntu@${RUNNER_IP}"
-    HOST_NAME_PARAM="-h ip-${RUNNER_IP//./-}"
-else
-    if [ -z "${DOCKER_GROUP_ARGS[@]}" ]; then
-        for gid in $(id -G); do
-            DOCKER_GROUP_ARGS+=(--group-add "$gid")
-        done
+fi
+
+if [ -z "${DOCKER_GROUP_ARGS[@]}" ]; then
+    for gid in $(${RUNNER_CMD} id -G); do
+        DOCKER_GROUP_ARGS+=(--group-add "$gid")
+    done
+fi
+
+PREPARE_CMD="sudo ln -s '${SCT_DIR}' '${WORK_DIR}'"
+
+if [[ -n "${AWS_MOCK}" ]]; then
+    if [[ -z "${HYDRA_DRY_RUN}" ]]; then
+        AWS_MOCK_IP=$(${RUNNER_CMD} cat aws_mock_ip)
+        MOCKED_HOSTS=$(${RUNNER_CMD} openssl s_client -connect "${AWS_MOCK_IP}:443" </dev/null 2>/dev/null \
+                       | openssl x509 -noout -ext subjectAltName \
+                       | grep -Po '(?<=DNS:)[^,]+')
+    else
+        AWS_MOCK_IP=127.0.0.1
+        MOCKED_HOSTS="aws-mock.itself scylla-qa-keystore.s3.amazonaws.com ec2.eu-west-2.amazonaws.com"
     fi
-    HOST_NAME_PARAM="-h ${HOST_NAME}"
+    for host in ${MOCKED_HOSTS}; do
+        echo "Mock requests to ${host} using ${AWS_MOCK_IP}"
+        DOCKER_ADD_HOST_ARGS+=(--add-host "${host}:${AWS_MOCK_IP}")
+    done
+    PREPARE_CMD+="; curl -sSk https://aws-mock.itself/install-ca.sh | bash"
+fi
+
+if [[ -z "${HYDRA_HELP}" ]]; then
+    PREPARE_CMD+="; ${WORK_DIR}/get-qa-ssh-keys.sh; ${WORK_DIR}/install_argus.sh"
 fi
 
 COMMAND=${HYDRA_COMMAND[0]}

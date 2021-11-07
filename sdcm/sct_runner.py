@@ -41,11 +41,12 @@ from sdcm.utils.gce_utils import get_gce_service
 from sdcm.utils.azure_utils import AzureService, list_instances_azure
 from sdcm.utils.azure_region import AzureOsState, AzureRegion, region_name_to_location
 from sdcm.utils.get_username import get_username
-from sdcm.cluster_docker import AIO_MAX_NR_RECOMMENDED_VALUE
 
 if TYPE_CHECKING:
     # pylint: disable=ungrouped-imports
     from typing import Optional, Any, Type
+
+    from mypy_boto3_ec2.literals import InstanceTypeType
 
     from sdcm.keystore import SSHKey
 
@@ -158,6 +159,8 @@ class SctRunner(ABC):
                                                   key_file=self._ssh_pkey_file.name, connect_timeout=connect_timeout)
 
     def install_prereqs(self, public_ip: str, connect_timeout: Optional[int] = None) -> None:
+        from sdcm.cluster_docker import AIO_MAX_NR_RECOMMENDED_VALUE  # pylint: disable=import-outside-toplevel
+
         LOGGER.info("Connecting instance...")
         remoter = self.get_remoter(host=public_ip, connect_timeout=connect_timeout)
 
@@ -427,7 +430,7 @@ class AwsSctRunner(SctRunner):
 
     # pylint: disable=too-many-arguments
     def _create_instance(self,
-                         instance_type: str,
+                         instance_type: InstanceTypeType,
                          base_image: Any,
                          tags: dict[str, str],
                          instance_name: str,
