@@ -35,9 +35,9 @@ class BaseYCSBPerformanceRegressionTest(BasePerformanceRegression):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.create_ycsb_commands()
+        self._create_ycsb_commands()
 
-    def create_ycsb_commands(self):
+    def _create_ycsb_commands(self):
         threads_size = self.params.get("n_db_nodes") * self.scylla_connection
         self.params["prepare_write_cmd"] = \
             f"{self.params['prepare_write_cmd']}" \
@@ -60,6 +60,9 @@ class BaseYCSBPerformanceRegressionTest(BasePerformanceRegression):
 
         InfoEvent(message="All params:\n(%s)" % pformat(self.params)).publish()
 
+    def preload_data(self, prepare_write_cmd: str = "prepare_write_cmd"):
+        super().preload_data(prepare_write_cmd=prepare_write_cmd)
+
     def test_latency(self):
         """
         Test steps:
@@ -76,12 +79,14 @@ class BaseYCSBPerformanceRegressionTest(BasePerformanceRegression):
             self.run_workload(stress_cmd=self.stress_cmd.format(workload_type), sub_type=workload_details)
 
     def test_latency_workload_a_with_nemesis(self):
-        self._latency_read_with_nemesis(
-            stress_cmd=self.stress_cmd.format("a"), sub_type=self.ycsb_workloads["a"])
+        self.preload_data()
+        # self._latency_read_with_nemesis(
+        #     stress_cmd=self.stress_cmd.format("a"), sub_type=self.ycsb_workloads["a"])
 
     def test_latency_workload_a_without_nemesis(self):
-        self.run_workload(
-            stress_cmd=self.stress_cmd.format("a"), sub_type=self.ycsb_workloads["a"], is_preload_data=True)
+        self.preload_data()
+        # self.run_workload(
+        #     stress_cmd=self.stress_cmd.format("a"), sub_type=self.ycsb_workloads["a"], is_preload_data=True)
 
     def test_latency_workload_b_with_nemesis(self):
         self._latency_read_with_nemesis(
