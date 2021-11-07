@@ -39,7 +39,8 @@ class BasePerformanceRegression(ClusterTester):
         with open(file=email_data_path, mode='w', encoding="utf-8"):
             pass
 
-    def preload_data(self, prepare_write_cmd: str = ""):
+    def preload_data(self, prepare_write_cmd: str = "prepare_write_cmd"):
+        prepare_write_cmd = self.params.get(prepare_write_cmd)
         # if test require a pre-population of data
         if not prepare_write_cmd:
             self.log.warning("No prepare command defined in YAML!")
@@ -56,7 +57,6 @@ class BasePerformanceRegression(ClusterTester):
             stress_queue.append(
                 self.run_stress_thread(stress_cmd=prepare_write_cmd[0], stress_num=1, prefix='preload-',
                                        stats_aggregate_cmds=False))
-            prepare_write_cmd = prepare_write_cmd[0]
         elif isinstance(prepare_write_cmd, list):
             # Check if it should be round_robin across loaders
             if self.params.get('round_robin'):
