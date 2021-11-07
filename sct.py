@@ -23,6 +23,7 @@ import glob
 import time
 import subprocess
 import traceback
+import uuid
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from functools import partial
@@ -71,7 +72,6 @@ from sdcm.utils.jepsen import JepsenResults
 from sdcm.utils.docker_utils import docker_hub_login
 from sdcm.monitorstack import (restore_monitoring_stack, get_monitoring_stack_services,
                                kill_running_monitoring_stack_services)
-from sdcm.cluster import TestConfig
 from sdcm.utils.log import setup_stdout_logger
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.get_username import get_username
@@ -79,6 +79,7 @@ from sdcm.send_email import get_running_instances_for_email_report, read_email_d
     send_perf_email
 from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module
+from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module
 
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
@@ -90,6 +91,12 @@ LOGGER = setup_stdout_logger()
 
 
 click_completion.init()
+
+
+def get_test_config():
+    from sdcm.cluster import TestConfig  # pylint: disable=import-outside-toplevel; avoid import for `--help' option
+
+    return TestConfig()
 
 
 def sct_option(name, sct_name, **kwargs):
@@ -116,7 +123,7 @@ def install_package_from_dir(ctx, _, directories):
 
 def add_file_logger(level: int = logging.DEBUG) -> None:
     cmd_path = "-".join(click.get_current_context().command_path.split()[1:])
-    logdir = TestConfig().make_new_logdir(update_latest_symlink=False, postfix=f"-{cmd_path}")
+    logdir = get_test_config().make_new_logdir(update_latest_symlink=False, postfix=f"-{cmd_path}")
     handler = logging.FileHandler(os.path.join(logdir, "hydra.log"))
     handler.setLevel(level)
     LOGGER.addHandler(handler)
@@ -229,7 +236,7 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
         params = (user_param, )
     else:
         if not logdir and (post_behavior or not test_id):
-            logdir = TestConfig().base_logdir()
+            logdir = get_test_config().base_logdir()
 
         if not test_id and (latest_test_id := search_test_id_in_latest(logdir)):
             click.echo(f"Latest TestId in {logdir} is {latest_test_id}")
@@ -894,7 +901,7 @@ def run_test(argv, backend, config, logdir):
     if logdir:
         os.environ['_SCT_LOGDIR'] = logdir
 
-    logfile = os.path.join(TestConfig().logdir(), 'output.log')
+    logfile = os.path.join(get_test_config().logdir(), 'output.log')
     sys.stdout = OutputLogger(logfile, sys.stdout)
     sys.stderr = OutputLogger(logfile, sys.stderr)
 
@@ -916,7 +923,7 @@ def run_pytest(target, backend, config, logdir):
     if logdir:
         os.environ['_SCT_LOGDIR'] = logdir
 
-    logfile = os.path.join(TestConfig().logdir(), 'output.log')
+    logfile = os.path.join(get_test_config().logdir(), 'output.log')
     sys.stdout = OutputLogger(logfile, sys.stdout)
     sys.stderr = OutputLogger(logfile, sys.stderr)
     if not target:
@@ -1288,6 +1295,40 @@ def create_runner_instance(cloud_provider, region, availability_zone, instance_t
 def clean_runner_instances(test_status, runner_ip, dry_run):
     add_file_logger()
     clean_sct_runners(test_status=test_status, test_runner_ip=runner_ip, dry_run=dry_run)
+
+
+@cli.command("run-aws-mock", help="Start AWS Mock server Docker container")
+@click.option(
+    "-r", "--mock-region",
+    required=True,
+    multiple=True,
+    type=CloudRegion(cloud_provider="aws"),
+    help="Mock this AWS region",
+)
+@click.option("-f", "--force", is_flag=True, default=False, help="don't check aws_mock_ip")
+@click.option("-t", "--test-id", required=False, help="SCT Test ID")
+def run_aws_mock(mock_region: list[str], force: bool = False, test_id: str | None = None) -> None:
+    add_file_logger()
+    if test_id is None:
+        test_id = str(uuid.uuid4())
+    aws_mock_ip = AwsMock(test_id=test_id, regions=mock_region).run(force=force)
+    LOGGER.info("New mock for %r AWS regions started and listen on %s:443 (TestId=%s)",
+                mock_region, aws_mock_ip, test_id)
+
+
+@cli.command("clean-aws-mocks", help="Clean running AWS mock Docker containers")
+@click.option("-t", "--test-id", required=False, help="Clean AWS Mock container for test id")
+@click.option(
+    "-a", "--all", "all_mocks",
+    is_flag=True,
+    default=False,
+    help="Clean all AWS Mock containers running on this host",
+)
+@click.option('--verbose', is_flag=True, default=False, help="if enable, will log progress")
+@click.option("--dry-run", is_flag=True, default=False, help="dry run")
+def clean_aws_mocks(test_id: str | None, all_mocks: bool, verbose: bool, dry_run: bool) -> None:
+    add_file_logger()
+    AwsMock.clean(test_id=test_id, all_mocks=all_mocks, verbose=verbose, dry_run=dry_run)
 
 
 if __name__ == '__main__':
