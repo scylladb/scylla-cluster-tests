@@ -19,15 +19,16 @@ from pydantic import BaseModel  # pylint: disable=no-name-in-module
 
 from sdcm import cluster
 from sdcm.provision.aws.instance_parameters import AWSInstanceParams
-from sdcm.provision.aws.provisioner import AWSProvisioner
+from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
 from sdcm.provision.aws.constants import MAX_SPOT_DURATION_TIME
-from sdcm.provision.common.provisioner import ProvisionParameters, TagsType
+from sdcm.provision.common.provision_plan import ProvisionPlan
+from sdcm.provision.common.provision_plan_builder import ProvisionPlanBuilder
+from sdcm.provision.common.provisioner import TagsType
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.aws.instance_parameters_builder import ScyllaInstanceParamsBuilder, \
     LoaderInstanceParamsBuilder, MonitorInstanceParamsBuilder, OracleScyllaInstanceParamsBuilder
 from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder, AWSInstanceUserDataBuilder
-from sdcm.sct_provision.common.utils import INSTANCE_PROVISION_ON_DEMAND, INSTANCE_PROVISION_SPOT, \
-    INSTANCE_PROVISION_SPOT_LOW_PRICE, INSTANCE_PROVISION_SPOT_DURATION, INSTANCE_PROVISION_SPOT_FLEET
+from sdcm.sct_provision.common.utils import INSTANCE_PROVISION_SPOT, INSTANCE_PROVISION_SPOT_FLEET
 from sdcm.test_config import TestConfig
 
 
@@ -58,7 +59,7 @@ class ClusterBase(BaseModel):
 
     @property
     def _provisioner(self):
-        return AWSProvisioner()
+        return AWSInstanceProvisioner()
 
     @property
     def nodes(self):
@@ -182,78 +183,16 @@ class ClusterBase(BaseModel):
         ))
         return on_demand_price * self.params.get('spot_max_price')
 
-    def _provision_request_spot(self, region_id: int) -> ProvisionParameters:
-        return ProvisionParameters(
-            name='Spot',
-            spot=True,
+    def provision_plan(self, region_id: int) -> ProvisionPlan:
+        return ProvisionPlanBuilder(
+            initial_provision_type=self._instance_provision,
+            duration=self._test_duration,
+            fallback_provision_on_demand=self.params.get('instance_provision_fallback_on_demand'),
             region_name=self._region(region_id),
             availability_zone=self._az(region_id),
-        )
-
-    def _provision_request_spot_low_price(self, region_id: int) -> ProvisionParameters:
-        return ProvisionParameters(
-            name='Spot(Low Price)',
-            spot=True,
-            region_name=self._region(region_id),
-            availability_zone=self._az(region_id),
-            price=self._spot_low_price(region_id)
-        )
-
-    def _provision_request_spot_duration(self, region_id: int) -> Optional[ProvisionParameters]:
-        if self._spot_duration is None:
-            return None
-        return ProvisionParameters(
-            name='Spot(Duration)',
-            spot=True,
-            region_name=self._region(region_id),
-            availability_zone=self._az(region_id),
-            duration=self._spot_duration
-        )
-
-    def _provision_request_spot_duration_low_price(self, region_id: int) -> Optional[ProvisionParameters]:
-        if self._spot_duration is None:
-            return None
-        return ProvisionParameters(
-            name='Spot(Duration, Low Price)',
-            spot=True,
-            region_name=self._region(region_id),
-            availability_zone=self._az(region_id),
-            price=self._spot_low_price(region_id),
-            duration=self._spot_duration
-        )
-
-    def _provision_request_on_demand(self, region_id: int) -> Optional[ProvisionParameters]:
-        if self._spot_duration is None:
-            return None
-        return ProvisionParameters(
-            name='On Demand',
-            spot=False,
-            region_name=self._region(region_id),
-            availability_zone=self._az(region_id),
-        )
-
-    def provision_plan(self, region_id: int) -> List[ProvisionParameters]:
-        if self._instance_provision == INSTANCE_PROVISION_ON_DEMAND:
-            return [self._provision_request_on_demand(region_id)]
-        provision_plan = []
-        if self._instance_provision == INSTANCE_PROVISION_SPOT:
-            provision_plan.extend([
-                self._provision_request_spot(region_id),
-                self._provision_request_spot_duration(region_id)
-            ])
-        elif self._instance_provision == INSTANCE_PROVISION_SPOT_LOW_PRICE:
-            provision_plan.extend([
-                self._provision_request_spot_low_price(region_id),
-                self._provision_request_spot_duration_low_price(region_id),
-                self._provision_request_spot(region_id),
-            ])
-        elif self._instance_provision == INSTANCE_PROVISION_SPOT_DURATION:
-            provision_plan.extend([
-                self._provision_request_spot(region_id),
-            ])
-        if self.params.get('instance_provision_fallback_on_demand'):
-            provision_plan.append(self._provision_request_on_demand(region_id))
-        return provision_plan
+            spot_low_price=self._spot_low_price(region_id),
+            provisioner=AWSInstanceProvisioner(),
+        ).provision_plan
 
     def _instance_parameters(self, region_id: int) -> AWSInstanceParams:
         params_builder = self._INSTANCE_PARAMS_BUILDER(  # pylint: disable=not-callable
@@ -270,16 +209,12 @@ class ClusterBase(BaseModel):
             node_tags = self._node_tags(region_id=region_id)
             node_names = self._node_names(region_id=region_id)
             node_count = self._node_num(region_id=region_id)
-            instances = []
-            for provision_parameters in self.provision_plan(region_id):
-                if instances := self._provisioner.provision(
-                    provision_parameters=provision_parameters,
-                    instance_parameters=instance_parameters,
-                    count=node_count,
-                    tags=node_tags,
-                    names=node_names,
-                ):
-                    break
+            instances = self.provision_plan(region_id).provision_instances(
+                instance_parameters=instance_parameters,
+                node_tags=node_tags,
+                node_names=node_names,
+                node_count=node_count
+            )
             if not instances:
                 raise RuntimeError('End of provision plan reached, but no instances provisioned')
             total_instances_provisioned.extend(instances)

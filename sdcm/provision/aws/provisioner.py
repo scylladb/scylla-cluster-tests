@@ -26,12 +26,12 @@ from sdcm.provision.aws.utils import ec2_services, ec2_clients, find_instance_by
     create_spot_instance_request
 from sdcm.provision.aws.constants import SPOT_CNT_LIMIT, SPOT_FLEET_LIMIT, SPOT_REQUEST_TIMEOUT, STATUS_FULFILLED, \
     SPOT_STATUS_UNEXPECTED_ERROR, FLEET_LIMIT_EXCEEDED_ERROR, SPOT_CAPACITY_NOT_AVAILABLE_ERROR, MAX_SPOT_DURATION_TIME
-from sdcm.provision.common.provisioner import TagsType, ProvisionParameters, ProvisionerBase
+from sdcm.provision.common.provisioner import TagsType, ProvisionParameters, InstanceProvisionerBase
 
 LOGGER = logging.getLogger(__name__)
 
 
-class AWSProvisioner(ProvisionerBase):  # pylint: disable=too-few-public-methods
+class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-few-public-methods
     # TODO: Make them configurable
     _wait_interval = 5
     _iam_fleet_role = 'arn:aws:iam::797456418907:role/aws-ec2-spot-fleet-role'

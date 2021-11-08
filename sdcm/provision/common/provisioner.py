@@ -23,7 +23,7 @@ class InstanceParamsBase(BaseModel):  # pylint: disable=too-few-public-methods
     """
 
 
-class ProvisionerBase(metaclass=abc.ABCMeta):  # pylint: disable=too-few-public-methods
+class InstanceProvisionerBase(BaseModel, metaclass=abc.ABCMeta):  # pylint: disable=too-few-public-methods
     """
     Base class for provisioner - a class that provide API to provision instances
     """
