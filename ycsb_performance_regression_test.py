@@ -39,16 +39,16 @@ class BaseYCSBPerformanceRegressionTest(BasePerformanceRegression):
 
     def _create_ycsb_commands(self):
         threads_size = self.params.get("n_db_nodes") * self.scylla_connection
-        # self.params["prepare_write_cmd"] = [
-        #     f"{cmd}"
-        #     f" -target {self.target_size}"
-        #     f" -threads {threads_size}"
-        #     f" -p recordcount={self.records_size}"
-        #     f" -p insertcount={self.records_size}"
-        #     f" -p scylla.coreconnections={self.scylla_connection}"
-        #     f" -p scylla.maxconnections={self.scylla_connection}"
-        #     for cmd in self.params['prepare_write_cmd']
-        # ]
+        self.params["prepare_write_cmd"] = [
+            f"{cmd}"
+            f" -target {self.target_size}"
+            f" -threads {threads_size}"
+            f" -p recordcount={self.records_size}"
+            f" -p insertcount={self.records_size}"
+            f" -p scylla.coreconnections={self.scylla_connection}"
+            f" -p scylla.maxconnections={self.scylla_connection}"
+            for cmd in self.params['prepare_write_cmd']
+        ]
 
         for workload_type in self.ycsb_workloads:
             self.params[self.stress_cmd.format(workload_type)] = \
@@ -60,6 +60,11 @@ class BaseYCSBPerformanceRegressionTest(BasePerformanceRegression):
                 f" -p scylla.maxconnections={self.scylla_connection}" \
                 f" {self.params['stress_cmd_m']}"
 
+    def run_pre_create_keyspace(self):
+        with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
+            for cmd in self.params.get('pre_create_keyspace'):
+                session.execute(cmd)
+
     def test_latency(self):
         """
         Test steps:
@@ -68,6 +73,7 @@ class BaseYCSBPerformanceRegressionTest(BasePerformanceRegression):
         with round_robin and list of stress_cmd - the data will load several times faster.
         2. Run WRITE workload with gauss population.
         """
+        self.run_pre_create_keyspace()
         self.run_fstrim_on_all_db_nodes()
         self.preload_data()
 
@@ -76,9 +82,10 @@ class BaseYCSBPerformanceRegressionTest(BasePerformanceRegression):
             self.run_workload(stress_cmd=self.stress_cmd.format(workload_type), sub_type=workload_details)
 
     def test_latency_workload_a_with_nemesis(self):
+        self.run_pre_create_keyspace()
         self.preload_data()
-        # self._latency_read_with_nemesis(
-        #     stress_cmd=self.stress_cmd.format("a"), sub_type=self.ycsb_workloads["a"])
+        self._latency_read_with_nemesis(
+            stress_cmd=self.stress_cmd.format("a"), sub_type=self.ycsb_workloads["a"])
 
     def test_latency_workload_a_without_nemesis(self):
         self.preload_data()

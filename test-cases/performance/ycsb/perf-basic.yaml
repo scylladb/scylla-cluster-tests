@@ -31,16 +31,12 @@ pre_create_keyspace: [
 
 # there is no sense to use more than 1 loader for 3 nodes cluster,
 # but this is just for example
-#bin/ycsb load scylla -P workloads/workloadc
-#    -p readproportion=0 -p insertproportion=1
-#    -p fieldcount=10 -p fieldlength=128
-#    -p scylla.username=cassandra -p scylla.password=cassandra
-#
 prepare_write_cmd:
   - >-2
-    bin/ycsb load scylla -P workloads/workloada
-    -threads 100 -p recordcount=1000000 -p fieldcount=10 -p fieldlength=128
-    -p insertstart=0 -p insertcount=1000000 -p operationcount=500000000
+    bin/ycsb load scylla -P workloads/workloadc
+    -p readproportion=0 -p insertproportion=1
+    -p fieldcount=10 -p fieldlength=128
+    -p scylla.username=cassandra -p scylla.password=cassandra
 
 # --target must be set to have correct latency results for const throughput - see coordinated omission avoidance problem
 #
@@ -69,9 +65,11 @@ n_db_nodes: 3
 n_loaders: 1
 n_monitor_nodes: 1
 
-instance_type_db: 'i3.4xlarge'
+#instance_type_db: 'i3.4xlarge'
+instance_type_db: 'i3.large'
 instance_type_monitor: 't3.large'
-instance_type_loader: 'c5.9xlarge' # 32 vCPU, 72 GB RAM, 10GiB
+#instance_type_loader: 'c5.9xlarge' # 32 vCPU, 72 GB RAM, 10GiB
+instance_type_loader: 'c5.2xlarge' # 32 vCPU, 72 GB RAM, 10GiB
 
 nemesis_class_name: 'NemesisSequence'
 nemesis_interval: 30
