@@ -29,7 +29,7 @@ class SCTProvisionLayout:
         backend = params.get('cluster_backend')
         try:
             importlib.import_module(cls.__module__.replace('.common.', f'.{backend}.'), package=None)
-        except Exception:  # pylint: disable=broad-except
+        except ModuleNotFoundError:
             pass
         target_class = cls._cluster_backend_mapping.get(backend, SCTProvisionLayout)
         return object.__new__(target_class)
