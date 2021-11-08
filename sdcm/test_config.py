@@ -53,14 +53,19 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
         return cls._test_id
 
     @classmethod
-    def set_test_id(cls, test_id):
+    def set_test_id_only(cls, test_id) -> bool:
         if not cls._test_id:
             cls._test_id = str(test_id)
+            return True
+        LOGGER.warning("TestID already set!")
+        return False
+
+    @classmethod
+    def set_test_id(cls, test_id):
+        if cls.set_test_id_only(test_id):
             test_id_file_path = os.path.join(cls.logdir(), "test_id")
             with open(test_id_file_path, "w") as test_id_file:
                 test_id_file.write(str(test_id))
-        else:
-            LOGGER.warning("TestID already set!")
 
     @classmethod
     def tester_obj(cls):
