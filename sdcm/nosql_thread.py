@@ -16,8 +16,11 @@ import logging
 import time
 import uuid
 import threading
+from pathlib import Path
 
 from sdcm.cluster import BaseNode
+from sdcm.remote import RemoteCmdRunnerBase
+from sdcm.results_analyze.analyze_nosqlbench_summary import NoSQLBenchSummaryReportBuilder
 from sdcm.sct_events import Severity
 from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
 from sdcm.sct_events.loaders import NoSQLBenchStressEvent, NOSQLBENCH_EVENT_PATTERNS
@@ -56,6 +59,7 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
 
     GRAPHITE_EXPORTER_CONFIG_SRC_PATH = "docker/graphite-exporter/graphite_mapping.conf"
     GRAPHITE_EXPORTER_CONFIG_DST_PATH = "/tmp/"
+    NOSQLBENCH_METRICS_SRC_PATH = "/tmp/nosql_metrics"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -78,20 +82,27 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
         stress_cmd = self.build_stress_cmd(loader_idx=loader_idx)
+        remoter: RemoteCmdRunnerBase = loader.remoter
 
-        if not os.path.exists(loader.logdir):
-            os.makedirs(loader.logdir, exist_ok=True)
+        os.makedirs(loader.logdir, exist_ok=True)
+        os.makedirs(self.NOSQLBENCH_METRICS_SRC_PATH, exist_ok=True)
+
         log_file_name = os.path.join(loader.logdir, 'nosql-bench-l%s-c%s-%s.log' %
                                      (loader_idx, cpu_idx, uuid.uuid4()))
-        LOGGER.debug('nosql-bench-stress local log: %s', log_file_name)
+        summary_file_name = f"nosql-bench-l{loader_idx}-c{cpu_idx}-{uuid.uuid4()}.summary"
+        summary_file_path = os.path.join(self.NOSQLBENCH_METRICS_SRC_PATH, summary_file_name)
+        LOGGER.info('nosql-bench-stress local log path: %s', log_file_name)
         LOGGER.debug("'running: %s", stress_cmd)
-        with NoSQLBenchStressEvent(node=loader, stress_cmd=stress_cmd, log_file_name=log_file_name) as stress_event, \
-                NoSQLBenchEventsPublisher(node=loader, log_filename=log_file_name):
+        with NoSQLBenchStressEvent(node=loader,
+                                   stress_cmd=stress_cmd,
+                                   log_file_name=log_file_name) as stress_event, \
+            NoSQLBenchEventsPublisher(node=loader,
+                                      log_filename=log_file_name) as events_publisher:
             try:
                 # copy graphite-exporter config file to loader
-                loader.remoter.send_files(src=self.GRAPHITE_EXPORTER_CONFIG_SRC_PATH,
-                                          dst=self.GRAPHITE_EXPORTER_CONFIG_DST_PATH,
-                                          verbose=False)
+                remoter.send_files(src=self.GRAPHITE_EXPORTER_CONFIG_SRC_PATH,
+                                   dst=self.GRAPHITE_EXPORTER_CONFIG_DST_PATH,
+                                   verbose=False)
 
                 # create shared network for the containers
                 create_network_cmd = "docker network create --driver bridge nosql"
@@ -106,12 +117,28 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                                    log_file=log_file_name,
                                    ignore_status=True)
 
-                return loader.remoter.run(cmd=f'docker run '
-                                              '--name=nb '
-                                              '--network=nosql '
-                                              f'{self._nosqlbench_image} '
-                                              f'{stress_cmd} --report-graphite-to graphite-exporter:9109',
-                                          timeout=self.timeout + self.shutdown_timeout, log_file=log_file_name)
+                result = remoter.run(
+                    cmd=f'docker run '
+                        '--name=nb '
+                        '--network=nosql '
+                        f'-v {self.NOSQLBENCH_METRICS_SRC_PATH}:{self.NOSQLBENCH_METRICS_SRC_PATH} '
+                        f'{self._nosqlbench_image} '
+                        f'{stress_cmd} '
+                        f'--report-graphite-to graphite-exporter:9109 '
+                        f'--report-summary-to {summary_file_path}',
+                    timeout=self.timeout + self.shutdown_timeout,
+                    log_file=log_file_name
+                )
+
+                remoter.receive_files(src=summary_file_path,
+                                      dst=loader.logdir)
+
+                summary_file = next(Path(loader.logdir).glob("*.summary"))
+                LOGGER.info("Found these summary files: %s", summary_file)
+                builder = NoSQLBenchSummaryReportBuilder(summary_file)
+                builder.build_summary_report()
+                return result
+
             except Exception as exc:  # pylint: disable=broad-except
                 stress_event.severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR
                 stress_event.add_error(errors=[format_stress_cmd_error(exc)])
