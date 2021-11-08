@@ -64,5 +64,5 @@ class SCTProvisionLayout:
 def create_sct_configuration(test_name: str):
     sct_configuration = init_and_verify_sct_config()
     TestConfig().set_test_name(test_name)
-    TestConfig().set_test_id(sct_configuration.get('test_id'))
+    TestConfig().set_test_id_only(sct_configuration.get('test_id'))
     return sct_configuration
