@@ -10,9 +10,11 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
-
+import logging
+import tarfile
 from abc import abstractmethod
-from typing import Type, Tuple, List, Optional
+from pathlib import Path
+from typing import Type, Tuple, List, Optional, Union
 from shlex import quote
 import glob
 import os
@@ -28,6 +30,9 @@ from sdcm.utils.decorators import retrying
 
 from .base import RetryableNetworkException, CommandRunner
 from .local_cmd_runner import LocalCmdRunner
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class RemoteCmdRunnerBase(CommandRunner):  # pylint: disable=too-many-instance-attributes
