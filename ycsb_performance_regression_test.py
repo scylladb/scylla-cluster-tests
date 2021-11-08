@@ -39,16 +39,16 @@ class BaseYCSBPerformanceRegressionTest(BasePerformanceRegression):
 
     def _create_ycsb_commands(self):
         threads_size = self.params.get("n_db_nodes") * self.scylla_connection
-        self.params["prepare_write_cmd"] = [
-            f"{cmd}"
-            f" -target {self.target_size}"
-            f" -threads {threads_size}"
-            f" -p recordcount={self.records_size}"
-            f" -p insertcount={self.records_size}"
-            f" -p scylla.coreconnections={self.scylla_connection}"
-            f" -p scylla.maxconnections={self.scylla_connection}"
-            for cmd in self.params['prepare_write_cmd']
-        ]
+        # self.params["prepare_write_cmd"] = [
+        #     f"{cmd}"
+        #     f" -target {self.target_size}"
+        #     f" -threads {threads_size}"
+        #     f" -p recordcount={self.records_size}"
+        #     f" -p insertcount={self.records_size}"
+        #     f" -p scylla.coreconnections={self.scylla_connection}"
+        #     f" -p scylla.maxconnections={self.scylla_connection}"
+        #     for cmd in self.params['prepare_write_cmd']
+        # ]
 
         for workload_type in self.ycsb_workloads:
             self.params[self.stress_cmd.format(workload_type)] = \
@@ -59,8 +59,6 @@ class BaseYCSBPerformanceRegressionTest(BasePerformanceRegression):
                 f" -p scylla.coreconnections={self.scylla_connection}" \
                 f" -p scylla.maxconnections={self.scylla_connection}" \
                 f" {self.params['stress_cmd_m']}"
-
-        InfoEvent(message="All params:\n(%s)" % pformat(self.params)).publish()
 
     def test_latency(self):
         """
