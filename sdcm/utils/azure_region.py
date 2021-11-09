@@ -24,7 +24,7 @@ from contextlib import suppress
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.compute.models import TargetRegion
 
-from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.azure_utils import AzureService, region_name_to_location
 
 if TYPE_CHECKING:
     # pylint: disable=ungrouped-imports
@@ -59,10 +59,6 @@ LOGGER = logging.getLogger(__name__)
 class AzureOsState(enum.Enum):
     GENERALIZED = "Generalized"
     SPECIALIZED = "Specialized"
-
-
-def region_name_to_location(region_name: str) -> str:
-    return region_name.lower().replace(" ", "")  # e.g., "East US" -> "eastus"
 
 
 # All Azure resources (VMs, networks, public IPs, etc.) should be created in some Resource Group [1].

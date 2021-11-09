@@ -744,7 +744,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if db_info['disk_type'] is None:
             db_info['disk_type'] = self.params.get('gce_root_disk_type_db')
         if db_info['disk_size'] is None:
-            db_info['disk_size'] = self.params.get('gce_root_disk_size_db')
+            db_info['disk_size'] = self.params.get('root_disk_size_loader')
         if db_info['n_local_ssd'] is None:
             db_info['n_local_ssd'] = self.params.get('gce_n_local_ssd_disk_db')
         if monitor_info['n_nodes'] is None:
@@ -754,7 +754,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if monitor_info['disk_type'] is None:
             monitor_info['disk_type'] = self.params.get('gce_root_disk_type_monitor')
         if monitor_info['disk_size'] is None:
-            monitor_info['disk_size'] = self.params.get('gce_root_disk_size_monitor')
+            monitor_info['disk_size'] = self.params.get('root_disk_size_monitor')
         if monitor_info['n_local_ssd'] is None:
             monitor_info['n_local_ssd'] = self.params.get('gce_n_local_ssd_disk_monitor')
 
@@ -853,7 +853,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if loader_info['type'] is None:
             loader_info['type'] = self.params.get('instance_type_loader')
         if loader_info['disk_size'] is None:
-            loader_info['disk_size'] = self.params.get('aws_root_disk_size_loader')
+            loader_info['disk_size'] = self.params.get('root_disk_size_loader')
         if loader_info['device_mappings'] is None:
             if loader_info['disk_size']:
                 loader_info['device_mappings'] = [{
@@ -1083,7 +1083,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_cluster = gke.GkeCluster(
             gke_cluster_version=self.params.get("gke_cluster_version"),
             gke_k8s_release_channel=self.params.get("gke_k8s_release_channel"),
-            gce_disk_size=self.params.get("gce_root_disk_size_db"),
+            gce_disk_size=self.params.get("root_disk_size_loader"),
             gce_disk_type=self.params.get("gce_root_disk_type_db"),
             gce_network=self.params.get("gce_network"),
             services=services,
@@ -1119,7 +1119,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             monitor_pool = gke.GkeNodePool(
                 name=self.k8s_cluster.MONITORING_POOL_NAME,
                 local_ssd_count=self.params.get("gce_n_local_ssd_disk_monitor"),
-                disk_size=self.params.get("gce_root_disk_size_monitor"),
+                disk_size=self.params.get("root_disk_size_monitor"),
                 disk_type=self.params.get("gce_root_disk_type_monitor"),
                 instance_type=self.params.get("gce_instance_type_monitor"),
                 num_nodes=1,
@@ -1129,7 +1129,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         scylla_pool = gke.GkeNodePool(
             name=self.k8s_cluster.SCYLLA_POOL_NAME,
             local_ssd_count=self.params.get("gce_n_local_ssd_disk_db"),
-            disk_size=self.params.get("gce_root_disk_size_db"),
+            disk_size=self.params.get("root_disk_size_loader"),
             disk_type=self.params.get("gce_root_disk_type_db"),
             instance_type=self.params.get("gce_instance_type_db"),
             num_nodes=int(self.params.get("n_db_nodes")) + 1,
@@ -1169,7 +1169,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.monitors = gke.MonitorSetGKE(
                 gce_image=self.params.get("gce_image_monitor"),
                 gce_image_type=self.params.get("gce_root_disk_type_monitor"),
-                gce_image_size=self.params.get('gce_root_disk_size_monitor'),
+                gce_image_size=self.params.get('root_disk_size_monitor'),
                 gce_network=self.params.get("gce_network"),
                 service=services[:1],
                 credentials=self.credentials,
@@ -1240,7 +1240,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             num_nodes=self.params.get("n_db_nodes") + 1,
             instance_type=self.params.get('instance_type_db'),
             role_arn=self.params.get('eks_nodegroup_role_arn'),
-            disk_size=self.params.get('aws_root_disk_size_db'),
+            disk_size=self.params.get('root_disk_size_db'),
             k8s_cluster=self.k8s_cluster
         )
         self.k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
@@ -1252,7 +1252,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 num_nodes=self.params.get("n_loaders"),
                 instance_type=self.params.get("instance_type_loader"),
                 role_arn=self.params.get('eks_nodegroup_role_arn'),
-                disk_size=self.params.get('aws_root_disk_size_monitor'),
+                disk_size=self.params.get('root_disk_size_monitor'),
                 k8s_cluster=self.k8s_cluster)
             self.k8s_cluster.deploy_node_pool(loader_pool, wait_till_ready=False)
 
@@ -1263,7 +1263,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 num_nodes=1,
                 instance_type=self.params.get("instance_type_monitor"),
                 role_arn=self.params.get('eks_nodegroup_role_arn'),
-                disk_size=self.params.get('aws_root_disk_size_monitor'),
+                disk_size=self.params.get('root_disk_size_monitor'),
                 k8s_cluster=self.k8s_cluster
             )
             self.k8s_cluster.deploy_node_pool(monitor_pool, wait_till_ready=False)

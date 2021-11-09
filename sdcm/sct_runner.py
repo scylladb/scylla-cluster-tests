@@ -38,8 +38,8 @@ from sdcm.utils.common import list_instances_aws, aws_tags_to_dict, list_instanc
 from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, ec2_ami_get_root_device_name
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.gce_utils import get_gce_service
-from sdcm.utils.azure_utils import AzureService, list_instances_azure
-from sdcm.utils.azure_region import AzureOsState, AzureRegion, region_name_to_location
+from sdcm.utils.azure_utils import AzureService, list_instances_azure, region_name_to_location
+from sdcm.utils.azure_region import AzureOsState, AzureRegion
 from sdcm.utils.get_username import get_username
 
 if TYPE_CHECKING:

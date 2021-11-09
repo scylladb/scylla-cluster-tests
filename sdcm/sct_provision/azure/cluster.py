@@ -13,21 +13,20 @@
 
 import abc
 from functools import cached_property
-from typing import List, Dict, Optional
+from typing import List, Dict
 
+from azure.mgmt.compute.v2021_07_01.models import VirtualMachine
 from pydantic import BaseModel  # pylint: disable=no-name-in-module
 
 from sdcm import cluster
-from sdcm.provision.aws.instance_parameters import AWSInstanceParams
-from sdcm.provision.aws.provisioner import AWSInstanceProvisioner
-from sdcm.provision.aws.constants import MAX_SPOT_DURATION_TIME
+from sdcm.provision.azure.provisioner import AzureInstanceProvisioner
 from sdcm.provision.common.provision_plan import ProvisionPlan
 from sdcm.provision.common.provision_plan_builder import ProvisionPlanBuilder
 from sdcm.provision.common.provisioner import TagsType
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_provision.aws.instance_parameters_builder import ScyllaInstanceParamsBuilder, \
-    LoaderInstanceParamsBuilder, MonitorInstanceParamsBuilder, OracleScyllaInstanceParamsBuilder
-from sdcm.sct_provision.aws.user_data import AWSInstanceUserDataBuilder
+from sdcm.sct_provision.azure.instance_parameters_builder import OracleScyllaInstanceParamsBuilder, \
+    LoaderInstanceParamsBuilder, MonitorInstanceParamsBuilder, ScyllaInstanceParamsBuilder
+from sdcm.sct_provision.azure.user_data import AzureInstanceUserDataBuilder
 from sdcm.sct_provision.common.user_data import ScyllaUserDataBuilder
 from sdcm.sct_provision.common.utils import INSTANCE_PROVISION_SPOT, INSTANCE_PROVISION_SPOT_FLEET
 from sdcm.test_config import TestConfig
@@ -57,10 +56,6 @@ class ClusterBase(BaseModel):
     _INSTANCE_TYPE_PARAM_NAME = None
     _NODE_NUM_PARAM_NAME = None
     _INSTANCE_PARAMS_BUILDER = None
-
-    @property
-    def _provisioner(self):
-        return AWSInstanceProvisioner()
 
     @property
     def nodes(self):
@@ -157,13 +152,6 @@ class ClusterBase(BaseModel):
     def _test_duration(self) -> int:
         return self.params.get('test_duration')
 
-    @property
-    def _spot_duration(self) -> Optional[int]:
-        duration = self._test_duration // 60 * 60 + 60
-        if duration >= MAX_SPOT_DURATION_TIME:
-            return None
-        return duration
-
     def _az(self, region_id: int) -> str:
         if len(self._azs) == 1:
             return self._azs[0]
@@ -175,14 +163,7 @@ class ClusterBase(BaseModel):
         return self._node_nums[region_id]
 
     def _spot_low_price(self, region_id: int) -> float:
-        from sdcm.utils.pricing import AWSPricing  # pylint: disable=import-outside-toplevel
-
-        aws_pricing = AWSPricing()
-        on_demand_price = float(aws_pricing.get_on_demand_instance_price(
-            region_name=self._region(region_id),
-            instance_type=self._instance_type,
-        ))
-        return on_demand_price * self.params.get('spot_max_price')
+        raise NotImplemented("Not implemented yet")  # TODO: Implement possible via azure eviction history
 
     def provision_plan(self, region_id: int) -> ProvisionPlan:
         return ProvisionPlanBuilder(
@@ -192,16 +173,16 @@ class ClusterBase(BaseModel):
             region_name=self._region(region_id),
             availability_zone=self._az(region_id),
             spot_low_price=self._spot_low_price(region_id),
-            provisioner=AWSInstanceProvisioner(),
+            provisioner=AzureInstanceProvisioner(),
         ).provision_plan
 
-    def _instance_parameters(self, region_id: int) -> AWSInstanceParams:
+    def _instance_parameters(self, region_id: int) -> VirtualMachine:
         params_builder = self._INSTANCE_PARAMS_BUILDER(  # pylint: disable=not-callable
             params=self.params,
             region_id=region_id,
             user_data_raw=self._user_data
         )
-        return AWSInstanceParams(**params_builder.dict(exclude_none=True, exclude_unset=True, exclude_defaults=True))
+        return VirtualMachine(**params_builder.dict(exclude_none=True, exclude_unset=True, exclude_defaults=True))
 
     def provision(self):
         if self._node_nums == [0]:
@@ -250,7 +231,7 @@ class OracleDBCluster(ClusterBase):
 
     @property
     def _user_data(self) -> str:
-        return ScyllaUserDataBuilder(
+        return AzureInstanceUserDataBuilder(
             params=self.params,
             cluster_name=self.cluster_name,
             old_format=False,
@@ -267,7 +248,7 @@ class LoaderCluster(ClusterBase):
 
     @property
     def _user_data(self) -> str:
-        return AWSInstanceUserDataBuilder(
+        return AzureInstanceUserDataBuilder(
             params=self.params,
             syslog_host_port=self._test_config.get_logging_service_host_port(),
         ).to_string()
@@ -282,7 +263,7 @@ class MonitoringCluster(ClusterBase):
 
     @property
     def _user_data(self) -> str:
-        return AWSInstanceUserDataBuilder(
+        return AzureInstanceUserDataBuilder(
             params=self.params,
             syslog_host_port=self._test_config.get_logging_service_host_port(),
         ).to_string()

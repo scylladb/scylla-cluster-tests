@@ -10,7 +10,6 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-
 import abc
 import contextlib
 import datetime

@@ -30,6 +30,7 @@ import anyconfig
 from sdcm import sct_abs_path
 from sdcm.utils import alternator
 from sdcm.utils.aws_utils import get_arch_from_instance_type
+from sdcm.utils.azure_utils import get_scylla_images_azure
 from sdcm.utils.common import (
     MAX_SPOT_DURATION_TIME,
     ami_built_by_scylla,
@@ -101,6 +102,7 @@ class SCTConfiguration(dict):
     Class the hold the SCT configuration
     """
     available_backends = [
+        'azure',
         'baremetal',
         'docker',
         # TODO: remove 'aws-siren' and 'gce-siren' backends completely when
@@ -569,13 +571,13 @@ class SCTConfiguration(dict):
         dict(name="ami_id_db_oracle", env="SCT_AMI_ID_DB_ORACLE", type=str,
              help="AMS AMI id to use for oracle node"),
 
-        dict(name="aws_root_disk_size_db", env="SCT_AWS_ROOT_DISK_SIZE_DB", type=int,
+        dict(name="root_disk_size_db", env="SCT_ROOT_DISK_SIZE_DB", type=int,
              help=""),
 
-        dict(name="aws_root_disk_size_monitor", env="SCT_AWS_ROOT_DISK_SIZE_MONITOR", type=int,
+        dict(name="root_disk_size_monitor", env="SCT_ROOT_DISK_SIZE_MONITOR", type=int,
              help=""),
 
-        dict(name="aws_root_disk_size_loader", env="SCT_AWS_ROOT_DISK_SIZE_LOADER", type=int,
+        dict(name="root_disk_size_loader", env="SCT_ROOT_DISK_SIZE_LOADER", type=int,
              help=""),
 
         dict(name="ami_db_scylla_user", env="SCT_AMI_DB_SCYLLA_USER", type=str,
@@ -588,6 +590,15 @@ class SCTConfiguration(dict):
              help=""),
 
         dict(name="ami_db_cassandra_user", env="SCT_AMI_DB_CASSANDRA_USER", type=str,
+             help=""),
+
+        dict(name="azure_image_db", env="SCT_AZURE_IMAGE_DB", type=str,
+             help=""),
+
+        dict(name="azure_image_monitor", env="SCT_AZURE_IMAGE_MONITOR", type=str,
+             help=""),
+
+        dict(name="azure_image_loader", env="SCT_AZURE_IMAGE_LOADER", type=str,
              help=""),
 
         dict(name="spot_max_price", env="SCT_SPOT_MAX_PRICE", type=float,
@@ -650,9 +661,6 @@ class SCTConfiguration(dict):
         dict(name="gce_root_disk_type_monitor", env="SCT_GCE_ROOT_DISK_TYPE_MONITOR", type=str,
              help=""),
 
-        dict(name="gce_root_disk_size_monitor", env="SCT_GCE_ROOT_DISK_SIZE_MONITOR", type=int,
-             help=""),
-
         dict(name="gce_n_local_ssd_disk_monitor", env="SCT_GCE_N_LOCAL_SSD_DISK_MONITOR", type=int,
              help=""),
 
@@ -660,9 +668,6 @@ class SCTConfiguration(dict):
              help=""),
 
         dict(name="gce_root_disk_type_db", env="SCT_GCE_ROOT_DISK_TYPE_DB", type=str,
-             help=""),
-
-        dict(name="gce_root_disk_size_db", env="SCT_GCE_ROOT_DISK_SIZE_DB", type=int,
              help=""),
 
         dict(name="gce_n_local_ssd_disk_db", env="SCT_GCE_N_LOCAL_SSD_DISK_DB", type=int,
@@ -1242,13 +1247,18 @@ class SCTConfiguration(dict):
     backend_required_params = {
         'aws': ['user_prefix', "instance_type_loader", "instance_type_monitor", "instance_type_db",
                 "region_name", "ami_id_db_scylla", "ami_id_loader",
-                "ami_id_monitor", "aws_root_disk_size_monitor", "aws_root_disk_name_monitor", "ami_db_scylla_user",
+                "ami_id_monitor", "root_disk_size_monitor", "aws_root_disk_name_monitor", "ami_db_scylla_user",
+                "ami_monitor_user"],
+
+        'azure': ['user_prefix', "instance_type_loader", "instance_type_monitor", "instance_type_db",
+                "region_name", "azure_image_db", "azure_image_loader",
+                "azure_image_monitor", "root_disk_size_monitor", "aws_root_disk_name_monitor", "ami_db_scylla_user",
                 "ami_monitor_user"],
 
         'gce': ['user_prefix', 'gce_network', 'gce_image_db', 'gce_image_username', 'gce_instance_type_db',
-                'gce_root_disk_type_db', 'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db',
+                'gce_root_disk_type_db', 'root_disk_size_loader', 'gce_n_local_ssd_disk_db',
                 'gce_instance_type_loader', 'gce_root_disk_type_loader', 'gce_n_local_ssd_disk_loader',
-                'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'gce_root_disk_size_monitor',
+                'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'root_disk_size_monitor',
                 'gce_n_local_ssd_disk_monitor', 'gce_datacenter'],
 
         'docker': ['user_credentials_path', 'scylla_version'],
@@ -1259,9 +1269,9 @@ class SCTConfiguration(dict):
                       "cloud_cluster_id", "nemesis_filter_seeds"],
 
         'gce-siren': ['user_prefix', 'gce_network', 'gce_image_username', 'gce_instance_type_db',
-                      'gce_root_disk_type_db', 'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db',
+                      'gce_root_disk_type_db', 'root_disk_size_loader', 'gce_n_local_ssd_disk_db',
                       'gce_instance_type_loader', 'gce_root_disk_type_loader', 'gce_n_local_ssd_disk_loader',
-                      'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'gce_root_disk_size_monitor',
+                      'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'root_disk_size_monitor',
                       'gce_n_local_ssd_disk_monitor', 'gce_datacenter'],
 
         'k8s-local-kind': ['user_credentials_path', 'scylla_version', 'scylla_mgmt_agent_version',
@@ -1280,15 +1290,15 @@ class SCTConfiguration(dict):
                                'mgmt_docker_image'],
 
         'k8s-gke': ['gke_cluster_version', 'gce_instance_type_db', 'gce_root_disk_type_db',
-                    'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db', 'user_credentials_path', 'scylla_version',
+                    'root_disk_size_loader', 'gce_n_local_ssd_disk_db', 'user_credentials_path', 'scylla_version',
                     'scylla_mgmt_agent_version', 'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter',
                     'k8s_scylla_rack', 'k8s_scylla_cluster_name',
                     'k8s_loader_cluster_name', 'gce_instance_type_loader',
                     'gce_image_monitor', 'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
-                    'gce_root_disk_size_monitor', 'gce_n_local_ssd_disk_monitor', 'mgmt_docker_image'],
+                    'root_disk_size_monitor', 'gce_n_local_ssd_disk_monitor', 'mgmt_docker_image'],
 
         'k8s-eks': ['instance_type_loader', 'instance_type_monitor', 'instance_type_db', 'region_name',
-                    'ami_id_db_scylla', 'ami_id_monitor', 'aws_root_disk_size_monitor',
+                    'ami_id_db_scylla', 'ami_id_monitor', 'root_disk_size_monitor',
                     'aws_root_disk_name_monitor', 'ami_db_scylla_user', 'ami_monitor_user', 'user_credentials_path',
                     'scylla_version', 'scylla_mgmt_agent_version', 'k8s_scylla_operator_docker_image',
                     'k8s_scylla_datacenter', 'k8s_scylla_rack', 'k8s_scylla_cluster_name',
@@ -1298,6 +1308,7 @@ class SCTConfiguration(dict):
     }
 
     defaults_config_files = {
+        "azure": [sct_abs_path('defaults/azure_config.yaml')],
         "aws": [sct_abs_path('defaults/aws_config.yaml')],
         "gce": [sct_abs_path('defaults/gce_config.yaml')],
         "docker": [sct_abs_path('defaults/docker_config.yaml')],
@@ -1421,6 +1432,16 @@ class SCTConfiguration(dict):
                     self.log.debug("Found AMI %s for scylla_version='%s' in %s", ami.image_id, scylla_version, region)
                     ami_list.append(ami)
                 self['ami_id_db_scylla'] = " ".join(ami.image_id for ami in ami_list)
+            elif not self.get("azure_image_db") and self.get("cluster_backend") == 'azure':
+                ami_list = []
+                for region in region_names:
+                    images = get_scylla_images_azure(scylla_version=scylla_version, region_name=region)
+                    if not images:
+                        raise ValueError(f"Image for {scylla_version=} not found in {region}")
+                    image = images[0]
+                    self.log.debug("Found Image %s for scylla_version='%s' in %s", image.id, scylla_version, region)
+                    ami_list.append(image)
+                self['azure_image_db'] = " ".join(ami.id for ami in ami_list)
             elif not self.get("gce_image_db") and self.get("cluster_backend") == "gce":
                 if ":" in scylla_version:
                     gce_image = get_branched_gce_images(scylla_version=scylla_version)[0]

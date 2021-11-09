@@ -10,11 +10,14 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-
+import abc
 from textwrap import dedent
 
 
 # pylint: disable=anomalous-backslash-in-string
+from typing import Any
+
+from sdcm.provision.aws.utils import Singleton
 
 
 def configure_rsyslog_rate_limits_script(interval: int, burst: int) -> str:

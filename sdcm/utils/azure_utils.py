@@ -14,13 +14,16 @@
 from __future__ import annotations
 
 import logging
+from contextlib import suppress
 from typing import NamedTuple, TYPE_CHECKING
 from functools import cached_property
 from itertools import chain
 
+from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
 from azure.identity import ClientSecretCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import VirtualMachine
+from azure.mgmt.compute.v2021_07_01.models import GalleryImageVersion
 from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.subscription import SubscriptionClient
@@ -28,6 +31,7 @@ from azure.mgmt.resourcegraph import ResourceGraphClient
 from azure.mgmt.resourcegraph.models import QueryRequestOptions, QueryRequest
 
 from sdcm.keystore import KeyStore
+from sdcm.utils.aws_utils import AwsArchType
 from sdcm.utils.metaclasses import Singleton
 
 if TYPE_CHECKING:
@@ -214,3 +218,61 @@ def list_instances_azure(tags_dict: Optional[dict[str, str]] = None,
         LOGGER.info("Done. Found total of %s instances.", len(instances))
 
     return instances
+
+
+def get_scylla_images_azure(
+        scylla_version: str,
+        region_name: str,
+        arch: AwsArchType = 'x86_64'
+) -> list[GalleryImageVersion]:
+    version_bucket = scylla_version.split(":", 1)
+    only_latest = False
+    tags_to_search = {
+        'arch': arch
+    }
+    if len(version_bucket) == 1:
+        if '.' in scylla_version:
+            # Plain version, like 4.5.0
+            tags_to_search['ScyllaVersion'] = lambda ver: ver and ver.startswith(scylla_version)
+        else:
+            # Commit id d28c3ee75183a6de3e9b474127b8c0b4d01bbac2
+            tags_to_search['scylla-git-commit'] = scylla_version
+    else:
+        # Branched version, like master:latest
+        branch, build_id = version_bucket
+        tags_to_search['branch'] = branch
+        if build_id == 'latest':
+            only_latest = True
+        elif build_id == 'all':
+            pass
+        else:
+            tags_to_search['build-id'] = build_id
+    output = []
+    with suppress(AzureResourceNotFoundError):
+        gallery_image_versions = AzureService().compute.images.list_by_resource_group(
+            resource_group_name="scylla-images",
+        )
+        for image in gallery_image_versions:
+            # Filter by region
+            if image.location != region_name:
+                continue
+
+            # Filter by tags
+            for tag_name, expected_value in tags_to_search.items():
+                actual_value = image.tags.get(tag_name)
+                if callable(expected_value):
+                    if not expected_value(actual_value):
+                        break
+                elif expected_value != actual_value:
+                    break
+            else:
+                output.append(image)
+
+    output = sorted(output, key=lambda img: img.tags.get('build_id'))
+    if only_latest:
+        return output[:1]
+    return output
+
+
+def region_name_to_location(region_name: str) -> str:
+    return region_name.lower().replace(" ", "")  # e.g., "East US" -> "eastus"

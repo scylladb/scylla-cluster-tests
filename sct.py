@@ -41,8 +41,8 @@ from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_configuration
 from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_runner, clean_sct_runners
-from sdcm.utils.azure_utils import AzureService
-from sdcm.utils.azure_region import AzureRegion, region_name_to_location
+from sdcm.utils.azure_utils import AzureService, region_name_to_location
+from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
 from sdcm.utils.common import (
