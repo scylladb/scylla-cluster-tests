@@ -1,7 +1,8 @@
 import logging
+from abc import ABC
 
 from datetime import datetime, timedelta
-
+from typing import Any
 
 LOGGER = logging.getLogger(__name__)
 
@@ -264,6 +265,19 @@ class CDCQueryFilter(QueryFilter):
 class CDCQueryFilterCS(QueryFilterCS, CDCQueryFilter):
     def cs_params(self):
         return self._PROFILE_PARAMS if 'profiles' in self.test_name else self._PARAMS
+
+
+class NoSQLBenchQueryFilter(QueryFilter):
+    SETUP_INSTANCE_PARAMS = ['instance_type_db', 'instance_type_loader', 'instance_type_monitor']
+
+    def __init__(self, test_doc: dict[str, Any], is_gce: bool, use_wide_query: bool, lastyear: bool):
+        super().__init__(test_doc)
+        self._is_gce = is_gce
+        self._use_wide_query = use_wide_query
+        self._lastyear = lastyear
+
+    def test_cmd_details(self):
+        return ""
 
 
 def query_filter(test_doc, is_gce, use_wide_query=False, lastyear=False):

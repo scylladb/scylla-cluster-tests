@@ -1213,3 +1213,4 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         self.save_email_data_file(subject, email_data, file_path='email_data.json')
 
         return True
+
