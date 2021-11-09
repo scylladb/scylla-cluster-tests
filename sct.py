@@ -1054,9 +1054,11 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
             LOGGER.error("Results file not found")
             sys.exit(1)
         test_results = read_email_data_from_file(email_results_file)
+        LOGGER.info("Test results: %s", test_results)
     else:
         LOGGER.warning("Failed to find test directory for %s", test_id)
     job_name = os.environ.get('JOB_NAME', '')
+    LOGGER.info("Job name was: %s", job_name)
     if 'latency' in job_name or 'throughput' in job_name or 'perf' in job_name:
         logs = list_logs_by_test_id(test_results.get('test_id', test_id))
         if not test_results:
@@ -1095,7 +1097,12 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
                 })
         test_results['logs_links'] = list_logs_by_test_id(test_results.get('test_id', test_id))
 
-        reporter = build_reporter(reporter, email_recipients, testrun_dir)
+        try:
+            reporter = build_reporter(reporter, email_recipients, testrun_dir)
+        except Exception as exc:
+            LOGGER.warning(exc)
+            raise
+
         if not reporter:
             LOGGER.warning("No reporter found")
             sys.exit(1)

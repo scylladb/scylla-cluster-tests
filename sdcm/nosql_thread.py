@@ -20,7 +20,6 @@ from pathlib import Path
 
 from sdcm.cluster import BaseNode
 from sdcm.remote import RemoteCmdRunnerBase
-from sdcm.results_analyze.analyze_nosqlbench_summary import NoSQLBenchSummaryReportBuilder
 from sdcm.sct_events import Severity
 from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
 from sdcm.sct_events.loaders import NoSQLBenchStressEvent, NOSQLBENCH_EVENT_PATTERNS
@@ -124,8 +123,9 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                         f'-v {self.NOSQLBENCH_METRICS_SRC_PATH}:{self.NOSQLBENCH_METRICS_SRC_PATH} '
                         f'{self._nosqlbench_image} '
                         f'{stress_cmd} '
+                        f'--classic-histograms hdr '
                         f'--report-graphite-to graphite-exporter:9109 '
-                        f'--report-summary-to {summary_file_path}',
+                        f'--report-summary-to {summary_file_path} ',
                     timeout=self.timeout + self.shutdown_timeout,
                     log_file=log_file_name
                 )
@@ -133,10 +133,6 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                 remoter.receive_files(src=summary_file_path,
                                       dst=loader.logdir)
 
-                summary_file = next(Path(loader.logdir).glob("*.summary"))
-                LOGGER.info("Found these summary files: %s", summary_file)
-                builder = NoSQLBenchSummaryReportBuilder(summary_file)
-                builder.build_summary_report()
                 return result
 
             except Exception as exc:  # pylint: disable=broad-except
