@@ -281,6 +281,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     _scylla_manager_namespace = SCYLLA_MANAGER_NAMESPACE
     _scylla_namespace = SCYLLA_NAMESPACE
 
+    @cached_property
+    def cluster_backend(self):
+        return self.params.get("cluster_backend")
+
     @property
     def k8s_server_url(self) -> Optional[str]:
         return None
@@ -1407,7 +1411,8 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
 
     @property
     def region(self):
-        return self.parent_cluster.k8s_cluster.datacenter[0]  # TODO: find the node and return it's region.
+        # TODO: make it be multi-dc aware when multi-dc support gets added
+        return self.parent_cluster.k8s_cluster.params.get('k8s_scylla_datacenter')
 
     def start_journal_thread(self):
         self._journal_thread = get_system_logging_thread(logs_transport="kubectl",

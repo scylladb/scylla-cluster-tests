@@ -94,7 +94,7 @@ class RemoteDocker(BaseNode):
 
     @property
     def region(self):
-        pass
+        return "docker"
 
     def restart(self):
         pass

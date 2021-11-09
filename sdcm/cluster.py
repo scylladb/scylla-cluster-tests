@@ -5426,7 +5426,7 @@ class LocalNode(BaseNode):
 
     @property
     def region(self):
-        pass
+        return "local"
 
     def set_keep_alive(self):
         pass
