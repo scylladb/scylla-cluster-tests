@@ -112,8 +112,6 @@ try:
 except ImportError:
     pass
 
-warnings.filterwarnings(action="ignore", message="unclosed",
-                        category=ResourceWarning)
 TEST_LOG = logging.getLogger(__name__)
 
 
@@ -587,6 +585,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     @teardown_on_exception
     @log_run_info
     def setUp(self):  # pylint: disable=too-many-branches,too-many-statements
+        warnings.filterwarnings(action="ignore", message="unclosed",
+                                category=ResourceWarning)
         self.credentials = []
         self.db_cluster = None
         self.cs_db_cluster = None
