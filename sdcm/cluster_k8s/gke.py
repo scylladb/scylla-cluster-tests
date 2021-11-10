@@ -139,6 +139,7 @@ class GcloudTokenUpdateThread(TokenUpdateThread):
 class GkeCluster(KubernetesCluster):
     AUXILIARY_POOL_NAME = 'default-pool'  # This is default pool that is deployed with the cluster
     POOL_LABEL_NAME = 'cloud.google.com/gke-nodepool'
+    IS_NODE_TUNING_SUPPORTED = True
     pools: Dict[str, GkeNodePool]
 
     # pylint: disable=too-many-arguments
@@ -173,15 +174,6 @@ class GkeCluster(KubernetesCluster):
         self.gce_user = services[0].key
         self.gce_zone = gce_datacenter[0]
         self.gke_cluster_created = False
-        self.allowed_labels_on_scylla_node = [('name', 'cpu-policy'),
-                                              ('app', 'local-volume-provisioner'),
-                                              ('name', 'raid-local-disks'),
-                                              ('k8s-app', 'fluentbit-gke'),
-                                              ('k8s-app', 'gke-metrics-agent'),
-                                              ('component', 'kube-proxy'),
-                                              ('k8s-app', 'gcp-compute-persistent-disk-csi-driver'),
-                                              ('scylla/cluster', self.k8s_scylla_cluster_name)]
-
         self.api_call_rate_limiter = ApiCallRateLimiter(
             rate_limit=GKE_API_CALL_RATE_LIMIT,
             queue_size=GKE_API_CALL_QUEUE_SIZE,
@@ -189,6 +181,24 @@ class GkeCluster(KubernetesCluster):
             urllib_backoff_factor=GKE_URLLIB_BACKOFF_FACTOR,
         )
         self.api_call_rate_limiter.start()
+
+    @cached_property
+    def allowed_labels_on_scylla_node(self) -> list:
+        allowed_labels_on_scylla_node = [
+            ('name', 'cpu-policy'),
+            ('app', 'local-volume-provisioner'),
+            ('name', 'raid-local-disks'),
+            ('k8s-app', 'fluentbit-gke'),
+            ('k8s-app', 'gke-metrics-agent'),
+            ('component', 'kube-proxy'),
+            ('k8s-app', 'gcp-compute-persistent-disk-csi-driver'),
+            ('scylla/cluster', self.k8s_scylla_cluster_name),
+        ]
+        if self.is_performance_tuning_enabled:
+            # NOTE: add performance tuning related pods only if we expect it to be.
+            #       When we have tuning disabled it must not exist.
+            allowed_labels_on_scylla_node.extend(self.perf_pods_labels)
+        return allowed_labels_on_scylla_node
 
     def __str__(self):
         return f"{type(self).__name__} {self.name} | Zone: {self.gce_zone} | Version: {self.gke_cluster_version}"

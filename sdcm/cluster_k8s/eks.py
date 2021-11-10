@@ -210,6 +210,7 @@ class EksTokenUpdateThread(TokenUpdateThread):
 # pylint: disable=too-many-instance-attributes
 class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
     POOL_LABEL_NAME = 'eks.amazonaws.com/nodegroup'
+    IS_NODE_TUNING_SUPPORTED = True
     pools: Dict[str, EksNodePool]
     short_cluster_name: str
 
@@ -237,12 +238,22 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         self.ec2_subnet_ids = ec2_subnet_ids
         self.service_ipv4_cidr = service_ipv4_cidr
         self.vpc_cni_version = vpc_cni_version
-        self.allowed_labels_on_scylla_node = [('name', 'node-setup'),
-                                              ('name', 'cpu-policy'),
-                                              ('k8s-app', 'aws-node'),
-                                              ('app', 'local-volume-provisioner'),
-                                              ('k8s-app', 'kube-proxy'),
-                                              ('scylla/cluster', self.k8s_scylla_cluster_name)]
+
+    @cached_property
+    def allowed_labels_on_scylla_node(self) -> list:
+        allowed_labels_on_scylla_node = [
+            ('name', 'node-setup'),
+            ('name', 'cpu-policy'),
+            ('k8s-app', 'aws-node'),
+            ('app', 'local-volume-provisioner'),
+            ('k8s-app', 'kube-proxy'),
+            ('scylla/cluster', self.k8s_scylla_cluster_name),
+        ]
+        if self.is_performance_tuning_enabled:
+            # NOTE: add performance tuning related pods only if we expect it to be.
+            #       When we have tuning disabled it must not exist.
+            allowed_labels_on_scylla_node.extend(self.perf_pods_labels)
+        return allowed_labels_on_scylla_node
 
     def create_eks_cluster(self, wait_till_functional=True):
         self.eks_client.create_cluster(

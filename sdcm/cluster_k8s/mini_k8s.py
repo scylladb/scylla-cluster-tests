@@ -346,9 +346,9 @@ class LocalKindCluster(LocalMinimalClusterBase):
     _target_user: str
     _create_kubectl_config_cmd: str = '/var/tmp/kind export kubeconfig'
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.allowed_labels_on_scylla_node = [
+    @cached_property
+    def allowed_labels_on_scylla_node(self) -> list:
+        return [
             ('k8s-app', 'kindnet'),
             ('k8s-app', 'kube-proxy'),
             ('scylla/cluster', self.k8s_scylla_cluster_name),

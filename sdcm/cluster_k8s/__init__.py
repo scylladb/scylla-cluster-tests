@@ -20,6 +20,7 @@ import os
 import re
 import abc
 import json
+import math
 import time
 import base64
 import random
@@ -243,6 +244,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     MONITORING_POOL_NAME = 'monitoring-pool'
     LOADER_POOL_NAME = 'loader-pool'
     POOL_LABEL_NAME: str = None
+    IS_NODE_TUNING_SUPPORTED: bool = False
 
     api_call_rate_limiter: Optional[ApiCallRateLimiter] = None
 
@@ -272,14 +274,23 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.k8s_scylla_cluster_name = self.params.get('k8s_scylla_cluster_name')
         self.scylla_config_lock = RLock()
         self.scylla_restart_required = False
-        # keep pods labels that are allowed to be scheduled on the Scylla node
-        self.allowed_labels_on_scylla_node = []
+        self.perf_pods_labels = [
+            ('app.kubernetes.io/name', 'scylla-node-config'),
+            ('app.kubernetes.io/name', 'node-config'),
+            ('scylla-operator.scylladb.com/node-config-job-type', 'Node'),
+            ('scylla-operator.scylladb.com/node-config-job-type', 'Containers'),
+        ]
 
     # NOTE: Following class attr(s) are defined for consumers of this class
     #       such as 'sdcm.utils.remote_logger.ScyllaOperatorLogger'.
     _scylla_operator_namespace = SCYLLA_OPERATOR_NAMESPACE
     _scylla_manager_namespace = SCYLLA_MANAGER_NAMESPACE
     _scylla_namespace = SCYLLA_NAMESPACE
+
+    @property
+    def allowed_labels_on_scylla_node(self):
+        # keep pods labels that are allowed to be scheduled on the Scylla node
+        return []
 
     @cached_property
     def cluster_backend(self):
@@ -723,7 +734,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             'cpuset': True,
             'hostNetworking': True,
             'automaticOrphanedNodeCleanup': True,
-            'sysctls': ["fs.aio-max-nr=2097152"],
+            # NOTE: '5578536' value is defined in the scylla repo here:
+            #       dist/common/sysctl.d/99-scylla-aio.conf
+            #       It is the same for the 4.3.x , 4.4.x and 4.5.x versions
+            'sysctls': ["fs.aio-max-nr=5578536"],
             'serviceMonitor': {
                 'create': False
             },
@@ -785,6 +799,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             'scylla-manager-agent.yaml': data,
         })
 
+    @cached_property
+    def is_performance_tuning_enabled(self):
+        return self.params.get('k8s_enable_performance_tuning') and self.IS_NODE_TUNING_SUPPORTED
+
     @log_run_info
     def deploy_scylla_cluster(self, node_pool: CloudK8sNodePool, node_prepare_config: str = None) -> None:
         if self.params.get('reuse_cluster'):
@@ -804,7 +822,19 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         affinity_modifiers = node_pool.affinity_modifiers
         if node_prepare_config:
             LOGGER.info("Install DaemonSets required by scylla nodes")
-            self.apply_file(node_prepare_config, modifiers=affinity_modifiers, envsubst=False)
+            scylla_machine_image_args = ['--setup-disks'] if self.is_performance_tuning_enabled else ['--all']
+
+            def scylla_machine_image_args_modifier(obj):
+                if obj["kind"] != "DaemonSet":
+                    return
+                for container_data in obj["spec"]["template"]["spec"]["containers"]:
+                    if "scylla-machine-image:" in container_data["image"]:
+                        container_data["args"] = scylla_machine_image_args
+
+            self.apply_file(
+                node_prepare_config,
+                modifiers=affinity_modifiers + [scylla_machine_image_args_modifier],
+                envsubst=False)
 
             LOGGER.info("Install local volume provisioner")
             self.helm(f"install local-provisioner {LOCAL_PROVISIONER_DIR}",
@@ -819,6 +849,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             - COMMON_CONTAINERS_RESOURCES['cpu']
             - SCYLLA_MANAGER_AGENT_RESOURCES['cpu']
         )
+        if self.is_performance_tuning_enabled:
+            # NOTE: we should use at max 7 from each 8 cores.
+            #       i.e 28/32 , 21/24 , 14/16 and 7/8
+            new_cpu_limit = math.ceil(cpu_limit / 8) * 7
+            if new_cpu_limit < cpu_limit:
+                cpu_limit = new_cpu_limit
         memory_limit = (
             memory_limit
             - OPERATOR_CONTAINERS_RESOURCES['memory']
@@ -831,6 +867,26 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         # Init 'scylla-config' configMap before installation of Scylla to avoid redundant restart
         self.init_scylla_config_map()
         self.scylla_restart_required = False
+
+        if self.is_performance_tuning_enabled and node_pool:
+            LOGGER.info("Tune K8S nodes dedicated for Scylla")
+            self.kubectl_wait(
+                "--for condition=established crd/scyllaoperatorconfigs.scylla.scylladb.com")
+            self.kubectl_wait("--for condition=established crd/nodeconfigs.scylla.scylladb.com")
+
+            if scylla_utils_docker_image := self.params.get('k8s_scylla_utils_docker_image'):
+                self.kubectl(
+                    "patch scyllaoperatorconfigs.scylla.scylladb.com cluster --type merge "
+                    "-p '{\"spec\":{\"scyllaUtilsImage\":\"%s\"}}'" % scylla_utils_docker_image,
+                    ignore_status=False)
+
+            self.apply_file(
+                "sdcm/k8s_configs/node-config-crd.yaml",
+                modifiers=affinity_modifiers, envsubst=False)
+            # NOTE: no need to wait explicitly for the new objects readiness.
+            #       Scylla pods will get in sync automatically.
+            #       Just sleep for some time to avoid races.
+            time.sleep(5)
 
         # Deploy scylla cluster
         LOGGER.debug(self.helm_install(
