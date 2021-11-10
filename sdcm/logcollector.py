@@ -786,7 +786,9 @@ class ScyllaLogCollector(LogCollector):
                     CommandLog(name='io-properties.yaml',
                                command='cat /etc/scylla.d/io_properties.yaml'),
                     CommandLog(name='dmesg.log',
-                               command='dmesg -P')
+                               command='dmesg -P'),
+                    CommandLog(name='kallsyms',
+                               command='sudo cat /proc/kallsyms')
                     ]
     cluster_log_type = "db-cluster"
     cluster_dir_prefix = "db-cluster"
