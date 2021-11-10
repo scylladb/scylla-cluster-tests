@@ -173,8 +173,10 @@ spec:
       - name: node-setup
         image: scylladb/scylla-machine-image:k8s-aws-666.development-20201023.0c4dfa1
         imagePullPolicy: Always
-        args:
-          - --all
+        # NOTE: 'args' will be updated in the code
+        #        when perf tuning is disabled it is ['--all']
+        #        when perf tuning is enabled it is ['--setup-disks']
+        args: ${SCYLLA_MACHINE_IMAGE_ARGS}
         env:
           - name: ROOT_DISK
             value: /mnt/hostfs/mnt/raid-disks/disk0

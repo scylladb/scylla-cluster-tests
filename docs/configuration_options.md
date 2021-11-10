@@ -156,6 +156,8 @@
 | **<a href="#user-content-gce_pd_ssd_disk_size_monitor" name="gce_pd_ssd_disk_size_monitor">gce_pd_ssd_disk_size_monitor</a>**  |  | N/A | SCT_GCE_SSD_DISK_SIZE_MONITOR
 | **<a href="#user-content-gke_cluster_version" name="gke_cluster_version">gke_cluster_version</a>**  |  | N/A | SCT_GKE_CLUSTER_VERSION
 | **<a href="#user-content-gke_k8s_release_channel" name="gke_k8s_release_channel">gke_k8s_release_channel</a>**  |  | N/A | SCT_GKE_K8S_RELEASE_CHANNEL
+| **<a href="#user-content-k8s_scylla_utils_docker_image" name="k8s_scylla_utils_docker_image">k8s_scylla_utils_docker_image</a>**  |  | N/A | SCT_K8S_SCYLLA_UTILS_DOCKER_IMAGE
+| **<a href="#user-content-k8s_enable_performance_tuning" name="k8s_enable_performance_tuning">k8s_enable_performance_tuning</a>**  |  | N/A | SCT_K8S_ENABLE_PERFORMANCE_TUNING
 | **<a href="#user-content-k8s_deploy_monitoring" name="k8s_deploy_monitoring">k8s_deploy_monitoring</a>**  |  | N/A | SCT_K8S_DEPLOY_MONITORING
 | **<a href="#user-content-k8s_scylla_operator_helm_repo" name="k8s_scylla_operator_helm_repo">k8s_scylla_operator_helm_repo</a>**  |  | N/A | SCT_K8S_SCYLLA_OPERATOR_HELM_REPO
 | **<a href="#user-content-k8s_scylla_operator_chart_version" name="k8s_scylla_operator_chart_version">k8s_scylla_operator_chart_version</a>**  |  | N/A | SCT_K8S_SCYLLA_OPERATOR_CHART_VERSION

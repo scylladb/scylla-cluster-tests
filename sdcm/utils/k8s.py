@@ -689,7 +689,18 @@ def get_pool_affinity_modifiers(pool_label_name, pool_name):
                     pool_label_name,
                     pool_name)
 
-    return [add_statefulset_or_daemonset_pool_affinity, add_scylla_cluster_pool_affinity]
+    def add_node_config_pool_affinity(obj):
+        if obj['kind'] == 'NodeConfig':
+            obj['spec']['placement']['affinity'] = add_pool_node_affinity(
+                obj['spec']['placement'].get('affinity', {}),
+                pool_label_name,
+                pool_name)
+
+    return [
+        add_statefulset_or_daemonset_pool_affinity,
+        add_scylla_cluster_pool_affinity,
+        add_node_config_pool_affinity,
+    ]
 
 
 class HelmValues:

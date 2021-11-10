@@ -158,6 +158,12 @@ max_events_severities: ""
 mgmt_docker_image: ''
 k8s_deploy_monitoring: false
 
+# NOTE: 'k8s_enable_performance_tuning' is alpha feature in operator-1.6 , so it is disabled by default
+k8s_enable_performance_tuning: false
+
+# NOTE: if 'k8s_scylla_utils_docker_image' is not specified then default values from operator-1.6+ will be used
+k8s_scylla_utils_docker_image: ''
+
 scylla_rsyslog_setup: false
 
 backup_bucket_region: ''  # use the same region as a cluster

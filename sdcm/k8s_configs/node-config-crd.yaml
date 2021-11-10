@@ -1,0 +1,12 @@
+apiVersion: scylla.scylladb.com/v1alpha1
+kind: NodeConfig
+metadata:
+  name: scylla-layout-nodes-tuning
+  labels:
+    app: scylla-node-config
+spec:
+  placement:
+    nodeSelector: {}
+    # NOTE: 'affinity' will be updated in the code
+    affinity: {}
+  disableOptimizations: false

@@ -700,6 +700,16 @@ class SCTConfiguration(dict):
                   "'rapid', 'regular', 'stable' and '' (static / No channel)."),
 
         # k8s options
+        dict(name="k8s_scylla_utils_docker_image",
+             env="SCT_K8S_SCYLLA_UTILS_DOCKER_IMAGE", type=str,
+             help=(
+                 "Docker image to be used by Scylla operator to tune K8S nodes for performance. "
+                 "Used when k8s_enable_performance_tuning' is defined to 'True'. "
+                 "If not set then the default from operator will be used.")),
+
+        dict(name="k8s_enable_performance_tuning", env="SCT_K8S_ENABLE_PERFORMANCE_TUNING",
+             type=boolean, help="Define whether performance tuning must run or not."),
+
         dict(name="k8s_deploy_monitoring", env="SCT_K8S_DEPLOY_MONITORING", type=str,
              help=""),
 
