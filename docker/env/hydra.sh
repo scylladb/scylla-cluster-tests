@@ -182,7 +182,7 @@ function run_in_docker () {
     echo "Going to run '${CMD_TO_RUN}'..."
     if [ -z "$HYDRA_DRY_RUN" ]; then
         docker ${REMOTE_DOCKER_HOST} run --rm ${TTY_STDIN} --privileged \
-            -h ${HOST_NAME} \
+            ${HOST_NAME_PARAM} \
             -l "TestId=${SCT_TEST_ID}" \
             -l "RunByUser=${RUN_BY_USER}" \
             -v /var/run:/run \
@@ -217,7 +217,7 @@ function run_in_docker () {
             /bin/bash -c "sudo ln -s '${SCT_DIR}' '${WORK_DIR}'; /sct/get-qa-ssh-keys.sh; /sct/install_argus.sh; ${TERM_SET_SIZE} eval '${CMD_TO_RUN}'"
     else
         echo docker ${REMOTE_DOCKER_HOST} run --rm ${TTY_STDIN} --privileged \
-            -h ${HOST_NAME} \
+            ${HOST_NAME_PARAM} \
             -l "TestId=${SCT_TEST_ID}" \
             -l "RunByUser=${RUN_BY_USER}" \
             -v /var/run:/run \
@@ -340,12 +340,14 @@ if [[ -n "$RUNNER_IP" ]]; then
     fi
 
     DOCKER_HOST="-H ssh://ubuntu@${RUNNER_IP}"
+    HOST_NAME_PARAM="-h ip-${RUNNER_IP//./-}"
 else
     if [ -z "${DOCKER_GROUP_ARGS[@]}" ]; then
         for gid in $(id -G); do
             DOCKER_GROUP_ARGS+=(--group-add "$gid")
         done
     fi
+    HOST_NAME_PARAM="-h ${HOST_NAME}"
 fi
 
 COMMAND=${HYDRA_COMMAND[0]}
