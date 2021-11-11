@@ -193,7 +193,14 @@ def call(Map pipelineParams) {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: 30, unit: 'MINUTES') {
-                                        provisionResources(params, builder.region)
+                                        if (params.backend == 'aws') {
+                                            provisionResources(params, builder.region)
+                                        } else {
+                                            sh """
+                                                echo 'Skipping because non-AWS backends are not supported'
+                                            """
+                                        }
+                                        completed_stages['provision_resources'] = true
                                     }
                                 }
                             }
@@ -209,6 +216,7 @@ def call(Map pipelineParams) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: testRunTimeout, unit: 'MINUTES') {
                                         runSctTest(params, builder.region, functional_test)
+                                        completed_stages['run_tests'] = true
                                     }
                                 }
                             }
@@ -224,6 +232,7 @@ def call(Map pipelineParams) {
                                 dir('scylla-cluster-tests') {
                                     timeout(time: collectLogsTimeout, unit: 'MINUTES') {
                                         runCollectLogs(params, builder.region)
+                                        completed_stages['collect_logs'] = true
                                     }
                                 }
                             }
@@ -270,6 +279,7 @@ def call(Map pipelineParams) {
                             wrap([$class: 'BuildUser']) {
                                 dir('scylla-cluster-tests') {
                                     cleanSctRunners(params, currentBuild)
+                                    completed_stages['clean_sct_runner'] = true
                                 }
                             }
                         }
@@ -280,13 +290,19 @@ def call(Map pipelineParams) {
         post {
             always {
                 script {
+                    def provision_resources = completed_stages['provision_resources']
+                    def run_tests = completed_stages['run_tests']
                     def collect_logs = completed_stages['collect_logs']
                     def clean_resources = completed_stages['clean_resources']
                     def send_email = completed_stages['send_email']
+                    def clean_sct_runner = completed_stages['clean_sct_runner']
                     sh """
-                        echo "$collect_logs"
-                        echo "$clean_resources"
-                        echo "$send_email"
+                        echo "'provision_resources' stage is completed: $provision_resources"
+                        echo "'run_tests' stage is completed: $run_tests"
+                        echo "'collect_logs' stage is completed: $collect_logs"
+                        echo "'clean_resources' stage is completed: $clean_resources"
+                        echo "'send_email' stage is completed: $send_email"
+                        echo "'clean_sct_runner' stage is completed: $clean_sct_runner"
                     """
                     if (!completed_stages['clean_resources']) {
                         catchError {
