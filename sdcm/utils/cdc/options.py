@@ -18,7 +18,7 @@ CDC_SETTINGS_NAMES_VALUES = {
 
 CDC_DELTA_REGEXP = r"delta.*?(?P<delta>(full|keys))"
 CDC_ENABLED_REGEXP = r"enabled.*?(?P<enabled>(true|false))"
-CDC_PREIMAGE_REGEXP = r"preimage.*?(?P<preimage>(full|on|off))"
+CDC_PREIMAGE_REGEXP = r"preimage.*?(?P<preimage>(full|false|true))"
 CDC_POSTIMAGE_REGEXP = r"postimage.*?(?P<postimage>(true|false))"
 CDC_TTL_REGEXP = r"ttl.*?(?P<ttl>\d+)"
 
