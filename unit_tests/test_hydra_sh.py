@@ -105,7 +105,7 @@ class LongevityPipelineTest:
     @staticmethod
     def docker_run_prefix(runner: bool):
         if runner:
-            return "docker -H ssh://ubuntu@1.1.1.1 run --rm -it --privileged -h SCT-CONTAINER.*"
+            return "docker -H ssh://ubuntu@1.1.1.1 run --rm -it --privileged -h ip-1.1.1.1.*"
         return "docker run --rm -it --privileged .*"
 
     def sct_path(self, runner: bool):
