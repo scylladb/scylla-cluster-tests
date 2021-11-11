@@ -442,10 +442,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                       start_time, self.test_duration, end_time)
         self.argus_update_status(TestStatus.RUNNING)
 
-        def kill_the_test():
-            TestTimeoutEvent(start_time=self.start_time, duration=self.test_duration).publish()
+        def kill_the_test(start: float, duration: int):
+            TestTimeoutEvent(start_time=start, duration=duration).publish()
 
-        thread = threading.Timer(60 * int(self.test_duration), kill_the_test)
+        thread = threading.Timer(60 * int(self.test_duration), kill_the_test,
+                                 kwargs={'start': self.start_time, 'duration': self.test_duration})
         thread.daemon = True
         thread.start()
         return thread
