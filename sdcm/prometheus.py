@@ -12,7 +12,6 @@
 # Copyright (c) 2020 ScyllaDB
 
 import time
-import socket
 import logging
 import datetime
 import threading
@@ -27,7 +26,7 @@ from sdcm.sct_events.base import EventPeriod
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.sct_events.monitors import PrometheusAlertManagerEvent
 from sdcm.utils.decorators import retrying, log_run_info
-
+from sdcm.utils.net import get_my_ip
 
 START = 'start'
 STOP = 'stop'
@@ -55,14 +54,11 @@ def start_metrics_server():
     https://github.com/prometheus/prometheus/wiki/Default-port-allocations
     Occupied port 9389 for SCT
     """
-    hostname = socket.gethostname()
-
     try:
         LOGGER.debug('Try to start prometheus API server')
         httpd = start_http_server(0)
         port = httpd.server_port
-        ip = socket.gethostbyname(hostname)
-
+        ip = get_my_ip()
         LOGGER.info('prometheus API server running on port: %s', port)
         return '{}:{}'.format(ip, port)
     except Exception as ex:  # pylint: disable=broad-except
