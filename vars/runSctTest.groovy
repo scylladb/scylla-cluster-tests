@@ -2,7 +2,7 @@
 
 def call(Map params, String region, functional_test = false){
     // handle params which can be a json list
-    def region = initAwsRegionParam(params.region, region)
+    def current_region = initAwsRegionParam(params.region, region)
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = getCloudProviderFromBackend(params.backend)
     def test_cmd
@@ -25,7 +25,7 @@ def call(Map params, String region, functional_test = false){
     export SCT_COLLECT_LOGS=false
 
     if [[ -n "${params.region ? params.region : ''}" ]] ; then
-        export SCT_REGION_NAME=${region}
+        export SCT_REGION_NAME=${current_region}
     fi
     if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
         export SCT_GCE_DATACENTER=${params.gce_datacenter}

@@ -3,7 +3,7 @@
 def completed_stages = [:]
 
 def runSctTest(Map params, String region){
-    def region = initAwsRegionParam(params.region, region)
+    def current_region = initAwsRegionParam(params.region, region)
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
     def cloud_provider = params.backend.trim().toLowerCase()
 
@@ -15,7 +15,7 @@ def runSctTest(Map params, String region){
     rm -fv ./latest
 
     export SCT_CLUSTER_BACKEND="${params.backend}"
-    export SCT_REGION_NAME=${region}
+    export SCT_REGION_NAME=${current_region}
     if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
         export SCT_GCE_DATACENTER=${params.gce_datacenter}
     fi
