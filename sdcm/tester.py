@@ -2992,7 +2992,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         test_result = 'PASSED' if self.get_test_status() == 'SUCCESS' else 'ERROR'
         job_base_name = os.environ.get('JOB_BASE_NAME', 'UnknownJob')
         ami_id = self.params.get('ami_id_db_scylla').split()[0]
-        region_name = self.params.get('aws_region').split()[0]
+        region_name = self.params.region_names[0]
 
         tag_ami(ami_id=ami_id, region_name=region_name, tags_dict={"JOB:{}".format(job_base_name): test_result})
 
