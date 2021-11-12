@@ -22,9 +22,10 @@ from pkg_resources import parse_version
 
 from sdcm import wait
 from sdcm.fill_db_data import FillDatabaseData
+from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.utils.version_utils import is_enterprise, get_node_supported_sstable_versions
 from sdcm.sct_events.system import InfoEvent
-from sdcm.sct_events.database import IndexSpecialColumnErrorEvent
+from sdcm.sct_events.database import IndexSpecialColumnErrorEvent, DatabaseLogEvent
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused
 from sdcm.sct_events.group_common_events import ignore_upgrade_cdc_errors
 
@@ -110,6 +111,12 @@ class UpgradeTest(FillDatabaseData):
 
     insert_rows = None
     truncate_entries_flag = False
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        scylla_version = self.params.get('scylla_version')
+        if scylla_version and scylla_version.startswith('2020.1'):
+            DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR, line='Could not retrieve CDC streams').publish()
 
     def read_data_from_truncated_tables(self, session):
         session.execute("USE truncate_ks")
