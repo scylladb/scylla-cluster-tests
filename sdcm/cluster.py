@@ -1677,7 +1677,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     exclude_none=True, exclude_unset=True, exclude_defaults=True,
                     # NOTE: explicit fields included into yaml no matter what,
                     #  they are needed for nodetool to operate properly
-                    explicit=['partitioner', 'commitlog_sync', 'commitlog_sync_period_in_ms']
+                    explicit=['partitioner', 'commitlog_sync', 'commitlog_sync_period_in_ms', 'endpoint_snitch']
                 )
             )
             LOGGER.debug("%s: scylla.yaml will be updated to:\n%s", self, scylla_yaml)
