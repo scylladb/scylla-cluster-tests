@@ -71,10 +71,10 @@ class EksNodePool(CloudK8sNodePool):
             k8s_cluster=k8s_cluster,
             name=name,
             num_nodes=num_nodes,
+            instance_type=instance_type,
+            image_type=image_type,
             disk_size=disk_size,
             disk_type=disk_type,
-            image_type=image_type,
-            instance_type=instance_type,
             labels=labels,
             is_deployed=is_deployed,
         )
