@@ -107,6 +107,7 @@ class SctEvent:
         self.severity = severity
         self._ready_to_publish = True
         self.event_id = str(uuid.uuid4())
+        self.log_level = logging.INFO
 
     @classmethod
     def is_abstract(cls) -> bool:

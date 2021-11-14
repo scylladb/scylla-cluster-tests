@@ -71,13 +71,15 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
         for event_tuple in self.inbound_events():
             with verbose_suppress("EventsFileLogger failed to process %s", event_tuple):
                 _, event = event_tuple  # try to unpack event from EventsDevice
-                self.write_event(event=event, tee=LOGGER.info)
+                self.write_event(event=event)
 
-    def write_event(self, event: SctEvent, tee: Optional[Callable[[str], Any]] = None) -> None:
+    def write_event(self, event: SctEvent) -> None:
         if event.source_timestamp:
             message = f"{event.formatted_event_timestamp} <{event.formatted_source_timestamp}>: {str(event).strip()}"
         else:
             message = f"{event.formatted_event_timestamp}: {str(event).strip()}"
+
+        tee = getattr(LOGGER, logging.getLevelName(event.log_level).lower())
         if tee and not isinstance(event, TestResultEvent):
             with verbose_suppress("%s: failed to tee %s to %s", self, event, tee):
                 tee(message)
