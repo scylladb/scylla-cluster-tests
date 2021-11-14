@@ -48,9 +48,11 @@ pipeline {
         }
         stage('Run hydra clean-runner-instances') {
             steps {
-                sctScript """
-                    ./docker/env/hydra.sh clean-runner-instances ${params.dryRun ? '--dry-run' : ''}
-                """
+                   timeout(time: 15, unit: 'MINUTES') {
+                        sctScript """
+                            ./docker/env/hydra.sh clean-runner-instances ${params.dryRun ? '--dry-run' : ''}
+                        """
+                   }
             }
         }
     }
