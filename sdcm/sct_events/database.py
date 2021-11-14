@@ -248,6 +248,7 @@ class RepairEvent(ScyllaDatabaseContinuousEvent):
 
     def __init__(self, node: str, shard: int, severity=Severity.NORMAL, **__):
         super().__init__(node=node, shard=shard, severity=severity)
+        self.log_level = logging.DEBUG
 
 
 class CompactionEvent(ScyllaDatabaseContinuousEvent):
