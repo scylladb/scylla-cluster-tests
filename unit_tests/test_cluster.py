@@ -124,6 +124,21 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             assert event_b["type"] == "REACTOR_STALLED"
             assert event_b["line_number"] == 3
 
+    def test_search_kernel_callstack(self):
+        self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'kernel_callstack.log')
+        self.node._read_system_log_and_publish_events(start_from_beginning=True)
+        with self.get_raw_events_log().open() as events_file:
+            events = [json.loads(line) for line in events_file]
+
+            event_a, event_b = events[-2], events[-1]
+            print(event_a)
+            print(event_b)
+
+            assert event_a["type"] == "KERNEL_CALLSTACK"
+            assert event_a["line_number"] == 2
+            assert event_b["type"] == "KERNEL_CALLSTACK"
+            assert event_b["line_number"] == 5
+
     def test_search_cdc_invalid_request(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_cdc_invalid_request.log')
         with ignore_upgrade_schema_errors():

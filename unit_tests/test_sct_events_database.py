@@ -60,6 +60,20 @@ class TestDatabaseLogEvent(unittest.TestCase):
         self.assertEqual(event2.line, f"{TOLERABLE_REACTOR_STALL} ms")
         self.assertEqual(event2.line_number, 2)
 
+    def test_kernel_callstack_severity(self):
+        event1 = DatabaseLogEvent.KERNEL_CALLSTACK()
+        self.assertEqual(event1.severity, Severity.DEBUG)
+
+        self.assertIs(event1, event1.add_info(node="n1", line="kernel callstack 0xffffffffffffff80", line_number=1))
+        self.assertEqual(event1.node, "n1")
+        self.assertEqual(event1.line_number, 1)
+
+        event2 = DatabaseLogEvent.REACTOR_STALLED()
+        self.assertEqual(event2.severity, Severity.DEBUG)
+        self.assertIs(event2, event2.add_info(node="n2", line="kernel callstack 0xffffffffffffff80", line_number=2))
+        self.assertEqual(event2.node, "n2")
+        self.assertEqual(event2.line_number, 2)
+
     def test_system_error_events_list(self):
         self.assertSetEqual(set(dir(DatabaseLogEvent)) - set(dir(LogEvent)),
                             {ev.type for ev in SYSTEM_ERROR_EVENTS})
