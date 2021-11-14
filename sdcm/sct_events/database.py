@@ -261,6 +261,7 @@ class CompactionEvent(ScyllaDatabaseContinuousEvent):
         super().__init__(node=node, shard=shard, severity=severity)
         self.table = table
         self.compaction_process_id = compaction_process_id
+        self.log_level = logging.DEBUG
 
     @property
     def msgfmt(self):
