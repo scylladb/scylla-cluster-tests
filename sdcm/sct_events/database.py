@@ -44,6 +44,7 @@ class DatabaseLogEvent(LogEvent, abstract=True):
 
     # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
     REACTOR_STALLED: Type[LogEventProtocol]
+    KERNEL_CALLSTACK: Type[LogEventProtocol]
     BACKTRACE: Type[LogEventProtocol]
     ABORTING_ON_SHARD: Type[LogEventProtocol]
     SEGMENTATION: Type[LogEventProtocol]
@@ -105,6 +106,8 @@ DatabaseLogEvent.add_subevent_type("STACKTRACE", severity=Severity.ERROR,
 # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
 DatabaseLogEvent.add_subevent_type("REACTOR_STALLED", mixin=ReactorStalledMixin, severity=Severity.DEBUG,
                                    regex="Reactor stalled")
+DatabaseLogEvent.add_subevent_type("KERNEL_CALLSTACK", severity=Severity.DEBUG,
+                                   regex="kernel callstack: 0x.{16}")
 DatabaseLogEvent.add_subevent_type("BACKTRACE", severity=Severity.ERROR,
                                    regex="backtrace")
 DatabaseLogEvent.add_subevent_type("ABORTING_ON_SHARD", severity=Severity.ERROR,
@@ -136,6 +139,7 @@ SYSTEM_ERROR_EVENTS = (
 
     # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
     DatabaseLogEvent.REACTOR_STALLED(),
+    DatabaseLogEvent.KERNEL_CALLSTACK(),
     DatabaseLogEvent.BACKTRACE(),
     DatabaseLogEvent.ABORTING_ON_SHARD(),
     DatabaseLogEvent.SEGMENTATION(),
