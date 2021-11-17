@@ -33,8 +33,9 @@ class FullScanThread:
     def get_ks_cs(self, db_node: BaseNode):
         ks_cf_list = self.db_cluster.get_non_system_ks_cf_list(db_node)
         if self.ks_cf not in ks_cf_list:
-            return 'random'
-        elif 'random' in self.ks_cf.lower():
+            self.ks_cf = 'random'
+
+        if 'random' in self.ks_cf.lower():
             return random.choice(ks_cf_list)
         return self.ks_cf
 
