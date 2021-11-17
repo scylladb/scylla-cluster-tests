@@ -316,7 +316,8 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertEqual(conf['store_perf_results'], False)
 
     def test_14_aws_siren_from_env(self):
-        os.environ['SCT_CLUSTER_BACKEND'] = 'aws-siren'
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_DB_TYPE'] = 'cloud_scylla'
         os.environ['SCT_REGION_NAME'] = 'us-east-1'
         os.environ['SCT_N_DB_NODES'] = '2'
         os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
