@@ -7,8 +7,7 @@ perfRegressionParallelPipeline(
     backend: "aws",
     aws_region: "us-east-1",
     test_name: "performance_regression_nosqlbench.PerformanceRegressionNosqlBenchTest",
-    test_config: "test-cases/performance/perf-regression-nosqlbench-latency-mixed-50r-50w.yaml",
-    sub_tests: ["test_mixed"],
-    timeout: [time: 420, unit: 'MINUTES']
-
+    test_config: '''["test-cases/performance/perf-regression-nosqlbench-throughput-mixed-50r-50w.yaml", "configurations/perf/regression-nosqlbench-aws-i3-2xlarge.yaml"]''',
+    sub_tests: ["test_nosqlbench_perf"],
+    timeout: [time: 420, unit: "MINUTES"]
 )

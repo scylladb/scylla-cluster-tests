@@ -10,14 +10,12 @@ class PerformanceRegressionNosqlBenchTest(ClusterTester):
     def __init__(self, *args):
         super().__init__(*args)
 
-    def test_mixed(self):
+    def test_nosqlbench_perf(self):
         """
-        Test steps:
-
-        1. Run a write workload as a preparation
-        2. Run a mixed workload
+        Run a performance workload with NoSQLBench. The specifics of the
+        workload should be defined in the respective test case yaml file.
         """
-        stress_cmd = self.params.get("stress_cmd_m")
+        stress_cmd = self.params.get("stress_cmd")
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
         results = self.get_stress_results(queue=stress_queue)
         LOGGER.info("Raw nosqlbench run result: %s", results)

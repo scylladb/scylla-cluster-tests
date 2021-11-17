@@ -1,0 +1,3 @@
+instance_type_db: 'r5.2xlarge'
+instance_type_loader: 'c4.4xlarge'
+user_prefix: 'perf-regression-throughput-nosqlbench-aws-r5-2xlarge'

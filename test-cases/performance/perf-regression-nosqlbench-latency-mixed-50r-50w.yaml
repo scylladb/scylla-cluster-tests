@@ -1,21 +1,7 @@
 test_duration: 360
-
-stress_cmd_m: "nosqlbench cql-tabular2 rampup-cycles=1M main-cycles=50M write_ratio=5 read_ratio=5 threads=150 striderate=10 strides=800 --progress console:120s rf=3 partsize=5000 driver=cql-scylla -v"
-
+stress_cmd_m: "nosqlbench cql-tabular2 rampup-cycles=1M main-cycles=50M write_ratio=5 read_ratio=5 threads=150 striderate=10 strides=800 --progress console:300s rf=3 partsize=5000 driver=cql-scylla -v"
 n_db_nodes: 3
 n_loaders: 1
 n_monitor_nodes: 1
-
-instance_type_db: 'i3.4xlarge'
-instance_type_loader: 'c4.2xlarge'
-gce_instance_type_db: 'e2-highmem-8'
-gce_instance_type_loader: 'e2-standard-4'
-
-
-user_prefix: 'perf-latency-nosqlbench-mixed'
 space_node_threshold: 64424
-
 store_perf_results: false
-data_volume_disk_size: 3000
-gce_pd_standard_disk_size_db: 3000
-gce_n_local_ssd_disk_db: 1

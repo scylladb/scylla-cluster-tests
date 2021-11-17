@@ -1537,8 +1537,12 @@ class SCTConfiguration(dict):
         for opt in self.config_options:
             if opt['env'] in os.environ:
                 try:
+                    self.log.info("Looking for env option: %s", opt["env"])
+                    self.log.info("Found environ value: %s, type: %s", os.environ[opt['env']],
+                                  type(os.environ[opt['env']]))
                     environment_vars[opt['name']] = opt['type'](os.environ[opt['env']])
                 except Exception as ex:  # pylint: disable=broad-except
+                    self.log.info("Parsed value: %s, type: %s", os.environ[opt['env']], type(os.environ[opt['env']]))
                     raise ValueError(
                         "failed to parse {} from environment variable".format(opt['env'])) from ex
         return environment_vars
