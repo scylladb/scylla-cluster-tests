@@ -46,6 +46,7 @@ from sdcm.cluster_k8s.mini_k8s import LocalKindCluster
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.compaction_ops import CompactionOps
 from sdcm.provision.scylla_yaml import SeedProvider
+from sdcm.remote import shell_script_cmd
 from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR
 from sdcm.utils.common import (get_db_tables, generate_random_string,
                                update_certificates, reach_enospc_on_node, clean_enospc_on_node,
@@ -68,7 +69,8 @@ from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.group_common_events import (ignore_alternator_client_errors, ignore_no_space_errors,
                                                  ignore_scrub_invalid_errors)
 from sdcm.db_stats import PrometheusDBStats
-from sdcm.utils.replication_strategy_utils import KeyspaceReplicationStrategy, temporary_replication_strategy_setter
+from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter,\
+    NetworkTopologyReplicationStrategy
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
@@ -2875,40 +2877,44 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             scylla_yml.rpc_address = new_node.ip_address
             scylla_yml.seed_provider = [SeedProvider(class_name='org.apache.cassandra.locator.SimpleSeedProvider',
                                                      parameters=[{"seeds": self.tester.db_cluster.seed_nodes_ips}])]
-        new_node.remoter.run("sudo sh -c 'echo dc_suffix=_nemesis_dc >> /etc/scylla/cassandra-rackdc.properties'")
-        self.cluster.wait_for_init(node_list=[new_node], timeout=300,
-                                   check_node_health=False)  # see _add_and_init_new_cluster_node
+        new_node.remoter.sudo(shell_script_cmd(
+            "echo dc_suffix=_nemesis_dc >> /etc/scylla/cassandra-rackdc.properties"))
+        self.cluster.wait_for_init(node_list=[new_node], timeout=900,
+                                   check_node_health=False)
         self.cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
         self.monitoring_set.reconfigure_scylla_monitoring()
         return new_node
 
     def _write_read_data_to_multi_dc_keyspace(self, datacenters: List[str]) -> None:
         InfoEvent(message='Writing and reading data with new dc').publish()
-        write_cmd = f"cassandra-stress write no-warmup cl=ALL n=1000 \
-        -schema 'keyspace=keyspace_new_dc replication(strategy=NetworkTopologyStrategy,{datacenters[0]}=3,{datacenters[1]}=1) \
-        compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' \
-        -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=5 -pop seq=1..1000 -log interval=5"
+        write_cmd = f"cassandra-stress write no-warmup cl=ALL n=10000 -schema 'keyspace=keyspace_new_dc " \
+                    f"replication(strategy=NetworkTopologyStrategy,{datacenters[0]}=3,{datacenters[1]}=1) " \
+                    f"compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 " \
+                    f"-mode cql3 native compression=lz4 -rate threads=5 -pop seq=1..10000 -log interval=5"
         write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, use_single_loader=True)
         self.tester.verify_stress_thread(cs_thread_pool=write_thread)
-        read_cmd = f"cassandra-stress read no-warmup cl=ALL n=1000 \
-        -schema 'keyspace=keyspace_new_dc replication(strategy=NetworkTopologyStrategy,{datacenters[0]}=3,{datacenters[1]}=1) \
-        compression=LZ4Compressor' \
-        -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=5 -pop seq=1..1000 -log interval=5"
+        read_cmd = f"cassandra-stress read no-warmup cl=ALL n=10000 -schema 'keyspace=keyspace_new_dc " \
+                   f"replication(strategy=NetworkTopologyStrategy,{datacenters[0]}=3,{datacenters[1]}=1) " \
+                   f"compression=LZ4Compressor' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=5 " \
+                   f"-pop seq=1..10000 -log interval=5"
         read_thread = self.tester.run_stress_thread(stress_cmd=read_cmd, use_single_loader=True)
         self.tester.verify_stress_thread(cs_thread_pool=read_thread)
 
     def disrupt_add_remove_dc(self) -> None:
         InfoEvent(message='Starting New DC Nemesis').publish()
         node = self.cluster.nodes[0]
-        new_node = self._add_new_node_in_new_dc()
+        status = self.tester.db_cluster.get_nodetool_status()
+        full_replication = NetworkTopologyReplicationStrategy(**{dc: len(status[dc].keys()) for dc in status})
         system_keyspaces = ["system_auth", "system_distributed", "system_traces"]
-        datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
-        assert [dc for dc in datacenters if dc.endswith("_nemesis_dc")], "new datacenter was not registered"
         with temporary_replication_strategy_setter(node) as replication_strategy_setter:
-            strategy = f"{{'class': 'NetworkTopologyStrategy', '{datacenters[0]}': 3, '{datacenters[1]}': 1}}"
-            replication_strategies = [KeyspaceReplicationStrategy(keyspace, strategy)
-                                      for keyspace in system_keyspaces]
-            replication_strategy_setter(replication_strategies)
+            replication_strategy_setter(system_auth=full_replication)
+            new_node = self._add_new_node_in_new_dc()
+            datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
+            status = self.tester.db_cluster.get_nodetool_status()
+            assert [dc for dc in list(status.keys()) if dc.endswith("_nemesis_dc")], "new datacenter was not registered"
+            full_replication = NetworkTopologyReplicationStrategy(**{dc: len(status[dc].keys()) for dc in status})
+            replication_strategies = {keyspace: full_replication for keyspace in system_keyspaces}
+            replication_strategy_setter(**replication_strategies)
             InfoEvent(message='execute rebuild on new datacenter').publish()
             new_node.run_nodetool(sub_cmd=f"rebuild -- {datacenters[0]}")
             InfoEvent(message='Running full cluster repair on each node').publish()
@@ -3092,6 +3098,11 @@ class NoOpMonkey(Nemesis):
 
 
 class AddRemoveDcNemesis(Nemesis):
+
+    disruptive = False
+    kubernetes = False
+    run_with_gemini = False
+    limited = True
 
     def disrupt(self):
         self.disrupt_add_remove_dc()
