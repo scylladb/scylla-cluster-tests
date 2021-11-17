@@ -168,8 +168,9 @@ class CloudRegion(click.ParamType):
               envvar="PACKAGES_PATHS",
               type=click.Path(),
               expose_value=False,
-              help="Install paths for extra python pacakges to install, scylla-cluster-plugins for example")
+              help="Install paths for extra python packages to install, scylla-cluster-plugins for example")
 def cli():
+    LOGGER.info("install-bash-completion current path: %s", os.getcwd())
     docker_hub_login(remoter=LOCALRUNNER)
 
 

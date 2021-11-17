@@ -1619,8 +1619,9 @@ class SCTConfiguration(dict):
         self._check_unexpected_sct_variables()
         self._validate_sct_variable_values()
         backend = self.get('cluster_backend')
+        db_type = self.get('db_type')
         self._check_per_backend_required_values(backend)
-        if backend in ['aws']:
+        if backend in ['aws'] and db_type != 'cloud_scylla':
             self._check_aws_multi_region_params()
 
         self._verify_data_volume_configuration(backend)
@@ -1693,6 +1694,8 @@ class SCTConfiguration(dict):
 
     def _check_per_backend_required_values(self, backend: str):
         if backend in self.available_backends:
+            if backend in ('aws', 'gce') and self.get("db_type") == "cloud_scylla":
+                backend += "-siren"
             self._check_backend_defaults(backend, self.backend_required_params[backend])
         else:
             raise ValueError("Unsupported backend [{}]".format(backend))
