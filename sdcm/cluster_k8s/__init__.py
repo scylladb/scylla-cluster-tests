@@ -786,7 +786,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         })
 
     @log_run_info
-    def deploy_scylla_cluster(self, node_pool: CloudK8sNodePool = None, node_prepare_config: str = None) -> None:
+    def deploy_scylla_cluster(self, node_pool: CloudK8sNodePool, node_prepare_config: str = None) -> None:
         if self.params.get('reuse_cluster'):
             try:
                 self.wait_till_cluster_is_operational()
@@ -801,37 +801,30 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.kubectl(f"create namespace {SCYLLA_NAMESPACE}")
         self.create_scylla_manager_agent_config()
 
-        affinity_modifiers = []
+        affinity_modifiers = node_pool.affinity_modifiers
+        if node_prepare_config:
+            LOGGER.info("Install DaemonSets required by scylla nodes")
+            self.apply_file(node_prepare_config, modifiers=affinity_modifiers, envsubst=False)
 
-        if node_pool:
-            affinity_modifiers.extend(node_pool.affinity_modifiers)
-            if node_prepare_config:
-                LOGGER.info("Install DaemonSets required by scylla nodes")
-                self.apply_file(node_prepare_config, modifiers=affinity_modifiers, envsubst=False)
+            LOGGER.info("Install local volume provisioner")
+            self.helm(f"install local-provisioner {LOCAL_PROVISIONER_DIR}",
+                      values=node_pool.helm_affinity_values)
 
-                LOGGER.info("Install local volume provisioner")
-                self.helm(f"install local-provisioner {LOCAL_PROVISIONER_DIR}",
-                          values=node_pool.helm_affinity_values)
-
-            # Calculate cpu and memory limits to occupy all available amounts by scylla pods
-            cpu_limit, memory_limit = node_pool.cpu_and_memory_capacity
-            # TBD: Remove reduction logic after https://github.com/scylladb/scylla-operator/issues/384 is fixed
-            cpu_limit = int(
-                cpu_limit
-                - OPERATOR_CONTAINERS_RESOURCES['cpu']
-                - COMMON_CONTAINERS_RESOURCES['cpu']
-                - SCYLLA_MANAGER_AGENT_RESOURCES['cpu']
-            )
-            memory_limit = (
-                memory_limit
-                - OPERATOR_CONTAINERS_RESOURCES['memory']
-                - COMMON_CONTAINERS_RESOURCES['memory']
-                - SCYLLA_MANAGER_AGENT_RESOURCES['memory']
-            )
-        else:
-            cpu_limit = 1
-            memory_limit = 2.5
-
+        # Calculate cpu and memory limits to occupy all available amounts by scylla pods
+        cpu_limit, memory_limit = node_pool.cpu_and_memory_capacity
+        # TBD: Remove reduction logic after https://github.com/scylladb/scylla-operator/issues/384 is fixed
+        cpu_limit = int(
+            cpu_limit
+            - OPERATOR_CONTAINERS_RESOURCES['cpu']
+            - COMMON_CONTAINERS_RESOURCES['cpu']
+            - SCYLLA_MANAGER_AGENT_RESOURCES['cpu']
+        )
+        memory_limit = (
+            memory_limit
+            - OPERATOR_CONTAINERS_RESOURCES['memory']
+            - COMMON_CONTAINERS_RESOURCES['memory']
+            - SCYLLA_MANAGER_AGENT_RESOURCES['memory']
+        )
         cpu_limit = convert_cpu_units_to_k8s_value(cpu_limit)
         memory_limit = convert_memory_units_to_k8s_value(memory_limit)
 
