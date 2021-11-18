@@ -94,7 +94,7 @@ class TestHealthChecker(unittest.TestCase):
         event = next(check_nodes_status(NODES_STATUS, Node, ["127.0.0.2", ]), None)
         self.assertIsNotNone(event)
         self.assertEqual(event.type, "NodeStatus")
-        self.assertEqual(event.severity, Severity.ERROR)
+        self.assertEqual(event.severity, Severity.CRITICAL)
         self.assertEqual(event.node, "node-0")
         self.assertEqual(event.message, "")
         self.assertNotEqual(event.error, "")
