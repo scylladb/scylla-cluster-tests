@@ -33,26 +33,18 @@ LOGGER = logging.getLogger(__name__)
 HealthEventsGenerator = Generator[ClusterHealthValidatorEvent, None, None]
 
 
-def check_nodes_status(nodes_status: dict, current_node, removed_nodes_list=None) -> HealthEventsGenerator:
+def check_nodes_status(nodes_status: dict, current_node, removed_nodes_list=()) -> HealthEventsGenerator:
     node_type = 'target' if current_node.running_nemesis else 'regular'
     if not nodes_status:
         LOGGER.warning("Node status info is not available. Search for the warning above")
         return
-
     LOGGER.info("Status for %s node %s", node_type, current_node.name)
-
-    if removed_nodes_list is None:
-        removed_nodes_list = ()
-
     for node_ip, node_properties in nodes_status.items():
         if node_properties['status'] != "UN":
+            LOGGER.info("All nodes that have been removed up until this point: %s", str(removed_nodes_list))
             is_target = current_node.print_node_running_nemesis(node_ip)
-
-            # FIXME: #2383 must be reverted once scylladb/scylla-enterprise#1419 will be fixed.
-            LOGGER.debug("REMOVED NODES LIST = %s", removed_nodes_list)
-
             yield ClusterHealthValidatorEvent.NodeStatus(
-                severity=Severity.ERROR if node_ip in removed_nodes_list else Severity.CRITICAL,
+                severity=Severity.CRITICAL,
                 node=current_node.name,
                 error=f"Current node {current_node.ip_address}. "
                       f"Node with {node_ip}{is_target} status is {node_properties['status']}",
