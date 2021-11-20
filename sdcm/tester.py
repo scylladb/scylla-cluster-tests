@@ -24,7 +24,7 @@ import unittest.mock
 import warnings
 from typing import NamedTuple, Optional, Union, List, Dict, Any
 from uuid import uuid4, UUID
-from functools import wraps, cached_property
+from functools import wraps, cached_property, cache
 import threading
 import signal
 import sys
@@ -669,6 +669,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.info('repair system_auth keyspace ...')
             node.run_nodetool(sub_cmd="repair", args="-- system_auth")
 
+    @cache
     def pre_create_alternator_tables(self):
         node = self.db_cluster.nodes[0]
         if self.params.get('alternator_port'):
