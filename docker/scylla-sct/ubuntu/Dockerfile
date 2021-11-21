@@ -37,5 +37,4 @@ stdout_logfile_maxbytes=0\n\
 stderr_logfile=/dev/stderr\n\
 stderr_logfile_maxbytes=0' > /etc/supervisord.conf.d/scylla-manager.conf && \
     echo "autostart=false" >> /etc/supervisord.conf.d/scylla-server.conf && \
-    echo "autostart=false" >> /etc/supervisord.conf.d/scylla-housekeeping.conf && \
-    sed -i "\:/dev/stderr:d" /etc/bashrc
+    echo "autostart=false" >> /etc/supervisord.conf.d/scylla-housekeeping.conf
