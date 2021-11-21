@@ -883,6 +883,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
         self._set_current_disruption('TerminateAndReplaceNode %s' % self.target_node)
         old_node_ip = self.target_node.ip_address
+        is_old_node_seed = self.target_node.is_seed
         InfoEvent(message='StartEvent - Terminate node and wait 5 minutes').publish()
         self._terminate_and_wait(target_node=self.target_node, by_nemesis='TerminateAndReplaceNode')
         InfoEvent(message='FinishEvent - target_node was terminated').publish()
@@ -905,6 +906,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         finally:
             self.unset_current_running_nemesis(new_node)
+            if is_old_node_seed:
+                new_node.set_seed_flag(True)
+                self.cluster.update_seed_provider()
 
     def disrupt_kill_scylla(self):
         self._set_current_disruption('ScyllaKillMonkey %s' % self.target_node)
