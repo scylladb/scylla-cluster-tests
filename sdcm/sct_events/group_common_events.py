@@ -168,3 +168,26 @@ def ignore_scrub_invalid_errors():
             line="Skipping invalid partition",
         ))
         yield
+
+
+@contextmanager
+def catch_all_errors():
+    yield
+
+
+@contextmanager
+def skip_paxos_warnings_errors():
+    with ExitStack() as stack:
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.DATABASE_ERROR,
+            line="mutation_write_timeout_exception (Operation timed out for system.paxos"
+        ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.DATABASE_ERROR,
+            line="Operation timed out for system.paxos"
+        ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.DATABASE_ERROR,
+            line="Operation failed for system.paxos"
+        ))
+        yield
