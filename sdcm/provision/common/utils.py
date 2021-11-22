@@ -35,6 +35,57 @@ def configure_rsyslog_target_script(host: str, port: int) -> str:
     return f'echo "action(type=\\"omfwd\\" Target=\\"{host}\\" Port=\\"{port}\\" Protocol=\\"tcp\\")" >> /etc/rsyslog.conf\n'
 
 
+def configure_syslogng_target_script(host: str, port: int, throttle_per_second: int, hostname: str = "") -> str:
+    return dedent("""
+        source_name=`cat /etc/syslog-ng/syslog-ng.conf | tr -d "\\n" | tr -d "\\r" | sed -r "s/\\}};/\\}};\\n/g; \
+        s/source /\\nsource /g" | grep -P "^source.*system\\(\\)" | cut -d" " -f2`
+        disk_buffer_option=""
+        if syslog-ng -V | grep disk; then
+            disk_buffer_option="disk-buffer(
+                    mem-buf-size(100000)
+                    disk-buf-size(2000000)
+                    reliable(yes)
+                    dir(\\\"/tmp\\\")
+                )"
+        fi
+
+        if grep -P "keep-timestamp\\([^)]+\\)" /etc/syslog-ng/syslog-ng.conf; then
+            sed -i -r "s/keep-timestamp([ ]*no[ ]*)/keep-timestamp(yes)/g" /etc/syslog-ng/syslog-ng.conf
+        else
+            sed -i -r "s/([ \t]*options[ \t]*\\\\{{)/\\\\1\\n  keep-timestamp(yes);\\n/g" /etc/syslog-ng/syslog-ng.conf
+        fi
+
+        grep "destination remote_sct" /etc/syslog-ng/syslog-ng.conf || cat <<EOF >>/etc/syslog-ng/syslog-ng.conf
+        destination remote_sct {{
+            network(
+                "{host}"
+                transport("tcp")
+                port({port})
+                throttle({throttle_per_second})
+                $disk_buffer_option
+            );
+        }};
+
+        destination d_system {{ file("/var/log/system.log"); }};
+        log {{ source($source_name); destination(d_system); }};
+
+        EOF
+
+        if ! grep -P "log {{.*destination\\\\(remote_sct\\\\)" /etc/syslog-ng/syslog-ng.conf; then
+            echo "log {{ source($source_name); destination(remote_sct); }};" >> /etc/syslog-ng/syslog-ng.conf
+        fi
+
+        if [ ! -z "{hostname}" ]; then
+            if grep "rewrite r_host" /etc/syslog-ng/syslog-ng.conf; then
+                sed -i -r "s/rewrite r_host \\{{ set\\(\\"[^\\"]+\\"/rewrite r_host {{ set(\\"{hostname}\\"/" /etc/syslog-ng/syslog-ng.conf
+            else
+                echo "rewrite r_host {{ set(\\"{hostname}\\", value(\\"HOST\\")); }};" >>  /etc/syslog-ng/syslog-ng.conf
+                sed -i -r "s/destination\\(remote_sct\\);[ \\t]*\\}};/destination\\(remote_sct\\); rewrite\\(r_host\\); \\}};/" /etc/syslog-ng/syslog-ng.conf
+            fi
+        fi
+        """.format(host=host, port=port, hostname=hostname, throttle_per_second=throttle_per_second))
+
+
 def configure_rsyslog_set_hostname_script(host: str) -> str:
     return dedent(f"""
     if ! grep "\\$LocalHostname {host}" /etc/rsyslog.conf; then
@@ -67,3 +118,40 @@ def restart_sshd_service():
 
 def restart_rsyslog_service():
     return "systemctl restart rsyslog\n"
+
+
+def restart_syslogng_service():
+    return "systemctl restart syslog-ng\n"
+
+
+def install_syslogng_service(return_status: bool = False):
+    ending = dedent("""
+    if [ -z "$SYSLOGNG_INSTALLED" ]; then
+      exit 1
+    else
+      exit 0
+    fi
+    """) if return_status else ""
+    return dedent("""
+    SYSLOGNG_INSTALLED=""
+    if yum --help 2>/dev/null 1>&2 ; then
+      if ! yum list installed | grep syslog-ng; then
+        yum install -y syslog-ng
+      fi
+
+      if yum list installed | grep syslog-ng; then
+        SYSLOGNG_INSTALLED=1
+      fi
+    elif apt --help 2>/dev/null 1>&2 ; then
+      if ! apt list --installed | grep syslog-ng; then
+        apt update -y | apt update | true
+        apt install -yf syslog-ng
+      fi
+      if apt list --installed | grep syslog-ng; then
+        SYSLOGNG_INSTALLED=1
+      fi
+    else
+      echo "Unsupported distro"
+    fi
+    {ending}
+    """.format(ending=ending))

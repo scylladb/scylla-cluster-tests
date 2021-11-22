@@ -54,6 +54,8 @@ from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
 from sdcm.mgmt.common import get_manager_repo_from_defaults, get_manager_scylla_backend
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
+from sdcm.provision.common.utils import install_syslogng_service, restart_syslogng_service, \
+    configure_rsyslog_set_hostname_script, restart_rsyslog_service
 from sdcm.provision.scylla_yaml import ScyllaYamlNodeAttrBuilder
 from sdcm.provision.scylla_yaml.certificate_builder import ScyllaYamlCertificateAttrBuilder
 
@@ -282,7 +284,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.wait_ssh_up(verbose=True)
         if not self.test_config.REUSE_CLUSTER:
             self.set_hostname()
-
+            self.configure_remote_logging()
         self.start_task_threads()
         self._init_port_mapping()
 
@@ -2960,6 +2962,28 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def set_hostname(self):
         self.log.warning('Method set_hostname is not implemented for %s' % self.__class__.__name__)
+
+    def configure_remote_logging(self):
+        use_rsyslog = False
+        script = ""
+        if self.parent_cluster.params.get('logs_transport') == 'rsyslog':
+            use_rsyslog = True
+        elif self.parent_cluster.params.get('logs_transport') == 'syslog-ng':
+            self.log.info("Log transport is syslog-ng. Try to install it.")
+            if self.remoter.sudo(f"bash -cxe '{install_syslogng_service(return_status=True)}'", ignore_status=True).ok:
+                script += self.test_config.get_syslogng_configuration_script(hostname=self.name)
+                script += restart_syslogng_service()
+            else:
+                self.log.info("Can't install syslog-ng. Use rsyslog instead")
+                use_rsyslog = True
+        if use_rsyslog:
+            script += configure_rsyslog_set_hostname_script(self.name)
+            script += self.test_config.get_rsyslog_configuration_script()
+            script += restart_rsyslog_service()
+        if script:
+            self.remoter.sudo(f"bash -cxe '{script}'")
+        else:
+            self.log.warning('Logging configuration is not needed')
 
     @property
     def scylla_packages_installed(self) -> List[str]:
