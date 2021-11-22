@@ -17,7 +17,7 @@ def create_scylla_bench_table_query(compaction_strategy=None):
                     ck bigint,
                     v blob,
                     PRIMARY KEY (pk, ck)
-                ) WITH CLUSTERING ORDER BY (ck DESC)
+                ) WITH CLUSTERING ORDER BY (ck ASC)
                     AND bloom_filter_fp_chance = 0.01
                     AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
                     AND comment = ''

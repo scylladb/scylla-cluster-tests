@@ -12,7 +12,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
-
+import json
 import os
 import re
 import time
@@ -86,15 +86,11 @@ class LongevityTest(ClusterTester):
     def _get_keyspace_name(ks_number, keyspace_pref='keyspace'):
         return '{}{}'.format(keyspace_pref, ks_number)
 
-    def _get_fullscan_params(self):
+    def _get_scan_operation_params(self, scan_operation: str) -> dict:
         params = {}
-        fullscan = self.params.get('run_fullscan')
-        if fullscan:
-            fullscan = fullscan.split(',')
-            params['ks.cf'] = fullscan[0].strip()
-            params['interval'] = int(fullscan[1].strip())
-            self.log.info('Fullscan target: {} Fullscan interval: {}'.format(params['ks.cf'],
-                                                                             params['interval']))
+        if scan_operation_params := self.params.get(scan_operation):
+            params = json.loads(scan_operation_params)
+            self.log.info('Scan operation %s params are: %s', scan_operation, params)
         return params
 
     def run_pre_create_schema(self):
@@ -192,6 +188,13 @@ class LongevityTest(ClusterTester):
 
         self.run_pre_create_keyspace()
         self.run_pre_create_schema()
+
+        if fullscan_params := self._get_scan_operation_params(scan_operation='run_fullscan'):
+            self.run_fullscan_thread(ks_cf=fullscan_params['ks_cf'], interval=fullscan_params['interval'])
+
+        if full_partition_scan_params := self._get_scan_operation_params(scan_operation='run_full_partition_scan'):
+            self.run_full_partition_scan_thread(**full_partition_scan_params)
+
         self.run_prepare_write_cmd()
 
         # Collect data about partitions and their rows amount
@@ -241,12 +244,6 @@ class LongevityTest(ClusterTester):
                             params = {'stress_cmd': stress_cmd, 'profile': cs_profile}
                             self.log.debug('Stress cmd: {}'.format(stress_cmd))
                             self._run_all_stress_cmds(stress_queue, params)
-
-        fullscan = self._get_fullscan_params()
-        if fullscan:
-            self.log.info('Fullscan target: {} Fullscan interval: {}'.format(fullscan['ks.cf'],
-                                                                             fullscan['interval']))
-            self.run_fullscan_thread(ks_cf=fullscan['ks.cf'], interval=fullscan['interval'])
 
         # Check if we shall wait for total_used_space or if nemesis wasn't started
         if not prepare_write_cmd or not self.params.get('nemesis_during_prepare'):
