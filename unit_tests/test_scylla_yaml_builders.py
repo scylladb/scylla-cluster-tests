@@ -454,6 +454,9 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
     def set_hostname(self):
         pass
 
+    def configure_remote_logging(self):
+        pass
+
     def set_keep_alive(self):
         pass
 

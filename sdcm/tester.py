@@ -30,6 +30,7 @@ import signal
 import sys
 import json
 
+import yaml
 from invoke.exceptions import UnexpectedExit, Failure
 
 from cassandra.concurrent import execute_concurrent_with_args  # pylint: disable=no-name-in-module
@@ -73,6 +74,7 @@ from sdcm.sct_events.file_logger import get_events_grouped_by_category, get_logg
 from sdcm.sct_events.events_analyzer import stop_events_analyzer
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
+from sdcm.utils.log_time_consistency import DbLogTimeConsistencyAnalyzer
 from sdcm.utils.threads_and_processes_alive import gather_live_processes_and_dump_to_file, \
     gather_live_threads_and_dump_to_file
 from sdcm.ycsb_thread import YcsbStressThread
@@ -2327,11 +2329,28 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.log.info('Test ID: {}'.format(self.test_config.test_id()))
         self._check_alive_routines_and_report_them()
+        self._check_if_db_log_time_consistency_looks_good()
         self.remove_python_exit_hooks()
 
     @silence()
     def remove_python_exit_hooks(self):  # pylint: disable=no-self-use
         clear_out_all_exit_hooks()
+
+    @silence()
+    def _check_if_db_log_time_consistency_looks_good(self):
+        result = DbLogTimeConsistencyAnalyzer.analyze_dir(self.logdir)
+        looks_good = True
+        for value in result['TOTAL'].values():
+            if value > 0:
+                looks_good = False
+                break
+        if looks_good:
+            self.log.info('DB logs time consistency is perfect')
+        else:
+            self.log.error(
+                'DB logs time consistency is NOT perfect, details:\n%s',
+                yaml.safe_dump(result, sort_keys=False)
+            )
 
     def _check_alive_routines_and_report_them(self):
         threads_alive = self.show_alive_threads()
