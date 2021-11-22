@@ -293,6 +293,14 @@ def restore_sct_dashboards(monitoring_dockers_dir, scylla_version):
     dashboard_url = f'http://localhost:{GRAFANA_DOCKER_PORT}/api/dashboards/db'
     with open(sct_dashboard_file, "r") as f:  # pylint: disable=invalid-name
         dashboard_config = json.load(f)
+        # NOTE: remove value from the 'dashboard.id' field to avoid following error:
+        #
+        #       Error message {"message":"Dashboard not found","status":"not-found"}
+        #
+        #       Creating dashboard from scratch we should not have 'id', because Grafana will try
+        #       to 'update' existing one which is absent in such a case.
+        if dashboard_config.get('dashboard', {}).get('id'):
+            dashboard_config['dashboard']['id'] = None
 
     try:
         res = requests.post(dashboard_url,
