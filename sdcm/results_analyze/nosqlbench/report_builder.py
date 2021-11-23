@@ -6,11 +6,8 @@ import re
 from pathlib import Path
 from typing import Pattern, Any
 
-from prettytable import PrettyTable
-
 from sdcm.results_analyze.nosqlbench.metrics import NoSQLBenchSummaryMetric, all_counters, \
-    all_histograms, all_meters, abridged_histograms, abridged_meters, \
-    abridged_timers, timers
+    all_histograms, all_meters, abridged_histograms, abridged_timers, timers
 from sdcm.utils.metaclasses import Singleton
 
 LOGGER = logging.getLogger(__name__)
@@ -58,11 +55,6 @@ class NoSQLBenchReportBuilder(metaclass=Singleton):
     def build_all_reports(self):
         self.build_abridged_report()
 
-    def build_pretty_tables_from_report(self) -> list[PrettyTable]:
-        if not self._full_report:
-            self.build_full_report()
-        return self._make_pretty_tables()
-
     def print_raw_report_file(self):
         LOGGER.info("Printing raw report from file:")
         with open(self._path, mode="r") as infile:
@@ -84,24 +76,6 @@ class NoSQLBenchReportBuilder(metaclass=Singleton):
             ".*".join([f"({metric.field_pattern}).*{metric.metrics}" for metric in metrics]),
             flags=re.DOTALL
         )
-
-    def _make_pretty_tables(self) -> list[PrettyTable]:
-        if not self._full_report:
-            self.build_full_report()
-
-        pretty_tables = []
-        metrics = self.full_report
-        for key in metrics.keys():
-            table = PrettyTable()
-            pretty_tables.append(table)
-            table.title = key
-            table.add_column("metric", [])
-            table.add_column("value", [])
-            if metrics[key]:
-                for sub_key, sub_value in metrics[key].items():
-                    table.add_row([sub_key, sub_value])
-
-        return pretty_tables
 
     def _make_full_report_dict(self) -> dict[str, dict[str, str]]:
         groups = {

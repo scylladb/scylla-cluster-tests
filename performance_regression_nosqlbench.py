@@ -31,14 +31,14 @@ class PerformanceRegressionNosqlBenchTest(PerformanceRegressionTest):
         self._update_stats_with_nosqlbench_report(report_builder)
         report_builder.save_abridged_report_to_file()
         # self.check_regression()
-        self._check_regression(report_builder=report_builder)
+        report_builder.print_raw_report_file()
+        self._check_regression()
 
-    def _check_regression(self, report_builder: NoSQLBenchReportBuilder):
+    def _check_regression(self):
         analyzer_args = NoSQLBenchAnalyzerArgs(
             test_id=self._test_id,
             es_index=self._test_index,
             es_doc_type=self._es_doc_type,
-            report_builder=report_builder,
             email_recipients=self.params.get('email_recipients'),
             events=get_events_grouped_by_category(
                 _registry=self.events_processes_registry,
@@ -58,9 +58,7 @@ class PerformanceRegressionNosqlBenchTest(PerformanceRegressionTest):
         report_builder.print_raw_report_file()
 
     def _update_stats_with_nosqlbench_report(self, report_builder: NoSQLBenchReportBuilder):
-        LOGGER.info("Found this as self._stats: %s", self._stats)
         self.update({"results": report_builder.abridged_report})
-        LOGGER.info("These are the self._stats after updating with nosqlbench report: %s", self._stats)
 
     def _get_report_builder(self):
         loader = self.loaders.get_loader()
