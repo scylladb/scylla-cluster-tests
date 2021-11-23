@@ -16,8 +16,10 @@
                 {{ severity }} - [{{ debug_events_summary.get(severity, 0) }}]
                 </h4>
                 {% for event in events %}
-                    <pre>{{event}}</pre>
-                    <hr>
+                    {% if "Reactor stalled" in event %}
+                        <pre>{{event}}</pre>
+                        <hr>
+                    {% endif %}
                 {% endfor %}
             {% endfor %}
         {% endif %}
