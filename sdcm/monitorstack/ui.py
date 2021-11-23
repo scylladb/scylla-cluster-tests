@@ -55,7 +55,7 @@ class Login:
 
 
 class Panel:
-    xpath_tmpl = """//header[contains(@aria-label,'{name}') and contains(@class, 'panel-title-container')]"""
+    xpath_tmpl = """//header[contains(@*,'{name}') and contains(@class, 'panel-title-container')]"""
 
     def __init__(self, name):
         self.name = name
