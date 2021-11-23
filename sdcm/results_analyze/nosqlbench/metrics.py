@@ -135,11 +135,6 @@ histograms = [
     Histogram(field_pattern=r"hdr-[\w]+schema.schema--create-table--resultset-size")
 ]
 
-abridged_histograms = ["main_main_read__main_select_all__resultset_size",
-                       "main.main-write--main-write--resultset-size",
-                       "main.resultset-size",
-                       "main.tries"]
-
 all_meters = [
     Meter(field_pattern=r"main.rows"),
     Meter(field_pattern=r"rampup.rows"),
@@ -150,9 +145,6 @@ meters = [
     Meter(field_pattern=r"main.rows"),
     Meter(field_pattern=r"rampup.rows")
 ]
-
-abridged_meters = ["main_rows",
-                   "rampup_rows"]
 
 all_timers = [
     Timer(field_pattern=r"hdr-[\w]+main.bind"),
@@ -224,6 +216,9 @@ timers = [
     Timer(field_pattern=r"hdr-[\w]+main.strides.servicetime")
 ]
 
+abridged_meters = ["main_rows",
+                   "rampup_rows"]
+
 abridged_timers = ["main_cycles_servicetime",
                    "main_strides_servicetime",
                    "main_main_read__main_select__error",
@@ -233,3 +228,8 @@ abridged_timers = ["main_cycles_servicetime",
                    "main_result",
                    "main_result_success",
                    ]
+
+abridged_histograms = ["main_main_read__main_select_all__resultset_size",
+                       "main.main-write--main-write--resultset-size",
+                       "main.resultset-size",
+                       "main.tries"]
