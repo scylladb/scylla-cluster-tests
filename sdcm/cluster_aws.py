@@ -807,14 +807,15 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
                  ec2_block_device_mappings=None,
                  user_prefix=None,
                  n_nodes=3,
-                 params=None):
+                 params=None,
+                 node_type: str = 'scylla-db',
+                 ):
         # pylint: disable=too-many-locals
         # We have to pass the cluster name in advance in user_data
         cluster_uuid = self.test_config.test_id()
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
 
-        node_type = 'scylla-db'
         shortid = str(cluster_uuid)[:8]
         name = '%s-%s' % (cluster_prefix, shortid)
 
