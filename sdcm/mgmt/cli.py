@@ -20,6 +20,7 @@ import datetime
 from re import findall
 from textwrap import dedent
 from statistics import mean
+from contextlib import contextmanager
 
 import requests
 from invoke.exceptions import UnexpectedExit, Failure
@@ -728,6 +729,14 @@ class ManagerCluster(ScyllaManagerBase):
         if start_tasks:
             cmd += " --start-tasks"
         self.sctool.run(cmd=cmd)
+
+    @contextmanager
+    def suspend_manager_then_resume(self, start_tasks=True):
+        self.suspend()
+        try:
+            yield
+        finally:
+            self.resume(start_tasks=start_tasks)
 
 
 def verify_errorless_result(cmd, res):

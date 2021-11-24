@@ -978,12 +978,13 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             raise ValueError(f"Not familiar with task type: {task_type}")
         assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), \
             f"task {suspendable_task.id} failed to reach status {TaskStatus.RUNNING}"
-        mgr_cluster.suspend()
-        assert suspendable_task.wait_for_status(list_status=[TaskStatus.STOPPED], timeout=300, step=10), \
-            f"task {suspendable_task.id} failed to reach status {TaskStatus.STOPPED}"
-        mgr_cluster.resume(start_tasks=True)
-        assert suspendable_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=1200, step=10), \
-            f"task {suspendable_task.id} failed to reach status {TaskStatus.DONE}"
+        with mgr_cluster.suspend_manager_then_resume(start_tasks=False):
+            mgr_cluster.suspend()
+            assert suspendable_task.wait_for_status(list_status=[TaskStatus.STOPPED], timeout=300, step=10), \
+                f"task {suspendable_task.id} failed to reach status {TaskStatus.STOPPED}"
+            mgr_cluster.resume(start_tasks=True)
+            assert suspendable_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=1200, step=10), \
+                f"task {suspendable_task.id} failed to reach status {TaskStatus.DONE}"
         self.log.info('finishing test_suspend_and_resume_{}'.format(task_type))
 
     def test_suspend_and_resume_without_starting_tasks(self):
@@ -995,14 +996,15 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
         assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), \
             f"task {suspendable_task.id} failed to reach status {TaskStatus.RUNNING}"
-        mgr_cluster.suspend()
-        assert suspendable_task.wait_for_status(list_status=[TaskStatus.STOPPED], timeout=300, step=10), \
-            f"task {suspendable_task.id} failed to reach status {TaskStatus.STOPPED}"
-        mgr_cluster.resume(start_tasks=False)
-        self.log.info("Waiting a little time to make sure the task isn't started")
-        time.sleep(60)
-        current_task_status = suspendable_task.status
-        assert current_task_status == TaskStatus.STOPPED, \
-            f'Task {current_task_status} did not remain in "{TaskStatus.STOPPED}" status, but instead ' \
-            f'reached "{current_task_status}" status'
+        with mgr_cluster.suspend_manager_then_resume(start_tasks=False):
+            mgr_cluster.suspend()
+            assert suspendable_task.wait_for_status(list_status=[TaskStatus.STOPPED], timeout=300, step=10), \
+                f"task {suspendable_task.id} failed to reach status {TaskStatus.STOPPED}"
+            mgr_cluster.resume(start_tasks=False)
+            self.log.info("Waiting a little time to make sure the task isn't started")
+            time.sleep(60)
+            current_task_status = suspendable_task.status
+            assert current_task_status == TaskStatus.STOPPED, \
+                f'Task {current_task_status} did not remain in "{TaskStatus.STOPPED}" status, but instead ' \
+                f'reached "{current_task_status}" status'
         self.log.info('finishing test_suspend_and_resume_without_starting_tasks')
