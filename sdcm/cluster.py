@@ -1273,7 +1273,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @property
     def uuid(self):
-        if not self._uuid:
+        if not self._uuid and not self.is_nonroot_install:
             uuid_path = '/var/lib/scylla-housekeeping/housekeeping.uuid'
             uuid_result = self.remoter.run('test -e %s' % uuid_path, ignore_status=True, verbose=True)
             uuid_exists = uuid_result.ok

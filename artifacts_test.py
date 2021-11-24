@@ -199,10 +199,11 @@ class ArtifactsTest(ClusterTester):
             # Scylla service is stopping/starting after installation and re-configuration.
             # To validate version after installation, we need to perform validation before re-config.
             # For that the test should be changed to be able to call "add_nodes" function from BaseCluster.
-            # self.log.info("Validate version after install")
-            # self.check_scylla_version_in_housekeepingdb(prev_id=0,
-            #                                             expected_status_code='i',
-            #                                             new_row_expected=False)
+            # if not self.node.is_nonroot_install:
+            #   self.log.info("Validate version after install")
+            #   self.check_scylla_version_in_housekeepingdb(prev_id=0,
+            #                                               expected_status_code='i',
+            #                                               new_row_expected=False)
 
         version_id_after_stop = 0
         with self.subTest("check Scylla server after stop/start"):
@@ -213,22 +214,24 @@ class ArtifactsTest(ClusterTester):
             # So we don't need to stop and to start it again
             self.check_scylla()
 
-            self.log.info("Validate version after stop/start")
-            version_id_after_stop = self.check_scylla_version_in_housekeepingdb(
-                prev_id=0,
-                expected_status_code=expected_housekeeping_status_code,
-                new_row_expected=False,
-                backend=backend)
+            if not self.node.is_nonroot_install:
+                self.log.info("Validate version after stop/start")
+                version_id_after_stop = self.check_scylla_version_in_housekeepingdb(
+                    prev_id=0,
+                    expected_status_code=expected_housekeeping_status_code,
+                    new_row_expected=False,
+                    backend=backend)
 
         with self.subTest("check Scylla server after restart"):
             self.node.restart_scylla(verify_up_after=True)
             self.check_scylla()
 
-            self.log.info("Validate version after restart")
-            self.check_scylla_version_in_housekeepingdb(prev_id=version_id_after_stop,
-                                                        expected_status_code=expected_housekeeping_status_code,
-                                                        new_row_expected=True,
-                                                        backend=backend)
+            if not self.node.is_nonroot_install:
+                self.log.info("Validate version after restart")
+                self.check_scylla_version_in_housekeepingdb(prev_id=version_id_after_stop,
+                                                            expected_status_code=expected_housekeeping_status_code,
+                                                            new_row_expected=True,
+                                                            backend=backend)
 
     def get_email_data(self):
         self.log.info("Prepare data for email")
