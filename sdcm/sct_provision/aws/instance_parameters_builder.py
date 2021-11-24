@@ -178,7 +178,6 @@ class OracleScyllaInstanceParamsBuilder(ScyllaInstanceParamsBuilder):
     _INSTANCE_TYPE_PARAM_NAME = 'instance_type_db'
     _IMAGE_ID_PARAM_NAME = 'ami_id_db_oracle'
     _ROOT_DISK_SIZE_PARAM_NAME = 'aws_root_disk_size_db'
-    # 'n_test_oracle_db_nodes'
 
 
 # Since AWS Loaders is being built on scylla image we need to base it from ScyllaInstanceParams
