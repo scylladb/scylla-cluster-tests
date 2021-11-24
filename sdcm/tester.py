@@ -899,14 +899,14 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     **cl_params)
             elif db_type == 'mixed_scylla':
                 self.test_config.mixed_cluster(True)
-                n_test_oracle_db_nodes = self.params.get('n_test_oracle_db_nodes')
-                cl_params.update(dict(ec2_instance_type=self.params.get('instance_type_db_oracle'),
-                                      user_prefix=user_prefix + '-oracle',
-                                      n_nodes=[n_test_oracle_db_nodes]))
                 return ScyllaAWSCluster(
                     ec2_ami_id=self.params.get('ami_id_db_oracle').split(),
                     ec2_ami_username=self.params.get('ami_db_scylla_user'),
-                    **cl_params)
+                    ec2_instance_type=self.params.get('instance_type_db_oracle'),
+                    ec2_block_device_mappings=db_info['device_mappings'],
+                    n_nodes=[self.params.get('n_test_oracle_db_nodes')],
+                    **(common_params | {'user_prefix': user_prefix + '-oracle'}),
+                )
             elif db_type == 'cloud_scylla':
                 cloud_credentials = self.params.get('cloud_credentials_path')
 
