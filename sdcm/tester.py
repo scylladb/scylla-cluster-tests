@@ -905,6 +905,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     ec2_instance_type=self.params.get('instance_type_db_oracle'),
                     ec2_block_device_mappings=db_info['device_mappings'],
                     n_nodes=[self.params.get('n_test_oracle_db_nodes')],
+                    node_type='oracle-db',
                     **(common_params | {'user_prefix': user_prefix + '-oracle'}),
                 )
             elif db_type == 'cloud_scylla':
