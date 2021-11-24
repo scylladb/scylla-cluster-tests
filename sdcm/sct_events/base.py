@@ -221,6 +221,7 @@ class SctEvent:
             "base": self.base,
             "type": self.type,
             "subtype": self.subtype,
+            "timestamp": self.timestamp,
             **self.__getstate__(),
         }, cls=encoder)
 
