@@ -20,7 +20,8 @@ from sdcm.sct_events import Severity, SctEventProtocol
 from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event, InformationalEvent, \
     EventPeriod
 
-from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, ContinuousEventRegistryException, ContinuousEvent
+from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, ContinuousEvent
+from sdcm.sct_events.system import TestFrameworkEvent
 
 TOLERABLE_REACTOR_STALL: int = 1000  # ms
 
@@ -335,10 +336,14 @@ def get_pattern_to_event_to_func_mapping(node: str) \
         begun_events = event_filter.get_filtered()
 
         if not begun_events:
-            raise ContinuousEventRegistryException("Did not find any events of type {event_type}"
-                                                   "with period type {period_type}."
-                                                   .format(event_type=event_type,
-                                                           period_type=EventPeriod.BEGIN.value))
+            TestFrameworkEvent(
+                source=event_type.__name__,
+                message="Did not find any events of type {event_type}"
+                        "with period type {period_type}.".format(event_type=event_type,
+                                                                 period_type=EventPeriod.BEGIN.value),
+                severity=Severity.ERROR
+            ).publish_or_dump()
+
         if len(begun_events) > 1:
             LOGGER.debug("Found %s events of type %s with period %s. "
                          "Will apply the function to most recent event by default.",
