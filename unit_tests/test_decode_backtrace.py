@@ -15,8 +15,11 @@ import os
 import json
 import queue
 import unittest
+from functools import cached_property
 
 from sdcm.cluster import TestConfig
+from sdcm.db_log_reader import DbLogReader
+from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 
 from unit_tests.dummy_remote import DummyRemote
 from unit_tests.test_cluster import DummyNode
@@ -28,6 +31,8 @@ class DecodeDummyNode(DummyNode):  # pylint: disable=abstract-method
     def copy_scylla_debug_info(self, node, debug_file):
         return "scylla_debug_info_file"
 
+
+class DummyDbLogReader(DbLogReader):
     def get_scylla_debuginfo_file(self):
         return "scylla_debug_info_file"
 
@@ -36,28 +41,73 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
     @classmethod
     def setUpClass(cls):
         cls.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
-        cls.node = DecodeDummyNode(name='test_node', parent_cluster=None,
-                                   base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
-        cls.node.remoter = DummyRemote()
-
-        cls.monitor_node = DecodeDummyNode(name='test_monitor_node', parent_cluster=None,
-                                           base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
-        cls.monitor_node.remoter = DummyRemote()
-        cls.test_config = TestConfig()
 
     @classmethod
     def tearDownClass(cls):
         cls.teardown_events_processes()
 
+    @cached_property
+    def test_config(self):
+        result = TestConfig()
+        result.set_decoding_queue()
+        return result
+
+    @cached_property
+    def node(self):
+        dummy_node = DecodeDummyNode(
+            name='test_node',
+            parent_cluster=None,
+            base_logdir=self.temp_dir,
+            ssh_login_info=dict(key_file='~/.ssh/scylla-test'),
+        )
+        dummy_node.remoter = DummyRemote()
+        return dummy_node
+
+    @cached_property
+    def monitor_node(self):
+        dummy_monitor = DecodeDummyNode(
+            name='test_monitor_node',
+            parent_cluster=None,
+            base_logdir=self.temp_dir,
+            ssh_login_info=dict(key_file='~/.ssh/scylla-test'),
+        )
+        dummy_monitor.remoter = DummyRemote()
+        return dummy_monitor
+
+    @cached_property
+    def _db_log_reader(self):
+        return DummyDbLogReader(
+            system_log=self.node.system_log,
+            node_name=str(self),
+            remoter=self.node.remoter,
+            decoding_queue=self.test_config.DECODING_QUEUE,
+            system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
+            log_lines=True,
+        )
+
+    @cached_property
+    def _db_log_reader_no_decoding(self):
+        return DummyDbLogReader(
+            system_log=self.node.system_log,
+            node_name=str(self),
+            remoter=self.node.remoter,
+            decoding_queue=None,
+            system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
+            log_lines=False,
+        )
+
+    def _read_and_publish_events(self):
+        self._db_log_reader._read_and_publish_events()  # pylint: disable=protected-access
+
+    def _read_and_publish_events_no_decoding(self):
+        self._db_log_reader_no_decoding._read_and_publish_events()  # pylint: disable=protected-access
+
     def setUp(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system.log')
 
     def test_01_reactor_stall_is_not_decoded_if_disabled(self):
-        self.test_config.DECODING_QUEUE = queue.Queue()
-        self.test_config.BACKTRACE_DECODING = False
-
         self.monitor_node.start_decode_on_monitor_node_thread()
-        self.node._read_system_log_and_publish_events()  # pylint: disable=protected-access
+        self._read_and_publish_events_no_decoding()  # pylint: disable=protected-access
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()
         self.monitor_node.wait_till_tasks_threads_are_stopped()
@@ -77,8 +127,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         self.test_config.DECODING_QUEUE = queue.Queue()
 
         self.monitor_node.start_decode_on_monitor_node_thread()
-        self.node._read_system_log_and_publish_events()  # pylint: disable=protected-access
-
+        self._read_and_publish_events()
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()
         self.monitor_node.wait_till_tasks_threads_are_stopped()
@@ -101,7 +150,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         self.monitor_node.start_decode_on_monitor_node_thread()
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_interlace_stall.log')
 
-        self.node._read_system_log_and_publish_events()  # pylint: disable=protected-access
+        self._read_and_publish_events()  # pylint: disable=protected-access
 
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()
@@ -125,7 +174,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
         self.monitor_node.start_decode_on_monitor_node_thread()
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_core.log')
 
-        self.node._read_system_log_and_publish_events()  # pylint: disable=protected-access
+        self._read_and_publish_events()
 
         self.monitor_node.termination_event.set()
         self.monitor_node.stop_task_threads()
