@@ -55,7 +55,7 @@
     {% for stat_name in [
         "main_cycles_servicetime_max",
         "main_cycles_servicetime_min",
-        ""main_cycles_servicetime_median",
+        "main_cycles_servicetime_median",
         "main_cycles_servicetime_mean_rate",
         "main_cycles_servicetime_p99",
         "main_result_mean_rate"
@@ -103,11 +103,11 @@
                 {% with status = last_stat.status, percent = last_stat.delta_percent %}
                     {% if status == 'Regression' and percent < -4 %}
                         <span class="red fbold">{{ percent }}%</span>
-                    {% elif status == 'Regression' and percent < 0 and percent > -4% %}
+                    {% elif status == 'Regression' and percent < 0 and percent > -4 %}
                         <span class="black fbold">{{ percent }}%</span>
                     {% elif status == 'Progress' and percent > 4 %}
                         <span class="green fbold">{{ percent }}%</span>
-                    {{% elif status == 'Progress' and percent >= 4 %}
+                    {% elif status == 'Progress' and percent >= 4 %}
                         <span class="black fbold">{{ percent }}%</span>
                     {% else %}
                         <span>{{ percent }}%</span>

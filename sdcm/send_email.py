@@ -536,7 +536,7 @@ def build_reporter(name: str,
     #  pylint: disable=too-many-return-statements
     if "Gemini" in name:
         return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)
-    elif "Longevity" in name or 'SlaPerUser' in name:
+    elif any(["Longevity" in name, 'SlaPerUser' in name, "NosqlBench" in name]):
         return LongevityEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "ManagerUpgrade" in name:
         return ManagerUpgradeEmailReporter(email_recipients=email_recipients, logdir=logdir)

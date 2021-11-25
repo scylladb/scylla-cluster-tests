@@ -38,6 +38,7 @@ class PerformanceRegressionNosqlBenchTest(PerformanceRegressionTest):
         analyzer_args = NoSQLBenchAnalyzerArgs(
             test_id=self._test_id,
             es_index=self._test_index,
+            logdir=self.logdir,
             es_doc_type=self._es_doc_type,
             email_recipients=self.params.get('email_recipients'),
             events=get_events_grouped_by_category(
@@ -46,7 +47,6 @@ class PerformanceRegressionNosqlBenchTest(PerformanceRegressionTest):
             is_gce=bool(self.params.get('cluster_backend') == 'gce'),
             use_wide_query=True
         )
-
         results_analyzer = NoSQLBenchResultsAnalyzer(analyzer_args=analyzer_args)
         try:
             results_analyzer.check_regression()
