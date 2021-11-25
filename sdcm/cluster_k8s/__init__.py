@@ -1436,6 +1436,9 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
     def pod_replace_timeout(self) -> int:
         return self.pod_terminate_timeout + self.pod_readiness_timeout
 
+    def configure_remote_logging(self):
+        self.log.debug("No need to configure remote logging on k8s")
+
     @staticmethod
     def is_docker() -> bool:
         return True
