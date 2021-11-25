@@ -710,7 +710,7 @@ class SCTConfiguration(dict):
         dict(name="k8s_enable_performance_tuning", env="SCT_K8S_ENABLE_PERFORMANCE_TUNING",
              type=boolean, help="Define whether performance tuning must run or not."),
 
-        dict(name="k8s_deploy_monitoring", env="SCT_K8S_DEPLOY_MONITORING", type=str,
+        dict(name="k8s_deploy_monitoring", env="SCT_K8S_DEPLOY_MONITORING", type=boolean,
              help=""),
 
         dict(name="k8s_scylla_operator_docker_image",
