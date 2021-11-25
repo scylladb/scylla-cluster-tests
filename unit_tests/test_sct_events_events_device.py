@@ -21,6 +21,7 @@ import multiprocessing
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.events_device import EventsDevice, start_events_main_device, get_events_main_device
 from sdcm.sct_events.events_processes import EventsProcessesRegistry
+from sdcm.wait import wait_for
 
 
 class TestEventsDevice(unittest.TestCase):
@@ -80,6 +81,7 @@ class TestEventsDevice(unittest.TestCase):
         self.assertIsNone(get_events_main_device(_registry=self.events_processes_registry))
         start_events_main_device(_registry=self.events_processes_registry)
         events_device = get_events_main_device(_registry=self.events_processes_registry)
+        wait_for(func=events_device.is_alive, timeout=5)
         try:
             self.assertIsInstance(events_device, EventsDevice)
             self.assertEqual(events_device.events_counter, 0)

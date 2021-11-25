@@ -21,12 +21,15 @@ import os.path
 import tempfile
 import unittest
 from datetime import datetime
+from functools import cached_property
 from weakref import proxy as weakproxy
 
 from invoke import Result
 
 from sdcm.cluster import BaseNode, BaseCluster, BaseMonitorSet
+from sdcm.db_log_reader import DbLogReader
 from sdcm.sct_events import Severity
+from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.system import InstanceStatusEvent
@@ -34,8 +37,6 @@ from sdcm.utils.distro import Distro
 
 from unit_tests.dummy_remote import DummyRemote
 from unit_tests.lib.events_utils import EventsUtilsMixin
-
-# pylint: disable=protected-access
 
 
 class DummyNode(BaseNode):  # pylint: disable=abstract-method
@@ -85,14 +86,41 @@ class DummyDbCluster(BaseCluster):  # pylint: disable=abstract-method
         self.nodes = nodes
 
 
+class DummyDbLogReader(DbLogReader):
+    def get_scylla_debuginfo_file(self):
+        return "scylla_debug_info_file"
+
+
 class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
     @classmethod
     def setUpClass(cls):
         cls.setup_events_processes(events_device=True, events_main_device=False, registry_patcher=True)
-        cls.node = DummyNode(name='test_node', parent_cluster=None,
-                             base_logdir=cls.temp_dir, ssh_login_info=dict(key_file='~/.ssh/scylla-test'))
-        cls.node.init()
-        cls.node.remoter = DummyRemote()
+
+    @cached_property
+    def node(self):
+        dummy_node = DummyNode(
+            name='test_node',
+            parent_cluster=None,
+            base_logdir=self.temp_dir,
+            ssh_login_info=dict(key_file='~/.ssh/scylla-test'),
+        )
+        dummy_node.init()
+        dummy_node.remoter = DummyRemote()
+        return dummy_node
+
+    @cached_property
+    def _db_log_reader(self):
+        return DummyDbLogReader(
+            system_log=self.node.system_log,
+            remoter=self.node.remoter,
+            node_name=str(self),
+            system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
+            decoding_queue=None,
+            log_lines=False
+        )
+
+    def _read_and_publish_events(self):
+        self._db_log_reader._read_and_publish_events()  # pylint: disable=protected-access
 
     @classmethod
     def tearDownClass(cls):
@@ -113,7 +141,7 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
     def test_search_system_interlace_reactor_stall(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_interlace_stall.log')
 
-        self.node._read_system_log_and_publish_events(start_from_beginning=True)
+        self._read_and_publish_events()
 
         with self.get_raw_events_log().open() as events_file:
             events = [json.loads(line) for line in events_file]
@@ -129,7 +157,7 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
 
     def test_search_kernel_callstack(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'kernel_callstack.log')
-        self.node._read_system_log_and_publish_events(start_from_beginning=True)
+        self._read_and_publish_events()
         with self.get_raw_events_log().open() as events_file:
             events = [json.loads(line) for line in events_file]
 
@@ -145,7 +173,7 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
     def test_search_cdc_invalid_request(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_cdc_invalid_request.log')
         with ignore_upgrade_schema_errors():
-            self.node._read_system_log_and_publish_events(start_from_beginning=True)
+            self._read_and_publish_events()
 
         time.sleep(0.1)
         with self.get_events_logger().events_logs_by_severity[Severity.ERROR].open() as events_file:
@@ -155,7 +183,7 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
     def test_search_power_off(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'power_off.log')
         with DbEventsFilter(db_event=InstanceStatusEvent.POWER_OFF, node=self.node):
-            self.node._read_system_log_and_publish_events(start_from_beginning=True)
+            self._read_and_publish_events()
 
         InstanceStatusEvent.POWER_OFF().add_info(
             node="A", line_number=22,
@@ -172,7 +200,7 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
         self.node.system_log = os.path.join(os.path.dirname(
             __file__), 'test_data', 'system_suppressed_messages.log')
 
-        self.node._read_system_log_and_publish_events(start_from_beginning=True)
+        self._read_and_publish_events()
 
         with self.get_raw_events_log().open() as events_file:
             events = [json.loads(line) for line in events_file]
@@ -186,7 +214,7 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
     def test_search_one_line_backtraces(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'system_one_line_backtrace.log')
 
-        self.node._read_system_log_and_publish_events(start_from_beginning=True)
+        self._read_and_publish_events()
 
         with self.get_raw_events_log().open() as events_file:
             events = [json.loads(line) for line in events_file]
