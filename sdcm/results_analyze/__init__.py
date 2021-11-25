@@ -177,6 +177,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         return "%s/%s" % (self._conf.get('kibana_url'), dashboard_path)
 
     def save_email_data_file(self, subject, email_data, file_path='email_data.json'):
+        LOGGER.info("Saving email data to path: %s", file_path)
         if os.path.exists(file_path):
             try:
                 with open(file_path, 'r') as file:
@@ -193,7 +194,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         except EnvironmentError as err:
             self.log.error('Failed to write %s to file %s with error %s', file_content, file_path, err)
         else:
-            self.log.debug('Successfully wrote %s to file %s', file_content, file_path)
+            self.log.info('Successfully wrote %s to file %s', file_content, file_path)
 
 
 class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):

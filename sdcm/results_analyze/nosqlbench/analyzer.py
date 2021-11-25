@@ -2,6 +2,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from itertools import groupby
+from pathlib import Path
 from typing import Any, NamedTuple
 
 from sdcm.db_stats import TestStatsMixin
@@ -26,6 +27,7 @@ class NoSQLBenchAnalyzerArgs(NamedTuple):
     test_id: str
     es_index: str
     es_doc_type: str
+    logdir: str | Path
     email_recipients: list[str]
     events: dict[str, Any]
     is_gce: bool
@@ -141,6 +143,7 @@ class MetricComparator:
 
     @staticmethod
     def _get_timer_value(item: dict, key: str):
+        LOGGER.info("Working on item: %s", item)
         return item["_source"]["results"]["timers"][key]
 
     @staticmethod
@@ -249,9 +252,6 @@ class NoSQLBenchResultsAnalyzer(BaseResultsAnalyzer):
 
         comparator = MetricComparator(current_test_results=doc, filtered_test_results=filtered_tests,
                                       comparison_axis=comparison_axes)
-        res_list = {"best": comparator.vs_history, "last": comparator.vs_last}
-        LOGGER.info("Comparisons:")
-        LOGGER.info(res_list)
 
         # send results by email
         # full_test_name = doc["_source"]["test_details"]["test_name"]
@@ -279,12 +279,10 @@ class NoSQLBenchResultsAnalyzer(BaseResultsAnalyzer):
         # test_name = full_test_name.split('.')[-1]  # Example: longevity_test.py:LongevityTest.test_custom_time
         # subject = f'NoSQLBench Performance Regression Compare Results ' \
         #           f'- {test_name} - {test_version} - {str(test_start_time)}'
-        results, subject = self._prepare_results_for_email(doc, comparator)
+        email_data, subject = self._prepare_results_for_email(doc, comparator)
 
-        email_data = {'email_body': results,
-                      'attachments': (),
-                      'template': self._email_template_fp}
-        self.save_email_data_file(subject, email_data, file_path='email_data.json')
+        self.save_email_data_file(subject, email_data,
+                                  file_path=Path(self._analyzer_args.logdir).joinpath('email_data.json'))
 
         return True
 
@@ -304,7 +302,7 @@ class NoSQLBenchResultsAnalyzer(BaseResultsAnalyzer):
     def _prepare_results_for_email(self,
                                    doc: dict[str, Any],
                                    comparator: MetricComparator) -> tuple[dict[str, Any], str]:
-        res_list = {"best": comparator.vs_history, "last": comparator.vs_last}
+        res_list = [{"best": comparator.vs_history, "last": comparator.vs_last}]
         LOGGER.info("Comparisons:")
         LOGGER.info(res_list)
 
@@ -332,7 +330,7 @@ class NoSQLBenchResultsAnalyzer(BaseResultsAnalyzer):
         }
         test_name = full_test_name.split('.')[-1]  # Example: longevity_test.py:LongevityTest.test_custom_time
         subject = f'NoSQLBench Performance Regression Compare Results ' \
-                  f'- {test_name} - {test_version} - {str(test_start_time)}'
+                  f'- {test_name} - {test_version["version"]} - {str(test_start_time)}'
 
         email_data = {'email_body': results,
                       'attachments': (),
