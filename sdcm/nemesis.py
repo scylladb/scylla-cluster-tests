@@ -2010,8 +2010,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.debug(result)
 
     # NOTE: '2022.1.rc0' is set in advance, not guaranteed to match when appears
-    # NOTE: current variant of the toppartitions feature is supported since 4.5 OSS
-    @scylla_versions(("4.5.rc1", None), ("2022.1.rc0", None))
+    # NOTE: current variant of the toppartitions feature is supported since 4.6 OSS
+    @scylla_versions(("4.6.rc0", None), ("2022.1.rc0", None))
     def disrupt_show_toppartitions(self):
         result = self.target_node.run_nodetool(sub_cmd='help', args='toppartitions')
         if 'Unknown command toppartitions' in result.stdout:
