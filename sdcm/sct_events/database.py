@@ -76,7 +76,7 @@ DatabaseLogEvent.add_subevent_type("NO_SPACE_ERROR", severity=Severity.ERROR,
 DatabaseLogEvent.add_subevent_type("UNKNOWN_VERB", severity=Severity.WARNING,
                                    regex="unknown verb exception")
 DatabaseLogEvent.add_subevent_type("CLIENT_DISCONNECT", severity=Severity.WARNING,
-                                   regex=r"\!INFO.*cql_server - exception while processing connection:.*")
+                                   regex=r"cql_server - exception while processing connection:")
 DatabaseLogEvent.add_subevent_type("SEMAPHORE_TIME_OUT", severity=Severity.WARNING,
                                    regex="semaphore_timed_out")
 # This scylla WARNING includes "exception" word and reported as ERROR. To prevent it I add the subevent below and locate
@@ -84,10 +84,10 @@ DatabaseLogEvent.add_subevent_type("SEMAPHORE_TIME_OUT", severity=Severity.WARNI
 # storage_proxy - Failed to apply mutation from 10.0.2.108#8: exceptions::mutation_write_timeout_exception
 # (Operation timed out for system.paxos - received only 0 responses from 1 CL=ONE.)
 DatabaseLogEvent.add_subevent_type("SYSTEM_PAXOS_TIMEOUT", severity=Severity.WARNING,
-                                   regex=".*mutation_write_*|.*Operation timed out for system.paxos.*|"
-                                         ".*Operation failed for system.paxos.*")
+                                   regex="(mutation_write_|Operation timed out for system.paxos|"
+                                         "Operation failed for system.paxos)")
 DatabaseLogEvent.add_subevent_type("RESTARTED_DUE_TO_TIME_OUT", severity=Severity.WARNING,
-                                   regex="scylla-server.service.*State 'stop-sigterm' timed out.*Killing")
+                                   regex="scylla-server.service.*State 'stop-sigterm' timed out")
 DatabaseLogEvent.add_subevent_type("EMPTY_NESTED_EXCEPTION", severity=Severity.WARNING,
                                    regex=r"cql_server - exception while processing connection: "
                                          r"seastar::nested_exception \(seastar::nested_exception\)$")
@@ -258,9 +258,9 @@ class RepairEvent(ScyllaDatabaseContinuousEvent):
 
 class CompactionEvent(ScyllaDatabaseContinuousEvent):
     begin_pattern = r'\[shard (?P<shard>\d+)\] compaction - \[Compact (?P<table>\w+.\w+) ' \
-                    r'(?P<compaction_process_id>.+)\] Compacting .*'
+                    r'(?P<compaction_process_id>.+)\] Compacting '
     end_pattern = r'\[shard (?P<shard>\d+)\] compaction - \[Compact (?P<table>\w+.\w+) ' \
-                  r'(?P<compaction_process_id>.+)\] Compacted .*'
+                  r'(?P<compaction_process_id>.+)\] Compacted '
 
     def __init__(self, node: str, shard: int, table: str, compaction_process_id: str,  # pylint: disable=too-many-arguments
                  severity=Severity.NORMAL, **__):
