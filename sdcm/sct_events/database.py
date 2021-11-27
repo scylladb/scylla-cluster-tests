@@ -343,6 +343,7 @@ def get_pattern_to_event_to_func_mapping(node: str) \
                                                                  period_type=EventPeriod.BEGIN.value),
                 severity=Severity.ERROR
             ).publish_or_dump()
+            return
 
         if len(begun_events) > 1:
             LOGGER.debug("Found %s events of type %s with period %s. "
