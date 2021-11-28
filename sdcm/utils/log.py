@@ -2,6 +2,8 @@ import sys
 import logging
 import logging.config
 
+import urllib3
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -95,7 +97,7 @@ def replace_vars(obj, variables, obj_type=None):
 
 def configure_logging(exception_handler=None,  # pylint: disable=too-many-arguments
                       formatters=None, filters=None, handlers=None, loggers=None, config=None, variables=None):
-    # sys.excepthook = handle_exception
+    urllib3.disable_warnings()
     if exception_handler:
         sys.excepthook = exception_handler
     if formatters is None:
