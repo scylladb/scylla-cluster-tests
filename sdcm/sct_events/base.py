@@ -351,6 +351,10 @@ class LogEvent(Generic[T_log_event], InformationalEvent, abstract=True):
     def __init__(self, regex: str, severity=Severity.ERROR):
         super().__init__(severity=severity)
 
+        # .* patterns works extremely slow, on big log message pattern evaluation can take >1s
+        #   in order to keep log reading fast we must avoid them at all costs
+        if regex:
+            assert '.*'.count(regex) < 2
         self.regex = regex
         self.node = None
         self.line = None
