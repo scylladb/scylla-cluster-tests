@@ -242,8 +242,7 @@ class ContinuousRegistryFilter:
         return self
 
     def filter_by_node(self, node: str) -> ContinuousRegistryFilter:
-        self._output = [item for item in self._output if item.node == node]
-
+        self._output = [item for item in self._output if getattr(item, 'node', None) == node]
         return self
 
     def filter_by_type(self, event_type: Type[ContinuousEvent]) -> ContinuousRegistryFilter:
