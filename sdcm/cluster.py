@@ -472,8 +472,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             """))
         self.remoter.run(shell_script_cmd("""\
             rm -rf cassandra-harry
-            git clone -b scylla-branch https://github.com/apache/cassandra-harry
+            git clone https://github.com/apache/cassandra-harry
             cd cassandra-harry
+            git checkout 26bb6696ba1b18ff5c062d780a9360e750691052
             make mvn
         """))
         result = self.remoter.run('realpath ~/cassandra-harry/scripts/cassandra-harry')
