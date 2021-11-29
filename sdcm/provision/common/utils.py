@@ -50,9 +50,9 @@ def configure_syslogng_target_script(host: str, port: int, throttle_per_second: 
         fi
 
         if grep -P "keep-timestamp\\([^)]+\\)" /etc/syslog-ng/syslog-ng.conf; then
-            sed -i -r "s/keep-timestamp([ ]*no[ ]*)/keep-timestamp(yes)/g" /etc/syslog-ng/syslog-ng.conf
+            sed -i -r "s/keep-timestamp([ ]*yes[ ]*)/keep-timestamp(no)/g" /etc/syslog-ng/syslog-ng.conf
         else
-            sed -i -r "s/([ \t]*options[ \t]*\\\\{{)/\\\\1\\n  keep-timestamp(yes);\\n/g" /etc/syslog-ng/syslog-ng.conf
+            sed -i -r "s/([ \t]*options[ \t]*\\\\{{)/\\\\1\\n  keep-timestamp(no);\\n/g" /etc/syslog-ng/syslog-ng.conf
         fi
 
         grep "destination remote_sct" /etc/syslog-ng/syslog-ng.conf || cat <<EOF >>/etc/syslog-ng/syslog-ng.conf
