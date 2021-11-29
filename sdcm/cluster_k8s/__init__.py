@@ -488,7 +488,21 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             f"show chart {chart_name} --devel --repo {repo} --version {chart_version}")
         for line in chart_info.split("\n"):
             if line.startswith("appVersion:"):
-                return f"scylladb/scylla-operator:{line.split(':')[-1].strip()}"
+                # NOTE: 'appVersion' key may have different formats for it's value.
+                #       Value may or may not be wrapped in quotes.
+                # $ helm show chart scylla-operator --devel --repo %repo% --version v1.6.0-rc.0
+                #     apiVersion: v2
+                #     appVersion: "1.6"
+                #     ...
+                #
+                # $ helm show chart scylla-operator --devel --repo %repo% --version v1.5.0-rc.0
+                #     apiVersion: v2
+                #     appVersion: 1.5.0-rc.0
+                #     ...
+                #
+                # Details: https://helm.sh/docs/topics/charts/#the-appversion-field
+                found_app_version = line.split(':')[-1].strip().replace('"', '').replace("'", "")
+                return f"scylladb/scylla-operator:{found_app_version}"
         raise ValueError(
             f"Cannot get operator image version from the '{chart_name}' chart located at "
             f"'{repo}' having '{chart_version}' version")
