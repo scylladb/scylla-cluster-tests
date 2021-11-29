@@ -5495,3 +5495,8 @@ class LocalNode(BaseNode):
 
     def check_spot_termination(self):
         pass
+
+
+class LocalK8SHostNode(LocalNode):
+    def configure_remote_logging(self):
+        self.log.debug("No need to configure remote logging on k8s")
