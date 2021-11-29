@@ -1,0 +1,23 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+managerPipeline(
+    manager: true,
+    backend: 'aws',
+    aws_region: 'us-east-1',
+
+    target_manager_version: 'master_latest',
+
+    manager_version: '2.5',
+    //TODO: Should be deprecated once 2.6 is no longer tested, since 2.6 doesn't even support meta installation anymore.
+
+    test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
+    test_config: '''["test-cases/upgrades/manager-upgrade.yaml", "configurations/manager/meta-installation.yaml"]''',
+
+    timeout: [time: 360, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy',
+    post_behavior_loader_nodes: 'destroy',
+    post_behavior_monitor_nodes: 'destroy'
+)

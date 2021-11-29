@@ -2394,7 +2394,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             time.sleep(5)
 
     # pylint: disable=too-many-branches
-    def install_mgmt(self, package_url: Optional[str] = None) -> None:
+    def install_mgmt(self, package_url: Optional[str] = None, force_package_name=None) -> None:
         self.log.debug("Install scylla-manager")
 
         if self.is_docker():
@@ -2422,6 +2422,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             manager_version = self.parent_cluster.params.get("manager_version")
             manager_repo_url = get_manager_repo_from_defaults(manager_version, self.distro)
             self.download_scylla_manager_repo(manager_repo_url)
+        if force_package_name:
+            package_names = force_package_name
         self.install_package(package_names)
 
         self.log.debug("Copying TLS files from data_dir to the node")
@@ -4999,7 +5001,10 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         # for starting the alert manager thread (since it depends on DB cluster size and num of loaders)
         node.start_alert_manager_thread()  # remove when start task threads will be started after node setup
         if self.params.get("use_mgmt"):
-            self.install_scylla_manager(node)
+            if self.params.get("use_mgmt_meta_installation"):
+                self.meta_install_scylla_manager(node)
+            else:
+                self.install_scylla_manager(node)
 
     def install_scylla_manager(self, node):
         if self.params.get("scylla_repo_m"):
@@ -5014,6 +5019,15 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             node.remoter.send_files(src=f"{package_path}*.rpm", dst=package_path)
         node.install_mgmt(package_url=package_path)
         self.nodes[0].wait_manager_server_up()
+
+    def meta_install_scylla_manager(self, node):
+        if self.params.get("scylla_repo_m"):
+            scylla_repo = self.params.get("scylla_repo_m")
+        else:
+            manager_scylla_backend_version = self.params.get("manager_scylla_backend_version")
+            scylla_repo = get_manager_scylla_backend(manager_scylla_backend_version, node.distro)
+        node.download_scylla_repo(scylla_repo)
+        node.install_mgmt(force_package_name="scylla-manager")
 
     def configure_ngrok(self):
         port = self.local_metrics_addr.split(':')[1]

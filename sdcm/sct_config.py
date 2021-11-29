@@ -296,6 +296,9 @@ class SCTConfiguration(dict):
         dict(name="use_ms_ad_ldap", env="SCT_USE_MS_AD_LDAP", type=boolean,
              help="This option will use ldap server of QA MS Active Directory, not default openldap"),
 
+        dict(name="use_mgmt_meta_installation", env="SCT_USE_MGMT_META_INSTALLATION", type=boolean,
+             help="When define true, the manager server and backend will be installed using a meta installation"),
+
         dict(name="use_mgmt", env="SCT_USE_MGMT", type=boolean,
              help="When define true, will install scylla management"),
 
