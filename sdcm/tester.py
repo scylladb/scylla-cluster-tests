@@ -21,7 +21,6 @@ import stat
 import time
 import unittest
 import unittest.mock
-import warnings
 from typing import NamedTuple, Optional, Union, List, Dict, Any
 from uuid import uuid4, UUID
 from functools import wraps, cached_property, cache
@@ -111,6 +110,7 @@ try:
     extract_from_urllib3()
 except ImportError:
     pass
+
 
 TEST_LOG = logging.getLogger(__name__)
 
@@ -585,8 +585,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     @teardown_on_exception
     @log_run_info
     def setUp(self):  # pylint: disable=too-many-branches,too-many-statements
-        warnings.filterwarnings(action="ignore", message="unclosed",
-                                category=ResourceWarning)
         self.credentials = []
         self.db_cluster = None
         self.cs_db_cluster = None

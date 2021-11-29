@@ -1,6 +1,7 @@
 import sys
 import logging
 import logging.config
+import warnings
 
 import urllib3
 
@@ -98,6 +99,8 @@ def replace_vars(obj, variables, obj_type=None):
 def configure_logging(exception_handler=None,  # pylint: disable=too-many-arguments
                       formatters=None, filters=None, handlers=None, loggers=None, config=None, variables=None):
     urllib3.disable_warnings()
+    warnings.filterwarnings(action="ignore", message="unclosed", category=ResourceWarning)
+
     if exception_handler:
         sys.excepthook = exception_handler
     if formatters is None:
