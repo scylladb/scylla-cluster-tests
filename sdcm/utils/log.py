@@ -149,6 +149,10 @@ def configure_logging(exception_handler=None,  # pylint: disable=too-many-argume
             's3transfer': {
                 'level': 'CRITICAL'
             },
+            'multiprocessing': {
+                'level': 'DEBUG',
+                'propagate': True,
+            },
             'paramiko.transport': {
                 'level': 'CRITICAL'
             },
