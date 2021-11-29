@@ -20,7 +20,7 @@ from functools import cached_property
 from invoke.exceptions import UnexpectedExit
 
 from sdcm import cluster
-from sdcm.cluster import LocalNode
+from sdcm.cluster import LocalK8SHostNode
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.base import CommandRunner
 from sdcm.cluster_k8s import (
@@ -312,7 +312,7 @@ class LocalMinimalClusterBase(MinimalClusterBase):
     # pylint: disable=invalid-overridden-method
     @cached_property
     def host_node(self):
-        node = LocalNode(
+        node = LocalK8SHostNode(
             name=f"{self.node_prefix}-1",
             parent_cluster=self,
             base_logdir=self.logdir,
