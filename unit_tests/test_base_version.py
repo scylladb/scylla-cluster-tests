@@ -14,7 +14,7 @@
 
 import unittest
 
-from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module
+from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module, import-error
 
 
 def general_test(scylla_repo='', linux_distro=''):
