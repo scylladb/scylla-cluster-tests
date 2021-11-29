@@ -340,38 +340,6 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 ec2_user_data += ' --bootstrap false '
         return ec2_user_data
 
-    # This is workaround for issue #5179: IPv6 - routing in scylla AMI isn't configured properly (when not Amazon Linux)
-    @staticmethod
-    def network_config_ipv6_workaround_script():  # pylint: disable=invalid-name
-        return dedent("""
-            if `grep -qi "ubuntu" /etc/os-release`; then
-
-                echo "On Ubuntu we don't need this workaround, so done"
-
-            else
-                BASE_EC2_NETWORK_URL=http://169.254.169.254/latest/meta-data/network/interfaces/macs/
-                MAC=`curl -s ${BASE_EC2_NETWORK_URL}`
-                IPv6_CIDR=`curl -s ${BASE_EC2_NETWORK_URL}${MAC}/subnet-ipv6-cidr-blocks`
-
-                grep -qi "amazon linux" /etc/os-release || sudo ip route add $IPv6_CIDR dev eth0
-
-                grep -q IPV6_AUTOCONF /etc/sysconfig/network-scripts/ifcfg-eth0
-                if [[ $? -eq 0 ]]; then
-                    sudo sed -i 's/^IPV6_AUTOCONF=[^ ]*/IPV6_AUTOCONF=yes/' /etc/sysconfig/network-scripts/ifcfg-eth0
-                else
-                    sudo echo "IPV6_AUTOCONF=yes" >> /etc/sysconfig/network-scripts/ifcfg-eth0
-                fi
-
-                grep -q IPV6_DEFROUTE /etc/sysconfig/network-scripts/ifcfg-eth0
-                if [[ $? -eq 0 ]]; then
-                    sudo sed -i 's/^IPV6_DEFROUTE=[^ ]*/IPV6_DEFROUTE=yes/' /etc/sysconfig/network-scripts/ifcfg-eth0
-                else
-                    sudo echo "IPV6_DEFROUTE=yes" >> /etc/sysconfig/network-scripts/ifcfg-eth0
-                fi
-                sudo systemctl restart network
-            fi
-        """)
-
     def _create_or_find_instances(self, count, ec2_user_data, dc_idx):
         if self.nodes:
             return self._create_instances(count, ec2_user_data, dc_idx)
