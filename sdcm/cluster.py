@@ -915,9 +915,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return self._init_system
 
     def start_journal_thread(self):
-        log_transport = self.parent_cluster.params.get("logs_transport")
+        logs_transport = self.parent_cluster.params.get("logs_transport")
         self._journal_thread = get_system_logging_thread(
-            logs_transport=log_transport,
+            logs_transport=logs_transport,
             node=self,
             target_log_file=self.system_log,
         )
@@ -925,9 +925,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.log.info("Use %s as logging daemon", type(self._journal_thread).__name__)
             self._journal_thread.start()
         else:
-            if log_transport == 'rsyslog':
+            if logs_transport == 'rsyslog':
                 self.log.info("Use no logging daemon since log transport is rsyslog")
-            elif log_transport == 'syslog-ng':
+            elif logs_transport == 'syslog-ng':
                 self.log.info("Use no logging daemon since log transport is syslog-ng")
             else:
                 TestFrameworkEvent(
@@ -2971,7 +2971,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             use_rsyslog = True
         elif self.parent_cluster.params.get('logs_transport') == 'syslog-ng':
             self.log.info("Log transport is syslog-ng. Try to install it.")
-            if self.remoter.sudo(f"bash -cxe '{install_syslogng_service(return_status=True)}'", ignore_status=True).ok:
+            if self.remoter.sudo(shell_script_cmd(install_syslogng_service(), quote="'"), ignore_status=True).ok:
                 script += self.test_config.get_syslogng_configuration_script(hostname=self.name)
                 script += restart_syslogng_service()
             else:
@@ -2982,7 +2982,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             script += self.test_config.get_rsyslog_configuration_script()
             script += restart_rsyslog_service()
         if script:
-            self.remoter.sudo(f"bash -cxe '{script}'")
+            self.remoter.sudo(shell_script_cmd(script, quote="'"))
         else:
             self.log.warning('Logging configuration is not needed')
 
