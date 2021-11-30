@@ -124,34 +124,24 @@ def restart_syslogng_service():
     return "systemctl restart syslog-ng\n"
 
 
-def install_syslogng_service(return_status: bool = False):
-    ending = dedent("""
-    if [ -z "$SYSLOGNG_INSTALLED" ]; then
-      exit 1
-    else
-      exit 0
-    fi
-    """) if return_status else ""
-    return dedent("""
-    SYSLOGNG_INSTALLED=""
-    if yum --help 2>/dev/null 1>&2 ; then
-      if ! yum list installed | grep syslog-ng; then
-        yum install -y syslog-ng
-      fi
-
-      if yum list installed | grep syslog-ng; then
-        SYSLOGNG_INSTALLED=1
-      fi
-    elif apt --help 2>/dev/null 1>&2 ; then
-      if ! apt list --installed | grep syslog-ng; then
-        apt update -y | apt update | true
-        apt install -yf syslog-ng
-      fi
-      if apt list --installed | grep syslog-ng; then
-        SYSLOGNG_INSTALLED=1
-      fi
-    else
-      echo "Unsupported distro"
-    fi
-    {ending}
-    """.format(ending=ending))
+def install_syslogng_service():
+    return dedent("""\
+        if yum --help 2>/dev/null 1>&2 ; then
+            if ! rpm -q syslog-ng ; then
+                yum install -y syslog-ng
+            fi
+            rpm -q syslog-ng
+        elif apt-get --help 2>/dev/null 1>&2 ; then
+            if ! dpkg-query --show syslog-ng ; then
+                while ! find /proc/*/fd -lname /var/lib/dpkg/lock-frontend -exec false {} + -quit ; do
+                    sleep 60
+                done
+                apt-get -qq update
+                apt-get -qq install syslog-ng
+            fi
+            dpkg-query --show syslog-ng
+        else
+            echo "Unsupported distro"
+            false
+        fi
+    """)

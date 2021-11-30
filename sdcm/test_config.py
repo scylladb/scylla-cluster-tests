@@ -233,7 +233,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
         script += restart_sshd_service()
         if cls._tester_obj and cls._tester_obj.params.get('logs_transport') == 'syslog-ng':
             script += install_syslogng_service()
-            script += '\nif [ -z "$SYSLOGNG_INSTALLED" ]; then\n'
+            script += '\nif [ $? -ne 0 ]; then\n'
             script += cls.get_rsyslog_configuration_script()
             script += restart_rsyslog_service()
             script += '\nelse\n'
