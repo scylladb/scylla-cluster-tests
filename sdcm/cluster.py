@@ -3866,19 +3866,16 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             elif node.distro.is_ubuntu:
                 check_package_suites_distro(node, 'deb')
 
-                def list_installed_packages():
-                    node.scylla_packages_installed()
-
                 @retrying(n=6, sleep_time=10, allowed_exceptions=(UnexpectedExit,))
                 def dpkg_force_install():
                     node.remoter.sudo(shell_script_cmd("yes Y | dpkg --force-depends -i /tmp/scylla/scylla*"),
                                       ignore_status=False, verbose=True)
 
                 node.log.info('Installed .deb packages before replacing with new .DEB files')
-                list_installed_packages()
+                node.log.info(node.scylla_packages_installed)
                 dpkg_force_install()
                 node.log.info('Installed .deb packages after replacing with new .DEB files')
-                list_installed_packages()
+                node.log.info(node.scylla_packages_installed)
             _queue.put(node)
             _queue.task_done()
 
