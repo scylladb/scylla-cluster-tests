@@ -81,8 +81,8 @@ class Email():
         msg = MIMEMultipart()
         msg['subject'] = subject
         msg['from'] = self.sender
-        if recipients:
-            msg['to'] = ','.join(recipients)
+        assert recipients, "No recipients provided"
+        msg['to'] = ','.join(recipients)
         if html:
             text_part = MIMEText(content, "html")
         else:

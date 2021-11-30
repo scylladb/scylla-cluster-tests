@@ -10,9 +10,10 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-
+import abc
 import os
 import tempfile
+from abc import abstractmethod
 
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -29,7 +30,7 @@ from sdcm.utils.cloud_monitor.resources.static_ips import StaticIPs
 
 class BaseReport:
 
-    def __init__(self, cloud_instances: CloudInstances, static_ips: StaticIPs, html_template: str):
+    def __init__(self, cloud_instances: CloudInstances, static_ips: StaticIPs | None, html_template: str):
         self.cloud_instances = cloud_instances
         self.static_ips = static_ips
         self.html_template = html_template
@@ -147,9 +148,9 @@ class DetailedReport(BaseReport):
         return self._jinja_render_template(body=resources_html)
 
 
-class QAonlyTimeDistributionReport(BaseReport):
-    def __init__(self, cloud_instances: CloudInstances, static_ips: StaticIPs, user=None):
-        super().__init__(cloud_instances, static_ips, html_template="per_qa_user.html")
+class InstancesTimeDistributionReport(BaseReport, metaclass=abc.ABCMeta):
+    def __init__(self, cloud_instances: CloudInstances, user=None):
+        super().__init__(cloud_instances, static_ips=None, html_template="per_qa_user.html")
         self.user = user
         self.report = {7: defaultdict(list), 5: defaultdict(list), 3: defaultdict(list)}
         self.qa_users = KeyStore().get_qa_users()
@@ -188,9 +189,20 @@ class QAonlyTimeDistributionReport(BaseReport):
     def _is_older_than_7days(create_time):
         return create_time < pytz.utc.localize(datetime.utcnow() - timedelta(days=7))
 
+    @abstractmethod
     def _is_user_be_skipped(self, instance):
-        return instance.owner == "qa" or instance.owner not in self.qa_users
+        ...
 
     @staticmethod
     def _is_instance_be_skipped(instance):
         return instance.state != "running"
+
+
+class QAonlyInstancesTimeDistributionReport(InstancesTimeDistributionReport):
+    def _is_user_be_skipped(self, instance):
+        return instance.owner == "qa" or instance.owner not in self.qa_users
+
+
+class NonQaInstancesTimeDistributionReport(InstancesTimeDistributionReport):
+    def _is_user_be_skipped(self, instance):
+        return instance.owner == "qa" or instance.owner in self.qa_users
