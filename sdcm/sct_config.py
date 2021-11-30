@@ -1321,6 +1321,7 @@ class SCTConfiguration(dict):
         env = self._load_environment_variables()
         config_files = env.get('config_files', [])
         config_files = [sct_abs_path(f) for f in config_files]
+        self.log.info("Overwritng - using these config files:\n%s", config_files)
 
         # prepend to the config list the defaults the config files
         backend = env.get('cluster_backend')
@@ -1356,6 +1357,8 @@ class SCTConfiguration(dict):
                         self[key] += " {}".format(value)
 
         # 3) overwrite with environment variables
+        self.log.info("Overwiting - self:\n%s", self)
+        self.log.info("Overwritng - env:\n%s", env)
         anyconfig.merge(self, env)
 
         # 4) update events max severities
@@ -1537,12 +1540,8 @@ class SCTConfiguration(dict):
         for opt in self.config_options:
             if opt['env'] in os.environ:
                 try:
-                    self.log.info("Looking for env option: %s", opt["env"])
-                    self.log.info("Found environ value: %s, type: %s", os.environ[opt['env']],
-                                  type(os.environ[opt['env']]))
                     environment_vars[opt['name']] = opt['type'](os.environ[opt['env']])
                 except Exception as ex:  # pylint: disable=broad-except
-                    self.log.info("Parsed value: %s, type: %s", os.environ[opt['env']], type(os.environ[opt['env']]))
                     raise ValueError(
                         "failed to parse {} from environment variable".format(opt['env'])) from ex
         return environment_vars
