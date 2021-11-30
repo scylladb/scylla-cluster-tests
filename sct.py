@@ -42,6 +42,7 @@ from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.azure_region import AzureRegion, region_name_to_location
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
+from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
 from sdcm.utils.common import (
     all_aws_regions,
     aws_tags_to_dict,
@@ -927,24 +928,20 @@ def run_pytest(target, backend, config, logdir):
 
 @cli.command("cloud-usage-report", help="Generate and send Cloud usage report")
 @click.option("-e", "--emails", required=True, type=str, help="Comma separated list of emails. Example a@b.com,c@d.com")
-def cloud_usage_report(emails):
+@click.option("-t", "--report-type", required=True,
+              type=click.Choice(choices=["general", "last-7-days-qa", "last-7-days-non-qa"], case_sensitive=False),
+              help="Type of the report")
+@click.option("-u", "--user", required=False, type=str, default="",
+              help="User or instance owner. Applicable for last-7-days-* reports")
+def cloud_usage_report(emails, report_type, user):
     add_file_logger()
 
     email_list = emails.split(",")
-    click.secho(message="Will send Cloud Usage report to %s" % email_list, fg="green")
-    cloud_report(mail_to=email_list)
-    click.secho(message="Done.", fg="yellow")
-
-
-@cli.command("cloud-usage-qa-report", help="Generate and send Cloud usage report")
-@click.option("-e", "--emails", required=True, type=str, help="Comma separated list of emails. Example a@b.com,c@d.com")
-@click.option("-u", "--user", required=False, type=str, help="User or instance owner")
-def cloud_usage_qa_report(emails, user=None):
-    add_file_logger()
-
-    email_list = emails.split(",")
-    click.secho(message="Will send Cloud Usage report to %s" % email_list, fg="green")
-    cloud_qa_report(mail_to=email_list, user=user)
+    click.secho(message=f"Will send {user} Cloud Usage '{report_type}' report to {email_list}", fg="green")
+    match report_type:
+        case "general": cloud_report(mail_to=email_list)
+        case "last-7-days-qa": cloud_qa_report(mail_to=email_list, user=user)
+        case "last-7-days-non-qa": cloud_non_qa_report(mail_to=email_list, user=user)
     click.secho(message="Done.", fg="yellow")
 
 
