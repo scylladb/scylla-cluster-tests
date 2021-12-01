@@ -662,6 +662,27 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             LOGGER.info("Using following predefined scylla-operator upgrade chart version: %s",
                         new_chart_version)
 
+        # Upgrade CRDs if new chart version is newer than v1.5.0
+        # Helm doesn't do CRD 'upgrades', only 'creations'.
+        # Details:
+        #   https://helm.sh/docs/chart_best_practices/custom_resource_definitions/#some-caveats-and-explanations
+        if version.parse(new_chart_version.split("-")[0]) > version.parse("v1.5.0"):
+            LOGGER.info("Upgrade Scylla Operator CRDs: START")
+            try:
+                with TemporaryDirectory() as tmpdir:
+                    self.helm(
+                        f"pull {local_repo_name}/scylla-operator --devel --untar "
+                        f"--version {new_chart_version} --destination {tmpdir}")
+                    crd_basedir = os.path.join(tmpdir, 'scylla-operator/crds')
+                    for current_file in os.listdir(crd_basedir):
+                        if not (current_file.endswith(".yaml") or current_file.endswith(".yml")):
+                            continue
+                        self.apply_file(
+                            os.path.join(crd_basedir, current_file), modifiers=[], envsubst=False)
+            except Exception as exc:  # pylint: disable=broad-except
+                LOGGER.debug("Upgrade Scylla Operator CRDs: Exception: %s", exc)
+            LOGGER.info("Upgrade Scylla Operator CRDs: END")
+
         # Get existing scylla-operator helm chart values
         values = HelmValues(json.loads(self.helm(
             "get values scylla-operator -o json", namespace=SCYLLA_OPERATOR_NAMESPACE)))
