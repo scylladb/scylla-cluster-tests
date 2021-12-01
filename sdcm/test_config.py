@@ -1,6 +1,6 @@
 import logging
+import multiprocessing
 import os
-import queue
 from datetime import datetime
 from typing import Optional, Dict
 
@@ -125,7 +125,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
 
     @classmethod
     def set_decoding_queue(cls):
-        cls.DECODING_QUEUE = queue.Queue()
+        cls.DECODING_QUEUE = multiprocessing.Queue()
 
     @classmethod
     def set_intra_node_comm_public(cls, intra_node_comm_public):

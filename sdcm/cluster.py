@@ -50,6 +50,7 @@ from cassandra.policies import WhiteListRoundRobinPolicy
 from argus.db.cloud_types import ResourceState, CloudInstanceDetails, CloudResource
 from sdcm.argus_test_run import ArgusTestRun
 from sdcm.collectd import ScyllaCollectdSetup
+from sdcm.db_log_reader import DbLogReader
 from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
 from sdcm.mgmt.common import get_manager_repo_from_defaults, get_manager_scylla_backend
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
@@ -99,8 +100,7 @@ from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent, INSTANCE_STATUS_EVENTS_PATTERNS
 from sdcm.sct_events.grafana import set_grafana_url
-from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, BACKTRACE_RE, ScyllaHelpErrorEvent, \
-    get_pattern_to_event_to_func_mapping
+from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS, ScyllaHelpErrorEvent
 from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
@@ -246,15 +246,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self._short_hostname = None
         self._alert_manager: Optional[PrometheusAlertManagerListener] = None
 
-        self._system_log_errors_and_status_events_index = []
-        self._exclude_system_log_from_being_logged = [
-            ' !INFO    | sshd[',
-            ' !INFO    | systemd:',
-            ' !INFO    | systemd-logind:',
-            ' !INFO    | sudo:',
-            ' !INFO    | sshd[',
-            ' !INFO    | dhclient['
-        ]
         self.termination_event = threading.Event()
         self.lock = threading.Lock()
 
@@ -936,28 +927,19 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     message="Got no logging daemon by unknown reason"
                 ).publish_or_dump()
 
-    @raise_event_on_failure
-    def db_log_reader_thread(self):
-        """
-        Keep reporting new events from db log, every 30 seconds.
-        """
-        while not self.termination_event.is_set():
-            self.termination_event.wait(15)
-            try:
-                self._read_system_log_and_publish_events(start_from_beginning=False,
-                                                         exclude_from_logging=self._exclude_system_log_from_being_logged)
-            except Exception:  # pylint: disable=broad-except
-                self.log.exception("failed to read db log")
-            except (SystemExit, KeyboardInterrupt) as ex:
-                self.log.debug("db_log_reader_thread() stopped by %s", ex.__class__.__name__)
-
     def start_coredump_thread(self):
         self._coredump_thread = CoredumpExportSystemdThread(self, self._maximum_number_of_cores_to_publish)
         self._coredump_thread.start()
 
     def start_db_log_reader_thread(self):
-        self._db_log_reader_thread = threading.Thread(
-            target=self.db_log_reader_thread, name='LogReaderThread', daemon=True)
+        self._db_log_reader_thread = DbLogReader(
+            system_log=self.system_log,
+            remoter=self.remoter,
+            node_name=str(self),
+            system_event_patterns=SYSTEM_ERROR_EVENTS_PATTERNS,
+            decoding_queue=self.test_config.DECODING_QUEUE,
+            log_lines=self.parent_cluster.params.get('logs_transport') in ['rsyslog', 'syslog-ng']
+        )
         self._db_log_reader_thread.start()
 
     def start_alert_manager_thread(self):
@@ -1083,6 +1065,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.termination_event.set()
         if self._coredump_thread and self._coredump_thread.is_alive():
             self._coredump_thread.stop()
+        if self._db_log_reader_thread and self._db_log_reader_thread.is_alive():
+            self._db_log_reader_thread.stop()
         if self._alert_manager and self._alert_manager.is_alive():
             self._alert_manager.stop()
 
@@ -1420,135 +1404,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 regexps.append(re.compile(pattern.regex, flags=re.IGNORECASE))
         return stream.read_lines_filtered(*regexps)
 
-    def _read_system_log_and_publish_events(self,
-                                            start_from_beginning: bool = False,
-                                            exclude_from_logging: List[str] = None) -> None:
-        """Search for all known patterns listed in `sdcm.sct_events.database.SYSTEM_ERROR_EVENTS'."""
-
-        # pylint: disable=too-many-branches,too-many-locals,too-many-statements
-
-        backtraces = []
-        index = 0
-
-        if not os.path.exists(self.system_log):
-            return
-
-        if start_from_beginning:
-            start_search_from_byte = 0
-            last_line_no = 0
-        else:
-            start_search_from_byte = self.last_log_position
-            last_line_no = self.last_line_no
-
-        with open(self.system_log, 'r') as db_file:
-            if start_search_from_byte:
-                db_file.seek(start_search_from_byte)
-            for index, line in enumerate(db_file, start=last_line_no):
-                json_log = None
-                if line[0] == '{':
-                    try:
-                        json_log = json.loads(line)
-                    except Exception:  # pylint: disable=broad-except
-                        pass
-                if not start_from_beginning and self.test_config.RSYSLOG_ADDRESS:
-                    line = line.strip()
-                    if not exclude_from_logging:
-                        LOGGER.debug(line)
-                    else:
-                        exclude = False
-                        for pattern in exclude_from_logging:
-                            if pattern in line:
-                                exclude = True
-                                break
-                        if not exclude:
-                            LOGGER.debug(line)
-                if json_log:
-                    continue
-                match = BACKTRACE_RE.search(line)
-                one_line_backtrace = []
-                if match and backtraces:
-                    data = match.groupdict()
-                    if data['other_bt']:
-                        backtraces[-1]['backtrace'] += [data['other_bt'].strip()]
-                    if data['scylla_bt']:
-                        backtraces[-1]['backtrace'] += [data['scylla_bt'].strip()]
-                elif "backtrace:" in line.lower() and "0x" in line:
-                    # This part handles the backtrases are printed in one line.
-                    # Example:
-                    # [shard 2] seastar - Exceptional future ignored: exceptions::mutation_write_timeout_exception
-                    # (Operation timed out for system.paxos - received only 0 responses from 1 CL=ONE.),
-                    # backtrace:   0x3316f4d#012  0x2e2d177#012  0x189d397#012  0x2e76ea0#012  0x2e770af#012
-                    # 0x2eaf065#012  0x2ebd68c#012  0x2e48d5d#012  /opt/scylladb/libreloc/libpthread.so.0+0x94e1#012
-                    splitted_line = re.split("backtrace:", line, flags=re.IGNORECASE)
-                    for trace_line in splitted_line[1].split():
-                        if trace_line.startswith('0x') or 'scylladb/lib' in trace_line:
-                            one_line_backtrace.append(trace_line)
-
-                if index not in self._system_log_errors_and_status_events_index or start_from_beginning:
-                    # for each line, if it matches a continuous event pattern,
-                    # call the appropriate function with the class tied to that pattern
-                    db_event_pattern_func_map = get_pattern_to_event_to_func_mapping(node=self.name)
-                    for item in db_event_pattern_func_map:
-                        event_match = item.pattern.search(line)
-                        if event_match:
-                            item.period_func(match=event_match)
-
-                    # for each line use all regexes to match, and if found send an event
-                    for pattern, event in self.SYSTEM_EVENTS_PATTERNS:
-                        match = pattern.search(line)
-                        if match:
-                            self._system_log_errors_and_status_events_index.append(index)
-                            cloned_event = event.clone().add_info(node=self, line_number=index, line=line)
-                            backtraces.append(dict(event=cloned_event, backtrace=[]))
-                            break  # Stop iterating patterns to avoid creating two events for one line of the log
-
-                if one_line_backtrace and backtraces:
-                    backtraces[-1]['backtrace'] = one_line_backtrace
-
-            if not start_from_beginning:
-                self.last_line_no = index if index else last_line_no
-                self.last_log_position = db_file.tell() + 1
-
-        traces_count = 0
-        for backtrace in backtraces:
-            backtrace['event'].raw_backtrace = "\n".join(backtrace['backtrace'])
-            if backtrace['event'].type == 'BACKTRACE':
-                traces_count += 1
-
-        # A filter function to attach the backtrace to the correct error and not to the backtraces.
-        # If the error is within 10 lines and the last isn't backtrace type, the backtrace would be
-        # appended to the previous error.
-        def filter_backtraces(backtrace):
-            last_error = filter_backtraces.last_error
-            try:
-                if (last_error and
-                        backtrace['event'].line_number <= filter_backtraces.last_error.line_number + 20
-                        and not filter_backtraces.last_error.type == 'BACKTRACE'
-                        and backtrace['event'].type == 'BACKTRACE'):
-                    last_error.raw_backtrace = "\n".join(backtrace['backtrace'])
-                    backtrace['event'].dont_publish()
-                    return False
-                return True
-            finally:
-                filter_backtraces.last_error = backtrace['event']
-
-        # support interlaced reactor stalled
-        for _ in range(traces_count):
-            filter_backtraces.last_error = None
-            backtraces = list(filter(filter_backtraces, backtraces))
-
-        for backtrace in backtraces:
-            if self.test_config.BACKTRACE_DECODING and backtrace["event"].raw_backtrace:
-                scylla_debug_info = self.get_scylla_debuginfo_file()
-                self.log.debug("Debug info file %s", scylla_debug_info)
-                self.test_config.DECODING_QUEUE.put({
-                    "node": self,
-                    "debug_file": scylla_debug_info,
-                    "event": backtrace["event"],
-                })
-            else:
-                backtrace["event"].publish()
-
     def start_decode_on_monitor_node_thread(self):
         self._decoding_backtraces_thread = threading.Thread(
             target=self.decode_backtrace, name='DecodeOnMonitorNodeThread', daemon=True)
@@ -1629,33 +1484,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if build_id_result.ok:
                 return build_id_result.stdout.strip()
         return None
-
-    def get_scylla_debuginfo_file(self):
-        """
-        Lookup the scylla debug information, in various places it can be.
-
-        :return the path to the scylla debug information
-        :rtype str
-        """
-        # first try default location
-        scylla_debug_info = '/usr/lib/debug/bin/scylla.debug'
-        results = self.remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
-        if results.exit_status == 0:
-            return scylla_debug_info
-
-        # then try the relocatable location
-        results = self.remoter.run('ls /usr/lib/debug/opt/scylladb/libexec/scylla*.debug', ignore_status=True)
-        if results.stdout.strip():
-            return results.stdout.strip()
-
-        # then look it up base on the build id
-        if build_id := self.get_scylla_build_id():
-            scylla_debug_info = "/usr/lib/debug/.build-id/{0}/{1}.debug".format(build_id[:2], build_id[2:])
-            results = self.remoter.run('[[ -f {} ]]'.format(scylla_debug_info), ignore_status=True)
-            if results.exit_status == 0:
-                return scylla_debug_info
-
-        raise Exception("Couldn't find scylla debug information")
 
     def datacenter_setup(self, datacenters):
         cmd = "sudo sh -c 'echo \"\ndc={}\nrack=RACK1\nprefer_local=true\ndc_suffix={}\n\" >> /etc/scylla/cassandra-rackdc.properties'"
