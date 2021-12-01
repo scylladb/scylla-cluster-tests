@@ -2,6 +2,8 @@ test_duration: 360
 
 stress_cmd: "cassandra-stress write cl=QUORUM n=1200300 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=400200300..600200300"
 
+gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2004-lts'
+
 n_db_nodes: 3
 n_loaders: 1
 n_monitor_nodes: 1
