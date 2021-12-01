@@ -75,7 +75,7 @@ class TestDownloadDir(unittest.TestCase):
                 Path(destination_path).touch(exist_ok=overwrite_existing)
 
         self.clear_cloud_downloaded_path(sct_update_db_packages)
-        test_file_names = ["sct_test/bentsi.txt", "sct_test/charybdis.fs"]
+        test_file_names = ["sct_test/", "sct_test/bentsi.txt", "sct_test/charybdis.fs"]
         with unittest.mock.patch("libcloud.storage.drivers.google_storage.GoogleStorageDriver.list_container_objects",
                                  return_value=[FakeObject(name=fname) for fname in test_file_names]):
             update_db_packages = download_dir_from_cloud(sct_update_db_packages)

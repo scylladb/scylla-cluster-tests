@@ -1591,7 +1591,8 @@ def gce_download_dir(bucket, path, target):
 
     container = driver.get_container(container_name=bucket)
     dir_listing = driver.list_container_objects(container, ex_prefix=path)
-    for obj in dir_listing:
+    # first element is gce dir itself. Skip it.
+    for obj in dir_listing[1:]:
         rel_path = obj.name[len(path):]
         local_file_path = os.path.join(target, rel_path)
 
