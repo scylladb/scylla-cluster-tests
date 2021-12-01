@@ -2289,6 +2289,10 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
             f"patch scyllacluster {scyllacluster_name} --type merge -p '{json.dumps(patch_data)}'",
             namespace=self.namespace)
 
+        # NOTE: sleep for some time to avoid races.
+        #       We do not waste time here, because waiting for Scylla pods restart takes minutes.
+        time.sleep(10)
+
         readiness_timeout = self.get_nodes_reboot_timeout(len(self.nodes))
         statefulsets = self.statefulsets
         if random_order:
