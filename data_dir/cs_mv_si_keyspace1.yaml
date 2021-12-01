@@ -1,0 +1,78 @@
+### DML ###
+
+keyspace: keyspace1
+
+keyspace_definition: |
+  CREATE KEYSPACE IF NOT EXISTS keyspace1 WITH replication = {'class': 'NetworkTopologyStrategy', 'replication_factor': 3};
+
+table: standard2
+
+table_definition: |
+  CREATE TABLE IF NOT EXISTS standard2 (
+      key blob,
+      key2 blob,
+      c0 blob,
+      c1 blob,
+      c2 blob,
+      c3 blob,
+      c4 blob,
+      PRIMARY KEY (key, key2)
+      WITH compaction = {'class': 'LeveledCompactionStrategy'}
+  );
+extra_definitions:
+  - CREATE MATERIALIZED VIEW keyspace1.sort_by_c1 AS SELECT key, c1 FROM keyspace1.standard2 WHERE c1 IS NOT NULL and key IS NOT NULL and key2 IS NOT NULL PRIMARY KEY (c1, key, key2)
+  - CREATE MATERIALIZED VIEW keyspace1.sort_by_c4 AS SELECT key, c4 FROM keyspace1.standard2 WHERE c4 IS NOT NULL and key IS NOT NULL and key2 IS NOT NULL PRIMARY KEY (c4, key, key2)
+  - CREATE INDEX IF NOT EXISTS sec_ind_c2 ON keyspace1.standard2 (c2)
+  - CREATE INDEX IF NOT EXISTS sec_ind_c3 ON keyspace1.standard2 (c3)
+
+### Column Distribution Specifications ###
+columnspec:
+  - name: key
+    size: fixed(10)
+    population: uniform(1..10M)
+
+  - name: key2
+    cluster: uniform(1..100)
+
+  - name: c0
+    size: fixed(1024)
+
+  - name: c1
+    size: fixed(1024)
+
+  - name: c2
+    size: fixed(1024)
+
+  - name: c3
+    size: fixed(1024)
+
+  - name: c4
+    size: fixed(1024)
+
+
+### Batch Ratio Distribution Specifications ###
+
+insert:
+  partitions: fixed(1)
+  select:    fixed(1)/1
+  batchtype: UNLOGGED
+
+queries:
+  insert:
+    cql: insert into keyspace1.standard2 (key, key2, c0, c1, c2, c3, c4) values (?,?,?,?,?,?,?)
+    fields: samerow
+  read:
+    cql: select * from keyspace1.standard2 where key=? and key2=?
+    fields: samerow
+  mv_read1:
+    cql: select * from keyspace1.sort_by_c1 where c1 = ? LIMIT 1
+    fields: samerow
+  mv_read2:
+    cql: select * from keyspace1.sort_by_c4 where c4 = ? LIMIT 1
+    fields: samerow
+  si_read1:
+    cql: select * from keyspace1.sec_ind_c2 where c2 = ? LIMIT 1
+    fields: samerow
+  si_read2:
+    cql: select * from keyspace1.sec_ind_c3 where c3 = ? LIMIT 1
+    fields: samerow
