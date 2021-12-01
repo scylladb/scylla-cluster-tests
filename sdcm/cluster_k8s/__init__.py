@@ -836,7 +836,11 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         affinity_modifiers = node_pool.affinity_modifiers
         if node_prepare_config:
             LOGGER.info("Install DaemonSets required by scylla nodes")
-            scylla_machine_image_args = ['--setup-disks'] if self.is_performance_tuning_enabled else ['--all']
+            scylla_machine_image_args = ['--all']
+            if version.parse(self._scylla_operator_chart_version) > version.parse("v1.5.0"):
+                # NOTE: operator versions newer than v1.5.0 have it's own perf tuning,
+                #       so, we should not do anything else than disk setup in such a case.
+                scylla_machine_image_args = ['--setup-disks']
 
             def scylla_machine_image_args_modifier(obj):
                 if obj["kind"] != "DaemonSet":
