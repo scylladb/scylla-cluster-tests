@@ -60,7 +60,6 @@ class EventsDevice(multiprocessing.Process):
         self._sub_port = multiprocessing.Value(ctypes.c_uint16, 0)
         self._queue = multiprocessing.Queue()
         self._raw_events_lock = multiprocessing.RLock()
-
         self.events_log_base_dir.mkdir(parents=True, exist_ok=True)
 
         super().__init__(daemon=True)
@@ -186,6 +185,9 @@ class EventsDevice(multiprocessing.Process):
                     obj.severity = obj_max_severity
 
                 yield obj.base, obj
+
+    def is_alive(self) -> bool:
+        return self._running.is_set()
 
 
 start_events_main_device = partial(start_events_process, EVENTS_MAIN_DEVICE_ID, EventsDevice)
