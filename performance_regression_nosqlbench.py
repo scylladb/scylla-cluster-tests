@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from pathlib import Path
 
 from performance_regression_test import PerformanceRegressionTest
@@ -22,9 +23,9 @@ class PerformanceRegressionNosqlBenchTest(PerformanceRegressionTest):
         stress_cmd = self.params.get("stress_cmd_m")
         self.create_test_stats(sub_type="mixed", doc_id_with_timestamp=True)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)
-        # results = self.get_stress_results(queue=stress_queue, calculate_stats=False)
-        # LOGGER.info("Raw nosqlbench run result: %s", results)
-        self.update_test_details(scylla_conf=False)
+        results = self.get_stress_results(queue=stress_queue, calculate_stats=False)
+        LOGGER.info("Raw nosqlbench run result: %s", results)
+        self._update_test_details(include_setup_details=False)
         report_builder = self._get_report_builder()
         self._display_results(report_builder)
         report_builder.build_all_reports()
@@ -59,6 +60,36 @@ class PerformanceRegressionNosqlBenchTest(PerformanceRegressionTest):
 
     def _update_stats_with_nosqlbench_report(self, report_builder: NoSQLBenchReportBuilder):
         self.update({"results": report_builder.abridged_report})
+
+    def _update_test_details(self, include_setup_details: bool = False):
+        if not self.create_stats:
+            return
+
+        if not self._stats:
+            self.log.error("Stats was not initialized. Could be error during TestConfig")
+            return
+
+        update_data = {
+            "test_details": self._stats.setdefault("test_details", {}),
+            "status": self.status
+        }
+
+        test_details = {
+            "time_completed": datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+        }
+
+        if include_setup_details:
+            update_data["setup_details"] = self._stats.setdefault("setup_details", {})
+
+        if self.params.get("store_perf_results") and self.monitors and self.monitors.nodes:
+            update_data["results"] = self.get_prometheus_stats()
+            grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(test_details["start_time"])
+            test_details.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
+                                 "grafana_snapshots": grafana_dataset.get("snapshots", []),
+                                 "grafana_annotations": self.monitors.upload_annotations_to_s3(),
+                                 "prometheus_data": self.monitors.download_monitor_data(), })
+
+        self.update(update_data)
 
     def _get_report_builder(self):
         loader = self.loaders.get_loader()

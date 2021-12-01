@@ -76,21 +76,21 @@
         {% set best_stat=cmp_res.best.get(stat_name) %}
         {% set last_stat=cmp_res.last.get(stat_name) %}
         <tr>
-            <td>{{ best_stat.current }}</td>
+            <td>{{ "%0.2f" | format(best_stat.current) }}</td>
             <td> <span class="fbold">{{ best_stat.commit_id_best }}</span></td>
-            <td>{{ best_stat.version_best }}</td>
+            <td>{{ "%0.2f" | format(best_stat.version_best) }}</td>
             <td>
                 {% with status = best_stat.status, percent = best_stat.delta_best_percent %}
                     {% if status == 'Regression' and percent < -4 %}
-                        <span class="red fbold">{{ percent }}%</span>
+                        <span class="red fbold">{{ "%0.2f" | format(percent) }}%</span>
                     {% elif status == 'Regression' and percent < 0 and percent > -4 %}
-                        <span class="black fbold">{{ percent }}%</span>
+                        <span class="black fbold">{{ "%0.2f" | format(percent) }}%</span>
                     {% elif status == 'Progress' and percent > 4 %}
-                        <span class="green fbold">{{ percent }}%</span>
+                        <span class="green fbold">{{ "%0.2f" | format(percent) }}%</span>
                     {% elif status == 'Progress' and percent >= 4 %}
-                        <span class="black fbold">{{ percent }}%</span>
+                        <span class="black fbold">{{ "%0.2f" | format(percent) }}%</span>
                     {% else %}
-                        <span>{{ percent }}%</span>
+                        <span>{{ "%0.2f" | format(percent) }}%</span>
                     {% endif %}
                 {% endwith %}
             </td>
@@ -98,19 +98,19 @@
                 <div>#{{ best_stat.commit_id_best }}</div>
                 <div>{{ best_stat.date_best }}</div>
             </td>
-            <td>{{ last_stat.last_value }}</td>
+            <td>{{ "%0.2f" | format(last_stat.last_value) }}</td>
             <td>
                 {% with status = last_stat.status, percent = last_stat.delta_percent %}
                     {% if status == 'Regression' and percent < -4 %}
-                        <span class="red fbold">{{ percent }}%</span>
+                        <span class="red fbold">{{ "%0.2f" | format(percent) }}%</span>
                     {% elif status == 'Regression' and percent < 0 and percent > -4 %}
-                        <span class="black fbold">{{ percent }}%</span>
-                    {% elif status == 'Progress' and percent > 4 %}
-                        <span class="green fbold">{{ percent }}%</span>
+                        <span class="black fbold">{{ "%0.2f" | format(percent) }}%</span>
+                    {% elif status == 'Progress' and percent  > 4 %}
+                        <span class="green fbold">{{ "%0.2f" | format(percent) }}%</span>
                     {% elif status == 'Progress' and percent >= 4 %}
-                        <span class="black fbold">{{ percent }}%</span>
+                        <span class="black fbold">{{ "%0.2f" | format(percent) }}%</span>
                     {% else %}
-                        <span>{{ percent }}%</span>
+                        <span>{{ "%0.2f" | format(percent) }}%</span>
                     {% endif %}
                 {% endwith %}
             </td>

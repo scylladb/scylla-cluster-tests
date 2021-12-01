@@ -79,11 +79,11 @@ class MetricComparator:
         vs_history_output = {}
         for metric, smaller_is_better in self.comparison_axis:
             best = self[metric]["max"][current_version] if smaller_is_better else self[metric]["min"][current_version]
-            comparison_value = best["value"]
+            comparison_value = float(best["value"])
             version_best = float(self._get_timer_value(self.current_test_results, metric))
             diff_time_completed = self[metric]["max"][current_version]["time_completed"] if smaller_is_better \
                 else self[metric]["min"][current_version]["time_completed"]
-            version_mean = self[metric]["mean"][current_version]
+            version_mean = float(self[metric]["mean"][current_version])
             diff_best = comparison_value - version_best
             delta_best_percent = diff_best / version_mean * 100
 
@@ -115,11 +115,11 @@ class MetricComparator:
         statuses = ProgressStatus()
 
         for metric, smaller_is_better in self.comparison_axis:
-            current_value = self._get_timer_value(self.current_test_results, metric)
-            last_run_value = self[metric]["last_run"]["value"]
+            current_value = float(self._get_timer_value(self.current_test_results, metric))
+            last_run_value = float(self[metric]["last_run"]["value"])
             last_run_time_completed = self[metric]["last_run"]["time_completed"]
             diff = float(current_value) - float(last_run_value)
-            delta_percent = round(diff / float(last_run_value) * 100, ndigits=4)
+            delta_percent = diff / float(last_run_value) * 100
 
             #  we declare progress only of both of the variables have the same boolean value
             if smaller_is_better + (delta_percent < 0) != 1:
@@ -143,7 +143,9 @@ class MetricComparator:
 
     @staticmethod
     def _get_timer_value(item: dict, key: str):
-        LOGGER.info("Working on item: %s", item)
+        if "results" not in item["_source"]:
+            LOGGER.info("Did not find results in ES json:\n%s", item)
+            return None
         return item["_source"]["results"]["timers"][key]
 
     @staticmethod
@@ -165,6 +167,7 @@ class MetricComparator:
                         "value": float(self._get_timer_value(i, metric))
                     } for i in item], key=lambda x: x["value"], reverse=reverse
             ))
+        sorted_output = [item for item in sorted_output if item is not None]
 
         return sorted_output
 
