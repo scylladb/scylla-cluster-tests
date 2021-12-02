@@ -258,7 +258,8 @@ class ScyllaYamlNodeAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                         'class_name': 'org.apache.cassandra.locator.SimpleSeedProvider',
                         'parameters': [{'seeds': '1.1.1.1'}]
                     }
-                ]
+                ],
+                'prometheus_address': '0.0.0.0',
             }
         )
 
@@ -284,7 +285,8 @@ class ScyllaYamlNodeAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                         'class_name': 'org.apache.cassandra.locator.SimpleSeedProvider',
                         'parameters': [{'seeds': '1.1.1.1'}]
                     }
-                ]
+                ],
+                'prometheus_address': '0.0.0.0',
             }
         )
 
@@ -310,7 +312,8 @@ class ScyllaYamlNodeAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                         'class_name': 'org.apache.cassandra.locator.SimpleSeedProvider',
                         'parameters': [{'seeds': '1.1.1.1'}]
                     }
-                ]
+                ],
+                'prometheus_address': '0.0.0.0',
             }
         )
 
@@ -336,7 +339,8 @@ class ScyllaYamlNodeAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                         'class_name': 'org.apache.cassandra.locator.SimpleSeedProvider',
                         'parameters': [{'seeds': '1.1.1.1'}]
                     }
-                ]
+                ],
+                'prometheus_address': '0.0.0.0',
             }
         )
 
