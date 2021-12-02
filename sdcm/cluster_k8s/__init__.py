@@ -124,7 +124,7 @@ COMMON_CONTAINERS_RESOURCES = {
 
 SCYLLA_MANAGER_AGENT_RESOURCES = {
     'cpu': 0.2,
-    'memory': 0.098,  # 0.098 will give 100Mb as a result
+    'memory': 0.489,  # 0.489 will give 500Mb as a result
 }
 
 LOGGER = logging.getLogger(__name__)
