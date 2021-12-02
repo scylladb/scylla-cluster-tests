@@ -34,6 +34,7 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     CLIENT_DISCONNECT: Type[LogEventProtocol]
     SEMAPHORE_TIME_OUT: Type[LogEventProtocol]
     SYSTEM_PAXOS_TIMEOUT: Type[LogEventProtocol]
+    GATE_CLOSED: Type[LogEventProtocol]
     RESTARTED_DUE_TO_TIME_OUT: Type[LogEventProtocol]
     EMPTY_NESTED_EXCEPTION: Type[LogEventProtocol]
     DATABASE_ERROR: Type[LogEventProtocol]
@@ -86,6 +87,8 @@ DatabaseLogEvent.add_subevent_type("SEMAPHORE_TIME_OUT", severity=Severity.WARNI
 DatabaseLogEvent.add_subevent_type("SYSTEM_PAXOS_TIMEOUT", severity=Severity.WARNING,
                                    regex="(mutation_write_|Operation timed out for system.paxos|"
                                          "Operation failed for system.paxos)")
+DatabaseLogEvent.add_subevent_type("GATE_CLOSED", severity=Severity.WARNING,
+                                   regex="exception \"gate closed\" in no_wait handler ignored")
 DatabaseLogEvent.add_subevent_type("RESTARTED_DUE_TO_TIME_OUT", severity=Severity.WARNING,
                                    regex="scylla-server.service.*State 'stop-sigterm' timed out")
 DatabaseLogEvent.add_subevent_type("EMPTY_NESTED_EXCEPTION", severity=Severity.WARNING,
@@ -129,6 +132,7 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.CLIENT_DISCONNECT(),
     DatabaseLogEvent.SEMAPHORE_TIME_OUT(),
     DatabaseLogEvent.SYSTEM_PAXOS_TIMEOUT(),
+    DatabaseLogEvent.GATE_CLOSED(),
     DatabaseLogEvent.RESTARTED_DUE_TO_TIME_OUT(),
     DatabaseLogEvent.EMPTY_NESTED_EXCEPTION(),
     DatabaseLogEvent.DATABASE_ERROR(),
