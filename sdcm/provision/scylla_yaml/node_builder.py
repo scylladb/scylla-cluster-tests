@@ -98,4 +98,4 @@ class ScyllaYamlNodeAttrBuilder(ScyllaYamlAttrBuilderBase):
     def prometheus_address(self) -> Optional[str]:
         if self._is_ip_ssh_connections_ipv6:
             return self._ipv6_ip_address
-        return None
+        return "0.0.0.0"

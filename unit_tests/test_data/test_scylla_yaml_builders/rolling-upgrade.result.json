@@ -23,5 +23,6 @@
     "truststore": "/etc/scylla/ssl_conf/cadb.pem"
   },
   "experimental": true,
-  "saslauthd_socket_path": "/run/saslauthd/mux"
+  "saslauthd_socket_path": "/run/saslauthd/mux",
+  "prometheus_address": "0.0.0.0"
 }

@@ -336,7 +336,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'experimental_features': {},
                 'lsa_reclamation_step': 1,
                 'prometheus_port': 9180,
-                'prometheus_address': '0.0.0.0',
+                'prometheus_address': 'localhost',
                 'prometheus_prefix': 'someprefix',
                 'abort_on_lsa_bad_alloc': False,
                 'alternator_address': '0.0.0.0',
