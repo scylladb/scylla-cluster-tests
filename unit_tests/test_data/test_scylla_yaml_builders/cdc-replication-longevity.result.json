@@ -15,5 +15,6 @@
     }
   ],
   "broadcast_rpc_address": "__NODE_PRIVATE_ADDRESS__",
-  "experimental": true
+  "experimental": true,
+  "prometheus_address": "0.0.0.0"
 }
