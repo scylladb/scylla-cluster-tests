@@ -5,9 +5,9 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 perfRegressionParallelPipeline(
     backend: "aws",
-    aws_region: "us-east-1",
+    region: "us-east-1",
     test_name: "performance_regression_nosqlbench.PerformanceRegressionNosqlBenchTest",
-    test_config: '''["test-cases/performance/perf-regression-nosqlbench-latency-mixed-50r-50w.yaml", "configurations/perf/regression-nosqlbench-gce-n2-highmem-8.yaml"]''',
+    test_config: '''["test-cases/performance/perf-regression-nosqlbench-latency-mixed-50r-50w.yaml", "configurations/perf/regression-nosqlbench-aws-r5-2xlarge.yaml"]''',
     sub_tests: ["test_nosqlbench_perf"],
-    timeout: [time: 420, unit: "MINUTES"]
+    testRunTimeout: [time: 420, unit: "MINUTES"]
 )

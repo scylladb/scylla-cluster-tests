@@ -1,0 +1,7 @@
+test_duration: 360
+stress_cmd: "nosqlbench cql-tabular2 rampup-cycles=1M main-cycles=100M write_ratio=5 read_ratio=5 async=300 --progress console:300s rf=3 partsize=5000 driver=cql-scylla -v"
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+space_node_threshold: 64424
+store_perf_results: false

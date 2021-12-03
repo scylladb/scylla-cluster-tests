@@ -1,5 +1,4 @@
 import logging
-from abc import ABC
 
 from datetime import datetime, timedelta
 from typing import Any
@@ -278,6 +277,17 @@ class NoSQLBenchQueryFilter(QueryFilter):
 
     def test_cmd_details(self):
         return ""
+
+    def build_query(self):
+        query = [self.filter_test_details()]
+
+        if self.use_wide_query:
+            query.append(self.filter_by_dashboard_query())
+
+        if self.lastyear:
+            query.append(self.filter_test_for_last_year())
+
+        return " AND ".join([q for q in query if q])
 
 
 def query_filter(test_doc, is_gce, use_wide_query=False, lastyear=False):

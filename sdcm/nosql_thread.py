@@ -81,7 +81,7 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
         stress_cmd = self.build_stress_cmd(loader_idx=loader_idx)
-        remoter: RemoteCmdRunnerBase = loader.remoter
+        remoter = loader.remoter
 
         os.makedirs(loader.logdir, exist_ok=True)
         os.makedirs(self.NOSQLBENCH_METRICS_SRC_PATH, exist_ok=True)
@@ -129,6 +129,8 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                     timeout=self.timeout + self.shutdown_timeout,
                     log_file=log_file_name
                 )
+                LOGGER.info("Docker run command stdout: %s", result.stdout)
+                LOGGER.info("Docker run command stderr: %s", result.stderr)
 
                 remoter.receive_files(src=summary_file_path,
                                       dst=loader.logdir)

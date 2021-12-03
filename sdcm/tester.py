@@ -1512,6 +1512,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                               stats_aggregate_cmds=True, stop_test_on_failure=True, **_):
 
         timeout = self.get_duration(duration)
+        self.log.info("Timeout in run_nosqlbench_thread: %s", timeout)
 
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, prefix, stresser="nosqlbench", aggregate=stats_aggregate_cmds)

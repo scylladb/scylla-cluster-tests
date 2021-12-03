@@ -39,6 +39,7 @@ class MetricComparator:
     current_test_results: dict
     filtered_test_results: dict
     comparison_axis: list[tuple[str, bool]]
+    percent_precision: int
     vs_last: dict[str, Any] = field(default_factory=dict, init=False)
     vs_history: dict[str, Any] = field(default_factory=dict, init=False)
 
@@ -84,8 +85,8 @@ class MetricComparator:
             diff_time_completed = self[metric]["max"][current_version]["time_completed"] if smaller_is_better \
                 else self[metric]["min"][current_version]["time_completed"]
             version_mean = float(self[metric]["mean"][current_version])
-            diff_best = comparison_value - version_best
-            delta_best_percent = diff_best / version_mean * 100
+            diff_best = round(comparison_value - version_best, self.percent_precision)
+            delta_best_percent = round(diff_best / version_mean * 100, self.percent_precision)
 
             diff_mean = version_best - self[metric]["mean"][current_version]
 
@@ -115,11 +116,11 @@ class MetricComparator:
         statuses = ProgressStatus()
 
         for metric, smaller_is_better in self.comparison_axis:
-            current_value = float(self._get_timer_value(self.current_test_results, metric))
+            current = float(self._get_timer_value(self.current_test_results, metric))
             last_run_value = float(self[metric]["last_run"]["value"])
             last_run_time_completed = self[metric]["last_run"]["time_completed"]
-            diff = float(current_value) - float(last_run_value)
-            delta_percent = diff / float(last_run_value) * 100
+            diff = round(float(current) - float(last_run_value), self.percent_precision)
+            delta_percent = round(diff / float(last_run_value) * 100, self.percent_precision)
 
             #  we declare progress only of both of the variables have the same boolean value
             if smaller_is_better + (delta_percent < 0) != 1:
@@ -128,7 +129,7 @@ class MetricComparator:
                 status = statuses.regression
 
             vs_last_run_output.update({metric: {
-                "current_value": current_value,
+                "current": current,
                 "last_value": last_run_value,
                 "last_run_commit_id": self[metric]["last_run"]["commit_id"],
                 "last_run_build_id": self[metric]["last_run"]["build_id"],
@@ -254,34 +255,8 @@ class NoSQLBenchResultsAnalyzer(BaseResultsAnalyzer):
         ]
 
         comparator = MetricComparator(current_test_results=doc, filtered_test_results=filtered_tests,
-                                      comparison_axis=comparison_axes)
+                                      comparison_axis=comparison_axes, percent_precision=2)
 
-        # send results by email
-        # full_test_name = doc["_source"]["test_details"]["test_name"]
-        # test_start_time = datetime.utcfromtimestamp(float(doc["_source"]["test_details"]["start_time"]))
-        # test_version = self._test_version(doc)["version"]
-        # dashboard_path = "app/kibana#/dashboard/03414b70-0e89-11e9-a976-2fe0f5890cd0?_g=()"
-        # last_events, events_summary = self.get_events(event_severity=[
-        #     Severity.CRITICAL.name, Severity.ERROR.name, Severity.DEBUG.name])
-        # results = {
-        #     "test_name": full_test_name,
-        #     "test_start_time": str(test_start_time),
-        #     "test_version": test_version,
-        #     "res_list": res_list,
-        #     "setup_details": self._get_setup_details(doc, self._analyzer_args.is_gce),
-        #     "prometheus_stats": {stat: doc["_source"]["results"].get(stat, {})
-        #                          for stat in TestStatsMixin.PROMETHEUS_STATS},
-        #     "prometheus_stats_units": TestStatsMixin.PROMETHEUS_STATS_UNITS,
-        #     "grafana_snapshots": self._get_grafana_snapshot(doc),
-        #     "grafana_screenshots": self._get_grafana_screenshot(doc),
-        #     "job_url": doc["_source"]["test_details"].get("job_url", ""),
-        #     "kibana_url": self.gen_kibana_dashboard_url(dashboard_path),
-        #     "events_summary": events_summary,
-        #     "last_events": last_events,
-        # }
-        # test_name = full_test_name.split('.')[-1]  # Example: longevity_test.py:LongevityTest.test_custom_time
-        # subject = f'NoSQLBench Performance Regression Compare Results ' \
-        #           f'- {test_name} - {test_version} - {str(test_start_time)}'
         email_data, subject = self._prepare_results_for_email(doc, comparator)
 
         self.save_email_data_file(subject, email_data,
