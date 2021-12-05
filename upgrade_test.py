@@ -510,12 +510,12 @@ class UpgradeTest(FillDatabaseData):
 
         # write workload during entire test
         self.log.info('Starting c-s write workload during entire test')
-        write_stress_during_entire_test = self.params.get('write_stress_during_entire_test')
-        entire_write_cs_thread_pool = self.run_stress_thread(stress_cmd=write_stress_during_entire_test)
+        # write_stress_during_entire_test = self.params.get('write_stress_during_entire_test')
+        # entire_write_cs_thread_pool = self.run_stress_thread(stress_cmd=write_stress_during_entire_test)
 
         # Let to write_stress_during_entire_test complete the schema changes
-        self.metric_has_data(
-            metric_query='collectd_cassandra_stress_write_gauge{type="ops", keyspace="keyspace_entire_test"}', n=10)
+        # self.metric_has_data(
+        #     metric_query='collectd_cassandra_stress_write_gauge{type="ops", keyspace="keyspace_entire_test"}', n=10)
 
         # Prepare keyspace and tables for truncate test
         if self.truncate_entries_flag:
@@ -548,10 +548,10 @@ class UpgradeTest(FillDatabaseData):
         # prepare write workload
         self.log.info('Starting c-s prepare write workload (n=10000000)')
         prepare_write_stress = self.params.get('prepare_write_stress')
-        prepare_write_cs_thread_pool = self.run_stress_thread(stress_cmd=prepare_write_stress)
-        self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
-        self.metric_has_data(
-            metric_query='collectd_cassandra_stress_write_gauge{type="ops", keyspace="keyspace1"}', n=5)
+        # prepare_write_cs_thread_pool = self.run_stress_thread(stress_cmd=prepare_write_stress)
+        # self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
+        # self.metric_has_data(
+        #     metric_query='collectd_cassandra_stress_write_gauge{type="ops", keyspace="keyspace1"}', n=5)
 
         # start gemini write workload
         # and cdc log reader
@@ -559,8 +559,8 @@ class UpgradeTest(FillDatabaseData):
             self.log.info("Start gemini and cdc stressor during upgrade")
             gemini_thread = self.run_gemini(self.params.get("gemini_cmd"))
             # Let to write_stress_during_entire_test complete the schema changes
-            self.metric_has_data(
-                metric_query='gemini_cql_requests', n=10)
+            # self.metric_has_data(
+            #     metric_query='gemini_cql_requests', n=10)
 
             cdc_reader_thread = self.run_cdclog_reader_thread(self.params.get("stress_cdclog_reader_cmd"),
                                                               keyspace_name="ks1", base_table_name="table1")
@@ -577,14 +577,14 @@ class UpgradeTest(FillDatabaseData):
             self.db_cluster.node_to_upgrade.check_node_health()
 
             # wait for the prepare write workload to finish
-            self.verify_stress_thread(prepare_write_cs_thread_pool)
+            # self.verify_stress_thread(prepare_write_cs_thread_pool)
 
             # read workload (cl=QUORUM)
             self.log.info('Starting c-s read workload (cl=QUORUM n=10000000)')
             stress_cmd_read_cl_quorum = self.params.get('stress_cmd_read_cl_quorum')
-            read_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_cl_quorum)
+            # read_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_cl_quorum)
             # wait for the read workload to finish
-            self.verify_stress_thread(read_stress_queue)
+            # self.verify_stress_thread(read_stress_queue)
             self.fill_and_verify_db_data('after upgraded one node')
             self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                           step=step+' - after upgraded one node')
@@ -592,10 +592,10 @@ class UpgradeTest(FillDatabaseData):
             # read workload
             self.log.info('Starting c-s read workload for 10m')
             stress_cmd_read_10m = self.params.get('stress_cmd_read_10m')
-            read_10m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_10m)
+            # read_10m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_10m)
 
-            self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
-            time.sleep(60)
+            # self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
+            # time.sleep(60)
 
             step = 'Step2 - Upgrade Second Node '
             self.log.info(step)
@@ -607,7 +607,7 @@ class UpgradeTest(FillDatabaseData):
             self.db_cluster.node_to_upgrade.check_node_health()
 
             # wait for the 10m read workload to finish
-            self.verify_stress_thread(read_10m_cs_thread_pool)
+            # self.verify_stress_thread(read_10m_cs_thread_pool)
             self.fill_and_verify_db_data('after upgraded two nodes')
             self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                           step=step+' - after upgraded two nodes')
@@ -615,9 +615,9 @@ class UpgradeTest(FillDatabaseData):
             # read workload (60m)
             self.log.info('Starting c-s read workload for 60m')
             stress_cmd_read_60m = self.params.get('stress_cmd_read_60m')
-            read_60m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_60m)
-            self.log.info('Sleeping for 60s to let cassandra-stress start before the rollback...')
-            time.sleep(60)
+            # read_60m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_60m)
+            # self.log.info('Sleeping for 60s to let cassandra-stress start before the rollback...')
+            # time.sleep(60)
 
             self.log.info('Step3 - Rollback Second Node ')
             # rollback second node
@@ -651,9 +651,9 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Step6 - Verify stress results after upgrade ')
         self.log.info('Waiting for stress threads to complete after upgrade')
         # wait for the 60m read workload to finish
-        self.verify_stress_thread(read_60m_cs_thread_pool)
+        # self.verify_stress_thread(read_60m_cs_thread_pool)
 
-        self.verify_stress_thread(entire_write_cs_thread_pool)
+        # self.verify_stress_thread(entire_write_cs_thread_pool)
 
         self.log.info('Step7 - Upgrade sstables to latest supported version ')
         # figure out what is the last supported sstable version
@@ -679,16 +679,16 @@ class UpgradeTest(FillDatabaseData):
         self.log.info('Starting verify_stress_after_cluster_upgrade')
         verify_stress_after_cluster_upgrade = self.params.get(  # pylint: disable=invalid-name
             'verify_stress_after_cluster_upgrade')
-        verify_stress_cs_thread_pool = self.run_stress_thread(stress_cmd=verify_stress_after_cluster_upgrade)
-        self.verify_stress_thread(verify_stress_cs_thread_pool)
+        # verify_stress_cs_thread_pool = self.run_stress_thread(stress_cmd=verify_stress_after_cluster_upgrade)
+        # self.verify_stress_thread(verify_stress_cs_thread_pool)
 
         # complex workload: verify data by simple read cl=ALL
         self.log.info('Starting c-s complex workload to verify data by simple read')
         stress_cmd_complex_verify_read = self.params.get('stress_cmd_complex_verify_read')
-        complex_cs_thread_pool = self.run_stress_thread(
-            stress_cmd=stress_cmd_complex_verify_read, profile='data_dir/complex_schema.yaml')
+        # complex_cs_thread_pool = self.run_stress_thread(
+        #     stress_cmd=stress_cmd_complex_verify_read, profile='data_dir/complex_schema.yaml')
         # wait for the read complex workload to finish
-        self.verify_stress_thread(complex_cs_thread_pool)
+        # self.verify_stress_thread(complex_cs_thread_pool)
 
         self.log.info('Will check paged query after upgrading all nodes')
         self.paged_query()
