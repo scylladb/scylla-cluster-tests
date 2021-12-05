@@ -1226,7 +1226,9 @@ class SCTConfiguration(dict):
         dict(name="data_volume_disk_iops", env="SCT_DATA_VOLUME_DISK_IOPS",
              type=int,
              help="Number of iops for ebs type io2|io3|gp3"),
-
+        dict(name="run_db_node_benchmarks", env="SCT_RUN_DB_NODE_BENCHMARKS",
+             type=boolean,
+             help="Flag for running db node benchmarks before the tests"),
         dict(name="nemesis_include_filter", env="SCT_NEMESIS_INCLUDE_FILTER",
              type=str_or_list,
              help="""nemesis_include_filter gets a list of "nemesis properties" and filters IN all the nemesis that has
