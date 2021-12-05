@@ -71,6 +71,7 @@ from sdcm import wait, mgmt
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
 from sdcm.utils import properties
+from sdcm.utils.benchmarks import ScyllaClusterBenchmarkManager
 from sdcm.utils.common import (
     S3Storage,
     ScyllaCQLSession,
@@ -1766,9 +1767,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.sudo("apt-get update", ignore_status=True)
 
     @retrying(n=30, sleep_time=15, allowed_exceptions=UnexpectedExit)
-    def install_package(self, package_name: str) -> None:
-        if self.distro.is_ubuntu:
-            wait.wait_for(func=self.is_apt_lock_free, step=30, timeout=60, text='Checking if package manager is free',
+    def install_package(self,
+                        package_name: str,
+                        wait_step: int = 30,
+                        wait_timeout: int = 60,
+                        wait_for_package_manager: bool = True) -> None:
+        if self.distro.is_ubuntu and wait_for_package_manager:
+            wait.wait_for(func=self.is_apt_lock_free, step=wait_step,
+                          timeout=wait_timeout, text='Checking if package manager is free',
                           throw_exc=False)
         if self.distro.is_rhel_like:
             pkg_cmd = 'yum'
@@ -3046,6 +3052,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.use_saslauthd_authenticator = self.params.get('use_saslauthd_authenticator')
         # default 'cassandra' password is weak password, MS AD doesn't allow to use it.
         self.added_password_suffix = False
+        self.node_benchmark_manager = ScyllaClusterBenchmarkManager()
 
         if self.test_config.REUSE_CLUSTER:
             # get_node_ips_param should be defined in child
@@ -3544,6 +3551,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.nemesis_threads = []
         self.nemesis_count = 0
         self.test_config = TestConfig()
+        self.node_benchmark_manager = ScyllaClusterBenchmarkManager()
         self._node_cycle = None
         super().__init__(*args, **kwargs)
 
