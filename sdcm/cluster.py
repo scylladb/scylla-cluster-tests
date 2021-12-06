@@ -1012,7 +1012,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.soft_reboot()
 
         # wait until the reboot is executed
-        wait.wait_for(func=uptime_changed, step=10, timeout=60*15, throw_exc=True)
+        wait.wait_for(func=uptime_changed, step=10, timeout=60*45, throw_exc=True)
 
         if verify_ssh:
             self.wait_ssh_up()
