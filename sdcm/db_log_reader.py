@@ -60,6 +60,7 @@ class DbLogReader(Process):
         self._last_line_no = 0
         self._last_log_position = 0
         self._remoter = remoter
+        self._skipped_end_line = 0
         super().__init__(name=self.__class__.__name__, daemon=True)
 
     @cached_property
@@ -81,6 +82,12 @@ class DbLogReader(Process):
             if self._last_log_position:
                 db_file.seek(self._last_log_position)
             for index, line in enumerate(db_file, start=self._last_line_no):
+                # Postpone processing line with no ending in case if half of line is written to the disc
+                if line[-1] == '\n' or self._skipped_end_line > 20:
+                    self._skipped_end_line = 0
+                else:
+                    self._skipped_end_line += 1
+                    continue
                 try:
                     json_log = None
                     if line[0] == '{':
