@@ -57,7 +57,7 @@ class DbLogReader(Process):
 
         self._terminate_event = Event()
         self._last_error: LogEvent | None = None
-        self._last_line_no = 0
+        self._last_line_no = -1
         self._last_log_position = 0
         self._remoter = remoter
         self._skipped_end_line = 0
@@ -81,7 +81,7 @@ class DbLogReader(Process):
         with open(self._system_log, 'r') as db_file:
             if self._last_log_position:
                 db_file.seek(self._last_log_position)
-            for index, line in enumerate(db_file, start=self._last_line_no):
+            for index, line in enumerate(db_file, start=self._last_line_no + 1):
                 # Postpone processing line with no ending in case if half of line is written to the disc
                 if line[-1] == '\n' or self._skipped_end_line > 20:
                     self._skipped_end_line = 0
@@ -145,9 +145,10 @@ class DbLogReader(Process):
                 except (BaseException, Exception):  # pylint: disable=broad-except
                     LOGGER.exception('Processing of %s line of %s failed, line content:\n%s',
                                      index, self._system_log, line)
+
             if index:
                 self._last_line_no = index
-            self._last_log_position = db_file.tell() + 1
+                self._last_log_position = db_file.tell() + 1
 
         traces_count = 0
         for backtrace in backtraces:
