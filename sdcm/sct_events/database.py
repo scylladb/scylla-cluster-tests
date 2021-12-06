@@ -343,8 +343,11 @@ def get_pattern_to_event_to_func_mapping(node: str) \
             TestFrameworkEvent(
                 source=event_type.__name__,
                 message="Did not find any events of type {event_type}"
-                        "with period type {period_type}.".format(event_type=event_type,
-                                                                 period_type=EventPeriod.BEGIN.value),
+                        " with period type {period_type}, event data: {event_data}".format(
+                            event_type=event_type,
+                            period_type=EventPeriod.BEGIN.value,
+                            event_data=kwargs,
+                        ),
                 severity=Severity.ERROR
             ).publish_or_dump()
             return
