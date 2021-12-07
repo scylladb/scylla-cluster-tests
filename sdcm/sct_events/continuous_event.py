@@ -198,7 +198,6 @@ class ContinuousEvent(SctEvent, abstract=True):
     def begin_event(self) -> ContinuousEvent:
         self.begin_timestamp = self.event_timestamp = time.time()
         self.period_type = EventPeriod.BEGIN.value
-        self.severity = Severity.NORMAL
         if self.publish_event:
             self._ready_to_publish = True
             self.publish()
