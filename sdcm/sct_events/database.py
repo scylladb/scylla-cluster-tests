@@ -348,7 +348,7 @@ def get_pattern_to_event_to_func_mapping(node: str) \
                             period_type=EventPeriod.BEGIN.value,
                             event_data=kwargs,
                         ),
-                severity=Severity.ERROR
+                severity=Severity.DEBUG
             ).publish_or_dump()
             return
 
