@@ -2408,31 +2408,28 @@ class FillDatabaseData(ClusterTester):
                         range(0, 2) for j in range(0, 2)],
             'queries': ["SELECT v FROM empty_in_test1 WHERE k1 IN ()",
                         "SELECT v FROM empty_in_test1 WHERE k1 = 0 AND k2 IN ()",
-                        "DELETE FROM empty_in_test1 WHERE k1 IN ()",
                         "SELECT * FROM empty_in_test1",
-                        "UPDATE empty_in_test1 SET v = 3 WHERE k1 IN () AND k2 = 2",
                         "SELECT * FROM empty_in_test1",
                         "SELECT v FROM empty_in_test2 WHERE k1 IN ()",
                         "SELECT v FROM empty_in_test2 WHERE k1 = 0 AND k2 IN ()",
-                        "DELETE FROM empty_in_test2 WHERE k1 IN ()",
                         "SELECT * FROM empty_in_test2",
-                        "UPDATE empty_in_test2 SET v = 3 WHERE k1 IN () AND k2 = 2",
                         "SELECT * FROM empty_in_test2"
                         ],
+            'invalid_queries': ["DELETE FROM empty_in_test1 WHERE k1 IN ()",
+                                "UPDATE empty_in_test1 SET v = 3 WHERE k1 IN () AND k2 = 2",
+                                "DELETE FROM empty_in_test2 WHERE k1 IN ()",
+                                "UPDATE empty_in_test2 SET v = 3 WHERE k1 IN () AND k2 = 2",
+                                ],
             'results': [[],
                         [],
-                        [],
                         [[1, 0, 1], [1, 1, 2], [0, 0, 0], [0, 1, 1]],
-                        [],
                         [[1, 0, 1], [1, 1, 2], [0, 0, 0], [0, 1, 1]],
-                        [],
                         [],
                         [],
                         [[1, 0, 1], [1, 1, 2], [0, 0, 0], [0, 1, 1]],
-                        [],
                         [[1, 0, 1], [1, 1, 2], [0, 0, 0], [0, 1, 1]]
                         ],
-            'min_version': '',
+            'min_version': '4.4',
             'max_version': '',
             'skip': ''},
         # collection_flush_test: CASSANDRA-5805
@@ -3056,8 +3053,9 @@ class FillDatabaseData(ClusterTester):
                 if 'invalid_queries' in item:
                     for i in range(len(item['invalid_queries'])):
                         try:
-                            session.execute(item['invalid_queries'][i])
-                            self.fail("query '%s' is not valid" % item['invalid_queries'][i])
+                            if not self.ignore_queries_for_min_version(item["min_version"]):
+                                session.execute(item['invalid_queries'][i])
+                                self.fail("query '%s' is not valid" % item['invalid_queries'][i])
                         except InvalidRequest as ex:
                             LOGGER.debug("Found error '%s' as expected", ex)
 
@@ -3136,3 +3134,15 @@ class FillDatabaseData(ClusterTester):
                 assert f'Paged query "{statement}" returned no value'
             self.log.info('will now compare results from session.execute and fetch_all_rows')
             self.assertEqual(sorted(full_query_res), sorted(full_res), "Results should be identical")
+
+    def ignore_queries_for_min_version(self, item_version):
+        node = self.db_cluster.nodes[0]
+        if not node.scylla_version:
+            node.get_scylla_version()
+
+        scylla_version = node.scylla_version
+
+        if parse_version(scylla_version) < parse_version(item_version):
+            return True  # don't execute query
+        else:
+            return False  # execute query
