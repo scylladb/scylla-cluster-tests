@@ -6,7 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 artifactsPipeline(
     test_config: 'test-cases/artifacts/amazon2.yaml',
     backend: 'aws',
-    region_name: 'eu-west-1',
+    region: 'eu-west-1',
     provision_type: 'spot_low_price',
 
     timeout: [time: 60, unit: 'MINUTES'],
