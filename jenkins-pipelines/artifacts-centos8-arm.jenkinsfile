@@ -6,7 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 artifactsPipeline(
     test_config: '''["test-cases/artifacts/centos8.yaml", "configurations/arm/centos8.yaml"]''',
     backend: 'aws',
-    region_name: 'eu-west-1',
+    region: 'eu-west-1',
     provision_type: 'spot_low_price',
     manager_version: '',  // scylla manager doesn't currently support arm processors
 

@@ -7,7 +7,7 @@ artifactsPipeline(
     test_config: 'test-cases/artifacts/oel76.yaml',
     backend: 'aws',
     nonroot_offline_install: true,
-    region_name: 'eu-west-1',
+    region: 'eu-west-1',
     provision_type: 'spot_low_price',
     manager_version: '',
 
