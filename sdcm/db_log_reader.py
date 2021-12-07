@@ -37,7 +37,15 @@ class DbLogReader(Process):
         ' | systemd:',
         ' | systemd-logind:',
         ' | sudo:',
-        ' | dhclient['
+        ' | dhclient[',
+
+        # Remove compactions, repair and steaming logs from being logged, we are getting to many of them
+        '] compaction - [Compact',
+        '] table - Done with off-strategy compaction for',
+        '] table - Starting off-strategy compaction for',
+        '] repair - Repair',
+        'repair id [id=',
+        '] stream_session - [Stream ',
     ]
     # pylint: disable=too-many-arguments
 
