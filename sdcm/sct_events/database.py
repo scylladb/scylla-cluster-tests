@@ -255,7 +255,7 @@ class RepairEvent(ScyllaDatabaseContinuousEvent):
     begin_pattern = r'Repair 1 out of \d+ ranges, id=\[id=\d+, uuid=[\d\w-]{36}\], shard=(?P<shard>\d+)'
     end_pattern = r'repair id \[id=\d+, uuid=[\d\w-]{36}\] on shard (?P<shard>\d+) completed'
 
-    def __init__(self, node: str, shard: int, severity=Severity.NORMAL, **__):
+    def __init__(self, node: str, shard: int, severity=Severity.DEBUG, **__):
         super().__init__(node=node, shard=shard, severity=severity)
         self.log_level = logging.DEBUG
 
@@ -267,7 +267,7 @@ class CompactionEvent(ScyllaDatabaseContinuousEvent):
                   r'(?P<compaction_process_id>.+)\] Compacted '
 
     def __init__(self, node: str, shard: int, table: str, compaction_process_id: str,  # pylint: disable=too-many-arguments
-                 severity=Severity.NORMAL, **__):
+                 severity=Severity.DEBUG, **__):
         super().__init__(node=node, shard=shard, severity=severity)
         self.table = table
         self.compaction_process_id = compaction_process_id
