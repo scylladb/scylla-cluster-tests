@@ -54,7 +54,7 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
             Severity.ERROR:    base_dir / ERROR_LOG,
             Severity.WARNING:  base_dir / WARNING_LOG,
             Severity.NORMAL:   base_dir / NORMAL_LOG,
-            Severity.DEBUG:  base_dir / DEBUG_LOG,
+            Severity.DEBUG: base_dir / DEBUG_LOG,
         }
 
         self.events_summary = collections.defaultdict(int)
@@ -79,22 +79,25 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
         else:
             message = f"{event.formatted_event_timestamp}: {str(event).strip()}"
 
-        tee = getattr(LOGGER, logging.getLevelName(event.log_level).lower())
-        if tee and not isinstance(event, TestResultEvent):
-            with verbose_suppress("%s: failed to tee %s to %s", self, event, tee):
-                tee(message)
-        message = message.encode("utf-8") + b"\n"
+        message_bin = message.encode("utf-8") + b"\n"
 
-        # Update events.log file (all events.)
-        with verbose_suppress("%s: failed to write %s to %s", self, event, self.events_log):
-            with self.events_log.open("ab+", buffering=0) as fobj:
-                fobj.write(message)
+        if event.severity != Severity.DEBUG:
+            # Log event to the console
+            tee = getattr(LOGGER, logging.getLevelName(event.log_level).lower())
+            if tee and not isinstance(event, TestResultEvent):
+                with verbose_suppress("%s: failed to tee %s to %s", self, event, tee):
+                    tee(message)
 
-        # Update {event.severity}.log file.
-        log_file = self.events_logs_by_severity[event.severity]
-        with verbose_suppress("%s: failed to write %s to %s", self, event, log_file):
-            with log_file.open("ab+", buffering=0) as fobj:
-                fobj.write(message)
+            # Write event to events.log file
+            with verbose_suppress("%s: failed to write %s to %s", self, event, self.events_log):
+                with self.events_log.open("ab+", buffering=0) as fobj:
+                    fobj.write(message_bin)
+
+        # Write event to a {event.severity}.log file
+        if log_file := self.events_logs_by_severity.get(event.severity):
+            with verbose_suppress("%s: failed to write %s to %s", self, event, log_file):
+                with log_file.open("ab+", buffering=0) as fobj:
+                    fobj.write(message_bin)
 
         # Update summary.log file (statistics.)
         self.events_summary[Severity(event.severity).name] += 1
