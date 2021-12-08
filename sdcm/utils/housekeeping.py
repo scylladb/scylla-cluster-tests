@@ -61,10 +61,13 @@ class HousekeepingDB:
         return result
 
     def close(self) -> None:
-        self._cursor.close()
-        self._connection.close()
-        self._cursor = None
-        self._connection = None
+        if self._cursor:
+            self._cursor.close()
+            self._cursor = None
+
+        if self._connection:
+            self._connection.close()
+            self._connection = None
 
     def get_most_recent_record(self, query: str, args: Optional[Sequence[Any]] = None) -> Optional[Row]:
         result = self.execute(query + " ORDER BY -dt LIMIT 1", args)
