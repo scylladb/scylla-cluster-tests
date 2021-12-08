@@ -1617,6 +1617,10 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         with open(yaml_dst_path, 'r') as scylla_yaml_file:
             scylla_yaml_contents = scylla_yaml_file.read()
 
+        # Set prometheus_address to 0.0.0.0
+        pattern = re.compile('\n[# ]*prometheus_address:.*')
+        scylla_yaml_contents = pattern.sub('\nprometheus_address: 0.0.0.0', scylla_yaml_contents)
+
         if seed_address:
             # Set seeds
             pattern = re.compile('seeds:.*')
