@@ -37,7 +37,8 @@ class ArtifactsTest(ClusterTester):
         self.housekeeping.connect()
 
     def tearDown(self) -> None:
-        self.housekeeping.close()
+        if getattr(self, "housekeeping", None):
+            self.housekeeping.close()
 
         super().tearDown()
 
