@@ -1802,6 +1802,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                      ldap=False,
                      ms_ad_ldap=False):
         with self.remote_scylla_yaml(yaml_file) as scylla_yml:
+            scylla_yml['prometheus_address'] = '0.0.0.0'
+
             if seed_address:
                 # Set seeds
                 scylla_yml['seed_provider'] = [
