@@ -120,7 +120,6 @@ class TestContinuousEventsRegistry:
 
         registry_filter = populated_registry.get_registry_filter()
         found_events = registry_filter.filter_by_attr(base="CompactionEvent",
-                                                      severity=Severity.NORMAL,
                                                       period_type=EventPeriod.END.value,
                                                       table='system.local').get_filtered()
 
