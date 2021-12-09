@@ -28,7 +28,7 @@ class PrometheusAlertManagerEvent(ContinuousEvent):  # pylint: disable=too-many-
         "alert_name",
     )
 
-    def __init__(self, raw_alert: dict, severity: Severity = Severity.WARNING):
+    def __init__(self, raw_alert: dict, severity: Severity = Severity.NORMAL):
         super().__init__(severity=severity)
 
         self.annotations = raw_alert.get("annotations") or {}
