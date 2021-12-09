@@ -44,6 +44,8 @@ class GrafanaAnnotator(EventsProcessPipe[Tuple[str, Any], Annotation]):
         for event_tuple in self.inbound_events():  # pylint: disable=no-member; pylint doesn't understand generics
             with verbose_suppress("GrafanaAnnotator failed to process %s", event_tuple):
                 event_class, event = event_tuple  # try to unpack event from EventsDevice
+                if not event.publish_to_grafana:
+                    continue
                 tags = [event_class, event.severity.name, "events", ]
                 if event_type := getattr(event, "type", None):
                     tags.append(event_type)
