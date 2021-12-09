@@ -50,6 +50,10 @@ class ContinuousEventsRegistry(metaclass=Singleton):
 
         self.continuous_events.append(event)
 
+    def del_event(self, event: ContinuousEvent):
+        if event in self.continuous_events:
+            self.continuous_events.remove(event)
+
     def get_event_by_id(self, event_id: Union[uuid.UUID, str]) -> Optional[ContinuousEvent]:
         found_events = self._find_event_by_id(event_id)
 
@@ -228,6 +232,19 @@ class ContinuousEvent(SctEvent, abstract=True):
 
     def register_event(self):
         self._continuous_event_registry.add_event(self)
+
+    def unregister_event(self):
+        self._continuous_event_registry.del_event(self)
+
+    def publish(self, warn_not_ready: bool = True) -> None:
+        super().publish(warn_not_ready=warn_not_ready)
+        if self.period_type == EventPeriod.END.value:
+            self.unregister_event()
+
+    def publish_or_dump(self, default_logger: Optional[logging.Logger] = None, warn_not_ready: bool = True) -> None:
+        super().publish_or_dump(default_logger=default_logger, warn_not_ready=warn_not_ready)
+        if self.period_type == EventPeriod.END.value:
+            self.unregister_event()
 
 
 class ContinuousRegistryFilter:
