@@ -39,7 +39,7 @@ class ClusterHealthValidatorEvent(ContinuousEvent):
                  node=None,
                  message: Optional[str] = None,
                  error: Optional[str] = None,
-                 severity=Severity.ERROR) -> None:
+                 severity=Severity.NORMAL) -> None:
         super().__init__(severity=severity)
 
         self.node = str(node) if node else ""
@@ -64,12 +64,17 @@ class ClusterHealthValidatorEvent(ContinuousEvent):
         return message
 
 
-ClusterHealthValidatorEvent.add_subevent_type("NodeStatus", mixin=ClusterHealthValidatorSubEvents)
-ClusterHealthValidatorEvent.add_subevent_type("NodePeersNulls", mixin=ClusterHealthValidatorSubEvents)
-ClusterHealthValidatorEvent.add_subevent_type("NodeSchemaVersion", mixin=ClusterHealthValidatorSubEvents)
-ClusterHealthValidatorEvent.add_subevent_type("NodesNemesis", mixin=ClusterHealthValidatorSubEvents)
-ClusterHealthValidatorEvent.add_subevent_type("MonitoringStatus", mixin=ClusterHealthValidatorSubEvents)
-ClusterHealthValidatorEvent.add_subevent_type("ScyllaCloudClusterServerDiagnostic",
+ClusterHealthValidatorEvent.add_subevent_type("NodeStatus", severity=Severity.ERROR,
+                                              mixin=ClusterHealthValidatorSubEvents)
+ClusterHealthValidatorEvent.add_subevent_type("NodePeersNulls", severity=Severity.ERROR,
+                                              mixin=ClusterHealthValidatorSubEvents)
+ClusterHealthValidatorEvent.add_subevent_type("NodeSchemaVersion", severity=Severity.ERROR,
+                                              mixin=ClusterHealthValidatorSubEvents)
+ClusterHealthValidatorEvent.add_subevent_type("NodesNemesis", severity=Severity.ERROR,
+                                              mixin=ClusterHealthValidatorSubEvents)
+ClusterHealthValidatorEvent.add_subevent_type("MonitoringStatus", severity=Severity.ERROR,
+                                              mixin=ClusterHealthValidatorSubEvents)
+ClusterHealthValidatorEvent.add_subevent_type("ScyllaCloudClusterServerDiagnostic", severity=Severity.ERROR,
                                               mixin=ClusterHealthValidatorSubEvents)
 
 
