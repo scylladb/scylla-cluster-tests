@@ -140,6 +140,7 @@ class DbLogReader(Process):
                     for item in self._continues_event_patterns:
                         if event_match := item.pattern.search(line):
                             item.period_func(match=event_match)
+                            break
 
                     # for each line use all regexes to match, and if found send an event
                     for pattern, event in self._system_event_patterns:
