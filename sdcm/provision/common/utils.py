@@ -128,6 +128,10 @@ def install_syslogng_service():
     return dedent("""\
         if yum --help 2>/dev/null 1>&2 ; then
             if ! rpm -q syslog-ng ; then
+                for n in {1..9}; do
+                    yum install -y --downloadonly syslog-ng && break
+                done
+                
                 yum install -y syslog-ng
             fi
             rpm -q syslog-ng
@@ -136,8 +140,16 @@ def install_syslogng_service():
                 while ! find /proc/*/fd -lname /var/lib/dpkg/lock-frontend -exec false {} + -quit ; do
                     sleep 60
                 done
-                apt-get -qq update
-                apt-get -qq install syslog-ng
+
+                for n in {1..9}; do
+                    apt-get update && apt-get install -yd syslog-ng && break
+                done
+
+                if [ $? -eq 0 ]; then
+                    apt-get install -y syslog-ng
+                else
+                    false
+                fi
             fi
             dpkg-query --show syslog-ng
         else
