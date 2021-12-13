@@ -11,7 +11,11 @@
 #
 # Copyright (c) 2020 ScyllaDB
 import datetime
+import json
 import re
+from functools import cached_property
+
+import yaml
 
 from sdcm.tester import ClusterTester
 from sdcm.utils.housekeeping import HousekeepingDB
@@ -87,6 +91,10 @@ class ArtifactsTest(ClusterTester):
         if self.db_cluster is None or not self.db_cluster.nodes:
             raise ValueError('DB cluster has not been initiated')
         return self.db_cluster.nodes[0]
+
+    @cached_property
+    def write_back_cache(self) -> int | None:
+        return yaml.safe_load(self.node.remoter.run("cat /etc/scylla.d/perftune.yaml").stdout).get("write_back_cache")
 
     def check_cluster_name(self):
         with self.node.remote_scylla_yaml() as scylla_yaml:
@@ -167,12 +175,40 @@ class ArtifactsTest(ClusterTester):
                                 f"matches: {snitch_matches_scylla_yaml}"
                             )
 
+    def verify_write_back_cache_param(self) -> None:
+        if self.params["cluster_backend"] == "gce" and self.params["use_preinstalled_scylla"]:
+            expected_write_back_cache_param = 0
+        else:
+            expected_write_back_cache_param = None
+        self.assertEqual(self.write_back_cache, expected_write_back_cache_param)
+
+    def verify_nvme_write_cache(self) -> None:
+        if self.write_back_cache is None:
+            return
+        expected_write_cache_value = "write back" if self.write_back_cache else "write through"
+
+        run = self.node.remoter.sudo
+
+        nvme_devices = [dev["DevicePath"] for dev in json.loads(run("nvme list -o json").stdout)["Devices"]]
+        self.assertGreater(len(nvme_devices), 0)
+
+        for nvme_device in nvme_devices:
+            self.log.info("Expected write cache for %s is %r", nvme_device, expected_write_cache_value)
+            write_cache = run(f"cat /sys/block/{nvme_device.removeprefix('/dev/')}/queue/write_cache").stdout.strip()
+            self.assertEqual(write_cache, expected_write_cache_value)
+
     def test_scylla_service(self):
         backend = self.params["cluster_backend"]
 
         if backend == "aws":
             with self.subTest("check ENA support"):
                 assert self.node.ena_support, "ENA support is not enabled"
+
+        with self.subTest("verify write_back_cache perftune parameter"):
+            self.verify_write_back_cache_param()
+
+        with self.subTest("verify write cache for NVMe devices"):
+            self.verify_nvme_write_cache()
 
         if backend == "gce":
             with self.subTest("verify users"):
