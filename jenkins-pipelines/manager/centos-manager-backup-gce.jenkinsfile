@@ -10,8 +10,6 @@ managerPipeline(
     scylla_version: '',  // In the manager scylla_version has a value by default,  but hydra currently can't find gce images by specific version number.
     // Therefore, I set scylla_version to be empty for this run, and instead set a predetermined scylla machine image
 
-    scylla_version: '4.5',
-
     timeout: [time: 500, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
