@@ -224,9 +224,10 @@ class ArgusTestRun:
         LOGGER.info("Preparing Resource Setup...")
         backend = sct_config.get("cluster_backend")
         regions = sct_config.region_names
+        primary_region = regions[0] if len(regions) > 0 else "unknown"
 
         sct_runner_info = CloudInstanceDetails(public_ip=get_sct_runner_ip(), provider=backend,
-                                               region=regions[0], private_ip=get_my_ip())
+                                               region=primary_region, private_ip=get_my_ip())
 
         cloud_setup = cls.BACKEND_MAP.get(backend, _prepare_unknown_resource_setup)(sct_config)
 
