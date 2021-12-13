@@ -10,7 +10,6 @@ n_monitor_nodes: 1
 num_nodes_to_rollback: 2   # max is n_db_nodes -1, after upgrading 4 nodes last node can't be rollback
 
 scylla_linux_distro: 'centos'
-gce_image_db: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-8'
 
 user_prefix: 'rolling-upgrade'
 
