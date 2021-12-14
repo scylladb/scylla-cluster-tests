@@ -71,7 +71,7 @@ def call(Map pipelineParams) {
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: "${pipelineParams.get('scylla_version', '')}", description: '', name: 'scylla_version')
             string(defaultValue: '', description: '', name: 'scylla_repo')
-            string(defaultValue: "https://www.googleapis.com/compute/alpha/projects/scylla-images/global/images/7436007548560002989",  // scylla 4.5.2
+            string(defaultValue: "${pipelineParams.get('gce_image_db', '')}",
                    description: "gce image of scylla (since scylla_version doesn't work with gce)",
                    name: 'gce_image_db')  // TODO: remove setting once hydra is able to discover scylla images in gce from scylla_version
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
@@ -234,10 +234,10 @@ def call(Map pipelineParams) {
 
                                         if [[ ! -z "${params.scylla_ami_id}" ]] ; then
                                             export SCT_AMI_ID_DB_SCYLLA="${params.scylla_ami_id}"
-                                        elif [[ ! -z "${params.gce_image_db}" ]] ; then
-                                            export SCT_GCE_IMAGE_DB="${params.gce_image_db}"  #TODO: remove it once scylla_version supports gce image detection
                                         elif [[ ! -z "${params.scylla_version}" ]] ; then
                                             export SCT_SCYLLA_VERSION="${params.scylla_version}"
+                                        elif [[ ! -z "${params.gce_image_db}" ]] ; then
+                                            export SCT_GCE_IMAGE_DB="${params.gce_image_db}"  #TODO: remove it once scylla_version supports gce image detection
                                         elif [[ ! -z "${params.scylla_repo}" ]] ; then
                                             export SCT_SCYLLA_REPO="${params.scylla_repo}"
                                         else
