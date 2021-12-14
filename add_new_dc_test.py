@@ -21,9 +21,12 @@ class TestAddNewDc(LongevityTest):
 
         assert self.params.get('n_db_nodes').endswith(" 0"), "n_db_nodes must be a list and last dc must equal 0"
         system_keyspaces = ["system_auth", "system_distributed", "system_traces"]
+
+        # reconfigure system keyspaces to use NetworkTopologyStrategy
+        status = self.db_cluster.get_nodetool_status()
         self.reconfigure_keyspaces_to_use_network_topology_strategy(
             keyspaces=system_keyspaces,
-            replication_factors={"eu-westscylla_node_west": 3}
+            replication_factors={dc: len(status[dc].keys()) for dc in status}
         )
         self.prewrite_db_with_data()
         read_thread, write_thread = self.start_stress_during_adding_new_dc()
@@ -32,13 +35,14 @@ class TestAddNewDc(LongevityTest):
 
         self.querying_new_node_should_return_no_data(new_node)  # verify issue #8354
 
+        status = self.db_cluster.get_nodetool_status()
         self.reconfigure_keyspaces_to_use_network_topology_strategy(
             keyspaces=system_keyspaces + ["keyspace1"],
-            replication_factors={"eu-westscylla_node_west": 3, "eu-west-2scylla_node_west": 1}
+            replication_factors={dc: len(status[dc].keys()) for dc in status}
         )
 
         self.log.info("Running rebuild on each node in new DC")
-        new_node.run_nodetool(sub_cmd="rebuild -- eu-westscylla_node_west")
+        new_node.run_nodetool(sub_cmd=f"rebuild -- {status.keys()[0]}", publish_event=True)
 
         self.log.info("Running repair on all nodes")
         for node in self.db_cluster.nodes:
@@ -63,56 +67,40 @@ class TestAddNewDc(LongevityTest):
 
     def prewrite_db_with_data(self) -> None:
         self.log.info("Prewriting database...")
-        stress_cmd = "cassandra-stress write cl=QUORUM n=209 -schema " \
-                     "'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3) " \
-                     "compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native " \
-                     "-rate threads=8 -pop seq=1..209 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+        stress_cmd = self.params.get('prepare_write_cmd')
         pre_thread = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False)
         self.verify_stress_thread(cs_thread_pool=pre_thread)
         self.log.info("Database pre write completed")
 
     def start_stress_during_adding_new_dc(self) -> Tuple[CassandraStressThread, CassandraStressThread]:
         self.log.info("Running stress during adding new DC")
-        node = self.db_cluster.nodes[0].ip_address
-        stress_cmd_read = f"cassandra-stress read cl=LOCAL_QUORUM duration=20m -port jmx=6868 -mode cql3 native" \
-                          f" -rate threads=8 -pop seq=1..209 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5 " \
-                          f"-node {node}"
-        stress_cmd_write = f"cassandra-stress write cl=LOCAL_QUORUM duration=20m -port jmx=6868 -mode cql3 " \
-                           f"native -rate threads=8 -pop seq=1..209 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5 " \
-                           f"-node {node}"
-        read_thread = self.run_stress_thread(stress_cmd=stress_cmd_read, stats_aggregate_cmds=False, round_robin=False)
-        write_thread = self.run_stress_thread(stress_cmd=stress_cmd_write,
-                                              stats_aggregate_cmds=False, round_robin=False)
+        stress_cmds = self.params.get('stress_cmd')
+        read_thread = self.run_stress_thread(stress_cmd=stress_cmds[0], stats_aggregate_cmds=False, round_robin=False)
+        write_thread = self.run_stress_thread(stress_cmd=stress_cmds[1], stats_aggregate_cmds=False, round_robin=False)
         self.log.info("Stress during adding DC started")
         return read_thread, write_thread
 
     def add_node_in_new_dc(self) -> BaseNode:
         self.log.info("Adding new node")
-        new_node = self.db_cluster.add_nodes(1, dc_idx=1, enable_auto_bootstrap=True)[0]  # add node
+        new_node = self.db_cluster.add_nodes(1, dc_idx=2, enable_auto_bootstrap=True)[0]  # add node
         self.db_cluster.wait_for_init(node_list=[new_node], timeout=900,
                                       check_node_health=False)
         self.db_cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
         self.monitors.reconfigure_scylla_monitoring()
 
         status = self.db_cluster.get_nodetool_status()
-        assert [dc for dc in list(status.keys()) if dc ==
-                "eu-west-2scylla_node_west"], f"new datacenter was not registered. Cluster status: {status}"
+        assert len(status.keys()) == 3, f"new datacenter was not registered. Cluster status: {status}"
         self.log.info("New DC to cluster has been added")
         return new_node
 
     def verify_data_can_be_read_from_new_dc(self, new_node: BaseNode) -> None:
         self.log.info("Veryfing if data has been transferred successfully to the new DC")
-        stress_cmd = f"cassandra-stress read cl=LOCAL_ONE n=209 -port jmx=6868 -mode cql3 native -rate threads=8 " \
-                     f"-pop seq=1..209 -col 'n=FIXED(10) size=FIXED(512)' -node {new_node.ip_address} -log interval=5"
+        stress_cmd = self.params.get('verify_data_after_entire_test') + f" -node {new_node.ip_address}"
         end_stress = self.run_stress_thread(stress_cmd=stress_cmd, stats_aggregate_cmds=False, round_robin=False)
         self.verify_stress_thread(cs_thread_pool=end_stress)
 
     def querying_new_node_should_return_no_data(self, new_node: BaseNode) -> None:
         self.log.info("Verifying if querying new node with RF=0 returns no data and does not crash the node. #8354")
-        self.reconfigure_keyspaces_to_use_network_topology_strategy(
-            keyspaces=["keyspace1"],
-            replication_factors={"eu-westscylla_node_west": 3, "eu-west-2scylla_node_west": 0}
-        )
         with self.db_cluster.cql_connection_exclusive(new_node) as session:
             statement = SimpleStatement(
                 "select * from keyspace1.standard1 limit 1;", consistency_level=ConsistencyLevel.LOCAL_QUORUM)
