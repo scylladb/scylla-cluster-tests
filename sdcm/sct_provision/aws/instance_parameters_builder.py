@@ -96,7 +96,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
             user_data = self.user_data_raw.to_string()
         else:
             user_data = self.user_data_raw
-        return base64.b64encode(user_data.encode('utf-8')).decode("ascii")
+        return base64.b64encode(user_data.encode('ascii')).decode("ascii")
 
     @cached_property
     def _root_device_name(self):
