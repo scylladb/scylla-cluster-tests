@@ -78,6 +78,7 @@ from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2Unexp
 from sdcm.cluster_k8s import PodCluster, ScyllaPodCluster
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
 from sdcm.argus_test_run import ArgusTestRun
+from sdcm.wait import wait_for
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
 
@@ -528,7 +529,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         rlocal_schema_res = self.target_node.follow_system_log(patterns=["schema_tables - Schema version changed to"])
         self.target_node.run_nodetool("resetlocalschema")
-        assert list(rlocal_schema_res), "Schema version has not been recalculated"
+
+        assert wait_for(
+            func=lambda: list(rlocal_schema_res),
+            timeout=30,
+            text="Waiting for schema version being recalculated",
+            throw_exc=False,
+        ), "Schema version has not been recalculated"
 
         # Check schema version on the nodes will be preformed after nemesis by ClusterHealthChecker
         # Waiting 60 sec: this time is defined by Tomasz
