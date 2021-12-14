@@ -131,7 +131,7 @@ def install_syslogng_service():
                 for n in {1..9}; do
                     yum install -y --downloadonly syslog-ng && break
                 done
-                
+
                 yum install -y syslog-ng
             fi
             rpm -q syslog-ng
