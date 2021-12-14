@@ -94,7 +94,10 @@ class ArtifactsTest(ClusterTester):
 
     @cached_property
     def write_back_cache(self) -> int | None:
-        return yaml.safe_load(self.node.remoter.run("cat /etc/scylla.d/perftune.yaml").stdout).get("write_back_cache")
+        res = self.node.remoter.run("cat /etc/scylla.d/perftune.yaml", ignore_status=True)
+        if res.ok:
+            return yaml.safe_load(res.stdout).get("write_back_cache")
+        return None
 
     def check_cluster_name(self):
         with self.node.remote_scylla_yaml() as scylla_yaml:
