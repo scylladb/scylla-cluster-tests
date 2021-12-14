@@ -586,7 +586,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             return ''
 
         try:
-            grep_result = self.remoter.run(f'grep "^SCYLLA_ARGS=" {self.scylla_server_sysconfig_path}')
+            grep_result = self.remoter.sudo(f'grep "^SCYLLA_ARGS=" {self.scylla_server_sysconfig_path}')
         except Exception as exc:  # pylint: disable=broad-except
             self.log.error(f"Failed to get SCYLLA_ARGS. Error: {exc}")
             return ''
