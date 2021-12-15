@@ -128,7 +128,7 @@ def ignore_mutation_write_errors():
         stack.enter_context(EventsSeverityChangerFilter(
             new_severity=Severity.WARNING,
             event_class=LogEvent,
-            regex=r".*mutation_write_*",
+            regex=r".*mutation_write_",
             extra_time_to_expiration=30
         ))
         stack.enter_context(EventsSeverityChangerFilter(
