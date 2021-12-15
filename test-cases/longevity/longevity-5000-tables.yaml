@@ -41,6 +41,7 @@ regions_data:
 cluster_health_check: false
 
 nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '004'
 nemesis_interval: 60
 
 

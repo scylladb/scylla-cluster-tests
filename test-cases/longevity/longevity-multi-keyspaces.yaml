@@ -10,7 +10,8 @@ batch_size: 100
 
 space_node_threshold: 10485760
 
-nemesis_class_name: 'ChaosMonkey'
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '022'
 nemesis_interval: 30
 
 # Env

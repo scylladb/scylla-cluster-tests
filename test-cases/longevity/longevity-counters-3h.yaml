@@ -13,5 +13,6 @@ user_prefix: longevity-counters-3h
 
 space_node_threshold: 6442
 
-nemesis_class_name: 'ChaosMonkey'
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '010'
 nemesis_interval: 5

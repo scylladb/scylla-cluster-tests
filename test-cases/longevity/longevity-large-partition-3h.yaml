@@ -34,7 +34,8 @@ round_robin: true
 
 instance_type_db: 'i3.2xlarge'
 
-nemesis_class_name: 'ChaosMonkey'
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '013'
 nemesis_interval: 15
 
 user_prefix: 'longevity-large-partitions-3h'

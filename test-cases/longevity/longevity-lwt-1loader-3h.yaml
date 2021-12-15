@@ -9,7 +9,8 @@ n_monitor_nodes: 1
 
 instance_type_db: 'i3.2xlarge'
 
-nemesis_class_name: 'ChaosMonkey'
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '017'
 nemesis_interval: 5
 space_node_threshold: 64424
 
