@@ -19,6 +19,7 @@ round_robin: true
 n_db_nodes: 4
 n_loaders: 4
 n_monitor_nodes: 1
+seeds_num: 2
 
 instance_type_db: 'i3.4xlarge'
 gce_instance_type_db: 'n1-highmem-16'
@@ -29,10 +30,11 @@ gce_instance_type_loader: 'c2-standard-16'
 scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.3.repo'
 
 
-nemesis_class_name: 'ChaosMonkey'
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '031'
 nemesis_interval: 30
 nemesis_filter_seeds: false
-seeds_num: 2
+
 
 user_prefix: 'longevity-tls-1tb-7d'
 space_node_threshold: 644245094
