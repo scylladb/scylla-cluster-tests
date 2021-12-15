@@ -332,6 +332,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             """)
         username = self.params.get("gce_image_username")
         public_key = pub_key_from_private_key_file(self.params.get("user_credentials_path"))
+        raid_level = self.params.get("raid_level")
         create_node_params = dict(name=name,
                                   size=self._gce_instance_type,
                                   image=self._gce_image,
@@ -342,7 +343,8 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                                "NodeIndex": node_index,
                                                "startup-script": startup_script,
                                                "user-data": json.dumps(dict(scylla_yaml=dict(cluster_name=self.name),
-                                                                            start_scylla_on_first_boot=False)),
+                                                                            start_scylla_on_first_boot=False,
+                                                                            raid_level=raid_level)),
                                                "block-project-ssh-keys": "true",
                                                "ssh-keys": f"{username}:ssh-rsa {public_key}", },
                                   ex_service_accounts=self._service_accounts,

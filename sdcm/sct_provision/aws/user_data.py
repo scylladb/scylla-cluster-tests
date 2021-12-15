@@ -5,7 +5,7 @@ from typing import Union
 from pydantic import Field
 
 from sdcm.provision.aws.configuration_script import AWSConfigurationScriptBuilder
-from sdcm.provision.common.user_data import UserDataBuilderBase, DataDeviceType, ScyllaUserDataBuilderBase
+from sdcm.provision.common.user_data import UserDataBuilderBase, DataDeviceType, ScyllaUserDataBuilderBase, RaidLevelType
 from sdcm.provision.scylla_yaml import ScyllaYaml
 from sdcm.sct_config import SCTConfiguration
 
@@ -39,6 +39,13 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
         if self.params.get("data_volume_disk_num") > 0:
             return DataDeviceType.ATTACHED.value
         return DataDeviceType.INSTANCE_STORE.value
+
+    @property
+    def raid_level(self) -> RaidLevelType:
+        """
+        Tell scylla setup to create RAID0 or RAID5 on disks
+        """
+        return self.params.get("raid_level") or RaidLevelType.RAID0
 
     @property
     def post_configuration_script(self) -> str:

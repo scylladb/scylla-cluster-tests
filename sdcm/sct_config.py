@@ -1233,6 +1233,9 @@ class SCTConfiguration(dict):
              type=int,
              help="Multiply the list of nemesis to execute by the specified factor"),
 
+        dict(name="raid_level", env="SCT_RAID_LEVEL",
+             type=int,
+             help="Number of of raid level: 0 - RAID0, 5 - RAID5"),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',

@@ -788,11 +788,13 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         user_data_format_version = ami_tags.get('user_data_format_version', user_data_format_version)
 
         data_device_type = EBS_VOLUME if params.get("data_volume_disk_num") > 0 else INSTANCE_STORE
+        raid_level = params.get("raid_level")
 
         if parse_version(user_data_format_version) >= parse_version('2'):
             user_data = dict(scylla_yaml=dict(cluster_name=name),
                              start_scylla_on_first_boot=False,
-                             data_device=data_device_type)
+                             data_device=data_device_type,
+                             raid_level=raid_level)
         else:
             user_data = ('--clustername %s '
                          '--totalnodes %s' % (name, sum(n_nodes)))
