@@ -22,6 +22,11 @@ class DataDeviceType(str, Enum):
     INSTANCE_STORE = 'instance_store'
 
 
+class RaidLevelType(int, Enum):
+    RAID0 = 0
+    RAID5 = 5
+
+
 class UserDataBuilderBase(AttrBuilder, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def to_string(self) -> str:
@@ -59,3 +64,10 @@ class ScyllaUserDataBuilderBase(UserDataBuilderBase, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def to_string(self) -> str:
         pass
+
+    @property
+    @abc.abstractmethod
+    def raid_level(self) -> RaidLevelType:
+        """
+        Tell scylla setup which raid to build RAID0 or RAID5
+        """
