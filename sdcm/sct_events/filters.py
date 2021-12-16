@@ -29,7 +29,7 @@ class DbEventsFilter(BaseFilter):
 
         self.filter_type = db_event.type
         self.filter_line = line
-        self.filter_node = str(node) if node else None
+        self.filter_node = str(node.name if hasattr(node, "name") else node) if node else None
 
     def eval_filter(self, event: LogEventProtocol) -> bool:
         if not isinstance(event, LogEventProtocol):
@@ -44,7 +44,7 @@ class DbEventsFilter(BaseFilter):
             result &= self.filter_line in (getattr(event, "line", "") or "")
 
         if self.filter_node:
-            result &= self.filter_node == getattr(event, "node", "")
+            result &= self.filter_node in (getattr(event, "node", "") or "").split()
 
         return result
 
