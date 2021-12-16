@@ -2799,7 +2799,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             use_rsyslog = True
         elif self.parent_cluster.params.get('logs_transport') == 'syslog-ng':
             self.log.info("Log transport is syslog-ng. Try to install it.")
-            if self.remoter.sudo(shell_script_cmd(install_syslogng_service(), quote="'"), ignore_status=True).ok:
+            if self.remoter.sudo(shell_script_cmd(install_syslogng_service() + "\n exit $?", quote="'",
+                                                  shell_cmd="bash -cx"), ignore_status=True).ok:
                 script += self.test_config.get_syslogng_configuration_script(hostname=self.name)
                 script += restart_syslogng_service()
             else:
