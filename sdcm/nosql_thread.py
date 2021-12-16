@@ -81,7 +81,7 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
 
     def _run_stress(self, loader, loader_idx, cpu_idx):
         stress_cmd = self.build_stress_cmd(loader_idx=loader_idx)
-        remoter = loader.remoter
+        remoter: RemoteCmdRunnerBase = loader.remoter
 
         os.makedirs(loader.logdir, exist_ok=True)
         os.makedirs(self.NOSQLBENCH_METRICS_SRC_PATH, exist_ok=True)
@@ -97,6 +97,7 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                                    log_file_name=log_file_name) as stress_event, \
             NoSQLBenchEventsPublisher(node=loader,
                                       log_filename=log_file_name) as events_publisher:
+            result = None
             try:
                 # copy graphite-exporter config file to loader
                 remoter.send_files(src=self.GRAPHITE_EXPORTER_CONFIG_SRC_PATH,
@@ -129,15 +130,12 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                     timeout=self.timeout + self.shutdown_timeout,
                     log_file=log_file_name
                 )
-                LOGGER.info("Docker run command stdout: %s", result.stdout)
-                LOGGER.info("Docker run command stderr: %s", result.stderr)
 
                 remoter.receive_files(src=summary_file_path,
                                       dst=loader.logdir)
 
-                return result
-
             except Exception as exc:  # pylint: disable=broad-except
                 stress_event.severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR
                 stress_event.add_error(errors=[format_stress_cmd_error(exc)])
-            return None
+
+        return result
