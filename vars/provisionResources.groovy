@@ -18,6 +18,11 @@ def call(Map params, String region){
     if [[ -n "${params.region ? params.region : ''}" ]] ; then
         export SCT_REGION_NAME=${current_region}
     fi
+
+    if [[ -n "${params.availability_zone ? params.availability_zone : ''}" ]] ; then
+        export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
+    fi
+
     if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
         export SCT_GCE_DATACENTER=${params.gce_datacenter}
     fi
