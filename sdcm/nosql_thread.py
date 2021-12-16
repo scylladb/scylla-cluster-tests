@@ -94,9 +94,7 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
         LOGGER.debug("'running: %s", stress_cmd)
         with NoSQLBenchStressEvent(node=loader,
                                    stress_cmd=stress_cmd,
-                                   log_file_name=log_file_name) as stress_event, \
-            NoSQLBenchEventsPublisher(node=loader,
-                                      log_filename=log_file_name) as events_publisher:
+                                   log_file_name=log_file_name) as stress_event:
             result = None
             try:
                 # copy graphite-exporter config file to loader
@@ -116,7 +114,7 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                                    timeout=self.timeout + self.shutdown_timeout,
                                    log_file=log_file_name,
                                    ignore_status=True)
-
+                LOGGER.info("Before running the remoter.run()")
                 result = remoter.run(
                     cmd=f'docker run '
                         '--name=nb '
@@ -128,13 +126,15 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
                         f'--report-graphite-to graphite-exporter:9109 '
                         f'--report-summary-to {summary_file_path} ',
                     timeout=self.timeout + self.shutdown_timeout,
-                    log_file=log_file_name
+                    log_file=log_file_name,
                 )
-
+                LOGGER.info("Results futures after triggering the run: %s", self.results_futures)
+                LOGGER.info("After running the remoter.run()")
                 remoter.receive_files(src=summary_file_path,
                                       dst=loader.logdir)
 
             except Exception as exc:  # pylint: disable=broad-except
+                LOGGER.info("FOUND AND EXCEPTION!!!")
                 stress_event.severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR
                 stress_event.add_error(errors=[format_stress_cmd_error(exc)])
 
