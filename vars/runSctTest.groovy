@@ -21,6 +21,10 @@ def call(Map params, String region){
         export SCT_REGION_NAME=${aws_region}
     fi
 
+    if [[ -n "${params.availability_zone ? params.availability_zone : ''}" ]] ; then
+        export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
+    fi
+
     if [[ -n "${params.new_version ? params.new_version : ''}" ]] ; then
         export SCT_NEW_VERSION="${params.new_version}"
     fi
