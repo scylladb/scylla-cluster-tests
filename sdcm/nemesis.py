@@ -82,6 +82,8 @@ from sdcm.wait import wait_for
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
 
+LOGGER = logging.getLogger(__name__)
+
 
 class NoFilesFoundToDestroy(Exception):
     pass
@@ -366,6 +368,25 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.debug("Gathered subclass methods: {}".format(disrupt_methods_list))
         return disrupt_methods_list
 
+    def get_list_of_subclasses_by_property_name(self, list_of_properties_to_include):
+        flags = {flag_name: True for flag_name in list_of_properties_to_include}
+        subclasses_list = self._get_subclasses(**flags)
+        return subclasses_list
+
+    def get_list_of_disrupt_methods(self, subclasses_list):
+        disrupt_methods_list = []
+        for subclass in subclasses_list:
+            method_name = re.search(
+                r'self\.(?P<method_name>disrupt_[A-Za-z_]+?)\(.*\)', inspect.getsource(subclass), flags=re.MULTILINE)
+            if method_name:
+                disrupt_methods_list.append(method_name.group('method_name'))
+        self.log.debug("list of matching disrupions: {}".format(disrupt_methods_list))
+        for _ in disrupt_methods_list:
+            disrupt_methods = [attr[1] for attr in inspect.getmembers(self) if
+                               attr[0] in disrupt_methods_list and
+                               callable(attr[1])]
+        return disrupt_methods
+
     @classmethod
     def _get_subclasses(cls, **flags) -> List[Type['Nemesis']]:
         tmp = Nemesis.__subclasses__()
@@ -395,7 +416,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             for filter_name, filter_value in flags.items():
                 if filter_value is None:
                     continue
-                if getattr(nemesis, filter_name) != filter_value:
+                try:
+                    attr = getattr(nemesis, filter_name)
+                except AttributeError:
+                    LOGGER.warning("The required nemesis flag {} was not found".format(filter_name))
+                    flags[filter_name] = None
+                    continue
+                if attr != filter_value:
                     matches = False
                     break
             if not matches:
@@ -1175,10 +1202,37 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         finally:
             self.metrics_srv.event_stop(disrupt_method_name)
 
-    def get_all_disrupt_methods(self):
-        all_disruptions = [attr[1] for attr in inspect.getmembers(self)
+    def build_list_of_disruptions_to_execute(self, nemesis_include_filter=None, nemesis_multiply_factor=1):
+        """
+        Builds the list of disruptions that should be excuted during a test.
+
+        nemesis_include_filter: should be retrived from the test yaml by using the "nemesis_include_filter".
+        Here it kept for future usages and unit testing ability.
+        more about nemesis_include_filter behaviour in sct_config.py
+
+        nemesis_multiply_factor: should be retrived from the test yaml by using the "nemesis_multiply_factor".
+        Here it kept for future usages and unit testing ability.
+        more about nemesis_include_filter behaviour in sct_config.py
+        """
+        nemesis_include_filter = self.cluster.params.get('nemesis_include_filter')
+        if nemesis_include_filter:
+            subclasses = self.get_list_of_subclasses_by_property_name(
+                list_of_properties_to_include=nemesis_include_filter)
+            if subclasses:
+                disruptions = self.get_list_of_disrupt_methods(subclasses_list=subclasses)
+            else:
+                disruptions = []
+        else:
+            disruptions = [attr[1] for attr in inspect.getmembers(self)
                            if attr[0].startswith('disrupt_') and callable(attr[1])]
-        self.disruptions_list.extend(all_disruptions)
+
+        nemesis_multiply_factor = self.cluster.params.get('nemesis_multiply_factor')
+        if nemesis_multiply_factor:
+            disruptions = disruptions * nemesis_multiply_factor
+
+        self.disruptions_list.extend(disruptions)
+        self.log.debug("This is the list of callable disruptions {}".format(self.disruptions_list))
+        return self.disruptions_list
 
     def shuffle_list_of_disruptions(self):
         if self.cluster.params.get('nemesis_seed'):
@@ -3968,7 +4022,7 @@ class SisyphusMonkey(Nemesis):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.get_all_disrupt_methods()
+        self.build_list_of_disruptions_to_execute()
         self.shuffle_list_of_disruptions()
 
     def disrupt(self):
