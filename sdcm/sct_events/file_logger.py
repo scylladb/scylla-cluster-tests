@@ -54,7 +54,7 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
             Severity.ERROR:    base_dir / ERROR_LOG,
             Severity.WARNING:  base_dir / WARNING_LOG,
             Severity.NORMAL:   base_dir / NORMAL_LOG,
-            Severity.DEBUG: base_dir / DEBUG_LOG,
+            Severity.DEBUG:    base_dir / DEBUG_LOG,
         }
 
         self.events_summary = collections.defaultdict(int)
