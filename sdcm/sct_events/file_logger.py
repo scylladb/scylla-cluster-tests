@@ -88,16 +88,16 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
                 with verbose_suppress("%s: failed to tee %s to %s", self, event, tee):
                     tee(message)
 
-            # Write event to events.log file
+        # Write event to events.log file
+        if getattr(event, 'save_to_files', False):
             with verbose_suppress("%s: failed to write %s to %s", self, event, self.events_log):
                 with self.events_log.open("ab+", buffering=0) as fobj:
                     fobj.write(message_bin)
 
-        # Write event to a {event.severity}.log file
-        if log_file := self.events_logs_by_severity.get(event.severity):
-            with verbose_suppress("%s: failed to write %s to %s", self, event, log_file):
-                with log_file.open("ab+", buffering=0) as fobj:
-                    fobj.write(message_bin)
+            if log_file := self.events_logs_by_severity.get(event.severity):
+                with verbose_suppress("%s: failed to write %s to %s", self, event, log_file):
+                    with log_file.open("ab+", buffering=0) as fobj:
+                        fobj.write(message_bin)
 
         # Update summary.log file (statistics.)
         self.events_summary[Severity(event.severity).name] += 1
