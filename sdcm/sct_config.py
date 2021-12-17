@@ -1445,7 +1445,8 @@ class SCTConfiguration(dict):
                                                               dist_version_loader)
 
         # 6.1) handle oracle_scylla_version if exists
-        if oracle_scylla_version := self.get('oracle_scylla_version'):  # pylint: disable=too-many-nested-blocks
+        if (oracle_scylla_version := self.get('oracle_scylla_version')) \
+           and self.get("db_type") == "mixed_scylla":  # pylint: disable=too-many-nested-blocks
             suffix = f" {oracle_scylla_version}"  # ami.name format example: ScyllaDB 4.4.0
             if not self.get('ami_id_db_oracle') and self.get('cluster_backend') == 'aws':
                 ami_list = []
