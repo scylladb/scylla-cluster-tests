@@ -257,7 +257,7 @@ class RepairEvent(ScyllaDatabaseContinuousEvent):
     publish_to_grafana = False
     save_to_files = False
 
-    def __init__(self, node: str, shard: int, severity=Severity.DEBUG, **__):
+    def __init__(self, node: str, shard: int, severity=Severity.NORMAL, **__):
         super().__init__(node=node, shard=shard, severity=severity)
         self.log_level = logging.DEBUG
 
@@ -271,7 +271,7 @@ class CompactionEvent(ScyllaDatabaseContinuousEvent):
     save_to_files = False
 
     def __init__(self, node: str, shard: int, table: str, compaction_process_id: str,  # pylint: disable=too-many-arguments
-                 severity=Severity.DEBUG, **__):
+                 severity=Severity.NORMAL, **__):
         super().__init__(node=node, shard=shard, severity=severity)
         self.table = table
         self.compaction_process_id = compaction_process_id
