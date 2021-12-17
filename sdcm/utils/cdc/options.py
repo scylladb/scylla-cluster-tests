@@ -11,7 +11,7 @@ CDC_LOGTABLE_SUFFIX = "_scylla_cdc_log"
 CDC_SETTINGS_NAMES_VALUES = {
     "enabled": [True, False],
     "delta": ["full", "keys"],
-    "preimage": ["full", "on", "off"],
+    "preimage": ["full", "true", "false"],
     "postimage": [True, False],
     "ttl": "86400"
 }
