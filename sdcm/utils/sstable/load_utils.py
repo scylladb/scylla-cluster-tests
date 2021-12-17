@@ -91,7 +91,7 @@ class SstableLoadUtils:
         # So we need to validate that resharded files are placed in the "upload" folder before moving.
         # Find the compaction output that reported about the resharding
 
-        system_log_follower = node.follow_system_log(patterns=[r'Resharded.*\[/'])
+        system_log_follower = node.follow_system_log(patterns=[r'Resharded.*'])
         node.run_nodetool(sub_cmd="refresh", args="-- keyspace1 standard1")
         return system_log_follower
 
@@ -116,6 +116,15 @@ class SstableLoadUtils:
         #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-15-big-Data.db:level=0,
         #   /var/lib/scylla/data/keyspace1/standard1-9fbed8d0f8c211ea9bb1000000000000/upload/md-16-big-Data.db:level=0,
         #   ]. 91MB to 92MB (~100% of original) in 5009ms = 18MB/s. ~370176 total partitions merged to 370150
+
+        Starting with Scylla 4.7 messages have changed to the following:
+        [shard 1] sstables_loader - Loading new SSTables for keyspace=keyspace1, table=standard1, ...
+        [shard 1] database - Resharding 223kB for keyspace1.standard1
+        [shard 1] database - Resharded 223kB for keyspace1.standard1 in 0.14 seconds, 1MB/s
+        [shard 1] database - Loaded 16 SSTables into /var/lib/scylla/data/keyspace1/standard1-eb0401905d8311ecb391aa52ebf0b3e1
+        [shard 1] sstables_loader - Done loading new SSTables for keyspace=keyspace1, table=standard1, ...
+
+        So, there is no per-file paths anymore for resharding log messages, only root dir path.
         """
         resharding_logs = list(system_log_follower)
         assert resharding_logs, f"Resharding wasn't run on the node {node.name}"
