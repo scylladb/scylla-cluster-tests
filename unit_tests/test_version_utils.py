@@ -159,10 +159,22 @@ def test_07_get_git_tag_from_helm_chart_version__wrong_input(chart_version):
 class ClassWithVersiondMethods:  # pylint: disable=too-few-public-methods
     def __init__(self, scylla_version, nemesis_like_class):
         params = {"scylla_version": scylla_version}
+        node_scylla_version = ""
+        if scylla_version.startswith('enterprise:'):
+            node_scylla_version = "2023.dev"
+        elif scylla_version.startswith('master:'):
+            node_scylla_version = "4.7.dev"
+        else:
+            node_scylla_version = "{}.dev".format(scylla_version.split(":")[0])
+        nodes = [type("Node", (object,), {"scylla_version": node_scylla_version})]
         if nemesis_like_class:
-            self.cluster = type("Cluster", (object,), {"params": params})
+            self.cluster = type("Cluster", (object,), {
+                "params": params,
+                "nodes": nodes,
+            })
         else:
             self.params = params
+            self.nodes = nodes
 
     @scylla_versions((None, "4.3"))
     def oss_method(self):  # pylint: disable=no-self-use
@@ -222,15 +234,17 @@ class ClassWithVersiondMethods:  # pylint: disable=too-few-public-methods
     "4.6.rc1", "4.6", "4.6.0", "4.6.1",
     "4.7.rc1", "4.7", "4.7.0", "4.7.1",
     "5.0.rc1", "5.0", "5.0.0", "5.0.1",
+    "4.7:latest", "master:latest",
 ) for method in ("oss_method", "mixed_method")] + [(scylla_version, method) for scylla_version in (
     "2019.1", "2019.1.0", "2019.1.1",
     "2020.1", "2020.1.0", "2020.1.1",
     "2021.1", "2021.1.0", "2021.1.1",
     "2022.1", "2022.1.0", "2022.1.1",
+    "2023:latest", "enterprise:latest",
 ) for method in ("es_method", "mixed_method")] + [(scylla_version, method) for scylla_version in (
-    "4.6.rc1", "4.6", "4.6.0", "4.6.1"
+    "4.6.rc1", "4.6", "4.6.0", "4.6.1", "4.7:latest", "master:latest",
 ) for method in ("new_oss_method", "new_mixed_method")] + [(scylla_version, method) for scylla_version in (
-    "2022.1.rc1", "2022.1", "2022.1.0", "2022.1.1",
+    "2022.1.rc1", "2022.1", "2022.1.0", "2022.1.1", "2023:latest", "enterprise:latest",
 ) for method in ("new_es_method", "new_mixed_method")])
 def test_scylla_versions_decorator_positive(scylla_version, method):
     for nemesis_like_class in (True, False):
@@ -266,5 +280,41 @@ def test_scylla_versions_decorator_negative(scylla_version, method):
         except MethodVersionNotFound as exc:
             assert "Method '{}' with version '{}' is not supported in '{}'!".format(
                 method, scylla_version, cls_instance.__class__.__name__) in str(exc)
+        else:
+            assert False, f"Versioned method must have been not found for the '{scylla_version}' scylla version"
+
+
+def test_scylla_versions_decorator_negative_latest_scylla_no_nodes():
+    scylla_version = "master:latest"
+    for nemesis_like_class in (True, False):
+        try:
+            cls_instance = ClassWithVersiondMethods(
+                scylla_version=scylla_version, nemesis_like_class=nemesis_like_class)
+            try:
+                cls_instance.cluster.nodes = []
+            except AttributeError:
+                cls_instance.nodes = []
+            cls_instance.oss_method()
+        except MethodVersionNotFound as exc:
+            assert "Method 'oss_method' with version 'n/a' is not supported in '{}'!".format(
+                cls_instance.__class__.__name__) in str(exc)
+        else:
+            assert False, f"Versioned method must have been not found for the '{scylla_version}' scylla version"
+
+
+def test_scylla_versions_decorator_negative_latest_scylla_no_attr():
+    scylla_version = "master:latest"
+    for nemesis_like_class in (True, False):
+        try:
+            cls_instance = ClassWithVersiondMethods(
+                scylla_version=scylla_version, nemesis_like_class=nemesis_like_class)
+            try:
+                delattr(cls_instance.cluster.nodes[0], "scylla_version")
+            except AttributeError:
+                delattr(cls_instance.nodes[0], "scylla_version")
+            cls_instance.oss_method()
+        except MethodVersionNotFound as exc:
+            assert "Method 'oss_method' with version 'n/a' is not supported in '{}'!".format(
+                cls_instance.__class__.__name__) in str(exc)
         else:
             assert False, f"Versioned method must have been not found for the '{scylla_version}' scylla version"

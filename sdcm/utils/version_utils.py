@@ -412,7 +412,16 @@ class scylla_versions:  # pylint: disable=invalid-name,too-few-public-methods
         @wraps(func)
         def inner(*args, **kwargs):
             cls_self = args[0]
-            scylla_version = getattr(cls_self, 'cluster', cls_self).params.get("scylla_version")
+            try:
+                cluster_object = getattr(cls_self, 'cluster', cls_self)
+                scylla_version = cluster_object.params.get("scylla_version")
+                if scylla_version.endswith(":latest"):
+                    # NOTE: in case we run Scylla cluster with "latest" version then we need
+                    #       to pick up a more precise version from one of it's nodes, i.e. '4.7.dev'
+                    scylla_version = cluster_object.nodes[0].scylla_version
+            except (AttributeError, IndexError) as exc:
+                LOGGER.warning("Failed to get scylla version: %s", exc)
+                scylla_version = "n/a"
             func_version_mapping = self.VERSIONS.get((func.__name__, func.__code__.co_filename), {})
             for (min_v, max_v), mapped_func in func_version_mapping.items():
                 if parse_version(min_v) <= parse_version(scylla_version) <= parse_version(max_v):
