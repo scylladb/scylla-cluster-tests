@@ -333,7 +333,7 @@ class ScyllaYamlTest(unittest.TestCase):
                 'skip_wait_for_gossip_to_settle': -1,
                 'force_gossip_generation': -1,
                 'experimental': False,
-                'experimental_features': {},
+                'experimental_features': [],
                 'lsa_reclamation_step': 1,
                 'prometheus_port': 9180,
                 'prometheus_address': 'localhost',
