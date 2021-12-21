@@ -1,13 +1,11 @@
 # pylint: disable=no-self-use
 
 import uuid
-from typing import Generator
 from pathlib import Path
+from typing import Generator
 
 import pytest
 
-from sdcm.sct_events import Severity
-from sdcm.sct_events.base import EventPeriod
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, ContinuousEventRegistryException
 from sdcm.sct_events.database import get_pattern_to_event_to_func_mapping, CompactionEvent
 from sdcm.sct_events.loaders import GeminiStressEvent
