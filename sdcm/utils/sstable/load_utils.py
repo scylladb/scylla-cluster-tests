@@ -11,9 +11,12 @@ from sdcm.utils.sstable.load_inventory import (TestDataInventory, BIG_SSTABLE_CO
 
 
 class SstableLoadUtils:
-    LOAD_AND_STREAM_RUN_EXPR = r'storage_service - load_and_stream:'
-    LOAD_AND_STREAM_DONE_EXPR = r'storage_service - Done loading new SSTables for keyspace={}, table={}, ' \
-                                r'load_and_stream=true.*status=(.*)'
+    LOAD_AND_STREAM_RUN_EXPR = r'(?:storage_service|sstables_loader) - load_and_stream:'
+    LOAD_AND_STREAM_DONE_EXPR = (
+        r'(?:storage_service|sstables_loader) - '
+        r'Done loading new SSTables for keyspace={}, table={}, '
+        r'load_and_stream=true.*status=(.*)'
+    )
 
     @staticmethod
     def calculate_columns_count_in_table(target_node, keyspace_name: str = 'keyspace1',
@@ -150,15 +153,18 @@ class SstableLoadUtils:
             storage_service - load_and_stream: ops_uuid=c06c76bb-d178-4e9c-87ff-90df7b80bd5e, ks=keyspace1, table=standard1,
             target_node=10.0.3.31, num_partitions_sent=45721, num_bytes_sent=24140688
 
-           storage_service - Done loading new SSTables for keyspace=keyspace1, table=standard1, load_and_stream=true,
-           primary_replica_only=false, status=succeeded
+            storage_service - Done loading new SSTables for keyspace=keyspace1, table=standard1, load_and_stream=true,
+            primary_replica_only=false, status=succeeded
+
+        Starting with the Scylla 4.6 version the prefix becomes 'sstables_loader' instead of
+        the 'storage_service' one.
         """
         load_and_stream_messages = list(system_log_follower)
         assert load_and_stream_messages, f"Load and stream wasn't run on the node {node.name}"
         LOGGER.debug("Found load_and_stream messages: %s", load_and_stream_messages)
 
         load_and_stream_started = False
-        load_and_stream_status = ""
+        load_and_stream_status = "n/a"
         for line in load_and_stream_messages:
             if not load_and_stream_started and re.findall(cls.LOAD_AND_STREAM_RUN_EXPR, line):
                 load_and_stream_started = True
