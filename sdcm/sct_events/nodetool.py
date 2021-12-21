@@ -47,11 +47,10 @@ class NodetoolEvent(ContinuousEvent):
                  node=None,
                  options=None,
                  publish_event=True):
-        super().__init__(severity=severity, publish_event=publish_event)
-
         self.nodetool_command = NodetoolCommand(cmd=nodetool_command, options=options)
         self.node = str(node)
         self.full_traceback = None
+        super().__init__(severity=severity, publish_event=publish_event)
 
     @property
     def msgfmt(self) -> str:

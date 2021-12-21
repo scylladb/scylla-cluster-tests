@@ -241,7 +241,7 @@ class TestYcsbStressEvent(unittest.TestCase):
         self.assertEqual(event.node, "[]")
         self.assertEqual(event.stress_cmd, "c-s")
         self.assertEqual(event.log_file_name, "1.log")
-        self.assertIsNone(event.errors)
+        self.assertFalse(event.errors)
         event.event_id = "68067fe2-4c9e-421c-97b5-12db8d7ba71d"
         self.assertEqual(str(event),
                          "(YcsbStressEvent Severity.ERROR) period_type=not-set "
@@ -279,7 +279,7 @@ class TestCDCReaderStressEvent(unittest.TestCase):
         self.assertEqual(event.node, "[]")
         self.assertEqual(event.stress_cmd, "c-s")
         self.assertEqual(event.log_file_name, "1.log")
-        self.assertIsNone(event.errors)
+        self.assertFalse(event.errors)
         event.event_id = "aed3946d-33a8-4f68-b56c-1d09f71f5da9"
         self.assertEqual(str(event),
                          "(CDCReaderStressEvent Severity.NORMAL) period_type=not-set "
@@ -317,7 +317,7 @@ class TestNdBenchStressEvent(unittest.TestCase):
         self.assertEqual(event.node, "[]")
         self.assertEqual(event.stress_cmd, "c-s")
         self.assertEqual(event.log_file_name, "1.log")
-        self.assertIsNone(event.errors)
+        self.assertFalse(event.errors)
         event.event_id = "a07b48fa-2706-465b-b139-698d35909cfa"
         self.assertEqual(str(event),
                          "(NdBenchStressEvent Severity.ERROR) period_type=not-set "
@@ -355,7 +355,7 @@ class TestKclStressEvent(unittest.TestCase):
         self.assertEqual(event.node, "[]")
         self.assertEqual(event.stress_cmd, "c-s")
         self.assertEqual(event.log_file_name, "1.log")
-        self.assertIsNone(event.errors)
+        self.assertFalse(event.errors)
         event.event_id = "1acd4202-3a38-4b0d-9464-62f4825ee148"
         self.assertEqual(str(event),
                          "(KclStressEvent Severity.ERROR) period_type=not-set "

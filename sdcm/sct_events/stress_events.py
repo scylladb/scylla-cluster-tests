@@ -60,12 +60,10 @@ class StressEvent(BaseStressEvent, abstract=True):
                  errors: Optional[List[str]] = None,
                  severity: Severity = Severity.NORMAL,
                  publish_event: bool = True):
-        super().__init__(severity=severity, publish_event=publish_event)
-
         self.node = str(node)
         self.stress_cmd = stress_cmd
         self.log_file_name = log_file_name
-        self.errors = errors
+        super().__init__(severity=severity, publish_event=publish_event, errors=errors)
 
     @property
     def msgfmt(self):

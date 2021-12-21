@@ -34,12 +34,11 @@ class GeminiStressEvent(BaseStressEvent):
                  log_file_name: Optional[str] = None,
                  severity: Severity = Severity.NORMAL,
                  publish_event: bool = True):
-        super().__init__(severity=severity, publish_event=publish_event)
-
         self.node = str(node)
         self.cmd = cmd
         self.log_file_name = log_file_name
         self.result = ""
+        super().__init__(severity=severity, publish_event=publish_event)
 
     def add_result(self, result: Optional[Result]):
         if result != "":
