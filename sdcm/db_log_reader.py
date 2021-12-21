@@ -72,7 +72,7 @@ class DbLogReader(Process):
         super().__init__(name=self.__class__.__name__, daemon=True)
 
     @cached_property
-    def _continues_event_patterns(self):
+    def _continuous_event_patterns(self):
         return get_pattern_to_event_to_func_mapping(node=self._node_name)
 
     def _read_and_publish_events(self) -> None:
@@ -137,7 +137,7 @@ class DbLogReader(Process):
 
                     # for each line, if it matches a continuous event pattern,
                     # call the appropriate function with the class tied to that pattern
-                    for item in self._continues_event_patterns:
+                    for item in self._continuous_event_patterns:
                         if event_match := item.pattern.search(line):
                             item.period_func(match=event_match)
                             break

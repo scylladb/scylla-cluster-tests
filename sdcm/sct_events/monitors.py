@@ -27,10 +27,9 @@ class PrometheusAlertManagerEvent(ContinuousEvent):  # pylint: disable=too-many-
         "state",
         "alert_name",
     )
+    continuous_hash_fields = ('node', 'starts_at', 'alert_name')
 
     def __init__(self, raw_alert: dict, severity: Severity = Severity.NORMAL):
-        super().__init__(severity=severity)
-
         self.annotations = raw_alert.get("annotations") or {}
         self.starts_at = raw_alert.get("startsAt")
         self.ends_at = raw_alert.get("endsAt")
@@ -45,9 +44,10 @@ class PrometheusAlertManagerEvent(ContinuousEvent):  # pylint: disable=too-many-
         self.alert_name = self.labels.get("alertname", "")
 
         try:
-            self.severity = Severity[self.labels["sct_severity"]]
+            severity = Severity[self.labels["sct_severity"]]
         except KeyError:
             pass
+        super().__init__(severity=severity)
 
     @property
     def msgfmt(self) -> str:

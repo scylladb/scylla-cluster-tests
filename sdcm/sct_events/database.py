@@ -210,11 +210,12 @@ class ScyllaServerEventPatternFuncs(NamedTuple):
 class ScyllaDatabaseContinuousEvent(ContinuousEvent, abstract=True):
     begin_pattern: str = NotImplemented
     end_pattern: str = NotImplemented
+    continuous_hash_fields = ('node', 'shard')
 
     def __init__(self, node: str, shard: int = None, severity=Severity.UNKNOWN, publish_event=True):
-        super().__init__(severity=severity, publish_event=publish_event)
         self.node = node
         self.shard = shard
+        super().__init__(severity=severity, publish_event=publish_event)
 
     @property
     def msgfmt(self):
@@ -243,9 +244,9 @@ class BootstrapEvent(ScyllaDatabaseContinuousEvent):
 
 class FullScanEvent(ScyllaDatabaseContinuousEvent):
     def __init__(self, node: str, ks_cf: str, message: Optional[str] = None, severity=Severity.NORMAL, **__):
-        super().__init__(node=node, severity=severity)
         self.ks_cf = ks_cf
         self.message = message
+        super().__init__(node=node, severity=severity)
 
     @property
     def msgfmt(self):
@@ -262,8 +263,8 @@ class RepairEvent(ScyllaDatabaseContinuousEvent):
     save_to_files = False
 
     def __init__(self, node: str, shard: int, severity=Severity.NORMAL, **__):
-        super().__init__(node=node, shard=shard, severity=severity)
         self.log_level = logging.DEBUG
+        super().__init__(node=node, shard=shard, severity=severity)
 
 
 class CompactionEvent(ScyllaDatabaseContinuousEvent):
@@ -273,13 +274,14 @@ class CompactionEvent(ScyllaDatabaseContinuousEvent):
                   r'(?P<compaction_process_id>.+)\] Compacted '
     publish_to_grafana = False
     save_to_files = False
+    continuous_hash_fields = ('node', 'shard', 'table', 'compaction_process_id')
 
     def __init__(self, node: str, shard: int, table: str, compaction_process_id: str,  # pylint: disable=too-many-arguments
                  severity=Severity.NORMAL, **__):
-        super().__init__(node=node, shard=shard, severity=severity)
         self.table = table
         self.compaction_process_id = compaction_process_id
         self.log_level = logging.DEBUG
+        super().__init__(node=node, shard=shard, severity=severity)
 
     @property
     def msgfmt(self):
@@ -323,49 +325,27 @@ def get_pattern_to_event_to_func_mapping(node: str) \
         kwargs = match.groupdict()
         if "shard" in kwargs:
             kwargs["shard"] = int(kwargs["shard"])
-
         new_event = event_type(node=node, **kwargs)
         new_event.begin_event()
 
     def _end_event(event_type: Type[ScyllaDatabaseContinuousEvent], match: Match):
         kwargs = match.groupdict()
-
-        event_filter = event_registry.get_registry_filter()
-        event_filter \
-            .filter_by_node(node=node) \
-            .filter_by_type(event_type=event_type) \
-            .filter_by_period(period_type=EventPeriod.BEGIN.value)
-
-        if kwargs.get("shard"):
-            event_filter.filter_by_shard(int(kwargs["shard"]))
-
-        if kwargs.get("table"):
-            event_filter.filter_by_attr(base="CompactionEvent", table=kwargs["table"])
-
-        if kwargs.get("compaction_process_id"):
-            event_filter.filter_by_attr(base="CompactionEvent", compaction_process_id=kwargs["compaction_process_id"])
-
-        begun_events = event_filter.get_filtered()
-
-        if not begun_events:
-            TestFrameworkEvent(
-                source=event_type.__name__,
-                message="Did not find any events of type {event_type}"
-                        " with period type {period_type}, event data: {event_data}".format(
-                            event_type=event_type,
-                            period_type=EventPeriod.BEGIN.value,
-                            event_data=kwargs,
-                        ),
-                severity=Severity.DEBUG
-            ).publish_or_dump()
+        continuous_hash = event_type.get_continuous_hash_from_dict({'node': node, **kwargs})
+        if begin_event := event_registry.find_continuous_event_by_hash(continuous_hash):
+            begin_event.end_event()
             return
 
-        if len(begun_events) > 1:
-            LOGGER.debug("Found %s events of type %s with period %s. "
-                         "Will apply the function to most recent event by default.",
-                         len(begun_events), event_type, EventPeriod.BEGIN.value)
-        event = begun_events[-1]
-        event.end_event()
+        TestFrameworkEvent(
+            source=event_type.__name__,
+            message="Did not find events of type {event_type} with hash {hash} ({hash_data})"
+                    " with period type {period_type}".format(
+                        event_type=event_type,
+                        period_type=EventPeriod.BEGIN.value,
+                        hash_data=kwargs,
+                        hash=continuous_hash,
+                    ),
+            severity=Severity.DEBUG
+        ).publish_or_dump()
 
     for event in SCYLLA_DATABASE_CONTINUOUS_EVENTS:
         mapping.append(ScyllaServerEventPatternFuncs(pattern=re.compile(event.begin_pattern),

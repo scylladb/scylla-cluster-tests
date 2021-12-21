@@ -40,11 +40,10 @@ class ClusterHealthValidatorEvent(ContinuousEvent):
                  message: Optional[str] = None,
                  error: Optional[str] = None,
                  severity=Severity.NORMAL) -> None:
-        super().__init__(severity=severity)
-
         self.node = str(node) if node else ""
         self.error = error if error else ""
         self.message = message if message else ""
+        super().__init__(severity=severity)
 
     @property
     def msgfmt(self) -> str:

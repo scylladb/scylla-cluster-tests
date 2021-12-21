@@ -165,13 +165,11 @@ class PrometheusAlertManagerListener(threading.Thread):
 
     def _publish_new_alerts(self, alerts: dict):  # pylint: disable=no-self-use
         for alert in alerts.values():
-            new_event = PrometheusAlertManagerEvent(raw_alert=alert)
-            new_event.begin_event()
+            PrometheusAlertManagerEvent(raw_alert=alert).begin_event()
 
     def _publish_end_of_alerts(self, alerts: dict):
         all_alerts = self._get_alerts()
         updated_dict = {}
-        event_filter = self.event_registry.get_registry_filter()
         if all_alerts:
             for alert in all_alerts:
                 fingerprint = alert.get('fingerprint', None)
@@ -186,24 +184,19 @@ class PrometheusAlertManagerListener(threading.Thread):
             alert_name = labels.get("alertname", "")
             node = labels.get("instance", "N/A")
 
-            event_filter.filter_by_attr(base="PrometheusAlertManagerEvent",
-                                        node=node, starts_at=alert.get("startsAt"),
-                                        alert_name=alert_name, period_type=EventPeriod.BEGIN.value)
+            continuous_hash = PrometheusAlertManagerEvent.get_continuous_hash_from_dict({
+                'node': node,
+                'starts_at': alert.get("startsAt"),
+                'alert_name': alert_name
+            })
 
-            begun_events = event_filter.get_filtered()
-            if not begun_events:
-                new_event = PrometheusAlertManagerEvent(raw_alert=alert)
-                new_event.period_type = EventPeriod.INFORMATIONAL.value
-                new_event.end_event()
-                return
+            if begin_event := self.event_registry.find_continuous_event_by_hash(continuous_hash):
+                begin_event.end_event()
+                continue
 
-            if len(begun_events) > 1:
-                LOGGER.debug("Found %s events of type '%s' started at %s with period %s. "
-                             "Will apply the function to most recent event by default.",
-                             len(begun_events), alert_name, alert.get("startsAt"), EventPeriod.BEGIN.value)
-
-            event = begun_events[-1]
-            event.end_event()
+            new_event = PrometheusAlertManagerEvent(raw_alert=alert)
+            new_event.period_type = EventPeriod.INFORMATIONAL.value
+            new_event.end_event()
 
     def run(self):
         self.wait_till_alert_manager_up()

@@ -15,8 +15,7 @@ from __future__ import annotations
 import logging
 import time
 import traceback
-import uuid
-from typing import Optional, List, Union, Type, Any
+from typing import Optional, List, Iterable, Any
 
 from dateutil.relativedelta import relativedelta
 
@@ -33,84 +32,32 @@ class ContinuousEventRegistryException(BaseException):
 
 class ContinuousEventsRegistry(metaclass=Singleton):
     def __init__(self):
-        self._continuous_events: List[ContinuousEvent] = []
+        self.hashed_continuous_events: dict[int, ContinuousEvent] = {}
 
     @property
-    def continuous_events(self):
-        return self._continuous_events
+    def continuous_events(self) -> Iterable[ContinuousEvent]:
+        return self.hashed_continuous_events.values()
 
     def add_event(self, event: ContinuousEvent):
         if not issubclass(type(event), ContinuousEvent):
             msg = f"Event: {event} is not a ContinuousEvent"
             raise ContinuousEventRegistryException(msg)
 
-        if self._find_event_by_id(event.event_id):
-            msg = f"Event with id: {event.event_id} is already present. Event ids in the registry must be unique."
-            raise ContinuousEventRegistryException(msg)
-
-        self.continuous_events.append(event)
+        if present_event := self.hashed_continuous_events.get(event.continuous_hash):
+            LOGGER.debug(
+                'Continues event %s with hash %s (%s) is getting replaced with another event %s',
+                present_event,
+                event.continuous_hash,
+                event.continuous_hash_dict,
+                event,
+            )
+        self.hashed_continuous_events[event.continuous_hash] = event
 
     def del_event(self, event: ContinuousEvent):
-        if event in self.continuous_events:
-            self.continuous_events.remove(event)
+        self.hashed_continuous_events.pop(event.continuous_hash, None)
 
-    def get_event_by_id(self, event_id: Union[uuid.UUID, str]) -> Optional[ContinuousEvent]:
-        found_events = self._find_event_by_id(event_id)
-
-        if not found_events:
-            LOGGER.warning("Couldn't find continuous event with id: {event_id} in registry.".format(event_id=event_id))
-
-            return None
-
-        return found_events[0]
-
-    def get_events_by_type(self, event_type: Type[ContinuousEvent]) -> List[ContinuousEvent]:
-        event_filter = self.get_registry_filter()
-        found_events = event_filter \
-            .filter_by_type(event_type=event_type) \
-            .get_filtered()
-
-        if not found_events:
-            LOGGER.warning("No continuous events of type: {event_type} found in registry."
-                           .format(event_type=event_type))
-
-        return found_events
-
-    def get_events_by_period(self,
-                             period_type: EventPeriod) -> List[ContinuousEvent]:
-        event_filter = self.get_registry_filter()
-        found_events = event_filter \
-            .filter_by_period(period_type=period_type.value) \
-            .get_filtered()
-
-        if not found_events:
-            LOGGER.warning("No continuous events with period type: {period_type} found in registry."
-                           .format(period_type=period_type))
-
-        return found_events
-
-    def get_events_by_node(self, node: str) -> List[ContinuousEvent]:
-        event_filter = self.get_registry_filter()
-        found_events = event_filter \
-            .filter_by_node(node=node) \
-            .get_filtered()
-
-        if not found_events:
-            LOGGER.warning("No continuous event with associated with node: {node_name} found in registry"
-                           .format(node_name=node))
-
-        return found_events
-
-    def get_registry_filter(self) -> ContinuousRegistryFilter:
-        registry_filter = ContinuousRegistryFilter(registry=self.continuous_events)
-
-        return registry_filter
-
-    def _find_event_by_id(self, event_id: Union[uuid.UUID, str]) -> List[ContinuousEvent]:
-        event_filter = self.get_registry_filter()
-        found_events = event_filter.filter_by_id(event_id).get_filtered()
-
-        return found_events
+    def find_continuous_event_by_hash(self, continuous_hash: int) -> ContinuousEvent | None:
+        return self.hashed_continuous_events.get(continuous_hash, None)
 
 
 # pylint: disable=too-many-instance-attributes
@@ -118,25 +65,42 @@ class ContinuousEvent(SctEvent, abstract=True):
     # Event filter does not create object of the class (not initialize it), so "_duration" attribute should
     # exist without initialization
     _duration: Optional[int] = None
+    continuous_hash_fields: tuple[str] = ('event_id',)
+    log_file_name: str = None
 
     def __init__(self,
                  severity: Severity = Severity.UNKNOWN,
-                 publish_event: bool = True):
+                 publish_event: bool = True, errors: list[str] = None):
         super().__init__(severity=severity)
-        self.log_file_name = None
-        self.errors = []
+        self.errors = errors if errors else []
         self.publish_event = publish_event
         self._ready_to_publish = publish_event
         self.begin_timestamp = None
         self.end_timestamp = None
         self.is_skipped = False
         self.skip_reason = ""
-        self._continuous_event_registry = ContinuousEventsRegistry()
-        self.register_event()
+
+    @property
+    def continuous_hash(self):
+        """Returns hash that is used to find similar events, i.e. related start event"""
+        return hash(self.continuous_hash_tuple)
+
+    @classmethod
+    def get_continuous_hash_from_dict(cls, data: dict):
+        if "shard" in data:
+            data["shard"] = int(data["shard"])
+        return hash(tuple(data.get(attr_name) for attr_name in cls.continuous_hash_fields))
+
+    @property
+    def continuous_hash_tuple(self) -> tuple[Any | None]:
+        return tuple(getattr(self, attr_name, None) for attr_name in self.continuous_hash_fields)
+
+    @property
+    def continuous_hash_dict(self) -> dict[str, str]:
+        return {attr_name: getattr(self, attr_name, None) for attr_name in self.continuous_hash_fields}
 
     def __enter__(self):
-        event = self.begin_event()
-        return event
+        return self.begin_event()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_tb is not None:
@@ -164,7 +128,7 @@ class ContinuousEvent(SctEvent, abstract=True):
 
     @property
     def errors_formatted(self):
-        return "\n".join(self.errors) if self.errors is not None else ""
+        return "\n".join(self.errors) if self.errors else ""
 
     @property
     def duration(self):
@@ -199,19 +163,21 @@ class ContinuousEvent(SctEvent, abstract=True):
         return duration
 
     # TODO: rename function to "begin" after the refactor will be done
-    def begin_event(self) -> ContinuousEvent:
+    def begin_event(self, publish: bool = True) -> ContinuousEvent:
         self.begin_timestamp = self.event_timestamp = time.time()
         self.period_type = EventPeriod.BEGIN.value
-        if self.publish_event:
+        ContinuousEventsRegistry().add_event(self)
+        if publish and self.publish_event:
             self._ready_to_publish = True
             self.publish()
         return self
 
     # TODO: rename function to "end" after the refactor will be done
-    def end_event(self) -> None:
+    def end_event(self, publish: bool = True) -> None:
         self.end_timestamp = self.event_timestamp = time.time()
         self.period_type = EventPeriod.END.value
-        if self.publish_event:
+        ContinuousEventsRegistry().del_event(self)
+        if publish and self.publish_event:
             self._ready_to_publish = True
             self.publish()
 
@@ -230,69 +196,8 @@ class ContinuousEvent(SctEvent, abstract=True):
             self._ready_to_publish = True
             self.publish()
 
-    def register_event(self):
-        self._continuous_event_registry.add_event(self)
-
-    def unregister_event(self):
-        self._continuous_event_registry.del_event(self)
-
     def publish(self, warn_not_ready: bool = True) -> None:
         super().publish(warn_not_ready=warn_not_ready)
-        if self.period_type == EventPeriod.END.value:
-            self.unregister_event()
 
     def publish_or_dump(self, default_logger: Optional[logging.Logger] = None, warn_not_ready: bool = True) -> None:
         super().publish_or_dump(default_logger=default_logger, warn_not_ready=warn_not_ready)
-        if self.period_type == EventPeriod.END.value:
-            self.unregister_event()
-
-
-class ContinuousRegistryFilter:
-    def __init__(self, registry: List[Any]):
-        self._registry = registry
-        self._output = registry.copy()
-
-    def filter_by_id(self, event_id: str) -> ContinuousRegistryFilter:
-        self._output = [event for event in self._output if event.event_id == event_id]
-
-        return self
-
-    def filter_by_node(self, node: str) -> ContinuousRegistryFilter:
-        self._output = [item for item in self._output if getattr(item, 'node', None) == node]
-        return self
-
-    def filter_by_type(self, event_type: Type[ContinuousEvent]) -> ContinuousRegistryFilter:
-        self._output = [item for item in self._output if isinstance(item, event_type)]
-
-        return self
-
-    def filter_by_period(self, period_type: EventPeriod) -> ContinuousRegistryFilter:
-        self._output = [item for item in self._output if item.period_type == period_type]
-
-        return self
-
-    def filter_by_shard(self, shard: int) -> ContinuousRegistryFilter:
-        self._output = [item for item in self._output if item.shard == shard]
-
-        return self
-
-    def filter_by_attr(self, **kwargs) -> ContinuousRegistryFilter:
-        output = []
-        for event in self._output:
-            selected = False
-            for attr, value in kwargs.items():
-                if getattr(event, attr, None) == value:
-                    selected = True
-                else:
-                    selected = False
-                    break
-
-            if selected:
-                output.append(event)
-
-        self._output = output
-
-        return self
-
-    def get_filtered(self) -> List[Any]:
-        return self._output

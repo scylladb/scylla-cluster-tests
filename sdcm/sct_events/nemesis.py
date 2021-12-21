@@ -20,12 +20,11 @@ class DisruptionEvent(ContinuousEvent):
                  node,
                  severity=Severity.NORMAL,
                  publish_event=True):  # pylint: disable=redefined-builtin,too-many-arguments
-        super().__init__(severity=severity, publish_event=publish_event)
-
         self.nemesis_name = nemesis_name
         self.node = str(node)
         self.duration = None
         self.full_traceback = ""
+        super().__init__(severity=severity, publish_event=publish_event)
 
     @property
     def msgfmt(self) -> str:
