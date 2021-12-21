@@ -2076,6 +2076,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B
                     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
                     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5e08fbd8b5d6ec9c
+                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys d0a112e067426ab2
                     # add-apt-repository -y ppa:scylladb/ppa
                     # apt-get update
                 """)
@@ -2111,6 +2112,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-stretch/Debian_9.0/Release.key
                     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
                     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5E08FBD8B5D6EC9C
+                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys d0a112e067426ab2
                     echo 'deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-stretch/Debian_9.0/ /' > /etc/apt/sources.list.d/scylla-3rdparty.list
                 """)
                 self.remoter.run('sudo bash -cxe "%s"' % install_debian_9_prereqs)
@@ -2122,6 +2124,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     apt-get install gnupg1-curl dirmngr -y
                     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
                     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5E08FBD8B5D6EC9C
+                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys d0a112e067426ab2
                     curl https://adoptopenjdk.jfrog.io/adoptopenjdk/api/gpg/key/public | sudo apt-key add -
                     apt-get install software-properties-common -y
                     add-apt-repository --yes https://adoptopenjdk.jfrog.io/adoptopenjdk/deb/
@@ -2397,6 +2400,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.sudo('apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B', retry=3)
             self.remoter.sudo('apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19', retry=3)
             self.remoter.sudo('apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5E08FBD8B5D6EC9C', retry=3)
+            self.remoter.sudo('apt-key adv --keyserver keyserver.ubuntu.com --recv-keys d0a112e067426ab2', retry=3)
         else:
             raise ValueError(f"Unsupported Linux distribution: {self.distro}")
 
@@ -4653,6 +4657,7 @@ class BaseLoaderSet():
             node.remoter.sudo(shell_script_cmd("""\
                 apt-get update
                 apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5E08FBD8B5D6EC9C
+                apt-key adv --keyserver keyserver.ubuntu.com --recv-keys d0a112e067426ab2
                 apt-get install -y openjdk-11-jre openjdk-11-jre-headless
             """))
 
