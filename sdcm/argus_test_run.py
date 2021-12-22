@@ -37,14 +37,24 @@ class ArgusTestRunError(Exception):
     pass
 
 
+def _get_node_amounts(config: SCTConfiguration) -> tuple[int, int]:
+    num_db_node = config.get("n_db_nodes")
+    num_db_node = sum([int(i) for i in num_db_node.split()]) if isinstance(num_db_node, str) else num_db_node
+    num_loaders = config.get("n_loaders")
+    num_loaders = sum([int(i) for i in num_loaders.split()]) if isinstance(num_loaders, str) else num_loaders
+
+    return num_db_node, num_loaders
+
+
 def _prepare_aws_resource_setup(sct_config: SCTConfiguration):
+    num_db_nodes, n_loaders = _get_node_amounts(sct_config)
     db_node_setup = CloudNodesInfo(image_id=sct_config.get("ami_id_db_scylla"),
                                    instance_type=sct_config.get("instance_type_db"),
-                                   node_amount=sct_config.get("n_db_nodes"),
+                                   node_amount=num_db_nodes,
                                    post_behaviour=sct_config.get("post_behavior_db_nodes"))
     loader_node_setup = CloudNodesInfo(image_id=sct_config.get("ami_id_loader"),
                                        instance_type=sct_config.get("instance_type_loader"),
-                                       node_amount=sct_config.get("n_loaders"),
+                                       node_amount=n_loaders,
                                        post_behaviour=sct_config.get("post_behavior_loader_nodes"))
     monitor_node_setup = CloudNodesInfo(image_id=sct_config.get("ami_id_monitor"),
                                         instance_type=sct_config.get("instance_type_monitor"),
@@ -57,13 +67,14 @@ def _prepare_aws_resource_setup(sct_config: SCTConfiguration):
 
 
 def _prepare_gce_resource_setup(sct_config: SCTConfiguration):
+    num_db_nodes, n_loaders = _get_node_amounts(sct_config)
     db_node_setup = CloudNodesInfo(image_id=sct_config.get("gce_image_db"),
                                    instance_type=sct_config.get("gce_instance_type_db"),
-                                   node_amount=sct_config.get("n_db_nodes"),
+                                   node_amount=num_db_nodes,
                                    post_behaviour=sct_config.get("post_behavior_db_nodes"))
     loader_node_setup = CloudNodesInfo(image_id=sct_config.get("gce_image_loader"),
                                        instance_type=sct_config.get("gce_instance_type_loader"),
-                                       node_amount=sct_config.get("n_loaders"),
+                                       node_amount=n_loaders,
                                        post_behaviour=sct_config.get("post_behavior_loader_nodes"))
     monitor_node_setup = CloudNodesInfo(image_id=sct_config.get("gce_image_monitor"),
                                         instance_type=sct_config.get("gce_instance_type_monitor"),
