@@ -99,9 +99,9 @@ CassandraStressEvent: CRITICAL
 GeminiStressEvent: CRITICAL
 ScyllaServerStatusEvent: NORMAL
 BootstrapEvent: NORMAL
-RepairEvent: DEBUG
+RepairEvent: NORMAL
 JMXServiceEvent: NORMAL
 InstanceStatusEvent.STARTUP: WARNING
 InstanceStatusEvent.REBOOT: WARNING
 InstanceStatusEvent.POWER_OFF: WARNING
-CompactionEvent: DEBUG
+CompactionEvent: NORMAL
