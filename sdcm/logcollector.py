@@ -742,9 +742,14 @@ class LogCollector:
     def update_db_info(self):
         pass
 
-    @staticmethod
-    def archive_to_tarfile(src_path: str) -> str:
+    def archive_to_tarfile(self, src_path: str, add_test_id_to_archive: bool = False) -> str:
         src_name = os.path.basename(src_path)
+        if add_test_id_to_archive:
+            # Add test_id to the archive name when archive is created per log file, like: sct.log, email_data.json
+            extension = f".{src_name.split('.')[-1]}"
+            if extension in ['.log', '.json']:
+                src_name = src_name.replace(extension, f"-{self.test_id.split('-')[0]}{extension}")
+
         archive_name = f"{src_name}.tar.gz"
         try:
             with tarfile.open(archive_name, "w:gz") as tar:
@@ -946,7 +951,7 @@ class SCTLogCollector(LogCollector):
             s3_links = self.create_single_archive_and_upload()
         else:
             LOGGER.info("SCT log files are too big, uploading them separately")
-            s3_links = self.create_achive_per_file_and_upload()
+            s3_links = self.create_archive_per_file_and_upload()
 
         return s3_links
 
@@ -972,13 +977,13 @@ class SCTLogCollector(LogCollector):
         remove_files(final_archive)
         return [s3_link]
 
-    def create_achive_per_file_and_upload(self) -> list[str]:
+    def create_archive_per_file_and_upload(self) -> list[str]:
         s3_links = []
         for root, _, files in os.walk(self.local_dir):
             for current_file in files:
                 file_path = os.path.join(root, current_file)
                 LOGGER.info(file_path)
-                file_archive = self.archive_to_tarfile(file_path)
+                file_archive = self.archive_to_tarfile(file_path, add_test_id_to_archive=True)
                 LOGGER.info(file_archive)
                 s3_link = upload_archive_to_s3(file_archive, f"{self.test_id}/{self.current_run}")
                 s3_links.append(s3_link)
