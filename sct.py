@@ -982,7 +982,15 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
     table.align = 'l'
     for cluster_type, s3_links in collected_logs.items():
         for link in s3_links:
-            table.add_row([cluster_type, link])
+            current_cluster_type = cluster_type
+            # Cover case when archive is created per log file not all logs in one archive.
+            # Here log name is extracted from archive name. For example:
+            # for link https://cloudius-jenkins-test.s3.amazonaws.com/c63a6913-6253-45a0-b5cf-d553f713fe81/20211222_
+            # 101636/warning-c63a6913.log.tar.gz
+            #  current_cluster_type will be "warning"
+            if cluster_type == 'sct-runner' and cluster_type not in link:
+                current_cluster_type = link.split("/")[-1].split("-")[0]
+            table.add_row([current_cluster_type, link])
 
     click.echo(table.get_string(title="Collected logs by test-id: {}".format(collector.test_id)))
     store_logs_in_argus(test_id=UUID(collector.test_id), logs=collected_logs)
