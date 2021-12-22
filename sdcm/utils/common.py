@@ -259,7 +259,7 @@ def get_latest_gemini_version():
 
 
 def list_logs_by_test_id(test_id):
-    log_types = ['db-cluster', 'monitor-set', 'loader-set', 'sct-runner', 'jepsen-data', 'siren-manager-set',
+    log_types = ['db-cluster', 'monitor-set', 'loader-set', 'sct', 'jepsen-data', 'siren-manager-set',
                  'prometheus', 'grafana', 'kubernetes', 'job', 'monitoring_data_stack', 'event', 'output', 'error',
                  'summary', 'warning', 'critical', 'normal', 'debug', 'left_processes', 'email_data']
 
