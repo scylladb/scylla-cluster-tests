@@ -345,7 +345,7 @@ if [[ -n "${AWS_MOCK}" ]]; then
 fi
 
 if [[ -z "${HYDRA_HELP}" ]]; then
-    PREPARE_CMD+="; ${WORK_DIR}/get-qa-ssh-keys.sh; ${WORK_DIR}/install_argus.sh"
+    PREPARE_CMD+="; ${WORK_DIR}/get-qa-ssh-keys.sh"
 fi
 
 COMMAND=${HYDRA_COMMAND[0]}
