@@ -1,19 +1,22 @@
 test_duration: 210
 bench_run: true
 
+stress_cmd: ["scylla-bench -workload=timeseries -mode=write -replication-factor=3 -partition-count=400 -clustering-row-count=10000000 -clustering-row-size=200 -concurrency=100 -rows-per-request=100  -connection-count 100 -max-rate 50000 --timeout 120s -duration=170m"]
+stress_read_cmd: [
+    "scylla-bench -workload=timeseries -mode=read -partition-count=20000 -concurrency=100 -replication-factor=3 -clustering-row-count=10000000 -clustering-row-size=200  -rows-per-request=100 -start-timestamp=SCT_TIME -write-rate 125 -duration=10m -distribution hnormal --connection-count 100 -duration=170m",
+    "scylla-bench -workload=timeseries -mode=read -partition-count=20000 -concurrency=100 -replication-factor=3 -clustering-row-count=10000000 -clustering-row-size=200  -rows-per-request=100 -start-timestamp=SCT_TIME -write-rate 125 -duration=10m -distribution uniform --connection-count 100 -duration=170m"
+    ]
 
-stress_cmd: ["scylla-bench -workload=timeseries -mode=write -replication-factor=3 -partition-count=20000 -clustering-row-count=9999999000000 -clustering-row-size=200 -concurrency=30 -max-rate=60000 -rows-per-request=5000 -duration=170m"]
-stress_read_cmd: ["scylla-bench -workload=timeseries -mode=read -partition-count=20000 -concurrency=48 -replication-factor=3 -write-rate=3 -clustering-row-count=9999999000000 -clustering-row-size=200  -rows-per-request=300 -provide-upper-bound -start-timestamp=SCT_TIME -duration=170m"]
-
-n_db_nodes: 3
-n_loaders: 1
+n_db_nodes: 5
+n_loaders: 3
 n_monitor_nodes: 1
 
+round_robin: true
 instance_type_db: 'i3.2xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '024'
-nemesis_interval: 5
+nemesis_interval: 15
 nemesis_during_prepare: false
 space_node_threshold: 64424
 
