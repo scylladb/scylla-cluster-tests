@@ -29,6 +29,7 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     UNKNOWN_VERB: Type[LogEventProtocol]
     BROKEN_PIPE: Type[LogEventProtocol]
     SEMAPHORE_TIME_OUT: Type[LogEventProtocol]
+    SERVICE_LEVEL_CONTROLLER: Type[LogEventProtocol]
     EMPTY_NESTED_EXCEPTION: Type[LogEventProtocol]
     DATABASE_ERROR: Type[LogEventProtocol]
     BAD_ALLOC: Type[LogEventProtocol]
@@ -72,6 +73,8 @@ DatabaseLogEvent.add_subevent_type("BROKEN_PIPE", severity=Severity.WARNING,
                                    regex="cql_server - exception while processing connection:.*Broken pipe")
 DatabaseLogEvent.add_subevent_type("SEMAPHORE_TIME_OUT", severity=Severity.WARNING,
                                    regex="semaphore_timed_out")
+DatabaseLogEvent.add_subevent_type("SERVICE_LEVEL_CONTROLLER", severity=Severity.WARNING,
+                                   regex="Operation timed out for system_distributed.service_levels")
 DatabaseLogEvent.add_subevent_type("EMPTY_NESTED_EXCEPTION", severity=Severity.WARNING,
                                    regex=r"cql_server - exception while processing connection: "
                                          r"seastar::nested_exception \(seastar::nested_exception\)$")
@@ -112,6 +115,7 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.UNKNOWN_VERB(),
     DatabaseLogEvent.BROKEN_PIPE(),
     DatabaseLogEvent.SEMAPHORE_TIME_OUT(),
+    DatabaseLogEvent.SERVICE_LEVEL_CONTROLLER(),
     DatabaseLogEvent.EMPTY_NESTED_EXCEPTION(),
     DatabaseLogEvent.DATABASE_ERROR(),
     DatabaseLogEvent.BAD_ALLOC(),
