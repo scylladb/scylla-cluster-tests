@@ -153,6 +153,7 @@ class GcloudContainerMixin:
         credentials = KeyStore().get_gcp_credentials()
         credentials["client_email"] = f"{credentials['project_id']}@appspot.gserviceaccount.com"
         shell_command = f"umask 077 && echo '{json.dumps(credentials)}' > /tmp/gcloud_svc_account.json"
+        shell_command += " && echo 'kubeletConfig:\n  cpuManagerPolicy: static' > /tmp/system_config.yaml"
         res = container.exec_run(["sh", "-c", shell_command])
         if res.exit_code:
             raise DockerException(f"{container}: {res.output.decode('utf-8')}")
