@@ -1,16 +1,16 @@
-prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=209 -schema 'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3,eu-west-2scylla_node_west=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=8 -pop seq=1..209 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20900 -schema 'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=8 -pop seq=1..20900 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
 
-stress_cmd: ["cassandra-stress read cl=LOCAL_QUORUM duration=20m -port jmx=6868 -mode cql3 native -rate threads=8 -pop seq=1..209 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
-             "cassandra-stress write cl=LOCAL_QUORUM duration=20m -port jmx=6868 -mode cql3 native -rate threads=8 -pop seq=1..209 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+stress_cmd: ["cassandra-stress read cl=LOCAL_QUORUM duration=20m -port jmx=6868 -mode cql3 native -rate threads=8 -pop seq=1..20900 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+             "cassandra-stress write cl=LOCAL_QUORUM duration=20m -port jmx=6868 -mode cql3 native -rate threads=8 -pop seq=1..20900 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
              ]
-verify_data_after_entire_test: "cassandra-stress read cl=LOCAL_ONE n=209 -port jmx=6868 -mode cql3 native -rate threads=8 -pop seq=1..209 -col 'n=FIXED(10) size=FIXED(512)' -node {new_node.ip_address} -log interval=5"
+verify_data_after_entire_test: "cassandra-stress read cl=LOCAL_ONE n=20900 -port jmx=6868 -mode cql3 native -rate threads=8 -pop seq=1..20900 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
 
-n_db_nodes: 3 3 0  # make n_db_nodes configured as multi-dc with last dc set to 0 (so later easily new node can be added)
-region_name: 'eu-west-1 eu-west-2 eu-north-1'
+n_db_nodes: 3 0  # make n_db_nodes configured as multi-dc with last dc set to 0 (so later easily new node can be added)
+region_name: 'eu-west-1 eu-west-2'
 n_loaders: 1
 n_monitor_nodes: 1
 
 instance_type_db: 'i3.xlarge'
-seeds_num: 4
+seeds_num: 3
 
 user_prefix: 'add-new-dc'
