@@ -1076,17 +1076,19 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         assert len(services) == 1, "Doesn't support multi DC setup for `k8s-gke' backend"
 
         services, gce_datacenter = list(services.values()), list(services.keys())
-        self.k8s_cluster = gke.GkeCluster(gke_cluster_version=self.params.get("gke_cluster_version"),
-                                          gke_k8s_release_channel=self.params.get("gke_k8s_release_channel"),
-                                          gce_image_type=self.params.get("gce_root_disk_type_db"),
-                                          gce_image_size=self.params.get("gce_root_disk_size_db"),
-                                          gce_network=self.params.get("gce_network"),
-                                          services=services,
-                                          user_prefix=self.params.get("user_prefix"),
-                                          gce_instance_type='n1-standard-2',
-                                          n_nodes=2,
-                                          params=self.params,
-                                          gce_datacenter=gce_datacenter)
+        self.k8s_cluster = gke.GkeCluster(
+            gke_cluster_version=self.params.get("gke_cluster_version"),
+            gke_k8s_release_channel=self.params.get("gke_k8s_release_channel"),
+            gce_disk_size=self.params.get("gce_root_disk_size_db"),
+            gce_disk_type=self.params.get("gce_root_disk_type_db"),
+            gce_network=self.params.get("gce_network"),
+            services=services,
+            user_prefix=self.params.get("user_prefix"),
+            gce_instance_type='n1-standard-2',
+            n_nodes=2,
+            params=self.params,
+            gce_datacenter=gce_datacenter,
+        )
         self.k8s_cluster.deploy()
 
         # NOTE: between GKE cluster creation and addition of new node pools we need
