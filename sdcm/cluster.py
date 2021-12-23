@@ -4392,6 +4392,7 @@ class BaseLoaderSet():
         self.params = params
         self._gemini_version = None
         self._gemini_base_path = None
+        self.sb_write_timeseries_ts = None
 
     @property
     def gemini_version(self):
