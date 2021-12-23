@@ -146,8 +146,8 @@ class GkeCluster(KubernetesCluster):
     def __init__(self,
                  gke_cluster_version,
                  gke_k8s_release_channel,
-                 gce_image_type,
-                 gce_image_size,
+                 gce_disk_size,
+                 gce_disk_type,
                  gce_network,
                  services,
                  gce_instance_type='n1-standard-2',
@@ -164,8 +164,8 @@ class GkeCluster(KubernetesCluster):
         )
         self.gke_cluster_version = gke_cluster_version
         self.gke_k8s_release_channel = gke_k8s_release_channel.strip()
-        self.gce_image_type = gce_image_type
-        self.gce_image_size = gce_image_size
+        self.gce_disk_type = gce_disk_type
+        self.gce_disk_size = gce_disk_size
         self.gce_network = gce_network
         self.gce_services = services
         self.gce_instance_type = gce_instance_type
@@ -218,8 +218,8 @@ class GkeCluster(KubernetesCluster):
                        f" --num-nodes {self.n_nodes}"
                        f" --machine-type {self.gce_instance_type}"
                        f" --image-type UBUNTU"
-                       f" --disk-type {self.gce_image_type}"
-                       f" --disk-size {self.gce_image_size}"
+                       f" --disk-type {self.gce_disk_type}"
+                       f" --disk-size {self.gce_disk_size}"
                        f" --enable-stackdriver-kubernetes"
                        f"{'' if self.gke_k8s_release_channel else ' --no-enable-autoupgrade'}"
                        f"{'' if self.gke_k8s_release_channel else ' --no-enable-autorepair'}"
@@ -228,8 +228,8 @@ class GkeCluster(KubernetesCluster):
             self.deploy_node_pool(GkeNodePool(
                 name=self.AUXILIARY_POOL_NAME,
                 num_nodes=self.n_nodes,
-                disk_size=self.gce_image_size,
-                disk_type=self.gce_image_type,
+                disk_size=self.gce_disk_size,
+                disk_type=self.gce_disk_type,
                 k8s_cluster=self,
                 instance_type=self.gce_instance_type,
                 is_deployed=True
