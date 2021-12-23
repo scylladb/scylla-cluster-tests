@@ -71,12 +71,14 @@ class GkeNodePool(CloudK8sNodePool):
 
     @property
     def _deploy_cmd(self) -> str:
+        # NOTE: '/tmp/system_config.yaml' file gets created on the gcloud container start up.
         cmd = [f"container --project {self.gce_project} node-pools create {self.name}",
                f"--zone {self.gce_zone}",
                f"--cluster {self.k8s_cluster.short_cluster_name}",
                f"--num-nodes {self.num_nodes}",
                f"--machine-type {self.instance_type}",
                f"--image-type {self.image_type}",
+               "--system-config-from-file /tmp/system_config.yaml",
                ]
         if not self.k8s_cluster.gke_k8s_release_channel:
             # NOTE: only static K8S release channel supports disabling of autoupgrade
@@ -185,7 +187,6 @@ class GkeCluster(KubernetesCluster):
     @cached_property
     def allowed_labels_on_scylla_node(self) -> list:
         allowed_labels_on_scylla_node = [
-            ('name', 'cpu-policy'),
             ('app', 'local-volume-provisioner'),
             ('name', 'raid-local-disks'),
             ('k8s-app', 'fluentbit-gke'),
