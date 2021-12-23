@@ -72,7 +72,7 @@ class GkeNodePool(CloudK8sNodePool):
     @property
     def _deploy_cmd(self) -> str:
         # NOTE: '/tmp/system_config.yaml' file gets created on the gcloud container start up.
-        cmd = [f"container --project {self.gce_project} node-pools create {self.name}",
+        cmd = [f"beta container --project {self.gce_project} node-pools create {self.name}",
                f"--zone {self.gce_zone}",
                f"--cluster {self.k8s_cluster.short_cluster_name}",
                f"--num-nodes {self.num_nodes}",
@@ -89,7 +89,10 @@ class GkeNodePool(CloudK8sNodePool):
         if self.disk_size:
             cmd.append(f"--disk-size {self.disk_size}")
         if self.local_ssd_count:
-            cmd.append(f"--local-ssd-count {self.local_ssd_count}")
+            # NOTE: Commands to be used:
+            # Stable API: --local-ssd-count 3
+            # Beta API  : --ephemeral-storage="local-ssd-count=3"
+            cmd.append(f"--ephemeral-storage=\"local-ssd-count={self.local_ssd_count}\"")
         if self.tags:
             cmd.append(f"--metadata {','.join(f'{key}={value}' for key, value in self.tags.items())}")
         return ' '.join(cmd)
@@ -187,8 +190,8 @@ class GkeCluster(KubernetesCluster):
     @cached_property
     def allowed_labels_on_scylla_node(self) -> list:
         allowed_labels_on_scylla_node = [
+            ('app', 'xfs-formatter'),
             ('app', 'local-volume-provisioner'),
-            ('name', 'raid-local-disks'),
             ('k8s-app', 'fluentbit-gke'),
             ('k8s-app', 'gke-metrics-agent'),
             ('component', 'kube-proxy'),

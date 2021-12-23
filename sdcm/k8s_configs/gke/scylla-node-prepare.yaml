@@ -1,96 +1,96 @@
-# Daemonset that will group NUM_DISKS disks following the pattern '/dev/ssd{i}'
-# into a raid0 array and mount that array onto RAID_DIR.
+# Daemonset that converts ephemeral-storage to xfs
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: raid-local-disks
+  name: xfs-formatter
 spec:
   selector:
     matchLabels:
-      name: raid-local-disks
+      app: xfs-formatter
   template:
     metadata:
       labels:
-        name: raid-local-disks
+        app: xfs-formatter
     spec:
+      hostPID: true
+      nodeSelector:
+        cloud.google.com/gke-nodepool: "scylla-pool"
       tolerations:
-        - key: role
-          operator: Equal
-          value: scylla-clusters
-          effect: NoSchedule
+      - key: role
+        operator: Equal
+        value: scylla-clusters
+        effect: NoSchedule
       containers:
-      - name: raid-local-disks
-        image: scylladb/raid-setup:0.1
-        env:
-          - name: RAID_DIR
-            value: "/mnt/hostfs/mnt/raid-disks/disk0"
-          - name: DISK_MNT_DIR_PREFIX
-            value: "/mnt/hostfs/mnt/disks/ssd"
-          - name: DISK_DEV_PREFIX
-            value: "/dev/sd"
-        command:
-          - "/bin/bash"
-          - "-c"
-          - "--"
-        args:
-          - |
-            set -e
-            set -x
-
-            # If the disk has already been created, sleep indefinitely
-            if [ -b "/dev/md0" ]; then
-                echo "raid array already created!"
-                sleep infinity
-            fi
-
-            # Discover how many disks there are
-            DISK_DEV_SUFFIX=(b c d e f g h i)
-            MAX_NUM_DISKS=8
-            NUM_DISKS=0
-            declare -a DISKS
-            for i in `seq 0 $((MAX_NUM_DISKS-1))`;
-            do
-                CURR_DISK="${DISK_DEV_PREFIX}${DISK_DEV_SUFFIX[$i]}"
-                if [ ! -b "$CURR_DISK" ]; then
-                  break
-                fi
-                DISKS[$i]="$CURR_DISK"
-                NUM_DISKS=$((i+1))
-            done
-
-            if [ $NUM_DISKS -eq 0 ]; then
-              echo "no local disks detected!"
-              sleep infinity
-            fi
-
-            # Unmount disks from host filesystem
-            for i in `seq 0 $((NUM_DISKS-1))`;
-            do
-                CURR_DISK=${DISKS[$i]}
-                DISCARD_FLAG_PATH="/sys/block/${CURR_DISK#'/dev/'}/queue/discard_granularity"
-                umount $CURR_DISK &> /dev/null || echo "Disk $CURR_DISK already unmounted."
-                if [ "`cat $DISCARD_FLAG_PATH`" != "0" ]; then
-                    blkdiscard $CURR_DISK || true
-                fi
-            done
-            # Waits till udev reread device data
-            udevadm settle
-            # Create a raid array
-            yes | mdadm --create /dev/md0 --force --level=0 -c1024 --raid-devices="$NUM_DISKS" "${DISKS[@]}"
-            # Waits till udev reread md0 device data
-            udevadm settle
-            # Format the raid array as xfs
-            mkfs.xfs /dev/md0
-
-            # Mount the raid array in a predefined location
-            mkdir -p $RAID_DIR
-            mount -o noatime /dev/md0 $RAID_DIR
+      - name: xfs-formatter
+        # NOTE: sha256:8948 .. fb5c33 was built on Dec 29 2021
+        #       which includes following operator PR with required changes:
+        #           https://github.com/scylladb/scylla-operator/pull/770
+        image: docker.io/scylladb/scylla-operator@sha256:894836496e1ea8f7ea9dd4e1aa55cbd6e3aa382cfdeebc474dad96a29dfb5c33
         securityContext:
           privileged: true
+        command:
+        - "/bin/bash"
+        - "-euExo"
+        - "pipefail"
+        - "-O"
+        - "inherit_errexit"
+        - "-c"
+        - |
+          cp -r /usr/local/lib/scylla-operator/gke/xfs-formatter /host/var/lib/
+
+          if [[ ! -d /host/usr/local/lib/systemd ]]; then
+            mkdir /host/usr/local/lib/systemd
+          fi
+
+          if [[ ! -d /host/usr/local/lib/systemd/system ]]; then
+            mkdir /host/usr/local/lib/systemd/system
+          fi
+
+          cp -r /usr/local/lib/scylla-operator/gke/systemd/. /host/usr/local/lib/systemd/system
+
+          if [[ ! -d /host/usr/local/lib/systemd/system/kube-node-configuration.service.d ]]; then
+            mkdir /host/usr/local/lib/systemd/system/kube-node-configuration.service.d
+          fi
+
+          cat<<-EOF > /host/usr/local/lib/systemd/system/kube-node-configuration.service.d/10-path.conf
+            [Service]
+            Environment="PATH=/var/lib/xfs-formatter/bin:$( chroot /host /bin/bash -c 'echo "${PATH}"' )"
+          EOF
+
+          if [[ ! -d /host/mnt/raid-disks ]]; then
+            mkdir /host/mnt/raid-disks
+          fi
+
+          if [[ ! -d /host/mnt/raid-disks/disk0 ]]; then
+            mkdir /host/mnt/raid-disks/disk0
+          fi
+          chmod a+w /host/mnt/raid-disks/disk0
+
+          chroot /host /bin/bash -euxo pipefail -O inherit_errexit -c '
+              systemctl daemon-reload
+              systemctl enable --now mnt-raid\\x2ddisks-disk0.mount
+              systemctl start xfs-formatter.service
+              journalctl -xeu xfs-formatter -f
+              '
         volumeMounts:
         - name: hostfs
-          mountPath: /mnt/hostfs
+          mountPath: /host
           mountPropagation: Bidirectional
+        readinessProbe:
+          exec:
+            command:
+              - "chroot"
+              - "/host"
+              - "/bin/bash"
+              - "-euExo"
+              - "pipefail"
+              - "-O"
+              - "inherit_errexit"
+              - "-c"
+              - |
+                xfs_info "$( { grep -E '/mnt/raid-disks/disk0($| )' /proc/mounts || test $? = 1; } | sed -E -e 's/([^ ]+) .+/\1/' )"
+          initialDelaySeconds: 10
+          periodSeconds: 10
       volumes:
       - name: hostfs
         hostPath:
