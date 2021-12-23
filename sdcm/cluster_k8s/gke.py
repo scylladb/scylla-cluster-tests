@@ -47,7 +47,7 @@ class GkeNodePool(CloudK8sNodePool):
             instance_type: str,
             disk_size: int = None,
             disk_type: str = None,
-            image_type: str = 'UBUNTU',
+            image_type: str = "UBUNTU_CONTAINERD",
             labels: dict = None,
             local_ssd_count: int = None,
             gce_project: str = None,
@@ -76,7 +76,7 @@ class GkeNodePool(CloudK8sNodePool):
                f"--cluster {self.k8s_cluster.short_cluster_name}",
                f"--num-nodes {self.num_nodes}",
                f"--machine-type {self.instance_type}",
-               "--image-type UBUNTU"
+               f"--image-type {self.image_type}",
                ]
         if not self.k8s_cluster.gke_k8s_release_channel:
             # NOTE: only static K8S release channel supports disabling of autoupgrade
