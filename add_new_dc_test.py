@@ -19,6 +19,7 @@ class TestAddNewDc(LongevityTest):
 
     def test_add_new_dc(self) -> None:  # pylint: disable=too-many-locals
 
+        self.log.info("Starting add new DC test...")
         assert self.params.get('n_db_nodes').endswith(" 0"), "n_db_nodes must be a list and last dc must equal 0"
         system_keyspaces = ["system_auth", "system_distributed", "system_traces"]
 
@@ -42,7 +43,7 @@ class TestAddNewDc(LongevityTest):
         )
 
         self.log.info("Running rebuild on each node in new DC")
-        new_node.run_nodetool(sub_cmd=f"rebuild -- {status.keys()[0]}", publish_event=True)
+        new_node.run_nodetool(sub_cmd=f"rebuild -- {list(status.keys())[0]}", publish_event=True)
 
         self.log.info("Running repair on all nodes")
         for node in self.db_cluster.nodes:
@@ -82,14 +83,14 @@ class TestAddNewDc(LongevityTest):
 
     def add_node_in_new_dc(self) -> BaseNode:
         self.log.info("Adding new node")
-        new_node = self.db_cluster.add_nodes(1, dc_idx=2, enable_auto_bootstrap=True)[0]  # add node
+        new_node = self.db_cluster.add_nodes(1, dc_idx=1, enable_auto_bootstrap=True)[0]  # add node
         self.db_cluster.wait_for_init(node_list=[new_node], timeout=900,
                                       check_node_health=False)
         self.db_cluster.wait_for_nodes_up_and_normal(nodes=[new_node])
         self.monitors.reconfigure_scylla_monitoring()
 
         status = self.db_cluster.get_nodetool_status()
-        assert len(status.keys()) == 3, f"new datacenter was not registered. Cluster status: {status}"
+        assert len(status.keys()) == 2, f"new datacenter was not registered. Cluster status: {status}"
         self.log.info("New DC to cluster has been added")
         return new_node
 
