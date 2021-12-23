@@ -17,6 +17,7 @@ import uuid
 import time
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from enum import Enum
 
 from sdcm.loader import ScyllaBenchStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
@@ -24,9 +25,24 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.loaders import ScyllaBenchEvent, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS
 from sdcm.utils.common import FileFollowerThread, generate_random_string, convert_metric_to_ms
 from sdcm.stress_thread import format_stress_cmd_error
+from sdcm.wait import wait_for
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+class ScyllaBenchModes(Enum):
+    WRITE = "write"
+    READ = "read"
+    COUNTER_UPDATE = "counter_update"
+    COUNTER_READ = "counter_read"
+    SCAN = "scan"
+
+
+class ScyllaBenchWorkloads(Enum):
+    UNIFORM = "uniform"
+    TIMESERIES = "timeseries"
+    SEQUENTIAL = "sequential"
 
 
 class ScyllaBenchStressEventsPublisher(FileFollowerThread):
@@ -106,6 +122,12 @@ class ScyllaBenchThread:  # pylint: disable=too-many-instance-attributes
         self.results_futures = []
         self.shell_marker = generate_random_string(20)
         self.max_workers = 0
+        # Find stress mode:
+        #    "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100"
+        #    "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=100"
+        self.sb_mode: ScyllaBenchModes = ScyllaBenchModes(re.search(r"-mode=(.+?) ", stress_cmd).group(1))
+        self.sb_workload: ScyllaBenchWorkloads = ScyllaBenchWorkloads(
+            re.search(r"-workload=(.+?) ", stress_cmd).group(1))
 
     def verify_results(self):
         sb_summary = []
@@ -131,9 +153,23 @@ class ScyllaBenchThread:  # pylint: disable=too-many-instance-attributes
         return sb_summary, errors
 
     def _run_stress_bench(self, node, loader_idx, stress_cmd, node_list):
-        read_gap = 480  # reads starts after write, read can look before start read time to current time using several sstables
-        stress_cmd = re.sub(r"SCT_TIME", f"{int(time.time()) - read_gap}", stress_cmd)
-        LOGGER.debug("replaced stress command %s", stress_cmd)
+        if self.sb_mode == ScyllaBenchModes.WRITE and self.sb_workload == ScyllaBenchWorkloads.TIMESERIES:
+            node.parent_cluster.sb_write_timeseries_ts = write_timestamp = time.time_ns()
+            LOGGER.debug("Set start-time: %s", write_timestamp)
+            stress_cmd = re.sub(r"SET_WRITE_TIMESTAMP", f"{write_timestamp}", stress_cmd)
+            LOGGER.debug("Replaced stress command: %s", stress_cmd)
+
+        elif self.sb_mode == ScyllaBenchModes.READ and self.sb_workload == ScyllaBenchWorkloads.TIMESERIES:
+            write_timestamp = wait_for(lambda: node.parent_cluster.sb_write_timeseries_ts,
+                                       step=5,
+                                       timeout=30,
+                                       text='Waiting for "scylla-bench -workload=timeseries -mode=write" been started, to pick up timestamp'
+                                       )
+            LOGGER.debug("Found write timestamp %s", write_timestamp)
+            stress_cmd = re.sub(r"GET_WRITE_TIMESTAMP", f"{write_timestamp}", stress_cmd)
+            LOGGER.debug("replaced stress command %s", stress_cmd)
+        else:
+            LOGGER.debug("Scylla bench command: %s", stress_cmd)
 
         os.makedirs(node.logdir, exist_ok=True)
 
@@ -141,15 +177,9 @@ class ScyllaBenchThread:  # pylint: disable=too-many-instance-attributes
         # Select first seed node to send the scylla-bench cmds
         ips = node_list[0].ip_address
 
-        # Find stress mode:
-        #    "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100"
-        #    "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=100"
-        found = re.search(r"-mode=(.+?) ", stress_cmd)
-        stress_cmd_opt = found.group(1)
-
         with ScyllaBenchStressExporter(instance_name=node.ip_address,
                                        metrics=nemesis_metrics_obj(),
-                                       stress_operation=stress_cmd_opt,
+                                       stress_operation=self.sb_mode,
                                        stress_log_filename=log_file_name,
                                        loader_idx=loader_idx), \
                 ScyllaBenchStressEventsPublisher(node=node, sb_log_filename=log_file_name) as publisher, \

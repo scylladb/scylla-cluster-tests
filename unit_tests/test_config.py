@@ -443,6 +443,43 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
         self.assertIn("'oracle_scylla_version' and 'ami_id_db_oracle' can't used together", str(context.exception))
 
+    def test_17_verify_scylla_bench_required_parameters_in_command(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_STRESS_CMD'] = "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100"
+        os.environ["SCT_STRESS_READ_CMD"] = "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=100"
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+        self.assertEqual(conf["stress_cmd"], [os.environ['SCT_STRESS_CMD']])
+        self.assertEqual(conf["stress_read_cmd"], [os.environ["SCT_STRESS_READ_CMD"]])
+
+    def test_17_1_raise_error_if_scylla_bench_command_dont_have_workload(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_STRESS_CMD'] = "scylla-bench -mode=write -replication-factor=3 -partition-count=100"
+        os.environ["SCT_STRESS_READ_CMD"] = "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=100"
+
+        err_msg = f"Scylla-bench command {os.environ['SCT_STRESS_CMD']} doesn't have parameter -workload"
+
+        with self.assertRaises(ValueError) as context:
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
+
+        self.assertIn(err_msg, str(context.exception))
+
+    def test_17_2_raise_error_if_scylla_bench_command_dont_have_mode(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_STRESS_CMD'] = "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100"
+        os.environ["SCT_STRESS_READ_CMD"] = "scylla-bench -workload=uniform -replication-factor=3 -partition-count=100"
+
+        err_msg = f"Scylla-bench command {os.environ['SCT_STRESS_READ_CMD']} doesn't have parameter -mode"
+
+        with self.assertRaises(ValueError) as context:
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
+
+        self.assertIn(err_msg, str(context.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

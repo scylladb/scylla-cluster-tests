@@ -1660,6 +1660,7 @@ class SCTConfiguration(dict):
         if 'extra_network_interface' in self and len(self.region_names) >= 2:
             raise ValueError("extra_network_interface isn't supported for multi region use cases")
         self._check_partition_range_with_data_validation_correctness()
+        self._verify_scylla_bench_mode_and_workload_parameters()
 
     def _get_target_upgrade_version(self):
         # 10) update target_upgrade_version automatically
@@ -1859,6 +1860,24 @@ class SCTConfiguration(dict):
 
         if not self.get('data_volume_disk_size') or not self.get('data_volume_disk_type'):
             raise ValueError('Data volume configuration requires: data_volume_disk_type, data_volume_disk_size')
+
+    def _verify_scylla_bench_mode_and_workload_parameters(self):
+        # pylint: disable=too-many-nested-blocks
+        for param_name in self.stress_cmd_params:
+            stress_cmds = self.get(param_name)
+            if stress_cmds is None:
+                continue
+            if isinstance(stress_cmds, str):
+                stress_cmds = [stress_cmds]
+            for stress_cmd in stress_cmds:
+                if not stress_cmd:
+                    continue
+                stress_cmd = stress_cmd.strip(' ')
+                if stress_cmd.startswith('scylla-bench'):
+                    if "-mode=" not in stress_cmd:
+                        raise ValueError(f"Scylla-bench command {stress_cmd} doesn't have parameter -mode")
+                    if "-workload=" not in stress_cmd:
+                        raise ValueError(f"Scylla-bench command {stress_cmd} doesn't have parameter -workload")
 
 
 def init_and_verify_sct_config() -> SCTConfiguration:
