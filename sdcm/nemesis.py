@@ -802,6 +802,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_ldap_connection_toggle(self):
         if not self.cluster.params.get('use_ldap_authorization'):
             raise UnsupportedNemesis('Cluster is not configured to run with LDAP authorization, hence skipping')
+        if not self.target_node.is_enterprise:
+            raise UnsupportedNemesis('Cluster is not enterprise. LDAP is supported only for enterprise. Skipping')
 
         self.log.info('Will now pause the LDAP container')
         ContainerManager.pause_container(self.tester.localhost, 'ldap')
@@ -814,6 +816,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_disable_enable_ldap_authorization(self):
         if not self.cluster.params.get('use_ldap_authorization'):
             raise UnsupportedNemesis('Cluster is not configured to run with LDAP authorization, hence skipping')
+        if not self.target_node.is_enterprise:
+            raise UnsupportedNemesis('Cluster is not enterprise. LDAP is supported only for enterprise. Skipping')
+
         ldap_config = {'role_manager': '',
                        'ldap_url_template': '',
                        'ldap_attr_role': '',
