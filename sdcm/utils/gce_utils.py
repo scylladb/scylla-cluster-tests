@@ -22,7 +22,8 @@ from sdcm.keystore import KeyStore
 from sdcm.utils.docker_utils import ContainerManager, DockerException, Container
 
 
-GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:348.0.0-alpine"
+# NOTE: we cannot use neither 'slim' nor 'alpine' versions because we need the 'beta' component be installed.
+GOOGLE_CLOUD_SDK_IMAGE = "google/cloud-sdk:367.0.0"
 
 LOGGER = logging.getLogger(__name__)
 
@@ -154,7 +155,8 @@ class GcloudContainerMixin:
         credentials["client_email"] = f"{credentials['project_id']}@appspot.gserviceaccount.com"
         shell_command = f"umask 077 && echo '{json.dumps(credentials)}' > /tmp/gcloud_svc_account.json"
         shell_command += " && echo 'kubeletConfig:\n  cpuManagerPolicy: static' > /tmp/system_config.yaml"
-        res = container.exec_run(["sh", "-c", shell_command])
+        # NOTE: use 'bash' in case of non-alpine sdk image and 'sh' when it is 'alpine' one.
+        res = container.exec_run(["bash", "-c", shell_command])
         if res.exit_code:
             raise DockerException(f"{container}: {res.output.decode('utf-8')}")
         res = container.exec_run(["gcloud", "auth", "activate-service-account", credentials["client_email"],
