@@ -181,3 +181,8 @@ install_mode: 'repo'  # install from scylla_repo
 nosqlbench_image: 'scylladb/hydra-loaders:nosqlbench-4.15.49'
 
 nemesis_multiply_factor: 6
+
+scylla_apt_keys:
+  - '17723034C56D4B19'  # ScyllaDB Package Signing Key 2018 <security@scylladb.com>
+  - '5E08FBD8B5D6EC9C'  # ScyllaDB Package Signing Key 2020 <security@scylladb.com>
+  - 'D0A112E067426AB2'  # ScyllaDB Package Signing Key 2022 <security@scylladb.com>
