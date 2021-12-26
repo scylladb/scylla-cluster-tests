@@ -13,7 +13,9 @@ n_loaders: 0
 n_monitor_nodes: 0
 nemesis_class_name: 'NoOpMonkey'
 scylla_linux_distro: 'debian-bullseye'
-scylla_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/deb/unstable/unified/master/latest/scylladb-master/scylla.list'
+scylla_repo: 'http://downloads.scylladb.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list'
+scylla_apt_keys:
+  - 'D0A112E067426AB2'  # ScyllaDB Package Signing Key 2022 <security@scylladb.com>
 test_duration: 60
 user_prefix: 'artifacts-debian11'
 system_auth_rf: 1
