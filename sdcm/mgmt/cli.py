@@ -553,7 +553,7 @@ class ManagerCluster(ScyllaManagerBase):
         self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
     def delete_task(self, task_id):
-        cmd = "-c {} task delete {}".format(self.id, task_id)
+        cmd = "-c {} stop --delete {}".format(self.id, task_id)
         LOGGER.debug("Task Delete command to execute is: {}".format(cmd))
         self.sctool.run(cmd=cmd, parse_table_res=False)
         LOGGER.debug("Deleted the task '{}' successfully!". format(task_id))
