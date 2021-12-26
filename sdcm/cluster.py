@@ -1807,6 +1807,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.sudo('curl -o %s -L %s' % (repo_path, scylla_repo))
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=False)
+            for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
+                self.remoter.sudo(f"apt-key adv --keyserver keyserver.ubuntu.com --recv-keys {apt_key}", retry=3)
         self.update_repo_cache()
 
     def download_scylla_manager_repo(self, scylla_repo: str) -> None:
@@ -1818,6 +1820,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
         self.remoter.sudo(f"curl -o {repo_path} -L {scylla_repo}")
         if self.distro.is_debian_like:
+            for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
+                self.remoter.sudo(f"apt-key adv --keyserver keyserver.ubuntu.com --recv-keys {apt_key}", retry=3)
             self.remoter.sudo("apt-get update", ignore_status=True)
 
     @retrying(n=30, sleep_time=15, allowed_exceptions=UnexpectedExit)
@@ -2014,11 +2018,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 install_prereqs = dedent("""
                     export DEBIAN_FRONTEND=noninteractive
                     apt-get install software-properties-common -y
-                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B
-                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
-                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5e08fbd8b5d6ec9c
-                    # add-apt-repository -y ppa:scylladb/ppa
-                    # apt-get update
                 """)
                 self.remoter.run('sudo bash -cxe "%s"' % install_prereqs)
             elif self.is_debian8():
@@ -2036,7 +2035,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 self.remoter.run(
                     'sudo apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/'
                     'scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key')
-                self.remoter.run('sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19')
                 self.remoter.run(
                     'echo "deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/'
                     'Debian_8.0/ /" |sudo tee /etc/apt/sources.list.d/scylla-3rdparty.list')
@@ -2050,8 +2048,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     apt-get install apt-transport-https -y
                     apt-get install gnupg1-curl dirmngr -y
                     apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-stretch/Debian_9.0/Release.key
-                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
-                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5E08FBD8B5D6EC9C
                     echo 'deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-stretch/Debian_9.0/ /' > /etc/apt/sources.list.d/scylla-3rdparty.list
                 """)
                 self.remoter.run('sudo bash -cxe "%s"' % install_debian_9_prereqs)
@@ -2061,8 +2057,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                     apt-get update
                     apt-get install apt-transport-https -y
                     apt-get install gnupg1-curl dirmngr -y
-                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
-                    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5E08FBD8B5D6EC9C
                     curl https://adoptopenjdk.jfrog.io/adoptopenjdk/api/gpg/key/public | sudo apt-key add -
                     apt-get install software-properties-common -y
                     add-apt-repository --yes https://adoptopenjdk.jfrog.io/adoptopenjdk/deb/
@@ -2334,11 +2328,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.sudo("yum install python36-PyYAML -y", retry=3)
         elif self.distro.is_sles:
             self.remoter.sudo("zypper install python36-PyYAML -y", retry=3)
-        elif self.distro.is_debian or self.distro.is_ubuntu:
-            self.remoter.sudo('apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 6B2BFD3660EF3F5B', retry=3)
-            self.remoter.sudo('apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19', retry=3)
-            self.remoter.sudo('apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5E08FBD8B5D6EC9C', retry=3)
-        else:
+        elif not self.distro.is_debian_like:
             raise ValueError(f"Unsupported Linux distribution: {self.distro}")
 
         package_names = "scylla-manager-server scylla-manager-client"
@@ -4587,7 +4577,6 @@ class BaseLoaderSet():
                 apt-get update
                 apt-get install gnupg-curl -y
                 apt-key adv --fetch-keys https://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/Release.key
-                apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 17723034C56D4B19
                 echo 'deb http://download.opensuse.org/repositories/home:/scylladb:/scylla-3rdparty-jessie/Debian_8.0/ /' |sudo tee /etc/apt/sources.list.d/scylla-3rdparty.list
                 apt-get update
                 apt-get install -y openjdk-8-jre-headless -t jessie-backports
@@ -4597,7 +4586,6 @@ class BaseLoaderSet():
         elif node.distro.is_debian10:
             node.remoter.sudo(shell_script_cmd("""\
                 apt-get update
-                apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5E08FBD8B5D6EC9C
                 apt-get install -y openjdk-11-jre openjdk-11-jre-headless
             """))
 
