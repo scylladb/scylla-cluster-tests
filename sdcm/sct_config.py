@@ -181,6 +181,9 @@ class SCTConfiguration(dict):
         dict(name="scylla_repo", env="SCT_SCYLLA_REPO", type=str,
              help="Url to the repo of scylla version to install scylla"),
 
+        dict(name="scylla_apt_keys", env="SCT_SCYLLA_APT_KEYS", type=str_or_list,
+             help="APT keys for ScyllaDB repos"),
+
         dict(name="unified_package", env="SCT_UNIFIED_PACKAGE", type=str,
              help="Url to the unified package of scylla version to install scylla"),
 

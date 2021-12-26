@@ -14,6 +14,8 @@ n_monitor_nodes: 0
 nemesis_class_name: 'NoOpMonkey'
 scylla_linux_distro: 'ubuntu-focal'
 scylla_repo: 'http://downloads.scylladb.com/unstable/scylla/master/deb/unified/latest/scylladb-master/scylla.list'
+scylla_apt_keys:
+  - 'D0A112E067426AB2'  # ScyllaDB Package Signing Key 2022 <security@scylladb.com>
 test_duration: 60
 user_prefix: 'artifacts-ubuntu2004'
 system_auth_rf: 1
