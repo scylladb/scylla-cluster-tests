@@ -1653,7 +1653,8 @@ class SCTConfiguration(dict):
         self._verify_data_volume_configuration(backend)
 
         self._validate_seeds_number()
-        self._validate_nemesis_can_run_on_non_seed()
+        if self.get('n_db_nodes'):
+            self._validate_nemesis_can_run_on_non_seed()
         if 'extra_network_interface' in self and len(self.region_names) >= 2:
             raise ValueError("extra_network_interface isn't supported for multi region use cases")
         self._check_partition_range_with_data_validation_correctness()
@@ -1714,7 +1715,6 @@ class SCTConfiguration(dict):
             return
         seeds_num = self.get('seeds_num')
         num_of_db_nodes = sum([int(i) for i in str(self.get('n_db_nodes')).split(' ')]) + int(self.get('add_node_cnt'))
-
         assert num_of_db_nodes > seeds_num, \
             "Nemesis cannot run when 'nemesis_filter_seeds' is true and seeds number is equal to nodes number"
 
