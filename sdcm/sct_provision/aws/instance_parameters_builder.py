@@ -12,7 +12,6 @@
 # Copyright (c) 2021 ScyllaDB
 
 import abc
-import base64
 from functools import cached_property
 from typing import Union, List, Optional, Tuple
 
@@ -93,10 +92,8 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
         if not self.user_data_raw:
             return None
         if isinstance(self.user_data_raw, UserDataBuilderBase):
-            user_data = self.user_data_raw.to_string()
-        else:
-            user_data = self.user_data_raw
-        return base64.b64encode(user_data.encode('ascii')).decode("ascii")
+            return self.user_data_raw.to_string()
+        return self.user_data_raw
 
     @cached_property
     def _root_device_name(self):

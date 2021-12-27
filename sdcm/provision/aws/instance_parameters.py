@@ -12,9 +12,9 @@
 # Copyright (c) 2021 ScyllaDB
 
 import base64
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Union
 
-from pydantic import BaseModel, validator
+from pydantic import BaseModel
 
 from sdcm.provision.common.provisioner import InstanceParamsBase
 
@@ -59,7 +59,7 @@ class AWSInstanceParams(InstanceParamsBase):
     ImageId: str
     KeyName: str
     InstanceType: str
-    UserData: str
+    UserData: str = None
     NetworkInterfaces: List[AWSNetworkInterfaces] = None
     IamInstanceProfile: Optional[AWSInstanceProfile] = None
     BlockDeviceMappings: List[AWSDiskMapping] = None
@@ -69,12 +69,29 @@ class AWSInstanceParams(InstanceParamsBase):
     AddressingType: str = None
     EbsOptimized: bool = None
 
-    @validator('UserData')
-    def validate_user_data_raw(cls, value: str):  # pylint: disable=no-self-argument,no-self-use
-        try:
-            assert base64.b64encode(base64.b64decode(value)).decode('ascii') == value
-        except AssertionError:
-            raise
-        except Exception:  # pylint: disable=broad-except
-            assert False, 'UserData is not base64 formatted'
-        return value
+    # pylint: disable=arguments-differ
+    def dict(
+        self,
+        *,
+        include: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
+        exclude: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
+        by_alias: bool = False,
+        skip_defaults: bool = None,
+        exclude_unset: bool = False,
+        exclude_defaults: bool = False,
+        exclude_none: bool = False,
+        encode_user_data: bool = False
+    ) -> 'DictStrAny':
+        dict_data = super().dict(
+            include=include,
+            exclude=exclude,
+            by_alias=by_alias,
+            skip_defaults=skip_defaults,
+            exclude_unset=exclude_unset,
+            exclude_defaults=exclude_defaults,
+            exclude_none=exclude_none,
+        )
+        if encode_user_data:
+            if user_data := dict_data.get('UserData'):
+                dict_data['UserData'] = base64.b64encode(user_data.encode('ascii')).decode("ascii")
+        return dict_data

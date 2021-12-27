@@ -203,6 +203,8 @@ class ClusterBase(BaseModel):
         return AWSInstanceParams(**params_builder.dict(exclude_none=True, exclude_unset=True, exclude_defaults=True))
 
     def provision(self):
+        if self._node_nums == [0]:
+            return []
         total_instances_provisioned = []
         for region_id in range(len(self._regions)):
             instance_parameters = self._instance_parameters(region_id=region_id)
