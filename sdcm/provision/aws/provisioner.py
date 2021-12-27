@@ -119,7 +119,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             count: int,
             tags: List[TagsType]) -> List[Instance]:
         instance_parameters_dict = instance_parameters.dict(
-            exclude_none=True, exclude_defaults=True, exclude_unset=True)
+            exclude_none=True, exclude_defaults=True, exclude_unset=True, encode_user_data=False)
         LOGGER.info("[%s] Creating {count} on-demand instances using AMI id '%s' with following parameters:\n%s",
                     provision_parameters.region_name,
                     instance_parameters.ImageId,
@@ -133,7 +133,7 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
                 instance_tags = tags.pop()
                 set_tags_on_instances(
                     region_name=provision_parameters.region_name,
-                    instance_ids=[instance.instance_id for instance in instances],
+                    instance_ids=[instance.instance_id],
                     tags={'Name': 'spot_fleet_{}_{}'.format(instance.instance_id, ind)} | instance_tags,
                 )
         return instances
@@ -179,7 +179,12 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             count=count,
             price=provision_parameters.price,
             fleet_role=self._iam_fleet_role,
-            instance_parameters=instance_parameters.dict(exclude_none=True, exclude_unset=True, exclude_defaults=True),
+            instance_parameters=instance_parameters.dict(
+                exclude_none=True,
+                exclude_unset=True,
+                exclude_defaults=True,
+                encode_user_data=True,
+            ),
         )
         instance_ids = wait_for_provision_request_done(
             region_name=provision_parameters.region_name,
@@ -266,7 +271,12 @@ class AWSInstanceProvisioner(InstanceProvisionerBase):  # pylint: disable=too-fe
             region_name=provision_parameters.region_name,
             count=count,
             price=getattr(provision_parameters, 'price', None),
-            instance_parameters=instance_parameters.dict(exclude_none=True, exclude_unset=True, exclude_defaults=True),
+            instance_parameters=instance_parameters.dict(
+                exclude_none=True,
+                exclude_unset=True,
+                exclude_defaults=True,
+                encode_user_data=True,
+            ),
             full_availability_zone=self._full_availability_zone_name(provision_parameters),
             valid_until=self._spot_valid_until,
             duration=self._spot_block_duration(provision_parameters),
