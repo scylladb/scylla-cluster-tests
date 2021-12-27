@@ -252,44 +252,48 @@ def sort_by_index(item: dict) -> str:
 
 def network_config_ipv6_workaround_script():
     return dedent("""
-        if `grep -qi "ubuntu" /etc/os-release`; then
-
+        if grep -qi "ubuntu" /etc/os-release; then
             echo "On Ubuntu we don't need this workaround, so done"
-
         else
             BASE_EC2_NETWORK_URL=http://169.254.169.254/latest/meta-data/network/interfaces/macs/
             MAC=`curl -s ${BASE_EC2_NETWORK_URL}`
             IPv6_CIDR=`curl -s ${BASE_EC2_NETWORK_URL}${MAC}/subnet-ipv6-cidr-blocks`
 
-            grep -qi "amazon linux" /etc/os-release || sudo ip route add $IPv6_CIDR dev eth0
+            while ! systemctl status cloud-init.service | grep 'active (exited)'; do sleep 1; done
+            while ! ls /etc/sysconfig/network-scripts/ifcfg-eth0; do sleep 1; done
 
-            grep -q IPV6_AUTOCONF /etc/sysconfig/network-scripts/ifcfg-eth0
-            if [[ $? -eq 0 ]]; then
-                sudo sed -i 's/^IPV6_AUTOCONF=[^ ]*/IPV6_AUTOCONF=yes/' /etc/sysconfig/network-scripts/ifcfg-eth0
-            else
-                sudo echo "IPV6_AUTOCONF=yes" >> /etc/sysconfig/network-scripts/ifcfg-eth0
+            if ! grep -qi "amazon linux" /etc/os-release; then
+                ip route add $IPv6_CIDR dev eth0
+                echo "ip route add $IPv6_CIDR dev eth0" >> /etc/sysconfig/network-scripts/init.ipv6-global
             fi
 
-            grep -q IPV6_DEFROUTE /etc/sysconfig/network-scripts/ifcfg-eth0
-            if [[ $? -eq 0 ]]; then
-                sudo sed -i 's/^IPV6_DEFROUTE=[^ ]*/IPV6_DEFROUTE=yes/' /etc/sysconfig/network-scripts/ifcfg-eth0
+            if grep -q IPV6_AUTOCONF /etc/sysconfig/network-scripts/ifcfg-eth0; then
+                sed -i 's/^IPV6_AUTOCONF=[^ ]*/IPV6_AUTOCONF=yes/' /etc/sysconfig/network-scripts/ifcfg-eth0
             else
-                sudo echo "IPV6_DEFROUTE=yes" >> /etc/sysconfig/network-scripts/ifcfg-eth0
+                echo "IPV6_AUTOCONF=yes" >> /etc/sysconfig/network-scripts/ifcfg-eth0
+                echo "echo \"IPV6_AUTOCONF=yes\" >> /etc/sysconfig/network-scripts/ifcfg-eth0" >>/CMDS
             fi
-            sudo systemctl restart network
+
+            if grep -q IPV6_DEFROUTE /etc/sysconfig/network-scripts/ifcfg-eth0; then
+                sed -i 's/^IPV6_DEFROUTE=[^ ]*/IPV6_DEFROUTE=yes/' /etc/sysconfig/network-scripts/ifcfg-eth0
+            else
+                echo "IPV6_DEFROUTE=yes" >> /etc/sysconfig/network-scripts/ifcfg-eth0
+            fi
+
+            systemctl restart network
         fi
     """)
 
 
 def configure_eth1_script():
     return dedent(r"""
-        if `grep -qi "ubuntu" /etc/os-release`; then
+        if grep -qi "ubuntu" /etc/os-release; then
 
             ETH1_IP_ADDRESS=`ip route show | grep eth1 | grep -oPm1 'src \K[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*'`
             ETH1_CIDR_BLOCK=`ip route show | grep eth1 | grep -oPm1 '\K[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*/[0-9]*'`
             ETH1_SUBNET=`echo ${ETH1_CIDR_BLOCK} | grep -oP '\\K/\\d+'`
 
-            sudo bash -c "echo '
+            bash -c "echo '
             network:
               version: 2
               renderer: networkd
@@ -331,7 +335,7 @@ def configure_eth1_script():
                ETH1_IP_ADDRESS=`curl -s ${BASE_EC2_NETWORK_URL}${ETH1_MAC}/local-ipv4s`
                ETH1_CIDR_BLOCK=`curl -s ${BASE_EC2_NETWORK_URL}${ETH1_MAC}/subnet-ipv4-cidr-block`
             fi
-            sudo bash -c "echo 'GATEWAYDEV=eth0' >> /etc/sysconfig/network"
+            bash -c "echo 'GATEWAYDEV=eth0' >> /etc/sysconfig/network"
             echo "
             DEVICE="eth1"
             BOOTPROTO="dhcp"
@@ -349,7 +353,7 @@ def configure_eth1_script():
             echo "
             from ${ETH1_IP_ADDRESS}/32 table 2
             " > /etc/sysconfig/network-scripts/rule-eth1
-            sudo systemctl restart network
+            systemctl restart network
 
         fi
     """)
