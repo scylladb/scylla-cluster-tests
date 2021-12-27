@@ -58,7 +58,7 @@ from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR
 from sdcm.utils.common import (get_db_tables, generate_random_string,
                                update_certificates, reach_enospc_on_node, clean_enospc_on_node,
                                parse_nodetool_listsnapshots,
-                               update_authenticator, ParallelObject)
+                               update_authenticator, ParallelObject, get_table_clustering_order)
 from sdcm.utils import cdc
 from sdcm.utils.decorators import retrying, latency_calculator_decorator
 from sdcm.utils.decorators import timeout as timeout_decor
@@ -1690,9 +1690,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 if exclude_partitions and partition_key in exclude_partitions:
                     continue
 
-                # The scylla_bench.test table is created WITH CLUSTERING ORDER BY (ck DESC).
-                # So first returned value is max cl value in the partition
-                cmd = f"select ck from {ks_cf} where pk={partition_key} limit 1"
+                # Get the max cl value in the partition according to the table's clustering order.
+                table_clustering_order = get_table_clustering_order(ks_cf=ks_cf, ck_name='ck', session=session)
+                # Build the query 'from the right side' so it finds the highest cl value using 'limit 1'.
+                # So it has to check the table's clustering order and set a reversed order if needed.
+                reversed_order = 'desc' if table_clustering_order.lower() == 'asc' else 'asc'
+                cmd = f"select ck from {ks_cf} where pk={partition_key} order by ck {reversed_order} limit 1"
                 try:
                     result = session.execute(cmd, timeout=300)
                 except Exception as exc:  # pylint: disable=broad-except
