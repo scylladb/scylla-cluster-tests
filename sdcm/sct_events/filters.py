@@ -53,7 +53,7 @@ class DbEventsFilter(BaseFilter):
 
 class EventsFilter(BaseFilter):
     def __init__(self,
-                 event_class: Optional[Type[SctEventProtocol]] = None,
+                 event_class: Optional[Union[Type[SctEventProtocol], Type[SctEvent]]] = None,
                  regex: Optional[Union[str, re.Pattern]] = None,
                  extra_time_to_expiration: Optional[int] = None):
 
