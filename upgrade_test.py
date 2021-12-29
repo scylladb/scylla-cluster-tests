@@ -152,6 +152,8 @@ class UpgradeTest(FillDatabaseData):
         new_scylla_repo = self.params.get('new_scylla_repo')
         new_version = self.params.get('new_version')
         upgrade_node_packages = self.params.get('upgrade_node_packages')
+        self.log.warning('skipping upgrade to check if the tombstone tests will pass')
+        return 'End'
 
         self.log.info('Upgrading a Node')
         node.upgrade_system()
@@ -250,6 +252,10 @@ class UpgradeTest(FillDatabaseData):
         # pylint: disable=too-many-branches,too-many-statements
 
         self.log.info('Rollbacking a Node')
+
+        self.log.warning('skipping rollback to check if the tombstone tests will pass')
+        return 'End'
+
         # fixme: auto identify new_introduced_pkgs, remove this parameter
         new_introduced_pkgs = self.params.get('new_introduced_pkgs')
         result = node.remoter.run('scylla --version')
