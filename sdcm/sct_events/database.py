@@ -257,10 +257,11 @@ class FullScanEvent(ScyllaDatabaseContinuousEvent):
 
 
 class RepairEvent(ScyllaDatabaseContinuousEvent):
-    begin_pattern = r'Repair 1 out of \d+ ranges, id=\[id=\d+, uuid=[\d\w-]{36}\], shard=(?P<shard>\d+)'
-    end_pattern = r'repair id \[id=\d+, uuid=[\d\w-]{36}\] on shard (?P<shard>\d+) completed'
+    begin_pattern = r'Repair 1 out of \d+ ranges, id=\[id=\d+, uuid=(?P<uuid>[\d\w-]{36})\w*\], shard=(?P<shard>\d+)'
+    end_pattern = r'repair id \[id=\d+, uuid=(?P<uuid>[\d\w-]{36})\w*\] on shard (?P<shard>\d+) completed'
     publish_to_grafana = False
     save_to_files = False
+    continuous_hash_fields = ('node', 'shard', 'uuid')
 
     def __init__(self, node: str, shard: int, severity=Severity.NORMAL, **__):
         self.log_level = logging.DEBUG
@@ -325,25 +326,18 @@ def get_pattern_to_event_to_func_mapping(node: str) \
         kwargs = match.groupdict()
         if "shard" in kwargs:
             kwargs["shard"] = int(kwargs["shard"])
-        new_event = event_type(node=node, **kwargs)
-        new_event.begin_event()
+        event_type(node=node, **kwargs).begin_event()
 
     def _end_event(event_type: Type[ScyllaDatabaseContinuousEvent], match: Match):
         kwargs = match.groupdict()
         continuous_hash = event_type.get_continuous_hash_from_dict({'node': node, **kwargs})
-        if begin_event := event_registry.find_continuous_event_by_hash(continuous_hash):
-            begin_event.end_event()
+        if begin_event := event_registry.find_continuous_events_by_hash(continuous_hash):
+            begin_event[-1].end_event()
             return
-
         TestFrameworkEvent(
             source=event_type.__name__,
-            message="Did not find events of type {event_type} with hash {hash} ({hash_data})"
-                    " with period type {period_type}".format(
-                        event_type=event_type,
-                        period_type=EventPeriod.BEGIN.value,
-                        hash_data=kwargs,
-                        hash=continuous_hash,
-                    ),
+            message=f"Did not find events of type {event_type} with hash {continuous_hash} ({kwargs})"
+                    f" with period type {EventPeriod.BEGIN.value}",
             severity=Severity.DEBUG
         ).publish_or_dump()
 

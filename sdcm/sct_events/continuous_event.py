@@ -32,32 +32,40 @@ class ContinuousEventRegistryException(BaseException):
 
 class ContinuousEventsRegistry(metaclass=Singleton):
     def __init__(self):
-        self.hashed_continuous_events: dict[int, ContinuousEvent] = {}
+        self.hashed_continuous_events: dict[int, list[ContinuousEvent]] = {}
 
     @property
     def continuous_events(self) -> Iterable[ContinuousEvent]:
-        return self.hashed_continuous_events.values()
+        for hash_bucket in self.hashed_continuous_events.values():
+            for event in hash_bucket:
+                yield event
 
     def add_event(self, event: ContinuousEvent):
         if not issubclass(type(event), ContinuousEvent):
             msg = f"Event: {event} is not a ContinuousEvent"
             raise ContinuousEventRegistryException(msg)
-
-        if present_event := self.hashed_continuous_events.get(event.continuous_hash):
-            LOGGER.debug(
-                'Continues event %s with hash %s (%s) is getting replaced with another event %s',
-                present_event,
+        hash_bucket = self.hashed_continuous_events.get(event.continuous_hash, None)
+        if hash_bucket is None:
+            hash_bucket = []
+            self.hashed_continuous_events[event.continuous_hash] = hash_bucket
+        elif hash_bucket:
+            LOGGER.error(
+                'Continues event %s with hash %s (%s) is not suppose to have duplicates, '
+                'while there is another event with same hash - %s',
+                hash_bucket[-1],
                 event.continuous_hash,
                 event.continuous_hash_dict,
                 event,
             )
-        self.hashed_continuous_events[event.continuous_hash] = event
+        hash_bucket.append(event)
 
     def del_event(self, event: ContinuousEvent):
-        self.hashed_continuous_events.pop(event.continuous_hash, None)
+        hash_bucket = self.hashed_continuous_events.get(event.continuous_hash, [])
+        if event in hash_bucket:
+            hash_bucket.remove(event)
 
-    def find_continuous_event_by_hash(self, continuous_hash: int) -> ContinuousEvent | None:
-        return self.hashed_continuous_events.get(continuous_hash, None)
+    def find_continuous_events_by_hash(self, continuous_hash: int) -> list[ContinuousEvent]:
+        return self.hashed_continuous_events.get(continuous_hash, []).copy()
 
 
 # pylint: disable=too-many-instance-attributes
