@@ -84,13 +84,14 @@ class TestContinuousEventsRegistry:
             'table': 'system.local',
             'compaction_process_id': 'edc49670-2a65-11ec-a8b8-b62621e7624c'
         })
-        found_event = populated_registry.find_continuous_event_by_hash(continues_hash)
+        found_events = populated_registry.find_continuous_events_by_hash(continues_hash)
 
         self._read_events_from_file("test_data/compaction_event_end.log")
 
-        assert not populated_registry.find_continuous_event_by_hash(continues_hash), \
+        assert not populated_registry.find_continuous_events_by_hash(continues_hash), \
             "Event was not removed from registry"
-
+        assert found_events
+        found_event = found_events[-1]
         assert found_event
         assert isinstance(found_event, CompactionEvent)
         assert found_event.node == 'node1'

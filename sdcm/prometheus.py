@@ -190,8 +190,8 @@ class PrometheusAlertManagerListener(threading.Thread):
                 'alert_name': alert_name
             })
 
-            if begin_event := self.event_registry.find_continuous_event_by_hash(continuous_hash):
-                begin_event.end_event()
+            if begin_event := self.event_registry.find_continuous_events_by_hash(continuous_hash):
+                begin_event[-1].end_event()
                 continue
 
             new_event = PrometheusAlertManagerEvent(raw_alert=alert)
