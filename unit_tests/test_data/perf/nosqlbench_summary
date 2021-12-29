@@ -1,0 +1,4169 @@
+-- Counters --------------------------------------------------------------------
+
+cqltabular2_default_main.optracker_blocked
+
+             count = 99902
+
+cqltabular2_default_main.pending_ops
+
+             count = 0
+
+cqltabular2_default_rampup.optracker_blocked
+
+             count = 9919
+
+cqltabular2_default_rampup.pending_ops
+
+             count = 0
+
+cqltabular2_default_schema.optracker_blocked
+
+             count = 1
+
+cqltabular2_default_schema.pending_ops
+
+             count = 0
+
+< t:2021-11-22 11:41:44,801 f:report_builder.py l:70   c:sdcm.results_analyze.nosqlbench.report_builder p:INFO  >
+
+-- Histograms ------------------------------------------------------------------
+
+cqltabular2_default_main.main-read--main-select--resultset-size
+
+             count = 6666
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_main.main-read--main-select-01--resultset-size
+
+             count = 6666
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_main.main-read--main-select-0123--resultset-size
+
+             count = 6666
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_main.main-read--main-select-0246--resultset-size
+
+             count = 6666
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_main.main-read--main-select-1357--resultset-size
+
+             count = 6666
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_main.main-read--main-select-4567--resultset-size
+
+             count = 6666
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_main.main-read--main-select-all--resultset-size
+
+             count = 6666
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_main.main-write--main-write--resultset-size
+
+             count = 53328
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_main.resultset-size
+
+             count = 99990
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_main.skipped-tokens
+
+             count = 0
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_main.tries
+
+             count = 99990
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_rampup.rampup--rampup-insert--resultset-size
+
+             count = 10000
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_rampup.resultset-size
+
+             count = 10000
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_rampup.skipped-tokens
+
+             count = 0
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_rampup.tries
+
+             count = 10000
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_schema.resultset-size
+
+             count = 2
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_schema.schema--create-keyspace--resultset-size
+
+             count = 1
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_schema.schema--create-table--resultset-size
+
+             count = 1
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_schema.skipped-tokens
+
+             count = 0
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+cqltabular2_default_schema.tries
+
+             count = 2
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+hdr-cqltabular2_default_main.main-read--main-select--resultset-size
+
+             count = 6666
+
+               min = 0
+
+               max = 10
+
+              mean = 5.52
+
+            stddev = 2.91
+
+            median = 6.00
+
+              75% <= 8.00
+
+              95% <= 10.00
+
+              98% <= 10.00
+
+              99% <= 10.00
+
+            99.9% <= 10.00
+
+hdr-cqltabular2_default_main.main-read--main-select-01--resultset-size
+
+             count = 6666
+
+               min = 0
+
+               max = 10
+
+              mean = 5.37
+
+            stddev = 2.88
+
+            median = 5.00
+
+              75% <= 8.00
+
+              95% <= 10.00
+
+              98% <= 10.00
+
+              99% <= 10.00
+
+            99.9% <= 10.00
+
+hdr-cqltabular2_default_main.main-read--main-select-0123--resultset-size
+
+             count = 6666
+
+               min = 0
+
+               max = 10
+
+              mean = 5.41
+
+            stddev = 2.88
+
+            median = 5.00
+
+              75% <= 8.00
+
+              95% <= 10.00
+
+              98% <= 10.00
+
+              99% <= 10.00
+
+            99.9% <= 10.00
+
+hdr-cqltabular2_default_main.main-read--main-select-0246--resultset-size
+
+             count = 6666
+
+               min = 0
+
+               max = 10
+
+              mean = 5.44
+
+            stddev = 2.93
+
+            median = 6.00
+
+              75% <= 8.00
+
+              95% <= 10.00
+
+              98% <= 10.00
+
+              99% <= 10.00
+
+            99.9% <= 10.00
+
+hdr-cqltabular2_default_main.main-read--main-select-1357--resultset-size
+
+             count = 6666
+
+               min = 0
+
+               max = 10
+
+              mean = 5.31
+
+            stddev = 2.90
+
+            median = 5.00
+
+              75% <= 8.00
+
+              95% <= 10.00
+
+              98% <= 10.00
+
+              99% <= 10.00
+
+            99.9% <= 10.00
+
+hdr-cqltabular2_default_main.main-read--main-select-4567--resultset-size
+
+             count = 6666
+
+               min = 0
+
+               max = 10
+
+              mean = 5.45
+
+            stddev = 2.83
+
+            median = 5.00
+
+              75% <= 8.00
+
+              95% <= 10.00
+
+              98% <= 10.00
+
+              99% <= 10.00
+
+            99.9% <= 10.00
+
+hdr-cqltabular2_default_main.main-read--main-select-all--resultset-size
+
+             count = 6666
+
+               min = 0
+
+               max = 10
+
+              mean = 5.43
+
+            stddev = 2.87
+
+            median = 5.00
+
+              75% <= 8.00
+
+              95% <= 10.00
+
+              98% <= 10.00
+
+              99% <= 10.00
+
+            99.9% <= 10.00
+
+hdr-cqltabular2_default_main.main-write--main-write--resultset-size
+
+             count = 53328
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+hdr-cqltabular2_default_main.resultset-size
+
+             count = 99990
+
+               min = 0
+
+               max = 10
+
+              mean = 2.37
+
+            stddev = 3.23
+
+            median = 0.00
+
+              75% <= 5.00
+
+              95% <= 9.00
+
+              98% <= 10.00
+
+              99% <= 10.00
+
+            99.9% <= 10.00
+
+hdr-cqltabular2_default_main.skipped-tokens
+
+             count = 0
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+hdr-cqltabular2_default_main.tries
+
+             count = 99990
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+hdr-cqltabular2_default_rampup.rampup--rampup-insert--resultset-size
+
+             count = 10000
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+hdr-cqltabular2_default_rampup.resultset-size
+
+             count = 10000
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+hdr-cqltabular2_default_rampup.skipped-tokens
+
+             count = 0
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+hdr-cqltabular2_default_rampup.tries
+
+             count = 10000
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+hdr-cqltabular2_default_schema.resultset-size
+
+             count = 2
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+hdr-cqltabular2_default_schema.schema--create-keyspace--resultset-size
+
+             count = 1
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+hdr-cqltabular2_default_schema.schema--create-table--resultset-size
+
+             count = 1
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+hdr-cqltabular2_default_schema.skipped-tokens
+
+             count = 0
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+hdr-cqltabular2_default_schema.tries
+
+             count = 2
+
+               min = 0
+
+               max = 0
+
+              mean = 0.00
+
+            stddev = 0.00
+
+            median = 0.00
+
+              75% <= 0.00
+
+              95% <= 0.00
+
+              98% <= 0.00
+
+              99% <= 0.00
+
+            99.9% <= 0.00
+
+< t:2021-11-22 11:41:44,897 f:report_builder.py l:70   c:sdcm.results_analyze.nosqlbench.report_builder p:INFO  >
+
+-- Meters ----------------------------------------------------------------------
+
+cqltabular2_default_main.rows
+
+             count = 252531
+
+         mean rate = 69124.79 events/second
+
+     1-minute rate = 0.00 events/second
+
+     5-minute rate = 0.00 events/second
+
+    15-minute rate = 0.00 events/second
+
+cqltabular2_default_rampup.rows
+
+             count = 0
+
+         mean rate = 0.00 events/second
+
+     1-minute rate = 0.00 events/second
+
+     5-minute rate = 0.00 events/second
+
+    15-minute rate = 0.00 events/second
+
+cqltabular2_default_schema.rows
+
+             count = 0
+
+         mean rate = 0.00 events/second
+
+     1-minute rate = 0.00 events/second
+
+     5-minute rate = 0.00 events/second
+
+    15-minute rate = 0.00 events/second
+
+< t:2021-11-22 11:41:44,899 f:report_builder.py l:70   c:sdcm.results_analyze.nosqlbench.report_builder p:INFO  >
+
+-- Timers ----------------------------------------------------------------------
+
+cqltabular2_default_main.bind
+
+             count = 99990
+
+         mean rate = 27406.88 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.cycles.servicetime
+
+             count = 99990
+
+         mean rate = 27403.48 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.execute
+
+             count = 99990
+
+         mean rate = 27383.50 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.main-read--main-select--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.main-read--main-select--success
+
+             count = 6666
+
+         mean rate = 1767.64 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.main-read--main-select-01--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.main-read--main-select-01--success
+
+             count = 6666
+
+         mean rate = 1726.39 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.main-read--main-select-0123--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.main-read--main-select-0123--success
+
+             count = 6666
+
+         mean rate = 1745.62 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.main-read--main-select-0246--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.main-read--main-select-0246--success
+
+             count = 6666
+
+         mean rate = 1729.98 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.main-read--main-select-1357--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.main-read--main-select-1357--success
+
+             count = 6666
+
+         mean rate = 1737.06 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.main-read--main-select-4567--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.main-read--main-select-4567--success
+
+             count = 6666
+
+         mean rate = 1751.60 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.main-read--main-select-all--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.main-read--main-select-all--success
+
+             count = 6666
+
+         mean rate = 1708.45 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.main-write--main-write--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.main-write--main-write--success
+
+             count = 53328
+
+         mean rate = 14126.84 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.pages
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.read_input
+
+             count = 6746
+
+         mean rate = 1835.33 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.result
+
+             count = 99990
+
+         mean rate = 27203.70 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.result-success
+
+             count = 99990
+
+         mean rate = 27199.19 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.retry-delay
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_main.strides.servicetime
+
+             count = 6666
+
+         mean rate = 1811.64 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_rampup.bind
+
+             count = 10000
+
+         mean rate = 2105.69 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_rampup.cycles.servicetime
+
+             count = 10000
+
+         mean rate = 2107.15 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_rampup.execute
+
+             count = 10000
+
+         mean rate = 2105.40 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_rampup.pages
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_rampup.rampup--rampup-insert--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_rampup.rampup--rampup-insert--success
+
+             count = 10000
+
+         mean rate = 1958.59 calls/second
+
+     1-minute rate = 2000.00 calls/second
+
+     5-minute rate = 2000.00 calls/second
+
+    15-minute rate = 2000.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_rampup.read_input
+
+             count = 10080
+
+         mean rate = 2120.31 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_rampup.result
+
+             count = 10000
+
+         mean rate = 2104.29 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_rampup.result-success
+
+             count = 10000
+
+         mean rate = 2104.23 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_rampup.retry-delay
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_rampup.strides.servicetime
+
+             count = 10000
+
+         mean rate = 2102.71 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_schema.bind
+
+             count = 2
+
+         mean rate = 0.26 calls/second
+
+     1-minute rate = 0.40 calls/second
+
+     5-minute rate = 0.40 calls/second
+
+    15-minute rate = 0.40 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_schema.cycles.servicetime
+
+             count = 2
+
+         mean rate = 0.26 calls/second
+
+     1-minute rate = 0.40 calls/second
+
+     5-minute rate = 0.40 calls/second
+
+    15-minute rate = 0.40 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_schema.execute
+
+             count = 2
+
+         mean rate = 0.26 calls/second
+
+     1-minute rate = 0.40 calls/second
+
+     5-minute rate = 0.40 calls/second
+
+    15-minute rate = 0.40 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_schema.pages
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_schema.read_input
+
+             count = 2
+
+         mean rate = 0.26 calls/second
+
+     1-minute rate = 0.40 calls/second
+
+     5-minute rate = 0.40 calls/second
+
+    15-minute rate = 0.40 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_schema.result
+
+             count = 2
+
+         mean rate = 0.26 calls/second
+
+     1-minute rate = 0.40 calls/second
+
+     5-minute rate = 0.40 calls/second
+
+    15-minute rate = 0.40 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_schema.result-success
+
+             count = 2
+
+         mean rate = 0.26 calls/second
+
+     1-minute rate = 0.40 calls/second
+
+     5-minute rate = 0.40 calls/second
+
+    15-minute rate = 0.40 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_schema.retry-delay
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_schema.schema--create-keyspace--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_schema.schema--create-keyspace--success
+
+             count = 1
+
+         mean rate = 0.13 calls/second
+
+     1-minute rate = 0.20 calls/second
+
+     5-minute rate = 0.20 calls/second
+
+    15-minute rate = 0.20 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_schema.schema--create-table--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_schema.schema--create-table--success
+
+             count = 1
+
+         mean rate = 0.13 calls/second
+
+     1-minute rate = 0.20 calls/second
+
+     5-minute rate = 0.20 calls/second
+
+    15-minute rate = 0.20 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+cqltabular2_default_schema.strides.servicetime
+
+             count = 1
+
+         mean rate = 0.13 calls/second
+
+     1-minute rate = 0.20 calls/second
+
+     5-minute rate = 0.20 calls/second
+
+    15-minute rate = 0.20 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_main.bind
+
+             count = 99990
+
+         mean rate = 27058.25 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 1.89 microseconds
+
+               max = 135.46 microseconds
+
+              mean = 11.10 microseconds
+
+            stddev = 9.80 microseconds
+
+            median = 8.87 microseconds
+
+              75% <= 14.90 microseconds
+
+              95% <= 22.93 microseconds
+
+              98% <= 37.24 microseconds
+
+              99% <= 47.28 microseconds
+
+            99.9% <= 103.40 microseconds
+
+hdr-cqltabular2_default_main.cycles.servicetime
+
+             count = 99990
+
+         mean rate = 27059.54 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 538.17 microseconds
+
+               max = 33104.92 microseconds
+
+              mean = 2297.41 microseconds
+
+            stddev = 2507.20 microseconds
+
+            median = 1456.52 microseconds
+
+              75% <= 2557.92 microseconds
+
+              95% <= 7085.39 microseconds
+
+              98% <= 10449.58 microseconds
+
+              99% <= 12731.40 microseconds
+
+            99.9% <= 20934.40 microseconds
+
+hdr-cqltabular2_default_main.execute
+
+             count = 99990
+
+         mean rate = 27045.87 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 2.68 microseconds
+
+               max = 116.87 microseconds
+
+              mean = 16.17 microseconds
+
+            stddev = 13.66 microseconds
+
+            median = 13.39 microseconds
+
+              75% <= 19.14 microseconds
+
+              95% <= 37.26 microseconds
+
+              98% <= 69.72 microseconds
+
+              99% <= 83.78 microseconds
+
+            99.9% <= 111.33 microseconds
+
+hdr-cqltabular2_default_main.main-read--main-select--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_main.main-read--main-select--success
+
+             count = 6666
+
+         mean rate = 1747.46 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 579.90 microseconds
+
+               max = 47798.20 microseconds
+
+              mean = 2626.33 microseconds
+
+            stddev = 2929.14 microseconds
+
+            median = 1714.70 microseconds
+
+              75% <= 2866.48 microseconds
+
+              95% <= 7615.92 microseconds
+
+              98% <= 11332.43 microseconds
+
+              99% <= 12549.06 microseconds
+
+            99.9% <= 21824.21 microseconds
+
+hdr-cqltabular2_default_main.main-read--main-select-01--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_main.main-read--main-select-01--success
+
+             count = 6666
+
+         mean rate = 1707.88 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 623.04 microseconds
+
+               max = 20769.04 microseconds
+
+              mean = 2459.13 microseconds
+
+            stddev = 2466.99 microseconds
+
+            median = 1612.26 microseconds
+
+              75% <= 2759.90 microseconds
+
+              95% <= 6669.24 microseconds
+
+              98% <= 11274.19 microseconds
+
+              99% <= 14005.69 microseconds
+
+            99.9% <= 19999.63 microseconds
+
+hdr-cqltabular2_default_main.main-read--main-select-0123--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_main.main-read--main-select-0123--success
+
+             count = 6666
+
+         mean rate = 1727.52 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 599.70 microseconds
+
+               max = 18671.27 microseconds
+
+              mean = 2394.37 microseconds
+
+            stddev = 2225.64 microseconds
+
+            median = 1645.84 microseconds
+
+              75% <= 2705.22 microseconds
+
+              95% <= 6938.51 microseconds
+
+              98% <= 10214.72 microseconds
+
+              99% <= 12164.69 microseconds
+
+            99.9% <= 15636.08 microseconds
+
+hdr-cqltabular2_default_main.main-read--main-select-0246--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_main.main-read--main-select-0246--success
+
+             count = 6666
+
+         mean rate = 1712.90 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 561.88 microseconds
+
+               max = 48797.37 microseconds
+
+              mean = 2424.70 microseconds
+
+            stddev = 2663.00 microseconds
+
+            median = 1645.51 microseconds
+
+              75% <= 2681.72 microseconds
+
+              95% <= 6965.45 microseconds
+
+              98% <= 10090.96 microseconds
+
+              99% <= 11878.87 microseconds
+
+            99.9% <= 20712.22 microseconds
+
+hdr-cqltabular2_default_main.main-read--main-select-1357--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_main.main-read--main-select-1357--success
+
+             count = 6666
+
+         mean rate = 1720.57 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 564.98 microseconds
+
+               max = 22110.10 microseconds
+
+              mean = 2509.16 microseconds
+
+            stddev = 2390.14 microseconds
+
+            median = 1621.12 microseconds
+
+              75% <= 2887.82 microseconds
+
+              95% <= 7301.33 microseconds
+
+              98% <= 9871.50 microseconds
+
+              99% <= 12218.22 microseconds
+
+            99.9% <= 17054.69 microseconds
+
+hdr-cqltabular2_default_main.main-read--main-select-4567--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_main.main-read--main-select-4567--success
+
+             count = 6666
+
+         mean rate = 1735.60 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 537.33 microseconds
+
+               max = 38783.46 microseconds
+
+              mean = 2564.71 microseconds
+
+            stddev = 2762.04 microseconds
+
+            median = 1680.37 microseconds
+
+              75% <= 2824.60 microseconds
+
+              95% <= 6787.08 microseconds
+
+              98% <= 11198.53 microseconds
+
+              99% <= 14778.39 microseconds
+
+            99.9% <= 23554.16 microseconds
+
+hdr-cqltabular2_default_main.main-read--main-select-all--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_main.main-read--main-select-all--success
+
+             count = 6666
+
+         mean rate = 1693.87 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 604.35 microseconds
+
+               max = 27407.48 microseconds
+
+              mean = 2531.15 microseconds
+
+            stddev = 2501.02 microseconds
+
+            median = 1687.96 microseconds
+
+              75% <= 2840.64 microseconds
+
+              95% <= 7238.87 microseconds
+
+              98% <= 10676.46 microseconds
+
+              99% <= 13643.06 microseconds
+
+            99.9% <= 18495.58 microseconds
+
+hdr-cqltabular2_default_main.main-write--main-write--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_main.main-write--main-write--success
+
+             count = 53328
+
+         mean rate = 14005.90 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 504.03 microseconds
+
+               max = 29929.87 microseconds
+
+              mean = 2100.33 microseconds
+
+            stddev = 2441.00 microseconds
+
+            median = 1315.35 microseconds
+
+              75% <= 2291.45 microseconds
+
+              95% <= 6523.84 microseconds
+
+              98% <= 10014.48 microseconds
+
+              99% <= 12609.14 microseconds
+
+            99.9% <= 23775.68 microseconds
+
+hdr-cqltabular2_default_main.pages
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_main.read_input
+
+             count = 6746
+
+         mean rate = 1819.55 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.09 microseconds
+
+               max = 28.44 microseconds
+
+              mean = 0.62 microseconds
+
+            stddev = 1.95 microseconds
+
+            median = 0.34 microseconds
+
+              75% <= 0.44 microseconds
+
+              95% <= 0.97 microseconds
+
+              98% <= 3.23 microseconds
+
+              99% <= 11.58 microseconds
+
+            99.9% <= 26.10 microseconds
+
+hdr-cqltabular2_default_main.result
+
+             count = 99990
+
+         mean rate = 26971.48 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 506.00 microseconds
+
+               max = 30137.13 microseconds
+
+              mean = 2238.43 microseconds
+
+            stddev = 2509.04 microseconds
+
+            median = 1382.84 microseconds
+
+              75% <= 2440.71 microseconds
+
+              95% <= 7559.85 microseconds
+
+              98% <= 9853.45 microseconds
+
+              99% <= 12120.49 microseconds
+
+            99.9% <= 24447.76 microseconds
+
+hdr-cqltabular2_default_main.result-success
+
+             count = 99990
+
+         mean rate = 26966.72 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 546.12 microseconds
+
+               max = 22183.55 microseconds
+
+              mean = 2316.52 microseconds
+
+            stddev = 2509.53 microseconds
+
+            median = 1411.22 microseconds
+
+              75% <= 2552.26 microseconds
+
+              95% <= 7126.78 microseconds
+
+              98% <= 10873.03 microseconds
+
+              99% <= 12747.74 microseconds
+
+            99.9% <= 21945.07 microseconds
+
+hdr-cqltabular2_default_main.retry-delay
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_main.strides.servicetime
+
+             count = 6666
+
+         mean rate = 1796.73 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 17564.47 microseconds
+
+               max = 108127.42 microseconds
+
+              mean = 39817.71 microseconds
+
+            stddev = 13228.14 microseconds
+
+            median = 36135.07 microseconds
+
+              75% <= 46573.84 microseconds
+
+              95% <= 66025.30 microseconds
+
+              98% <= 71968.22 microseconds
+
+              99% <= 79617.56 microseconds
+
+            99.9% <= 107807.84 microseconds
+
+hdr-cqltabular2_default_rampup.bind
+
+             count = 10000
+
+         mean rate = 2092.39 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 7.62 microseconds
+
+               max = 3156.86 microseconds
+
+              mean = 41.38 microseconds
+
+            stddev = 148.63 microseconds
+
+            median = 21.23 microseconds
+
+              75% <= 32.73 microseconds
+
+              95% <= 119.72 microseconds
+
+              98% <= 148.38 microseconds
+
+              99% <= 183.68 microseconds
+
+            99.9% <= 2710.86 microseconds
+
+hdr-cqltabular2_default_rampup.cycles.servicetime
+
+             count = 10000
+
+         mean rate = 2093.73 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 588.34 microseconds
+
+               max = 28007.83 microseconds
+
+              mean = 4428.37 microseconds
+
+            stddev = 3555.43 microseconds
+
+            median = 3132.68 microseconds
+
+              75% <= 5353.00 microseconds
+
+              95% <= 12451.00 microseconds
+
+              98% <= 15485.97 microseconds
+
+              99% <= 16352.61 microseconds
+
+            99.9% <= 22380.77 microseconds
+
+hdr-cqltabular2_default_rampup.execute
+
+             count = 10000
+
+         mean rate = 2091.87 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 11.14 microseconds
+
+               max = 937.63 microseconds
+
+              mean = 80.65 microseconds
+
+            stddev = 63.85 microseconds
+
+            median = 74.44 microseconds
+
+              75% <= 118.61 microseconds
+
+              95% <= 163.13 microseconds
+
+              98% <= 186.33 microseconds
+
+              99% <= 198.67 microseconds
+
+            99.9% <= 837.77 microseconds
+
+hdr-cqltabular2_default_rampup.pages
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_rampup.rampup--rampup-insert--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_rampup.rampup--rampup-insert--success
+
+             count = 10000
+
+         mean rate = 1947.14 calls/second
+
+     1-minute rate = 2000.00 calls/second
+
+     5-minute rate = 2000.00 calls/second
+
+    15-minute rate = 2000.00 calls/second
+
+               min = 588.34 microseconds
+
+               max = 19146.62 microseconds
+
+              mean = 4473.52 microseconds
+
+            stddev = 3546.72 microseconds
+
+            median = 3300.53 microseconds
+
+              75% <= 5233.50 microseconds
+
+              95% <= 12291.96 microseconds
+
+              98% <= 15829.03 microseconds
+
+              99% <= 16864.39 microseconds
+
+            99.9% <= 18971.16 microseconds
+
+hdr-cqltabular2_default_rampup.read_input
+
+             count = 10080
+
+         mean rate = 2106.90 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.26 microseconds
+
+               max = 27.49 microseconds
+
+              mean = 1.35 microseconds
+
+            stddev = 2.41 microseconds
+
+            median = 0.73 microseconds
+
+              75% <= 1.64 microseconds
+
+              95% <= 2.56 microseconds
+
+              98% <= 4.61 microseconds
+
+              99% <= 17.98 microseconds
+
+            99.9% <= 22.70 microseconds
+
+hdr-cqltabular2_default_rampup.result
+
+             count = 10000
+
+         mean rate = 2090.90 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 590.29 microseconds
+
+               max = 28007.83 microseconds
+
+              mean = 4524.70 microseconds
+
+            stddev = 3428.62 microseconds
+
+            median = 3312.34 microseconds
+
+              75% <= 5652.17 microseconds
+
+              95% <= 11552.50 microseconds
+
+              98% <= 14662.80 microseconds
+
+              99% <= 16804.49 microseconds
+
+            99.9% <= 19106.99 microseconds
+
+hdr-cqltabular2_default_rampup.result-success
+
+             count = 10000
+
+         mean rate = 2090.75 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 572.64 microseconds
+
+               max = 18976.46 microseconds
+
+              mean = 4362.92 microseconds
+
+            stddev = 3446.67 microseconds
+
+            median = 3136.23 microseconds
+
+              75% <= 5339.62 microseconds
+
+              95% <= 12046.81 microseconds
+
+              98% <= 15706.91 microseconds
+
+              99% <= 17053.08 microseconds
+
+            99.9% <= 18766.55 microseconds
+
+hdr-cqltabular2_default_rampup.retry-delay
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_rampup.strides.servicetime
+
+             count = 10000
+
+         mean rate = 2089.32 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 1864.21 microseconds
+
+               max = 35927.22 microseconds
+
+              mean = 9686.84 microseconds
+
+            stddev = 5719.37 microseconds
+
+            median = 7821.54 microseconds
+
+              75% <= 12060.58 microseconds
+
+              95% <= 21779.66 microseconds
+
+              98% <= 24815.05 microseconds
+
+              99% <= 27850.85 microseconds
+
+            99.9% <= 33918.56 microseconds
+
+hdr-cqltabular2_default_schema.bind
+
+             count = 2
+
+         mean rate = 0.25 calls/second
+
+     1-minute rate = 0.40 calls/second
+
+     5-minute rate = 0.40 calls/second
+
+    15-minute rate = 0.40 calls/second
+
+               min = 11.96 microseconds
+
+               max = 44.00 microseconds
+
+              mean = 27.86 microseconds
+
+            stddev = 16.02 microseconds
+
+            median = 11.96 microseconds
+
+              75% <= 44.00 microseconds
+
+              95% <= 44.00 microseconds
+
+              98% <= 44.00 microseconds
+
+              99% <= 44.00 microseconds
+
+            99.9% <= 44.00 microseconds
+
+hdr-cqltabular2_default_schema.cycles.servicetime
+
+             count = 2
+
+         mean rate = 0.25 calls/second
+
+     1-minute rate = 0.40 calls/second
+
+     5-minute rate = 0.40 calls/second
+
+    15-minute rate = 0.40 calls/second
+
+               min = 953491.80 microseconds
+
+               max = 1708226.83 microseconds
+
+              mean = 1336519.40 microseconds
+
+            stddev = 377325.07 microseconds
+
+            median = 1708226.83 microseconds
+
+              75% <= 1708226.83 microseconds
+
+              95% <= 1708226.83 microseconds
+
+              98% <= 1708226.83 microseconds
+
+              99% <= 1708226.83 microseconds
+
+            99.9% <= 1708226.83 microseconds
+
+hdr-cqltabular2_default_schema.execute
+
+             count = 2
+
+         mean rate = 0.25 calls/second
+
+     1-minute rate = 0.40 calls/second
+
+     5-minute rate = 0.40 calls/second
+
+    15-minute rate = 0.40 calls/second
+
+               min = 284.02 microseconds
+
+               max = 95576.01 microseconds
+
+              mean = 47572.68 microseconds
+
+            stddev = 47644.66 microseconds
+
+            median = 284.02 microseconds
+
+              75% <= 95576.01 microseconds
+
+              95% <= 95576.01 microseconds
+
+              98% <= 95576.01 microseconds
+
+              99% <= 95576.01 microseconds
+
+            99.9% <= 95576.01 microseconds
+
+hdr-cqltabular2_default_schema.pages
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_schema.read_input
+
+             count = 2
+
+         mean rate = 0.25 calls/second
+
+     1-minute rate = 0.40 calls/second
+
+     5-minute rate = 0.40 calls/second
+
+    15-minute rate = 0.40 calls/second
+
+               min = 154.46 microseconds
+
+               max = 4219.06 microseconds
+
+              mean = 2202.00 microseconds
+
+            stddev = 2032.24 microseconds
+
+            median = 4219.06 microseconds
+
+              75% <= 4219.06 microseconds
+
+              95% <= 4219.06 microseconds
+
+              98% <= 4219.06 microseconds
+
+              99% <= 4219.06 microseconds
+
+            99.9% <= 4219.06 microseconds
+
+hdr-cqltabular2_default_schema.result
+
+             count = 2
+
+         mean rate = 0.25 calls/second
+
+     1-minute rate = 0.40 calls/second
+
+     5-minute rate = 0.40 calls/second
+
+    15-minute rate = 0.40 calls/second
+
+               min = 953491.80 microseconds
+
+               max = 1708226.83 microseconds
+
+              mean = 1336519.40 microseconds
+
+            stddev = 377325.07 microseconds
+
+            median = 1708226.83 microseconds
+
+              75% <= 1708226.83 microseconds
+
+              95% <= 1708226.83 microseconds
+
+              98% <= 1708226.83 microseconds
+
+              99% <= 1708226.83 microseconds
+
+            99.9% <= 1708226.83 microseconds
+
+hdr-cqltabular2_default_schema.result-success
+
+             count = 2
+
+         mean rate = 0.25 calls/second
+
+     1-minute rate = 0.40 calls/second
+
+     5-minute rate = 0.40 calls/second
+
+    15-minute rate = 0.40 calls/second
+
+               min = 953491.80 microseconds
+
+               max = 1708226.83 microseconds
+
+              mean = 1336519.40 microseconds
+
+            stddev = 377325.07 microseconds
+
+            median = 1708226.83 microseconds
+
+              75% <= 1708226.83 microseconds
+
+              95% <= 1708226.83 microseconds
+
+              98% <= 1708226.83 microseconds
+
+              99% <= 1708226.83 microseconds
+
+            99.9% <= 1708226.83 microseconds
+
+hdr-cqltabular2_default_schema.retry-delay
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_schema.schema--create-keyspace--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_schema.schema--create-keyspace--success
+
+             count = 1
+
+         mean rate = 0.13 calls/second
+
+     1-minute rate = 0.20 calls/second
+
+     5-minute rate = 0.20 calls/second
+
+    15-minute rate = 0.20 calls/second
+
+               min = 953491.80 microseconds
+
+               max = 953491.80 microseconds
+
+              mean = 953491.80 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 953491.80 microseconds
+
+              75% <= 953491.80 microseconds
+
+              95% <= 953491.80 microseconds
+
+              98% <= 953491.80 microseconds
+
+              99% <= 953491.80 microseconds
+
+            99.9% <= 953491.80 microseconds
+
+hdr-cqltabular2_default_schema.schema--create-table--error
+
+             count = 0
+
+         mean rate = 0.00 calls/second
+
+     1-minute rate = 0.00 calls/second
+
+     5-minute rate = 0.00 calls/second
+
+    15-minute rate = 0.00 calls/second
+
+               min = 0.00 microseconds
+
+               max = 0.00 microseconds
+
+              mean = 0.00 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 0.00 microseconds
+
+              75% <= 0.00 microseconds
+
+              95% <= 0.00 microseconds
+
+              98% <= 0.00 microseconds
+
+              99% <= 0.00 microseconds
+
+            99.9% <= 0.00 microseconds
+
+hdr-cqltabular2_default_schema.schema--create-table--success
+
+             count = 1
+
+         mean rate = 0.13 calls/second
+
+     1-minute rate = 0.20 calls/second
+
+     5-minute rate = 0.20 calls/second
+
+    15-minute rate = 0.20 calls/second
+
+               min = 1708226.83 microseconds
+
+               max = 1708226.83 microseconds
+
+              mean = 1708226.83 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 1708226.83 microseconds
+
+              75% <= 1708226.83 microseconds
+
+              95% <= 1708226.83 microseconds
+
+              98% <= 1708226.83 microseconds
+
+              99% <= 1708226.83 microseconds
+
+            99.9% <= 1708226.83 microseconds
+
+hdr-cqltabular2_default_schema.strides.servicetime
+
+             count = 1
+
+         mean rate = 0.13 calls/second
+
+     1-minute rate = 0.20 calls/second
+
+     5-minute rate = 0.20 calls/second
+
+    15-minute rate = 0.20 calls/second
+
+               min = 2666983.65 microseconds
+
+               max = 2666983.65 microseconds
+
+              mean = 2666983.65 microseconds
+
+            stddev = 0.00 microseconds
+
+            median = 2666983.65 microseconds
+
+              75% <= 2666983.65 microseconds
+
+              95% <= 2666983.65 microseconds
+
+              98% <= 2666983.65 microseconds
+
+              99% <= 2666983.65 microseconds
+
+            99.9% <= 2666983.65 microseconds

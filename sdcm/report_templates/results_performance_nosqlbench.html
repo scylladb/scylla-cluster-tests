@@ -1,0 +1,103 @@
+{% extends 'results_base_custom.html' %}
+{% block body %}
+    {% block title %}
+    <h3>Test: {{ test_name }}</h3>
+    {% endblock %}
+    <h3>
+        <span>Test start time: </span>
+        <span class="blue">{{ test_start_time }}</span>
+    </h3>
+    <h3>
+        <span>Version: </span>
+        <span class="blue">{{ test_version.version }} </span>
+    </h3>
+    <div>
+        <span> Version Details: </span>
+        <li>
+            <span> build date: </span>
+            <span class="blue"> {{ test_version.date }} </span>
+        </li>
+        <li>
+            <span> commit id: </span>
+            <span class="blue"> {{ test_version.commit_id }} </span>
+        </li>
+    </div>
+    <div>
+        <span> Setup Details: </span>
+        <ul>
+        {% for key, val in setup_details.items()|sort %}
+            <li>
+                {{ key }}: <span class="blue"> {{ val }} </span>
+            </li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% for stat_name in [
+        "main_cycles_servicetime_max",
+        "main_cycles_servicetime_min",
+        "main_cycles_servicetime_median",
+        "main_cycles_servicetime_p99",
+        "main_result_mean_rate"] %}
+    <h2>{{ stat_name }}</h2>
+    <table id="results_table">
+        <tr>
+            <th>Current test result</th>
+            <th>Version compared to</th>
+            <th>Best</th>
+            <th>Diff best</th>
+            <th>Commit, Date</th>
+            <th>Last</th>
+            <th>Diff last</th>
+            <th>Commit, Date</th>
+        </tr>
+        {% for cmp_res in res_list %}
+        {% set best_stat=cmp_res.best.get(stat_name) %}
+        {% set last_stat=cmp_res.last.get(stat_name) %}
+        <tr>
+            <td>{{ best_stat.current }}</td>
+            <td> <span class="fbold">{{ best_stat.commit_id_best }}</span></td>
+            <td>{{ best_stat.version_best }}</td>
+            <td>
+                {% with status = best_stat.status, percent = best_stat.delta_best_percent %}
+                    {% if status == 'Regression' and percent < -4 %}
+                        <span class="red fbold">{{ percent }}%</span>
+                    {% elif status == 'Regression' and percent < 0 and percent > -4 %}
+                        <span class="black fbold">{{ percent }}%</span>
+                    {% elif status == 'Progress' and percent > 4 %}
+                        <span class="green fbold">{{ percent }}%</span>
+                    {% elif status == 'Progress' and percent >= 4 %}
+                        <span class="black fbold">{{ percent }}%</span>
+                    {% else %}
+                        <span>{{ percent }}%</span>
+                    {% endif %}
+                {% endwith %}
+            </td>
+            <td>
+                <div>#{{ best_stat.commit_id_best }}</div>
+                <div>{{ best_stat.date_best }}</div>
+            </td>
+            <td>{{ last_stat.last_value }}</td>
+            <td>
+                {% with status = last_stat.status, percent = last_stat.delta_percent %}
+                    {% if status == 'Regression' and percent < -4 %}
+                        <span class="red fbold">{{ percent }}%</span>
+                    {% elif status == 'Regression' and percent < 0 and percent > -4 %}
+                        <span class="black fbold">{{ percent }}%</span>
+                    {% elif status == 'Progress' and percent  > 4 %}
+                        <span class="green fbold">{{ percent }}%</span>
+                    {% elif status == 'Progress' and percent >= 4 %}
+                        <span class="black fbold">{{ percent }}%</span>
+                    {% else %}
+                        <span>{{ percent }}%</span>
+                    {% endif %}
+                {% endwith %}
+            </td>
+            <td>
+                <div>#{{ last_stat.last_run_commit_id }}</div>
+                <div>{{ last_stat.last_run_commit_date }}</div>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% endfor %}
+{% endblock %}

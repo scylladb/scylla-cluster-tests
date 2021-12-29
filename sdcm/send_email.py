@@ -536,7 +536,7 @@ def build_reporter(name: str,
     #  pylint: disable=too-many-return-statements
     if "Gemini" in name:
         return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)
-    elif "Longevity" in name or 'SlaPerUser' in name:
+    elif any(["Longevity" in name, 'SlaPerUser' in name, "NosqlBench" in name]):
         return LongevityEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "ManagerUpgrade" in name:
         return ManagerUpgradeEmailReporter(email_recipients=email_recipients, logdir=logdir)
@@ -620,6 +620,7 @@ def get_running_instances_for_email_report(test_id: str, ip_filter: str = None):
 
 
 def send_perf_email(reporter, test_results, logs, email_recipients, testrun_dir, start_time):  # pylint: disable=too-many-arguments
+    LOGGER.info("Test results on entering send_perf_email:\n%s", test_results)
     for subject, content in test_results.items():
         if 'email_body' not in content:
             content['email_body'] = {}
@@ -651,6 +652,7 @@ def read_email_data_from_file(filename):
     :returns: dict read from json data
     :rtype: {dict}
     """
+    LOGGER.info("Reading data email from path: %s", filename)
     email_data = None
     if os.path.exists(filename):
         try:

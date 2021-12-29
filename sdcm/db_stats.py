@@ -555,7 +555,6 @@ class TestStatsMixin(Stats):
 
     def create_test_stats(self, sub_type=None, specific_tested_stats=None,  # pylint: disable=too-many-arguments
                           doc_id_with_timestamp=False, append_sub_test_to_name=True, test_name=None, test_index=None):
-
         if not self.create_stats:
             return
         if not test_index:
@@ -655,6 +654,9 @@ class TestStatsMixin(Stats):
         self.update(dict(results=self._stats['results']))
 
     def _convert_stat(self, stat, stress_result):
+        LOGGER.info("_convert_stat - stat: %s", stat)
+        LOGGER.info("_convert_stat - stress_result: %s", stress_result)
+
         if stat not in stress_result or stress_result[stat] == 'NaN':
             self.log.warning("Stress stat not found: '%s'", stat)
             return 0
@@ -677,7 +679,9 @@ class TestStatsMixin(Stats):
     def calculate_stats_average(self):
         # calculate average stats
         average_stats = {}
+        LOGGER.info("self.STRESS_STATS in calculate_stats_average: %s", self.STRESS_STATS)
         for stat in self.STRESS_STATS:
+            LOGGER.info("Working on stat: %s", stat)
             average_stats[stat] = ''  # default
             total = self._calc_stat_total(stat=stat)
             if total:

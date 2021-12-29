@@ -309,6 +309,7 @@ class DockerBasedStressThread:
         self.stop_test_on_failure = stop_test_on_failure
 
     def run(self):
+        LOGGER.info("Nosqlbench entering run() in DockerBasedStressThread")
         if self.round_robin:
             self.stress_num = 1
             loaders = [self.loader_set.get_loader()]
@@ -324,6 +325,7 @@ class DockerBasedStressThread:
 
         for loader_idx, loader in enumerate(loaders):
             for cpu_idx in range(self.stress_num):
+                LOGGER.info("Submitting stress future to executor...")
                 self.results_futures += [self.executor.submit(self._run_stress, *(loader, loader_idx, cpu_idx))]
 
         return self
