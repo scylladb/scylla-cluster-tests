@@ -290,3 +290,4 @@
 | **<a href="#user-content-nosqlbench_image" name="nosqlbench_image">nosqlbench_image</a>**  | A docker image of NoSQLBench | N/A | SCT_NOSQLBENCH_IMAGE
 | **<a href="#user-content-raid_level" name="raid_level">raid_level</a>**  | Configure RAID0 or RAID5 on instance | N/A | SCT_RAID_LEVEL
 | **<a href="#user-content-bare_loaders" name="bare_loaders">bare_loaders</a>**  | Don't install anything but collectd to the loaders during cluster setup | False | SCT_BARE_LOADERS
+| **<a href="#user-content-run-db-node-benchmarks" name="run_db_node_benchmarks">run_db_node_benchmarks</a>**  | Run benchmarks on db nodes before the test | false | SCT_RUN_DB_NODE_BENCHMARKS
