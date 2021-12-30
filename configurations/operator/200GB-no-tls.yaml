@@ -1,0 +1,6 @@
+user_prefix: 'longevity-operator-200gb-48h'
+k8s_minio_storage_size: '4096Gi'
+
+# NOTE: operator doesn't support encryption as of January 2022
+server_encrypt: false
+client_encrypt: false
