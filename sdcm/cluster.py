@@ -3067,6 +3067,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             self.add_nodes(n_nodes, enable_auto_bootstrap=self.auto_bootstrap)
         else:
             raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
+        self.run_node_benchmarks()
         self.coredumps = {}
         super().__init__()
 
@@ -3429,6 +3430,14 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
         return ks_tables_with_cdc
 
+    def run_node_benchmarks(self):
+        if not self.params.get("run_db_node_benchmarks") or not self.nodes:
+            return
+
+        self.node_benchmark_manager.add_nodes(self.nodes)
+        self.node_benchmark_manager.install_benchmark_tools()
+        self.node_benchmark_manager.run_benchmarks()
+
     @property
     def cluster_backend(self):
         return self.params.get("cluster_backend")
@@ -3551,7 +3560,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.nemesis_threads = []
         self.nemesis_count = 0
         self.test_config = TestConfig()
-        self.node_benchmark_manager = ScyllaClusterBenchmarkManager()
         self._node_cycle = None
         super().__init__(*args, **kwargs)
 
