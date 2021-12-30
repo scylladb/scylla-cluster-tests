@@ -29,8 +29,13 @@ class ProvisionPlan(BaseModel):
     def name(self):
         return self.__class__.__name__
 
-    def provision_instances(self, instance_parameters: InstanceParamsBase, node_count: int, node_tags: List[TagsType],
-                            node_names: List[str]):
+    def provision_instances(
+            self,
+            instance_parameters: InstanceParamsBase | List[InstanceParamsBase],
+            node_count: int,
+            node_tags: List[TagsType],
+            node_names: List[str],
+    ):
         for provision_parameters in self.provision_steps:
             if instances := self.provisioner.provision(
                     provision_parameters=provision_parameters,

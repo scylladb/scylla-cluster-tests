@@ -55,8 +55,7 @@ from sdcm.mgmt import AnyManagerCluster, ScyllaManagerError
 from sdcm.mgmt.common import get_manager_repo_from_defaults, get_manager_scylla_backend
 from sdcm.prometheus import start_metrics_server, PrometheusAlertManagerListener, AlertSilencer
 from sdcm.log import SDCMAdapter
-from sdcm.provision.common.utils import install_syslogng_service, restart_syslogng_service, \
-    configure_rsyslog_set_hostname_script, restart_rsyslog_service
+from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
 from sdcm.provision.scylla_yaml import ScyllaYamlNodeAttrBuilder
 from sdcm.provision.scylla_yaml.certificate_builder import ScyllaYamlCertificateAttrBuilder
 
@@ -2783,27 +2782,15 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.log.warning('Method set_hostname is not implemented for %s' % self.__class__.__name__)
 
     def configure_remote_logging(self):
-        use_rsyslog = False
-        script = ""
-        if self.parent_cluster.params.get('logs_transport') == 'rsyslog':
-            use_rsyslog = True
-        elif self.parent_cluster.params.get('logs_transport') == 'syslog-ng':
-            self.log.info("Log transport is syslog-ng. Try to install it.")
-            if self.remoter.sudo(shell_script_cmd(install_syslogng_service() + "\n exit $?", quote="'",
-                                                  shell_cmd="bash -cx"), ignore_status=True).ok:
-                script += self.test_config.get_syslogng_configuration_script(hostname=self.name)
-                script += restart_syslogng_service()
-            else:
-                self.log.info("Can't install syslog-ng. Use rsyslog instead")
-                use_rsyslog = True
-        if use_rsyslog:
-            script += configure_rsyslog_set_hostname_script(self.name)
-            script += self.test_config.get_rsyslog_configuration_script()
-            script += restart_rsyslog_service()
-        if script:
-            self.remoter.sudo(shell_script_cmd(script, quote="'"))
-        else:
-            self.log.warning('Logging configuration is not needed')
+        if self.parent_cluster.params.get('logs_transport') not in ['rsyslog', 'syslog-ng']:
+            return
+        script = ConfigurationScriptBuilder(
+            syslog_host_port=self.test_config.get_logging_service_host_port(),
+            logs_transport=self.parent_cluster.params.get('logs_transport'),
+            disable_ssh_while_running=False,
+            hostname=self.name,
+        ).to_string()
+        self.remoter.sudo(shell_script_cmd(script, quote="'"))
 
     @property
     def scylla_packages_installed(self) -> List[str]:

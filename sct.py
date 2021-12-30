@@ -35,6 +35,7 @@ import click
 import click_completion
 from prettytable import PrettyTable
 
+from sdcm.localhost import LocalHost
 from sdcm.remote import LOCALRUNNER
 from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
@@ -193,7 +194,21 @@ def provision_resources(backend, test_name: str, config: str):
 
     add_file_logger()
 
-    layout = SCTProvisionLayout(params=create_sct_configuration(test_name=test_name))
+    params = create_sct_configuration(test_name=test_name)
+    test_config = get_test_config()
+    localhost = LocalHost(user_prefix=params.get("user_prefix"), test_id=test_config.test_id())
+
+    if params.get("logs_transport") == 'rsyslog':
+        click.echo("Provision rsyslog logging service")
+        test_config.configure_rsyslog(localhost, enable_ngrok=False)
+    elif params.get("logs_transport") == 'syslog-ng':
+        click.echo("Provision syslog-ng logging service")
+        test_config.configure_syslogng(localhost)
+    else:
+        click.echo("No need provision logging service")
+
+    click.echo(f"Provision {backend} cloud resources")
+    layout = SCTProvisionLayout(params=params)
     layout.provision()
 
 
