@@ -207,6 +207,7 @@ class ScyllaNodeBenchmarkRunner:
 
             if cat_out.stderr:
                 LOGGER.info("Cat error out: %s", cat_out.stderr)
+
             cassandra_fio_jobs = jsoned_output.pop("cassandra_fio_jobs")
             cassandra_fio_jobs = [job for job in cassandra_fio_jobs if "setup" not in job["jobname"]]
 
