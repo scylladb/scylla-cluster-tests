@@ -7,9 +7,7 @@ from typing import Optional, Dict
 import requests
 
 from sdcm.keystore import KeyStore
-from sdcm.provision.common.utils import configure_sshd_script, configure_rsyslog_rate_limits_script, \
-    configure_rsyslog_target_script, restart_sshd_service, restart_rsyslog_service, configure_syslogng_target_script, \
-    install_syslogng_service, restart_syslogng_service
+from sdcm.provision.common.configuration_script import ConfigurationScriptBuilder
 from sdcm.utils.net import get_my_ip
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import ContainerManager
@@ -228,56 +226,25 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
 
     @classmethod
     def get_startup_script(cls) -> str:
-        script = "#!/bin/bash\n"
-        script += configure_sshd_script()
-        script += restart_sshd_service()
-        if cls._tester_obj and cls._tester_obj.params.get('logs_transport') == 'syslog-ng':
-            script += install_syslogng_service()
-            script += '\nif [ $? -ne 0 ]; then\n'
-            script += cls.get_rsyslog_configuration_script()
-            script += restart_rsyslog_service()
-            script += '\nelse\n'
-            script += cls.get_syslogng_configuration_script()
-            script += restart_syslogng_service()
-            script += '\nfi\n'
-        else:
-            script += cls.get_rsyslog_configuration_script()
-            script += restart_rsyslog_service()
-        return script
+        host_port = cls.get_logging_service_host_port()
+        if not host_port or not host_port[0]:
+            host_port = None
+        return ConfigurationScriptBuilder(
+            syslog_host_port=host_port,
+            logs_transport=cls._tester_obj.params.get('logs_transport') if cls._tester_obj else "rsyslog",
+            disable_ssh_while_running=True,
+        ).to_string()
 
     @classmethod
-    def get_logging_service_host_port(cls) -> tuple[str | None, int | None]:
+    def get_logging_service_host_port(cls) -> tuple[str, int] | None:
         if not cls.RSYSLOG_ADDRESS:
-            return None, None
+            return None
         if cls.IP_SSH_CONNECTIONS == "public" or cls.MULTI_REGION:
             rsyslog_host = "127.0.0.1"
             rsyslog_port = cls.RSYSLOG_SSH_TUNNEL_LOCAL_PORT
         else:
             rsyslog_host, rsyslog_port = cls.RSYSLOG_ADDRESS  # pylint: disable=unpacking-non-sequence
         return rsyslog_host, rsyslog_port
-
-    @classmethod
-    def get_rsyslog_configuration_script(cls) -> str:
-        script = configure_rsyslog_rate_limits_script(
-            interval=cls.RSYSLOG_IMJOURNAL_RATE_LIMIT_INTERVAL,
-            burst=cls.RSYSLOG_IMJOURNAL_RATE_LIMIT_BURST,
-        )
-        rsyslog_host, rsyslog_port = cls.get_logging_service_host_port()
-        if rsyslog_host and rsyslog_port:
-            script += configure_rsyslog_target_script(host=rsyslog_host, port=rsyslog_port)
-        return script
-
-    @classmethod
-    def get_syslogng_configuration_script(cls, hostname: str = "") -> str:
-        rsyslog_host, rsyslog_port = cls.get_logging_service_host_port()
-        if rsyslog_host and rsyslog_port:
-            return configure_syslogng_target_script(
-                host=rsyslog_host,
-                port=rsyslog_port,
-                hostname=hostname,
-                throttle_per_second=cls.SYSLOGNG_LOG_THROTTLE_PER_SECOND,
-            )
-        return ""
 
     @classmethod
     def set_ip_ssh_connections(cls, ip_type):

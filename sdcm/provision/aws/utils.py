@@ -259,7 +259,6 @@ def network_config_ipv6_workaround_script():
             MAC=`curl -s ${BASE_EC2_NETWORK_URL}`
             IPv6_CIDR=`curl -s ${BASE_EC2_NETWORK_URL}${MAC}/subnet-ipv6-cidr-blocks`
 
-            while ! systemctl status cloud-init.service | grep 'active (exited)'; do sleep 1; done
             while ! ls /etc/sysconfig/network-scripts/ifcfg-eth0; do sleep 1; done
 
             if ! grep -qi "amazon linux" /etc/os-release; then

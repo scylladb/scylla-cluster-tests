@@ -20,14 +20,16 @@ from textwrap import dedent
 def configure_rsyslog_rate_limits_script(interval: int, burst: int) -> str:
     # Configure rsyslog.  Use obsolete legacy format here because it's easier to redefine imjournal parameters.
     return dedent(fr"""
-    grep imjournalRatelimitInterval /etc/rsyslog.conf | cat <<EOF >> /etc/rsyslog.conf
-    #
-    # The following configuration was added by SCT.
-    #
-    \$ModLoad imjournal
-    \$imjournalRatelimitInterval {interval}
-    \$imjournalRatelimitBurst {burst}
+    if ! grep imjournalRatelimitInterval /etc/rsyslog.conf; then
+        cat <<EOF >> /etc/rsyslog.conf
+        #
+        # The following configuration was added by SCT.
+        #
+        \$ModLoad imjournal
+        \$imjournalRatelimitInterval {interval}
+        \$imjournalRatelimitBurst {burst}
     EOF
+    fi
     """)
 
 
@@ -55,7 +57,8 @@ def configure_syslogng_target_script(host: str, port: int, throttle_per_second: 
             sed -i -r "s/([ \t]*options[ \t]*\\\\{{)/\\\\1\\n  keep-timestamp(no);\\n/g" /etc/syslog-ng/syslog-ng.conf
         fi
 
-        grep "destination remote_sct" /etc/syslog-ng/syslog-ng.conf || cat <<EOF >>/etc/syslog-ng/syslog-ng.conf
+        if ! grep "destination remote_sct" /etc/syslog-ng/syslog-ng.conf; then
+            cat <<EOF >>/etc/syslog-ng/syslog-ng.conf
         destination remote_sct {{
             network(
                 "{host}"
@@ -68,8 +71,8 @@ def configure_syslogng_target_script(host: str, port: int, throttle_per_second: 
 
         destination d_system {{ file("/var/log/system.log"); }};
         log {{ source($source_name); destination(d_system); }};
-
         EOF
+        fi
 
         if ! grep -P "log {{.*destination\\\\(remote_sct\\\\)" /etc/syslog-ng/syslog-ng.conf; then
             echo "log {{ source($source_name); destination(remote_sct); }};" >> /etc/syslog-ng/syslog-ng.conf
@@ -88,7 +91,9 @@ def configure_syslogng_target_script(host: str, port: int, throttle_per_second: 
 
 def configure_rsyslog_set_hostname_script(host: str) -> str:
     return dedent(f"""
-    if ! grep "\\$LocalHostname {host}" /etc/rsyslog.conf; then
+    if grep "\\$LocalHostname {host}" /etc/rsyslog.conf; then
+        sed -ei "s/\\$LocalHostname  \(.*\)$/\\$LocalHostname  {host}/" /etc/rsyslog.conf || true
+    else
         echo "" >> /etc/rsyslog.conf
         echo "\\$LocalHostname {host}" >> /etc/rsyslog.conf
     fi
@@ -102,58 +107,68 @@ def configure_hosts_set_hostname_script(host: str) -> str:
 
 def configure_sshd_script():
     return dedent("""
-    sed -i -e 's/^\*[[:blank:]]*soft[[:blank:]]*nproc[[:blank:]]*4096/*\t\tsoft\tnproc\t\tunlimited/' \
-        /etc/security/limits.d/20-nproc.conf
-    echo -e '*\t\thard\tnproc\t\tunlimited' >> /etc/security/limits.d/20-nproc.conf
+    if [ -f "/etc/security/limits.d/20-nproc.conf" ]; then
+        sed -i -e "s/^\*[[:blank:]]*soft[[:blank:]]*nproc[[:blank:]]*.*/*\t\tsoft\tnproc\t\tunlimited/" \
+    /etc/security/limits.d/20-nproc.conf || true
+    else
+        echo "*    hard    nproc    unlimited" > /etc/security/limits.d/20-nproc.conf || true
+    fi
 
-    sed -i 's/#MaxSessions \(.*\)$/MaxSessions 1000/' /etc/ssh/sshd_config
-    sed -i 's/#MaxStartups \(.*\)$/MaxStartups 60/' /etc/ssh/sshd_config
-    sed -i 's/#LoginGraceTime \(.*\)$/LoginGraceTime 15s/' /etc/ssh/sshd_config
+    sed -i "s/#MaxSessions \(.*\)$/MaxSessions 1000/" /etc/ssh/sshd_config || true
+    sed -i "s/#MaxStartups \(.*\)$/MaxStartups 60/" /etc/ssh/sshd_config || true
+    sed -i "s/#LoginGraceTime \(.*\)$/LoginGraceTime 15s/" /etc/ssh/sshd_config || true
     """)
 
 
 def restart_sshd_service():
-    return "systemctl restart sshd\n"
+    return "systemctl restart sshd || true\n"
 
 
 def restart_rsyslog_service():
-    return "systemctl restart rsyslog\n"
+    return "systemctl restart rsyslog || true\n"
 
 
 def restart_syslogng_service():
-    return "systemctl restart syslog-ng\n"
+    return "systemctl restart syslog-ng  || true\n"
 
 
 def install_syslogng_service():
     return dedent("""\
+        SYSLOG_NG_INSTALLED=""
         if yum --help 2>/dev/null 1>&2 ; then
-            if ! rpm -q syslog-ng ; then
-                for n in {1..9}; do
-                    yum install -y --downloadonly syslog-ng && break
+            if rpm -q syslog-ng ; then
+                SYSLOG_NG_INSTALLED=1
+            else
+                for n in 1 2 3 4 5 6 7 8 9; do # cloud-init is running it with set +o braceexpand
+                    if yum install -y --downloadonly syslog-ng; then
+                        break
+                    fi
                 done
 
-                yum install -y syslog-ng
+                if yum install -y syslog-ng; then
+                    SYSLOG_NG_INSTALLED=1
+                fi
             fi
-            rpm -q syslog-ng
         elif apt-get --help 2>/dev/null 1>&2 ; then
-            if ! dpkg-query --show syslog-ng ; then
+            if dpkg-query --show syslog-ng ; then
+                SYSLOG_NG_INSTALLED=1
+            else
                 while ! find /proc/*/fd -lname /var/lib/dpkg/lock-frontend -exec false {} + -quit ; do
                     sleep 60
                 done
-
-                for n in {1..9}; do
-                    apt-get update && apt-get install -yd syslog-ng && break
+                cat /etc/apt/sources.list
+                for n in 1 2 3 4 5 6 7 8 9; do # cloud-init is running it with set +o braceexpand
+                    if apt-get -y update 2>&1 | tee /tmp/syslog_ng_install.output || grep NO_PUBKEY \
+        /tmp/syslog_ng_install.output; then
+                        apt-get install -y syslog-ng
+                        if dpkg-query --show syslog-ng ; then
+                            SYSLOG_NG_INSTALLED=1
+                            break
+                        fi
+                    fi
                 done
-
-                if [ $? -eq 0 ]; then
-                    apt-get install -y syslog-ng
-                else
-                    false
-                fi
             fi
-            dpkg-query --show syslog-ng
         else
             echo "Unsupported distro"
-            false
         fi
     """)

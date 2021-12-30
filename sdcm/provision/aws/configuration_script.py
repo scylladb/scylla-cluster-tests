@@ -22,8 +22,8 @@ class AWSConfigurationScriptBuilder(ConfigurationScriptBuilder):
     aws_additional_interface: bool = False
     aws_ipv6_workaround: bool = False
 
-    def to_string(self) -> str:
-        script = super().to_string()
+    def _script_body(self) -> str:
+        script = super()._script_body()
         if self.aws_additional_interface:
             script += configure_eth1_script()
         if self.aws_ipv6_workaround:

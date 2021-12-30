@@ -236,6 +236,7 @@ class DBCluster(ClusterBase):
             params=self.params,
             cluster_name=self.cluster_name,
             old_format=False,
+            syslog_host_port=self._test_config.get_logging_service_host_port(),
         ).to_string()
 
 
@@ -252,6 +253,7 @@ class OracleDBCluster(ClusterBase):
             params=self.params,
             cluster_name=self.cluster_name,
             old_format=False,
+            syslog_host_port=self._test_config.get_logging_service_host_port(),
         ).to_string()
 
 
@@ -264,7 +266,10 @@ class LoaderCluster(ClusterBase):
 
     @property
     def _user_data(self) -> str:
-        return AWSInstanceUserDataBuilder(params=self.params).to_string()
+        return AWSInstanceUserDataBuilder(
+            params=self.params,
+            syslog_host_port=self._test_config.get_logging_service_host_port(),
+        ).to_string()
 
 
 class MonitoringCluster(ClusterBase):
@@ -276,7 +281,10 @@ class MonitoringCluster(ClusterBase):
 
     @property
     def _user_data(self) -> str:
-        return AWSInstanceUserDataBuilder(params=self.params).to_string()
+        return AWSInstanceUserDataBuilder(
+            params=self.params,
+            syslog_host_port=self._test_config.get_logging_service_host_port(),
+        ).to_string()
 
 
 ClusterNode.update_forward_refs()
