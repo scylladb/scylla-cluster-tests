@@ -1736,6 +1736,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             pkg_cmd = 'zypper'
         else:
             pkg_cmd = 'apt-get'
+
+            # A workaround for: https://github.com/scylladb/scylla-pkg/issues/2578
+            if package_name == "scylla-manager-agent":
+                self.remoter.sudo('apt --fix-broken install -y')
+
         self.remoter.sudo(f'{pkg_cmd} install -y {package_name}')
 
     def is_apt_lock_free(self) -> bool:
