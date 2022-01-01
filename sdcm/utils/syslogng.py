@@ -37,6 +37,16 @@ class SyslogNGContainerMixin:  # pylint: disable=too-few-public-methods
     def syslogng_port(self) -> Optional[int]:
         return ContainerManager.get_container_port(self, "syslogng", SYSLOGNG_PORT)
 
+    @property
+    def syslogng_log_dir(self) -> Optional[str]:
+        # This should work after process that had run container was terminated and another one starts
+        # that is why it is not using variable to store log directory instead
+        return ContainerManager.get_host_volume_path(
+            instance=self,
+            container_name="syslogng",
+            path_in_container="/var/log",
+        )
+
     def syslogng_container_run_args(self, logdir: str) -> dict:
         basedir, logdir = os.path.split(logdir)
         logdir = os.path.abspath(os.path.join(os.environ.get("_SCT_LOGDIR", basedir), logdir))

@@ -36,6 +36,16 @@ class RSyslogContainerMixin:  # pylint: disable=too-few-public-methods
     def rsyslog_port(self) -> Optional[int]:
         return ContainerManager.get_container_port(self, "rsyslog", RSYSLOG_PORT)
 
+    @property
+    def rsyslog_log_dir(self) -> str:
+        # This should work after process that had run container was terminated and another one starts
+        # that is why it is not using variable to store log directory instead
+        return ContainerManager.get_host_volume_path(
+            instance=self,
+            container_name="rsyslog",
+            path_in_container="/logs",
+        )
+
     def rsyslog_container_run_args(self, logdir: str) -> dict:
         basedir, logdir = os.path.split(logdir)
         logdir = os.path.abspath(os.path.join(os.environ.get("_SCT_LOGDIR", basedir), logdir))

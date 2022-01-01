@@ -78,7 +78,7 @@ class _Name(SimpleNamespace):
         return self.full is not None
 
 
-class ContainerManager:
+class ContainerManager:  # pylint: disable=too-many-public-methods)
     """A set of methods for manipulating containers associated with a node.
 
     This manager expects that node instance has two dicts: `_containers' and `tags'.
@@ -302,6 +302,19 @@ class ContainerManager:
             return int(container.ports[f"{port}/tcp"][0]["HostPort"])
         except (IndexError, KeyError, ):
             return None
+
+    @classmethod
+    def get_host_volume_path(cls, instance: object, container_name: str, path_in_container: str) -> str:
+        """
+            Return directory on the host that is mounted into the container to path `path_in_container`
+        """
+        container = cls.get_container(instance, container_name, raise_not_found_exc=False)
+        if not container:
+            return ''
+        for mount in container.attrs.get('Mounts', []):
+            if mount.get('Destination') == path_in_container:
+                return mount.get('Source', '')
+        return ''
 
     @classmethod
     def get_environ(cls, instance: object, name: str) -> dict:
