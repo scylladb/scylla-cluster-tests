@@ -2,6 +2,7 @@ import logging
 import multiprocessing
 import os
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, Dict
 
 import requests
@@ -192,8 +193,25 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
             raise LdapServerNotReady("LDAP server didn't finish its startup yet...")
 
     @classmethod
+    def _link_running_syslog_logdir(cls, syslog_logdir):
+        current_logdir = cls.logdir()
+        if not syslog_logdir:
+            raise RuntimeError("Can't fund syslog docker log directory")
+        if syslog_logdir == current_logdir:
+            LOGGER.info("Syslog docker is running on the same directory where SCT is running")
+            return
+        LOGGER.info("Syslog docker is running on the another directory. Linking it's directory %s to %s",
+                    syslog_logdir, current_logdir)
+        current_logdir = Path(current_logdir) / "hosts"
+        docker_logdir = Path(syslog_logdir) / "hosts"
+        if current_logdir.exists():
+            current_logdir.rmdir()
+        current_logdir.symlink_to(target=docker_logdir)
+
+    @classmethod
     def configure_syslogng(cls, node):
         ContainerManager.run_container(node, "syslogng", logdir=cls.logdir())
+        cls._link_running_syslog_logdir(node.syslogng_log_dir)
         port = node.syslogng_port
         LOGGER.info("syslog-ng listen on port %s (config: %s)", port, node.syslogng_confpath)
         address = get_my_ip()
@@ -202,6 +220,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     @classmethod
     def configure_rsyslog(cls, node, enable_ngrok=False):
         ContainerManager.run_container(node, "rsyslog", logdir=cls.logdir())
+        cls._link_running_syslog_logdir(node.rsyslog_log_dir)
         port = node.rsyslog_port
         LOGGER.info("rsyslog listen on port %s (config: %s)", port, node.rsyslog_confpath)
 
