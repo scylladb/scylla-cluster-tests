@@ -2,6 +2,7 @@
 # stress_before_upgrade:           # To be configured in additional yaml
 # stress_during_entire_upgrade:       # To be configured in additional yaml
 # stress_after_cluster_upgrade:    # To be configured in additional yaml
+test_duration: 360
 
 n_db_nodes: 3
 n_loaders: 1
