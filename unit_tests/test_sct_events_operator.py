@@ -14,6 +14,7 @@
 import pickle
 import re
 import unittest
+import datetime
 
 from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.operator import ScyllaOperatorLogEvent
@@ -34,7 +35,10 @@ class TestOperatorEvents(unittest.TestCase):
 
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
         event.event_id = "9bb2980a-5940-49a7-8b08-d5c323b46aa9"
-        assert event.timestamp == 1624895582.269804
+        expected_timestamp = datetime.datetime(
+            year=datetime.datetime.now().year, month=6, day=28, hour=15, minute=53, second=2,
+            microsecond=269804, tzinfo=datetime.timezone.utc).timestamp()
+        assert event.timestamp == expected_timestamp
         self.assertEqual(
             '(ScyllaOperatorLogEvent Severity.WARNING) period_type=one-time '
             'event_id=9bb2980a-5940-49a7-8b08-d5c323b46aa9: type=TLS_HANDSHAKE_ERROR regex=TLS handshake error '
@@ -57,7 +61,10 @@ class TestOperatorEvents(unittest.TestCase):
 
         self.assertEqual(event, pickle.loads(pickle.dumps(event)))
         event.event_id = "9bb2980a-5940-49a7-8b08-d5c323b46aa9"
-        assert event.timestamp == 1624896463.572294
+        expected_timestamp = datetime.datetime(
+            year=datetime.datetime.now().year, month=6, day=28, hour=16, minute=7, second=43,
+            microsecond=572294, tzinfo=datetime.timezone.utc).timestamp()
+        assert event.timestamp == expected_timestamp
         self.assertEqual(
             '(ScyllaOperatorLogEvent Severity.NORMAL) period_type=one-time '
             'event_id=9bb2980a-5940-49a7-8b08-d5c323b46aa9: type=OPERATOR_STARTED_INFO regex="Starting controller" '
