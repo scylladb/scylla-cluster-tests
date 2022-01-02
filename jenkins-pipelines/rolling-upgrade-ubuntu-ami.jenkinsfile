@@ -12,6 +12,4 @@ rollingUpgradePipeline(
     test_config: 'test-cases/upgrades/rolling-upgrade.yaml',
     workaround_kernel_bug_for_iotune: false,
     internode_compression: 'all',
-
-    timeout: [time: 360, unit: 'MINUTES']
 )

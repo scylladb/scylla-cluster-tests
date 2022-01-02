@@ -1,5 +1,7 @@
 #!groovy
 
+(testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
+
 def call(Map pipelineParams) {
 
     def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
@@ -14,7 +16,7 @@ def call(Map pipelineParams) {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
         }
-         parameters {
+        parameters {
             string(defaultValue: "${pipelineParams.get('backend', 'gce')}",
                description: 'aws|gce',
                name: 'backend')
@@ -62,7 +64,6 @@ def call(Map pipelineParams) {
         options {
             timestamps()
             disableConcurrentBuilds()
-            timeout(pipelineParams.timeout)
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
         stages {
@@ -90,27 +91,43 @@ def call(Map pipelineParams) {
                         for (version in supportedUpgradeFromVersions(pipelineParams.base_versions, pipelineParams.linux_distro,
                                                                      params.new_scylla_repo)) {
                             def base_version = version
+
                             tasks["${base_version}"] = {
                                 node(builder.label) {
-                                    withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
-                                             "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
-                                             "SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
-
-                                        stage("Create SCT Runner for ${base_version}") {
-                                            catchError(stageResult: 'FAILURE') {
-                                                wrap([$class: 'BuildUser']) {
-                                                    dir('scylla-cluster-tests') {
-                                                        checkout scm
-                                                        timeout(time: 5, unit: 'MINUTES') {
-                                                            createSctRunner(params, pipelineParams.timeout.time, builder.region)
+                                    environment {
+                                        AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
+                                        AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+                                    }
+                                    stage('Get test duration') {
+                                        catchError(stageResult: 'FAILURE') {
+                                            timeout(time: 2, unit: 'MINUTES') {
+                                                script {
+                                                    env.SCT_TEST_ID = UUID.randomUUID().toString()
+                                                    wrap([$class: 'BuildUser']) {
+                                                        dir('scylla-cluster-tests') {
+                                                            checkout scm
+                                                            (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
                                                         }
                                                     }
                                                 }
                                             }
                                         }
-                                        stage("Upgrade from ${base_version}") {
-                                            catchError(stageResult: 'FAILURE') {
-                                                wrap([$class: 'BuildUser']) {
+                                    }
+                                    stage("Create SCT Runner for ${base_version}") {
+                                        catchError(stageResult: 'FAILURE') {
+                                            wrap([$class: 'BuildUser']) {
+                                                dir('scylla-cluster-tests') {
+                                                    timeout(time: 5, unit: 'MINUTES') {
+                                                        createSctRunner(params, runnerTimeout, builder.region)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    stage("Upgrade from ${base_version}") {
+                                        catchError(stageResult: 'FAILURE') {
+                                            wrap([$class: 'BuildUser']) {
+                                                timeout(time: testRunTimeout, unit: 'MINUTES') {
                                                     dir('scylla-cluster-tests') {
                                                         def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
                                                         def cloud_provider = getCloudProviderFromBackend(params.backend)
@@ -172,44 +189,46 @@ def call(Map pipelineParams) {
                                                 }
                                             }
                                         }
-                                        stage("Collect logs for Upgrade from ${base_version}") {
-                                            catchError(stageResult: 'FAILURE') {
-                                                wrap([$class: 'BuildUser']) {
+                                    }
+                                    stage("Collect logs for Upgrade from ${base_version}") {
+                                        catchError(stageResult: 'FAILURE') {
+                                            wrap([$class: 'BuildUser']) {
+                                                timeout(time: collectLogsTimeout, unit: 'MINUTES') {
                                                     dir('scylla-cluster-tests') {
                                                         runCollectLogs(params, builder.region)
                                                     }
                                                 }
                                             }
                                         }
-                                        stage("Clean resources for Upgrade from ${base_version}") {
-                                            catchError(stageResult: 'FAILURE') {
-                                                wrap([$class: 'BuildUser']) {
-                                                    dir('scylla-cluster-tests') {
-                                                        timeout(time: 10, unit: 'MINUTES') {
-                                                            runCleanupResource(params, builder.region)
-                                                        }
+                                    }
+                                    stage("Clean resources for Upgrade from ${base_version}") {
+                                        catchError(stageResult: 'FAILURE') {
+                                            wrap([$class: 'BuildUser']) {
+                                                dir('scylla-cluster-tests') {
+                                                    timeout(time: resourceCleanupTimeout, unit: 'MINUTES') {
+                                                        runCleanupResource(params, builder.region)
                                                     }
                                                 }
                                             }
                                         }
-                                        stage("Send email for Upgrade from ${base_version}") {
-                                            def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
-                                            catchError(stageResult: 'FAILURE') {
-                                                wrap([$class: 'BuildUser']) {
-                                                    dir('scylla-cluster-tests') {
-                                                        timeout(time: 10, unit: 'MINUTES') {
-                                                            runSendEmail(params, currentBuild)
-                                                        }
+                                    }
+                                    stage("Send email for Upgrade from ${base_version}") {
+                                        def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
+                                        catchError(stageResult: 'FAILURE') {
+                                            wrap([$class: 'BuildUser']) {
+                                                dir('scylla-cluster-tests') {
+                                                    timeout(time: 10, unit: 'MINUTES') {
+                                                        runSendEmail(params, currentBuild)
                                                     }
                                                 }
                                             }
                                         }
-                                        stage('Clean SCT Runners') {
-                                            catchError(stageResult: 'FAILURE') {
-                                                wrap([$class: 'BuildUser']) {
-                                                    dir('scylla-cluster-tests') {
-                                                        cleanSctRunners(params, currentBuild)
-                                                    }
+                                    }
+                                    stage('Clean SCT Runners') {
+                                        catchError(stageResult: 'FAILURE') {
+                                            wrap([$class: 'BuildUser']) {
+                                                dir('scylla-cluster-tests') {
+                                                    cleanSctRunners(params, currentBuild)
                                                 }
                                             }
                                         }

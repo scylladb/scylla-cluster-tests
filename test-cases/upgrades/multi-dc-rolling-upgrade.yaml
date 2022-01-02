@@ -1,4 +1,4 @@
-test_duration: 240
+test_duration: 360
 # Workloads
 stress_before_upgrade: cassandra-stress write no-warmup cl=ALL n=10100200 -schema 'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3,eu-west-2scylla_node_west=3) compression=LZ4Compressor compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=1000 -pop seq=1..10100200 -log interval=5
 stress_during_entire_upgrade: cassandra-stress write no-warmup cl=QUORUM n=20100200 -schema 'replication(strategy=NetworkTopologyStrategy,eu-westscylla_node_west=3,eu-west-2scylla_node_west=3) compression=LZ4Compressor compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=60 -pop seq=10100201..30200400 -log interval=5
