@@ -1112,16 +1112,15 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                                                    instance=instance,
                                                    global_ip=instance['PublicIpAddress'],
                                                    tags={**self.tags, "NodeType": "monitor", }))
-        # Temporarily disabling cloud-manager logs collection
-        # due to: https://github.com/scylladb/scylla-cluster-tests/issues/3816
-        if self.params["use_cloud_manager"] and False:  # pylint: disable=condition-evals-to-constant
+        if self.params["use_cloud_manager"]:
             try:
                 from cluster_cloud import get_manager_instance_by_cluster_id  # pylint: disable=import-outside-toplevel
             except ImportError:
                 LOGGER.error("Couldn't collect Siren manager logs, cluster_cloud module isn't installed")
             else:
                 instance = get_manager_instance_by_cluster_id(cluster_id=self.params["cloud_cluster_id"],
-                                                              region_name=self.params["region_name"][0])
+                                                              region_name=self.params["region_name"][0],
+                                                              cloud_manager_id=self.params["cloud_manager_id"])
                 name = [tag["Value"]
                         for tag in instance["Tags"] if tag["Key"] == "Name"]
                 self.siren_manager_set.append(CollectingNode(name=name[0],
