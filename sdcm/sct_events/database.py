@@ -29,6 +29,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class DatabaseLogEvent(LogEvent, abstract=True):
+    WARNING: Type[LogEventProtocol]
     NO_SPACE_ERROR: Type[LogEventProtocol]
     UNKNOWN_VERB: Type[LogEventProtocol]
     CLIENT_DISCONNECT: Type[LogEventProtocol]
@@ -73,6 +74,8 @@ class ReactorStalledMixin(Generic[T_log_event]):
         return super().add_info(node=node, line=line, line_number=line_number)
 
 
+DatabaseLogEvent.add_subevent_type("WARNING", severity=Severity.WARNING,
+                                   regex="!WARNING ")
 DatabaseLogEvent.add_subevent_type("NO_SPACE_ERROR", severity=Severity.ERROR,
                                    regex="No space left on device")
 DatabaseLogEvent.add_subevent_type("UNKNOWN_VERB", severity=Severity.WARNING,
@@ -130,6 +133,7 @@ DatabaseLogEvent.add_subevent_type("stream_exception", severity=Severity.ERROR,
 
 
 SYSTEM_ERROR_EVENTS = (
+    DatabaseLogEvent.WARNING(),
     DatabaseLogEvent.NO_SPACE_ERROR(),
     DatabaseLogEvent.UNKNOWN_VERB(),
     DatabaseLogEvent.CLIENT_DISCONNECT(),
