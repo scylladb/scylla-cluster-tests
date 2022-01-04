@@ -2497,7 +2497,9 @@ class FillDatabaseData(ClusterTester):
                         [],
                         [[1, 0, 1], [1, 1, 2], [0, 0, 0], [0, 1, 1]]
                         ],
-            'min_version': '',
+            # cause of https://github.com/scylladb/scylla/issues/9311 4.3 would keep failing on this check
+            # we can disable it
+            'min_version': '4.4.rc0',
             'max_version': '',
             'skip': ''},
         # collection_flush_test: CASSANDRA-5805
