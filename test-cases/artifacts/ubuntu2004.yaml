@@ -17,4 +17,4 @@ scylla_repo: 'http://downloads.scylladb.com/deb/unstable/unified/master/latest/s
 test_duration: 60
 user_prefix: 'artifacts-ubuntu2004'
 system_auth_rf: 1
-scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/manager/deb/unstable/focal/branch-2.3/2/scylla-manager-2.3/scylla-manager.list'
+scylla_mgmt_agent_repo: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.6-focal.list'

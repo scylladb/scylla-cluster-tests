@@ -17,4 +17,4 @@ scylla_repo: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-
 test_duration: 60
 user_prefix: 'artifacts-ubuntu1804'
 system_auth_rf: 1
-scylla_mgmt_agent_repo: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.3-bionic.list'
+scylla_mgmt_agent_repo: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.6-bionic.list'
