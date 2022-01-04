@@ -71,6 +71,10 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
+            string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
+               description: 'Availability zone',
+               name: 'availability_zone')
+
         }
         options {
             timestamps()
@@ -185,6 +189,7 @@ def call(Map pipelineParams) {
                                                     export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
                                                     export SCT_IP_SSH_CONNECTIONS="${params.ip_ssh_connections}"
                                                     export SCT_INSTANCE_PROVISION="${params.provision_type}"
+                                                    export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
 
                                                     echo "start test ......."
                                                     ./docker/env/hydra.sh run-test artifacts_test --backend ${params.backend} --logdir "`pwd`"
