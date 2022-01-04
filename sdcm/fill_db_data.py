@@ -831,7 +831,7 @@ class FillDatabaseData(ClusterTester):
             # from "[['Bob'], ['Tom']]" to "[['Tom'], ['Bob']]" from versions Scylla 4.4 and above
             'results': [[['Tom'], ['Bob']]],
             'min_version': '4.4.rc0',
-            'max_version': '',
+            'max_version': '2020.1.rc0',
             'skip_condition': 'self.version_new_sorting_order_with_secondary_indexes()',
             'skip': ''},
         # nameless_index_test_old_version:  Test CREATE INDEX without name and validate the index can be dropped
