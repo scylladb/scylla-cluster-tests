@@ -11,6 +11,7 @@ DataValidatorEvent.UpdatedRowsValidator: WARNING
 DataValidatorEvent.DeletedRowsValidator: ERROR
 FullScanEvent.start: NORMAL
 FullScanEvent.finish: ERROR
+DatabaseLogEvent.WARNING: WARNING
 DatabaseLogEvent.NO_SPACE_ERROR: ERROR
 DatabaseLogEvent.UNKNOWN_VERB: WARNING
 DatabaseLogEvent.CLIENT_DISCONNECT: WARNING
