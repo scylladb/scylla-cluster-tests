@@ -7,7 +7,7 @@ rollingUpgradePipeline(
     backend: 'gce',
     base_versions: ['2020.1', '4.3', '2021.1'],
     linux_distro: 'ubuntu-xenial',
-    gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-1604-lts',
+    gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-pro-cloud/global/images/family/ubuntu-pro-1604-lts',
 
     test_name: 'upgrade_test.UpgradeTest.test_rolling_upgrade',
     test_config: 'test-cases/upgrades/rolling-upgrade.yaml',
