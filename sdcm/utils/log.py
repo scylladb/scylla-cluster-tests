@@ -131,6 +131,13 @@ def configure_logging(exception_handler=None,  # pylint: disable=too-many-argume
                 'filename': '{log_dir}/sct.log',
                 'mode': 'a',
                 'formatter': 'default',
+            },
+            'argus': {
+                'level': 'DEBUG',
+                'class': 'logging.FileHandler',
+                'filename': '{log_dir}/argus.log',
+                'mode': 'a',
+                'formatter': 'default',
             }
         }
     if loggers is None:
@@ -164,7 +171,17 @@ def configure_logging(exception_handler=None,  # pylint: disable=too-many-argume
             },
             'anyconfig': {
                 'level': 'ERROR'
-            }
+            },
+            'argus': {
+                'handlers': ['argus'],
+                'level': 'DEBUG',
+                'propagate': False
+            },
+            'sdcm.argus_test_run': {
+                'handlers': ['argus'],
+                'level': 'DEBUG',
+                'propagate': False
+            },
         }
     if config is None:
         config = {

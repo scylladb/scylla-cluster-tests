@@ -920,6 +920,8 @@ class SCTLogCollector(LogCollector):
                 search_locally=True),
         FileLog(name='scylla-migrate.log',
                 search_locally=True),
+        FileLog(name='argus.log',
+                search_locally=True),
     ]
     cluster_log_type = 'sct-runner'
     cluster_dir_prefix = 'sct-runner'
