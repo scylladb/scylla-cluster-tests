@@ -10,7 +10,6 @@ post_behavior_db_nodes: "destroy"
 post_behavior_loader_nodes: "destroy"
 post_behavior_monitor_nodes: "destroy"
 use_preinstalled_scylla: true
-scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.3.repo'
 
 user_prefix: manager-regression
 space_node_threshold: 6442
