@@ -1,4 +1,4 @@
-test_duration: 255
+test_duration: 240
 stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5"
              ]
 
@@ -20,3 +20,4 @@ space_node_threshold: 64424
 
 gce_n_local_ssd_disk_db: 2
 use_preinstalled_scylla: true
+ip_ssh_connections: 'ipv6'

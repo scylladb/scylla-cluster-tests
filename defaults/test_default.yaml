@@ -9,7 +9,7 @@ scylla_repo_m: 'http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylla
 scylla_mgmt_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylladb-manager-2.4.repo'
 scylla_mgmt_agent_repo: 'http://downloads.scylladb.com.s3.amazonaws.com/deb/ubuntu/scylladb-manager-2.4-focal.list'
 
-scylla_repo_loader: ''
+scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.6.repo'
 
 experimental: true
 round_robin: false
