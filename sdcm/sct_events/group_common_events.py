@@ -119,6 +119,16 @@ def ignore_no_space_errors(node):
             line="No space left on device",
             node=node,
         ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.DATABASE_ERROR,
+            line="No such file or directory",
+            node=node,
+        ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.FILESYSTEM_ERROR,
+            line="No such file or directory",
+            node=node,
+        ))
         yield
 
 
