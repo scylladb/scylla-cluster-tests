@@ -2159,23 +2159,39 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         result = self.target_node.run_nodetool('clearsnapshot')
         self.log.debug(result)
 
-    # NOTE: '2022.1.rc0' is set in advance, not guaranteed to match when appears
-    # NOTE: current variant of the toppartitions feature is supported since 4.5 OSS
-    @scylla_versions(("4.5.rc1", None), ("2022.1.rc0", None))
+    # NOTE: '2023.1.rc0' is set in advance, not guaranteed to match when appears
+    @scylla_versions(("4.6.rc0", None), ("2023.1.rc0", None))
     def disrupt_show_toppartitions(self):
+        # NOTE: new API is supported only starting with Scylla 4.6
+        #       In Scylla 4.5 it exists but disabled.
+        return self._disrupt_show_toppartitions(allow_new_api=True)
+
+    @scylla_versions(("4.3.rc1", "4.5"), ("2020.1.rc0", "2022.1"))
+    def disrupt_show_toppartitions(self):  # pylint: disable=function-redefined
+        return self._disrupt_show_toppartitions(allow_new_api=False)
+
+    def _disrupt_show_toppartitions(self, allow_new_api: bool):
+        self.log.debug(
+            "Running 'disrupt_show_toppartitions' method using %s API.",
+            "new and old" if allow_new_api else "old")
         result = self.target_node.run_nodetool(sub_cmd='help', args='toppartitions')
         if 'Unknown command toppartitions' in result.stdout:
             raise UnsupportedNemesis("nodetool doesn't support toppartitions")
         ks_cf_list = self.cluster.get_any_ks_cf_list(self.target_node)
         if not ks_cf_list:
             raise UnsupportedNemesis('User-defined Keyspace and ColumnFamily are not found.')
-        top_partition_api = random.choice([NewApiTopPartitionCmd, OldApiTopPartitionCmd])(ks_cf_list)
-        # workaround for issue #4519
-        self.target_node.run_nodetool('cfstats')
-        top_partition_api.generate_cmd_arg_values()
-        result = self.target_node.run_nodetool(sub_cmd='toppartitions', args=top_partition_api.get_cmd_args())
 
-        top_partition_api.verify_output(result.stdout)
+        top_partition_api_cmds = [OldApiTopPartitionCmd]
+        if allow_new_api:
+            top_partition_api_cmds.append(NewApiTopPartitionCmd)
+        for top_partition_api_cmd in top_partition_api_cmds:
+            top_partition_api = top_partition_api_cmd(ks_cf_list)
+            # workaround for issue #4519
+            self.target_node.run_nodetool('cfstats')
+            top_partition_api.generate_cmd_arg_values()
+            result = self.target_node.run_nodetool(
+                sub_cmd='toppartitions', args=top_partition_api.get_cmd_args())
+            top_partition_api.verify_output(result.stdout)
 
     def get_rate_limit_for_network_disruption(self) -> Optional[str]:
         if not self.monitoring_set.nodes:
