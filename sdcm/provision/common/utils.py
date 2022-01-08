@@ -89,20 +89,20 @@ def configure_syslogng_target_script(host: str, port: int, throttle_per_second: 
         """.format(host=host, port=port, hostname=hostname, throttle_per_second=throttle_per_second))
 
 
-def configure_rsyslog_set_hostname_script(host: str) -> str:
+def configure_rsyslog_set_hostname_script(hostname: str) -> str:
     return dedent(f"""
-    if grep "\\$LocalHostname {host}" /etc/rsyslog.conf; then
-        sed -ei "s/\\$LocalHostname  \(.*\)$/\\$LocalHostname  {host}/" /etc/rsyslog.conf || true
+    if grep "\\$LocalHostname {hostname}" /etc/rsyslog.conf; then
+        sed -ei "s/\\$LocalHostname  \(.*\)$/\\$LocalHostname  {hostname}/" /etc/rsyslog.conf || true
     else
         echo "" >> /etc/rsyslog.conf
-        echo "\\$LocalHostname {host}" >> /etc/rsyslog.conf
+        echo "\\$LocalHostname {hostname}" >> /etc/rsyslog.conf
     fi
     """)
 
 
-def configure_hosts_set_hostname_script(host: str) -> str:
-    return f'grep -P "127.0.0.1[^\\\\n]+{host}" /etc/hosts || sed -ri "s/(127.0.0.1[ \\t]+' \
-           f'localhost[^\\n]*)$/\\1\\t{host}/" /etc/hosts\n'
+def configure_hosts_set_hostname_script(hostname: str) -> str:
+    return f'grep -P "127.0.0.1[^\\\\n]+{hostname}" /etc/hosts || sed -ri "s/(127.0.0.1[ \\t]+' \
+           f'localhost[^\\n]*)$/\\1\\t{hostname}/" /etc/hosts\n'
 
 
 def configure_sshd_script():
