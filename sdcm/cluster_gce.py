@@ -19,7 +19,7 @@ from typing import Dict, Any
 from functools import cached_property
 import json
 
-from libcloud.common.google import GoogleBaseError, ResourceNotFoundError
+from libcloud.common.google import GoogleBaseError, ResourceNotFoundError, InvalidRequestError
 
 from sdcm import cluster
 from sdcm.keystore import pub_key_from_private_key_file
@@ -302,6 +302,12 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         return gce_disk_struct
 
     def _create_instance(self, node_index, dc_idx, spot=False):
+        def set_tags_as_labels(_instance):
+            self.log.debug(f"Expected tags are {self.tags}")
+            lower_tags = dict((k.lower(), v.lower().replace('.', '-')) for k, v in self.tags.items())
+            self.log.debug(f"Lower tags are {lower_tags}")
+            self._gce_services[dc_idx].ex_set_node_labels(_instance, lower_tags)
+
         # if size of disk is larget than 80G, then
         # change the timeout of job completion to default * 3.
 
@@ -348,6 +354,11 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                                   spot=spot)
 
         self.log.info('Created %s instance %s', 'spot' if spot else 'on-demand', instance)
+        try:
+            set_tags_as_labels(instance)
+        except InvalidRequestError as exc:
+            self.log.warning(f"Unable to set tags as labels due to {exc}")
+
         if gce_job_default_timeout:
             self.log.info('Restore default job timeout %s' % gce_job_default_timeout)
             self._gce_services[dc_idx].connection.timeout = gce_job_default_timeout
