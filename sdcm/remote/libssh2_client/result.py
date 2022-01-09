@@ -49,15 +49,15 @@ class Result:  # pylint: disable=too-many-instance-attributes
         for stream in ("stdout", "stderr"):
             val = getattr(self, stream)
             ret.append(
-                u"""=== {} ===
+                """=== {} ===
 {}
 """.format(
                     stream, val.rstrip()
                 )
                 if val
-                else u"(no {})".format(stream)
+                else "(no {})".format(stream)
             )
-        return u"\n".join(ret)
+        return "\n".join(ret)
 
     def __repr__(self) -> str:
         template = "<Result cmd={!r} exited={}>"

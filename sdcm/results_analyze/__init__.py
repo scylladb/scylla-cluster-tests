@@ -315,16 +315,16 @@ class SpecifiedStatsPerformanceAnalyzer(BaseResultsAnalyzer):
         tested_params = stats.keys()
         group_by_version = {}
         # repair_runtime result example:
-        # { u'_id': u'20190303-105120-405065',
-        #   u'_index': u'performanceregressionrowlevelrepairtest',
-        #   u'_source': { u'coredumps': { },
-        #                 u'errors': { },
-        #                 u'nemesis': { },
-        #                 u'repair_runtime': 11.847206830978394,
-        #                 u'results': { u'latency_read_99': { },
-        #                               u'latency_write_99': { },
-        #                               u'repair_runtime': -1,
-        #                               u'throughput': { }},
+        # { '_id': '20190303-105120-405065',
+        #   '_index': 'performanceregressionrowlevelrepairtest',
+        #   '_source': { 'coredumps': { },
+        #                'errors': { },
+        #                'nemesis': { },
+        #                'repair_runtime': 11.847206830978394,
+        #                'results': { 'latency_read_99': { },
+        #                             'latency_write_99': { },
+        #                             'repair_runtime': -1,
+        #                             'throughput': { }},
         #
         # # Find the average results for each version per tested param (stats)
         for tag_row in tests_filtered['hits']['hits']:

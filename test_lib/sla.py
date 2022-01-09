@@ -7,7 +7,7 @@ from cassandra import InvalidRequest
 
 
 def sla_result_to_dict(sla_result):
-    # Result example: <type 'list'>: [Row(service_level=u'sla1', shares=1)]
+    # Result example: <type 'list'>: [Row(service_level='sla1', shares=1)]
     sla_list = []
     for row in sla_result:
         current_sla = []
