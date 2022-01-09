@@ -268,7 +268,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
         if not core_info.coredump_info:
             return
         log_file = os.path.join(self.node.logdir, 'coredump.log')
-        with open(log_file, 'a') as log_file_obj:
+        with open(log_file, 'a', encoding="utf-8") as log_file_obj:
             log_file_obj.write(core_info.coredump_info)
         for line in core_info.coredump_info.splitlines():
             self.log.error(line)

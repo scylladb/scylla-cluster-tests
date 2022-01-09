@@ -411,7 +411,7 @@ class ContainerManager:
 
 def running_in_docker():
     path = '/proc/self/cgroup'
-    with open(path) as cgroup:
+    with open(path, encoding="utf-8") as cgroup:
         return (
             os.path.exists('/.dockerenv') or
             os.path.isfile(path) and any('docker' in line for line in cgroup)

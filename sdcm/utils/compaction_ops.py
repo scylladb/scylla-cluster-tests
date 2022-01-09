@@ -90,7 +90,7 @@ class CompactionOps:
                                        stop_func: Callable, mark: Optional[int] = None):
         LOGGER.info("Starting to watch for user compaction logged...")
         start_time = time.time()
-        with open(node.system_log, "r") as log_file:
+        with open(node.system_log, encoding="utf-8") as log_file:
             if mark:
                 log_file.seek(mark)
 

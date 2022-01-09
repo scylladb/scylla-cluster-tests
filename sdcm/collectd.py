@@ -47,7 +47,7 @@ class CollectdSetup():  # pylint: disable=too-many-instance-attributes
         tmp_path_exporter = os.path.join(tmp_dir_exporter, 'scylla.conf')
         tmp_path_remote = "/tmp/scylla-collectd.conf"
 
-        with open(tmp_path_exporter, 'w') as tmp_cfg_prom:  # deepcode ignore BinaryWrite~open: automatically converted to utf8
+        with open(tmp_path_exporter, 'w', encoding="utf-8") as tmp_cfg_prom:
             tmp_cfg_prom.write(self._collectd_cfg)   # pylint: disable=no-member
         try:
             self.node.remoter.send_files(src=tmp_path_exporter, dst=tmp_path_remote)
@@ -348,7 +348,7 @@ end script
         tmp_path_exporter = os.path.join(tmp_dir_exporter, 'collectd_exporter.conf')
         tmp_path_remote = '/tmp/collectd_exporter.conf'
         system_path_remote = '/etc/init/collectd_exporter.conf'
-        with open(tmp_path_exporter, 'w') as tmp_cfg_prom:
+        with open(tmp_path_exporter, 'w', encoding="utf-8") as tmp_cfg_prom:
             tmp_cfg_prom.write(service_file)
         try:
             self.node.remoter.send_files(src=tmp_path_exporter, dst=tmp_path_remote)
@@ -423,7 +423,7 @@ LoadPlugin processes
         tmp_path_exporter = os.path.join(tmp_dir_exporter, 'collectd-exporter.service')
         tmp_path_remote = '/tmp/collectd-exporter.service'
         system_path_remote = '/etc/systemd/system/collectd-exporter.service'
-        with open(tmp_path_exporter, 'w') as tmp_cfg_prom:  # deepcode ignore BinaryWrite~open: automatically converted to utf8
+        with open(tmp_path_exporter, 'w', encoding="utf-8") as tmp_cfg_prom:
             tmp_cfg_prom.write(systemd_unit)
         try:
             self.node.remoter.send_files(src=tmp_path_exporter, dst=tmp_path_remote)
@@ -452,7 +452,7 @@ LoadPlugin processes
         tmp_path_exporter = os.path.join(tmp_dir_exporter, 'collectd_exporter.conf')
         tmp_path_remote = '/tmp/collectd_exporter.conf'
         system_path_remote = '/etc/init/collectd_exporter.conf'
-        with open(tmp_path_exporter, 'w') as tmp_cfg_prom:  # deepcode ignore BinaryWrite~open: automatically converted to utf8
+        with open(tmp_path_exporter, 'w', encoding="utf-8") as tmp_cfg_prom:
             tmp_cfg_prom.write(service_file)
         try:
             self.node.remoter.send_files(src=tmp_path_exporter, dst=tmp_path_remote)

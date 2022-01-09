@@ -184,7 +184,7 @@ def latency_calculator_decorator(func):
         if not os.path.exists(latency_results_file_path):
             latency_results = {}
         else:
-            with open(latency_results_file_path, 'r') as file:
+            with open(latency_results_file_path, encoding="utf-8") as file:
                 data = file.read().strip()
                 latency_results = json.loads(data or '{}')
 
@@ -200,7 +200,7 @@ def latency_calculator_decorator(func):
         else:
             latency_results[func.__name__]['cycles'].append(result)
 
-        with open(latency_results_file_path, 'w') as file:
+        with open(latency_results_file_path, 'w', encoding="utf-8") as file:
             json.dump(latency_results, file)
 
         return res

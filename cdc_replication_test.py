@@ -46,7 +46,7 @@ def mode_str(mode: Mode) -> str:
 
 
 def print_file_to_stdout(path: str) -> None:
-    with open(path, "r") as file:
+    with open(path, encoding="utf-8") as file:
         shutil.copyfileobj(file, sys.stdout)
 
 
@@ -58,7 +58,7 @@ def write_cql_result(res, path: str):
     :param path: path to file
     :type path: str
     """
-    with open(path, 'w') as file:
+    with open(path, 'w', encoding="utf-8") as file:
         for row in res:
             file.write(str(row) + '\n')
         file.flush()
@@ -300,7 +300,7 @@ class CDCReplicationTest(ClusterTester):
         migrate_log_path = None
         migrate_ok = True
         if mode == Mode.PREIMAGE:
-            with open(replicator_log_path) as file:
+            with open(replicator_log_path, encoding="utf-8") as file:
                 self.consistency_ok = not 'Inconsistency detected.\n' in (line for line in file)
         else:
             migrate_log_path = os.path.join(self.logdir, 'scylla-migrate.log')
@@ -332,7 +332,7 @@ class CDCReplicationTest(ClusterTester):
         migrate_ok = res.ok
         if not migrate_ok:
             self.log.error('scylla-migrate command returned status {}'.format(res.exit_status))
-        with open(migrate_log_dst_path) as file:
+        with open(migrate_log_dst_path, encoding="utf-8") as file:
             consistency_ok = 'Consistency check OK.\n' in (line for line in file)
 
         return (migrate_ok, consistency_ok)

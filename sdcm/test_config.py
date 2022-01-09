@@ -66,7 +66,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     def set_test_id(cls, test_id):
         if cls.set_test_id_only(test_id):
             test_id_file_path = os.path.join(cls.logdir(), "test_id")
-            with open(test_id_file_path, "w") as test_id_file:
+            with open(test_id_file_path, "w", encoding="utf-8") as test_id_file:
                 test_id_file.write(str(test_id))
 
     @classmethod
@@ -107,7 +107,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     def latency_results_file(cls):
         if not cls._latency_results_file_path:
             cls._latency_results_file_path = os.path.join(cls._logdir, cls._latency_results_file_name)
-            with open(cls._latency_results_file_path, 'w'):
+            with open(cls._latency_results_file_path, 'w', encoding="utf-8"):
                 pass
         return cls._latency_results_file_path
 

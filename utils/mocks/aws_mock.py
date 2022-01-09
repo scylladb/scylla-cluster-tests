@@ -62,7 +62,7 @@ class AwsMock:
     def run(self, force: bool = False) -> str:
         if not force and AWS_MOCK_IP_FILE.exists():
             LOGGER.warning("%s found, don't run a new container and return AWS Mock IP from it", AWS_MOCK_IP_FILE)
-            return AWS_MOCK_IP_FILE.read_text()
+            return AWS_MOCK_IP_FILE.read_text(encoding="utf-8")
 
         container = ContainerManager.run_container(self, "aws_mock")
         res = container.exec_run(["bash", "-cxe", dedent("""\
@@ -78,7 +78,7 @@ class AwsMock:
             raise DockerException(f"{container}: {res.output.decode('utf-8')}")
 
         aws_mock_ip = ContainerManager.get_ip_address(self, "aws_mock")
-        AWS_MOCK_IP_FILE.write_text(aws_mock_ip)
+        AWS_MOCK_IP_FILE.write_text(aws_mock_ip, encoding="utf-8")
 
         return aws_mock_ip
 
@@ -102,7 +102,7 @@ class AwsMock:
             if not AWS_MOCK_IP_FILE.exists():
                 LOGGER.info("No AWS Mock requested to clean")
                 return
-            aws_mock_ip = AWS_MOCK_IP_FILE.read_text()
+            aws_mock_ip = AWS_MOCK_IP_FILE.read_text(encoding="utf-8")
             for container in containers:
                 container.reload()
                 if container.attrs["NetworkSettings"]["IPAddress"] == aws_mock_ip:

@@ -590,6 +590,6 @@ class IntegrationTests(unittest.TestCase):
         ) for config_name in os.listdir(BASE_FOLDER) if config_name.endswith('.yaml')
     ])
     def test_integration_node(self, config_path, result_path):
-        with open(result_path, 'r') as result_file:
+        with open(result_path, encoding="utf-8") as result_file:
             expected_node_config = result_file.read()
         self._run_test(config_path, expected_node_config=expected_node_config)

@@ -237,14 +237,14 @@ class LogWriteWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
     def submit(self, stream: str) -> list:
         stream_buffer = stream[self.len:]
 
-        with open(self.log_file, "a+") as log_file:
+        with open(self.log_file, "a+", encoding="utf-8") as log_file:
             log_file.write(stream_buffer)
 
         self.len = len(stream)
         return []
 
     def submit_line(self, line: str):
-        with open(self.log_file, "a+") as log_file:
+        with open(self.log_file, "a+", encoding="utf-8") as log_file:
             log_file.write(line)
 
 

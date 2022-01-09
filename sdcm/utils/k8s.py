@@ -329,7 +329,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             if envsubst:
                 data = LOCALRUNNER.run(f'{environ_str}envsubst<{config_path}', verbose=False).stdout
             else:
-                with open(config_path, 'r') as config_file_stream:
+                with open(config_path, encoding="utf-8") as config_file_stream:
                     data = config_file_stream.read()
             file_content = yaml.safe_load_all(data)
 
@@ -425,7 +425,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             kube_config_path = os.path.expanduser(os.environ.get('KUBECONFIG', '~/.kube/config'))
         LOGGER.debug("Patch %s to use file token %s", kube_config_path, static_token_path)
 
-        with open(kube_config_path) as kube_config:
+        with open(kube_config_path, encoding="utf-8") as kube_config:
             data = yaml.safe_load(kube_config)
         auth_type, user_config = KubernetesOps.get_kubectl_auth_config_for_first_user(data)
 
@@ -433,7 +433,7 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
             raise RuntimeError("Unable to find user configuration in ~/.kube/config")
         KubernetesOps.patch_kubectl_auth_config(user_config, auth_type, "cat", [static_token_path])
 
-        with open(kube_config_path, "w") as kube_config:
+        with open(kube_config_path, "w", encoding="utf-8") as kube_config:
             yaml.safe_dump(data, kube_config)
 
         LOGGER.debug('Patched kubectl config at %s with static kubectl token from %s',
@@ -574,12 +574,12 @@ class TokenUpdateThread(threading.Thread, metaclass=abc.ABCMeta):
             LOGGER.debug('Failed to cleanup temporary token: %s', exc)
 
     def _check_token_validity_in_temporary_location(self):
-        with open(self._temporary_token_path, 'r') as gcloud_config_file:
+        with open(self._temporary_token_path, encoding="utf-8") as gcloud_config_file:
             json.load(gcloud_config_file)
 
     def _get_token_and_save_to_temporary_location(self):
         token = self.get_token()
-        with open(self._temporary_token_path, 'w+') as gcloud_config_file:
+        with open(self._temporary_token_path, 'w+', encoding="utf-8") as gcloud_config_file:
             gcloud_config_file.write(token)
             gcloud_config_file.flush()
 

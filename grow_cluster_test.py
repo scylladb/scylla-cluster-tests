@@ -37,7 +37,7 @@ class GrowClusterTest(ClusterTester):
 
     def get_stress_cmd_profile(self):
         cs_custom_config = get_data_dir_path('cassandra-stress-custom-mixed-narrow-wide-row.yaml')
-        with open(cs_custom_config, 'r') as cs_custom_config_file:
+        with open(cs_custom_config, encoding="utf-8") as cs_custom_config_file:
             self.log.info('Using custom cassandra-stress config:')
             self.log.info(cs_custom_config_file.read())
         for node in self.loaders.nodes:

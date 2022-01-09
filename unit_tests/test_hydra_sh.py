@@ -22,7 +22,7 @@ class HydraTestCaseTmpDir:
     @staticmethod
     def _touch_file(file_path: str):
         if not os.path.exists(file_path):
-            with open(file_path, 'w') as token_file:
+            with open(file_path, 'w', encoding="utf-8") as token_file:
                 token_file.write(' ')
                 token_file.flush()
 

@@ -47,13 +47,13 @@ def remote_file(remoter, remote_path, serializer=StringIO.getvalue, deserializer
                   throw_exc=True,
                   src=remote_path,
                   dst=local_tempfile)
-    with open(local_tempfile, "r") as fobj:
+    with open(local_tempfile, encoding="utf-8") as fobj:
         parsed_data = deserializer(fobj)
 
     yield parsed_data
 
     content = serializer(parsed_data)
-    with open(local_tempfile, "w") as fobj:
+    with open(local_tempfile, "w", encoding="utf-8") as fobj:
         fobj.write(content)
 
     LOGGER.debug("New content of `%s':\n%s", remote_path, content)

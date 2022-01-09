@@ -424,14 +424,14 @@ class TestRemoteFile(unittest.TestCase):
                 return Result(stdout="", stderr="")
 
             def send_files(self, src: str, dst: str, *_, **__) -> bool:
-                with open(src) as fobj:
+                with open(src, encoding="utf-8") as fobj:
                     self.sf_data = fobj.read()
                 self.sf_src = src
                 self.sf_dst = dst
                 return True
 
             def receive_files(self, src: str, dst: str, *_, **__) -> bool:
-                with open(dst, "w"):
+                with open(dst, "w", encoding="utf-8"):
                     pass
                 self.rf_src = src
                 self.rf_dst = dst

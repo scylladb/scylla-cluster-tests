@@ -46,7 +46,7 @@ def duration_to_timedelta(duration_string):
 
 
 def get_manager_repo_from_defaults(manager_version_name, distro):
-    with open("defaults/manager_versions.yaml", 'r') as mgmt_config:
+    with open("defaults/manager_versions.yaml", encoding="utf-8") as mgmt_config:
         manager_repos_by_version_dict = yaml.safe_load(mgmt_config)["manager_repos_by_version"]
 
     version_specific_repos = manager_repos_by_version_dict.get(manager_version_name, None)
@@ -61,7 +61,7 @@ def get_manager_repo_from_defaults(manager_version_name, distro):
 
 
 def get_manager_scylla_backend(scylla_backend_version_name, distro):
-    with open("defaults/manager_versions.yaml", 'r') as mgmt_config:
+    with open("defaults/manager_versions.yaml", encoding="utf-8") as mgmt_config:
         scylla_backend_repos_by_version_dict = yaml.safe_load(mgmt_config)["scylla_backend_repo_by_version"]
 
     version_specific_repos = scylla_backend_repos_by_version_dict.get(scylla_backend_version_name, None)

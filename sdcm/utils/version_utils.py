@@ -216,7 +216,7 @@ def get_gemini_version(output: str):
 
 def get_node_supported_sstable_versions(node_system_log) -> List[str]:
     output = []
-    with open(node_system_log) as file:
+    with open(node_system_log, encoding="utf-8") as file:
         for line in file.readlines():
             if match := SSTABLE_FORMAT_VERSION_REGEX.search(line):
                 output.append(match.group(1).lower())

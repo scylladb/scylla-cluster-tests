@@ -338,7 +338,7 @@ class MicroBenchmarkingResultsAnalyzer(BaseResultsAnalyzer):  # pylint: disable=
                         test_args = os.path.splitext(new_filename)[0]
                         test_type = dirname + "_" + test_args
                         json_path = os.path.join(dirname, dataset_name, filename)
-                        with open(json_path, 'r') as json_file:
+                        with open(json_path, encoding="utf-8") as json_file:
                             self.log.info("Reading: %s", json_path)
                             datastore = json.load(json_file)
                         datastore.update({'hostname': self.hostname,

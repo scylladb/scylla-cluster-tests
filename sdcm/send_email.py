@@ -654,7 +654,7 @@ def read_email_data_from_file(filename):
     email_data = None
     if os.path.exists(filename):
         try:
-            with open(filename, "r") as file:
+            with open(filename, encoding="utf-8") as file:
                 data = file.read().strip()
                 email_data = json.loads(data or '{}')
         except Exception as details:  # pylint: disable=broad-except
@@ -673,7 +673,7 @@ def save_email_data_to_file(email_data, filepath):
     """
     try:
         if email_data:
-            with open(filepath, "w") as json_file:
+            with open(filepath, "w", encoding="utf-8") as json_file:
                 json.dump(email_data, json_file)
     except Exception as details:  # pylint: disable=broad-except
         LOGGER.warning("Error during collecting data for email %s", details)

@@ -238,7 +238,7 @@ class StopCompactionTest(ClusterTester):
 
     def _grep_log_and_assert(self, node: BaseNode):
         found_grepped_expression = False
-        with open(node.system_log, "r") as logfile:
+        with open(node.system_log, encoding="utf-8") as logfile:
             pattern = re.compile(self.GREP_PATTERN)
             for line in logfile.readlines():
                 if pattern.search(line):

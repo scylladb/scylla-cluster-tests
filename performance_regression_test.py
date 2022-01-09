@@ -119,7 +119,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
                 self.display_single_result(single_result)
                 test_xml += self.get_test_xml(single_result, test_name=test_name)
 
-            with open(os.path.join(self.logdir, 'jenkins_perf_PerfPublisher.xml'), 'w') as pref_file:
+            with open(os.path.join(self.logdir, 'jenkins_perf_PerfPublisher.xml'), 'w', encoding="utf-8") as pref_file:
                 content = """<report name="%s report" categ="none">%s</report>""" % (test_name, test_xml)
                 pref_file.write(content)
         except Exception as ex:  # pylint: disable=broad-except
@@ -152,7 +152,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
     @staticmethod
     def _clean_email_data():
         email_data_path = 'email_data.json'
-        with open(email_data_path, 'w'):
+        with open(email_data_path, 'w', encoding="utf-8"):
             pass
 
     def preload_data(self):
@@ -556,7 +556,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
 
             # Get materialized view name from user profile
 
-            with open(user_profile) as fobj:
+            with open(user_profile, encoding="utf-8") as fobj:
                 user_profile_yaml = yaml.safe_load(fobj)
             mv_name = ''
 

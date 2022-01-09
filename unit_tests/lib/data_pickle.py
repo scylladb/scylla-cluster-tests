@@ -199,17 +199,17 @@ class Pickler:
 
     @classmethod
     def load_from_file(cls, filepath):
-        with open(filepath, 'r') as file:
+        with open(filepath, encoding="utf-8") as file:
             return cls.from_data(json.load(file))
 
     @classmethod
     def load_data_from_file(cls, filepath):
-        with open(filepath, 'r') as file:
+        with open(filepath, encoding="utf-8") as file:
             return json.load(file)
 
     @classmethod
     def save_to_file(cls, filepath, data):
-        with open(filepath, 'w') as file:
+        with open(filepath, 'w', encoding="utf-8") as file:
             return json.dump(cls.to_data(data), file)
 
     _init_by_type = {

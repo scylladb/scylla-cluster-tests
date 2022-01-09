@@ -461,7 +461,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         os.environ['KUBECONFIG'] = self.kubectl_config_path
         if not os.path.exists(self.kubectl_config_path):
             os.makedirs(os.path.dirname(self.kubectl_config_path), exist_ok=True)
-            with open(self.kubectl_config_path, 'w') as kube_config_file:
+            with open(self.kubectl_config_path, 'w', encoding="utf-8") as kube_config_file:
                 kube_config_file.write('')
                 kube_config_file.flush()
         os.chmod(os.path.dirname(self.kubectl_config_path), mode=secure_mode)
@@ -2112,7 +2112,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         # Collect data about partitions' rows amount.
         partitions = {}
         partitions_stats_file = os.path.join(self.logdir, save_into_file_name)
-        with open(partitions_stats_file, 'a') as stats_file:
+        with open(partitions_stats_file, 'a', encoding="utf-8") as stats_file:
             for i in pk_list:
                 self.log.debug("Next PK: {}".format(i))
                 count_partition_keys_cmd = f'select count(*) from {table_name} where {primary_key_column} = {i}'
@@ -2582,13 +2582,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                                           'email_recipients'),
                                                                       events=get_events_grouped_by_category(
                                                                           _registry=self.events_processes_registry))
-        with open(self.latency_results_file, 'r') as file:
+        with open(self.latency_results_file, encoding="utf-8") as file:
             latency_results = json.load(file)
         self.log.debug('latency_results were loaded from file %s and its result is %s',
                        self.latency_results_file, latency_results)
         if latency_results and self.create_stats:
             latency_results = calculate_latency(latency_results)
-            with open(self.latency_results_file, 'w') as file:
+            with open(self.latency_results_file, 'w', encoding="utf-8") as file:
                 json.dump(latency_results, file)
             self.log.debug('collected latency values are: %s', latency_results)
             self.update({"latency_during_ops": latency_results})
