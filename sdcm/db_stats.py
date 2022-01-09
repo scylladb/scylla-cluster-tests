@@ -14,7 +14,7 @@ import yaml
 import requests
 
 from elasticsearch.exceptions import ConnectionError as ES_ConnectionError, ConnectionTimeout as ES_ConnectionTimeout, \
-    RequestError as ES_RequestError
+    RequestError as ES_RequestError, TransportError as ES_TransportError
 from urllib3.exceptions import ReadTimeoutError, MaxRetryError, ConnectTimeoutError
 
 from sdcm.es import ES
@@ -25,7 +25,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 connection_exception = (ES_RequestError, ES_ConnectionTimeout, ES_ConnectionError,
-                        ReadTimeoutError, MaxRetryError, ConnectTimeoutError)
+                        ReadTimeoutError, MaxRetryError, ConnectTimeoutError, ES_TransportError)
 
 
 class CassandraStressCmdParseError(Exception):
@@ -377,6 +377,8 @@ class Stats():
             LOGGER.error('Failed to update test stats: test_id: %s, error: %s', self._test_id, ex)
             raise
 
+    @retrying(n=5, sleep_time=5, allowed_exceptions=connection_exception, message="es document exists",
+              raise_on_exceeded=False)
     def exists(self):
         return self.elasticsearch.exists(index=self._test_index, doc_type=self._es_doc_type, id=self._test_id)
 
