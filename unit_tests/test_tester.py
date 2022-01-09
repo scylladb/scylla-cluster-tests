@@ -150,7 +150,7 @@ class ClusterTesterForTests(ClusterTester):
     def sct_log(self):
         if self._sct_log:
             return self._sct_log
-        with open(os.path.join(self.logdir, 'sct.log'), 'r') as log_file:
+        with open(os.path.join(self.logdir, 'sct.log'), encoding="utf-8") as log_file:
             output = log_file.read()
         self._sct_log = output
         return output

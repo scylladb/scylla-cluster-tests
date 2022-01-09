@@ -52,7 +52,8 @@ class PrometheusAlertManagerListenerArtificialTest(PrometheusAlertManagerListene
 class PrometheusAlertManagerTest(unittest.TestCase):
     def test_alert_manager_listener_artificial_run(self):
         with open(os.path.join(os.path.dirname(__file__),
-                               'test_data/test_prometheus/test_alert_manager_listener_artificial_run.yaml')) as file:
+                               'test_data/test_prometheus/test_alert_manager_listener_artificial_run.yaml'),
+                  encoding="utf-8") as file:
             test_data = json.load(file)
         listener = PrometheusAlertManagerListenerArtificialTest(artificial_alerts=test_data['post'])
         listener.start()

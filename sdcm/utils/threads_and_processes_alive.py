@@ -38,7 +38,7 @@ def gather_live_threads_and_dump_to_file(dump_file_path: str) -> bool:
         return False
     source_modules = []
     result = False
-    with open(dump_file_path, 'a') as log_file:
+    with open(dump_file_path, 'a', encoding="utf-8") as log_file:
         for thread in threading.enumerate():
             if thread is threading.current_thread():
                 continue
@@ -71,7 +71,7 @@ def gather_live_processes_and_dump_to_file(dump_file_path: str) -> bool:
     if not multiprocessing.active_children():
         return False
     source_modules = []
-    with open(dump_file_path, 'a') as log_file:
+    with open(dump_file_path, 'a', encoding="utf-8") as log_file:
         for proc in multiprocessing.active_children():
             source = '<no code available>'
             module = 'Unknown'

@@ -151,7 +151,7 @@ class GeminiStressThread:  # pylint: disable=too-many-instance-attributes
 
             local_gemini_result_file = os.path.join(node.logdir, os.path.basename(result_file))
             node.remoter.receive_files(src=result_file, dst=local_gemini_result_file)
-            with open(local_gemini_result_file) as local_file:
+            with open(local_gemini_result_file, encoding="utf-8") as local_file:
                 content = local_file.read()
                 res = self._parse_gemini_summary_json(content)
                 if res:

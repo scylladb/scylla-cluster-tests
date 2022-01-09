@@ -86,7 +86,7 @@ class DbLogReader(Process):
         if not os.path.exists(self._system_log):
             return
 
-        with open(self._system_log, 'r') as db_file:
+        with open(self._system_log, encoding="utf-8") as db_file:
             if self._last_log_position:
                 db_file.seek(self._last_log_position)
             for index, line in enumerate(db_file, start=self._last_line_no + 1):

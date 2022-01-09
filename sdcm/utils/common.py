@@ -128,7 +128,7 @@ def get_profile_content(stress_cmd):
     elif not os.path.exists(cs_profile):
         raise FileNotFoundError('User profile file {} not found'.format(cs_profile))
 
-    with open(cs_profile, 'r') as yaml_stream:
+    with open(cs_profile, encoding="utf-8") as yaml_stream:
         profile = yaml.safe_load(yaml_stream)
     return cs_profile, profile
 
@@ -503,7 +503,7 @@ def clean_cloud_resources(tags_dict, dry_run=False):
 
 
 def docker_current_container_id() -> Optional[str]:
-    with open("/proc/1/cgroup") as cgroup:
+    with open("/proc/1/cgroup", encoding="utf-8") as cgroup:
         for line in cgroup:
             match = DOCKER_CGROUP_RE.search(line)
             if match:
@@ -1206,7 +1206,7 @@ class FileFollowerIterator():  # pylint: disable=too-few-public-methods
         self.thread_obj = thread_obj
 
     def __iter__(self):
-        with open(self.filename, 'r') as input_file:
+        with open(self.filename, encoding="utf-8") as input_file:
             line = ''
             while not self.thread_obj.stopped():
                 poller = select.poll()  # pylint: disable=no-member
@@ -1861,11 +1861,11 @@ def get_testrun_status(test_id=None, logdir=None, only_critical=False):
     error_log = os.path.join(testrun_dir, 'events_log/error.log')
 
     if os.path.exists(critical_log):
-        with open(critical_log) as file:
+        with open(critical_log, encoding="utf-8") as file:
             status = file.readlines()
 
     if not only_critical and os.path.exists(error_log):
-        with open(error_log) as file:
+        with open(error_log, encoding="utf-8") as file:
             status += file.readlines()
 
     return status
@@ -2064,7 +2064,7 @@ def get_docker_stress_image_name(tool_name=None):
     if not tool_name:
         return None
     base_path = os.path.dirname(os.path.dirname((os.path.dirname(__file__))))
-    with open(os.path.join(base_path, "docker", tool_name, "image"), "r") as image_file:
+    with open(os.path.join(base_path, "docker", tool_name, "image"), encoding="utf-8") as image_file:
         result = image_file.read()
 
     return result.strip()

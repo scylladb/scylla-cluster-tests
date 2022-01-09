@@ -52,7 +52,7 @@ class BaseEventsTest(unittest.TestCase, EventsUtilsMixin):
     @classmethod
     def get_event_log_file(cls, name: str) -> str:
         if (log_file := Path(cls.temp_dir, "events_log", name)).exists():
-            return log_file.read_text()
+            return log_file.read_text(encoding="utf-8")
         return ""
 
     @timeout(timeout=10, sleep_time=0.05)

@@ -247,7 +247,7 @@ def get_monitoring_stack_dir(base_dir):
 
 def get_monitoring_stack_scylla_version(monitoring_stack_dir):
     try:
-        with open(os.path.join(monitoring_stack_dir, 'monitor_version'), 'r') as f:  # pylint: disable=invalid-name
+        with open(os.path.join(monitoring_stack_dir, 'monitor_version'), encoding="utf-8") as f:  # pylint: disable=invalid-name
             versions = f.read().strip()
         monitoring_version, scylla_version = versions.split(':')
         return monitoring_version, scylla_version
@@ -291,7 +291,7 @@ def restore_sct_dashboards(monitoring_dockers_dir, scylla_version):
                                           sct_dashboard_file_name)
 
     dashboard_url = f'http://localhost:{GRAFANA_DOCKER_PORT}/api/dashboards/db'
-    with open(sct_dashboard_file, "r") as f:  # pylint: disable=invalid-name
+    with open(sct_dashboard_file, encoding="utf-8") as f:  # pylint: disable=invalid-name
         dashboard_config = json.load(f)
         # NOTE: remove value from the 'dashboard.id' field to avoid following error:
         #
@@ -329,7 +329,7 @@ def restore_annotations_data(monitoring_stack_dir):
         LOGGER.info('There is no annotations file.Skip loading annotations')
         return False
     try:
-        with open(annotations_file, "r") as f:  # pylint: disable=invalid-name
+        with open(annotations_file, encoding="utf-8") as f:  # pylint: disable=invalid-name
             annotations = json.load(f)
 
         annotations_url = f"http://localhost:{GRAFANA_DOCKER_PORT}/api/annotations"

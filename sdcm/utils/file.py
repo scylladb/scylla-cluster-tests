@@ -63,7 +63,7 @@ class File:
     def _open(self) -> TextIO:
         kwargs = {attr_name: getattr(self, attr_name) for attr_name in
                   ['mode', 'buffering', 'encoding', 'errors', 'closefd'] if getattr(self, attr_name, None) is not None}
-        return open(self.path, **kwargs)  # pylint: disable=consider-using-with
+        return open(self.path, **kwargs)  # pylint: disable=consider-using-with,unspecified-encoding
 
     def move_to(self, pos) -> 'File':
         self._io.seek(pos)

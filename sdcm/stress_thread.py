@@ -157,7 +157,7 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
         stress_cmd = self.create_stress_cmd(node, loader_idx, keyspace_idx)
 
         if self.profile:
-            with open(self.profile) as profile_file:
+            with open(self.profile, encoding="utf-8") as profile_file:
                 LOGGER.info('Profile content:\n%s', profile_file.read())
             node.remoter.send_files(self.profile, os.path.join('/tmp', os.path.basename(self.profile)), delete_dst=True)
 

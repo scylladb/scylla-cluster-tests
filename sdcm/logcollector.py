@@ -582,7 +582,7 @@ class GrafanaSnapshot(GrafanaEntity):
         os.makedirs(local_dst, exist_ok=True)
         snapshots = self.get_grafana_snapshot(node)
         snapshots_file = os.path.join(local_dst, "grafana_snapshots")
-        with open(snapshots_file, "w") as f:  # pylint: disable=invalid-name
+        with open(snapshots_file, "w", encoding="utf-8") as f:  # pylint: disable=invalid-name
             for snapshot in snapshots:
                 f.write(snapshot + '\n')
 
@@ -1268,7 +1268,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         self.storage_dir = os.path.join(self.sct_result_dir, log_dir, 'collected_logs')
         os.makedirs(self.storage_dir, exist_ok=True)
         if not os.path.exists(os.path.join(os.path.dirname(self.storage_dir), "test_id")):
-            with open(os.path.join(os.path.dirname(self.storage_dir), "test_id"), "w") as f:  # pylint: disable=invalid-name
+            with open(os.path.join(os.path.dirname(self.storage_dir), "test_id"), "w", encoding="utf-8") as f:  # pylint: disable=invalid-name
                 f.write(self.test_id)
 
 

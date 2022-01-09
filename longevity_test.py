@@ -234,7 +234,7 @@ class LongevityTest(ClusterTester):
                 assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
                 self.log.debug('Run stress test with user profile {}, duration {}'.format(cs_profile, cs_duration))
                 profile_dst = os.path.join('/tmp', os.path.basename(cs_profile))
-                with open(cs_profile) as pconf:
+                with open(cs_profile, encoding="utf-8") as pconf:
                     cont = pconf.readlines()
                     user_profile_table_count = self.params.get(  # pylint: disable=invalid-name
                         'user_profile_table_count')
@@ -497,7 +497,7 @@ class LongevityTest(ClusterTester):
         cs_user_profiles = self.params.get('cs_user_profiles')
         # read user-profile
         for profile_file in cs_user_profiles:
-            with open(profile_file) as fobj:
+            with open(profile_file, encoding="utf-8") as fobj:
                 profile_yaml = yaml.safe_load(fobj)
             keyspace_definition = profile_yaml['keyspace_definition']
             keyspace_name = profile_yaml['keyspace']
@@ -582,7 +582,7 @@ class LongevityTest(ClusterTester):
         params_list = []
         cs_duration = self.params.get('cs_duration')
 
-        with open(cs_profile) as pconf:
+        with open(cs_profile, encoding="utf-8") as pconf:
             cont = pconf.readlines()
             pconf.seek(0)
             template = string.Template(pconf.read())

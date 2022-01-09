@@ -152,7 +152,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         html = template.render(results)
         self.log.info("Results has been rendered to html")
         if html_file_path:
-            with open(html_file_path, "w") as html_file:
+            with open(html_file_path, "w", encoding="utf-8") as html_file:
                 html_file.write(html)
             self.log.info("HTML report saved to '%s'.", html_file_path)
         return html
@@ -179,7 +179,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
     def save_email_data_file(self, subject, email_data, file_path='email_data.json'):
         if os.path.exists(file_path):
             try:
-                with open(file_path, 'r') as file:
+                with open(file_path, encoding="utf-8") as file:
                     data = file.read().strip()
                     file_content = json.loads(data or '{}')
             except EnvironmentError as err:
@@ -188,7 +188,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
             file_content = {}
         file_content[subject] = email_data.copy()
         try:
-            with open(file_path, 'w') as file:
+            with open(file_path, 'w', encoding="utf-8") as file:
                 json.dump(file_content, file)
         except EnvironmentError as err:
             self.log.error('Failed to write %s to file %s with error %s', file_content, file_path, err)

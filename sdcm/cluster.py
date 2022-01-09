@@ -621,7 +621,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         yaml_dst_path = os.path.join(tempfile.mkdtemp(prefix='sct'), 'scylla.yaml')
         wait.wait_for(func=self.remoter.receive_files, step=10, text='Waiting for copying scylla.yaml', timeout=300,
                       throw_exc=True, src=self.add_install_prefix(SCYLLA_YAML_PATH), dst=yaml_dst_path)
-        with open(yaml_dst_path, 'r') as yaml_stream:
+        with open(yaml_dst_path, encoding="utf-8") as yaml_stream:
             try:
                 conf_dict = yaml.safe_load(yaml_stream)
             except Exception:
@@ -1380,7 +1380,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         """
         if not os.path.exists(self.system_log):
             return 0
-        with open(self.system_log) as log_file:
+        with open(self.system_log, encoding="utf-8") as log_file:
             log_file.seek(0, os.SEEK_END)
             return log_file.tell()
 
@@ -3155,13 +3155,13 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
     def write_node_public_ip_file(self):
         public_ip_file_path = os.path.join(self.logdir, 'public_ips')
-        with open(public_ip_file_path, 'w') as public_ip_file:
+        with open(public_ip_file_path, 'w', encoding="utf-8") as public_ip_file:
             public_ip_file.write("%s" % "\n".join(self.get_node_public_ips()))
             public_ip_file.write("\n")
 
     def write_node_private_ip_file(self):
         private_ip_file_path = os.path.join(self.logdir, 'private_ips')
-        with open(private_ip_file_path, 'w') as private_ip_file:
+        with open(private_ip_file_path, 'w', encoding="utf-8") as private_ip_file:
             private_ip_file.write("%s" % "\n".join(self.get_node_private_ips()))
             private_ip_file.write("\n")
 
@@ -4775,13 +4775,13 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
     @staticmethod
     def sct_dashboard_json_file_content_update(update_params: dict, json_file: str):
         # Read json data to the string
-        with open(json_file, 'r') as file:
+        with open(json_file, encoding="utf-8") as file:
             json_data = file.read()
 
         for param, value in update_params.items():
             json_data = json_data.replace(param, value)
 
-        with open(json_file, 'w') as file:
+        with open(json_file, 'w', encoding="utf-8") as file:
             json.dump(json.loads(json_data), file, indent=2)
 
     def node_setup(self, node, **kwargs):  # pylint: disable=unused-argument
@@ -4959,7 +4959,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             local_template = os.path.join(temp_dir, template_fn)
             node.remoter.receive_files(src=prometheus_yaml_template,
                                        dst=local_template_tmp)
-            with open(local_template_tmp) as output_file:
+            with open(local_template_tmp, encoding="utf-8") as output_file:
                 templ_yaml = yaml.safe_load(output_file)
                 self.log.debug("Configs %s" % templ_yaml)
             loader_targets_list = ["[%s]:9103" % getattr(node, self.DB_NODES_IP_ADDRESS)
@@ -4998,7 +4998,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             if self.sct_ip_port:
                 scrape_configs.append(dict(job_name="sct_metrics", honor_labels=True,
                                            static_configs=[dict(targets=[self.sct_ip_port])]))
-            with open(local_template, "w") as output_file:
+            with open(local_template, "w", encoding="utf-8") as output_file:
                 yaml.safe_dump(templ_yaml, output_file, default_flow_style=False)  # to remove tag !!python/unicode
             node.remoter.send_files(src=local_template, dst=prometheus_yaml_template, delete_dst=True)
 

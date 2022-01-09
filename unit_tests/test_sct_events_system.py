@@ -174,7 +174,8 @@ class TestInstanceStatusEvent(unittest.TestCase):
 
     def test_instance_status_events_patterns(self):
         cloned_events = []
-        with open(os.path.join(os.path.dirname(__file__), 'test_data/system_status_events.log'), 'r') as sct_log:
+        with open(os.path.join(os.path.dirname(__file__), 'test_data/system_status_events.log'),
+                  encoding="utf-8") as sct_log:
             for index, line in enumerate(sct_log.readlines()):
                 for pattern, event in INSTANCE_STATUS_EVENTS_PATTERNS:
                     match = pattern.search(line)

@@ -46,7 +46,7 @@ LOGGER = logging.getLogger(__name__)
 class SctEventTypesRegistry(Dict[str, Type["SctEvent"]]):  # pylint: disable=too-few-public-methods
     def __init__(self, severities_conf: str = DEFAULT_SEVERITIES):
         super().__init__()
-        with open(severities_conf) as fobj:
+        with open(severities_conf, encoding="utf-8") as fobj:
             self.max_severities = {event_t: Severity[sev] for event_t, sev in yaml.safe_load(fobj).items()}
         self.limit_rules = []
 

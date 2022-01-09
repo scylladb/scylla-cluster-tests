@@ -1053,7 +1053,7 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
         start_time = format_timestamp(int(start_time))
     testrun_dir = get_testrun_dir(test_id=test_id, base_dir=logdir)
     if testrun_dir:
-        with open(os.path.join(testrun_dir, 'test_id'), 'r', encoding='utf-8') as file:
+        with open(os.path.join(testrun_dir, 'test_id'), encoding='utf-8') as file:
             test_id = file.read().strip()
         email_results_file = os.path.join(testrun_dir, "email_data.json")
         if not os.path.exists(email_results_file):
@@ -1286,7 +1286,7 @@ def create_runner_instance(cloud_provider, region, availability_zone, instance_t
     remoter = sct_runner.get_remoter(host=runner_public_ip, connect_timeout=120)
     if remoter.run("true", timeout=100, verbose=False, ignore_status=True).ok:
         LOGGER.info("Successfully connected the SCT Runner. Public IP: %s", runner_public_ip)
-        with sct_runner_ip_path.open("w") as sct_runner_ip_file:
+        with sct_runner_ip_path.open(mode="w", encoding="utf-8") as sct_runner_ip_file:
             sct_runner_ip_file.write(runner_public_ip)
     else:
         LOGGER.error("Unable to SSH to %s! Exiting...", runner_public_ip)
