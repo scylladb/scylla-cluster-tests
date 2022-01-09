@@ -105,13 +105,11 @@ def ignore_upgrade_schema_errors():
 def ignore_upgrade_cdc_errors(version=None):
     with ExitStack() as stack:
         if version and '2020.1' in version:
-            stack.enter_context(DbEventsFilter(
-                db_event=DatabaseLogEvent.DATABASE_ERROR,
-                line="Could not retrieve CDC streams with timestamp",
-            ))
-            stack.enter_context(DbEventsFilter(
-                db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                line="Could not retrieve CDC streams with timestamp",
+            stack.enter_context(EventsSeverityChangerFilter(
+                new_severity=Severity.WARNING,
+                event_class=LogEvent,
+                regex="Could not retrieve CDC streams with timestamp",
+                extra_time_to_expiration=60
             ))
         yield
 
