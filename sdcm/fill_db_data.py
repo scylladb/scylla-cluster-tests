@@ -395,8 +395,8 @@ class FillDatabaseData(ClusterTester):
             'queries': [
                 "SELECT * FROM limit_sparse_test LIMIT 4"],
             'results': [
-                [[23, u'http://foo.com', 1, u'jan', 2012], [23, u'http://foo.net', 1, u'jan', 2012],
-                 [23, u'http://foo.org', 1, u'jan', 2012], [53, u'http://foo.com', 1, u'jan', 2012]]
+                [[23, 'http://foo.com', 1, 'jan', 2012], [23, 'http://foo.net', 1, 'jan', 2012],
+                 [23, 'http://foo.org', 1, 'jan', 2012], [53, 'http://foo.com', 1, 'jan', 2012]]
             ],
             'min_version': '',
             'max_version': '',
@@ -1301,17 +1301,17 @@ class FillDatabaseData(ClusterTester):
                         "UPDATE list_test SET %s WHERE fn='Bilbo' AND ln='Baggins'" % "tags = tags - [ 'bar' ]",
                         "SELECT tags FROM list_test WHERE fn='Bilbo' AND ln='Baggins'"
                         ],
-            'results': [[[[u'foo', u'bar', u'foo', u'foobar']]],
+            'results': [[[['foo', 'bar', 'foo', 'foobar']]],
                         [],
-                        [[[u'a', u'c', u'b', u'c']]],
+                        [[['a', 'c', 'b', 'c']]],
                         [],
-                        [[[u'm', u'n', u'a', u'c', u'b', u'c']]],
+                        [[['m', 'n', 'a', 'c', 'b', 'c']]],
                         [],
-                        [[[u'm', u'n', u'foo', u'c', u'bar', u'c']]],
+                        [[['m', 'n', 'foo', 'c', 'bar', 'c']]],
                         [],
-                        [[[u'm', u'n', u'c', u'bar', u'c']]],
+                        [[['m', 'n', 'c', 'bar', 'c']]],
                         [],
-                        [[[u'm', u'n', u'c', u'c']]]
+                        [[['m', 'n', 'c', 'c']]]
                         ],
             'min_version': '',
             'max_version': '',
@@ -1356,7 +1356,7 @@ class FillDatabaseData(ClusterTester):
             'queries': [
                 "SELECT a, b, c, d, e, f FROM range_query_test WHERE a = 1 AND b = 1 AND c = 1 AND d = 1 AND e >= 2;"
             ],
-            'results': [[[1, 1, 1, 1, 2, u'2'], [1, 1, 1, 1, 3, u'3'], [1, 1, 1, 1, 5, u'5']]
+            'results': [[[1, 1, 1, 1, 2, '2'], [1, 1, 1, 1, 3, '3'], [1, 1, 1, 1, 5, '5']]
                         ],
             'min_version': '',
             'max_version': '',
