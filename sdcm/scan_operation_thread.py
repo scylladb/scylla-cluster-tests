@@ -8,6 +8,7 @@ from typing import Optional
 from cassandra import ConsistencyLevel
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
+from sdcm import wait
 from sdcm.cluster import BaseNode, BaseScyllaCluster, BaseCluster
 from sdcm.utils.common import get_partition_keys, get_table_clustering_order
 from sdcm.sct_events import Severity
@@ -39,14 +40,14 @@ class ScanOperationThread:
         self.log = logging.getLogger(self.__class__.__name__)
         self._thread = threading.Thread(daemon=True, name=self.__class__.__name__, target=self.run)
 
-    def get_ks_cs(self, db_node: BaseNode):
-        ks_cf_list = self.db_cluster.get_non_system_ks_cf_list(db_node)
-        if self.ks_cf not in ks_cf_list:
-            self.ks_cf = 'random'
-
-        if 'random' in self.ks_cf.lower():
-            return random.choice(ks_cf_list)
-        return self.ks_cf
+    def wait_until_user_table_exists(self, db_node, table_name: str = 'random', timeout_min: int = 20):
+        text = f'Waiting until {table_name} user table exists'
+        if table_name.lower() == 'random':
+            wait.wait_for(func=lambda: len(self.db_cluster.get_non_system_ks_cf_list(db_node)) > 0, step=60,
+                          text=text, timeout=60 * timeout_min, throw_exc=True)
+        else:
+            wait.wait_for(func=lambda: table_name in (self.db_cluster.get_non_system_ks_cf_list(db_node)), step=60,
+                          text=text, timeout=60 * timeout_min, throw_exc=True)
 
     def randomly_bypass_cache(self, cmd: str) -> str:
         if random.choice([True] + [False]):
@@ -87,8 +88,9 @@ class ScanOperationThread:
 
     def run_scan_operation(self, scan_operation_event, cmd: str = None):  # pylint: disable=too-many-locals
         db_node = self.db_node
-        if self.ks_cf == 'random':
-            self.ks_cf = self.get_ks_cs(db_node)
+        self.wait_until_user_table_exists(db_node=db_node, table_name=self.ks_cf)
+        if self.ks_cf.lower() == 'random':
+            self.ks_cf = random.choice(self.db_cluster.get_non_system_ks_cf_list(db_node))
         with scan_operation_event(node=db_node.name, ks_cf=self.ks_cf, message="") as operation_event:
             cmd = cmd or self.randomly_form_cql_statement()
             if not cmd:
