@@ -1,4 +1,0 @@
-instance_type_db: 'is4gen.4xlarge'  # The equivalent of i3.4xlarge
-# enhanced network isn't supported
-append_scylla_setup_args: ' --no-ec2-check '
-use_mgmt: false

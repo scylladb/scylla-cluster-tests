@@ -7,7 +7,7 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_large_partition_test.LargePartitionLongevityTest.test_large_partition_longevity',
-    test_config: '''["test-cases/longevity/longevity-large-partition-4days.yaml", "configurations/arm_instance_types/Is4gen_4xlarge.yaml"]''',
+    test_config: '''["test-cases/longevity/longevity-large-partition-4days.yaml", "configurations/arm_instance_types/is4gen_4xlarge.yaml"]''',
 
     timeout: [time: 6540, unit: 'MINUTES']
 )
