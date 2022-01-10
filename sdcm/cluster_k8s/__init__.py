@@ -2418,10 +2418,22 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
 
 
 def get_tags_from_params(params: dict) -> Dict[str, str]:
-    behaviors = ['keep', 'keep-on-failure', 'destroy']
-    picked_behavior_idx = 2
-    for node_type in ['db', 'loader', 'monitor']:
-        post_behavior_idx = behaviors.index(params.get(f"post_behavior_{node_type}_nodes").lower())
-        picked_behavior_idx = min(post_behavior_idx, picked_behavior_idx)
-    picked_behavior = behaviors[picked_behavior_idx]
-    return {**TestConfig().common_tags(), "keep_action": "terminate" if picked_behavior == "destroy" else "", }
+    tags = TestConfig().common_tags()
+    if params.get("post_behavior_k8s_cluster").startswith("keep"):
+        # NOTE: case when 'post_behavior_k8s_cluster' is 'keep' or 'keep-on-failure':
+        #       - if TestRun passes then SCT will cleanup resources by itself if needed
+        #       - if TestRun fails then cluster will be kept as expected
+        tags["keep"] = "alive"
+    elif int(params.get("test_duration")) > 660:
+        if params.get("cluster_backend") == "k8s-eks":
+            # NOTE: set keep:X where X is hours equal to 'duration + 1'
+            tags["keep"] = str(params.get("test_duration") // 60 + 1)
+        else:
+            # NOTE: our GCE/GKE cleanup scripts do not support hour-based 'keep' tag,
+            #       so set it as 'alive'.
+            LOGGER.warning(
+                "The GKE cluster won't be cleaned up by infra clean up scripts because "
+                "it has 'keep:alive' tag set due to the too big value in 'test_duration' option. "
+                "Please, double-check that GKE cluster gets deleted either by SCT or manually.")
+            tags["keep"] = "alive"
+    return tags

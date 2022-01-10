@@ -381,6 +381,23 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         self.deploy_minio_s3_backend()
         super().deploy_scylla_manager(pool_name=pool_name)
 
+    def _get_all_instance_ids(self):
+        cmd = "get node --no-headers -o custom-columns=:.spec.providerID"
+        return [name.split("/")[-1] for name in self.kubectl(cmd).stdout.split()]
+
+    def set_tags(self, instance_ids):
+        if isinstance(instance_ids, str):
+            instance_ids = [instance_ids]
+        boto3.client('ec2', region_name=self.region_name).create_tags(
+            Resources=instance_ids,
+            Tags=[{"Key": key, "Value": value} for key, value in self.tags.items()],
+        )
+
+    def set_tags_on_all_instances(self):
+        # NOTE: EKS doesn't apply nodeGroup's tags to nodes.
+        # So, we add it for each node explicitly.
+        self.set_tags(self._get_all_instance_ids())
+
     def set_security_groups(self, instance):
         for network_interface in instance.network_interfaces:
             security_groups = [g["GroupId"] for g in network_interface.groups]
@@ -392,18 +409,18 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
     def set_security_groups_on_all_instances(self):
         # NOTE: EKS doesn't apply nodeGroup's security groups to nodes
         # So, we add it for each network interface of a node explicitly.
-        cmd = "get node --no-headers -o custom-columns=:.spec.providerID"
-        instance_ids = [name.split("/")[-1] for name in self.kubectl(cmd).stdout.split()]
-        for instance_id in instance_ids:
+        for instance_id in self._get_all_instance_ids():
             self.set_security_groups(self.get_ec2_instance_by_id(instance_id))
 
     def deploy_scylla_cluster(self, *args, **kwargs) -> None:  # pylint: disable=signature-differs
         super().deploy_scylla_cluster(*args, **kwargs)
         self.set_security_groups_on_all_instances()
+        self.set_tags_on_all_instances()
 
     def deploy_monitoring_cluster(self, *args, **kwargs) -> None:  # pylint: disable=signature-differs
         super().deploy_monitoring_cluster(*args, **kwargs)
         self.set_security_groups_on_all_instances()
+        self.set_tags_on_all_instances()
 
     def upgrade_kubernetes_platform(self) -> str:
         upgrade_version = f"1.{int(self.eks_cluster_version.split('.')[1]) + 1}"
@@ -482,6 +499,7 @@ class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
         self._instance_wait_safe(self.ec2_instance_destroy)
         self.wait_for_k8s_node_readiness()
         self.parent_cluster.k8s_cluster.set_security_groups_on_all_instances()
+        self.parent_cluster.k8s_cluster.set_tags_on_all_instances()
 
     def ec2_instance_destroy(self, ec2_host=None):
         ec2_host = ec2_host or self.ec2_host
@@ -572,6 +590,7 @@ class EksScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
                                       enable_auto_bootstrap=enable_auto_bootstrap)
         for node in new_nodes:
             self.k8s_cluster.set_security_groups(node.ec2_host)
+            self.k8s_cluster.set_tags(node.ec2_host.id)
         self.add_hydra_iptables_rules(nodes=new_nodes)
         self.update_nodes_iptables_redirect_rules(nodes=new_nodes, loaders=False)
         return new_nodes
