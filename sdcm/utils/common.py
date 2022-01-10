@@ -1650,15 +1650,18 @@ def filter_aws_instances_by_type(instances):
     }
 
     for instance in instances:
-        name = [tag['Value']
-                for tag in instance['Tags'] if tag['Key'] == 'Name']
-        if 'db-node' in name[0]:
+        name = ""
+        for tag in instance['Tags']:
+            if tag['Key'] == 'Name':
+                name = tag['Value']
+                break
+        if 'db-node' in name:
             filtered_instances["db_nodes"].append(instance)
-        if 'monitor-node' in name[0]:
+        elif 'monitor-node' in name:
             filtered_instances["monitor_nodes"].append(instance)
-        if 'loader-node' in name[0]:
+        elif 'loader-node' in name:
             filtered_instances["loader_nodes"].append(instance)
-        elif '-k8s-' in name[0]:
+        elif '-k8s-' in name:
             filtered_instances["kubernetes_nodes"].append(instance)
 
     return filtered_instances
