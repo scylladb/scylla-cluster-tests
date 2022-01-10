@@ -7,7 +7,7 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/longevity/longevity-200GB-48h-verifier-LimitedMonkey-tls.yaml", "configurations/arm_instance_types/Is4gen_4xlarge.yaml"]''',
+    test_config: '''["test-cases/longevity/longevity-200GB-48h-verifier-LimitedMonkey-tls.yaml", "configurations/arm_instance_types/im4gn_4xlarge.yaml"]''',
     availability_zone: 'c',
 
     timeout: [time: 3060, unit: 'MINUTES']
