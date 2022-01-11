@@ -68,8 +68,8 @@ from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.group_common_events import (ignore_alternator_client_errors, ignore_no_space_errors,
                                                  ignore_scrub_invalid_errors)
 from sdcm.db_stats import PrometheusDBStats
-from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter,\
-    NetworkTopologyReplicationStrategy
+from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
+    NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
@@ -3015,23 +3015,48 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         read_thread = self.tester.run_stress_thread(stress_cmd=read_cmd, use_single_loader=True)
         self.tester.verify_stress_thread(cs_thread_pool=read_thread)
 
+    def _switch_to_network_replication_strategy(self, keyspaces: List[str]) -> None:
+        """Switches replication strategy to NetworkTopology for given keyspaces.
+        """
+        node = self.cluster.nodes[0]
+        nodes_by_region = self.tester.db_cluster.nodes_by_region()
+        region = list(nodes_by_region.keys())[0]
+        dc_name = self.tester.db_cluster.get_nodetool_info(nodes_by_region[region][0])['Data Center']
+        for keyspace in keyspaces:
+            replication_strategy = ReplicationStrategy.get(node, keyspace)
+            if not isinstance(replication_strategy, SimpleReplicationStrategy):
+                # no need to switch as already is NetworkTopology
+                continue
+            self.log.info(f"Switching replication strategy to Network for '{keyspace}' keyspace")
+            if keyspace == "system_auth":
+                # system_auth keyspace must have full replication
+                replication_strategy.replication_factor = len(nodes_by_region[region])
+            network_replication = NetworkTopologyReplicationStrategy(
+                **{dc_name: replication_strategy.replication_factor})
+            network_replication.apply(node, keyspace)
+            for node in nodes_by_region[0]:
+                node.run_nodetool(sub_cmd=f"repair {keyspace}", publish_event=True)
+
     def disrupt_add_remove_dc(self) -> None:
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("Operator doesn't support multi-DC yet. Skipping.")
         InfoEvent(message='Starting New DC Nemesis').publish()
         node = self.cluster.nodes[0]
-        status = self.tester.db_cluster.get_nodetool_status()
-        full_replication = NetworkTopologyReplicationStrategy(**{dc: len(status[dc].keys()) for dc in status})
         system_keyspaces = ["system_auth", "system_distributed", "system_traces"]
+        self._switch_to_network_replication_strategy(system_keyspaces)
         with temporary_replication_strategy_setter(node) as replication_strategy_setter:
-            replication_strategy_setter(system_auth=full_replication)
             new_node = self._add_new_node_in_new_dc()
             datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
             status = self.tester.db_cluster.get_nodetool_status()
-            assert [dc for dc in list(status.keys()) if dc.endswith("_nemesis_dc")], "new datacenter was not registered"
-            full_replication = NetworkTopologyReplicationStrategy(**{dc: len(status[dc].keys()) for dc in status})
-            replication_strategies = {keyspace: full_replication for keyspace in system_keyspaces}
-            replication_strategy_setter(**replication_strategies)
+            new_dc_list = [dc for dc in list(status.keys()) if dc.endswith("_nemesis_dc")]
+            assert new_dc_list, "new datacenter was not registered"
+            new_dc_name = new_dc_list[0]
+            for keyspace in system_keyspaces:
+                strategy = ReplicationStrategy.get(node, keyspace)
+                assert isinstance(strategy, NetworkTopologyReplicationStrategy), \
+                    "Should have been already switched to NetworkStrategy"
+                strategy.replication_factors.update({new_dc_name: 1})
+                replication_strategy_setter(**{keyspace: strategy})
             InfoEvent(message='execute rebuild on new datacenter').publish()
             new_node.run_nodetool(sub_cmd=f"rebuild -- {datacenters[0]}")
             InfoEvent(message='Running full cluster repair on each node').publish()

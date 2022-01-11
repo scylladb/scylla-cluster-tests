@@ -19,6 +19,15 @@ class ReplicationStrategy:  # pylint: disable=too-few-public-methods
                 return class_(**strategy_params)
         raise ValueError(f"Couldn't find such replication strategy: {replication_value}")
 
+    @classmethod
+    def get(cls, node: BaseNode, keyspace: str):
+        create_ks_statement = node.run_cqlsh(f"describe {keyspace}").stdout.splitlines()[1]
+        return ReplicationStrategy.from_string(create_ks_statement)
+
+    def apply(self, node: BaseNode, keyspace: str):
+        cql = f"ALTER KEYSPACE {keyspace} WITH replication = {self}"
+        node.run_cqlsh(cql)
+
 
 class SimpleReplicationStrategy(ReplicationStrategy):
 
@@ -64,11 +73,9 @@ class temporary_replication_strategy_setter(ContextDecorator):  # pylint: disabl
     def _preserve_replication_strategy(self, keyspace: str) -> None:
         if keyspace in self.preserved:
             return  # already preserved
-        create_ks_statement = self.node.run_cqlsh(f"describe {keyspace}").stdout.splitlines()[1]
-        self.preserved[keyspace] = (ReplicationStrategy.from_string(create_ks_statement))
+        self.preserved[keyspace] = ReplicationStrategy.get(self.node, keyspace)
 
     def __call__(self, **keyspaces: ReplicationStrategy) -> None:
         for keyspace, strategy in keyspaces.items():
             self._preserve_replication_strategy(keyspace)
-            cql = f"ALTER KEYSPACE {keyspace} WITH replication = {strategy}"
-            self.node.run_cqlsh(cql)
+            strategy.apply(self.node, keyspace)
