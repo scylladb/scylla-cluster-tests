@@ -26,7 +26,7 @@ from sdcm.utils.metaclasses import Singleton
 LOGGER = logging.getLogger(__name__)
 
 
-class ContinuousEventRegistryException(BaseException):
+class ContinuousEventRegistryException(Exception):
     pass
 
 

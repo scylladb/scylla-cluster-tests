@@ -151,7 +151,7 @@ class DbLogReader(Process):
 
                     if one_line_backtrace and backtraces:
                         backtraces[-1]['backtrace'] = one_line_backtrace
-                except (BaseException, Exception):  # pylint: disable=broad-except
+                except Exception:  # pylint: disable=broad-except
                     LOGGER.exception('Processing of %s line of %s failed, line content:\n%s',
                                      index, self._system_log, line)
 
@@ -196,7 +196,7 @@ class DbLogReader(Process):
                 self._read_and_publish_events()
             except (SystemExit, KeyboardInterrupt) as ex:
                 LOGGER.debug("db_log_reader_thread() stopped by %s", ex.__class__.__name__)
-            except BaseException:  # pylint: disable=broad-except
+            except Exception:  # pylint: disable=broad-except
                 LOGGER.exception("failed to read db log")
 
     def filter_backtraces(self, backtrace):
