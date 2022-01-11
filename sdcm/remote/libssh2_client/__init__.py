@@ -150,7 +150,7 @@ class KeepAliveThread(Thread):
             try:
                 time_to_wait = self._session.eagain(
                     self._session.keepalive_send, timeout=self._keepalive_timeout)
-            except:  # pylint: disable=bare-except
+            except Exception:  # pylint: disable=broad-except
                 time_to_wait = self._keepalive_timeout
             sleep(time_to_wait)
 
@@ -356,7 +356,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                 with self.session.lock:
                     self.session.agent_auth(self.user)
                 return
-            except:  # pylint: disable=bare-except
+            except Exception:  # pylint: disable=broad-except
                 pass
         self._password_auth()
 
@@ -403,7 +403,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
         if self.sock:
             try:
                 self.sock.close()
-            except:  # pylint: disable=bare-except
+            except Exception:  # pylint: disable=broad-except
                 pass
         family = self._get_socket_family(host)
         if family is None:
@@ -447,7 +447,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                     stdout_stream.write(data)
                     for watcher in watchers:
                         watcher.submit_line(data)
-                except:  # pylint: disable=bare-except
+                except Exception:  # pylint: disable=broad-except
                     pass
             if stderr_stream is not None:
                 if reader.stderr.qsize():
@@ -457,7 +457,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                         stderr_stream.write(data)
                         for watcher in watchers:
                             watcher.submit_line(data)
-                    except:  # pylint: disable=bare-except
+                    except Exception:  # pylint: disable=broad-except
                         pass
         return True
 
@@ -540,14 +540,14 @@ class Client:  # pylint: disable=too-many-instance-attributes
         if self.session is not None:
             try:
                 self.session.eagain(self.session.disconnect)
-            except:  # pylint: disable=bare-except
+            except Exception:  # pylint: disable=broad-except
                 pass
             del self.session
             self.session = None
         if self.sock is not None:
             try:
                 self.sock.close()
-            except:  # pylint: disable=bare-except
+            except Exception:  # pylint: disable=broad-except
                 pass
             self.sock = None
 
@@ -678,7 +678,7 @@ class Client:  # pylint: disable=too-many-instance-attributes
                 chan = self.session.eagain(self.session.open_session)
                 if chan != LIBSSH2_ERROR_EAGAIN:
                     break
-            except:  # pylint: disable=bare-except
+            except Exception:  # pylint: disable=broad-except
                 pass
             delay = next(delay_iter, delay)
             sleep(delay)

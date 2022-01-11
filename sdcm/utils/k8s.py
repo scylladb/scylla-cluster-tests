@@ -747,7 +747,7 @@ class HelmValues:
             last = int(last[1:-1])
         try:
             del parent[last]
-        except:  # pylint: disable=bare-except
+        except Exception:  # pylint: disable=broad-except
             pass
 
     def as_dict(self):

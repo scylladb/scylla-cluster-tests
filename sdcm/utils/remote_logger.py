@@ -198,7 +198,7 @@ class CommandLoggerBase(LoggerBase):
                 if started:
                     # Update last time only if command successfully started
                     self._last_time_completed = time.time()
-            except:  # pylint: disable=bare-except
+            except Exception:  # pylint: disable=broad-except
                 pass
 
     def start(self):

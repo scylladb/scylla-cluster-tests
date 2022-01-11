@@ -278,7 +278,7 @@ class ArtifactsTest(ClusterTester):
         email_data = self._get_common_email_data()
         try:
             node = self.node
-        except:  # pylint: disable=bare-except
+        except Exception:  # pylint: disable=broad-except
             node = None
         if node:
             scylla_packages = node.scylla_packages_installed

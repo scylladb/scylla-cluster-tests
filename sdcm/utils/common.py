@@ -528,7 +528,7 @@ def list_clients_docker(builder_name: Optional[str] = None, verbose: bool = Fals
                     base_url=f"ssh://{builder['user']}@{normalize_ipv6_url(builder['public_ip'])}:22")
             client.ping()
             log.info("%(name)s: connected via SSH (%(user)s@%(public_ip)s)", builder)
-        except:
+        except Exception:  # pylint: disable=broad-except
             log.error("%(name)s: failed to connect to Docker via SSH", builder)
             raise
         docker_clients[builder["name"]] = client
