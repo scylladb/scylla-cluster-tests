@@ -170,7 +170,7 @@ class CoredumpThreadBase(Thread):  # pylint: disable=too-many-instance-attribute
                 if result:
                     uploaded.append(core_info)
                     self.publish_event(core_info)
-            except:  # pylint: disable=bare-except
+            except Exception:  # pylint: disable=broad-except
                 pass
 
     @abstractmethod

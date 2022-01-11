@@ -34,7 +34,7 @@ def livenodes_update():
             # If we're successful, replace livenodes by the new list
             livenodes = a
             print(livenodes)
-        except:
+        except Exception:  # pylint: disable=broad-except
             # TODO: contacting this ip was unsuccessful, maybe we should
             # remove it from the list of live nodes.
             pass

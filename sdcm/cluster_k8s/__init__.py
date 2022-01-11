@@ -1372,7 +1372,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 config_map = self.k8s_core_v1_api.read_namespaced_config_map(
                     name=SCYLLA_CONFIG_NAME, namespace=SCYLLA_NAMESPACE).data or {}
                 exists = True
-            except:  # pylint: disable=bare-except
+            except Exception:  # pylint: disable=broad-except
                 config_map = {}
                 exists = False
             original_config_map = deepcopy(config_map)
