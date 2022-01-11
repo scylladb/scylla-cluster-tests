@@ -21,6 +21,8 @@ from functools import cached_property
 from unittest.mock import MagicMock
 from time import sleep
 
+from sdcm.sct_events import Severity
+from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.tester import ClusterTester, silence, TestResultEvent
 from sdcm.sct_config import SCTConfiguration
 from sdcm.utils.log import MultilineMessagesFormatter, configure_logging
@@ -100,6 +102,7 @@ class ClusterTesterForTests(ClusterTester):
         self.events_processes_registry_patcher.stop()
 
     def _validate_results(self):
+        self.result._excinfo = []  # pylint: disable=protected-access
         final_event = self.final_event
         unittest_final_event = self.unittest_final_event
         self._remove_errors_from_unittest_results(self._outcome)
@@ -193,6 +196,31 @@ class SubtestAndTeardownFailsTest(ClusterTesterForTests):
         assert self.event_summary == {'NORMAL': 2, 'ERROR': 2}
         assert 'Subtest1 failed' in self.events['ERROR'][0]
         assert 'send_email' in self.events['ERROR'][1]
+        assert self.final_event.test_status == 'FAILED'
+
+
+class CriticalErrorNotCaughtTest(ClusterTesterForTests):
+    @staticmethod
+    def test():
+        try:
+            ClusterHealthValidatorEvent.NodeStatus(
+                node='node-1',
+                message='Failed by some reason',
+                error='Reason to fail',
+                severity=Severity.CRITICAL,
+            ).publish()
+            end_time = time.time() + 2
+            while time.time() < end_time:
+                time.sleep(0.1)
+        except Exception:  # pylint: disable=broad-except
+            pass
+
+    def _validate_results(self):
+        super()._validate_results()
+        # While running from pycharm and from hydra run-test exception inside subTest won't stop the test,
+        #  under hydra unit_test it stops running it and you don't see exception from next subtest.
+        assert len(self.events['CRITICAL']) == 1
+        assert 'ClusterHealthValidatorEvent' in self.events['CRITICAL'][0]
         assert self.final_event.test_status == 'FAILED'
 
 
