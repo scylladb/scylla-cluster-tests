@@ -210,6 +210,10 @@ class silence:  # pylint: disable=invalid-name
         ).publish_or_dump(default_logger=parent.log)
 
 
+class CriticalTestFailure(BaseException):
+    pass
+
+
 def critical_failure_handler(signum, frame):  # pylint: disable=unused-argument
     try:
         if TestConfig().tester_obj().teardown_started:
@@ -217,7 +221,7 @@ def critical_failure_handler(signum, frame):  # pylint: disable=unused-argument
             return
     except Exception:  # pylint: disable=broad-except
         pass
-    raise AssertionError("Critical Error has failed the test")  # pylint: disable=raise-missing-from
+    raise CriticalTestFailure("Critical Error has failed the test")  # pylint: disable=raise-missing-from
 
 
 signal.signal(signal.SIGUSR2, critical_failure_handler)
