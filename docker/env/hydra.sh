@@ -331,7 +331,7 @@ if [[ -n "${AWS_MOCK}" ]]; then
     if [[ -z "${HYDRA_DRY_RUN}" ]]; then
         AWS_MOCK_IP=$(${RUNNER_CMD} cat aws_mock_ip)
         MOCKED_HOSTS=$(${RUNNER_CMD} openssl s_client -connect "${AWS_MOCK_IP}:443" </dev/null 2>/dev/null \
-                       | openssl x509 -noout -ext subjectAltName \
+                       | openssl x509 -noout -text \
                        | grep -Po '(?<=DNS:)[^,]+')
     else
         AWS_MOCK_IP=127.0.0.1
