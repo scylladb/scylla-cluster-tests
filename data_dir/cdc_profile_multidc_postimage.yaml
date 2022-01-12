@@ -2,13 +2,13 @@ keyspace: cdc_test
 
 keyspace_definition: |
 
-  CREATE KEYSPACE IF NOT EXISTS cdc_test WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'}  AND durable_writes = true;
+  CREATE KEYSPACE IF NOT EXISTS cdc_test WITH replication = {'class': 'NetworkTopologyStrategy', 'eu-westscylla_node_west': 2, 'us-eastscylla_node_east': 3}  AND durable_writes = true;
 
-table: test_table_preimage
+table: test_table_postimage
 
 table_definition: |
 
-  CREATE TABLE cdc_test.test_table_preimage (
+  CREATE TABLE cdc_test.test_table_postimage (
     pkid text PRIMARY KEY,
     name text,
     number int,
@@ -23,7 +23,7 @@ table_definition: |
     nums_set set<int>,
     names_set set<text>
   ) WITH bloom_filter_fp_chance = 0.01
-    AND cdc = {'enabled': true, 'preimage': true, 'postimage': false, 'ttl': 600}
+    AND cdc = {'enabled': true, 'preimage': false, 'postimage': true, 'ttl': 600}
     AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
     AND comment = 'Request for unit level UIs'
     AND compaction = {'class': 'SizeTieredCompactionStrategy'}
@@ -31,7 +31,7 @@ table_definition: |
     AND crc_check_chance = 1.0
     AND dclocal_read_repair_chance = 0.1
     AND default_time_to_live = 0
-    AND gc_grace_seconds = 14400
+    AND gc_grace_seconds = 3600
     AND max_index_interval = 2048
     AND memtable_flush_period_in_ms = 0
     AND min_index_interval = 128
@@ -56,14 +56,14 @@ insert:
 
 queries:
   read1:
-    cql: select * from cdc_test.test_table_preimage where pkid = ?
+    cql: select * from cdc_test.test_table_postimage where pkid = ?
     fields: samerow
   update_name:
-    cql: update cdc_test.test_table_preimage set name = ? where pkid = ?
+    cql: update cdc_test.test_table_postimage set name = ? where pkid = ?
     fields: samerow
   update_number:
-    cql: update cdc_test.test_table_preimage set number = ? where pkid = ?
+    cql: update cdc_test.test_table_postimage set number = ? where pkid = ?
     fields: samerow
   delete1:
-    cql: delete from cdc_test.test_table_preimage where pkid = ?
+    cql: delete from cdc_test.test_table_postimage where pkid = ?
     fields: samerow
