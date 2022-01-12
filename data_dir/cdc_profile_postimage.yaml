@@ -31,7 +31,7 @@ table_definition: |
     AND crc_check_chance = 1.0
     AND dclocal_read_repair_chance = 0.1
     AND default_time_to_live = 0
-    AND gc_grace_seconds = 864000
+    AND gc_grace_seconds = 3600
     AND max_index_interval = 2048
     AND memtable_flush_period_in_ms = 0
     AND min_index_interval = 128

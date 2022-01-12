@@ -1,0 +1,27 @@
+test_duration: 500
+
+stress_cmd: [ "cassandra-stress user no-warmup profile=/tmp/cdc_profile_multidc.yaml ops'(insert=2,read1=1,update_number=1,update_name=1,delete1=1)' cl=QUORUM duration=480m -port jmx=6868 -mode cql3 native -rate threads=75",
+              "cassandra-stress user no-warmup profile=/tmp/cdc_profile_multidc_preimage.yaml ops'(insert=2,read1=1,update_number=1,update_name=1,delete1=1)' cl=QUORUM duration=480m -port jmx=6868 -mode cql3 native -rate threads=75",
+              "cassandra-stress user no-warmup profile=/tmp/cdc_profile_multidc_postimage.yaml ops'(insert=2,read1=1,update_number=1,update_name=1,delete1=1)' cl=QUORUM duration=480m -port jmx=6868 -mode cql3 native -rate threads=75",
+              "cassandra-stress user no-warmup profile=/tmp/cdc_profile_multidc_preimage_postimage.yaml ops'(insert=2,read1=1,update_number=1,update_name=1,delete1=1)' cl=QUORUM duration=480m -port jmx=6868 -mode cql3 native -rate threads=75"
+             ]
+
+n_db_nodes: '4 4'
+instance_type_db: 'i3.4xlarge'
+n_loaders: '2 2'
+region_aware_loader: true
+n_monitor_nodes: 1
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_include_filter: ['topology_changes']
+nemesis_seed: '032'
+nemesis_interval: 5
+nemesis_add_node_cnt: 2
+
+round_robin: true
+
+user_prefix: 'longevity-cdc-100gb-8h-multi-dc-tpch'
+space_node_threshold: 64424
+
+ip_ssh_connections: 'public'
+intra_node_comm_public: true
