@@ -153,6 +153,8 @@ class UpgradeTest(FillDatabaseData):
         new_version = self.params.get('new_version')
         upgrade_node_packages = self.params.get('upgrade_node_packages')
         self.log.warning('skipping upgrade to check if the tombstone tests will pass')
+        self.log.warning('Will sleep 20 min to give time to load to run, and maybe catch the issue')
+        time.sleep(1200)
         return 'End'
 
         self.log.info('Upgrading a Node')
