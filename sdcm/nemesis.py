@@ -3008,8 +3008,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     f"-mode cql3 native compression=lz4 -rate threads=5 -pop seq=1..10000 -log interval=5"
         write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, use_single_loader=True)
         self.tester.verify_stress_thread(cs_thread_pool=write_thread)
-        read_cmd = f"cassandra-stress read no-warmup cl=ALL n=10000 -schema 'keyspace=keyspace_new_dc " \
-                   f"replication(strategy=NetworkTopologyStrategy,{datacenters[0]}=3,{datacenters[1]}=1) " \
+        self._verify_multi_dc_keyspace_data(consistency_level="ALL")
+
+    def _verify_multi_dc_keyspace_data(self, consistency_level: str = "ALL"):
+        read_cmd = f"cassandra-stress read no-warmup cl={consistency_level} n=10000 -schema 'keyspace=keyspace_new_dc " \
                    f"compression=LZ4Compressor' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=5 " \
                    f"-pop seq=1..10000 -log interval=5"
         read_thread = self.tester.run_stress_thread(stress_cmd=read_cmd, use_single_loader=True)
@@ -3067,6 +3069,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.monitoring_set.reconfigure_scylla_monitoring()
         datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
         assert not [dc for dc in datacenters if dc.endswith("_nemesis_dc")], "new datacenter was not unregistered"
+        self._verify_multi_dc_keyspace_data(consistency_level="QUORUM")
 
 
 def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
