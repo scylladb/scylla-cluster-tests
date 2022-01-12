@@ -129,16 +129,22 @@ class CdcStreamsWasNotUpdated(Exception):
 
 class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
 
-    disruptive = False
-    run_with_gemini = True
-    networking = False
-    kubernetes = False
-    limited = False
-    MINUTE_IN_SEC = 60
-    HOUR_IN_SEC = 60 * MINUTE_IN_SEC
-    disruptions_list = []
-    has_steady_run = False
-    DISRUPT_NAME_PREF = "disrupt_"
+    MINUTE_IN_SEC: int = 60
+    HOUR_IN_SEC: int = 60 * MINUTE_IN_SEC
+    disruptions_list: list[Callable] = []
+    DISRUPT_NAME_PREF: str = "disrupt_"
+
+    # nemesis flags:
+    topology_changes: bool = False  # flag that signal that nemesis is changing cluster topology,
+    # i.e. adding/removing nodes/data centers
+    disruptive: bool = False        # flag that signal that nemesis disrupts node/cluster,
+    # i.e reboot,kill, hardreboot, terminate
+    run_with_gemini: bool = True    # flag that signal that nemesis runs with gemini tests
+    networking: bool = False        # flag that signal that nemesis interact with nemesis,
+    # i.e switch off/on network interface, network issues
+    kubernetes: bool = False        # flag that signal that nemesis run with k8s cluster
+    limited: bool = False           # flag that signal that nemesis are belong to limited set of nemesises
+    has_steady_run: bool = False    # flag that signal that nemesis should be run with perf tests with steady run
 
     def __new__(cls, tester_obj, termination_event, *args):  # pylint: disable=unused-argument
         for name, member in inspect.getmembers(cls, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
@@ -329,18 +335,21 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for operation in self.operation_log:
             self.log.info(operation)
 
+    # pylint: disable=too-many-arguments,unused-argument
     def get_list_of_methods_compatible_with_backend(
             self,
             disruptive: Optional[bool] = None,
             run_with_gemini: Optional[bool] = None,
             networking: Optional[bool] = None,
-            limited: Optional[bool] = None) -> List[str]:
+            limited: Optional[bool] = None,
+            topology_changes: Optional[bool] = None) -> List[str]:
         return self.get_list_of_methods_by_flags(
             disruptive=disruptive,
             run_with_gemini=run_with_gemini,
             networking=networking,
             kubernetes=self._is_it_on_kubernetes() or None,
-            limited=limited
+            limited=limited,
+            topology_changes=topology_changes,
         )
 
     def _is_it_on_kubernetes(self) -> bool:
@@ -353,11 +362,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             run_with_gemini: Optional[bool] = None,
             networking: Optional[bool] = None,
             kubernetes: Optional[bool] = None,
-            limited: Optional[bool] = None) -> List[str]:
-        attributes = locals()
-        flags = {flag_name: attributes[flag_name] for flag_name in
-                 ['disruptive', 'run_with_gemini', 'networking', 'kubernetes', 'limited'] if attributes[flag_name] is not None}
-        subclasses_list = self._get_subclasses(**flags)
+            limited: Optional[bool] = None,
+            topology_changes: Optional[bool] = None) -> List[str]:
+        subclasses_list = self._get_subclasses(
+            disruptive=disruptive,
+            run_with_gemini=run_with_gemini,
+            networking=networking,
+            kubernetes=kubernetes,
+            limited=limited,
+            topology_changes=topology_changes
+        )
         disrupt_methods_list = []
         for subclass in subclasses_list:
             method_name = re.search(
@@ -3166,6 +3180,7 @@ class AddRemoveDcNemesis(Nemesis):
     kubernetes = False
     run_with_gemini = False
     limited = True
+    topology_changes = True
 
     def disrupt(self):
         self.disrupt_add_remove_dc()
@@ -3174,6 +3189,7 @@ class AddRemoveDcNemesis(Nemesis):
 class GrowShrinkClusterNemesis(Nemesis):
     disruptive = True
     kubernetes = True
+    topology_changes = True
 
     def disrupt(self):
         self.disrupt_grow_shrink_cluster()
@@ -3245,6 +3261,7 @@ class DrainerMonkey(Nemesis):
     disruptive = True
     kubernetes = True
     limited = True
+    topology_changes = True
 
     def disrupt(self):
         self.disrupt_nodetool_drain()
@@ -3269,6 +3286,7 @@ class CorruptThenRebuildMonkey(Nemesis):
 class DecommissionMonkey(Nemesis):
     disruptive = True
     limited = True
+    topology_changes = True
 
     def disrupt(self):
         self.disrupt_nodetool_decommission()
@@ -3276,6 +3294,7 @@ class DecommissionMonkey(Nemesis):
 
 class DecommissionSeedNode(Nemesis):
     disruptive = True
+    topology_changes = True
 
     def disrupt(self):
         self.disrupt_nodetool_seed_decommission()
@@ -3725,6 +3744,7 @@ class NodeTerminateAndReplace(Nemesis):
     # It should not be run on kubernetes, since it is a manual procedure
     # While on kubernetes we put it all on scylla-operator
     kubernetes = False
+    topology_changes = True
 
     def disrupt(self):
         self.disrupt_terminate_and_replace_node()
@@ -3782,6 +3802,7 @@ class SnapshotOperations(Nemesis):
 class NodeRestartWithResharding(Nemesis):
     disruptive = True
     kubernetes = True
+    topology_changes = True
 
     def disrupt(self):
         self.disrupt_restart_with_resharding()
@@ -4015,6 +4036,7 @@ class TerminateAndRemoveNodeMonkey(Nemesis):
     # It should not be run on kubernetes, since it is a manual procedure
     # While on kubernetes we put it all on scylla-operator
     kubernetes = False
+    topology_changes = True
 
     def disrupt(self):
         self.disrupt_remove_node_then_add_node()
@@ -4048,6 +4070,7 @@ class CDCStressorMonkey(Nemesis):
 class DecommissionStreamingErrMonkey(Nemesis):
 
     disruptive = True
+    topology_changes = True
 
     def disrupt(self):
         self.disrupt_decommission_streaming_err()

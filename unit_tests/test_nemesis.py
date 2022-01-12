@@ -1,6 +1,6 @@
 from collections import namedtuple
 import sdcm.utils.cloud_monitor  # pylint: disable=unused-import # import only to avoid cyclic dependency
-from sdcm.nemesis import Nemesis, CategoricalMonkey
+from sdcm.nemesis import Nemesis, CategoricalMonkey, SisyphusMonkey
 from sdcm.cluster_k8s.mini_k8s import LocalMinimalScyllaPodCluster
 from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
 from sdcm.cluster_k8s.eks import EksScyllaPodCluster
@@ -25,6 +25,11 @@ class FakeNemesis(Nemesis):
 
 class ChaosMonkey(FakeNemesis):
     ...
+
+
+class FakeSisyphusMonkey(SisyphusMonkey):
+    def __new__(cls, tester_obj, termination_event, *args):
+        return object.__new__(cls)
 
 
 class FakeCategoricalMonkey(CategoricalMonkey):
@@ -123,3 +128,26 @@ def test_categorical_monkey():
     nemesis._random_disrupt()
 
     assert nemesis.runs in ([1, 2, 1], [1, 2, 2])
+
+
+def test_list_topology_changes_monkey():
+    expected_disrupt_method_names = [
+        "disrupt_restart_with_resharding",
+        "disrupt_nodetool_seed_decommission",
+        "disrupt_nodetool_drain",
+        "disrupt_nodetool_decommission",
+        "disrupt_add_remove_dc",
+        "disrupt_grow_shrink_cluster",
+        "disrupt_terminate_and_replace_node",
+        "disrupt_decommission_streaming_err",
+        "disrupt_remove_node_then_add_node",
+    ]
+    tester = FakeTester()
+    tester.params["nemesis_include_filter"] = ['topology_changes']
+    sisphus = FakeSisyphusMonkey(FakeTester(), None)
+
+    collected_disrupt_methods_names = [disrupt.__name__ for disrupt in sisphus.disruptions_list]
+
+    for disrupt_method in collected_disrupt_methods_names:
+        assert disrupt_method in expected_disrupt_method_names, \
+            f"{disrupt_method=} from {collected_disrupt_methods_names=} was not found in {expected_disrupt_method_names=}"
