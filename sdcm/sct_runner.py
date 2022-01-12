@@ -635,6 +635,7 @@ class GceSctRunner(SctRunner):
             size=instance_type,
             image=base_image,
             ex_network=self.SCT_NETWORK,
+            ex_tags="keep-alive",
             ex_disks_gce_struct=[{
                 "type": "PERSISTENT",
                 "deviceName": f"{instance_name}-root-pd-ssd",
