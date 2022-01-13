@@ -14,7 +14,7 @@
 import time
 import logging
 from functools import cached_property
-from typing import List, Dict
+from typing import List, Dict, Literal
 
 import boto3
 from botocore.exceptions import ClientError
@@ -25,6 +25,7 @@ from sdcm.wait import wait_for
 
 
 LOGGER = logging.getLogger(__name__)
+AwsArchType = Literal['x86_64', 'arm64']
 
 
 class EksClusterCleanupMixin:
