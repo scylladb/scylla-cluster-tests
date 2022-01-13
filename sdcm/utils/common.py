@@ -64,7 +64,7 @@ from libcloud.compute.types import Provider
 import yaml
 from packaging.version import Version
 
-from sdcm.utils.aws_utils import EksClusterCleanupMixin
+from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
 from sdcm import wait
@@ -1080,7 +1080,7 @@ def clean_clusters_eks(tags_dict: dict, dry_run: bool = False) -> None:
 _SCYLLA_AMI_CACHE: dict[str, list[EC2Image]] = defaultdict(list)
 
 
-def get_scylla_ami_versions(region_name: str) -> list[EC2Image]:
+def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64') -> list[EC2Image]:
     """Get the list of all the formal scylla ami from specific region."""
 
     if _SCYLLA_AMI_CACHE[region_name]:
@@ -1090,7 +1090,10 @@ def get_scylla_ami_versions(region_name: str) -> list[EC2Image]:
     _SCYLLA_AMI_CACHE[region_name] = sorted(
         ec2_resource.images.filter(
             Owners=[SCYLLA_AMI_OWNER_ID, ],
-            Filters=[{'Name': 'name', 'Values': ['ScyllaDB *']}, ],
+            Filters=[
+                {'Name': 'name', 'Values': ['ScyllaDB *']},
+                {'Name': 'architecture', 'Values': [arch]},
+            ],
         ),
         key=lambda x: x.creation_date,
         reverse=True,
@@ -1365,16 +1368,20 @@ def get_branched_repo(scylla_version: str,
     return None
 
 
-def get_branched_ami(scylla_version: str, region_name: str) -> list[EC2Image]:
+def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = 'x86_64') -> list[EC2Image]:
     """
     Get a list of AMIs, based on version match
 
     :param scylla_version: branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:all'
     :param region_name: the region to look AMIs in
+    :param arch: image architecture, it is either x86_64 or arm64
     :return: list of ec2.images
     """
     branch, build_id = scylla_version.split(":", 1)
-    filters = [{"Name": "tag:branch", "Values": [branch, ], }, ]
+    filters = [
+        {"Name": "tag:branch", "Values": [branch, ], },
+        {"Name": "architecture", "Values": [arch, ], },
+    ]
     if build_id not in ("latest", "all",):
         filters.append({'Name': 'tag:build-id', 'Values': [build_id, ], })
 
