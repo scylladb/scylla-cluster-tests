@@ -95,6 +95,7 @@ source s_network_tcp {{
     transport("tcp")
     port({port})
     flags(syslog-protocol)
+    max-connections(1000)
   );
 }};
 
