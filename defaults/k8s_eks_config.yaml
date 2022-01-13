@@ -15,9 +15,9 @@ eks_service_ipv4_cidr: '172.20.0.0/16'
 eks_vpc_cni_version: 'v1.8.0-eksbuild.1'
 eks_nodegroup_role_arn: 'arn:aws:iam::797456418907:role/helm-test-worker-nodes-NodeInstanceRole-6ACHDYEKNN3I'
 
-scylla_version: '4.4.1'
-scylla_mgmt_agent_version: '2.3.0'
-k8s_cert_manager_version: '1.0.3'
+scylla_version: '4.5.3'
+scylla_mgmt_agent_version: '2.6.0'
+k8s_cert_manager_version: '1.2.0'
 
 # Currently k8s monitoring does not work properly
 # https://trello.com/c/8Hwc0nUB/3061-eks-k8s-monitoring-stack-health-monitoring-fails
@@ -44,7 +44,7 @@ n_db_nodes: 3
 
 append_scylla_args: ''
 docker_image: ''
-mgmt_docker_image: 'scylladb/scylla-manager:2.3.0'
+mgmt_docker_image: 'scylladb/scylla-manager:2.6.0'
 
 backup_bucket_backend: 's3'
 backup_bucket_location: 'minio-bucket'

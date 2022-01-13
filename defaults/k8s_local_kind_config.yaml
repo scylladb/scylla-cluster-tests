@@ -3,9 +3,9 @@ mini_k8s_version: '0.11.0'
 
 n_db_nodes: 3
 
-scylla_version: '4.4.1'
-scylla_mgmt_agent_version: '2.3.0'
-mgmt_docker_image: 'scylladb/scylla-manager:2.3.0'
+scylla_version: '4.5.3'
+scylla_mgmt_agent_version: '2.6.0'
+mgmt_docker_image: 'scylladb/scylla-manager:2.6.0'
 
 # NOTE: If 'k8s_scylla_operator_docker_image' not set then the one from helm chart will be used.
 # To test nightly builds define it like this: 'scylladb/scylla-operator:nightly'
