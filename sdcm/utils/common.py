@@ -29,7 +29,7 @@ import copy
 import string
 import sys
 import warnings
-from typing import Iterable, List, Callable
+from typing import Iterable, List, Callable, Literal
 from urllib.parse import urlparse
 
 from functools import wraps, partial
@@ -48,6 +48,7 @@ from libcloud.compute.types import Provider
 
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
+AwsArchType = Literal['x86_64', 'arm64']
 
 
 try:
@@ -804,34 +805,28 @@ def clean_instances_gce(tags_dict):
     ParallelObject(gce_instances_to_clean, timeout=60).run(delete_instance, ignore_exceptions=True)
 
 
-_SCYLLA_AMI_CACHE = defaultdict(dict)
+_SCYLLA_AMI_CACHE = defaultdict(list)
 
 
-def get_scylla_ami_versions(region):
-    """
-    get the list of all the formal scylla ami from specific region
+def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64'):
+    """Get the list of all the formal scylla ami from specific region."""
 
-    :param region: the aws region to look in
-    :return: list of ami data
-    :rtype: list
-    """
+    if _SCYLLA_AMI_CACHE[region_name]:
+        return _SCYLLA_AMI_CACHE[region_name]
 
-    if _SCYLLA_AMI_CACHE[region]:
-        return _SCYLLA_AMI_CACHE[region]
-
-    ec2 = boto3.client('ec2', region_name=region)
-    response = ec2.describe_images(
-        Owners=['797456418907'],  # ScyllaDB
-        Filters=[
-            {'Name': 'name', 'Values': ['ScyllaDB *']},
-        ],
+    ec2_resource = boto3.resource('ec2', region_name=region_name)
+    _SCYLLA_AMI_CACHE[region_name] = sorted(
+        ec2_resource.images.filter(
+            Owners=['797456418907', ],
+            Filters=[
+                {'Name': 'name', 'Values': ['ScyllaDB *']},
+                {'Name': 'architecture', 'Values': [arch]},
+            ],
+        ),
+        key=lambda x: x.creation_date,
+        reverse=True,
     )
-
-    _SCYLLA_AMI_CACHE[region] = sorted(response['Images'],
-                                       key=lambda x: x['CreationDate'],
-                                       reverse=True)
-
-    return _SCYLLA_AMI_CACHE[region]
+    return _SCYLLA_AMI_CACHE[region_name]
 
 
 _S3_SCYLLA_REPOS_CACHE = defaultdict(dict)
@@ -1053,32 +1048,37 @@ def get_my_ip():
     return ip
 
 
-def get_branched_ami(ami_version, region_name):
+def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = 'x86_64'):
     """
     Get a list of AMIs, based on version match
 
-    :param ami_version: branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:all'
+    :param scylla_version: branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:all'
     :param region_name: the region to look AMIs in
+    :param arch: image architecture, it is either x86_64 or arm64
     :return: list of ec2.images
     """
-    branch, build_id = ami_version.split(':')
-    ec2 = boto3.resource('ec2', region_name=region_name)
 
-    LOGGER.info("Looking for AMI match [%s]", ami_version)
-    if build_id in ('latest', 'all'):
-        filters = [{'Name': 'tag:branch', 'Values': [branch]}]
-    else:
-        filters = [{'Name': 'tag:branch', 'Values': [branch]}, {'Name': 'tag:build-id', 'Values': [build_id]}]
+    branch, build_id = scylla_version.split(":", 1)
+    filters = [
+        {"Name": "tag:branch", "Values": [branch, ], },
+        {"Name": "architecture", "Values": [arch, ], },
+    ]
+    if build_id not in ("latest", "all",):
+        filters.append({'Name': 'tag:build-id', 'Values': [build_id, ], })
 
-    amis = list(ec2.images.filter(Filters=filters))
+    LOGGER.info("Looking for AMIs match [%s]", scylla_version)
+    ec2_resource = boto3.resource("ec2", region_name=region_name)
+    images = sorted(
+        ec2_resource.images.filter(Filters=filters),
+        key=lambda x: x.creation_date,
+        reverse=True,
+    )
+    images = [image for image in images if not image.name.startswith('debug-image')]
 
-    amis = sorted(amis, key=lambda x: x.creation_date, reverse=True)
-
-    assert amis, "AMI matching [{}] wasn't found on {}".format(ami_version, region_name)
-    if build_id == 'all':
-        return amis
-    else:
-        return amis[:1]
+    assert images, f"AMIs for {scylla_version=} not found in {region_name}"
+    if build_id == "all":
+        return images
+    return images[:1]
 
 
 def get_ami_tags(ami_id, region_name):
