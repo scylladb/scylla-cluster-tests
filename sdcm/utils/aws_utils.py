@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import List, Dict
+from typing import List, Dict, Literal
 
 import boto3
 import logging
@@ -13,6 +13,7 @@ from sdcm.wait import wait_for
 
 
 LOGGER = logging.getLogger(__name__)
+AwsArchType = Literal['x86_64', 'arm64']
 
 
 class EksClusterCleanupMixin:
