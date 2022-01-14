@@ -13,6 +13,7 @@ from sdcm.wait import wait_for
 
 
 LOGGER = logging.getLogger(__name__)
+ARM_ARCH_PREFIXES = ('im4', 'is4', 'a1.', 'inf', 'm6', 'c6', 'r6', 'm7', 'c7', 'r7')
 AwsArchType = Literal['x86_64', 'arm64']
 
 
@@ -312,3 +313,9 @@ def ec2_ami_get_root_device_name(image_id, region):
             return image.root_device_name
     except (TypeError, ClientError):
         raise AssertionError(f"Image '{image_id}' details not found in '{region}'")
+
+
+def get_arch_from_instance_type(instance_type: str) -> AwsArchType:
+    if any((prefix in instance_type for prefix in ARM_ARCH_PREFIXES)):
+        return 'arm64'
+    return 'x86_64'

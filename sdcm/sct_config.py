@@ -35,6 +35,7 @@ from sdcm.utils.common import find_scylla_repo, get_scylla_ami_versions, get_bra
 from sdcm.utils.k8s import convert_cpu_units_to_k8s_value, convert_memory_units_to_k8s_value
 from sdcm.utils.version_utils import get_branch_version, get_branch_version_for_multiple_repositories, \
     get_scylla_docker_repo_from_version, resolve_latest_repo_symlink
+from sdcm.utils.aws_utils import get_arch_from_instance_type
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 
 
@@ -1271,14 +1272,15 @@ class SCTConfiguration(dict):
             if self.get("cluster_backend") in ["docker", "k8s-gce-minikube", "k8s-gke"]:
                 self.log.info("Assume that Scylla Docker image has repo file pre-installed.")
             elif not self.get('ami_id_db_scylla') and self.get('cluster_backend') == 'aws':
+                aws_arch = get_arch_from_instance_type(self.get('instance_type_db'))
                 ami_list = []
                 for region in region_names:
                     if ':' in scylla_version:
-                        amis = get_branched_ami(scylla_version, region_name=region)
+                        amis = get_branched_ami(scylla_version, region_name=region, arch=aws_arch)
                         ami_list.append(amis[0].id)
                         continue
 
-                    amis = get_scylla_ami_versions(region)
+                    amis = get_scylla_ami_versions(region, arch=aws_arch)
                     for ami in amis:
                         if scylla_version in ami['Name']:
                             ami_list.append(ami['ImageId'])
@@ -1305,14 +1307,15 @@ class SCTConfiguration(dict):
         oracle_scylla_version = self.get('oracle_scylla_version')
         if oracle_scylla_version:
             if not self.get('ami_id_db_oracle') and self.get('cluster_backend') == 'aws':
+                aws_arch = get_arch_from_instance_type(self.get('instance_type_db'))
                 ami_list = []
                 for region in region_names:
                     if ':' in oracle_scylla_version:
-                        amis = get_branched_ami(oracle_scylla_version, region_name=region)
+                        amis = get_branched_ami(oracle_scylla_version, region_name=region, arch=aws_arch)
                         ami_list.append(amis[0].id)
                         continue
 
-                    amis = get_scylla_ami_versions(region)
+                    amis = get_scylla_ami_versions(region, arch=aws_arch)
                     for ami in amis:
                         if oracle_scylla_version in ami['Name']:
                             ami_list.append(ami['ImageId'])
