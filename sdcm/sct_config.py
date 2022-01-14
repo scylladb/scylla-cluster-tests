@@ -29,6 +29,7 @@ import anyconfig
 
 from sdcm import sct_abs_path
 from sdcm.utils import alternator
+from sdcm.utils.aws_utils import get_arch_from_instance_type
 from sdcm.utils.common import (
     MAX_SPOT_DURATION_TIME,
     ami_built_by_scylla,
@@ -1380,14 +1381,15 @@ class SCTConfiguration(dict):
                     "k8s-local-kind", "k8s-local-kind-aws", "k8s-local-kind-gce"):
                 self.log.info("Assume that Scylla Docker image has repo file pre-installed.")
             elif not self.get('ami_id_db_scylla') and self.get('cluster_backend') == 'aws':
+                aws_arch = get_arch_from_instance_type(self.get('instance_type_db'))
                 # ami.name format examples: ScyllaDB 4.4.0 or ScyllaDB Enterprise 2019.1.1
                 scylla_version_substr = f" {scylla_version}"
                 ami_list = []
                 for region in region_names:
                     if ':' in scylla_version:
-                        ami = get_branched_ami(scylla_version=scylla_version, region_name=region)[0]
+                        ami = get_branched_ami(scylla_version=scylla_version, region_name=region, arch=aws_arch)[0]
                     else:
-                        for ami in get_scylla_ami_versions(region_name=region):
+                        for ami in get_scylla_ami_versions(region_name=region, arch=aws_arch):
                             if scylla_version_substr in ami.name:
                                 break
                         else:
@@ -1429,12 +1431,14 @@ class SCTConfiguration(dict):
         if oracle_scylla_version := self.get('oracle_scylla_version'):  # pylint: disable=too-many-nested-blocks
             suffix = f" {oracle_scylla_version}"  # ami.name format example: ScyllaDB 4.4.0
             if not self.get('ami_id_db_oracle') and self.get('cluster_backend') == 'aws':
+                aws_arch = get_arch_from_instance_type(self.get('instance_type_db'))
                 ami_list = []
                 for region in region_names:
                     if ':' in oracle_scylla_version:
-                        ami = get_branched_ami(scylla_version=oracle_scylla_version, region_name=region)[0]
+                        ami = get_branched_ami(
+                            scylla_version=oracle_scylla_version, region_name=region, arch=aws_arch)[0]
                     else:
-                        for ami in get_scylla_ami_versions(region_name=region):
+                        for ami in get_scylla_ami_versions(region_name=region, arch=aws_arch):
                             if ami.name.endswith(suffix):
                                 break
                         else:
