@@ -585,15 +585,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             sb_version = f'heads/{sb_version}'
         self.remoter.sudo(shell_script_cmd(f"""\
             rm -rf /usr/local/go
-            curl -LO https://storage.googleapis.com/golang/go1.16.3.linux-amd64.tar.gz
-            tar -C /usr/local -xvzf go1.16.3.linux-amd64.tar.gz
-            echo 'export GOPATH=$HOME/go' >> $HOME/.bash_profile
-            echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bash_profile
-            source $HOME/.bash_profile
-            
             rm -f /tmp/sb_install || true
             mkdir /tmp/sb_install
             cd /tmp/sb_install
+            curl -Lo go.tar.gz https://storage.googleapis.com/golang/go1.17.4.linux-amd64.tar.gz
+            tar -C /usr/local -xvzf go.tar.gz
+            echo 'export GOPATH=$HOME/go' >> $HOME/.bash_profile
+            echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bash_profile
+            source $HOME/.bash_profile
             curl -Lo sb.zip https://github.com/scylladb/scylla-bench/archive/refs/{sb_version}.zip
             unzip sb.zip
             cd ./scylla-bench-*
