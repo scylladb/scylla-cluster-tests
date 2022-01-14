@@ -14,7 +14,7 @@ gce_instance_type_loader: 'e2-standard-4'
 
 ssh_transport: 'libssh2'
 
-nemesis_class_name: 'ChaosMonkey'
+nemesis_class_name: 'NonDisruptive'
 nemesis_interval: 10
 
 user_prefix: 'longevity-nosqlbench-3h'
