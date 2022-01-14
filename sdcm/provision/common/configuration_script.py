@@ -39,10 +39,14 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         script += self._end_script()
         return script
 
+    @staticmethod
+    def _wait_before_running_script() -> str:
+        return ''
+
     def _start_script(self) -> str:
         script = '#!/bin/bash\n'
         script += 'set -x\n'
-        script += 'while ! systemctl status cloud-init.service | grep "active (exited)"; do sleep 1; done\n'
+        script += self._wait_before_running_script()
         if self.disable_ssh_while_running:
             script += 'systemctl stop sshd || true\n'
         return script
