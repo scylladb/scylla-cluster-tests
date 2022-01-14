@@ -1394,7 +1394,7 @@ def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = 
     )
     images = [image for image in images if not image.name.startswith('debug-image')]
 
-    assert images, f"AMIs for {scylla_version=} not found in {region_name}"
+    assert images, f"AMIs for {scylla_version=} with {arch} architecture not found in {region_name}"
     if build_id == "all":
         return images
     return images[:1]
