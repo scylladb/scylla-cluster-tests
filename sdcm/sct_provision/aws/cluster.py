@@ -141,11 +141,11 @@ class ClusterBase(BaseModel):
     def _node_nums(self) -> List[int]:
         node_nums = self.params.get(self._NODE_NUM_PARAM_NAME)
         if isinstance(node_nums, list):
-            return node_nums
+            return [int(num) for num in node_nums]
         if isinstance(node_nums, int):
             return [node_nums]
         if isinstance(node_nums, str):
-            return [int(node_nums)]
+            return [int(num) for num in node_nums.split()]
         raise ValueError('Unexpected value of %s parameter' % (self._NODE_NUM_PARAM_NAME,))
 
     @property
