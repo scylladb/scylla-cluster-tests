@@ -578,13 +578,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @retrying(n=5)
     def install_scylla_bench(self):
-        if self.distro.is_rhel_like:
-            self.remoter.sudo("yum install -y git")
+        sb_version = self.parent_cluster.params.get('scylla_bench_version')
+        if sb_version.startswith('v') and '.' in sb_version:
+            sb_version = f'tags/{sb_version}'
         else:
-            self.remoter.sudo(shell_script_cmd("""\
-                apt-get update
-                apt-get install -y git
-            """))
+            sb_version = f'heads/{sb_version}'
         self.remoter.sudo(shell_script_cmd(f"""\
             rm -rf /usr/local/go
             curl -LO https://storage.googleapis.com/golang/go1.16.3.linux-amd64.tar.gz
@@ -592,7 +590,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             echo 'export GOPATH=$HOME/go' >> $HOME/.bash_profile
             echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bash_profile
             source $HOME/.bash_profile
-            GO111MODULE=on go get -v github.com/scylladb/scylla-bench@{self.parent_cluster.params.get('scylla_bench_version')}
+            
+            rm -f /tmp/sb_install || true
+            mkdir /tmp/sb_install
+            cd /tmp/sb_install
+            curl -Lo sb.zip https://github.com/scylladb/scylla-bench/archive/refs/{sb_version}.zip
+            unzip sb.zip
+            cd ./scylla-bench-*
+            GO111MODULE=on go install .
         """))
         self.is_scylla_bench_installed = True
 
