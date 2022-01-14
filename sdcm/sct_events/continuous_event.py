@@ -97,11 +97,12 @@ class ContinuousEvent(SctEvent, abstract=True):
     def get_continuous_hash_from_dict(cls, data: dict):
         if "shard" in data:
             data["shard"] = int(data["shard"])
-        return hash(tuple(data.get(attr_name) for attr_name in cls.continuous_hash_fields))
+        return hash((cls.__name__,) + tuple(data.get(attr_name) for attr_name in cls.continuous_hash_fields))
 
     @property
     def continuous_hash_tuple(self) -> tuple[Any | None]:
-        return tuple(getattr(self, attr_name, None) for attr_name in self.continuous_hash_fields)
+        return (self.__class__.__name__,) + \
+            tuple(getattr(self, attr_name, None) for attr_name in self.continuous_hash_fields)
 
     @property
     def continuous_hash_dict(self) -> dict[str, str]:
