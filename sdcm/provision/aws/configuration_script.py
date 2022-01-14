@@ -22,6 +22,9 @@ class AWSConfigurationScriptBuilder(ConfigurationScriptBuilder):
     aws_additional_interface: bool = False
     aws_ipv6_workaround: bool = False
 
+    def _wait_before_running_script(self) -> str:
+        return 'while ! systemctl status cloud-init.service | grep "active (exited)"; do sleep 1; done\n'
+
     def _script_body(self) -> str:
         script = super()._script_body()
         if self.aws_additional_interface:
