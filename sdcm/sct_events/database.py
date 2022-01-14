@@ -291,7 +291,8 @@ class RepairEvent(ScyllaDatabaseContinuousEvent):
     save_to_files = False
     continuous_hash_fields = ('node', 'shard', 'uuid')
 
-    def __init__(self, node: str, shard: int, severity=Severity.NORMAL, **__):
+    def __init__(self, node: str, shard: int, uuid: str, severity=Severity.NORMAL, **__):
+        self.uuid = uuid
         super().__init__(node=node, shard=shard, severity=severity)
         self.log_level = logging.DEBUG
 
