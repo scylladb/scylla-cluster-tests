@@ -498,7 +498,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                              watch_for="User initiated compaction started on behalf of",
                              timeout=timeout,
                              stop_func=compaction_ops.stop_major_compaction)
-        self.tester.wait_no_compactions_running()
         ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
 
     def disrupt_start_stop_scrub_compaction(self):
@@ -512,7 +511,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                              watch_for="Scrubbing",
                              timeout=timeout,
                              stop_func=compaction_ops.stop_scrub_compaction)
-        self.tester.wait_no_compactions_running()
         ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
 
     def disrupt_start_stop_cleanup_compaction(self):
@@ -527,7 +525,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                              timeout=timeout,
                              watch_for="Cleaning",
                              stop_func=compaction_ops.stop_cleanup_compaction)
-        # self.tester.wait_no_compactions_running()
         ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
 
     def disrupt_start_stop_validation_compaction(self):
@@ -542,7 +539,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                              watch_for="Scrubbing ",
                              timeout=timeout,
                              stop_func=compaction_ops.stop_validation_compaction)
-        # self.tester.wait_no_compactions_running()
         ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
 
     # This nemesis should be run with "private" ip_ssh_connections till the issue #665 is not fixed

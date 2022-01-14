@@ -230,6 +230,7 @@ class StopCompactionTest(ClusterTester):
     def _stop_compaction_base_test_scenario(self,
                                             compaction_nemesis):
         try:
+            self.wait_no_compactions_running()
             compaction_nemesis.disrupt()
             node = compaction_nemesis.target_node
             self._grep_log_and_assert(node)
