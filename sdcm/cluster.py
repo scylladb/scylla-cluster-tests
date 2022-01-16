@@ -1719,6 +1719,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         else:
             repo_path = '/etc/apt/sources.list.d/scylla-manager.list'
         self.remoter.sudo(f"curl -o {repo_path} -L {scylla_repo}")
+
+        # Prevent issue https://github.com/scylladb/scylla/issues/9683
+        if self.distro.is_oel8:
+            self.remoter.sudo(f"chmod 644 {repo_path}")
+
         if self.distro.is_debian_like:
             for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
                 self.remoter.sudo(f"apt-key adv --keyserver keyserver.ubuntu.com --recv-keys {apt_key}", retry=3)
