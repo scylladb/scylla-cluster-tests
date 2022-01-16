@@ -26,6 +26,10 @@ def call(Map pipelineParams) {
                description: 'us-east-1|eu-west-1',
                name: 'region')
 
+            string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
+                description: 'Availability zone',
+                name: 'availability_zone')
+
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
@@ -154,6 +158,8 @@ def call(Map pipelineParams) {
                                                             export SCT_REGION_NAME=${pipelineParams.region}
                                                         fi
                                                         export SCT_CONFIG_FILES=${test_config}
+
+                                                        export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
 
                                                         if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
                                                             export SCT_GCE_DATACENTER=${params.gce_datacenter}
