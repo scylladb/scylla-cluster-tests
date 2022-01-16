@@ -2,7 +2,7 @@ instance_provision: 'spot'
 gce_datacenter: 'us-east1'
 gce_network: 'qa-vpc'
 
-gce_image_db: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
+gce_image_db: '' # so we can use `scylla_version` as needed
 gce_image_loader: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
 gce_image_monitor: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
 gce_image_username: 'scylla-test'
