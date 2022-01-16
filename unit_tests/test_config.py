@@ -15,6 +15,7 @@ import os
 import logging
 import itertools
 import unittest
+from collections import namedtuple
 
 from sdcm import sct_config
 
@@ -209,12 +210,17 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
-        conf = sct_config.SCTConfiguration()
-        conf.verify_configuration()
+        os.environ['SCT_GCE_IMAGE_DB'] = 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
+
+        expected_repo = 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list'
+        with unittest.mock.patch.object(sct_config, 'get_branch_version', return_value="4.7.dev", clear=True), \
+                unittest.mock.patch.object(sct_config, 'find_scylla_repo', return_value=expected_repo, clear=True):
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
 
         self.assertIn('scylla_repo', conf.dump_config())
         self.assertEqual(conf.get('scylla_repo'),
-                         "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list")
+                         expected_repo)
         self.assertEqual(conf.get('scylla_repo_loader'),
                          "https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.6.repo")
 
@@ -223,12 +229,17 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'centos'
         os.environ['SCT_SCYLLA_VERSION'] = '3.0.3'
-        conf = sct_config.SCTConfiguration()
-        conf.verify_configuration()
+        os.environ['SCT_GCE_IMAGE_DB'] = 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
+
+        expected_repo = 'https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list'
+        with unittest.mock.patch.object(sct_config, 'get_branch_version', return_value="4.7.dev", clear=True), \
+                unittest.mock.patch.object(sct_config, 'find_scylla_repo', return_value=expected_repo, clear=True):
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
 
         self.assertIn('scylla_repo', conf.dump_config())
         self.assertEqual(conf.get('scylla_repo'),
-                         "https://s3.amazonaws.com/downloads.scylladb.com/deb/ubuntu/scylla-3.0-xenial.list")
+                         expected_repo)
         self.assertEqual(conf.get('scylla_repo_loader'),
                          "https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.6.repo")
 
@@ -359,6 +370,8 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_SCYLLA_VERSION'] = 'master:latest'
         os.environ['SCT_NEW_VERSION'] = 'master:latest'
         os.environ['SCT_USER_PREFIX'] = 'testing'
+        os.environ['SCT_GCE_IMAGE_DB'] = \
+            'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
 
         resolved_repo_link = 'https://s3.amazonaws.com/downloads.scylladb.com/unstable/scylla/master/rpm\
             /centos/2021-06-09T13:12:44Z/scylla.repo'
@@ -372,6 +385,24 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertEqual(conf.get('scylla_repo'), resolved_repo_link)
         target_upgrade_version = conf.get('target_upgrade_version')
         self.assertTrue(target_upgrade_version == '666.development' or target_upgrade_version.endswith(".dev"))
+
+    def test_15b_image_id_by_scylla_version(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
+        os.environ['SCT_SCYLLA_VERSION'] = 'master:latest'
+        os.environ['SCT_USER_PREFIX'] = 'testing'
+        os.environ['SCT_GCE_IMAGE_DB'] = ''
+
+        resolved_image_link = 'https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/' \
+                              'scylla-4-7-dev-0-20220113-8bcd23fa0-1-build-359'
+        image = namedtuple("Image", "name extra")(name='scylla-4-7-dev-0-20220113-8bcd23fa0-1-build-359',
+                                                  extra=dict(selfLink=resolved_image_link))
+
+        with unittest.mock.patch.object(sct_config, 'get_branched_gce_images', return_value=[image], clear=True):
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
+            conf._get_target_upgrade_version()  # pylint: disable=protected-access
+
+        self.assertEqual(conf.get('gce_image_db'), resolved_image_link)
 
     def test_16_default_oracle_scylla_version_eu_west_1(self):
         ami_4_4_7 = "ami-0cac6b91be579df80"
