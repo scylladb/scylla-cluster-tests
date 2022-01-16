@@ -27,6 +27,7 @@ import uuid
 import itertools
 import json
 import ipaddress
+from pathlib import Path
 from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager
 from datetime import datetime
 from textwrap import dedent
@@ -457,6 +458,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @retrying(n=3)
     def install_cassandra_harry(self):
+        # The SCT code runs from another machine, and the current code runs from the loader machine.
+        # Therefore, one needs to execute the "pwd" command to get the user path.
+        cassandra_harry_folder_path = Path(self.remoter.sudo("pwd", ignore_status=True).stdout.strip())
+        cassandra_harry_path = cassandra_harry_folder_path / "cassandra-harry"
         if self.distro.is_rhel_like:
             self.remoter.sudo("yum install -y git make maven")
         else:
@@ -464,15 +469,24 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 apt-get update
                 apt-get install -y git make maven
             """))
-        self.remoter.run(shell_script_cmd("""\
-            rm -rf cassandra-harry
-            git clone https://github.com/apache/cassandra-harry
-            cd cassandra-harry
-            git checkout 26bb6696ba1b18ff5c062d780a9360e750691052
-            make mvn
+        # TODO: Needs to uncomment the following lines after https://github.com/apache/cassandra-harry/pull/12 will
+        # self.remoter.run(shell_script_cmd(f"""\
+        #     rm -rf {cassandra_harry_path}
+        #     git clone https://github.com/apache/cassandra-harry.git {cassandra_harry_path}
+        # """))
+        self.remoter.run(shell_script_cmd(f"""\
+            rm -rf {cassandra_harry_path}
+            git clone https://github.com/fruch/cassandra-harry {cassandra_harry_path}
         """))
-        result = self.remoter.run('realpath ~/cassandra-harry/scripts/cassandra-harry')
-        self.remoter.sudo(f"ln -s {result.stdout.strip()} /usr/bin/cassandra-harry", ignore_status=True)
+        self.remoter.run(shell_script_cmd(f"""\
+            cd {cassandra_harry_path}
+            git checkout standalone
+            make standalone
+        """))
+        cassandra_harry_tool_path = cassandra_harry_path / "scripts" / "cassandra-harry"
+        # Edit the "cassandra-harry' file and set the correct HARRY_HOME value (the value should be repo's path)
+        self.remoter.run(rf"sed -i '2s;^;HARRY_HOME={cassandra_harry_path}\n;' {cassandra_harry_tool_path}")
+        self.remoter.sudo(f"ln -svf {cassandra_harry_tool_path} /usr/bin/cassandra-harry", ignore_status=True)
         self.is_cassandra_harry_installed = True
 
     @property

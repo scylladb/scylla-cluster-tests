@@ -1,5 +1,5 @@
 test_duration: 240
-stress_cmd: ["/usr/bin/cassandra-harry -run-time 2 -run-time-unit HOURS"]
+stress_cmd: ["cassandra-harry -run-time 2 -run-time-unit HOURS"]
 
 n_db_nodes: 6
 n_loaders: 2
