@@ -98,6 +98,19 @@ def call(Map pipelineParams) {
                                         AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
                                         AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
                                     }
+                                    stage('Checkout') {
+                                        catchError(stageResult: 'FAILURE') {
+                                            timeout(time: 5, unit: 'MINUTES') {
+                                                script {
+                                                    wrap([$class: 'BuildUser']) {
+                                                        dir('scylla-cluster-tests') {
+                                                            checkout scm
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                     stage('Get test duration') {
                                         catchError(stageResult: 'FAILURE') {
                                             timeout(time: 2, unit: 'MINUTES') {
@@ -105,7 +118,6 @@ def call(Map pipelineParams) {
                                                     env.SCT_TEST_ID = UUID.randomUUID().toString()
                                                     wrap([$class: 'BuildUser']) {
                                                         dir('scylla-cluster-tests') {
-                                                            checkout scm
                                                             (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
                                                         }
                                                     }
