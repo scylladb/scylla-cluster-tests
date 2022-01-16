@@ -1266,7 +1266,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def call_next_nemesis(self):
         self.log.info(f'Selecting the next nemesis out of stack {self.disruptions_list}')
-        if self.disruptions_list is not None:
+        if self.disruptions_list:
             self.execute_disrupt_method(disrupt_method=self.disruptions_list.pop())
             self.log.info(f'Remaining nemesis to execute {self.disruptions_list}')
         else:
