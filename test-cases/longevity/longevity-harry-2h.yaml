@@ -2,7 +2,7 @@ test_duration: 240
 stress_cmd: ["cassandra-harry -run-time 2 -run-time-unit HOURS"]
 
 n_db_nodes: 6
-n_loaders: 2
+n_loaders: 1
 n_monitor_nodes: 1
 
 instance_type_db: 'i3.large'
