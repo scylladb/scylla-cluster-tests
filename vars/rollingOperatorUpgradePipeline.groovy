@@ -137,7 +137,7 @@ def call(Map pipelineParams) {
                                                 dir('scylla-cluster-tests') {
                                                     timeout(time: testRunTimeout, unit: 'MINUTES') {
                                                         checkout scm
-                                                        runSctTest(run_params, builder.region)
+                                                        runSctTest(run_params, builder.region, functional_test=false, pipelineParams)
                                                     }
                                                 }
                                             }

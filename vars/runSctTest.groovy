@@ -1,6 +1,6 @@
 #!groovy
 
-def call(Map params, String region, functional_test = false){
+def call(Map params, String region, functional_test = false, Map pipelineParams = [:]){
     // handle params which can be a json list
     def current_region = initAwsRegionParam(params.region, region)
     def test_config = groovy.json.JsonOutput.toJson(params.test_config)
@@ -57,6 +57,9 @@ def call(Map params, String region, functional_test = false){
     fi
     if [[ -n "${params.k8s_scylla_operator_upgrade_chart_version ? params.k8s_scylla_operator_upgrade_chart_version : ''}" ]] ; then
         export SCT_K8S_SCYLLA_OPERATOR_UPGRADE_CHART_VERSION=${params.k8s_scylla_operator_upgrade_chart_version}
+    fi
+    if [[ -n "${pipelineParams.k8s_enable_performance_tuning ? pipelineParams.k8s_enable_performance_tuning : ''}" ]] ; then
+        export SCT_K8S_ENABLE_PERFORMANCE_TUNING=${pipelineParams.k8s_enable_performance_tuning}
     fi
 
     if [[ -n "${params.scylla_mgmt_agent_version ? params.scylla_mgmt_agent_version : ''}" ]] ; then
