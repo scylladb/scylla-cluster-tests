@@ -25,13 +25,13 @@ def get_git_current_branch() -> str:
     return proc.stdout.decode(encoding="utf-8").strip()
 
 
-def clone_repo(remoter, repo_url: str):
+def clone_repo(remoter, repo_url: str, destination_dir_name: str = ""):
     # pylint: disable=broad-except
     try:
         LOGGER.debug("Cloning from %s...", repo_url)
         rm_cmd = f"rm -rf ./{repo_url.split('/')[-1].split('.')[0]}"
         remoter.sudo(rm_cmd, ignore_status=False)
-        clone_cmd = f"git clone {repo_url}"
+        clone_cmd = f"git clone {repo_url} {destination_dir_name}"
         remoter.sudo(clone_cmd)
         LOGGER.debug("Finished cloning from %s.", repo_url)
     except Exception as exc:
