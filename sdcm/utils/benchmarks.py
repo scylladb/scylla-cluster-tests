@@ -140,11 +140,11 @@ class ScyllaNodeBenchmarkRunner:
 
     @property
     def benchmark_results(self):
-        LOGGER.info("Node benchmarks results for node %s:\n%s", self.node_name, self._benchmark_results)
         return self._benchmark_results
 
     def install_benchmark_tools(self):
         clone_repo(self._remoter, "https://github.com/akopytov/sysbench.git")
+        # upstream repo: https://github.com/ibspoof/cassandra-fio
         clone_repo(self._remoter, "https://github.com/KnifeyMoloko/cassandra-fio.git")
         self._install_ubuntu_prerequisites()
         self._build_and_install_sysbench()
@@ -200,7 +200,6 @@ class ScyllaNodeBenchmarkRunner:
     def _get_fio_results(self):
         fio_reports_path = "/home/ubuntu/cassandra-fio/reports/"
         cat_cmd = f"cat {fio_reports_path}{'lcs.64k.fio.json'}"
-
         try:
             cat_out = self._remoter.run(cat_cmd, ignore_status=True)
             jsoned_output = {f"cassandra_fio_{key}": value for key, value in json.loads(cat_out.stdout).items()}

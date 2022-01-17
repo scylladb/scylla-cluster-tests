@@ -89,6 +89,7 @@ from sdcm.utils.common import (
 )
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.distro import Distro
+from sdcm.utils.git import clone_repo
 from sdcm.utils.install import InstallMode
 from sdcm.utils.docker_utils import ContainerManager, NotFound, docker_hub_login
 from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_gossip_and_nodetool_status, \
@@ -482,14 +483,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 apt-get install -y git make maven
             """))
         # TODO: Needs to uncomment the following lines after https://github.com/apache/cassandra-harry/pull/12 will
-        # self.remoter.run(shell_script_cmd(f"""\
-        #     rm -rf {cassandra_harry_path}
-        #     git clone https://github.com/apache/cassandra-harry.git {cassandra_harry_path}
-        # """))
-        self.remoter.run(shell_script_cmd(f"""\
-            rm -rf {cassandra_harry_path}
-            git clone https://github.com/fruch/cassandra-harry {cassandra_harry_path}
-        """))
+        # self.remoter.run(shell_script_cmd(f"""rm -rf {cassandra_harry_path}"""))
+        # clone_repo(remoter=self.remoter, repo_url="https://github.com/apache/cassandra-harry.git",
+        # destination_dir_name=str(cassandra_harry_path))
+        self.remoter.run(shell_script_cmd(f"""rm -rf {cassandra_harry_path}"""))
+        clone_repo(remoter=self.remoter, repo_url="https://github.com/apache/cassandra-harry.git",
+                   destination_dir_name=str(cassandra_harry_path))
         self.remoter.run(shell_script_cmd(f"""\
             cd {cassandra_harry_path}
             git checkout standalone
