@@ -27,8 +27,7 @@ ElasticSearch index `node_benchmarks`.
 
 ### How are the benchmark results structured?
 
-Since the benchmarks are meant to compare relative performance of db node 
-instances, each ES doc represents benchmark results for one node.
+Since the benchmarks are meant to compare relative performance of db node instances, each ES doc represents benchmark results for one node.
 
 Each ElasticSearch doc has the following top-level fields (apart from the regular metadata fields like `_id`):
 * node_instance_type - e.g. 'i3.4xlarge'
