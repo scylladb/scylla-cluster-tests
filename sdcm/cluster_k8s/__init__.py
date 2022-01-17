@@ -729,10 +729,13 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         if not self.params.get('reuse_cluster'):
             LOGGER.info('Deploy minio s3-like backend server')
             self.kubectl(f"create namespace {MINIO_NAMESPACE}")
+            values = HelmValues({})
+            values.set('persistence.size', self.params.get("k8s_minio_storage_size"))
             LOGGER.debug(self.helm_install(
                 target_chart_name="minio",
                 source_chart_name=LOCAL_MINIO_DIR,
                 namespace=MINIO_NAMESPACE,
+                values=values,
             ))
 
         wait_for(lambda: self.minio_ip_address, text='Waiting for minio pod to popup',

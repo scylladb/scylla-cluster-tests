@@ -158,6 +158,7 @@ jepsen_test_run_policy: all
 max_events_severities: ""
 mgmt_docker_image: ''
 k8s_deploy_monitoring: false
+k8s_minio_storage_size: '10Gi'
 
 # NOTE: 'k8s_enable_performance_tuning' is alpha feature in operator-1.6 , so it is disabled by default
 k8s_enable_performance_tuning: false

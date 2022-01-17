@@ -173,6 +173,7 @@
 | **<a href="#user-content-k8s_loader_cluster_name" name="k8s_loader_cluster_name">k8s_loader_cluster_name</a>**  |  | N/A | SCT_K8S_LOADER_CLUSTER_NAME
 | **<a href="#user-content-mini_k8s_version" name="mini_k8s_version">mini_k8s_version</a>**  |  | N/A | SCT_MINI_K8S_VERSION
 | **<a href="#user-content-k8s_cert_manager_version" name="k8s_cert_manager_version">k8s_cert_manager_version</a>**  |  | N/A | SCT_K8S_CERT_MANAGER_VERSION
+| **<a href="#user-content-k8s_minio_storage_size" name="k8s_minio_storage_size">k8s_minio_storage_size</a>**  |  | N/A | SCT_K8S_MINIO_STORAGE_SIZE
 | **<a href="#user-content-mgmt_docker_image" name="mgmt_docker_image">mgmt_docker_image</a>**  | Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1' | N/A | SCT_MGMT_DOCKER_IMAGE
 | **<a href="#user-content-docker_image" name="docker_image">docker_image</a>**  | Scylla docker image repo, i.e. 'scylladb/scylla', if omitted is calculated from scylla_version | N/A | SCT_DOCKER_IMAGE
 | **<a href="#user-content-db_nodes_private_ip" name="db_nodes_private_ip">db_nodes_private_ip</a>**  |  | N/A | SCT_DB_NODES_PRIVATE_IP
