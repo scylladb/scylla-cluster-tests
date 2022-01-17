@@ -19,6 +19,7 @@ k8s_scylla_rack: 'kind'
 k8s_scylla_cluster_name: 'sct-cluster'
 k8s_scylla_disk_gi: 5
 k8s_scylla_disk_class: ''
+k8s_minio_storage_size: '20Gi'
 
 n_loaders: 1
 n_monitor_nodes: 1

@@ -764,6 +764,8 @@ class SCTConfiguration(dict):
 
         dict(name="k8s_cert_manager_version", env="SCT_K8S_CERT_MANAGER_VERSION", type=str,
              help=""),
+        dict(name="k8s_minio_storage_size", env="SCT_K8S_MINIO_STORAGE_SIZE", type=str,
+             help=""),
 
         # docker config options
         dict(name="mgmt_docker_image", env="SCT_MGMT_DOCKER_IMAGE", type=str,
