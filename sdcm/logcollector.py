@@ -1028,6 +1028,22 @@ class JepsenLogCollector(LogCollector):
         return s3_link
 
 
+class ParallelTimelinesReportCollector(SCTLogCollector):
+    """
+    Collect HTML file with parallel timelines report and upload it to S3
+    """
+    log_entities = [
+        FileLog(name='parallel-timelines-report.html',
+                search_locally=True)
+    ]
+    cluster_log_type = "parallel-timelines-report"
+    cluster_dir_prefix = "parallel-timelines-report"
+
+    @property
+    def is_collect_to_a_single_archive(self) -> bool:
+        return True
+
+
 class Collector:  # pylint: disable=too-many-instance-attributes,
     """Collector instance
 
@@ -1060,6 +1076,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         self.loader_set = []
         self.kubernetes_set = []
         self.sct_set = []
+        self.pt_report_set = []
         self.cluster_log_collectors = {
             ScyllaLogCollector: self.db_cluster,
             MonitorLogCollector: self.monitor_set,
@@ -1067,6 +1084,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
             LoaderLogCollector: self.loader_set,
             SCTLogCollector: self.sct_set,
             JepsenLogCollector: self.loader_set,
+            ParallelTimelinesReportCollector: self.pt_report_set,
         }
         if self.backend.startswith("k8s"):
             self.cluster_log_collectors[KubernetesLogCollector] = self.kubernetes_set
