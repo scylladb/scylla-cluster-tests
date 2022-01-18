@@ -98,7 +98,7 @@ def call(Map pipelineParams) {
                                         AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
                                         AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
                                     }
-                                    stage('Checkout') {
+                                    stage("Checkout for ${base_version}") {
                                         catchError(stageResult: 'FAILURE') {
                                             timeout(time: 5, unit: 'MINUTES') {
                                                 script {
@@ -111,7 +111,7 @@ def call(Map pipelineParams) {
                                             }
                                         }
                                     }
-                                    stage('Get test duration') {
+                                    stage("Get test duration for ${base_version}") {
                                         catchError(stageResult: 'FAILURE') {
                                             timeout(time: 2, unit: 'MINUTES') {
                                                 script {
