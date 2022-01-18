@@ -7,4 +7,5 @@ rollingOperatorUpgradePipeline(
     region: 'eu-north-1',
     test_name: 'upgrade_test.UpgradeTest.test_kubernetes_platform_upgrade',
     test_config: 'test-cases/scylla-operator/kubernetes-platform-upgrade.yaml',
+    availability_zone: 'a,b',
 )

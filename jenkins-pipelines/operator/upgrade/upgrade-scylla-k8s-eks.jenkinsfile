@@ -9,4 +9,5 @@ rollingOperatorUpgradePipeline(
     new_version: '4.4.1',
     test_name: 'upgrade_test.UpgradeTest.test_kubernetes_scylla_upgrade',
     test_config: 'test-cases/scylla-operator/kubernetes-scylla-upgrade.yaml',
+    availability_zone: 'a,b',
 )
