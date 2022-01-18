@@ -358,6 +358,7 @@ class LongevityEmailReporter(BaseEmailReporter):
         "nemesis_details",
         "nemesis_name",
         "scylla_ami_id",
+        "parallel_timelines_report",
     )
     email_template_file = "results_longevity.html"
     last_events_body_limit_per_severity_in_attachment = 3000000

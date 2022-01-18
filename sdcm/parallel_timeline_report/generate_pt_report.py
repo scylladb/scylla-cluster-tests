@@ -27,7 +27,7 @@ from jinja2 import Environment, FileSystemLoader
 LOGGER = logging.getLogger(__name__)
 
 env = Environment(
-    loader=FileSystemLoader("templates"),
+    loader=FileSystemLoader(Path(__file__).parent.resolve() / 'templates'),
     autoescape=True
 )
 
@@ -154,7 +154,7 @@ class ParallelTimelinesReportGenerator:
         self.events = []
         self.chart_data = []
         self.template = "pt_report_template.html"
-        self.default_report_file_name = "pt_report.html"
+        self.default_report_file_name = "parallel-timelines-report.html"
 
     def read_events_file(self) -> None:
         if not self.events_file.exists():
@@ -313,10 +313,10 @@ class ParallelTimelinesReportGenerator:
 
     def create_report_file(self) -> None:
         if self.cluster_name:
-            report_file_name = self.cluster_name.replace("-db-cluster", "") + "-report.html"
+            report_file_name = self.cluster_name.replace("-db-cluster", "") + "-" + self.default_report_file_name
         else:
             report_file_name = self.default_report_file_name
-        report_file = Path(report_file_name)
+        report_file = self.events_file.parent / report_file_name
         LOGGER.info("Creating report file \"%s\"", report_file)
         max_line_height = 20
         label_count = 0
@@ -330,6 +330,14 @@ class ParallelTimelinesReportGenerator:
         with report_file.open("w", encoding="utf-8") as file:
             file.write(rendered_template)
         LOGGER.info("Report file has been successfully created")
+
+    def generate_full_report(self):
+        self.read_events_file()
+        self.prepare_scylla_nodes_event_data()
+        self.prepare_prometheus_event_data()
+        self.prepare_sct_event_data()
+        self.prepare_stress_event_data()
+        self.create_report_file()
 
 
 def setup_logging():
@@ -349,13 +357,8 @@ def setup_logging():
 
 def main():
     setup_logging()
-    pt_report_generator = ParallelTimelinesReportGenerator(events_file="raw_events_new.log")
-    pt_report_generator.read_events_file()
-    pt_report_generator.prepare_scylla_nodes_event_data()
-    pt_report_generator.prepare_prometheus_event_data()
-    pt_report_generator.prepare_sct_event_data()
-    pt_report_generator.prepare_stress_event_data()
-    pt_report_generator.create_report_file()
+    pt_report_generator = ParallelTimelinesReportGenerator(events_file="raw_events.log")
+    pt_report_generator.generate_full_report()
 
 
 if __name__ == "__main__":

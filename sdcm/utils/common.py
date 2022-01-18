@@ -297,6 +297,18 @@ def list_logs_by_test_id(test_id):
     return results
 
 
+def list_parallel_timelines_report_urls(test_id: str) -> list[str | None]:
+    name_to_search = 'parallel-timelines-report'
+    available_logs_paths = S3Storage().search_by_path(path=test_id)
+    report_path_list = [log_file_path for log_file_path in available_logs_paths if name_to_search in log_file_path]
+    LOGGER.debug("Found saved report files:\n%s", ", ".join(report_path_list))
+    # log_file_path looks like
+    # 88605a0b-aa5a-4da9-bb58-5dd2a94c5350/20220109_092346/parallel-timelines-report-88605a0b.tar.gz
+    # Perform reverse order sorting by date inside this path
+    report_path_list.sort(key=lambda x: x.split('/')[1], reverse=True)
+    return [f"https://{S3Storage.bucket_name}.s3.amazonaws.com/{report_path}" for report_path in report_path_list]
+
+
 def all_aws_regions(cached=False):
     if cached:
         return [

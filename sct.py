@@ -68,6 +68,7 @@ from sdcm.utils.common import (
     list_logs_by_test_id,
     list_resources_docker,
     search_test_id_in_latest,
+    list_parallel_timelines_report_urls
 )
 from sdcm.utils.net import get_sct_runner_ip
 from sdcm.utils.jepsen import JepsenResults
@@ -79,6 +80,7 @@ from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.get_username import get_username
 from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter, \
     send_perf_email
+from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
 from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module
 from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module
@@ -1118,6 +1120,9 @@ def send_email(test_id=None, test_status=None, start_time=None, started_by=None,
                     "nodes": get_running_instances_for_email_report(test_id, runner_ip)
                 })
         test_results['logs_links'] = list_logs_by_test_id(test_results.get('test_id', test_id))
+        if 'longevity' in job_name:
+            pt_report_urls = list_parallel_timelines_report_urls(test_id=test_results.get('test_id', test_id))
+            test_results['parallel_timelines_report'] = pt_report_urls[0] if pt_report_urls else None
 
         reporter = build_reporter(reporter, email_recipients, testrun_dir)
         if not reporter:
@@ -1350,6 +1355,33 @@ def run_aws_mock(mock_region: list[str], force: bool = False, test_id: str | Non
 def clean_aws_mocks(test_id: str | None, all_mocks: bool, verbose: bool, dry_run: bool) -> None:
     add_file_logger()
     AwsMock.clean(test_id=test_id, all_mocks=all_mocks, verbose=verbose, dry_run=dry_run)
+
+
+@cli.command("generate-pt-report", help="Generate parallel timelines representation for the SCT test events")
+@click.option("-t", "--test-id", envvar='SCT_TEST_ID', help="Test ID to search in sct-results")
+@click.option("-d", "--logdir", envvar='HOME', type=click.Path(exists=True),
+              help="Directory with sct-results folder")
+def generate_parallel_timelines_report(logdir: str | None, test_id: str | None) -> None:
+    add_file_logger()
+
+    event_log_file = "raw_events.log"
+
+    LOGGER.debug("Searching for the required test run directory in %s...", logdir)
+    testrun_dir = get_testrun_dir(os.path.join(logdir, "sct-results"), test_id)
+    if not testrun_dir:
+        click.secho(message=f"Couldn't find directory for the required test run in '{logdir}'! Aborting...", fg="red")
+        sys.exit(1)
+    LOGGER.info("Found the test run directory '%s'", testrun_dir)
+
+    LOGGER.debug("Searching for the %s in %s...", event_log_file, testrun_dir)
+    raw_events_log_path = next(Path(testrun_dir).glob(f"**/{event_log_file}"), None)
+
+    if raw_events_log_path is None:
+        click.secho(message=f"Couldn't find '{event_log_file}' in '{testrun_dir}'! Aborting...", fg="red")
+        sys.exit(1)
+    LOGGER.info("Found the file '%s'", raw_events_log_path)
+    pt_report_generator = ParallelTimelinesReportGenerator(events_file=raw_events_log_path)
+    pt_report_generator.generate_full_report()
 
 
 if __name__ == '__main__':

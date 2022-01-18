@@ -307,7 +307,7 @@
 {% endblock %}
 
 {% block links %}
-    {% if kibana_url or job_url or grafana_screenshots or grafana_snapshots %}
+    {% if kibana_url or job_url or grafana_screenshots or grafana_snapshots or parallel_timelines_report %}
     <h3>Links:</h3>
     <ul>
         {% if kibana_url %}
@@ -337,6 +337,9 @@
             {% if grafana_snapshots[2] %}
                 <li><a href={{  grafana_snapshots[2] }}>Shared "Alternator metrics" Grafana Snapshot</a></li>
             {% endif %}
+        {% endif %}
+        {% if parallel_timelines_report %}
+            <li><a href={{ parallel_timelines_report }}>Download Parallel Timelines report</a></li>
         {% endif %}
     </ul>
         {% if grafana_screenshots %}

@@ -224,6 +224,22 @@ def call(Map pipelineParams) {
                     }
                 }
             }
+            stage("Parallel timelines report") {
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    timeout(time: 5, unit: 'MINUTES') {
+                                        runGeneratePTReport(testDuration)
+                                        completed_stages['generate_parallel_timelines_report'] = true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             stage("Collect log data") {
                 steps {
                     catchError(stageResult: 'FAILURE') {
