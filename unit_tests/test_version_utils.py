@@ -159,10 +159,9 @@ def test_07_get_git_tag_from_helm_chart_version__wrong_input(chart_version):
 class ClassWithVersiondMethods:  # pylint: disable=too-few-public-methods
     def __init__(self, scylla_version, nemesis_like_class):
         params = {"scylla_version": scylla_version}
-        node_scylla_version = ""
         if scylla_version.startswith('enterprise:'):
             node_scylla_version = "2023.dev"
-        elif scylla_version.startswith('master:'):
+        elif scylla_version.startswith('master:') or scylla_version == "":
             node_scylla_version = "4.7.dev"
         else:
             node_scylla_version = "{}.dev".format(scylla_version.split(":")[0])
@@ -227,7 +226,7 @@ class ClassWithVersiondMethods:  # pylint: disable=too-few-public-methods
 
 
 @pytest.mark.parametrize("scylla_version,method", [(scylla_version, method) for scylla_version in (
-    "4.2.rc1", "4.2", "4.2.0", "4.2.1",
+    "", "4.2.rc1", "4.2", "4.2.0", "4.2.1",
     "4.3.rc1", "4.3", "4.3.0", "4.3.1",
     "4.4.rc1", "4.4.rc4", "4.4", "4.4.0", "4.4.4",
     "4.5.rc1", "4.5", "4.5.0", "4.5.1",
