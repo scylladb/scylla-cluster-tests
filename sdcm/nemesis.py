@@ -3030,14 +3030,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 # no need to switch as already is NetworkTopology
                 continue
             self.log.info(f"Switching replication strategy to Network for '{keyspace}' keyspace")
-            if keyspace == "system_auth":
-                # system_auth keyspace must have full replication
-                replication_strategy.replication_factor = len(nodes_by_region[region])
+            if keyspace == "system_auth" and replication_strategy.replication_factor != len(nodes_by_region[region]):
+                self.log.warning(f"system_auth keyspace is not replicated on all nodes "
+                                 f"({replication_strategy.replication_factor}/{len(nodes_by_region[region])}).")
             network_replication = NetworkTopologyReplicationStrategy(
                 **{dc_name: replication_strategy.replication_factor})
             network_replication.apply(node, keyspace)
-            for node in nodes_by_region[0]:
-                node.run_nodetool(sub_cmd=f"repair {keyspace}", publish_event=True)
+
+    def _get_user_keyspaces(self):
+        node = self.cluster.nodes[0]
+        keyspaces = node.run_cqlsh("describe keyspaces").stdout.split()
+        return [ks for ks in keyspaces if not ks.startswith("system")]
 
     def disrupt_add_remove_dc(self) -> None:
         if self._is_it_on_kubernetes():
@@ -3045,7 +3048,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message='Starting New DC Nemesis').publish()
         node = self.cluster.nodes[0]
         system_keyspaces = ["system_auth", "system_distributed", "system_traces"]
-        self._switch_to_network_replication_strategy(system_keyspaces)
+        self._switch_to_network_replication_strategy(self._get_user_keyspaces() + system_keyspaces)
         with temporary_replication_strategy_setter(node) as replication_strategy_setter:
             new_node = self._add_new_node_in_new_dc()
             datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
