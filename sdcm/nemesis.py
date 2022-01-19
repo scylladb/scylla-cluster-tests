@@ -680,6 +680,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             values_to_toggle = list(filter(lambda value: value != current_compression, values))
             return random.choice(values_to_toggle)
 
+        if self._is_it_on_kubernetes():
+            # NOTE: on K8S update of 'scylla.yaml' and 'cassandra-rackdc.properties' files is done
+            #       via update of the single reused place and serial restart of Scylla pods.
+            raise UnsupportedNemesis(
+                "This logic will be covered by an operator functional test. Skipping.")
         with self.target_node.remote_scylla_yaml() as scylla_yaml:
             current = scylla_yaml.internode_compression
         new_value = get_internode_compression_new_value_randomly(current)
@@ -1016,6 +1021,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.monitoring_set.reconfigure_scylla_monitoring()
 
     def disrupt_terminate_and_replace_node(self):  # pylint: disable=invalid-name
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis(
+                'Use "disrupt_terminate_and_replace_node_kubernetes" instead this one for K8S')
         # using "Replace a Dead Node" procedure from http://docs.scylladb.com/procedures/replace_dead_node/
         old_node_ip = self.target_node.ip_address
         is_old_node_seed = self.target_node.is_seed
@@ -2272,7 +2280,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for node in self.cluster.nodes:
             self.cluster.check_nodes_up_and_normal(verification_node=node)
 
-    def disrupt_remove_node_then_add_node(self):
+    def disrupt_remove_node_then_add_node(self):  # pylint: disable=too-many-branches
         """
         https://docs.scylladb.com/operating-scylla/procedures/cluster-management/remove_node/
 
@@ -2283,6 +2291,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         if self.cluster.params.get("db_type") == 'cloud_scylla':
             raise UnsupportedNemesis("Skipping this nemesis due this job run from Siren cloud with 2019 version!")
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis("On K8S nodes get removed differently. Skipping.")
 
         node_to_remove = self.target_node
         up_normal_nodes = self.cluster.get_nodes_up_and_normal(verification_node=node_to_remove)
@@ -2631,11 +2641,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.debug('Streaming is not used. In latest Scylla, it is optional to use streaming for rebuild and '
                            'decommission, and repair will not use streaming.')
         self.log.info('Recover the target node by a final rebuild')
+        wait_db_up_timeout = 300
+        if self._is_it_on_kubernetes():
+            # NOTE: on K8S nodes come up longer.
+            wait_db_up_timeout = 1800
         if new_node:
-            new_node.wait_db_up(verbose=True, timeout=300)
+            new_node.wait_db_up(verbose=True, timeout=wait_db_up_timeout)
             new_node.run_nodetool('rebuild')
         else:
-            self.target_node.wait_db_up(verbose=True, timeout=300)
+            self.target_node.wait_db_up(verbose=True, timeout=wait_db_up_timeout)
             self.target_node.run_nodetool('rebuild')
 
     def disrupt_decommission_streaming_err(self):
@@ -2983,6 +2997,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.tester.verify_stress_thread(cs_thread_pool=read_thread)
 
     def disrupt_add_remove_dc(self) -> None:
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis("Operator doesn't support multi-DC yet. Skipping.")
         InfoEvent(message='Starting New DC Nemesis').publish()
         node = self.cluster.nodes[0]
         status = self.tester.db_cluster.get_nodetool_status()
