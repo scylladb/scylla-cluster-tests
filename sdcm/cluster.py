@@ -1689,6 +1689,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if not scylla_repo:
             self.log.error("Scylla YUM repo file url is not provided, it should be defined in configuration YAML!!!")
             return
+        scylla_repo = "https://s3.amazonaws.com/downloads.scylladb.com/unstable/scylla/branch-4.5/rpm/centos/2021-10-20T19:27:25Z/scylla.repo"
+        self.log.info(f'will start from {scylla_repo}')
         if self.is_rhel_like():
             repo_path = '/etc/yum.repos.d/scylla.repo'
             self.remoter.sudo('curl -o %s -L %s' % (repo_path, scylla_repo))
