@@ -415,7 +415,7 @@ class scylla_versions:  # pylint: disable=invalid-name,too-few-public-methods
             try:
                 cluster_object = getattr(cls_self, 'cluster', cls_self)
                 scylla_version = cluster_object.params.get("scylla_version")
-                if scylla_version.endswith(":latest"):
+                if not scylla_version or scylla_version.endswith(":latest"):
                     # NOTE: in case we run Scylla cluster with "latest" version then we need
                     #       to pick up a more precise version from one of it's nodes, i.e. '4.7.dev'
                     scylla_version = cluster_object.nodes[0].scylla_version
