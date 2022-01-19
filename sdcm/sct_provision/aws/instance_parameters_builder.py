@@ -85,7 +85,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
         """
         if len(self._availability_zones) != 1:
             return None
-        return AWSPlacementInfo(AvailabilityZone=self._region_name + self._availability_zones[self.region_id])
+        return AWSPlacementInfo(AvailabilityZone=self._region_name + self._availability_zones[0])
 
     @property
     def UserData(self) -> Optional[str]:  # pylint: disable=invalid-name
