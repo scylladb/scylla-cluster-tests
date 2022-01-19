@@ -394,7 +394,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             for package_name, package_info in versions.items():
                 package = PackageVersion(name=package_name, date=package_info.get("date", "#NO_DATE"),
                                          version=package_info.get("version", "#NO_VERSION"),
-                                         revision_id=package_info.get("commit_id", "#NO_COMMIT"))
+                                         revision_id=package_info.get("commit_id", "#NO_COMMIT"),
+                                         build_id=package_info.get("build_id", "#NO_BUILDID"))
                 self.argus_test_run.run_info.details.packages.append(package)
             self.log.info("Saving collected packages...")
             self.argus_test_run.save()
