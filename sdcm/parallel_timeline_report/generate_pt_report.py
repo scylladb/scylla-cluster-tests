@@ -34,7 +34,8 @@ env = Environment(
 
 class EventGroup(Enum):
     NODES_RELATED_EVENTS = ["ScyllaServerStatusEvent", "RepairEvent", "JMXServiceEvent", "DatabaseLogEvent",
-                            "BootstrapEvent", "NodetoolEvent", "DisruptionEvent", "InstanceStatusEvent"]
+                            "BootstrapEvent", "NodetoolEvent", "DisruptionEvent", "InstanceStatusEvent",
+                            "CompactionEvent"]
     PROMETHEUS_EVENTS = ["PrometheusAlertManagerEvent"]
     SCT_EVENTS = ["InfoEvent", "ClusterHealthValidatorEvent"]
     STRESS_EVENTS = ["CassandraStressEvent", "CassandraStressLogEvent"]
@@ -55,6 +56,7 @@ class Event:
     message: str = field(init=False)
     nodetool_command: str = field(init=False)
     type: str = field(init=False)
+    table: str = field(init=False)
     begin_timestamp: float = field(init=False)
     end_timestamp: float = field(init=False)
     node_name: str = field(init=False)
@@ -74,6 +76,7 @@ class Event:
         self.message = self.event_dict.get("message")
         self.nodetool_command = self.event_dict.get("nodetool_command")
         self.type = self.event_dict["type"]
+        self.table = self.event_dict.get("table")
         if self.event_dict.get("period_type") in ["begin", "end"]:
             event_begin_timestamp = self._convert_to_milliseconds(timestamp=self.event_dict.get("begin_timestamp"))
             event_end_timestamp = self._convert_to_milliseconds(timestamp=self.event_dict.get("end_timestamp"))
@@ -113,7 +116,7 @@ class Event:
         """
         Creates labels for the chart
         """
-        if self.event_dict["base"] == "RepairEvent":
+        if self.event_dict["base"] in ["RepairEvent", "CompactionEvent"]:
             label_string = f"{self.event_dict['base']}, shard: {self.event_dict['shard']}"
         elif self.event_dict["base"] == "DisruptionEvent":
             label_string = f"{self.event_dict['base']}, nemesis: {self.event_dict['nemesis_name']}"
@@ -139,6 +142,8 @@ class Event:
             label_string = f"nemesis: {self.event_dict['nemesis_name']}"
         elif self.event_dict["base"] in ["DatabaseLogEvent", "InstanceStatusEvent"]:
             label_string = f"type: {self.event_dict['type']}"
+        elif self.event_dict["base"] == "CompactionEvent":
+            label_string = f"table: {self.event_dict['table']}"
         else:
             label_string = self.event_dict['base']
         return label_string
