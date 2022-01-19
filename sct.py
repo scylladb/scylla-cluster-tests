@@ -1015,9 +1015,10 @@ def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]]):
     try:
         from sdcm.argus_test_run import ArgusTestRun  # pylint: disable=import-outside-toplevel
         test_run = ArgusTestRun.get(test_id=test_id)
-        for cluster_type, s3_links in logs.items():
+        for _, s3_links in logs.items():
             for link in s3_links:
-                test_run.run_info.logs.add_log(cluster_type, link)
+                file_name = link.split("/")[-1]
+                test_run.run_info.logs.add_log(file_name, link)
         test_run.save()
         ArgusTestRun.destroy()
     except Exception:  # pylint: disable=broad-except
