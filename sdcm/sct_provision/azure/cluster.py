@@ -163,7 +163,7 @@ class ClusterBase(BaseModel):
         return self._node_nums[region_id]
 
     def _spot_low_price(self, region_id: int) -> float:
-        raise NotImplemented("Not implemented yet")  # TODO: Implement possible via azure eviction history
+        return 0  # TODO: Implement possible via azure eviction history
 
     def provision_plan(self, region_id: int) -> ProvisionPlan:
         return ProvisionPlanBuilder(
@@ -208,7 +208,7 @@ class ClusterBase(BaseModel):
 class DBCluster(ClusterBase):
     _NODE_TYPE = 'scylla-db'
     _NODE_PREFIX = 'db'
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_db'
+    _INSTANCE_TYPE_PARAM_NAME = 'azure_instance_type_db'
     _NODE_NUM_PARAM_NAME = 'n_db_nodes'
     _INSTANCE_PARAMS_BUILDER = ScyllaInstanceParamsBuilder
 
@@ -225,7 +225,7 @@ class DBCluster(ClusterBase):
 class OracleDBCluster(ClusterBase):
     _NODE_TYPE = 'oracle-db'
     _NODE_PREFIX = 'oracle'
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_db'
+    _INSTANCE_TYPE_PARAM_NAME = 'azure_instance_type_db_oracle'
     _NODE_NUM_PARAM_NAME = 'n_test_oracle_db_nodes'
     _INSTANCE_PARAMS_BUILDER = OracleScyllaInstanceParamsBuilder
 
@@ -242,7 +242,7 @@ class OracleDBCluster(ClusterBase):
 class LoaderCluster(ClusterBase):
     _NODE_TYPE = 'loader'
     _NODE_PREFIX = 'loader'
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_loader'
+    _INSTANCE_TYPE_PARAM_NAME = 'azure_instance_type_loader'
     _NODE_NUM_PARAM_NAME = 'n_loaders'
     _INSTANCE_PARAMS_BUILDER = LoaderInstanceParamsBuilder
 
@@ -257,7 +257,7 @@ class LoaderCluster(ClusterBase):
 class MonitoringCluster(ClusterBase):
     _NODE_TYPE = 'monitor'
     _NODE_PREFIX = 'monitor'
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_monitor'
+    _INSTANCE_TYPE_PARAM_NAME = 'azure_instance_type_monitor'
     _NODE_NUM_PARAM_NAME = 'n_monitor_nodes'
     _INSTANCE_PARAMS_BUILDER = MonitorInstanceParamsBuilder
 

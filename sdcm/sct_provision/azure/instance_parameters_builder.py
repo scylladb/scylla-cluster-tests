@@ -12,6 +12,7 @@
 # Copyright (c) 2021 ScyllaDB
 
 import abc
+import base64
 from functools import cached_property
 from typing import Union, List, Optional
 
@@ -20,12 +21,13 @@ from azure.mgmt.compute.v2021_07_01.models import HardwareProfile, StorageProfil
     ManagedDiskParameters, StorageAccountTypes, VirtualMachineNetworkInterfaceConfiguration, \
     VirtualMachineNetworkInterfaceDnsSettingsConfiguration, VirtualMachineNetworkInterfaceIPConfiguration, \
     VirtualMachinePublicIPAddressConfiguration, IPVersions, PublicIPAllocationMethod, LinuxConfiguration, \
-    SshConfiguration, SshPublicKey, OperatingSystemStateTypes
-from azure.mgmt.network.v2021_02_01.models import NetworkProfile, DeleteOptions, SubResource, PublicIPAddressSku, \
+    SshConfiguration, SshPublicKey, OperatingSystemStateTypes, NetworkProfile
+from azure.mgmt.network.v2021_02_01.models import DeleteOptions, SubResource, PublicIPAddressSku, \
     PublicIPAddressSkuName, PublicIPAddressSkuTier, VirtualNetwork, NetworkSecurityGroup
 from pydantic import Field
 
 from sdcm.cluster import UserRemoteCredentials
+from sdcm.keystore import KeyStore
 from sdcm.provision.azure.instance_parameters_builder import AzureInstanceParamsBuilderBase
 from sdcm.provision.azure.utils import AzureMixing
 from sdcm.provision.common.user_data import UserDataBuilderBase
@@ -54,11 +56,11 @@ class AzureInstanceParamsBuilder(AzureInstanceParamsBuilderBase, AzureMixing, me
     @property
     def storage_profile(self) -> StorageProfile:  # pylint: disable=invalid-name
         return StorageProfile(
-            image_reference=self._image_id,
-            disk_size_gb=self._root_device_size,
+            image_reference=SubResource(id=self._image_id),
             os_disk=OSDisk(
                 name='os-disk',
                 os_type='linux',
+                disk_size_gb=self._root_device_size,
                 caching=CachingTypes.READ_WRITE,
                 create_option=DiskCreateOption.FROM_IMAGE,
                 managed_disk=ManagedDiskParameters(
@@ -77,22 +79,37 @@ class AzureInstanceParamsBuilder(AzureInstanceParamsBuilderBase, AzureMixing, me
             interfaces.append(self._network_interface(name='eth1', primary=False, ip_version=self._ipv6_version))
         return NetworkProfile(
             network_interface_configurations=interfaces,
+            network_api_version='2021-07-01',
         )
+
+    @property
+    def _user_data(self) -> str:
+        if isinstance(self.user_data_raw, UserDataBuilderBase):
+            return self.user_data_raw.to_string()
+        return self.user_data_raw
+
+    @property
+    def _access_key_pair(self):
+        return KeyStore().get_gce_ssh_key_pair()
+
+    @property
+    def _public_key_data(self) -> str:
+        return self._access_key_pair.public_key.decode()
 
     @property
     def os_profile(self) -> OSProfile:  # pylint: disable=invalid-name
         return OSProfile(
-            # computer_name=computer_name or vm_name.replace(".", "-"),
+            computer_name='tmp-instance-name',  # TODO: Find a way to pass hostname/instance name here
             admin_username='scylla-test',
             # admin_password=binascii.hexlify(os.urandom(20)).decode(),
-            custom_data=self.user_data_raw,
+            custom_data=base64.b64encode(self._user_data.encode('utf-8')).decode("ascii"),
             linux_configuration=LinuxConfiguration(
                 provision_vm_agent=False,
                 ssh=SshConfiguration(
                     public_keys=[
                         SshPublicKey(
                             path='/home/scylla-test/.ssh/authorized_keys',
-                            key_data='',
+                            key_data=self._public_key_data,
                         )
                     ]
                 ),
@@ -138,7 +155,6 @@ class AzureInstanceParamsBuilder(AzureInstanceParamsBuilderBase, AzureMixing, me
 
     @cached_property
     def _image_ids(self) -> List[str]:
-        print(self._IMAGE_ID_PARAM_NAME)
         return self.params.get(self._IMAGE_ID_PARAM_NAME).split()
 
     @cached_property
@@ -177,7 +193,12 @@ class AzureInstanceParamsBuilder(AzureInstanceParamsBuilderBase, AzureMixing, me
 
     @cached_property
     def _subnet_ids(self) -> List[str]:
-        return [network.id for network in self._networks]
+        subnet_ids = []
+        for network in self._networks:
+            for subnet in network.subnets:
+                if subnet.name == 'default':
+                    subnet_ids.append(subnet.id)
+        return subnet_ids
 
     @cached_property
     def _ec2_security_group_ids(self) -> List[str]:
@@ -190,7 +211,7 @@ class AzureInstanceParamsBuilder(AzureInstanceParamsBuilderBase, AzureMixing, me
             delete_option=DeleteOptions.DELETE,
             enable_accelerated_networking=True,
             enable_ip_forwarding=True,
-            network_security_group=self._ec2_security_group_ids[self.region_id],
+            network_security_group=SubResource(id=self._ec2_security_group_ids[self.region_id]),
             ip_configurations=[
                 VirtualMachineNetworkInterfaceIPConfiguration(
                     name=f"{name}-network-cfg",
@@ -202,7 +223,7 @@ class AzureInstanceParamsBuilder(AzureInstanceParamsBuilderBase, AzureMixing, me
                             name=PublicIPAddressSkuName.BASIC,
                             tier=PublicIPAddressSkuTier.GLOBAL_ENUM,
                         ),
-                        idle_timeout_in_minutes=180,
+                        idle_timeout_in_minutes=30,
                         delete_option=DeleteOptions.DELETE,
                         public_ip_address_version=ip_version,
                         public_ip_allocation_method=PublicIPAllocationMethod.DYNAMIC,
@@ -223,7 +244,7 @@ class AzureInstanceParamsBuilder(AzureInstanceParamsBuilderBase, AzureMixing, me
 
 
 class ScyllaInstanceParamsBuilder(AzureInstanceParamsBuilder):
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_db'
+    _INSTANCE_TYPE_PARAM_NAME = 'azure_instance_type_db'
     _IMAGE_ID_PARAM_NAME = 'azure_image_db'
     _ROOT_DISK_SIZE_PARAM_NAME = 'root_disk_size_db'
 
@@ -251,18 +272,18 @@ class ScyllaInstanceParamsBuilder(AzureInstanceParamsBuilder):
 
 
 class OracleScyllaInstanceParamsBuilder(ScyllaInstanceParamsBuilder):
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_db'
+    _INSTANCE_TYPE_PARAM_NAME = 'azure_instance_type_db_oracle'
     _IMAGE_ID_PARAM_NAME = 'azure_image_db_oracle'
     _ROOT_DISK_SIZE_PARAM_NAME = 'root_disk_size_db'
 
 
 class LoaderInstanceParamsBuilder(AzureInstanceParamsBuilder):
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_loader'
+    _INSTANCE_TYPE_PARAM_NAME = 'azure_instance_type_loader'
     _IMAGE_ID_PARAM_NAME = 'azure_image_loader'
     _ROOT_DISK_SIZE_PARAM_NAME = 'root_disk_size_loader'
 
 
 class MonitorInstanceParamsBuilder(AzureInstanceParamsBuilder):
-    _INSTANCE_TYPE_PARAM_NAME = 'instance_type_monitor'
+    _INSTANCE_TYPE_PARAM_NAME = 'azure_instance_type_monitor'
     _IMAGE_ID_PARAM_NAME = 'azure_image_monitor'
     _ROOT_DISK_SIZE_PARAM_NAME = 'root_disk_size_monitor'

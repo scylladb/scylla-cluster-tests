@@ -592,6 +592,18 @@ class SCTConfiguration(dict):
         dict(name="ami_db_cassandra_user", env="SCT_AMI_DB_CASSANDRA_USER", type=str,
              help=""),
 
+        dict(name="azure_instance_type_loader", env="SCT_AZURE_INSTANCE_TYPE_LOADER", type=str,
+             help=""),
+
+        dict(name="azure_instance_type_monitor", env="SCT_AZURE_INSTANCE_TYPE_MONITOR", type=str,
+             help=""),
+
+        dict(name="azure_instance_type_db", env="SCT_AZURE_INSTANCE_TYPE_DB", type=str,
+             help=""),
+
+        dict(name="azure_instance_type_db_oracle", env="SCT_AZURE_INSTANCE_TYPE_DB_ORACLE", type=str,
+             help=""),
+
         dict(name="azure_image_db", env="SCT_AZURE_IMAGE_DB", type=str,
              help=""),
 
@@ -1250,10 +1262,11 @@ class SCTConfiguration(dict):
                 "ami_id_monitor", "root_disk_size_monitor", "aws_root_disk_name_monitor", "ami_db_scylla_user",
                 "ami_monitor_user"],
 
-        'azure': ['user_prefix', "instance_type_loader", "instance_type_monitor", "instance_type_db",
-                "region_name", "azure_image_db", "azure_image_loader",
-                "azure_image_monitor", "root_disk_size_monitor", "aws_root_disk_name_monitor", "ami_db_scylla_user",
-                "ami_monitor_user"],
+        'azure': ['user_prefix', 'azure_network', 'azure_image_db', 'azure_image_username', 'azure_instance_type_db',
+                'azure_root_disk_type_db', 'root_disk_size_loader', 'azure_n_local_ssd_disk_db',
+                'azure_instance_type_loader', 'azure_root_disk_type_loader', 'azure_n_local_ssd_disk_loader',
+                'azure_instance_type_monitor', 'azure_root_disk_type_monitor', 'root_disk_size_monitor',
+                'azure_n_local_ssd_disk_monitor' 'region_name'],
 
         'gce': ['user_prefix', 'gce_network', 'gce_image_db', 'gce_image_username', 'gce_instance_type_db',
                 'gce_root_disk_type_db', 'root_disk_size_loader', 'gce_n_local_ssd_disk_db',

@@ -148,26 +148,34 @@ def install_syslogng_service():
                     fi
                 done
 
-                if yum install -y syslog-ng; then
-                    SYSLOG_NG_INSTALLED=1
-                fi
+                for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
+                    if yum install -y syslog-ng; then
+                        SYSLOG_NG_INSTALLED=1
+                        break
+                    fi
+                    sleep 10
+                done
             fi
         elif apt-get --help 2>/dev/null 1>&2 ; then
             if dpkg-query --show syslog-ng ; then
                 SYSLOG_NG_INSTALLED=1
             else
-                while ! find /proc/*/fd -lname /var/lib/dpkg/lock-frontend -exec false {} + -quit ; do
-                    sleep 60
-                done
                 cat /etc/apt/sources.list
                 for n in 1 2 3 4 5 6 7 8 9; do # cloud-init is running it with set +o braceexpand
                     if apt-get -y update 2>&1 | tee /tmp/syslog_ng_install.output || grep NO_PUBKEY \
         /tmp/syslog_ng_install.output; then
-                        apt-get install -y syslog-ng
-                        if dpkg-query --show syslog-ng ; then
-                            SYSLOG_NG_INSTALLED=1
-                            break
-                        fi
+                        break
+                    fi
+                done
+
+                for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
+                    while ! find /proc/*/fd -lname /var/lib/dpkg/lock-frontend -exec false {} + -quit ; do
+                        sleep 1
+                    done
+                    apt-get install -y syslog-ng || true
+                    if dpkg-query --show syslog-ng ; then
+                        SYSLOG_NG_INSTALLED=1
+                        break
                     fi
                 done
             fi

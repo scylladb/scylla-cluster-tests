@@ -119,4 +119,4 @@ class ProvisionPlanBuilder(BaseModel):
 
     @property
     def provision_plan(self):
-        return ProvisionPlan(provision_steps=self._provision_steps, provisioner=AWSInstanceProvisioner())
+        return ProvisionPlan(provision_steps=self._provision_steps, provisioner=self.provisioner)

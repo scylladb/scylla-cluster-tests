@@ -41,26 +41,36 @@ class AzureInstanceProvisioner(InstanceProvisionerBase, AzureMixing):  # pylint:
 
         pricing_params = {
             'priority': "Regular",  # possible values are "Regular", "Low", or "Spot"
-            "eviction_policy": "Deallocate",  # can be "Deallocate" or "Delete"
-            "billing_profile": {
-                "max_price": -1.0,  # -1 indicates the VM shouldn't be evicted for price reasons
-            },
         }
 
         if provision_parameters.spot:
-            pricing_params['priority'] = "Spot"
+            pricing_params.update({
+                'priority': 'Spot',
+                'eviction_policy': 'Deallocate',  # can be "Deallocate" or "Delete"
+                'billing_profile': {
+                    "max_price": -1.0,  # -1 indicates the VM shouldn't be evicted for price reasons
+                },
+            })
+
         if provision_parameters.duration:
             LOGGER.info("Azure does not support duration on instance provision. Let's change priority to Low")
             pricing_params['priority'] = "Low"
         if provision_parameters.price:
             pricing_params['billing_profile']['max_price'] = provision_parameters.price
         output = []
-        for idx in range(count + 1):
+        for idx in range(count):
             output.append(self._compute.virtual_machines.begin_create_or_update(
-                **instance_parameters.__dict__,
-                **pricing_params,
-                location=provision_parameters.region_name,
-                tags=tags[idx],
+                parameters={
+                    **self._extract_parameters_from_instance_parameters(instance_parameters),
+                    **pricing_params,
+                    'location': provision_parameters.region_name,
+                    'tags': tags[idx],
+                },
                 vm_name=names[idx],
+                resource_group_name='SCT-' + provision_parameters.region_name,
             ))
         return output
+
+    def _extract_parameters_from_instance_parameters(self, instance_parameters: VirtualMachine) -> dict:
+        return {name: value for name, value in instance_parameters.__dict__.items() if
+                name[0] != '_' and value is not None}
