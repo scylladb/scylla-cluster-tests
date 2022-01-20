@@ -19,7 +19,6 @@
 from random import randint
 from pathlib import Path
 from functools import cached_property
-import os
 import re
 import time
 from textwrap import dedent
@@ -314,7 +313,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         """
         Test steps:
         1) add a cluster to manager.
-        2) update the cluster attributes in manager: name/host/ssh-user
+        2) update the cluster attributes in manager: name/host
         3) delete the cluster from manager and re-add again.
         """
         self.log.info('starting test_mgmt_cluster_crud')
@@ -752,36 +751,6 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             reconfigure_scylla_manager(manager_node=manager_node, logger=self.log, values_to_remove=['healthcheck'])
             mgr_cluster.delete()  # remove cluster at the end of the test
         self.log.info('finishing test_healthcheck_change_max_timeout')
-
-    def test_ssh_setup_script(self):
-        self.log.info('starting test_ssh_setup_script')
-        new_user = "qa_user"
-        new_user_identity_file = os.path.join(mgmt.cli.MANAGER_IDENTITY_FILE_DIR, new_user)+".pem"
-        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
-        selected_host_ip = self.get_cluster_hosts_ip()[0]
-        res_ssh_setup, _ssh = manager_tool.scylla_mgr_ssh_setup(
-            node_ip=selected_host_ip, single_node=True, create_user=new_user)
-        self.log.debug('res_ssh_setup: {}'.format(res_ssh_setup))
-        new_user_login_message = "This account is currently not available"
-        new_user_login_cmd = f"sudo ssh -i {new_user_identity_file} -q -o BatchMode=yes -o ConnectTimeout=5 -o " \
-                             f"StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -L 59164:0.0.0.0:10000" \
-                             f" {new_user}@{selected_host_ip}"
-        self.log.debug("new_user_login_cmd command is: {}".format(new_user_login_cmd))
-        res_new_user_login_cmd = manager_tool.manager_node.remoter.run(new_user_login_cmd, ignore_status=True)
-        self.log.debug("res_new_user_login_cmd is: {}".format(res_new_user_login_cmd))
-        assert new_user_login_message in res_new_user_login_cmd.stdout, "unexpected login-returned-message: {} . (expected: {}) ".format(
-            res_new_user_login_cmd.stdout, new_user_login_message)
-
-        mgr_cluster = manager_tool.add_cluster(  # pylint: disable=unexpected-keyword-arg
-            name=self.CLUSTER_NAME+"_ssh_setup", host=selected_host_ip,
-            single_node=True, auth_token=self.monitors.mgmt_auth_token)
-        # self.log.debug('mgr_cluster: {}'.format(mgr_cluster))
-        healthcheck_task = mgr_cluster.get_healthcheck_task()
-        self.log.debug("Health-check task history is: {}".format(healthcheck_task.history))
-        dict_host_health = mgr_cluster.get_hosts_health()
-        for host_health in dict_host_health.values():
-            self.log.debug("host_health is: {}".format(host_health))
-        self.log.info('finishing test_ssh_setup_script')
 
     def test_manager_upgrade(self):
         """

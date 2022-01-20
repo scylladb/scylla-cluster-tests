@@ -164,11 +164,11 @@ class OperatorManagerCluster(ManagerCluster):
     scylla_cluster = None
     _id = None
 
-    def __init__(self, manager_node, cluster_id=None, ssh_identity_file=None, client_encrypt=False,
+    def __init__(self, manager_node, cluster_id=None, client_encrypt=False,
                  cluster_name: str = None, scylla_cluster=None):
         self.cluster_name = cluster_name
         self.scylla_cluster = scylla_cluster
-        super().__init__(manager_node=manager_node, cluster_id=cluster_id, ssh_identity_file=ssh_identity_file,
+        super().__init__(manager_node=manager_node, cluster_id=cluster_id,
                          client_encrypt=client_encrypt)
 
     @staticmethod
@@ -364,7 +364,7 @@ class OperatorManagerCluster(ManagerCluster):
     def operator_backup_tasks(self) -> List[ScyllaOperatorBackupTask]:
         return self._get_list_of_entities_from_operator('/spec/backups', ScyllaOperatorBackupTask)
 
-    def update(self, name=None, host=None, ssh_identity_file=None, ssh_user=None, client_encrypt=None):
+    def update(self, name=None, host=None, client_encrypt=None):
         raise NotImplementedError()
 
     def delete_task(self, task_id):

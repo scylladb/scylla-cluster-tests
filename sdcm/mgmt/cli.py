@@ -12,7 +12,6 @@
 # Copyright (c) 2021 ScyllaDB
 
 # pylint: disable=too-many-lines
-import os
 import json
 import time
 import logging
@@ -35,9 +34,6 @@ LOGGER = logging.getLogger(__name__)
 
 STATUS_DONE = 'done'
 STATUS_ERROR = 'error'
-MANAGER_IDENTITY_FILE_DIR = '/root/.ssh'
-MANAGER_IDENTITY_FILE_NAME = 'scylla-manager.pem'
-MANAGER_IDENTITY_FILE = os.path.join(MANAGER_IDENTITY_FILE_DIR, MANAGER_IDENTITY_FILE_NAME)
 SSL_CONF_DIR = '/tmp/ssl_conf'
 SSL_USER_CERT_FILE = SSL_CONF_DIR + '/db.crt'
 SSL_USER_KEY_FILE = SSL_CONF_DIR + '/db.key'
@@ -366,12 +362,11 @@ class BackupTask(ManagerTask):
 
 class ManagerCluster(ScyllaManagerBase):
 
-    def __init__(self, manager_node, cluster_id=None, ssh_identity_file=None, client_encrypt=False):
+    def __init__(self, manager_node, cluster_id=None, client_encrypt=False):
         if not manager_node:
             raise ScyllaManagerError("Cannot create a Manager Cluster where no 'manager tool' parameter is given")
         ScyllaManagerBase.__init__(self, id=cluster_id, manager_node=manager_node)
         self.client_encrypt = client_encrypt
-        self.ssh_identity_file = ssh_identity_file
 
     def get_cluster_id_by_name(self, cluster_name: str):
         try:
@@ -524,7 +519,7 @@ class ManagerCluster(ScyllaManagerBase):
         cmd = "cluster delete -c {}".format(self.id)
         self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
 
-    def update(self, name=None, host=None, ssh_identity_file=None, ssh_user=None, client_encrypt=None):  # pylint: disable=too-many-arguments
+    def update(self, name=None, host=None, client_encrypt=None):  # pylint: disable=too-many-arguments
         """
         $ sctool cluster update --help
         Modify a cluster
@@ -536,18 +531,12 @@ class ManagerCluster(ScyllaManagerBase):
           -h, --help                     help for update
               --host string              hostname or IP of one of the cluster nodes
           -n, --name alias               alias you can give to your cluster
-              --ssh-identity-file path   path to identity file containing SSH private key
-              --ssh-user name            SSH user name used to connect to the cluster nodes
         """
         cmd = "cluster update -c {}".format(self.id)
         if name:
             cmd += " --name={}".format(name)
         if host:
             cmd += " --host={}".format(host)
-        if ssh_identity_file:
-            cmd += " --ssh-identity-file={}".format(ssh_identity_file)
-        if ssh_user:
-            cmd += " --ssh-user={}".format(ssh_user)
         if client_encrypt:
             cmd += " --ssl-user-cert-file {} --ssl-user-key-file {}".format(SSL_USER_CERT_FILE, SSL_USER_KEY_FILE)
         self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
@@ -578,25 +567,12 @@ class ManagerCluster(ScyllaManagerBase):
         Gets the Cluster name as represented in Manager
         """
         # expecting output of:
-        # ╭──────────────────────────────────────┬──────┬─────────────┬────────────────╮
-        # │ cluster id                           │ name │ host        │ ssh user       │
-        # ├──────────────────────────────────────┼──────┼─────────────┼────────────────┤
-        # │ 1de39a6b-ce64-41be-a671-a7c621035c0f │ sce2 │ 10.142.0.25 │ scylla-manager │
-        # ╰──────────────────────────────────────┴──────┴─────────────┴────────────────╯
+        # ╭──────────────────────────────────────┬──────┬─────────────╮
+        # │ cluster id                           │ name │ host        │
+        # ├──────────────────────────────────────┼──────┼─────────────┤
+        # │ 1de39a6b-ce64-41be-a671-a7c621035c0f │ sce2 │ 10.142.0.25 │
+        # ╰──────────────────────────────────────┴──────┴─────────────╯
         return self.get_property(parsed_table=self._cluster_list, column_name='name')
-
-    @property
-    def ssh_user(self):
-        """
-        Gets the Cluster ssh_user as represented in Manager
-        """
-        # expecting output of:
-        # ╭──────────────────────────────────────┬──────┬─────────────┬────────────────╮
-        # │ cluster id                           │ name │ host        │ ssh user       │
-        # ├──────────────────────────────────────┼──────┼─────────────┼────────────────┤
-        # │ 1de39a6b-ce64-41be-a671-a7c621035c0f │ sce2 │ 10.142.0.25 │ scylla-manager │
-        # ╰──────────────────────────────────────┴──────┴─────────────┴────────────────╯
-        return self.get_property(parsed_table=self._cluster_list, column_name='ssh user')
 
     def _get_task_list(self):
         cmd = "task list -c {}".format(self.id)
@@ -743,7 +719,7 @@ class ScyllaManagerTool(ScyllaManagerBase):
     clusterClass = ManagerCluster
 
     """
-    Provides communication with scylla-manager, operating sctool commands and ssh-scripts.
+    Provides communication with scylla-manager, operating sctool commands
     """
 
     def __init__(self, manager_node):
@@ -796,41 +772,6 @@ class ScyllaManagerTool(ScyllaManagerBase):
         cluster.set_cluster_id(cluster_id)
         return cluster
 
-    def scylla_mgr_ssh_setup(self, node_ip, user='centos', identity_file='/tmp/scylla-test',  # pylint: disable=too-many-arguments
-                             create_user=None, single_node=False):
-        """
-        scyllamgr_ssh_setup [--ssh-user <username>] [--ssh-identity-file <path to private key>]
-            [--ssh-config-file <path to SSH config file>] [--create-user <username>] [--single-node] [--debug] SCYLLA_NODE_IP
-           -u --ssh-user <username>        username used to connect to Scylla nodes, must be a sudo enabled user
-           -i --ssh-identity-file <file>        path to SSH identity file (private key) for user
-           -c --ssh-config-file <file>        path to alternate SSH configuration file, see man ssh_config
-              --create-user <username>        username that will be created on Scylla nodes, default scylla-manager
-              --single-node            setup the given node only, skip discovery of all the cluster nodes
-              --debug                display debug info
-
-        sudo scyllamgr_ssh_setup -u centos -i /tmp/scylla-qa-ec2 192.168.100.11
-        """
-        cmd = 'sudo scyllamgr_ssh_setup'
-        if create_user:
-            cmd += " --create-user {}".format(create_user)
-        # create-user
-        cmd += ' -u {} -i {} '.format(
-            user, identity_file)
-        if single_node:
-            cmd += " --single-node "
-        cmd += ' {} '.format(node_ip)
-        LOGGER.debug("SSH setup command is: {}".format(cmd))
-
-        res = self.manager_node.remoter.run(cmd)
-        verify_errorless_result(cmd=cmd, res=res)
-
-        try:
-            ssh_identity_file = [arg for arg in res.stdout.split('\n') if "--ssh-identity-file" in arg][0].split()[-1]
-        except Exception as ex:
-            raise ScyllaManagerError(f"Failed to parse scyllamgr_ssh_setup output: {ex}") from ex
-
-        return res, ssh_identity_file
-
     @staticmethod
     def get_cluster_hosts_ip(db_cluster):
         return [node_data[1] for node_data in ScyllaManagerTool.get_cluster_hosts_with_ips(db_cluster)]
@@ -857,8 +798,6 @@ class ScyllaManagerTool(ScyllaManagerBase):
           -h, --help                      help for add
               --host string               hostname or IP of one of the cluster nodes
           -n, --name alias                alias you can give to your cluster
-              --ssh-identity-file path    path to identity file containing SSH private key
-              --ssh-user name             SSH user name used to connect to the cluster nodes
               --ssl-user-cert-file path   path to client certificate when using client/server encryption with require_client_auth enabled
               --ssl-user-key-file path    path to key associated with ssl-user-cert-file
 
@@ -877,7 +816,6 @@ class ScyllaManagerTool(ScyllaManagerBase):
         if not any([host, db_cluster]):
             raise ScyllaManagerError("Neither host or db_cluster parameter were given to Manager add_cluster")
         host = host or self.get_cluster_hosts_ip(db_cluster=db_cluster)[0]
-        LOGGER.debug("Configuring ssh setup for cluster using {} node before adding the cluster: {}".format(host, name))
         # FIXME: if cluster already added, print a warning, but not fail
         cmd = 'cluster add --host={}  --name={} --auth-token {}'.format(
             host, name, auth_token)
