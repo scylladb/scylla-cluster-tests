@@ -156,6 +156,7 @@ pipeline {
                 script {
                     try {
                         sh ''' ./docker/env/hydra.sh run-aws-mock -r us-east-1 '''
+                        sleep 10  // seconds
                         sh ''' ./docker/env/hydra.sh --aws-mock run-pytest functional_tests/mocked '''
                         pullRequestSetResult('success', 'jenkins/mocked_tests', 'All mocked tests are passed')
                     } catch(Exception ex) {
