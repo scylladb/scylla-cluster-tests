@@ -65,8 +65,8 @@ class ClusterBase(BaseModel):
     def nodes(self):
         nodes = []
         node_num = 0
-        for region_id in range(len(self._regions)):
-            for _ in range(self._node_num(region_id)):
+        for region_id in range(len(self._regions_with_nodes)):
+            for _ in range(self._node_nums[region_id]):
                 node_num += 1
                 nodes.append(
                     ClusterNode(
@@ -130,6 +130,16 @@ class ClusterBase(BaseModel):
     def _regions(self) -> List[str]:
         return self.params.region_names
 
+    @cached_property
+    def _regions_with_nodes(self) -> List[str]:
+        output = []
+        for region_id, region_name in enumerate(self.params.region_names):
+            if len(self._node_nums) <= region_id:
+                continue
+            if self._node_nums[region_id] > 0:
+                output.append(region_name)
+        return output
+
     def _region(self, region_id: int) -> str:
         return self.params.region_names[region_id]
 
@@ -168,11 +178,6 @@ class ClusterBase(BaseModel):
             return self._azs[0]
         return self._azs[region_id]
 
-    def _node_num(self, region_id: int) -> int:
-        if len(self._node_nums) == 1:
-            return self._node_nums[0]
-        return self._node_nums[region_id]
-
     def _spot_low_price(self, region_id: int) -> float:
         from sdcm.utils.pricing import AWSPricing  # pylint: disable=import-outside-toplevel
 
@@ -206,11 +211,11 @@ class ClusterBase(BaseModel):
         if self._node_nums == [0]:
             return []
         total_instances_provisioned = []
-        for region_id in range(len(self._regions)):
+        for region_id in range(len(self._regions_with_nodes)):
             instance_parameters = self._instance_parameters(region_id=region_id)
             node_tags = self._node_tags(region_id=region_id)
             node_names = self._node_names(region_id=region_id)
-            node_count = self._node_num(region_id=region_id)
+            node_count = self._node_nums[region_id]
             instances = self.provision_plan(region_id).provision_instances(
                 instance_parameters=instance_parameters,
                 node_tags=node_tags,
