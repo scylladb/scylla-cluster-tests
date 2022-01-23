@@ -148,9 +148,9 @@ class CassandraHarryThread:
 
         log_file_name = os.path.join(node.logdir, f'cassandra-harry-l{loader_idx}-{uuid.uuid4()}.log')
         # Select first seed node to send the scylla-harry cmds
-        ip = node_list[0].private_ip_address
+        ip = node_list[0].cql_ip_address
 
-        with CassandraHarryStressExporter(instance_name=node.ip_address,
+        with CassandraHarryStressExporter(instance_name=node.cql_ip_address,
                                           metrics=nemesis_metrics_obj(),
                                           stress_operation='write',
                                           stress_log_filename=log_file_name,

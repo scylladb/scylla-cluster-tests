@@ -55,7 +55,7 @@ class YcsbStatsPublisher(FileFollowerThread):
 
     def set_metric(self, operation, name, value):
         metric = self.METRICS[self.gauge_name(operation)]
-        metric.labels(self.loader_node.ip_address, self.loader_idx, self.uuid, name).set(value)
+        metric.labels(self.loader_node.cql_ip_address, self.loader_idx, self.uuid, name).set(value)
 
     def handle_verify_metric(self, line):
         verify_status_regex = re.compile(r"Return\((?P<status>.*?)\)=(?P<value>\d*)")
@@ -119,9 +119,9 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             target_address = 'alternator'
         else:
             if hasattr(self.node_list[0], 'parent_cluster'):
-                target_address = self.node_list[0].parent_cluster.get_node().ip_address
+                target_address = self.node_list[0].parent_cluster.get_node().cql_ip_address
             else:
-                target_address = self.node_list[0].ip_address
+                target_address = self.node_list[0].cql_ip_address
 
         if 'dynamodb' in self.stress_cmd:
             dynamodb_teample = dedent('''
@@ -170,7 +170,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         if 'dynamodb' in self.stress_cmd:
             stress_cmd += ' -P /tmp/dynamodb.properties'
         if 'cassandra-cql' in self.stress_cmd:
-            hosts = ",".join([i.ip_address for i in self.node_list])
+            hosts = ",".join([i.cql_ip_address for i in self.node_list])
             stress_cmd += f' -p hosts={hosts} -p cassandra.readconsistencylevel=QUORUM -p cassandra.writeconsistencylevel=QUORUM'
         if 'maxexecutiontime' not in stress_cmd:
             stress_cmd += f' -p maxexecutiontime={self.timeout}'
