@@ -39,15 +39,15 @@ def check_nodes_status(nodes_status: dict, current_node, removed_nodes_list=()) 
         LOGGER.warning("Node status info is not available. Search for the warning above")
         return
     LOGGER.info("Status for %s node %s", node_type, current_node.name)
-    for node_ip, node_properties in nodes_status.items():
+    for node, node_properties in nodes_status.items():
         if node_properties['status'] != "UN":
             LOGGER.info("All nodes that have been removed up until this point: %s", str(removed_nodes_list))
-            is_target = current_node.print_node_running_nemesis(node_ip)
+            is_target = current_node.print_node_running_nemesis(node.ip_address)
             yield ClusterHealthValidatorEvent.NodeStatus(
                 severity=Severity.CRITICAL,
                 node=current_node.name,
-                error=f"Current node {current_node.ip_address}. "
-                      f"Node with {node_ip}{is_target} status is {node_properties['status']}",
+                error=f"Current node {current_node}. "
+                      f"Node {node}{is_target} status is {node_properties['status']}",
             )
 
 
@@ -60,20 +60,20 @@ def check_nulls_in_peers(gossip_info, peers_details, current_node) -> HealthEven
         LOGGER.warning("Gossip info is not available. Search for the warning above")
         return
 
-    for ip, node_info in peers_details.items():
+    for node, node_info in peers_details.items():
         if all(value != "null" for value in node_info.values()):
             continue
 
-        is_target = current_node.print_node_running_nemesis(ip)
-        message = f"Current node {current_node.ip_address}. Found nulls in system.peers for " \
-                  f"node {ip}{is_target} with status {gossip_info.get(ip, {}).get('status', 'n/a')} : " \
-                  f"{peers_details[ip]}"
+        is_target = current_node.print_node_running_nemesis(node.ip_address)
+        message = f"Current node {current_node}. Found nulls in system.peers for " \
+                  f"node {node}{is_target} with status {gossip_info.get(node, {}).get('status', 'n/a')} : " \
+                  f"{peers_details[node]}"
 
         # By Asias request: https://github.com/scylladb/scylla/issues/6397#issuecomment-666893877
-        LOGGER.debug("Print all columns from system.peers for peer %s", ip)
-        current_node.run_cqlsh(f"select * from system.peers where peer = '{ip}'", split=True, verbose=True)
+        LOGGER.debug("Print all columns from system.peers for peer %s", node)
+        current_node.run_cqlsh(f"select * from system.peers where peer = '{node.ip_address}'", split=True, verbose=True)
 
-        if ip in gossip_info and gossip_info[ip]['status'] not in current_node.GOSSIP_STATUSES_FILTER_OUT:
+        if node in gossip_info and gossip_info[node]['status'] not in current_node.GOSSIP_STATUSES_FILTER_OUT:
             yield ClusterHealthValidatorEvent.NodePeersNulls(
                 severity=Severity.ERROR,
                 node=current_node.name,
@@ -91,39 +91,40 @@ def check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, c
                        "Verify node status can't be performed")
         return
 
-    for ip, node_info in gossip_info.items():
-        is_target = current_node.print_node_running_nemesis(ip)
-        if ip not in nodes_status:
+    for node, node_info in gossip_info.items():
+        is_target = current_node.print_node_running_nemesis(node)
+        if node not in nodes_status:
             if node_info['status'] not in current_node.GOSSIP_STATUSES_FILTER_OUT:
                 LOGGER.debug("Gossip info: %s\nnodetool.status info: %s", gossip_info, nodes_status)
                 yield ClusterHealthValidatorEvent.NodeStatus(
                     severity=Severity.ERROR,
                     node=current_node.name,
-                    error=f"Current node {current_node.ip_address}. The node {ip}{is_target} exists in the gossip but "
-                          f"doesn't exist in the nodetool.status",
+                    error=f"Current node {current_node}. The node {node}{is_target} "
+                          f"exists in the gossip but doesn't exist in the nodetool.status",
                 )
             continue
 
-        if (node_info['status'] == 'NORMAL' and nodes_status[ip]['status'] != 'UN') or \
-                (node_info['status'] != 'NORMAL' and nodes_status[ip]['status'] == 'UN'):
+        if (node_info['status'] == 'NORMAL' and nodes_status[node]['status'] != 'UN') or \
+                (node_info['status'] != 'NORMAL' and nodes_status[node]['status'] == 'UN'):
             yield ClusterHealthValidatorEvent.NodeStatus(
                 severity=Severity.ERROR,
                 node=current_node.name,
-                error=f"Current node {current_node.ip_address}. Wrong node status. Node {ip}{is_target} status in "
-                      f"nodetool.status is {nodes_status[ip]['status']}, but status in gossip {node_info['status']}",
+                error=f"Current node {current_node}. Wrong node status. "
+                      f"Node {node}{is_target} status in nodetool.status is "
+                      f"{nodes_status[node]['status']}, but status in gossip {node_info['status']}",
             )
 
     # Validate that all nodes in nodetool.status exist in gossip
     not_in_gossip = list(set(nodes_status.keys()) - set(gossip_info.keys()))
-    for ip in not_in_gossip:
-        if nodes_status[ip]['status'] == 'UN':
-            is_target = current_node.print_node_running_nemesis(ip)
+    for node in not_in_gossip:
+        if nodes_status[node]['status'] == 'UN':
+            is_target = current_node.print_node_running_nemesis(node.ip_address)
             LOGGER.debug("Gossip info: %s\nnodetool.status info: %s", gossip_info, nodes_status)
             yield ClusterHealthValidatorEvent.NodeSchemaVersion(
                 severity=Severity.ERROR,
                 node=current_node.name,
-                error=f"Current node {current_node.ip_address}. "
-                      f"Node {ip}{is_target} exists in the nodetool.status but missed in gossip.",
+                error=f"Current node {current_node}. "
+                      f"Node {node}{is_target} exists in the nodetool.status but missed in gossip.",
             )
 
 
@@ -145,33 +146,34 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
 
     debug_message = f"Gossip info: {gossip_info}\nSYSTEM.PEERS info: {peers_details}"
     # Validate schema version
-    for ip, node_info in gossip_info.items():
+    for node, node_info in gossip_info.items():
         # SYSTEM.PEERS table includes peers of the current node, so the node itcurrent_node doesn't exist in the list
-        if current_node.ip_address == ip:
+        if current_node == node:
             continue
 
         # Can't validate the schema version if the node is not in NORMAL status
         if node_info['status'] != 'NORMAL':
             continue
 
-        is_target = current_node.print_node_running_nemesis(ip)
-        if ip not in peers_details.keys():
+        is_target = current_node.print_node_running_nemesis(node.ip_address)
+        if node not in peers_details.keys():
             LOGGER.debug(debug_message)
             yield ClusterHealthValidatorEvent.NodeSchemaVersion(
                 severity=Severity.ERROR,
                 node=current_node.name,
-                error=f"Current node {current_node.ip_address}. "
-                      f"Node {ip}{is_target} exists in the gossip but missed in SYSTEM.PEERS.",
+                error=f"Current node {current_node}. "
+                      f"Node {node}{is_target} exists in the gossip but missed in SYSTEM.PEERS.",
             )
             continue
 
-        if node_info['schema'] != peers_details[ip]['schema_version']:
+        if node_info['schema'] != peers_details[node]['schema_version']:
             LOGGER.debug(debug_message)
             yield ClusterHealthValidatorEvent.NodeSchemaVersion(
                 severity=Severity.ERROR,
                 node=current_node.name,
-                error=f"Current node {current_node.ip_address}. Wrong Schema version. "
-                      f"Node {ip}{is_target} schema version in SYSTEM.PEERS is {peers_details[ip]['schema_version']}, "
+                error=f"Current node {current_node}. Wrong Schema version. "
+                      f"Node {node}{is_target} schema version in SYSTEM.PEERS is "
+                      f"{peers_details[node]['schema_version']}, "
                       f"but schema version in gossip {node_info['schema']}",
             )
 
@@ -182,8 +184,8 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
         yield ClusterHealthValidatorEvent.NodeSchemaVersion(
             severity=Severity.ERROR,
             node=current_node.name,
-            error=f"Current node {current_node.ip_address}. "
-                  f"Nodes {','.join(ip for ip in not_in_gossip)} exists in the SYSTEM.PEERS but missed in gossip.",
+            error=f"Current node {current_node}. Nodes {','.join(node.ip_address for node in not_in_gossip)}"
+                  f" exists in the SYSTEM.PEERS but missed in gossip.",
         )
 
     # Validate that same schema on all nodes in the gossip
@@ -193,27 +195,27 @@ def check_schema_version(gossip_info, peers_details, nodes_status, current_node)
     if len(set(schema_version_on_all_nodes)) > 1:
         LOGGER.debug(debug_message)
         gossip_info_str = '\n'.join(
-            f"{ip}: {schema_version['schema']}" for ip, schema_version in gossip_info.items())
+            f"{node}: {schema_version['schema']}" for node, schema_version in gossip_info.items())
         yield ClusterHealthValidatorEvent.NodeSchemaVersion(
             severity=Severity.WARNING,
             node=current_node.name,
-            message=f"Current node {current_node.ip_address}. "
+            message=f"Current node {current_node}. "
                     f"Schema version is not same on all nodes in gossip info: {gossip_info_str}",
         )
 
     # Validate that same schema on all nodes in the SYSTEM.PEERS
-    schema_version_on_all_nodes = [values['schema_version'] for ip, values in peers_details.items()
-                                   if ip in gossip_info and gossip_info[ip]['status'] not in
+    schema_version_on_all_nodes = [values['schema_version'] for node, values in peers_details.items()
+                                   if node in gossip_info and gossip_info[node]['status'] not in
                                    current_node.GOSSIP_STATUSES_FILTER_OUT]
 
     if len(set(schema_version_on_all_nodes)) > 1:
         LOGGER.debug(debug_message)
         peers_info_str = '\n'.join(
-            f"{ip}: {schema_version['schema_version']}" for ip, schema_version in peers_details.items())
+            f"{node}: {schema_version['schema_version']}" for node, schema_version in peers_details.items())
         yield ClusterHealthValidatorEvent.NodeSchemaVersion(
             severity=Severity.WARNING,
             node=current_node.name,
-            message=f"Current node {current_node.ip_address}. "
+            message=f"Current node {current_node}. "
                     f"Schema version is not same on all nodes in SYSTEM.PEERS info: {peers_info_str}",
         )
 
@@ -222,7 +224,7 @@ def check_schema_agreement_in_gossip_and_peers(node, retries: int = CHECK_NODE_H
     for retry_n in range(retries):
         if retry_n:
             time.sleep(CHECK_NODE_HEALTH_RETRY_DELAY)
-        message_pref = f'Check for schema agreement on the node {node.name} ({node.ip_address}) [attempt #{retry_n}].'
+        message_pref = f'Check for schema agreement on the node {node.name} ({node}) [attempt #{retry_n}].'
         gossip_info = node.get_gossip_info()
         peers_info = node.get_peers_info()
         LOGGER.debug("%s Gossip info: %s", message_pref, gossip_info)
@@ -237,10 +239,11 @@ def check_schema_agreement_in_gossip_and_peers(node, retries: int = CHECK_NODE_H
             LOGGER.warning("%s Schema version is not same on nodes in the gossip", message_pref)
             continue
 
-        for ip, data in gossip_info.items():
-            if data['status'] == "NORMAL" and ip in peers_info:
-                if data["schema"] != peers_info[ip]['schema_version']:
-                    LOGGER.warning("%s Schema version is not same in the gossip and peers for %s", message_pref, ip)
+        for current_node, data in gossip_info.items():
+            if data['status'] == "NORMAL" and current_node in peers_info:
+                if data["schema"] != peers_info[current_node]['schema_version']:
+                    LOGGER.warning("%s Schema version is not same in the gossip and peers for %s",
+                                   message_pref, current_node)
                     continue
 
         break  # Everything is OK, break the cycle.

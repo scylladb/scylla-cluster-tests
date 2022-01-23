@@ -13,63 +13,19 @@
 
 
 import unittest
-from copy import deepcopy
 
 from sdcm.sct_events import Severity
 from sdcm.utils.health_checker import check_nodes_status, check_nulls_in_peers, \
     check_node_status_in_gossip_and_nodetool_status, check_schema_version
 
 
-NODES_STATUS = {
-    "127.0.0.1": {"status": "UN", "dc": "datacenter1", },
-    "127.0.0.2": {"status": "DN", "dc": "datacenter1", },
-    "127.0.0.3": {"status": "UN", "dc": "datacenter1", },
-}
-
-PEERS_INFO = {
-    '127.0.0.2': {
-        'data_center': 'datacenter1',
-        'host_id': 'b231fe54-8093-4d5c-9a35-b5e34dc81500',
-        'rack': 'rack1',
-        'release_version': '3.0.8',
-        'rpc_address': '127.0.0.2',
-        'schema_version': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
-    },
-    '127.0.0.3': {
-        'data_center': 'datacenter1',
-        'host_id': 'e11cb4ea-a129-48aa-a9e9-7815dcd2828c',
-        'rack': 'rack1',
-        'release_version': '3.0.8',
-        'rpc_address': '127.0.0.3',
-        'schema_version': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
-    },
-}
-
-GOSSIP_INFO = {
-    '127.0.0.1': {
-        'schema': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
-        'status': 'NORMAL',
-        'dc': 'datacenter1'
-    },
-    '127.0.0.2': {
-        'schema': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
-        'status': 'shutdown',
-        'dc': 'datacenter1'
-    },
-    '127.0.0.3': {
-        'schema': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
-        'status': 'NORMAL',
-        'dc': 'datacenter1'
-    },
-}
-
-
 class Node:
     GOSSIP_STATUSES_FILTER_OUT = ["FILTERED", ]
 
-    ip_address = "127.0.0.1"
-    name = "node-0"
-    running_nemesis = None
+    def __init__(self, ip_address, name):
+        self.ip_address = ip_address
+        self.name = name
+        self.running_nemesis = None
 
     @staticmethod
     def print_node_running_nemesis(_):
@@ -80,9 +36,59 @@ class Node:
         pass
 
 
+node1 = Node('127.0.0.1', "node-0")
+node2 = Node('127.0.0.2', "node-1")
+node3 = Node('127.0.0.3', "node-2")
+node4 = Node('127.0.0.4', "node-3")
+
+
+NODES_STATUS = {
+    node1: {"status": "UN", "dc": "datacenter1", },
+    node2: {"status": "DN", "dc": "datacenter1", },
+    node3: {"status": "UN", "dc": "datacenter1", },
+}
+
+PEERS_INFO = {
+    node2: {
+        'data_center': 'datacenter1',
+        'host_id': 'b231fe54-8093-4d5c-9a35-b5e34dc81500',
+        'rack': 'rack1',
+        'release_version': '3.0.8',
+        'rpc_address': '127.0.0.2',
+        'schema_version': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
+    },
+    node3: {
+        'data_center': 'datacenter1',
+        'host_id': 'e11cb4ea-a129-48aa-a9e9-7815dcd2828c',
+        'rack': 'rack1',
+        'release_version': '3.0.8',
+        'rpc_address': '127.0.0.3',
+        'schema_version': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
+    },
+}
+
+GOSSIP_INFO = {
+    node1: {
+        'schema': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
+        'status': 'NORMAL',
+        'dc': 'datacenter1'
+    },
+    node2: {
+        'schema': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
+        'status': 'shutdown',
+        'dc': 'datacenter1'
+    },
+    node3: {
+        'schema': 'cbe15453-33f3-3387-aaf1-4120548f41e8',
+        'status': 'NORMAL',
+        'dc': 'datacenter1'
+    },
+}
+
+
 class TestHealthChecker(unittest.TestCase):
     def test_check_nodes_status_no_removed(self):
-        event = next(check_nodes_status(NODES_STATUS, Node), None)
+        event = next(check_nodes_status(NODES_STATUS, node1), None)
         self.assertIsNotNone(event)
         self.assertEqual(event.type, "NodeStatus")
         self.assertEqual(event.severity, Severity.CRITICAL)
@@ -91,7 +97,7 @@ class TestHealthChecker(unittest.TestCase):
         self.assertNotEqual(event.error, "")
 
     def test_check_nodes_status_removed(self):
-        event = next(check_nodes_status(NODES_STATUS, Node, ["127.0.0.2", ]), None)
+        event = next(check_nodes_status(NODES_STATUS, node1, [node1, ]), None)
         self.assertIsNotNone(event)
         self.assertEqual(event.type, "NodeStatus")
         self.assertEqual(event.severity, Severity.CRITICAL)
@@ -100,37 +106,50 @@ class TestHealthChecker(unittest.TestCase):
         self.assertNotEqual(event.error, "")
 
     def test_check_nulls_in_peers_no_nulls(self):
-        event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, Node), None)
+        event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
         self.assertIsNone(event)
 
     def test_check_nulls_in_peers(self):
-        peers_info = deepcopy(PEERS_INFO)
-        peers_info["127.0.0.2"]["data_center"] = "null"
-        event = next(check_nulls_in_peers(GOSSIP_INFO, peers_info, Node), None)
+        # Due to commit
+        # https://github.com/scylladb/scylla-cluster-tests/pull/4375/commits/0d2657291b9152c92b68a893b46b146abba62be6
+        # node object is used as key instead of string. "deepcopy" change the object and we can't use it
+        data_center = PEERS_INFO[node2]["data_center"]
+        PEERS_INFO[node2]["data_center"] = "null"
+        event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
         self.assertEqual(event.type, "NodePeersNulls")
         self.assertEqual(event.severity, Severity.ERROR)
         self.assertEqual(event.node, "node-0")
         self.assertEqual(event.message, "")
         self.assertNotEqual(event.error, "")
 
+        PEERS_INFO[node2]["data_center"] = data_center
+
     def test_check_nulls_in_peers_filtered_status(self):
-        peers_info = deepcopy(PEERS_INFO)
-        peers_info["127.0.0.2"]["data_center"] = "null"
-        gossip_info = deepcopy(GOSSIP_INFO)
-        gossip_info["127.0.0.2"]["status"] = "FILTERED"
-        event = next(check_nulls_in_peers(gossip_info, peers_info, Node), None)
+        # Due to commit
+        # https://github.com/scylladb/scylla-cluster-tests/pull/4375/commits/0d2657291b9152c92b68a893b46b146abba62be6
+        # node object is used as key instead of string. "deepcopy" change the object and we can't use it
+        data_center = PEERS_INFO[node2]["data_center"]
+        PEERS_INFO[node2]["data_center"] = "null"
+
+        gossip_status = GOSSIP_INFO[node2]["status"]
+        GOSSIP_INFO[node2]["status"] = "FILTERED"
+
+        event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
         self.assertIsNone(event)
+
+        PEERS_INFO[node2]["data_center"] = data_center
+        GOSSIP_INFO[node2]["status"] = gossip_status
 
     def test_check_nulls_in_peers_not_in_gossip(self):
-        peers_info = deepcopy(PEERS_INFO)
-        peers_info["127.0.0.4"] = {"data_center": "null", }
-        event = next(check_nulls_in_peers(GOSSIP_INFO, peers_info, Node), None)
+        PEERS_INFO[node4] = {"data_center": "null", }
+        event = next(check_nulls_in_peers(GOSSIP_INFO, PEERS_INFO, node1), None)
         self.assertIsNone(event)
+        PEERS_INFO.pop(node4)
 
     def test_check_node_status_in_gossip_and_nodetool_status_all_ok(self):
-        event = next(check_node_status_in_gossip_and_nodetool_status(GOSSIP_INFO, NODES_STATUS, Node), None)
+        event = next(check_node_status_in_gossip_and_nodetool_status(GOSSIP_INFO, NODES_STATUS, node1), None)
         self.assertIsNone(event)
 
     def test_check_schema_version_all_ok(self):
-        event = next(check_schema_version(GOSSIP_INFO, PEERS_INFO, NODES_STATUS, Node), None)
+        event = next(check_schema_version(GOSSIP_INFO, PEERS_INFO, NODES_STATUS, node1), None)
         self.assertIsNone(event)
