@@ -175,9 +175,9 @@ class ScyllaBenchThread:  # pylint: disable=too-many-instance-attributes
 
         log_file_name = os.path.join(node.logdir, f'scylla-bench-l{loader_idx}-{uuid.uuid4()}.log')
         # Select first seed node to send the scylla-bench cmds
-        ips = node_list[0].ip_address
+        ips = node_list[0].cql_ip_address
 
-        with ScyllaBenchStressExporter(instance_name=node.ip_address,
+        with ScyllaBenchStressExporter(instance_name=node.cql_ip_address,
                                        metrics=nemesis_metrics_obj(),
                                        stress_operation=self.sb_mode,
                                        stress_log_filename=log_file_name,

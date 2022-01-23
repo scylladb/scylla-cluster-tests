@@ -122,7 +122,7 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
             first_node = [n for n in self.node_list if n.dc_idx == loader_idx %
                           3]  # make sure each loader is targeting on datacenter/region
             first_node = first_node[0] if first_node else self.node_list[0]
-            stress_cmd += " -node {}".format(first_node.ip_address)
+            stress_cmd += " -node {}".format(first_node.cql_ip_address)
         if 'skip-unsupported-columns' in self._get_available_suboptions(node, '-errors'):
             stress_cmd = self._add_errors_option(stress_cmd, ['skip-unsupported-columns'])
         return stress_cmd
@@ -185,7 +185,7 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
 
         result = None
 
-        with CassandraStressExporter(instance_name=node.ip_address,
+        with CassandraStressExporter(instance_name=node.cql_ip_address,
                                      metrics=nemesis_metrics_obj(),
                                      stress_operation=stress_cmd_opt,
                                      stress_log_filename=log_file_name,
@@ -365,5 +365,5 @@ class DockerBasedStressThread:
             assert db_nodes, "No node to query, nemesis runs on all DB nodes!"
             node_to_query = random.choice(db_nodes)
             LOGGER.debug("Selected '%s' to query for local nodes", node_to_query)
-            return node_to_query.ip_address
-        return self.node_list[0].ip_address
+            return node_to_query.cql_ip_address
+        return self.node_list[0].cql_ip_address

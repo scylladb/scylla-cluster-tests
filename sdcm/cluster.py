@@ -842,6 +842,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         raise NotImplementedError()
 
     @property
+    def cql_ip_address(self):
+        with self.remote_scylla_yaml() as scylla_yaml:
+            return scylla_yaml.broadcast_rpc_address if scylla_yaml.broadcast_rpc_address else self.ip_address
+
+    @property
     def ip_address(self):
         if self.test_config.IP_SSH_CONNECTIONS == "ipv6":
             return self.ipv6_ip_address
@@ -3124,8 +3129,8 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def get_node_public_ips(self):
         return [node.public_ip_address for node in self.nodes]
 
-    def get_node_external_ips(self):
-        return [node.external_address for node in self.nodes]
+    def get_node_cql_ips(self):
+        return [node.cql_ip_address for node in self.nodes]
 
     def get_node_database_errors(self):
         errors = {}
@@ -3240,7 +3245,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     def cql_connection(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
                        password=None, compression=True, protocol_version=None,
                        port=None, ssl_opts=None, connect_timeout=100, verbose=True):
-        node_ips = self.get_node_external_ips()
+        node_ips = self.get_node_cql_ips()
         wlrr = WhiteListRoundRobinPolicy(node_ips)
         return self._create_session(node=node, keyspace=keyspace, user=user, password=password,
                                     compression=compression, protocol_version=protocol_version,
@@ -3251,7 +3256,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                                  password=None, compression=True,
                                  protocol_version=None, port=None,
                                  ssl_opts=None, connect_timeout=100, verbose=True):
-        node_ips = [node.external_address]
+        node_ips = [node.cql_ip_address]
         wlrr = WhiteListRoundRobinPolicy(node_ips)
         return self._create_session(node=node, keyspace=keyspace, user=user, password=password,
                                     compression=compression, protocol_version=protocol_version,
