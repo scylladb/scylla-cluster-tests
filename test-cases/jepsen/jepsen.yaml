@@ -15,6 +15,7 @@ nemesis_class_name: 'NoOpMonkey'
 scylla_linux_distro: 'debian-buster'
 user_prefix: 'jepsen'
 use_legacy_cluster_init: true
+scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/debian/scylla-4.6-buster.list'
 jepsen_scylla_repo: 'https://github.com/scylladb/jepsen.git'
 jepsen_test_count: 5
 jepsen_test_run_policy: any
