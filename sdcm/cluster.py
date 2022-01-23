@@ -2674,7 +2674,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
             for dc, dc_status in statuses.items():
                 for node_ip, node_properties in dc_status.items():
-                    nodes_status[node_ip] = {'status': node_properties['state'], 'dc': dc}
+                    if node := self.parent_cluster.find_node_by_ip(node_ip):
+                        nodes_status[node] = {'status': node_properties['state'], 'dc': dc}
+                    else:
+                        if node_ip:
+                            LOGGER.error("Get nodes statuses. Failed to find a node in cluster by IP: %s", node_ip)
 
         except Exception as exc:  # pylint: disable=broad-except
             ClusterHealthValidatorEvent.NodeStatus(
@@ -2702,15 +2706,20 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 ipaddress.ip_address(peer)
             except ValueError:
                 continue
-            peers_details[peer] = {
-                'data_center': line_splitted[1].strip(),
-                'host_id': line_splitted[2].strip(),
-                'rack': line_splitted[3].strip(),
-                'release_version': line_splitted[4].strip(),
-                'rpc_address': line_splitted[5].strip(),
-                'schema_version': line_splitted[6].strip(),
-                'supported_features': line_splitted[7].strip(),
-            }
+
+            if node := self.parent_cluster.find_node_by_ip(peer):
+                peers_details[node] = {
+                    'data_center': line_splitted[1].strip(),
+                    'host_id': line_splitted[2].strip(),
+                    'rack': line_splitted[3].strip(),
+                    'release_version': line_splitted[4].strip(),
+                    'rpc_address': line_splitted[5].strip(),
+                    'schema_version': line_splitted[6].strip(),
+                    'supported_features': line_splitted[7].strip(),
+                }
+            else:
+                if peer:
+                    LOGGER.error("Get peers info. Failed to find a node in the cluster by IP: %s", peer)
 
         return peers_details
 
@@ -2731,8 +2740,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 dc = line.replace('DC:', '').split(',')[0]
 
             if schema and ip and status:
-                gossip_node_schemas[ip] = {'schema': schema, 'status': status, 'dc': dc}
-                schema = ip = status = dc = ''
+                if node := self.parent_cluster.find_node_by_ip(ip):
+                    gossip_node_schemas[node] = {'schema': schema, 'status': status, 'dc': dc}
+                    schema = ip = status = dc = ''
+                else:
+                    LOGGER.error("Get gossip info. Failed to find a node in the cluster by IP: %s", ip)
 
         return gossip_node_schemas
 
@@ -3057,6 +3069,13 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     @property
     def dead_nodes_ip_address_list(self):
         return [node.ip_address for node in self.dead_nodes_list]
+
+    def find_node_by_ip(self, node_ip):
+        for node in self.nodes:
+            if node_ip in [node.private_ip_address, node.public_ip_address, node.ipv6_ip_address]:
+                return node
+
+        return None
 
     def init_log_directory(self):
         assert '_SCT_TEST_LOGDIR' in os.environ
