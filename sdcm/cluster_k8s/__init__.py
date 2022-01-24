@@ -2288,7 +2288,9 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
             sleep_time=self.PodContainerClass.pod_readiness_delay)
         def wait_till_any_node_get_new_image(nodes_with_old_image: list):
             for node in nodes_with_old_image.copy():
-                if node.image == new_image:
+                # NOTE: 'node.image' may be 'docker.io/scylladb/scylla:4.5.3'
+                #       as well as 'scylladb/scylla:4.5.3'
+                if node.image.endswith(new_image):
                     nodes_with_old_image.remove(node)
                     return True
             raise RuntimeError('No node was upgraded')
