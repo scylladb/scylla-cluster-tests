@@ -277,12 +277,11 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
     def _get_persistent_disk_struct(self, name, disk_size, disk_type='pd-ssd', dc_idx=0):
         device_name = '%s-data-%s' % (name, disk_type)
-        return {"type": "SCRATCH",
+        return {"type": "PERSISTENT",
                 "deviceName": device_name,
                 "initializeParams": {
                     "diskType": self._get_disk_url(disk_type, dc_idx=dc_idx),
                     "diskSizeGb": disk_size,
-                    "sourceImage": self._gce_image
                 },
                 "autoDelete": True}
 

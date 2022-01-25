@@ -2155,7 +2155,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         :return: list of disk names
         """
         patt = (r'nvme*n*', r'nvme\d+n\d+') if nvme else (r'sd[b-z]', r'sd\w+')
-        result = self.remoter.run('ls /dev/{}'.format(patt[0]))
+        result = self.remoter.run(f"ls /dev/{patt[0]}", ignore_status=True)
         disks = re.findall(r'/dev/{}'.format(patt[1]), result.stdout)
         # filter out the used disk, the free disk doesn't have partition.
         disks = [i for i in disks if disks.count(i) == 1]
