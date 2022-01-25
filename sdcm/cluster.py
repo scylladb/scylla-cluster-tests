@@ -439,6 +439,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             sb_version = f'tags/{sb_version}'
         else:
             sb_version = f'heads/{sb_version}'
+
+        if self.distro.is_rhel_like:
+            self.remoter.sudo("yum install -y unzip")
+        else:
+            self.remoter.sudo("apt-get install -y unzip")
+
         self.remoter.sudo(shell_script_cmd(f"""\
             rm -rf /usr/local/go || true
             rm -rf /tmp/sb_install || true
