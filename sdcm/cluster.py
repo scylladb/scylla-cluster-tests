@@ -3828,7 +3828,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if not verification_node:
             verification_node = random.choice(self.nodes)
         status = {}
-        res = verification_node.run_nodetool('status', warning_event_on_exception=(Exception,), publish_event=False)
+        res = verification_node.run_nodetool('status', publish_event=False)
+
         data_centers = res.stdout.strip().split("Datacenter: ")
         for dc in data_centers:
             if dc:
