@@ -1946,6 +1946,10 @@ class PodCluster(cluster.BaseCluster):
                   rack: int = 0,
                   enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
 
+        # TODO: make it work when we have decommissioned (by nodetool) nodes.
+        #       Now it will fail because pod which hosts decommissioned Scylla member is reported
+        #       as 'NotReady' and will fail the pod waiter function below.
+
         # Wait while whole cluster (on all racks) including new nodes are up and running
         self.wait_for_pods_readiness(pods_to_wait=count, total_pods=len(self.nodes) + count)
 
@@ -2205,6 +2209,10 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                   rack: int = 0,
                   enable_auto_bootstrap: bool = False) -> List[BasePodContainer]:
         self._create_k8s_rack_if_not_exists(rack)
+        # TODO: 'self.get_rack_nodes(rack)' returns correct number only
+        #       when there are no decommissioned, by nodetool, nodes.
+        #       Having 1 decommissioned node we do not change node count.
+        #       Having 2 decommissioned nodes we will reduce node count.
         current_members = len(self.get_rack_nodes(rack))
         self.replace_scylla_cluster_value(f"/spec/datacenter/racks/{rack}/members", current_members + count)
 

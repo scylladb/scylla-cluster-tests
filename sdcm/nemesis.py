@@ -885,6 +885,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     @retrying(n=3, sleep_time=60, allowed_exceptions=(NodeSetupFailed, NodeSetupTimeout))
     def _add_and_init_new_cluster_node(self, old_node_ip=None, timeout=HOUR_IN_SEC * 6, rack=0):
         """When old_node_private_ip is not None replacement node procedure is initiated"""
+        # TODO: make it work on K8S when we have decommissioned (by nodetool) nodes.
+        #       Now it will fail because pod which hosts decommissioned Scylla member is reported
+        #       as 'NotReady' and will fail the pod waiter function.
         self.log.info("Adding new node to cluster...")
         InfoEvent(message='StartEvent - Adding new node to cluster').publish()
         new_node = self.cluster.add_nodes(
@@ -2673,6 +2676,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         Stop decommission in middle to trigger some streaming fails, then rebuild the data on the node.
         If the node is decommission unexpectedly, need to re-add a new node to cluster.
         """
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis(
+                "This nemesis logic is not compatible with K8S approach "
+                "for handling Scylla member's decommissioning.")
         self.break_streaming_task_and_rebuild(task='decommission')
 
     def disrupt_rebuild_streaming_err(self):
