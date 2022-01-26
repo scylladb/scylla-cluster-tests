@@ -371,6 +371,10 @@ class TestStatsMixin(Stats):
                         versions[package.replace('-enterprise', '')] = {'version': match.group(2),
                                                                         'date': match.group(4),
                                                                         'commit_id': match.group(5)}
+            build_id_output = node.remoter.run('scylla --build-id').stdout.strip()
+            if 'scylla-server' not in versions.keys():
+                versions['scylla-server'] = dict()
+            versions['scylla-server']['build_id'] = build_id_output if build_id_output else 'Not Found'
         except Exception as ex:  # pylint: disable=broad-except
             LOGGER.error('Failed getting scylla versions: %s', ex)
 
