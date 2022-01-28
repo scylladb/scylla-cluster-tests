@@ -274,6 +274,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.k8s_scylla_cluster_name = self.params.get('k8s_scylla_cluster_name')
         self.scylla_config_lock = RLock()
         self.scylla_restart_required = False
+        self.calculated_cpu_limit = None
+        self.calculated_memory_limit = None
         self.perf_pods_labels = [
             ('app.kubernetes.io/name', 'scylla-node-config'),
             ('app.kubernetes.io/name', 'node-config'),
@@ -903,8 +905,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             - COMMON_CONTAINERS_RESOURCES['memory']
             - SCYLLA_MANAGER_AGENT_RESOURCES['memory']
         )
-        cpu_limit = convert_cpu_units_to_k8s_value(cpu_limit)
-        memory_limit = convert_memory_units_to_k8s_value(memory_limit)
+        self.calculated_cpu_limit = convert_cpu_units_to_k8s_value(cpu_limit)
+        self.calculated_memory_limit = convert_memory_units_to_k8s_value(memory_limit)
 
         # Init 'scylla-config' configMap before installation of Scylla to avoid redundant restart
         self.init_scylla_config_map()
@@ -937,8 +939,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             version=self._scylla_operator_chart_version,
             use_devel=True,
             values=self.get_scylla_cluster_helm_values(
-                cpu_limit=cpu_limit,
-                memory_limit=memory_limit,
+                cpu_limit=self.calculated_cpu_limit,
+                memory_limit=self.calculated_memory_limit,
                 pool_name=node_pool.name if node_pool else None),
             namespace=SCYLLA_NAMESPACE,
         ))

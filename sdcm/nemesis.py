@@ -38,9 +38,17 @@ from cassandra import ConsistencyLevel
 from argus.db.db_types import NemesisStatus, NemesisRunInfo, NodeDescription
 
 from sdcm.paths import SCYLLA_YAML_PATH
-from sdcm.cluster import (NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady, BaseCluster, BaseScyllaCluster,
-                          BaseNode)
-from sdcm.cluster import NodeStayInClusterAfterDecommission
+from sdcm.cluster import (
+    BaseCluster,
+    BaseNode,
+    BaseScyllaCluster,
+    ClusterNodesNotReady,
+    DB_LOG_PATTERN_RESHARDING_START,
+    DB_LOG_PATTERN_RESHARDING_FINISH,
+    NodeSetupFailed,
+    NodeSetupTimeout,
+    NodeStayInClusterAfterDecommission,
+)
 from sdcm.cluster_k8s.mini_k8s import LocalKindCluster
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.compaction_ops import CompactionOps
@@ -55,6 +63,10 @@ from sdcm.utils import cdc
 from sdcm.utils.decorators import retrying, latency_calculator_decorator
 from sdcm.utils.decorators import timeout as timeout_decor
 from sdcm.utils.docker_utils import ContainerManager
+from sdcm.utils.k8s import (
+    convert_cpu_units_to_k8s_value,
+    convert_cpu_value_from_k8s_to_units,
+)
 from sdcm.log import SDCMAdapter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm import wait
@@ -960,6 +972,129 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     @latency_calculator_decorator
     def replace_node(self, old_node_ip, rack=0):
         return self._add_and_init_new_cluster_node(old_node_ip, rack=rack)
+
+    def _verify_resharding_on_k8s(self, cpus):
+        nodes_data = []
+        for node in reversed(self.cluster.nodes):
+            liveness_probe_failures = node.follow_system_log(
+                patterns=["healthz probe: can't connect to JMX"])
+            resharding_start = node.follow_system_log(patterns=[DB_LOG_PATTERN_RESHARDING_START])
+            resharding_finish = node.follow_system_log(patterns=[DB_LOG_PATTERN_RESHARDING_FINISH])
+            nodes_data.append((node, liveness_probe_failures, resharding_start, resharding_finish))
+
+        self.log.info(
+            "Update the cpu count to '%s' CPUs to make Scylla start "
+            "the resharding process on all the nodes 1 by 1", cpus)
+        self.tester.db_cluster.replace_scylla_cluster_value(
+            "/spec/datacenter/racks/0/resources", {
+                "limits": {
+                    "cpu": cpus,
+                    "memory": self.cluster.k8s_cluster.calculated_memory_limit,
+                },
+                "requests": {
+                    "cpu": cpus,
+                    "memory": self.cluster.k8s_cluster.calculated_memory_limit,
+                },
+            })
+
+        # Wait for the start of the resharding.
+        # In K8S it starts from the last node of a rack and then goes to previous ones.
+        # One resharding with 100Gb+ may take about 3-4 minutes. So, set 5 minutes timeout per node.
+        for node, liveness_probe_failures, resharding_start, resharding_finish in nodes_data:
+            assert wait.wait_for(
+                func=lambda: list(resharding_start),  # pylint: disable=cell-var-from-loop
+                step=1, timeout=300, throw_exc=False,
+                text=f"Waiting for the start of resharding on the '{node.name}' node.",
+            ), f"Start of resharding hasn't been detected on the '{node.name}' node."
+            resharding_started = time.time()
+            self.log.debug("Resharding has been started on the '%s' node.", node.name)
+
+            # Wait for the end of resharding
+            assert wait.wait_for(
+                func=lambda: list(resharding_finish),  # pylint: disable=cell-var-from-loop
+                step=3, timeout=600, throw_exc=False,
+                text=f"Waiting for the finish of resharding on the '{node.name}' node.",
+            ), f"Finish of the resharding hasn't been detected on the '{node.name}' node."
+            self.log.debug("Resharding has been finished successfully on the '%s' node.", node.name)
+
+            # Calculate the time spent for resharding. We need to have it be bigger than 2minutes
+            # because it is the timeout of the liveness probe for Scylla pods.
+            resharding_time = time.time() - resharding_started
+            if resharding_time < 120:
+                self.log.warning(
+                    "Resharding was too fast - '%s's (<120s) on the '%s' node. "
+                    "So, nemesis didn't cover the case.",
+                    resharding_time, node.name)
+            else:
+                self.log.info(
+                    "Resharding took '%s's on the '%s' node. It is enough to cover the case.",
+                    resharding_time, node.name)
+
+            # Check that liveness probe didn't report any errors
+            # https://github.com/scylladb/scylla-operator/issues/894
+            liveness_probe_failures = list(liveness_probe_failures)
+            assert not liveness_probe_failures, (
+                f"There are liveness probe failures: {liveness_probe_failures}")
+        self.log.info("Resharding has successfully ended on whole Scylla cluster.")
+
+    def disrupt_nodetool_flush_and_reshard_on_kubernetes(self):
+        """Covers https://github.com/scylladb/scylla-operator/issues/894"""
+        if not self._is_it_on_kubernetes():
+            raise UnsupportedNemesis('It is supported only on kubernetes')
+
+        def _check_pod_stats(node):
+            # Pod info:
+            # status:
+            #   containerStatuses:
+            #   - ready: false
+            #     restartCount: 0
+            #     started: true
+            #     ...
+            target_pod_stats = {}
+            for container in node._pod_status.container_statuses:  # pylint: disable=protected-access
+                if container.image.split(":")[0].endswith("scylla"):
+                    target_pod_stats["started"] = container.started
+                    target_pod_stats["restart_count"] = container.restart_count
+                    target_pod_stats["ready"] = container.ready
+                    break
+            return target_pod_stats
+
+        # Calculate new value for the CPU cores dedicated for Scylla pods
+        current_cpus = convert_cpu_value_from_k8s_to_units(
+            self.cluster.k8s_cluster.calculated_cpu_limit)
+        if current_cpus <= 1:
+            new_cpus = current_cpus + 1
+        else:
+            new_cpus = current_cpus - 1
+        new_cpus = convert_cpu_units_to_k8s_value(new_cpus)
+
+        # Calculate Scylla pod stats and make sure it is ok
+        origin_target_pod_stats = _check_pod_stats(self.target_node)
+        assert origin_target_pod_stats["started"] in (True, 'True', 'true')
+        assert origin_target_pod_stats["ready"] in (True, 'True', 'true')
+
+        # Run 'nodetool flush' command
+        self.target_node.run_nodetool("flush -- keyspace1")
+
+        # Change number of CPUs dedicated for Scylla pods
+        # and make sure that the resharding process begins and finishes
+        self._verify_resharding_on_k8s(new_cpus)
+
+        # Make sure that Scylla pods didn't get restarted
+        target_pod_stats = _check_pod_stats(self.target_node)
+
+        # Return the cpu count back and wait for the resharding begin and finish
+        self._verify_resharding_on_k8s(current_cpus)
+
+        # Make sure that pod was not restarted during the first resharding process
+        assert target_pod_stats
+        assert origin_target_pod_stats
+        assert target_pod_stats.get("restart_count") == origin_target_pod_stats.get("restart_count")
+
+        # Make sure that pod was not restarted during the second resharding process
+        final_target_pod_stats = _check_pod_stats(self.target_node)
+        assert final_target_pod_stats
+        assert final_target_pod_stats.get("restart_count") == origin_target_pod_stats.get("restart_count")
 
     def disrupt_terminate_and_replace_node_kubernetes(self):  # pylint: disable=invalid-name
         for node_terminate_method_name in self._get_kubernetes_node_break_methods():
@@ -3845,6 +3980,14 @@ class OperatorNodeReplace(Nemesis):
         self.disrupt_replace_node_kubernetes()
 
 
+class OperatorNodetoolFlushAndReshard(Nemesis):
+    disruptive = True
+    kubernetes = True
+
+    def disrupt(self):
+        self.disrupt_nodetool_flush_and_reshard_on_kubernetes()
+
+
 class ScyllaKillMonkey(Nemesis):
     disruptive = True
     kubernetes = True
@@ -4076,6 +4219,7 @@ class ScyllaOperatorBasicOperationsMonkey(Nemesis):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.disrupt_methods_list = [
+            'disrupt_nodetool_flush_and_reshard_on_kubernetes',
             'disrupt_rolling_restart_cluster',
             'disrupt_grow_shrink_cluster',
             'disrupt_grow_shrink_new_rack',
