@@ -1,12 +1,11 @@
 test_duration: 300
-k8s_minio_storage_size: '900Gi'
 
 # We should wait for the end of write-prepare stage to avoid unneeded overloads
 nemesis_during_prepare: false
 
-# NOTE: Following is needed to make OperatorNodetoolFlushAndReshard work correctly
-#       It is sub-part of the 'ScyllaOperatorBasicOperationsMonkey' one
-prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=35123456 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=80 -pop seq=1..35123456 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+# NOTE: We should have big enough data in DB to make resharding long more than 2 minutes
+#       to exceed the liveness probe timeout making sure it doesn't panic
+prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=35123456 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=60 -pop seq=1..35123456 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
 
 stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=100 throttle=5000/s -pop seq=1..10000000 -log interval=5"
              ]
@@ -17,9 +16,8 @@ n_monitor_nodes: 1
 instance_type_db: 'i3.4xlarge'
 gce_instance_type_db: 'n1-highmem-16'
 
-nemesis_class_name: 'ScyllaOperatorBasicOperationsMonkey'
+nemesis_class_name: 'OperatorNodetoolFlushAndReshard'
 nemesis_interval: 5
 
 space_node_threshold: 100246000000
-
-user_prefix: 'longevity-scylla-operator-basic-3h'
+user_prefix: 'longevity-operator-3h-nodetool-flush-and-reshard'

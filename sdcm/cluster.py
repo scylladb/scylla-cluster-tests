@@ -133,6 +133,9 @@ SCYLLA_DIR = "/var/lib/scylla"
 TEST_USER = 'scylla-test'
 INSTALL_DIR = f"/home/{TEST_USER}/scylladb"
 
+DB_LOG_PATTERN_RESHARDING_START = "(?i)database - Resharding"
+DB_LOG_PATTERN_RESHARDING_FINISH = "(?i)storage_service - Restarting a node in NORMAL"
+
 SPOT_TERMINATION_CHECK_DELAY = 5
 
 LOGGER = logging.getLogger(__name__)
@@ -2539,6 +2542,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         return search_reshard
 
     def restart_node_with_resharding(self, murmur3_partitioner_ignore_msb_bits: int = 12) -> None:
+        # TODO: reuse 'DB_LOG_PATTERN_RESHARDING_START' and 'DB_LOG_PATTERN_RESHARDING_FINISH' vars here.
         search_reshard = self._restart_node_with_resharding(murmur3_partitioner_ignore_msb_bits)
 
         resharding_started = wait.wait_for(func=self._resharding_status, step=5, timeout=180,
