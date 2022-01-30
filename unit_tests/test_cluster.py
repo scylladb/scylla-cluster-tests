@@ -79,6 +79,14 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
     def is_nonroot_install(self):  # pylint: disable=invalid-overridden-method
         return False
 
+    @property
+    def scylla_shards(self):
+        return 0
+
+    @property
+    def cpu_cores(self) -> int:
+        return 0
+
 
 class DummyDbCluster(BaseCluster):  # pylint: disable=abstract-method
     # pylint: disable=super-init-not-called
