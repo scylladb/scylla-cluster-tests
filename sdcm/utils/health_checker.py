@@ -106,6 +106,7 @@ def check_node_status_in_gossip_and_nodetool_status(gossip_info, nodes_status, c
 
         if (node_info['status'] == 'NORMAL' and nodes_status[node]['status'] != 'UN') or \
                 (node_info['status'] != 'NORMAL' and nodes_status[node]['status'] == 'UN'):
+            LOGGER.debug("Gossip info: %s\nnodetool.status info: %s", gossip_info, nodes_status)
             yield ClusterHealthValidatorEvent.NodeStatus(
                 severity=Severity.ERROR,
                 node=current_node.name,

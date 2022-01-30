@@ -2730,6 +2730,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def get_gossip_info(self):
         gossip_info = self.run_nodetool('gossipinfo', verbose=False, warning_event_on_exception=(Exception,),
                                         publish_event=False)
+        LOGGER.debug("get_gossip_info: %s", gossip_info)
         gossip_node_schemas = {}
         schema = ip = status = dc = ''
         for line in gossip_info.stdout.split():
@@ -2745,9 +2746,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if schema and ip and status:
                 if node := self.parent_cluster.find_node_by_ip(ip):
                     gossip_node_schemas[node] = {'schema': schema, 'status': status, 'dc': dc}
-                    schema = ip = status = dc = ''
+                elif status in self.GOSSIP_STATUSES_FILTER_OUT:
+                    LOGGER.debug("Get gossip info. Node with IP %s is not found in the cluster. Node status is: %s",
+                                 ip, status)
                 else:
-                    LOGGER.error("Get gossip info. Failed to find a node in the cluster by IP: %s", ip)
+                    LOGGER.error("Get gossip info. Failed to find a node with status %s in the cluster by IP: %s",
+                                 status, ip)
+
+                schema = ip = status = dc = ''
 
         return gossip_node_schemas
 
