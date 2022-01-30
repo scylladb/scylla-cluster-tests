@@ -2911,6 +2911,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         try:
             email_data = self.get_email_data()
+            self.argus_collect_screenshots(email_data)
         except Exception as exc:  # pylint: disable=broad-except
             self.log.error("Error while saving email data. Error: %s", exc)
 
@@ -2921,6 +2922,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.log.debug('Save email data to file %s', json_file_path)
             self.log.debug('Email data: %s', email_data)
             save_email_data_to_file(email_data, json_file_path)
+
+    def argus_collect_screenshots(self, email_data: dict) -> None:
+        screenshot_links = email_data.get("grafana_screenshots", [])
+        for link in screenshot_links:
+            self.argus_test_run.run_info.results.add_screenshot(link)
+
+        self.argus_test_run.save()
 
     @silence()
     def send_email(self):
