@@ -391,6 +391,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         try:
             self.log.info("Collecting packages for Argus...")
             versions = self.get_scylla_versions()
+            kernel_version = self.db_cluster.nodes[0].kernel_version
+            kernel_package = PackageVersion(name="kernel", date="", version=kernel_version, revision_id="", build_id="")
+            self.argus_test_run.run_info.details.packages.append(kernel_package)
             for package_name, package_info in versions.items():
                 package = PackageVersion(name=package_name, date=package_info.get("date", "#NO_DATE"),
                                          version=package_info.get("version", "#NO_VERSION"),
