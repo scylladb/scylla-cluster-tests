@@ -294,9 +294,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def _init_argus_resource(self):
         try:
             run = ArgusTestRun.get()
+            shards = self.scylla_shards if "db-node" in self.instance_name else self.cpu_cores
+            shards = int(shards) if shards else 0
             instance_details = CloudInstanceDetails(public_ip=self.public_ip_address, region=self.region,
                                                     provider=self.parent_cluster.cluster_backend,
-                                                    private_ip=self.ip_address, creation_time=int(time.time()))
+                                                    private_ip=self.ip_address, creation_time=int(time.time()),
+                                                    shards_amount=shards)
             resource = CloudResource(name=self.name, state=ResourceState.RUNNING,
                                      instance_info=instance_details)
             self.argus_resource = resource
