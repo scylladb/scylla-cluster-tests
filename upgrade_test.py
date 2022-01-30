@@ -543,15 +543,15 @@ class UpgradeTest(FillDatabaseData):
         # complex workload: prepare write
         self.log.info('Starting c-s complex workload (5M) to prepare data')
         stress_cmd_complex_prepare = self.params.get('stress_cmd_complex_prepare')
-        complex_cs_thread_pool = self.run_stress_thread(
-            stress_cmd=stress_cmd_complex_prepare, profile='data_dir/complex_schema.yaml')
+        # complex_cs_thread_pool = self.run_stress_thread(
+        #     stress_cmd=stress_cmd_complex_prepare, profile='data_dir/complex_schema.yaml')
 
         # wait for the complex workload to finish
-        self.verify_stress_thread(complex_cs_thread_pool)
+        # self.verify_stress_thread(complex_cs_thread_pool)
 
-        self.log.info('Will check paged query before upgrading nodes')
-        self.paged_query()
-        self.log.info('Done checking paged query before upgrading nodes')
+        # self.log.info('Will check paged query before upgrading nodes')
+        # self.paged_query()
+        # self.log.info('Done checking paged query before upgrading nodes')
 
         # prepare write workload
         self.log.info('Starting c-s prepare write workload (n=10000000)')
@@ -563,15 +563,15 @@ class UpgradeTest(FillDatabaseData):
 
         # start gemini write workload
         # and cdc log reader
-        if self.version_cdc_support():
-            self.log.info("Start gemini and cdc stressor during upgrade")
-            gemini_thread = self.run_gemini(self.params.get("gemini_cmd"))
+        # if self.version_cdc_support():
+        #     self.log.info("Start gemini and cdc stressor during upgrade")
+        #     gemini_thread = self.run_gemini(self.params.get("gemini_cmd"))
             # Let to write_stress_during_entire_test complete the schema changes
             # self.metric_has_data(
             #     metric_query='gemini_cql_requests', n=10)
 
-            cdc_reader_thread = self.run_cdclog_reader_thread(self.params.get("stress_cdclog_reader_cmd"),
-                                                              keyspace_name="ks1", base_table_name="table1")
+            # cdc_reader_thread = self.run_cdclog_reader_thread(self.params.get("stress_cdclog_reader_cmd"),
+            #                                                   keyspace_name="ks1", base_table_name="table1")
 
         with ignore_upgrade_schema_errors():
 
@@ -698,9 +698,9 @@ class UpgradeTest(FillDatabaseData):
         # wait for the read complex workload to finish
         # self.verify_stress_thread(complex_cs_thread_pool)
 
-        self.log.info('Will check paged query after upgrading all nodes')
-        self.paged_query()
-        self.log.info('Done checking paged query after upgrading nodes')
+        # self.log.info('Will check paged query after upgrading all nodes')
+        # self.paged_query()
+        # self.log.info('Done checking paged query after upgrading nodes')
 
         # After adjusted the workloads, there is a entire write workload, and it uses a fixed duration for catching
         # the data lose.
@@ -752,12 +752,12 @@ class UpgradeTest(FillDatabaseData):
                                         'entire test, actual: %d' % (
                 error_factor, schema_load_error_num)
 
-        self.log.info('Step10 - Verify that gemini and cdc stressor are not failed during upgrade')
-        if self.version_cdc_support():
-            self.verify_gemini_results(queue=gemini_thread)
-            self.verify_cdclog_reader_results(cdc_reader_thread)
-
-        self.log.info('all nodes were upgraded, and last workaround is verified.')
+        # self.log.info('Step10 - Verify that gemini and cdc stressor are not failed during upgrade')
+        # if self.version_cdc_support():
+        #     self.verify_gemini_results(queue=gemini_thread)
+        #     self.verify_cdclog_reader_results(cdc_reader_thread)
+        #
+        # self.log.info('all nodes were upgraded, and last workaround is verified.')
 
     def _start_and_wait_for_node_upgrade(self, node: BaseNode, step: int) -> None:
         InfoEvent(
