@@ -186,7 +186,6 @@ class ArgusTestRun:
         "unknown": _prepare_unknown_resource_setup,
     }
     AVAILABLE_RELEASES = [
-        "argus-integration",
         "master",
         "branch-2022.1",
         "branch-4.6",
