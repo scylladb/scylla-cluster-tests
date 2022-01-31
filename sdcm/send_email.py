@@ -584,10 +584,15 @@ def get_running_instances_for_email_report(test_id: str, ip_filter: str = None):
     instances = list_instances_aws(tags_dict=tags, group_as_region=True, running=True)
     for region in instances:
         for instance in instances[region]:
-            name = [tag['Value'] for tag in instance['Tags'] if tag['Key'] == 'Name']
+            # NOTE: K8S nodes created by autoscaler never have 'Name' set.
+            name = 'N/A'
+            for tag in instance['Tags']:
+                if tag['Key'] == 'Name':
+                    name = tag['Value']
+                    break
             public_ip_addr = instance.get('PublicIpAddress', 'N/A')
             if public_ip_addr != ip_filter:
-                nodes.append([name[0],
+                nodes.append([name,
                               instance.get('PublicIpAddress', 'N/A'),
                               instance['State']['Name'],
                               "aws",
