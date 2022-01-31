@@ -54,12 +54,24 @@ class VmInstance:
     tags: Dict[str, str]
 
 
+class PricingModel(Enum):
+    ON_DEMAND = 'on_demand'
+    SPOT = 'spot'
+    SPOT_FLEET = 'spot_fleet'
+    SPOT_LOW_PRICE = 'spot_low_price'  # maybe not needed
+    SPOT_DURATION = 'spot_duration'  # maybe not needed
+
+
 class Provisioner(ABC):
     """Abstract class for virtual machines provisioner, cloud-provider and sct agnostic.
     Limits only to machines related to provided test_id. """
     test_id: str
 
-    def create_virtual_machine(self, region: str, definition: InstanceDefinition) -> VmInstance:
+    def create_virtual_machine(self,
+                               region: str,
+                               definition: InstanceDefinition,
+                               pricing_model: PricingModel = PricingModel.SPOT
+                               ) -> VmInstance:
         """Create virtual machine in provided region, specified by InstanceDefinition"""
         raise NotImplementedError()
 
