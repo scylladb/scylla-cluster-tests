@@ -17,14 +17,14 @@ from dataclasses import dataclass, field, fields
 from typing import Dict, Any, Optional, List
 import binascii
 
-
 from azure.mgmt.compute.models import VirtualMachine
 from azure.mgmt.network.models import (NetworkSecurityGroup, VirtualNetwork, Subnet, PublicIPAddress,
                                        NetworkInterface)
 from azure.mgmt.resource.resources.models import ResourceGroup
 from sdcm.provision.azure.network_security_group_rules import open_ports_rules
 from sdcm.provision.azure.utils import get_scylla_images
-from sdcm.provision.provisioner import Provisioner, InstanceDefinition, VmArch, InstancePurpose, VmInstance
+from sdcm.provision.provisioner import Provisioner, InstanceDefinition, VmArch, InstancePurpose, VmInstance, \
+    PricingModel
 from sdcm.utils.azure_utils import AzureService
 
 LOGGER = logging.getLogger(__name__)
@@ -78,7 +78,8 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
             for v_m in self._vm_cache.values():
                 self._instances_cache[v_m.name] = self._vm_to_instance(v_m)
 
-    def create_virtual_machine(self, region: str, definition: InstanceDefinition) -> VmInstance:
+    def create_virtual_machine(self, region: str, definition: InstanceDefinition,
+                               pricing_model: PricingModel = PricingModel.SPOT) -> VmInstance:
         """Create virtual machine in provided region, specified by InstanceDefinition"""
         if definition.name in self._instances_cache:
             return self._instances_cache[definition.name]
@@ -129,6 +130,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
                 raise ValueError("unknown instance purpose")
 
         params.update(storage_profile)
+        params.update(self._get_pricing_params(pricing_model))
         v_m = self._azure_service.compute.virtual_machines.begin_create_or_update(
             resource_group_name=resource_group_name,
             vm_name=definition.name,
@@ -329,3 +331,16 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
             }
         }
         return storage_profile
+
+    @staticmethod
+    def _get_pricing_params(pricing_model: PricingModel):
+        if pricing_model != PricingModel.ON_DEMAND:
+            return {
+                "priority": "Spot",  # possible values are "Regular", "Low", or "Spot"
+                "eviction_policy": "Delete",  # can be "Deallocate" or "Delete", Deallocate leaves disks intact
+                "billing_profile": {
+                    "max_price": -1,  # -1 indicates the VM shouldn't be evicted for price reasons
+                }
+            }
+        else:
+            return {}
