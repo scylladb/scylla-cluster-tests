@@ -82,7 +82,7 @@ from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
 from sdcm.localhost import LocalHost
 from sdcm.cdclog_reader_thread import CDCLogReaderThread
 from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCollector, LoaderLogCollector, \
-    KubernetesLogCollector
+    KubernetesLogCollector, SirenManagerLogCollector
 from sdcm.send_email import build_reporter, read_email_data_from_file, get_running_instances_for_email_report, \
     save_email_data_to_file
 from sdcm.utils import alternator
@@ -598,6 +598,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.cs_db_cluster = None
         self.loaders = None
         self.monitors = None
+        self.siren_manager = None
         self.k8s_cluster = None
         self.connections = []
         make_threads_be_daemonic_by_default()
@@ -2734,7 +2735,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                      "loader_log": "",
                      "monitoring_log": "",
                      "prometheus_data": "",
-                     "monitoring_stack": ""}
+                     "monitoring_stack": "",
+                     "siren_manager": "",
+                     }
         storage_dir = os.path.join(self.logdir, "collected_logs")
         os.makedirs(storage_dir, exist_ok=True)
         self.log.info("Storage dir is %s", storage_dir)
@@ -2750,6 +2753,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                     {"name": "monitors",
                      "nodes": self.monitors and self.monitors.nodes,
                      "collector": MonitorLogCollector,
+                     "logname": "monitoring_log", },
+                    {"name": "siren_manager",
+                     "nodes": self.db_cluster and self.db_cluster.manager_instance,
+                     "collector": SirenManagerLogCollector,
                      "logname": "monitoring_log", },
                     {"name": "k8s_cluster",
                      "nodes": [],
