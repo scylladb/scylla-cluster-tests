@@ -118,7 +118,7 @@ class UpgradeTest(FillDatabaseData):
         new_version = self.params.get('new_version')
         upgrade_node_packages = self.params.get('upgrade_node_packages')
 
-        self.log.info('Upgrading a Node')
+        InfoEvent(message='Upgrading a Node').publish()
         node.upgrade_system()
 
         # We assume that if update_db_packages is not empty we install packages from there.
@@ -219,7 +219,7 @@ class UpgradeTest(FillDatabaseData):
     def rollback_node(self, node, upgrade_sstables=True):
         # pylint: disable=too-many-branches,too-many-statements
 
-        self.log.info('Rollbacking a Node')
+        InfoEvent(message='Rollbacking a Node').publish()
         # fixme: auto identify new_introduced_pkgs, remove this parameter
         new_introduced_pkgs = self.params.get('new_introduced_pkgs')
         result = node.remoter.run('scylla --version')
@@ -298,19 +298,20 @@ class UpgradeTest(FillDatabaseData):
         node.start_scylla_server(verify_up_timeout=500)
         result = node.remoter.run('scylla --version')
         new_ver = result.stdout
-        self.log.info('original scylla-server version is %s, latest: %s', orig_ver, new_ver)
+        InfoEvent(message='original scylla-server version is %s, latest: %s' % (orig_ver, new_ver)).publish()
         assert orig_ver != new_ver, "scylla-server version isn't changed"
 
         if upgrade_sstables:
             self.upgradesstables_if_command_available(node)
 
-    def upgradesstables_if_command_available(self, node, queue=None):  # pylint: disable=invalid-name
+    @staticmethod
+    def upgradesstables_if_command_available(node, queue=None):  # pylint: disable=invalid-name
         upgradesstables_available = False
         upgradesstables_supported = node.remoter.run(
             'nodetool help | grep -q upgradesstables && echo "yes" || echo "no"')
         if "yes" in upgradesstables_supported.stdout:
             upgradesstables_available = True
-            self.log.info("calling upgradesstables")
+            InfoEvent(message="calling upgradesstables").publish()
 
             # NOTE: some 4.3.x and 4.4.x scylla images have nodetool with bug [1]
             # that is not yet fixed [3] there.
@@ -370,7 +371,7 @@ class UpgradeTest(FillDatabaseData):
                 return True
 
         try:
-            self.log.info("Start waiting for upgardesstables to finish")
+            InfoEvent(message="Start waiting for upgardesstables to finish").publish()
             wait.wait_for(func=wait_for_node_to_finish, step=30, timeout=900, throw_exc=True,
                           text="Waiting until upgardesstables is finished")
         except Exception:  # pylint: disable=broad-except
@@ -388,27 +389,28 @@ class UpgradeTest(FillDatabaseData):
         and after upgrade of every node to check the consistency of data
         """
         self.truncate_entries_flag = False  # not perform truncate entries test
-        self.log.info('Populate DB with many types of tables and data')
+        InfoEvent(message='Populate DB with many types of tables and data').publish()
         self.fill_db_data()
-        self.log.info('Run some Queries to verify data BEFORE UPGRADE')
+        InfoEvent(message='Run some Queries to verify data BEFORE UPGRADE').publish()
         self.verify_db_data()
 
-        self.log.info('Starting c-s write workload to pupulate 10M paritions')
+        InfoEvent(message='Starting c-s write workload to pupulate 10M paritions').publish()
         # YAML: stress_cmd: cassandra-stress write cl=QUORUM n=10000000 -schema 'replication(factor=3)' -port jmx=6868
         # -mode cql3 native -rate threads=1000 -pop seq=1..10000000
         stress_cmd = self._cs_add_node_flag(self.params.get('stress_cmd'))
         self.run_stress_thread(stress_cmd=stress_cmd)
 
-        self.log.info('Sleeping for 360s to let cassandra-stress populate some data before the mixed workload')
+        InfoEvent(message='Sleeping for 360s to let cassandra-stress populate '
+                          'some data before the mixed workload').publish()
         time.sleep(600)
 
-        self.log.info('Starting c-s read workload for 60m')
+        InfoEvent(message='Starting c-s read workload for 60m').publish()
         # YAML: stress_cmd_1: cassandra-stress read cl=QUORUM duration=60m -schema 'replication(factor=3)'
         # -port jmx=6868 -mode cql3 native -rate threads=100 -pop seq=1..10000000
         stress_cmd_1 = self._cs_add_node_flag(self.params.get('stress_cmd_1'))
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_1)
 
-        self.log.info('Sleeping for 300s to let cassandra-stress start before the upgrade...')
+        InfoEvent(message='Sleeping for 300s to let cassandra-stress start before the upgrade...').publish()
         time.sleep(300)
 
         nodes_num = len(self.db_cluster.nodes)
@@ -420,23 +422,23 @@ class UpgradeTest(FillDatabaseData):
         # upgrade all the nodes in random order
         for i in indexes:
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
-            self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
+            InfoEvent(message='Upgrade Node %s begin' % self.db_cluster.node_to_upgrade.name).publish()
             self.upgrade_node(self.db_cluster.node_to_upgrade)
             time.sleep(300)
-            self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+            InfoEvent(message='Upgrade Node %s ended' % self.db_cluster.node_to_upgrade.name).publish()
 
-        self.log.info('Run some Queries to verify data AFTER UPGRADE')
+        InfoEvent(message='Run some Queries to verify data AFTER UPGRADE').publish()
         self.verify_db_data()
         self.verify_stress_thread(stress_queue)
 
     def fill_and_verify_db_data(self, note, pre_fill=False, rewrite_data=True):
         if pre_fill:
-            self.log.info('Populate DB with many types of tables and data')
+            InfoEvent(message='Populate DB with many types of tables and data').publish()
             self.fill_db_data()
-        self.log.info('Run some Queries to verify data %s', note)
+        InfoEvent(message='Run some Queries to verify data %s' % note).publish()
         self.verify_db_data()
         if rewrite_data:
-            self.log.info('Re-Populate DB with many types of tables and data')
+            InfoEvent(message='Re-Populate DB with many types of tables and data').publish()
             self.fill_db_data()
 
     # Added to cover the issue #5621: upgrade from 3.1 to 3.2 fails on std::logic_error (Column idx_token doesn't exist
@@ -466,13 +468,13 @@ class UpgradeTest(FillDatabaseData):
                 not is_enterprise(target_upgrade_version):
             self.truncate_entries_flag = True
 
-        self.log.info('pre-test - prepare test keyspaces and tables')
+        InfoEvent(message='pre-test - prepare test keyspaces and tables').publish()
         # prepare test keyspaces and tables before upgrade to avoid schema change during mixed cluster.
         self.prepare_keyspaces_and_tables()
         self.fill_and_verify_db_data('BEFORE UPGRADE', pre_fill=True)
 
         # write workload during entire test
-        self.log.info('Starting c-s write workload during entire test')
+        InfoEvent(message='Starting c-s write workload during entire test').publish()
         write_stress_during_entire_test = self.params.get('write_stress_during_entire_test')
         entire_write_cs_thread_pool = self.run_stress_thread(stress_cmd=write_stress_during_entire_test)
 
@@ -494,9 +496,9 @@ class UpgradeTest(FillDatabaseData):
         # shuffle it so we will upgrade the nodes in a random order
         random.shuffle(indexes)
 
-        self.log.info('pre-test - Run stress workload before upgrade')
+        InfoEvent(message='pre-test - Run stress workload before upgrade').publish()
         # complex workload: prepare write
-        self.log.info('Starting c-s complex workload (5M) to prepare data')
+        InfoEvent(message='Starting c-s complex workload (5M) to prepare data').publish()
         stress_cmd_complex_prepare = self.params.get('stress_cmd_complex_prepare')
         complex_cs_thread_pool = self.run_stress_thread(
             stress_cmd=stress_cmd_complex_prepare, profile='data_dir/complex_schema.yaml')
@@ -504,22 +506,22 @@ class UpgradeTest(FillDatabaseData):
         # wait for the complex workload to finish
         self.verify_stress_thread(complex_cs_thread_pool)
 
-        self.log.info('Will check paged query before upgrading nodes')
+        InfoEvent(message='Will check paged query before upgrading nodes').publish()
         self.paged_query()
-        self.log.info('Done checking paged query before upgrading nodes')
+        InfoEvent(message='Done checking paged query before upgrading nodes').publish()
 
         # prepare write workload
-        self.log.info('Starting c-s prepare write workload (n=10000000)')
+        InfoEvent(message='Starting c-s prepare write workload (n=10000000)').publish()
         prepare_write_stress = self.params.get('prepare_write_stress')
         prepare_write_cs_thread_pool = self.run_stress_thread(stress_cmd=prepare_write_stress)
-        self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
+        InfoEvent(message='Sleeping for 60s to let cassandra-stress start before the upgrade...').publish()
         self.metric_has_data(
             metric_query='collectd_cassandra_stress_write_gauge{type="ops", keyspace="keyspace1"}', n=5)
 
         # start gemini write workload
         # and cdc log reader
         if self.version_cdc_support():
-            self.log.info("Start gemini and cdc stressor during upgrade")
+            InfoEvent(message="Start gemini and cdc stressor during upgrade").publish()
             gemini_thread = self.run_gemini(self.params.get("gemini_cmd"))
             # Let to write_stress_during_entire_test complete the schema changes
             self.metric_has_data(
@@ -531,42 +533,42 @@ class UpgradeTest(FillDatabaseData):
         with ignore_upgrade_schema_errors():
 
             step = 'Step1 - Upgrade First Node '
-            self.log.info(step)
+            InfoEvent(message=step).publish()
             # upgrade first node
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[0]]
-            self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
+            InfoEvent(message='Upgrade Node %s begin' % self.db_cluster.node_to_upgrade.name).publish()
             self.upgrade_node(self.db_cluster.node_to_upgrade)
-            self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+            InfoEvent(message='Upgrade Node %s ended' % self.db_cluster.node_to_upgrade.name).publish()
             self.db_cluster.node_to_upgrade.check_node_health()
 
             # wait for the prepare write workload to finish
             self.verify_stress_thread(prepare_write_cs_thread_pool)
 
             # read workload (cl=QUORUM)
-            self.log.info('Starting c-s read workload (cl=QUORUM n=10000000)')
+            InfoEvent(message='Starting c-s read workload (cl=QUORUM n=10000000)').publish()
             stress_cmd_read_cl_quorum = self.params.get('stress_cmd_read_cl_quorum')
             read_stress_queue = self.run_stress_thread(stress_cmd=stress_cmd_read_cl_quorum)
             # wait for the read workload to finish
             self.verify_stress_thread(read_stress_queue)
-            self.fill_and_verify_db_data('after upgraded one node')
+            InfoEvent(message='after upgraded one node').publish()
             self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                           step=step+' - after upgraded one node')
 
             # read workload
-            self.log.info('Starting c-s read workload for 10m')
+            InfoEvent(message='Starting c-s read workload for 10m').publish()
             stress_cmd_read_10m = self.params.get('stress_cmd_read_10m')
             read_10m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_10m)
 
-            self.log.info('Sleeping for 60s to let cassandra-stress start before the upgrade...')
+            InfoEvent(message='Sleeping for 60s to let cassandra-stress start before the upgrade...').publish()
             time.sleep(60)
 
             step = 'Step2 - Upgrade Second Node '
-            self.log.info(step)
+            InfoEvent(message=step).publish()
             # upgrade second node
             self.db_cluster.node_to_upgrade = self.db_cluster.nodes[indexes[1]]
-            self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
+            InfoEvent(message='Upgrade Node %s begin' % self.db_cluster.node_to_upgrade.name).publish()
             self.upgrade_node(self.db_cluster.node_to_upgrade)
-            self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+            InfoEvent(message='Upgrade Node %s ended' % self.db_cluster.node_to_upgrade.name).publish()
             self.db_cluster.node_to_upgrade.check_node_health()
 
             # wait for the 10m read workload to finish
@@ -576,23 +578,23 @@ class UpgradeTest(FillDatabaseData):
                                                           step=step+' - after upgraded two nodes')
 
             # read workload (60m)
-            self.log.info('Starting c-s read workload for 60m')
+            InfoEvent(message='Starting c-s read workload for 60m').publish()
             stress_cmd_read_60m = self.params.get('stress_cmd_read_60m')
             read_60m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_60m)
-            self.log.info('Sleeping for 60s to let cassandra-stress start before the rollback...')
+            InfoEvent(message='Sleeping for 60s to let cassandra-stress start before the rollback...').publish()
             time.sleep(60)
 
-            self.log.info('Step3 - Rollback Second Node ')
+            InfoEvent(message='Step3 - Rollback Second Node ').publish()
             # rollback second node
-            self.log.info('Rollback Node %s begin', self.db_cluster.nodes[indexes[1]].name)
+            InfoEvent(message='Rollback Node %s begin' % self.db_cluster.nodes[indexes[1]].name).publish()
             self.rollback_node(self.db_cluster.nodes[indexes[1]])
-            self.log.info('Rollback Node %s ended', self.db_cluster.nodes[indexes[1]].name)
+            InfoEvent(message='Rollback Node %s ended' % self.db_cluster.nodes[indexes[1]].name).publish()
             self.db_cluster.nodes[indexes[1]].check_node_health()
 
         step = 'Step4 - Verify data during mixed cluster mode '
-        self.log.info(step)
+        InfoEvent(message=step).publish()
         self.fill_and_verify_db_data('after rollback the second node')
-        self.log.info('Repair the first upgraded Node')
+        InfoEvent(message='Repair the first upgraded Node').publish()
         self.db_cluster.nodes[indexes[0]].run_nodetool(sub_cmd='repair')
         self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                       step=step)
@@ -600,25 +602,25 @@ class UpgradeTest(FillDatabaseData):
         with ignore_upgrade_schema_errors():
 
             step = 'Step5 - Upgrade rest of the Nodes '
-            self.log.info(step)
+            InfoEvent(message=step).publish()
             for i in indexes[1:]:
                 self.db_cluster.node_to_upgrade = self.db_cluster.nodes[i]
-                self.log.info('Upgrade Node %s begin', self.db_cluster.node_to_upgrade.name)
+                InfoEvent(message='Upgrade Node %s begin' % self.db_cluster.node_to_upgrade.name).publish()
                 self.upgrade_node(self.db_cluster.node_to_upgrade)
-                self.log.info('Upgrade Node %s ended', self.db_cluster.node_to_upgrade.name)
+                InfoEvent(message='Upgrade Node %s ended' % self.db_cluster.node_to_upgrade.name).publish()
                 self.db_cluster.node_to_upgrade.check_node_health()
                 self.fill_and_verify_db_data('after upgraded %s' % self.db_cluster.node_to_upgrade.name)
                 self.search_for_idx_token_error_after_upgrade(node=self.db_cluster.node_to_upgrade,
                                                               step=step)
 
-        self.log.info('Step6 - Verify stress results after upgrade ')
-        self.log.info('Waiting for stress threads to complete after upgrade')
+        InfoEvent(message='Step6 - Verify stress results after upgrade ').publish()
+        InfoEvent(message='Waiting for stress threads to complete after upgrade').publish()
         # wait for the 60m read workload to finish
         self.verify_stress_thread(read_60m_cs_thread_pool)
 
         self.verify_stress_thread(entire_write_cs_thread_pool)
 
-        self.log.info('Step7 - Upgrade sstables to latest supported version ')
+        InfoEvent(message='Step7 - Upgrade sstables to latest supported version ').publish()
         # figure out what is the last supported sstable version
         self.expected_sstable_format_version = self.get_highest_supported_sstable_version()
 
@@ -627,35 +629,35 @@ class UpgradeTest(FillDatabaseData):
 
         # only check sstable format version if all nodes had 'nodetool upgradesstables' available
         if all(upgradesstables):
-            self.log.info('Upgrading sstables if new version is available')
+            InfoEvent(message='Upgrading sstables if new version is available').publish()
             tables_upgraded = self.db_cluster.run_func_parallel(func=self.wait_for_sstable_upgrade)
             assert all(tables_upgraded), "Failed to upgrade the sstable format {}".format(tables_upgraded)
 
         # Verify sstabledump
-        self.log.info('Starting sstabledump to verify correctness of sstables')
+        InfoEvent(message='Starting sstabledump to verify correctness of sstables').publish()
         self.db_cluster.nodes[0].remoter.run(
             'for i in `sudo find /var/lib/scylla/data/keyspace_complex/ -type f |grep -v manifest.json |'
             'grep -v snapshots |head -n 1`; do echo $i; sudo sstabledump $i 1>/tmp/sstabledump.output || '
             'exit 1; done', verbose=True)
 
-        self.log.info('Step8 - Run stress and verify after upgrading entire cluster ')
-        self.log.info('Starting verify_stress_after_cluster_upgrade')
+        InfoEvent(message='Step8 - Run stress and verify after upgrading entire cluster').publish()
+        InfoEvent(message='Starting verify_stress_after_cluster_upgrade').publish()
         verify_stress_after_cluster_upgrade = self.params.get(  # pylint: disable=invalid-name
             'verify_stress_after_cluster_upgrade')
         verify_stress_cs_thread_pool = self.run_stress_thread(stress_cmd=verify_stress_after_cluster_upgrade)
         self.verify_stress_thread(verify_stress_cs_thread_pool)
 
         # complex workload: verify data by simple read cl=ALL
-        self.log.info('Starting c-s complex workload to verify data by simple read')
+        InfoEvent(message='Starting c-s complex workload to verify data by simple read').publish()
         stress_cmd_complex_verify_read = self.params.get('stress_cmd_complex_verify_read')
         complex_cs_thread_pool = self.run_stress_thread(
             stress_cmd=stress_cmd_complex_verify_read, profile='data_dir/complex_schema.yaml')
         # wait for the read complex workload to finish
         self.verify_stress_thread(complex_cs_thread_pool)
 
-        self.log.info('Will check paged query after upgrading all nodes')
+        InfoEvent(message='Will check paged query after upgrading all nodes').publish()
         self.paged_query()
-        self.log.info('Done checking paged query after upgrading nodes')
+        InfoEvent(message='Done checking paged query after upgrading nodes').publish()
 
         # After adjusted the workloads, there is a entire write workload, and it uses a fixed duration for catching
         # the data lose.
@@ -683,8 +685,8 @@ class UpgradeTest(FillDatabaseData):
 
         # During the test we filter and ignore some specific errors, but we want to allow only certain amount of them
         step = 'Step9 - Search for errors that we filter during the test '
-        self.log.info(step)
-        self.log.info('Checking how many failed_to_load_schem errors happened during the test')
+        InfoEvent(message=step).publish()
+        InfoEvent(message='Checking how many failed_to_load_schem errors happened during the test').publish()
         error_factor = 3
         schema_load_error_num = self.count_log_errors(search_pattern='Failed to load schema version',
                                                       step=step)
@@ -695,8 +697,8 @@ class UpgradeTest(FillDatabaseData):
         workload_prioritization_error_num = self.count_log_errors(search_pattern='workload prioritization.*read_failure_exception',
                                                                   step=step, search_for_idx_token_error=False)
 
-        self.log.info(f'schema_load_error_num: {schema_load_error_num}; '
-                      f'workload_prioritization_error_num: {workload_prioritization_error_num}')
+        InfoEvent(message='schema_load_error_num: %s; workload_prioritization_error_num: %s' %
+                          (schema_load_error_num, workload_prioritization_error_num)).publish()
 
         # Issue #https://github.com/scylladb/scylla-enterprise/issues/1391
         # By Eliran's comment: For 'Failed to load schema version' error which is expected and non offensive is
@@ -707,12 +709,12 @@ class UpgradeTest(FillDatabaseData):
                                         'entire test, actual: %d' % (
                 error_factor, schema_load_error_num)
 
-        self.log.info('Step10 - Verify that gemini and cdc stressor are not failed during upgrade')
+        InfoEvent(message='Step10 - Verify that gemini and cdc stressor are not failed during upgrade').publish()
         if self.version_cdc_support():
             self.verify_gemini_results(queue=gemini_thread)
             self.verify_cdclog_reader_results(cdc_reader_thread)
 
-        self.log.info('all nodes were upgraded, and last workaround is verified.')
+        InfoEvent(message='all nodes were upgraded, and last workaround is verified.').publish()
 
     def test_generic_cluster_upgrade(self):  # pylint: disable=too-many-locals,too-many-statements
         """
@@ -802,71 +804,71 @@ class UpgradeTest(FillDatabaseData):
         and after upgrade of every node to check the consistency of data
         """
         self.truncate_entries_flag = False  # not perform truncate entries test
-        self.log.info('Step1 - Populate DB with many types of tables and data')
+        InfoEvent(message='Step1 - Populate DB with many types of tables and data').publish()
         target_upgrade_version = self.params.get('new_version')
         if target_upgrade_version and parse_version(target_upgrade_version) >= parse_version('3.1') and \
                 not is_enterprise(target_upgrade_version):
             self.truncate_entries_flag = True
         self.prepare_keyspaces_and_tables()
-        self.log.info('Step2 - Populate some data before upgrading cluster')
+        InfoEvent(message='Step2 - Populate some data before upgrading cluster').publish()
         self.fill_and_verify_db_data('', pre_fill=True)
-        self.log.info('Step3 - Starting c-s write workload')
+        InfoEvent(message='Step3 - Starting c-s write workload').publish()
         self.verify_stress_thread(
             self.run_stress_thread(
                 stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_w'))
             )
         )
-        self.log.info('Step4 - Starting c-s read workload')
+        InfoEvent(message='Step4 - Starting c-s read workload').publish()
         self.verify_stress_thread(
             self.run_stress_thread(
                 stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))
             )
         )
-        self.log.info(f'Step5 - Upgrade cluster to {target_upgrade_version}')
+        InfoEvent(message='Step5 - Upgrade cluster to %s' % target_upgrade_version).publish()
         self.db_cluster.upgrade_scylla_cluster(target_upgrade_version)
-        self.log.info('Step6 - Wait till cluster got upgraded')
+        InfoEvent(message='Step6 - Wait till cluster got upgraded').publish()
         self.wait_till_scylla_is_upgraded_on_all_nodes(target_upgrade_version)
 
-        self.log.info('Step7 - Upgrade sstables')
+        InfoEvent(message='Step7 - Upgrade sstables').publish()
         if self.params.get('upgrade_sstables'):
             self.expected_sstable_format_version = self.get_highest_supported_sstable_version()
             upgradesstables = self.db_cluster.run_func_parallel(
                 func=self.upgradesstables_if_command_available)
             # only check sstable format version if all nodes had 'nodetool upgradesstables' available
             if all(upgradesstables):
-                self.log.info("Waiting until jmx is up across the board")
+                InfoEvent(message="Waiting until jmx is up across the board").publish()
                 self.wait_till_jmx_on_all_nodes()
-                self.log.info('Upgrading sstables if new version is available')
+                InfoEvent(message='Upgrading sstables if new version is available').publish()
                 tables_upgraded = self.db_cluster.run_func_parallel(
                     func=self.wait_for_sstable_upgrade)
                 assert all(tables_upgraded), f"Failed to upgrade the sstable format {tables_upgraded}"
         else:
-            self.log.info("Upgrade of sstables is disabled")
+            InfoEvent(message="Upgrade of sstables is disabled").publish()
 
-        self.log.info('Step8 - Verify data after upgrade')
+        InfoEvent(message='Step8 - Verify data after upgrade').publish()
         self.fill_and_verify_db_data(note='after all nodes upgraded')
-        self.log.info('Step9 - Starting c-s read workload')
+        InfoEvent(message='Step9 - Starting c-s read workload').publish()
         self.verify_stress_thread(
             self.run_stress_thread(
                 stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))
             )
         )
-        self.log.info('Step10 - Starting c-s write workload')
+        InfoEvent(message='Step10 - Starting c-s write workload').publish()
         self.verify_stress_thread(
             self.run_stress_thread(
                 stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_w'))
             )
         )
-        self.log.info('Step11 - Starting c-s read workload')
+        InfoEvent(message='Step11 - Starting c-s read workload').publish()
         self.verify_stress_thread(
             self.run_stress_thread(
                 stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))
             )
         )
-        self.log.info('Step12 - Search for errors in scylla log')
+        InfoEvent(message='Step12 - Search for errors in scylla log').publish()
         for node in self.db_cluster.nodes:
             self.search_for_idx_token_error_after_upgrade(node=node, step=f'{str(node)} after upgrade')
-        self.log.info('Step13 - Checking how many failed_to_load_scheme errors happened during the test')
+        InfoEvent(message='Step13 - Checking how many failed_to_load_scheme errors happened during the test').publish()
         error_factor = 3
         schema_load_error_num = self.count_log_errors(search_pattern='Failed to load schema version',
                                                       step='AFTER UPGRADE')
@@ -879,8 +881,8 @@ class UpgradeTest(FillDatabaseData):
             step='AFTER UPGRADE',
             search_for_idx_token_error=False
         )
-        self.log.info(f'schema_load_error_num: {schema_load_error_num}; '
-                      f'workload_prioritization_error_num: {workload_prioritization_error_num}')
+        InfoEvent(message='schema_load_error_num: %s; workload_prioritization_error_num: %s' %
+                          (schema_load_error_num, workload_prioritization_error_num)).publish()
 
         # Issue #https://github.com/scylladb/scylla-enterprise/issues/1391
         # By Eliran's comment: For 'Failed to load schema version' error which is expected and non offensive is
