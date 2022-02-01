@@ -197,7 +197,7 @@ def call(Map pipelineParams) {
                                                         if [[ -n "${params.k8s_scylla_operator_docker_image ? params.k8s_scylla_operator_docker_image : ''}" ]] ; then
                                                             export SCT_K8S_SCYLLA_OPERATOR_DOCKER_IMAGE=${params.k8s_scylla_operator_docker_image}
                                                         fi
-                                                        if [[ -n "${pipelineParams.k8s_deploy_monitoring}" ]] ; then
+                                                        if [[ -n "${pipelineParams.k8s_deploy_monitoring ? pipelineParams.k8s_deploy_monitoring : ''}" ]] ; then
                                                             export SCT_K8S_DEPLOY_MONITORING=${pipelineParams.k8s_deploy_monitoring}
                                                         fi
                                                         if [[ -n "${pipelineParams.k8s_enable_performance_tuning ? pipelineParams.k8s_enable_performance_tuning : ''}" ]] ; then
