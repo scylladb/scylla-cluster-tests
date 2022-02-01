@@ -7,13 +7,13 @@
 
 {%- block events -%}
     <div>
-        {% if debug_events %}
+        {% if reactor_stall_events %}
             <h3>
                 <span>Last events by severity</span>
             </h3>
-            {% for severity, events in debug_events.items() %}
+            {% for severity, events in reactor_stall_events.items() %}
                 <h4>
-                {{ severity }} - [{{ debug_events_summary.get(severity, 0) }}]
+                {{ severity }} - [{{ reactor_stall_events_summary.get(severity, 0) }}]
                 </h4>
                 {% for event in events %}
                     {% if "Reactor stalled" in event %}

@@ -28,14 +28,14 @@
         </ul>
     </div>
     <div>
-        {% for severity, events in debug_events.items() %}
-            {% if debug_events_summary.get(severity, 0) > 0 %}
-                <h3>
-                    <span>Amount of reactor stalls:</span>
-                    <span class="blue">{{ debug_events_summary.get(severity) }}</span>
-                </h3>
-            {% endif %}
-        {% endfor %}
+        <h3>
+            <span>Amount of reactor stalls:</span>
+            <span class="blue">{{ reactor_stall_events_summary.get('DEBUG', 0) }}</span>
+        </h3>
+        <h3>
+            <span>Amount of kernel callstacks:</span>
+            <span class="blue">{{ kernel_callstack_events_summary.get('DEBUG', 0) }}</span>
+        </h3>
     </div>
         <div>
             {% for operation, results in stats.items() %}
