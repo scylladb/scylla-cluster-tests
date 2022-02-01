@@ -1883,6 +1883,12 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def update_repo_cache(self):
         try:
+            if self.distro.is_centos8:
+                # since centos8 is EOL, we need to switch to vault.centos.org
+                self.remoter.sudo(shell_script_cmd("""
+                    sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-Linux-*
+                    sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-Linux-*
+                """))
             if self.is_rhel_like():
                 # try to avoid ERROR 404 of yum, reference https://wiki.centos.org/yum-errors
                 self.remoter.sudo('yum clean all')
