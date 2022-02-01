@@ -208,6 +208,16 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
     def get_debug_events(self):
         return self.get_events(event_severity=[Severity.DEBUG.name])
 
+    def get_reactor_stall_events(self):
+        debug_events, _ = self.get_debug_events()
+        events_list = [stall for stall in debug_events[Severity.DEBUG.name] if 'type=REACTOR_STALLED' in stall]
+        return events_list
+
+    def get_kernel_callstack_events(self):
+        debug_events, _ = self.get_debug_events()
+        events_list = [stall for stall in debug_events[Severity.DEBUG.name] if 'type=KERNEL_CALLSTACK' in stall]
+        return events_list
+
     def check_regression(self, test_id, data, is_gce=False):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         doc = self.get_test_by_id(test_id)
         full_test_name = doc["_source"]["test_details"]["test_name"]
@@ -222,15 +232,20 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             build_id = ''
 
         last_events, events_summary = self.get_events(event_severity=[
-            Severity.CRITICAL.name, Severity.ERROR.name, Severity.WARNING.name])
-        reactor_stall_events, reactor_stall_events_summary = self.get_debug_events()
+            Severity.CRITICAL.name, Severity.ERROR.name])
+        reactor_stall_events = self.get_reactor_stall_events()
+        reactor_stall_events_summary = {Severity.DEBUG.name: len(reactor_stall_events)}
+        kernel_callstack_events = self.get_kernel_callstack_events()
+        kernel_callstack_events_summary = {Severity.DEBUG.name: len(kernel_callstack_events)}
         subject = f'Performance Regression Compare Results (latency during operations) -' \
                   f' {test_name} - {test_version} - {str(test_start_time)}'
         results = dict(
             events_summary=events_summary,
             last_events=last_events,
-            debug_events=reactor_stall_events,
-            debug_events_summary=reactor_stall_events_summary,
+            # limiting to 100 entries, avoiding oversize email
+            reactor_stall_events={Severity.DEBUG.name: reactor_stall_events[:100]},
+            reactor_stall_events_summary=reactor_stall_events_summary,
+            kernel_callstack_events_summary=kernel_callstack_events_summary,
             stats=data,
             test_name=full_test_name,
             test_start_time=str(test_start_time),
