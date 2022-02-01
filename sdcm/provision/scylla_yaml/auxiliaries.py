@@ -96,6 +96,7 @@ EndPointSnitchType = Literal[
     'org.apache.cassandra.locator.Ec2MultiRegionSnitch',
     'org.apache.cassandra.locator.RackInferringSnitch',
     'org.apache.cassandra.locator.GoogleCloudSnitch',
+    'org.apache.cassandra.locator.AzureSnitch',
     'SimpleSnitch',
     'GossipingPropertyFileSnitch',
     'PropertyFileSnitch',
@@ -103,6 +104,7 @@ EndPointSnitchType = Literal[
     'Ec2MultiRegionSnitch',
     'RackInferringSnitch',
     'GoogleCloudSnitch',
+    'AzureSnitch'
 ]
 
 

@@ -40,6 +40,7 @@ from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_sta
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR, TestConfig, UserRemoteCredentials, BaseLoaderSet, BaseMonitorSet, \
     BaseScyllaCluster, BaseNode
 from sdcm.argus_test_run import ArgusTestRun
+from sdcm.cluster_azure import ScyllaAzureCluster
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_gce import LoaderSetGCE
 from sdcm.cluster_gce import MonitorSetGCE
@@ -49,6 +50,7 @@ from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.cluster_k8s import mini_k8s, gke, eks, LOADER_CLUSTER_CONFIG
 from sdcm.cluster_k8s.eks import MonitorSetEKS
+from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.scan_operation_thread import FullScanThread, FullPartitionScanThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
 from sdcm.scylla_bench_thread import ScyllaBenchThread
@@ -843,6 +845,50 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         else:
             self.monitors = NoMonitorSet()
 
+    def get_cluster_azure(self, loader_info, db_info, monitor_info):
+        provisioner = AzureProvisioner(str(TestConfig().test_id()))
+        if db_info['n_nodes'] is None:
+            n_db_nodes = self.params.get('n_db_nodes')
+            if isinstance(n_db_nodes, int):  # legacy type
+                db_info['n_nodes'] = [n_db_nodes]
+            elif isinstance(n_db_nodes, str):  # latest type to support multiple datacenters
+                db_info['n_nodes'] = [int(n) for n in n_db_nodes.split()]
+            else:
+                self.fail('Unsupported parameter type: {}'.format(type(n_db_nodes)))
+        db_info['type'] = self.params.get('azure_instance_type_db')
+        if loader_info['n_nodes'] is None:
+            n_loader_nodes = self.params.get('n_loaders')
+            if isinstance(n_loader_nodes, int):  # legacy type
+                loader_info['n_nodes'] = [n_loader_nodes]
+            elif isinstance(n_loader_nodes, str):  # latest type to support multiple datacenters
+                loader_info['n_nodes'] = [int(n) for n in n_loader_nodes.split()]
+            else:
+                self.fail('Unsupported parameter type: {}'.format(type(n_loader_nodes)))
+        if monitor_info['n_nodes'] is None:
+            # todo lukasz: fix implementation for monitor
+            pass
+        azure_image = self.params.get("azure_image_db") or self.params.get("scylla_version")
+        user_prefix = self.params.get('user_prefix')
+        self.credentials.append(UserRemoteCredentials(key_file="~/.ssh/scylla-qa-ec2"))
+
+        common_params = dict(azure_image_username=self.params.get('azure_image_username'),
+                             azure_network=self.params.get('azure_network'),
+                             credentials=self.credentials,
+                             user_prefix=user_prefix,
+                             params=self.params,
+                             azure_datacenter=None,
+                             )
+        self.db_cluster = ScyllaAzureCluster(scylla_version=azure_image,
+                                             azure_image_type=db_info['disk_type'],
+                                             azure_image_size=db_info['disk_size'],
+                                             azure_n_local_ssd=db_info['n_local_ssd'],
+                                             azure_instance_type=db_info['type'],
+                                             provisioner=provisioner,
+                                             n_nodes=db_info['n_nodes'],
+                                             add_disks=None,  # todo: fix disks
+                                             service_accounts=None,  # todo: fix service_accounts
+                                             **common_params)
+
     def get_cluster_aws(self, loader_info, db_info, monitor_info):
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches
         regions = self.params.get('region_name').split()
@@ -1355,6 +1401,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.get_cluster_k8s_gke()
         elif cluster_backend == 'k8s-eks':
             self.get_cluster_k8s_eks()
+        elif cluster_backend == 'azure':
+            self.get_cluster_azure(loader_info=loader_info, db_info=db_info,
+                                   monitor_info=monitor_info)
 
     def _cs_add_node_flag(self, stress_cmd):
         if '-node' not in stress_cmd:
@@ -3016,6 +3065,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             scylla_instance_type = self.params.get("instance_type_db") or "Unknown"
         elif backend in ("gce", "gce-siren", "k8s-gke"):
             scylla_instance_type = self.params.get("gce_instance_type_db") or "Unknown"
+        elif backend in ("azure"):
+            scylla_instance_type = self.params.get("azure_instance_type_db") or "Unknown"
         elif backend in ("baremetal", "docker"):
             scylla_instance_type = "N/A"
         else:

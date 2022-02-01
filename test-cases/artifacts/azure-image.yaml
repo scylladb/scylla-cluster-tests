@@ -1,0 +1,20 @@
+cluster_backend: 'azure'
+azure_region_name: "eastus"
+use_preinstalled_scylla: true
+backtrace_decoding: false
+azure_image_db: ''
+azure_instance_type_db: 'Standard_L8s_v2'
+#azure_root_disk_type_db: 'pd-ssd'
+#azure_root_disk_size_db: 50
+#azure_n_local_ssd_disk_db: 1
+instance_provision: "spot"
+instance_provision_fallback_on_demand: true  # todo lukasz: add support for fallback on demand for azure
+logs_transport: 'ssh'
+n_db_nodes: 1
+n_loaders: 0
+n_monitor_nodes: 0
+nemesis_class_name: 'NoOpMonkey'
+scylla_linux_distro: 'centos'
+test_duration: 60
+user_prefix: 'artifacts-azure-image'
+system_auth_rf: 1

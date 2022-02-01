@@ -64,6 +64,7 @@ from libcloud.compute.types import Provider
 import yaml
 from packaging.version import Version
 
+from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
@@ -510,6 +511,7 @@ def clean_cloud_resources(tags_dict, dry_run=False):
     clean_orphaned_gke_disks(dry_run=dry_run)
     clean_clusters_eks(tags_dict, dry_run=dry_run)
     clean_instances_gce(tags_dict, dry_run=dry_run)
+    clean_instances_azure(tags_dict, dry_run=dry_run)
     clean_resources_docker(tags_dict, dry_run=dry_run)
     return True
 
@@ -1050,6 +1052,18 @@ def clean_instances_gce(tags_dict, dry_run=False):
             LOGGER.info("%s deleted=%s", instance.name, res)
 
     ParallelObject(gce_instances_to_clean, timeout=60).run(delete_instance, ignore_exceptions=True)
+
+
+def clean_instances_azure(tags_dict, dry_run=False):
+    """
+    Removes everything related to test_id todo lukasz: cleanup instances by tags, not everything if some have keep-alive
+
+    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :return: None
+    """
+    if not dry_run:
+        provisioner = AzureProvisioner(test_id=tags_dict["TestId"])
+        provisioner.cleanup(wait=False)
 
 
 def clean_clusters_gke(tags_dict: dict, dry_run: bool = False) -> None:

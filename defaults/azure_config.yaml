@@ -1,0 +1,40 @@
+# TODO: Go over it and fix detauls
+instance_provision: 'spot'
+spot_max_price: 0.60
+instance_provision_fallback_on_demand: false
+region_name:
+  - westeurope
+user_credentials_path: '~/.ssh/scylla-qa-ec2'
+
+azure_instance_type_db: 'Standard_L8s_v2'
+azure_instance_type_loader: 'Standard_L8s_v2'
+azure_instance_type_monitor: 'Standard_L8s_v2'
+# TODO: Make loader and monitor images
+azure_image_loader: '/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers/Microsoft.Compute/images/ScyllaDB-4.7.dev-0.20211212.b0a8c153f72-1-build-219' # Loader dedicated AMI v17
+azure_image_monitor: '/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers/Microsoft.Compute/images/ScyllaDB-4.7.dev-0.20211212.b0a8c153f72-1-build-219' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
+
+availability_zone: 'a'
+#root_disk_size_monitor: 50  # GB, remove this field if default disk size should be used
+#root_disk_size_db: 30  # GB, increase root disk for larger swap (maximum: 16G)
+#root_disk_size_loader: 30  # GB, Increase loader disk in order to have extra space for a larger swap
+loader_swap_size: 10240  #10GB SWAP space
+azure_image_username: 'scyllaadm'
+# used prepared centos7 AMI for loader
+ami_loader_user: 'centos'
+# centos7 is used for monitor
+ami_monitor_user: 'centos'
+aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'
+
+ami_id_db_scylla: ''
+ami_id_db_oracle: ''
+
+use_preinstalled_scylla: true
+
+backup_bucket_backend: 's3'
+backup_bucket_location: 'manager-backup-tests-us-east-1'
+backup_bucket_region: 'us-east-1'
+
+data_volume_disk_num: 0
+data_volume_disk_type: 'gp2'
+data_volume_disk_size: 500
+data_volume_disk_iops: 10000 # depend on type iops could be 100-16000 for io2|io3 and 3000-16000 for gp3

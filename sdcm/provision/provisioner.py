@@ -12,7 +12,7 @@
 # Copyright (c) 2022 ScyllaDB
 
 from abc import ABC
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Dict, Optional
 
@@ -34,24 +34,13 @@ class VmArch(Enum):
 class InstanceDefinition:  # pylint: disable=too-many-instance-attributes
     name: str
     purpose: InstancePurpose
-    version: str
+    version: str  # can provide version or image url
     size: str   # instance_type_db from yaml
     admin_name: str
-    admin_public_key: str
+    admin_public_key: str = field(repr=False)
     tags: Dict[str, str]
     arch: VmArch = VmArch.X86
     root_disk_size: str = None
-
-
-@dataclass
-class VmInstance:
-    name: str
-    purpose: InstancePurpose
-    region: str
-    admin_name: str
-    public_ip_address: str
-    private_ip_address: str
-    tags: Dict[str, str]
 
 
 class PricingModel(Enum):
@@ -60,6 +49,22 @@ class PricingModel(Enum):
     SPOT_FLEET = 'spot_fleet'
     SPOT_LOW_PRICE = 'spot_low_price'  # maybe not needed
     SPOT_DURATION = 'spot_duration'  # maybe not needed
+
+    def is_spot(self) -> bool:
+        return self is not PricingModel.ON_DEMAND
+
+
+@dataclass
+class VmInstance:  # pylint: disable=too-many-instance-attributes
+    name: str
+    purpose: InstancePurpose
+    region: str
+    admin_name: str
+    public_ip_address: str
+    private_ip_address: str
+    tags: Dict[str, str]
+    pricing_model: PricingModel
+    image: str
 
 
 class Provisioner(ABC):

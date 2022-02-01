@@ -1,0 +1,16 @@
+#! groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+artifactsPipeline(
+    params: params,
+
+    test_config: 'test-cases/artifacts/azure-image.yaml',
+    backend: 'azure',
+    instance_provision: 'spot',
+
+    timeout: [time: 45, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy',
+    builds_to_keep: '30'
+)

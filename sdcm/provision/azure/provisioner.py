@@ -17,7 +17,7 @@ from dataclasses import dataclass, field, fields
 from typing import Dict, Any, Optional, List
 import binascii
 
-from azure.mgmt.compute.models import VirtualMachine
+from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
 from azure.mgmt.network.models import (NetworkSecurityGroup, VirtualNetwork, Subnet, PublicIPAddress,
                                        NetworkInterface)
 from azure.mgmt.resource.resources.models import ResourceGroup
@@ -83,10 +83,28 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         """Create virtual machine in provided region, specified by InstanceDefinition"""
         if definition.name in self._instances_cache:
             return self._instances_cache[definition.name]
+        match definition.purpose:
+            # get storage profile to fail fast if not found
+            case InstancePurpose.SCYLLA:
+                storage_profile = self._get_scylla_storage_profile(region=region,
+                                                                   version=definition.version,
+                                                                   arch=definition.arch,
+                                                                   name=definition.name,
+                                                                   disk_size=definition.root_disk_size)
+            case InstancePurpose.LOADER:
+                raise NotImplementedError()
+            case InstancePurpose.MONITOR:
+                raise NotImplementedError()
+            case InstancePurpose.SCT:
+                raise NotImplementedError()
+            case _:
+                raise ValueError("unknown instance purpose")
         resource_group_name = self._resource_group(region).name
         nic_id = self._network_interface(region, definition.name).id
         LOGGER.info(
             "Creating '{name}' VM in resource group {rg}...".format(name=definition.name, rg=resource_group_name))
+        LOGGER.info(
+            "Instance params: {definition}".format(definition=definition))
         params = {
             "location": region,
             "tags": definition.tags | {"_nodeType": definition.purpose.value},
@@ -113,21 +131,6 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
                 },
             }
         }
-        match definition.purpose:
-            case InstancePurpose.SCYLLA:
-                storage_profile = self._get_scylla_storage_profile(region=region,
-                                                                   version=definition.version,
-                                                                   arch=definition.arch,
-                                                                   name=definition.name,
-                                                                   disk_size=definition.root_disk_size)
-            case InstancePurpose.LOADER:
-                raise NotImplementedError()
-            case InstancePurpose.MONITOR:
-                raise NotImplementedError()
-            case InstancePurpose.SCT:
-                raise NotImplementedError()
-            case _:
-                raise ValueError("unknown instance purpose")
 
         params.update(storage_profile)
         params.update(self._get_pricing_params(pricing_model))
@@ -159,7 +162,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         for resource_group_name in self._resource_groups_cache:
             tasks.append(self._azure_service.resource.resource_groups.begin_delete(resource_group_name))
         LOGGER.info("Initiated cleanup of all resources")
-        for _field in fields(self):
+        for _field in fields(self):  # clear cache
             if _field.name != "test_id":
                 setattr(self, _field.name, {})
         if wait is True:
@@ -174,8 +177,15 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         tags = v_m.tags.copy()
         purpose = InstancePurpose(tags.pop("_nodeType"))
         admin = v_m.os_profile.admin_username
+        image = str(v_m.storage_profile.image_reference)
+        if v_m.priority is VirtualMachinePriorityTypes.REGULAR:
+            pricing_model = PricingModel.ON_DEMAND
+        else:
+            pricing_model = PricingModel.SPOT
+
         return VmInstance(name=v_m.name, region=v_m.location, admin_name=admin, public_ip_address=pub_address,
-                          private_ip_address=priv_address, purpose=purpose, tags=tags)
+                          private_ip_address=priv_address, purpose=purpose, tags=tags, pricing_model=pricing_model,
+                          image=image)
 
     def _resource_group(self, region: str) -> ResourceGroup:
         group_name = f"sct-{self.test_id}-{region.lower()}"
@@ -315,7 +325,11 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
     @staticmethod
     def _get_scylla_storage_profile(region: str, version: str, arch: VmArch, name: str, disk_size: str = None
                                     ) -> Dict[str, Any]:
-        image = get_scylla_images(version, region, arch.value)[0].id
+        if version.startswith("/subscriptions/"):
+            image = version
+        else:
+            image = get_scylla_images(version, region, arch.value)[0].id
+        LOGGER.warning(image)
         storage_profile = {
             "storage_profile": {
                 "image_reference": {"id": image},
