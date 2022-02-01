@@ -11,7 +11,6 @@
 #
 # Copyright (c) 2020 ScyllaDB
 import datetime
-import json
 import re
 from functools import cached_property
 
@@ -26,6 +25,7 @@ STRESS_CMD: str = "/usr/bin/cassandra-stress"
 BACKENDS = {
     "aws": ["Ec2Snitch", "Ec2MultiRegionSnitch"],
     "gce": ["GoogleCloudSnitch"],
+    "azure": ["AzureSnitch"],
     "docker": ["GossipingPropertyFileSnitch", "SimpleSnitch"]
 }
 
@@ -179,7 +179,7 @@ class ArtifactsTest(ClusterTester):
                             )
 
     def verify_write_back_cache_param(self) -> None:
-        if self.params["cluster_backend"] == "gce" and self.params["use_preinstalled_scylla"]:
+        if self.params["cluster_backend"] in ("gce", "azure") and self.params["use_preinstalled_scylla"]:
             expected_write_back_cache_param = 0
         else:
             expected_write_back_cache_param = None
@@ -191,13 +191,12 @@ class ArtifactsTest(ClusterTester):
         expected_write_cache_value = "write back" if self.write_back_cache else "write through"
 
         run = self.node.remoter.sudo
-
-        nvme_devices = [dev["DevicePath"] for dev in json.loads(run("nvme list -o json").stdout)["Devices"]]
+        nvme_devices = re.findall(r"nvme[\d]+n[\d\w]+", run("ls -1 /dev/nvme*").stdout)
         self.assertGreater(len(nvme_devices), 0)
 
         for nvme_device in nvme_devices:
             self.log.info("Expected write cache for %s is %r", nvme_device, expected_write_cache_value)
-            write_cache = run(f"cat /sys/block/{nvme_device.removeprefix('/dev/')}/queue/write_cache").stdout.strip()
+            write_cache = run(f"cat /sys/block/{nvme_device}/queue/write_cache").stdout.strip()
             self.assertEqual(write_cache, expected_write_cache_value)
 
     def check_service_existence(self, service_name):

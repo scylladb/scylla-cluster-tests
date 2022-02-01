@@ -101,6 +101,7 @@ class SCTConfiguration(dict):
     Class the hold the SCT configuration
     """
     available_backends = [
+        'azure',
         'baremetal',
         'docker',
         # TODO: remove 'aws-siren' and 'gce-siren' backends completely when
@@ -681,6 +682,34 @@ class SCTConfiguration(dict):
              help=""),
 
         dict(name="gce_pd_ssd_disk_size_monitor", env="SCT_GCE_SSD_DISK_SIZE_MONITOR", type=int,
+             help=""),
+
+        # azure options
+        dict(name="azure_region_name", env="SCT_AZURE_REGION_NAME", type=str,
+             help="Supported: eastus "),
+
+        dict(name="azure_instance_type_loader", env="SCT_AZURE_INSTANCE_TYPE_LOADER", type=str,
+             help=""),
+
+        dict(name="azure_instance_type_monitor", env="SCT_AZURE_INSTANCE_TYPE_MONITOR", type=str,
+             help=""),
+
+        dict(name="azure_instance_type_db", env="SCT_AZURE_INSTANCE_TYPE_DB", type=str,
+             help=""),
+
+        dict(name="azure_instance_type_db_oracle", env="SCT_AZURE_INSTANCE_TYPE_DB_ORACLE", type=str,
+             help=""),
+
+        dict(name="azure_image_db", env="SCT_AZURE_IMAGE_DB", type=str,
+             help=""),
+
+        dict(name="azure_image_monitor", env="SCT_AZURE_IMAGE_MONITOR", type=str,
+             help=""),
+
+        dict(name="azure_image_loader", env="SCT_AZURE_IMAGE_LOADER", type=str,
+             help=""),
+
+        dict(name="azure_image_username", env="SCT_AZURE_IMAGE_USERNAME", type=str,
              help=""),
 
         # k8s-eks options
@@ -1264,6 +1293,12 @@ class SCTConfiguration(dict):
                 'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'gce_root_disk_size_monitor',
                 'gce_n_local_ssd_disk_monitor', 'gce_datacenter'],
 
+        'azure': ['user_prefix', 'azure_network', 'azure_image_db', 'azure_image_username', 'azure_instance_type_db',
+                  'azure_root_disk_type_db', 'azure_n_local_ssd_disk_db',
+                  'azure_instance_type_loader', 'azure_root_disk_type_loader', 'azure_n_local_ssd_disk_loader',
+                  'azure_instance_type_monitor', 'azure_root_disk_type_monitor',
+                  'azure_n_local_ssd_disk_monitor', 'azure_region_name'],
+
         'docker': ['user_credentials_path', 'scylla_version'],
 
         'baremetal': ['db_nodes_private_ip', 'db_nodes_public_ip', 'user_credentials_path'],
@@ -1313,6 +1348,7 @@ class SCTConfiguration(dict):
     defaults_config_files = {
         "aws": [sct_abs_path('defaults/aws_config.yaml')],
         "gce": [sct_abs_path('defaults/gce_config.yaml')],
+        "azure": [sct_abs_path('defaults/azure_config.yaml')],
         "docker": [sct_abs_path('defaults/docker_config.yaml')],
         "baremetal": [sct_abs_path('defaults/baremetal_config.yaml')],
         "aws-siren": [sct_abs_path('defaults/aws_config.yaml')],

@@ -1,7 +1,7 @@
 #! groovy
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name)
 
     pipeline {
         agent {
@@ -15,7 +15,7 @@ def call(Map pipelineParams) {
         }
         parameters {
             string(defaultValue: "${pipelineParams.get('backend', 'gce')}",
-                   description: 'aws|gce|docker',
+                   description: 'aws|gce|azure|docker',
                    name: 'backend')
             string(defaultValue: '',
                    description: 'a Scylla repo to run against (for .rpm/.deb tests, should be blank otherwise)',
@@ -47,6 +47,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
+           string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
+                   description: 'Azure location',
+                   name: 'azure_region_name')
             string(defaultValue: '',
                    description: "a Scylla docker image to run against (for docker backend.) Should be `scylladb/scylla' for official images",
                    name: 'scylla_docker_image')
@@ -138,6 +141,11 @@ def call(Map pipelineParams) {
                                                         if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
                                                             export SCT_GCE_DATACENTER=${params.gce_datacenter}
                                                         fi
+                                                    elif [[ ! -z "${params.azure_image_db}" ]]; then
+                                                        export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"
+                                                        if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
+                                                            export SCT_AZURE_REGION_NAME=${params.azure_region_name}
+                                                        fi
                                                     elif [[ ! -z "${params.scylla_version}" ]]; then
                                                         export SCT_SCYLLA_VERSION="${params.scylla_version}"
                                                     elif [[ ! -z "${params.scylla_repo}" ]]; then
@@ -147,7 +155,7 @@ def call(Map pipelineParams) {
                                                         export SCT_NONROOT_OFFLINE_INSTALL=${params.nonroot_offline_install}
                                                         export SCT_USE_MGMT=false
                                                     else
-                                                        echo "need to choose one of SCT_GCE_IMAGE_DB | SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO | SCT_UNIFIED_PACKAGE"
+                                                        echo "need to choose one of SCT_AZURE_IMAGE_DB | SCT_GCE_IMAGE_DB | SCT_AMI_ID_DB_SCYLLA | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO | SCT_UNIFIED_PACKAGE"
                                                         exit 1
                                                     fi
 
@@ -182,6 +190,9 @@ def call(Map pipelineParams) {
                                                                 ;;
                                                             "gce")
                                                                 export SCT_GCE_INSTANCE_TYPE_DB="${instance_type}"
+                                                                ;;
+                                                            "azure")
+                                                                export SCT_AZURE_INSTANCE_TYPE_DB="${instance_type}"
                                                                 ;;
                                                         esac
                                                     fi

@@ -69,5 +69,5 @@ def get_scylla_images(  # pylint: disable=too-many-branches
 
     output = sorted(output, key=lambda img: img.tags.get('build_id'))
     if only_latest:
-        return output[:1]
+        return output[-1:]
     return output

@@ -1,7 +1,7 @@
 #!groovy
 import groovy.json.JsonSlurper
 
-def call(String backend, String region=null, String datacenter=null) {
+def call(String backend, String region=null, String datacenter=null, String location=null) {
     try {
         regionList = new JsonSlurper().parseText(region)
         region = regionList[0]
@@ -17,18 +17,22 @@ def call(String backend, String region=null, String datacenter=null) {
                           'gce-us-east1': 'gce-sct-builders-us-east1',
                           'gce-us-west1': 'gce-sct-builders-us-west1',
                           'gce': 'gce-sct-builders',
-                          'docker': 'sct-builders']
+                          'docker': 'sct-builders',
+                          'azure-eastus': 'aws-sct-builders-us-east-1-new']
 
     def cloud_provider = getCloudProviderFromBackend(backend)
 
-    if ((cloud_provider == 'aws' && region) || (cloud_provider == 'gce' && datacenter))
+    if ((cloud_provider == 'aws' && region) || (cloud_provider == 'gce' && datacenter) || (cloud_provider == 'azure' && location))
     {
         if (cloud_provider == 'aws')
         {
             def supported_regions = ["eu-west-2", "eu-north-1", "eu-central-1"]
-        } else {
+        } else if (cloud_provider == 'gce') {
             def supported_regions = ["us-east1", "us-west1"]
             region = datacenter
+        } else {
+            def supported_regions = ["eastus"]
+            region = location
         }
 
         println("Finding builder for region: " + region)
