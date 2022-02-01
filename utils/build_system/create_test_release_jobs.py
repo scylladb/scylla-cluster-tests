@@ -71,14 +71,7 @@ class JenkinsPipelines:
         # wait while worker will be found
         def check_job_is_started(job_id):
             return self.jenkins.get_queue_item(job_id).get("executable")
-        wait_for(check_job_is_started, step=5, text="Job is starting", timeout=60, throw_exc=True, job_id=job_id)
-
-        # wait while job will be executed
-        def check_job_is_finished(job_name):
-            return not self.jenkins.get_build_info(job_name, 1).get("building")
-
-        wait_for(check_job_is_finished, step=5, text="Check job is finished",
-                 timeout=120, throw_exc=True, job_name=name)
+        wait_for(check_job_is_started, step=5, text="Job is starting", timeout=120, throw_exc=True, job_id=job_id)
 
         LOGGER.info("First build finished")
 
