@@ -708,9 +708,11 @@ def list_instances_aws(tags_dict=None, region_name=None, running=False, group_as
 
 def clean_instances_aws(tags_dict, dry_run=False):
     """Remove all instances with specific tags in AWS."""
-
+    # pylint: disable=too-many-locals
     assert tags_dict, "tags_dict not provided (can't clean all instances)"
     aws_instances = list_instances_aws(tags_dict=tags_dict, group_as_region=True)
+    from sdcm.argus_test_run import ArgusTestRun  # pylint: disable=import-outside-toplevel
+    argus_run = ArgusTestRun.get()
 
     for region, instance_list in aws_instances.items():
         if not instance_list:
@@ -722,11 +724,17 @@ def clean_instances_aws(tags_dict, dry_run=False):
             name = tags.get("Name", "N/A")
             node_type = tags.get("NodeType")
             instance_id = instance['InstanceId']
+            argus_resources = [r for r in argus_run.run_info.resources.allocated_resources if r.name == name]
+            argus_resource = argus_resources[0] if len(argus_resources) > 0 else None
             if node_type and node_type == "sct-runner":
                 LOGGER.info("Skipping Sct Runner instance '%s'", instance_id)
                 continue
             LOGGER.info("Going to delete '{instance_id}' [name={name}] ".format(instance_id=instance_id, name=name))
             if not dry_run:
+                if argus_resource:
+                    argus_run.run_info.resources.detach_resource(argus_resource,
+                                                                 reason="clean-resources: Graceful Termination")
+                    argus_run.save()
                 response = client.terminate_instances(InstanceIds=[instance_id])
                 LOGGER.debug("Done. Result: %s\n", response['TerminatingInstances'])
 
@@ -1027,8 +1035,17 @@ def clean_instances_gce(tags_dict, dry_run=False):
 
     def delete_instance(instance):
         LOGGER.info("Going to delete: %s", instance.name)
+
+        from sdcm.argus_test_run import ArgusTestRun  # pylint: disable=import-outside-toplevel
+        argus_run = ArgusTestRun.get()
+        argus_resources = [r for r in argus_run.run_info.resources.allocated_resources if r.name == instance.name]
+        argus_resource = argus_resources[0] if len(argus_resources) > 0 else None
         if not dry_run:
             # https://libcloud.readthedocs.io/en/latest/compute/api.html#libcloud.compute.base.Node.destroy
+            if argus_resource:
+                argus_run.run_info.resources.detach_resource(argus_resource,
+                                                             reason="clean-resources: Graceful Termination")
+                argus_run.save()
             res = instance.destroy()
             LOGGER.info("%s deleted=%s", instance.name, res)
 
