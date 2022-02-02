@@ -286,6 +286,15 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
     if dry_run:
         click.echo("Make a dry-run")
 
+    try:
+        from sdcm.argus_test_run import ArgusTestRun  # pylint: disable=import-outside-toplevel
+        # Will return MagicMock if there are more than 1 test_id
+        argus_run = ArgusTestRun.get(UUID(test_id[0])) if len(test_id) == 1 else ArgusTestRun.get()
+        LOGGER.info("Loaded Argus Run: %s", argus_run.id)
+    except Exception:  # pylint: disable=broad-except
+        LOGGER.warning("Unable to acquire test run for id %s, clean-resources will not be tracked in argus", test_id)
+        LOGGER.debug("Error details: ", exc_info=True)
+
     for param in params:
         clean_func(param, dry_run=dry_run)
         click.echo(f"Resources for {param} have cleaned")
