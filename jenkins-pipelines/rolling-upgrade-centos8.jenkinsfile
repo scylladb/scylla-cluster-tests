@@ -7,7 +7,7 @@ rollingUpgradePipeline(
     backend: 'gce',
     base_versions: ['4.3'],
     linux_distro: 'centos',
-    gce_image_db: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-8',
+    gce_image_db: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-8',
 
     test_name: 'upgrade_test.UpgradeTest.test_rolling_upgrade',
     test_config: 'test-cases/upgrades/rolling-upgrade.yaml',
