@@ -301,10 +301,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                                                     private_ip=self.ip_address, creation_time=int(time.time()),
                                                     shards_amount=shards)
             resource = CloudResource(name=self.name, state=ResourceState.RUNNING,
-                                     instance_info=instance_details)
+                                     instance_info=instance_details, resource_type=self.node_type)
             self.argus_resource = resource
             run.run_info.resources.attach_resource(resource)
-
             run.save()
         except Exception:  # pylint: disable=broad-except
             LOGGER.error("Encountered an unhandled exception while interacting with Argus", exc_info=True)
@@ -312,11 +311,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def _destroy_argus_resource(self):
         try:
             run = ArgusTestRun.get()
-            if self.argus_resource in run.run_info.resources.leftover_resources:
-                self.argus_resource.instance_info.termination_time = int(time.time())
-                self.argus_resource.instance_info.termination_reason = self.running_nemesis \
-                    if self.running_nemesis else "GracefulShutdown"
-                run.run_info.resources.detach_resource(self.argus_resource)
+            if self.argus_resource in run.run_info.resources.allocated_resources:
+                reason = self.running_nemesis if self.running_nemesis else "GracefulShutdown"
+                run.run_info.resources.detach_resource(self.argus_resource, reason=reason)
                 run.save()
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error saving resource state to Argus", exc_info=True)
