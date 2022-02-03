@@ -2786,7 +2786,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             log_info = {"error": "Not enough nodes for decommission"}
             DisruptionEvent(type=self.get_disrupt_name(), subtype="end", status=False, node=self.target_node,
                             end=end_time, duration=time_elapsed, **log_info).publish()
-            self.log.warning(f"Shrink cluster skipped. Error: {log_info['error']}")
+            self.log.warning("Shrink cluster skipped. Error: %s", log_info['error'])
             return
 
         self.log.info("Start shrink cluster by %s nodes", decommission_nodes_number)
@@ -2798,8 +2798,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             rack,
             is_seed=None if self._is_it_on_kubernetes() else DefaultValue,
             dc_idx=self.target_node.dc_idx)
-        self.log.info("Cluster shrink finished. Current number of nodes %s", len(self.cluster.nodes))
-        InfoEvent(message='Cluster shrink finished. Current number of nodes %s').publish()
+        num_of_nodes = len(self.cluster.nodes)
+        self.log.info("Cluster shrink finished. Current number of nodes %s", num_of_nodes)
+        InfoEvent(message=f'Cluster shrink finished. Current number of nodes {num_of_nodes}').publish()
 
     def disrupt_hot_reloading_internode_certificate(self):
         """
