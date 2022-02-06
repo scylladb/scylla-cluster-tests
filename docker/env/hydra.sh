@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -e
+set -eo pipefail
 
 CMD=$@
 DOCKER_ENV_DIR=$(readlink -f "$0")
@@ -178,19 +178,19 @@ fi
 DOCKER_ADD_HOST_ARGS=()
 
 # export all SCT_* env vars into the docker run
-SCT_OPTIONS=$(env | grep SCT_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
+SCT_OPTIONS=$(env | sed -n 's/^\(SCT_[^=]\+\)=.*/--env \1/p')
 
 # export all PYTEST_* env vars into the docker run
-PYTEST_OPTIONS=$(env | grep PYTEST_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
+PYTEST_OPTIONS=$(env | sed -n 's/^\(PYTEST_[^=]\+\)=.*/--env \1/p')
 
 # export all BUILD_* env vars into the docker run
-BUILD_OPTIONS=$(env | grep BUILD_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
+BUILD_OPTIONS=$(env | sed -n 's/^\(BUILD_[^=]\+\)=.*/--env \1/p')
 
 # export all AWS_* env vars into the docker run
-AWS_OPTIONS=$(env | grep AWS_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
+AWS_OPTIONS=$(env | sed -n 's/^\(AWS_[^=]\+\)=.*/--env \1/p')
 
 # export all JENKINS_* env vars into the docker run
-JENKINS_OPTIONS=$(env | grep JENKINS_ | cut -d "=" -f 1 | xargs -i echo "--env {}")
+JENKINS_OPTIONS=$(env | sed -n 's/^\(JENKINS_[^=]\+\)=.*/--env \1/p')
 
 function run_in_docker () {
     CMD_TO_RUN=$1
