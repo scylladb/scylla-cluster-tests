@@ -1,5 +1,5 @@
 ami_db_scylla_user: 'centos'
-ami_id_db_scylla: 'ami-0528bc21ac93f3461'
+ami_id_db_scylla: 'ami-07d54ca4e98347364'
 region_name: 'eu-west-1'
 instance_type_db: 'r6gd.large'
 use_preinstalled_scylla: false
