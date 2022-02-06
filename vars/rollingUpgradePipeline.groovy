@@ -94,153 +94,153 @@ def call(Map pipelineParams) {
 
                             tasks["${base_version}"] = {
                                 node(builder.label) {
-                                    environment {
-                                        AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
-                                        AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
-                                    }
-                                    stage("Checkout for ${base_version}") {
-                                        catchError(stageResult: 'FAILURE') {
-                                            timeout(time: 5, unit: 'MINUTES') {
-                                                script {
-                                                    wrap([$class: 'BuildUser']) {
-                                                        dir('scylla-cluster-tests') {
-                                                            checkout scm
+                                    withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
+                                             "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
+                                             "SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
+
+                                        stage("Checkout for ${base_version}") {
+                                            catchError(stageResult: 'FAILURE') {
+                                                timeout(time: 5, unit: 'MINUTES') {
+                                                    script {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            dir('scylla-cluster-tests') {
+                                                                checkout scm
+                                                            }
                                                         }
                                                     }
                                                 }
                                             }
                                         }
-                                    }
-                                    stage("Get test duration for ${base_version}") {
-                                        catchError(stageResult: 'FAILURE') {
-                                            timeout(time: 2, unit: 'MINUTES') {
-                                                script {
-                                                    env.SCT_TEST_ID = UUID.randomUUID().toString()
-                                                    wrap([$class: 'BuildUser']) {
-                                                        dir('scylla-cluster-tests') {
-                                                            (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
+                                        stage("Get test duration for ${base_version}") {
+                                            catchError(stageResult: 'FAILURE') {
+                                                timeout(time: 2, unit: 'MINUTES') {
+                                                    script {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            dir('scylla-cluster-tests') {
+                                                                (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
+                                                            }
                                                         }
                                                     }
                                                 }
                                             }
                                         }
-                                    }
-                                    stage("Create SCT Runner for ${base_version}") {
-                                        catchError(stageResult: 'FAILURE') {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir('scylla-cluster-tests') {
-                                                    timeout(time: 5, unit: 'MINUTES') {
-                                                        createSctRunner(params, runnerTimeout, builder.region)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    stage("Upgrade from ${base_version}") {
-                                        catchError(stageResult: 'FAILURE') {
-                                            wrap([$class: 'BuildUser']) {
-                                                timeout(time: testRunTimeout, unit: 'MINUTES') {
+                                        stage("Create SCT Runner for ${base_version}") {
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {
-                                                        def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
-                                                        def cloud_provider = getCloudProviderFromBackend(params.backend)
-                                                        sh """
-                                                        #!/bin/bash
-                                                        set -xe
-                                                        env
-
-                                                        rm -fv ./latest
-
-                                                        export SCT_CLUSTER_BACKEND=${params.backend}
-
-                                                        if [[ -n "${params.region ? params.region : ''}" ]] ; then
-                                                            export SCT_REGION_NAME='${params.region}'
-                                                        fi
-                                                        if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
-                                                            export SCT_GCE_DATACENTER=${params.gce_datacenter}
-                                                        fi
-
-                                                        export SCT_CONFIG_FILES=${test_config}
-                                                        export SCT_SCYLLA_VERSION=${base_version}
-                                                        export SCT_NEW_SCYLLA_REPO=${params.new_scylla_repo}
-
-                                                        if [[ -n "${params.post_behavior_db_nodes ? params.post_behavior_db_nodes : ''}" ]] ; then
-                                                            export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
-                                                        fi
-                                                        if [[ -n "${params.post_behavior_loader_nodes ? params.post_behavior_loader_nodes : ''}" ]] ; then
-                                                            export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
-                                                        fi
-                                                        if [[ -n "${params.post_behavior_monitor_nodes ? params.post_behavior_monitor_nodes : ''}" ]] ; then
-                                                            export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
-                                                        fi
-                                                        if [[ -n "${params.post_behavior_k8s_cluster ? params.post_behavior_k8s_cluster : ''}" ]] ; then
-                                                            export SCT_POST_BEHAVIOR_K8S_CLUSTER="${params.post_behavior_k8s_cluster}"
-                                                        fi
-                                                        export SCT_INSTANCE_PROVISION="${params.provision_type}"
-                                                        export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
-                                                        export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
-
-                                                        export SCT_GCE_IMAGE_DB=${pipelineParams.gce_image_db}
-                                                        export SCT_SCYLLA_LINUX_DISTRO=${pipelineParams.linux_distro}
-                                                        export SCT_AMI_ID_DB_SCYLLA_DESC="\$SCT_AMI_ID_DB_SCYLLA_DESC-\$SCT_SCYLLA_LINUX_DISTRO"
-
-                                                        export SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE=${pipelineParams.workaround_kernel_bug_for_iotune}
-                                                        if [[ ${pipelineParams.internode_compression} != null ]] ; then
-                                                            export SCT_INTERNODE_COMPRESSION=${pipelineParams.internode_compression}
-                                                        fi
-
-                                                        echo "start test ......."
-                                                        SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
-                                                        if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
-                                                            ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} run-test ${pipelineParams.test_name} --backend ${params.backend}
-                                                        else
-                                                            ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir "`pwd`"
-                                                        fi
-                                                        echo "end test ....."
-                                                        """
+                                                        timeout(time: 5, unit: 'MINUTES') {
+                                                            createSctRunner(params, runnerTimeout, builder.region)
+                                                        }
                                                     }
                                                 }
                                             }
                                         }
-                                    }
-                                    stage("Collect logs for Upgrade from ${base_version}") {
-                                        catchError(stageResult: 'FAILURE') {
-                                            wrap([$class: 'BuildUser']) {
-                                                timeout(time: collectLogsTimeout, unit: 'MINUTES') {
+                                        stage("Upgrade from ${base_version}") {
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
+                                                    timeout(time: testRunTimeout, unit: 'MINUTES') {
+                                                        dir('scylla-cluster-tests') {
+                                                            def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
+                                                            def cloud_provider = getCloudProviderFromBackend(params.backend)
+                                                            sh """
+                                                            #!/bin/bash
+                                                            set -xe
+                                                            env
+
+                                                            rm -fv ./latest
+
+                                                            export SCT_CLUSTER_BACKEND=${params.backend}
+
+                                                            if [[ -n "${params.region ? params.region : ''}" ]] ; then
+                                                                export SCT_REGION_NAME='${params.region}'
+                                                            fi
+                                                            if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
+                                                                export SCT_GCE_DATACENTER=${params.gce_datacenter}
+                                                            fi
+
+                                                            export SCT_CONFIG_FILES=${test_config}
+                                                            export SCT_SCYLLA_VERSION=${base_version}
+                                                            export SCT_NEW_SCYLLA_REPO=${params.new_scylla_repo}
+
+                                                            if [[ -n "${params.post_behavior_db_nodes ? params.post_behavior_db_nodes : ''}" ]] ; then
+                                                                export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                                            fi
+                                                            if [[ -n "${params.post_behavior_loader_nodes ? params.post_behavior_loader_nodes : ''}" ]] ; then
+                                                                export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
+                                                            fi
+                                                            if [[ -n "${params.post_behavior_monitor_nodes ? params.post_behavior_monitor_nodes : ''}" ]] ; then
+                                                                export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
+                                                            fi
+                                                            if [[ -n "${params.post_behavior_k8s_cluster ? params.post_behavior_k8s_cluster : ''}" ]] ; then
+                                                                export SCT_POST_BEHAVIOR_K8S_CLUSTER="${params.post_behavior_k8s_cluster}"
+                                                            fi
+                                                            export SCT_INSTANCE_PROVISION="${params.provision_type}"
+                                                            export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
+                                                            export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
+
+                                                            export SCT_GCE_IMAGE_DB=${pipelineParams.gce_image_db}
+                                                            export SCT_SCYLLA_LINUX_DISTRO=${pipelineParams.linux_distro}
+                                                            export SCT_AMI_ID_DB_SCYLLA_DESC="\$SCT_AMI_ID_DB_SCYLLA_DESC-\$SCT_SCYLLA_LINUX_DISTRO"
+
+                                                            export SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE=${pipelineParams.workaround_kernel_bug_for_iotune}
+                                                            if [[ ${pipelineParams.internode_compression} != null ]] ; then
+                                                                export SCT_INTERNODE_COMPRESSION=${pipelineParams.internode_compression}
+                                                            fi
+
+                                                            echo "start test ......."
+                                                            SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
+                                                            if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
+                                                                ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} run-test ${pipelineParams.test_name} --backend ${params.backend}
+                                                            else
+                                                                ./docker/env/hydra.sh run-test ${pipelineParams.test_name} --backend ${params.backend}  --logdir "`pwd`"
+                                                            fi
+                                                            echo "end test ....."
+                                                            """
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        stage("Collect logs for Upgrade from ${base_version}") {
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
+                                                    timeout(time: collectLogsTimeout, unit: 'MINUTES') {
+                                                        dir('scylla-cluster-tests') {
+                                                            runCollectLogs(params, builder.region)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        stage("Clean resources for Upgrade from ${base_version}") {
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
                                                     dir('scylla-cluster-tests') {
-                                                        runCollectLogs(params, builder.region)
+                                                        timeout(time: resourceCleanupTimeout, unit: 'MINUTES') {
+                                                            runCleanupResource(params, builder.region)
+                                                        }
                                                     }
                                                 }
                                             }
                                         }
-                                    }
-                                    stage("Clean resources for Upgrade from ${base_version}") {
-                                        catchError(stageResult: 'FAILURE') {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir('scylla-cluster-tests') {
-                                                    timeout(time: resourceCleanupTimeout, unit: 'MINUTES') {
-                                                        runCleanupResource(params, builder.region)
+                                        stage("Send email for Upgrade from ${base_version}") {
+                                            def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        timeout(time: 10, unit: 'MINUTES') {
+                                                            runSendEmail(params, currentBuild)
+                                                        }
                                                     }
                                                 }
                                             }
                                         }
-                                    }
-                                    stage("Send email for Upgrade from ${base_version}") {
-                                        def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
-                                        catchError(stageResult: 'FAILURE') {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir('scylla-cluster-tests') {
-                                                    timeout(time: 10, unit: 'MINUTES') {
-                                                        runSendEmail(params, currentBuild)
+                                        stage('Clean SCT Runners') {
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        cleanSctRunners(params, currentBuild)
                                                     }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    stage('Clean SCT Runners') {
-                                        catchError(stageResult: 'FAILURE') {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir('scylla-cluster-tests') {
-                                                    cleanSctRunners(params, currentBuild)
                                                 }
                                             }
                                         }
