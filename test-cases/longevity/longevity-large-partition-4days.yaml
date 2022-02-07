@@ -40,4 +40,4 @@ validate_partitions: true
 table_name: "scylla_bench.test"
 primary_key_column: "pk"
 
-run_full_partition_scan: '{"ks_cf": "scylla_bench.test", "interval": 180, "pk_name":"pk", "rows_count": 10000000}' # 'ks.cf, interval(sec), partition-key name, number-of-rows-per-partition'
+# run_full_partition_scan: '{"ks_cf": "scylla_bench.test", "interval": 180, "pk_name":"pk", "rows_count": 10000000}' # 'ks.cf, interval(sec), partition-key name, number-of-rows-per-partition'
