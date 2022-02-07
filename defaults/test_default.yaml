@@ -189,3 +189,5 @@ scylla_apt_keys:
   - 'D0A112E067426AB2'  # ScyllaDB Package Signing Key 2022 <security@scylladb.com>
 
 raid_level: 0
+
+bare_loaders: false

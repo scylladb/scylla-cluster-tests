@@ -1238,6 +1238,9 @@ class SCTConfiguration(dict):
         dict(name="raid_level", env="SCT_RAID_LEVEL",
              type=int,
              help="Number of of raid level: 0 - RAID0, 5 - RAID5"),
+
+        dict(name="bare_loaders", env="SCT_BARE_LOADERS", type=boolean,
+             help="Don't install anything but collectd to the loaders during cluster setup")
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
@@ -1445,7 +1448,12 @@ class SCTConfiguration(dict):
                 raise ValueError("'scylla_version' can't used together with 'ami_id_db_scylla', 'gce_image_db' "
                                  "or with 'scylla_repo'")
 
-            if self.get("n_loaders") and not self.get("scylla_repo_loader") and self.get("cluster_backend") != "aws":
+            if (
+                self.get("n_loaders") and
+                not self.get("bare_loaders") and
+                not self.get("scylla_repo_loader") and
+                self.get("cluster_backend") != "aws"
+            ):
                 scylla_linux_distro_loader = self.get('scylla_linux_distro_loader')
                 dist_type_loader = scylla_linux_distro_loader.split('-')[0]
                 dist_version_loader = scylla_linux_distro_loader.split('-')[-1]

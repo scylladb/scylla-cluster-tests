@@ -289,3 +289,4 @@
 | **<a href="#user-content-scylla_bench_version" name="scylla_bench_version">scylla_bench_version</a>**  | A valid tag under the scylla bench repo: https://github.com/scylladb/scylla-bench | N/A | SCT_SCYLLA_BENCH_VERSION
 | **<a href="#user-content-nosqlbench_image" name="nosqlbench_image">nosqlbench_image</a>**  | A docker image of NoSQLBench | N/A | SCT_NOSQLBENCH_IMAGE
 | **<a href="#user-content-raid_level" name="raid_level">raid_level</a>**  | Configure RAID0 or RAID5 on instance | N/A | SCT_RAID_LEVEL
+| **<a href="#user-content-bare_loaders" name="bare_loaders">bare_loaders</a>**  | Don't install anything but collectd to the loaders during cluster setup | False | SCT_BARE_LOADERS
