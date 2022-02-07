@@ -341,6 +341,8 @@ class LongevityTest(ClusterTester):
 
         if customer_profiles:
             cs_duration = self.params.get('cs_duration')
+            duration = int(cs_duration.translate(str.maketrans('', '', string.ascii_letters))) * 60 + 60
+
             for cs_profile in customer_profiles:
                 assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
                 self.log.debug('Run stress test with user profile {}, duration {}'.format(cs_profile, cs_duration))
@@ -352,9 +354,9 @@ class LongevityTest(ClusterTester):
                                                                                    cs_profile)
 
             self._run_user_stress_in_batches(batch_size=batch_size,
-                                             stress_params_list=stress_params_list)
+                                             stress_params_list=stress_params_list, duration=duration)
 
-    def _run_user_stress_in_batches(self, batch_size, stress_params_list):
+    def _run_user_stress_in_batches(self, batch_size, stress_params_list, duration):
         """
         run user profile in batches, while adding 4 stress-commands which are not with precreated tables
         and wait for them to finish
@@ -363,6 +365,8 @@ class LongevityTest(ClusterTester):
         :param stress_params_list: the list of all stress commands
         :return:
         """
+        # pylint: disable=too-many-locals
+
         def chunks(_list, chunk_size):
             """Yield successive n-sized chunks from _list."""
             for i in range(0, len(_list), chunk_size):
@@ -371,7 +375,7 @@ class LongevityTest(ClusterTester):
         for batch, _, _, extra_tables_idx in list(chunks(stress_params_list, batch_size)):
 
             stress_queue = []
-            batch_params = dict(round_robin=True, stress_cmd=[])
+            batch_params = dict(duration=duration, round_robin=True, stress_cmd=[])
 
             # add few stress threads with tables that weren't pre-created
             customer_profiles = self.params.get('cs_user_profiles')
