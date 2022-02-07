@@ -4516,6 +4516,11 @@ class BaseLoaderSet():
 
         collectd_setup = ScyllaCollectdSetup()
         collectd_setup.install(node)
+
+        if self.params.get("bare_loaders"):
+            self.log.info("Don't install anything because bare loaders requested")
+            return
+
         self.install_gemini(node=node)
         if self.params.get('client_encrypt'):
             node.config_client_encrypt()
