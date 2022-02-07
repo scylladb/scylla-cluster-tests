@@ -115,7 +115,7 @@ class ScyllaBenchThread:  # pylint: disable=too-many-instance-attributes
         self.stress_num = stress_num
         if credentials and 'username=' not in self.stress_cmd:
             self.stress_cmd += " -username {} -password {}".format(*credentials)
-        self.stress_cmd += ' -error-at-row-limit 1000'  # make it fail after having 1000 errors at row
+        self.stress_cmd += ' -error-at-row-limit 0'  # make it fail after having 1000 errors at row
         self.stop_test_on_failure = stop_test_on_failure
 
         self.executor = None
