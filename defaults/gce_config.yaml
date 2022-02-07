@@ -11,7 +11,7 @@ gce_instance_type_loader: 'e2-standard-2'
 gce_root_disk_type_loader: 'pd-standard'
 gce_n_local_ssd_disk_loader: 0
 
-gce_instance_type_monitor: 'e2-medium'
+gce_instance_type_monitor: 'n2-highmem-8'
 gce_root_disk_type_monitor: 'pd-standard'
 gce_root_disk_size_monitor: 50
 gce_n_local_ssd_disk_monitor: 0
