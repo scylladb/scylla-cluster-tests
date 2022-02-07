@@ -107,6 +107,15 @@ MINIO_NAMESPACE = "minio"
 SCYLLA_CONFIG_NAME = "scylla-config"
 SCYLLA_AGENT_CONFIG_NAME = "scylla-agent-config"
 
+# NOTE: add custom annotations to a ServiceAccount used by a ScyllaCluster
+#       It is needed to make sure that annotations survive operator upgrades
+SCYLLA_CLUSTER_SA_ANNOTATION_KEY_PREFIX = "sct-custom-annotation-key-"
+SCYLLA_CLUSTER_SA_ANNOTATION_VALUE_PREFIX = "sct-custom-annotation-value-"
+SCYLLA_CLUSTER_SA_ANNOTATIONS = {
+    f'{SCYLLA_CLUSTER_SA_ANNOTATION_KEY_PREFIX}1': f'{SCYLLA_CLUSTER_SA_ANNOTATION_VALUE_PREFIX}1',
+    f'{SCYLLA_CLUSTER_SA_ANNOTATION_KEY_PREFIX}2': f'{SCYLLA_CLUSTER_SA_ANNOTATION_VALUE_PREFIX}2',
+}
+
 # Resources that are used by container deployed by scylla-operator on scylla nodes
 OPERATOR_CONTAINERS_RESOURCES = {
     'cpu': 0.05,
@@ -724,6 +733,20 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.kubectl("rollout status deployment scylla-operator",
                      namespace=SCYLLA_OPERATOR_NAMESPACE)
 
+    def check_scylla_cluster_sa_annotations(self):
+        # Make sure that ScyllaCluster ServiceAccount annotations stay unchanged
+        raw_sa_data = self.kubectl(
+            f"get sa {self.params.get('k8s_scylla_cluster_name')}-member -o yaml",
+            namespace=SCYLLA_NAMESPACE).stdout
+        sa_data = yaml.safe_load(raw_sa_data)
+        error_msg = (
+            "ServiceAccount annotations don't have expected values.\n"
+            f"Expected: {SCYLLA_CLUSTER_SA_ANNOTATIONS}\n"
+            f"Actual: {sa_data['metadata']['annotations']}"
+        )
+        for annotation_key, annotation_value in SCYLLA_CLUSTER_SA_ANNOTATIONS.items():
+            assert sa_data["metadata"]["annotations"].get(annotation_key) == annotation_value, error_msg
+
     @log_run_info
     def deploy_minio_s3_backend(self):
         if not self.params.get('reuse_cluster'):
@@ -760,7 +783,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             },
             'serviceAccount': {
                 'create': True,
-                'annotations': {},
+                'annotations': SCYLLA_CLUSTER_SA_ANNOTATIONS,
                 'name': f"{self.params.get('k8s_scylla_cluster_name')}-member"
             },
             'alternator': {

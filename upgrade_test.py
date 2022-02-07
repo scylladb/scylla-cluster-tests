@@ -832,6 +832,7 @@ class UpgradeTest(FillDatabaseData):
         Run a set of different cql queries against various types/tables before
         and after upgrade of every node to check the consistency of data
         """
+        self.k8s_cluster.check_scylla_cluster_sa_annotations()
         self.truncate_entries_flag = False  # not perform truncate entries test
         InfoEvent(message='Step1 - Populate DB with many types of tables and data').publish()
         target_upgrade_version = self.params.get('new_version')
@@ -857,6 +858,7 @@ class UpgradeTest(FillDatabaseData):
         self.db_cluster.upgrade_scylla_cluster(target_upgrade_version)
         InfoEvent(message='Step6 - Wait till cluster got upgraded').publish()
         self.wait_till_scylla_is_upgraded_on_all_nodes(target_upgrade_version)
+        self.k8s_cluster.check_scylla_cluster_sa_annotations()
 
         InfoEvent(message='Step7 - Upgrade sstables').publish()
         if self.params.get('upgrade_sstables'):
@@ -929,6 +931,8 @@ class UpgradeTest(FillDatabaseData):
         ).stdout.strip().split(":")[-1]
 
     def test_kubernetes_operator_upgrade(self):
+        self.k8s_cluster.check_scylla_cluster_sa_annotations()
+
         InfoEvent(message='Step1 - Populate DB with data').publish()
         self.prepare_keyspaces_and_tables()
         self.fill_and_verify_db_data('', pre_fill=True)
@@ -971,6 +975,7 @@ class UpgradeTest(FillDatabaseData):
             " --watch=true --timeout=20m",
             timeout=1205,
             namespace=self.k8s_cluster._scylla_namespace)  # pylint: disable=protected-access
+        self.k8s_cluster.check_scylla_cluster_sa_annotations()
 
         InfoEvent(message='Step7 - Add new member to the Scylla cluster').publish()
         peer_db_node = self.db_cluster.nodes[0]
@@ -983,6 +988,7 @@ class UpgradeTest(FillDatabaseData):
         self.db_cluster.wait_sts_rollout_restart(pods_to_wait=1)
         self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
         self.monitors.reconfigure_scylla_monitoring()
+        self.k8s_cluster.check_scylla_cluster_sa_annotations()
 
         InfoEvent(message='Step8 - Verify data in the Scylla cluster').publish()
         self.fill_and_verify_db_data(note='after operator upgrade and scylla member addition')
@@ -992,6 +998,8 @@ class UpgradeTest(FillDatabaseData):
             stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))))
 
     def test_kubernetes_platform_upgrade(self):
+        self.k8s_cluster.check_scylla_cluster_sa_annotations()
+
         InfoEvent(message='Step1 - Populate DB with data').publish()
         self.prepare_keyspaces_and_tables()
         self.fill_and_verify_db_data('', pre_fill=True)
@@ -1039,6 +1047,7 @@ class UpgradeTest(FillDatabaseData):
             "--all --for=condition=Ready pod",
             namespace=self.k8s_cluster._scylla_namespace,  # pylint: disable=protected-access
             timeout=600)
+        self.k8s_cluster.check_scylla_cluster_sa_annotations()
 
         InfoEvent(message='Step8 - Add new member to the Scylla cluster').publish()
         peer_db_node = self.db_cluster.nodes[0]
@@ -1051,6 +1060,7 @@ class UpgradeTest(FillDatabaseData):
         self.db_cluster.wait_sts_rollout_restart(pods_to_wait=1)
         self.db_cluster.wait_for_nodes_up_and_normal(nodes=new_nodes)
         self.monitors.reconfigure_scylla_monitoring()
+        self.k8s_cluster.check_scylla_cluster_sa_annotations()
 
         InfoEvent(message='Step9 - Verify data in the Scylla cluster').publish()
         self.fill_and_verify_db_data(note='after operator upgrade and scylla member addition')
