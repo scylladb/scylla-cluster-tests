@@ -826,6 +826,8 @@ class LoaderLogCollector(LogCollector):
                 search_locally=True),
         FileLog(name='kcl-l*.log',
                 search_locally=True),
+        FileLog(name='*cassandra-harry*.log',
+                search_locally=True),
     ]
 
     def collect_logs(self, local_search_path=None) -> list[str]:
