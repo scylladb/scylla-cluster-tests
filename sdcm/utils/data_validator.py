@@ -604,7 +604,7 @@ class LongevityDataValidator:
         actual_result = self.longevity_self_object.fetch_all_rows(session=session, default_fetch_size=self.DEFAULT_FETCH_SIZE,
                                                                   statement=f"SELECT {pk_name} FROM {self.view_name_for_deletion_data}",
                                                                   verbose=not during_nemesis)
-        if not actual_result:
+        if actual_result is None:
             DataValidatorEvent.DeletedRowsValidator(
                 severity=Severity.ERROR,
                 error=f"Can't validate deleted rows. Fetch all rows from {self.view_name_for_deletion_data} failed. "
