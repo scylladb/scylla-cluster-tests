@@ -319,6 +319,7 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
         return pids_list
 
     def update_coredump_info_with_more_information(self, core_info: CoreDumpInfo):
+        # pylint: disable=too-many-branches
         coredump_info = self._get_coredumpctl_info(core_info)
         corefile = ''
         executable = ''
@@ -380,6 +381,9 @@ class CoredumpExportSystemdThread(CoredumpThreadBase):
                         if re.search(r'^[+-][0-9]{2}$', timezone):
                             # On some systems two digit timezone is not recognized as correct timezone
                             time_spat[3] = f'{timezone}00'
+                            timestring = ' '.join(time_spat)
+                        if timezone.upper() == "UTC":
+                            time_spat[3] = '+00:00'
                             timestring = ' '.join(time_spat)
                         fmt = "%a %Y-%m-%d %H:%M:%S %z"
                     else:
