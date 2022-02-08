@@ -1062,15 +1062,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self._prepare_test_table(ks=f'drop_table_during_repair_ks_{i}', table='standard1')
 
         self.log.debug("Start repair target_node in background")
-        thread1 = threading.Thread(target=self.repair_nodetool_repair, name='NodeToolRepairThread', daemon=True)
-        thread1.start()
-
-        # drop test tables one by one during repair
-        for i in range(10):
-            time.sleep(random.randint(0, 300))
-            with self.cluster.cql_connection_patient(self.target_node) as session:
-                session.execute(f'DROP TABLE drop_table_during_repair_ks_{i}.standard1')
-        thread1.join(timeout=120)
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix='NodeToolRepairThread') as thread_pool:
+            thread = thread_pool.submit(self.repair_nodetool_repair)
+            try:
+                # drop test tables one by one during repair
+                for i in range(10):
+                    time.sleep(random.randint(0, 300))
+                    with self.cluster.cql_connection_patient(self.target_node) as session:
+                        session.execute(f'DROP TABLE drop_table_during_repair_ks_{i}.standard1')
+            finally:
+                thread.result(timeout=120)
 
     def disrupt_major_compaction(self):
         self.target_node.run_nodetool("compact")
