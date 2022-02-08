@@ -1117,7 +1117,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.kubectl("get pods", namespace=namespace)
 
     @log_run_info
-    def gather_k8s_logs(self) -> None:
+    def gather_k8s_logs(self) -> None:  # pylint: disable=too-many-locals,too-many-branches
         # NOTE: reuse data where possible to minimize spent time due to API limiter restrictions
         LOGGER.info("K8S-LOGS: starting logs gathering")
         logdir = Path(self.logdir)
@@ -1187,6 +1187,19 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                         self.kubectl(f"logs pod/{res} -c={container_name} --previous=true > "
                                      f"{logfile}-previous.log",
                                      namespace=namespace, ignore_status=True)
+
+                        # NOTE: pick up Scylla container-specific files
+                        if namespace != SCYLLA_NAMESPACE or container_name != 'scylla':
+                            continue
+                        scylla_container_files_to_copy = (
+                            ('/var/lib/scylla/io_properties.yaml', logfile / 'io_properties.yaml'),
+                            ('/etc/scylla.d/', logfile / 'etc-scylla-d'),
+                            ('/etc/scylla/', logfile / 'etc-scylla'),
+                        )
+                        for src_path, dst_path in scylla_container_files_to_copy:
+                            self.kubectl(
+                                f"cp {res}:{src_path} {dst_path} -c {container_name}",
+                                namespace=namespace, ignore_status=True)
 
     @log_run_info
     def stop_k8s_task_threads(self, timeout=10):
