@@ -201,8 +201,8 @@ class SctEvent:
             return
         try:
             proc = get_events_main_device(_registry=self._events_processes_registry)
-        except RuntimeError:
-            LOGGER.exception("Unable to get events main device")
+        except RuntimeError as exc:
+            LOGGER.warning("Unable to get events main device: %s", exc)
             proc = None
         if proc:
             if proc.is_alive():
