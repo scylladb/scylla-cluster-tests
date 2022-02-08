@@ -72,7 +72,6 @@ from sdcm.utils import properties
 from sdcm.utils.common import (
     S3Storage,
     ScyllaCQLSession,
-    PageFetcher,
     deprecation,
     get_data_dir_path,
     verify_scylla_repo_file,
@@ -3341,7 +3340,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         materialized_view_column_names = ["keyspace_name", "view_name"]
         regular_table_names, materialized_view_table_names = set(), set()
 
-        def execute_cmd(cql_session, entity_type):
+        def execute_cmd(cql_session, entity_type):  # pylint: disable=too-many-branches
             result = set()
             is_column_type = entity_type == "column"
             column_names = regular_column_names
@@ -3353,13 +3352,16 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             else:
                 raise ValueError(f"The following value '{entity_type}' not supported")
 
-            session.default_fetch_size = 1000
-            session.default_consistency_level = ConsistencyLevel.ONE
-            execute_result = session.execute_async(cmd)
-            fetcher = PageFetcher(execute_result).request_all()
-            current_rows = fetcher.all_data()
+            cql_session.default_fetch_size = 1000
+            cql_session.default_consistency_level = ConsistencyLevel.ONE
+            execute_result_future = session.execute_async(cmd, timeout=120)
 
-            # for row in cql_session.execute(cmd).current_rows:
+            try:
+                current_rows = execute_result_future.result()
+            except Exception as details:  # pylint: disable=broad-except
+                self.log.error("Get list of tables failed with error: %s", details)
+                current_rows = []
+
             for row in current_rows:
                 is_valid_table = True
                 table_name = f"{getattr(row, column_names[0])}.{getattr(row, column_names[1])}"
