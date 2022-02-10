@@ -4,13 +4,12 @@ import groovy.json.JsonSlurper
 def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
-
     def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
 
     pipeline {
         agent {
             label {
-                label builder.label
+                label 'built-in'
             }
         }
         environment {
@@ -98,6 +97,11 @@ def call(Map pipelineParams) {
                 }
             }
             stage('Get test duration') {
+                agent {
+                    label {
+                        label builder.label
+                    }
+                }
                 steps {
                     catchError(stageResult: 'FAILURE') {
                         timeout(time: 1, unit: 'MINUTES') {

@@ -6,7 +6,7 @@ def call(Map pipelineParams) {
     pipeline {
         agent {
             label {
-                label builder.label
+                label 'built-in'
             }
         }
         environment {
