@@ -3018,6 +3018,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         job_name = os.environ.get('JOB_NAME').split("/")[-1] if os.environ.get('JOB_NAME') else config_file_name
         restore_monitor_job_base_link = \
             "https://jenkins.scylladb.com/view/QA/job/QA-tools/job/hydra-show-monitor/parambuild/?"
+        if build_id:
+            sct_branch = os.environ.get("GIT_BRANCH", "master").rsplit("/", maxsplit=1)[-1]
+            restore_monitor_job_base_link += f"sct_branch={sct_branch}&"
 
         return {"backend": backend,
                 "build_id": os.environ.get('BUILD_NUMBER', ''),

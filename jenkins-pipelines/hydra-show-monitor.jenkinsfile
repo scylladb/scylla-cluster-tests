@@ -14,6 +14,9 @@ pipeline {
         AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
     }
     parameters {
+        string(defaultValue: 'master',
+               description: 'SCT git branch (usually has same name as Scylla branch, e.g., branch-4.5)',
+               name: 'sct_branch')
         string(defaultValue: '',
                description: 'ID of a SCT test to restore the monitoring stack',
                name: 'test_id')
@@ -49,7 +52,9 @@ pipeline {
         stage('Checkout') {
             steps {
                 dir('scylla-cluster-tests') {
-                    checkout scm
+                    git(url: 'git@github.com:scylladb/scylla-cluster-tests.git',
+                        credentialsId:'b8a774da-0e46-4c91-9f74-09caebaea261',
+                        branch: params.sct_branch)
                 }
             }
         }
