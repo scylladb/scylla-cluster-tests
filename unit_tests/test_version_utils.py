@@ -6,6 +6,7 @@ import pytest
 import sdcm
 from sdcm.utils.version_utils import (
     get_branch_version,
+    get_all_versions,
     get_branch_version_for_multiple_repositories,
     get_git_tag_from_helm_chart_version,
     get_scylla_urls_from_repository,
@@ -127,6 +128,10 @@ class TestVersionUtils(unittest.TestCase):
         self.assertEqual(
             set(),
             urls)
+
+    def test_07_get_all_versions(self):
+        self.assertIn('4.5.3', get_all_versions(
+            'https://s3.amazonaws.com/downloads.scylladb.com/rpm/centos/scylla-4.5.repo'))
 
 
 @pytest.mark.parametrize("chart_version,git_tag", [
