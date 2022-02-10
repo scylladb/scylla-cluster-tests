@@ -185,6 +185,9 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
 
         result = None
 
+        # disable logging for cassandra stress
+        node.remoter.run("cp /etc/scylla/cassandra/logback-tools.xml .", ignore_status=True)
+
         with CassandraStressExporter(instance_name=node.cql_ip_address,
                                      metrics=nemesis_metrics_obj(),
                                      stress_operation=stress_cmd_opt,
