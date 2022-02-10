@@ -341,7 +341,7 @@ class LongevityTest(ClusterTester):
 
         if customer_profiles:
             cs_duration = self.params.get('cs_duration')
-            duration = int(cs_duration.translate(str.maketrans('', '', string.ascii_letters))) * 60 + 60
+            duration = int(cs_duration.translate(str.maketrans('', '', string.ascii_letters)))
 
             for cs_profile in customer_profiles:
                 assert os.path.exists(cs_profile), 'File not found: {}'.format(cs_profile)
