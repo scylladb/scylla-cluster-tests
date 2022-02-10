@@ -1,15 +1,15 @@
 #!groovy
 
+List supportedVersions = []
 (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
-
     def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
 
     pipeline {
         agent {
             label {
-                label builder.label
+                label 'built-in'
             }
         }
         environment {
@@ -83,13 +83,42 @@ def call(Map pipelineParams) {
                     }
                 }
             }
+            stage('Get supported Scylla versions and test duration') {
+                agent {
+                    label {
+                        label builder.label
+                    }
+                }
+                steps {
+                    catchError(stageResult: 'FAILURE') {
+                        timeout(time: 10, unit: 'MINUTES') {
+                            script {
+                                wrap([$class: 'BuildUser']) {
+                                    dir('scylla-cluster-tests') {
+                                        checkout scm
+                                        supportedVersions = supportedUpgradeFromVersions(
+                                            pipelineParams.base_versions,
+                                            pipelineParams.linux_distro,
+                                            params.new_scylla_repo
+                                        )
+                                        (testDuration,
+                                         testRunTimeout,
+                                         runnerTimeout,
+                                         collectLogsTimeout,
+                                         resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             stage('Run SCT stages') {
                 steps {
                     script {
                         def tasks = [:]
 
-                        for (version in supportedUpgradeFromVersions(pipelineParams.base_versions, pipelineParams.linux_distro,
-                                                                     params.new_scylla_repo)) {
+                        for (version in supportedVersions) {
                             def base_version = version
 
                             tasks["${base_version}"] = {
@@ -97,7 +126,6 @@ def call(Map pipelineParams) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                              "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
                                              "SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
-
                                         stage("Checkout for ${base_version}") {
                                             catchError(stageResult: 'FAILURE') {
                                                 timeout(time: 5, unit: 'MINUTES') {
@@ -105,19 +133,6 @@ def call(Map pipelineParams) {
                                                         wrap([$class: 'BuildUser']) {
                                                             dir('scylla-cluster-tests') {
                                                                 checkout scm
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        stage("Get test duration for ${base_version}") {
-                                            catchError(stageResult: 'FAILURE') {
-                                                timeout(time: 2, unit: 'MINUTES') {
-                                                    script {
-                                                        wrap([$class: 'BuildUser']) {
-                                                            dir('scylla-cluster-tests') {
-                                                                (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
                                                             }
                                                         }
                                                     }
