@@ -5,7 +5,7 @@ import re
 import os
 
 from pkg_resources import parse_version
-from sdcm.utils.version_utils import is_enterprise
+from sdcm.utils.version_utils import is_enterprise, get_all_versions
 from sdcm.utils.common import get_s3_scylla_repos_mapping
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -114,7 +114,21 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
         oss_base_version = [v for v in oss_base_version if v in supported_versions]
         ent_base_version = [v for v in ent_base_version if v in supported_versions]
 
+        # if there's only release candidates in those repos, skip this version
+        oss_base_version = self.filter_rc_only_version(oss_base_version, oss_release_list)
+        ent_base_version = self.filter_rc_only_version(ent_base_version, ent_release_list)
+
         return oss_base_version + ent_base_version
+
+    def filter_rc_only_version(self, base_version_list, release_list):
+        if base_version_list:
+            # if there's only release candidates in this repo, skip this version
+            filter_rc = {v for v in get_all_versions(self.repo_maps[base_version_list[-1]]) if 'rc' not in v}
+            if not filter_rc:
+                base_version_list = base_version_list[:-1]
+                if not base_version_list:
+                    base_version_list.append(release_list[-2])
+        return base_version_list
 
     def get_version_list(self):
         """
