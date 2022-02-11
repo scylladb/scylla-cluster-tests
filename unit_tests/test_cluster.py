@@ -22,11 +22,12 @@ import tempfile
 import unittest
 from datetime import datetime
 from functools import cached_property
+from typing import List
 from weakref import proxy as weakproxy
 
 from invoke import Result
 
-from sdcm.cluster import BaseNode, BaseCluster, BaseMonitorSet
+from sdcm.cluster import BaseNode, BaseCluster, BaseMonitorSet, BaseScyllaCluster
 from sdcm.db_log_reader import DbLogReader
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
@@ -416,3 +417,74 @@ class TestBaseMonitorSet(unittest.TestCase):
             ("/usr/bin/scylla --build-id", (0, "xxx", "")),
         ))
         self.assertEqual(self.monitor_cluster.monitoring_version, "master")
+
+
+class NodetoolDummyNode(BaseNode):  # pylint: disable=abstract-method
+
+    def __init__(self, resp):  # pylint: disable=super-init-not-called
+        self.resp = resp
+
+    def run_nodetool(self, *args, **kwargs):  # pylint: disable=unused-argument
+        return Result(exited=0, stderr="", stdout=self.resp)
+
+
+class DummyScyllaCluster(BaseScyllaCluster, BaseCluster):  # pylint: disable=abstract-method
+    nodes: List['NodetoolDummyNode']
+
+    def __init__(self, params):  # pylint: disable=super-init-not-called
+        self.nodes = params
+        self.name = 'dummy_cluster'
+
+
+class TestNodetoolStatus(unittest.TestCase):
+
+    def test_can_get_nodetool_status_typical(self):  # pylint: disable=no-self-use
+        resp = "\n".join(["Datacenter: eastus",
+                          "==================",
+                          "Status=Up/Down",
+                          "|/ State=Normal/Leaving/Joining/Moving",
+                          "--  Address   Load       Tokens       Owns    Host ID                               Rack",
+                          "UN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a",
+                          "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a"
+                          ]
+                         )
+        node = NodetoolDummyNode(resp=resp)
+        db_cluster = DummyScyllaCluster([node])
+
+        status = db_cluster.get_nodetool_status()
+
+        assert status == {'eastus':
+                          {'10.0.59.34':
+                           {'state': 'UN', 'load': '21.71GB', 'tokens': '256', 'owns': '?',
+                            'host_id': 'e5bcb094-e4de-43aa-8dc9-b1bf74b3b346', 'rack': '1a'},
+                           '10.0.198.153': {'state': 'UN', 'load': '?', 'tokens': '256', 'owns': '?',
+                                            'host_id': 'fba174cd-917a-40f6-ab62-cc58efaaf301', 'rack': '1a'}}}
+
+    def test_can_get_nodetool_status_azure(self):  # pylint: disable=no-self-use
+        resp = "\n".join(["Datacenter: eastus",
+                         "==================",
+                          "Status=Up/Down",
+                          "|/ State=Normal/Leaving/Joining/Moving",
+                          "--  Address   Load       Tokens       Owns    Host ID                               Rack",
+                          "UN  10.0.0.4  431 KB     256          ?       ed6af9a0-8c22-4813-ac9b-6fbeb462b687  ",
+                          "UN  10.0.0.5  612 KB     256          ?       caa15869-cfb4-4229-85d7-0f4832986237  ",
+                          "UN  10.0.0.6  806 KB     256          ?       3046ded9-ce17-4a3a-ac44-a3ada6916972  "
+                          ]
+                         )
+        node = NodetoolDummyNode(resp=resp)
+        db_cluster = DummyScyllaCluster([node])
+
+        status = db_cluster.get_nodetool_status()
+
+        assert status == {'eastus': {'10.0.0.4': {'host_id': 'ed6af9a0-8c22-4813-ac9b-6fbeb462b687',
+                                                  'load': '431KB',
+                                                  'owns': '?',
+                                                  'rack': '',
+                                                  'state': 'UN',
+                                                  'tokens': '256'},
+                                     '10.0.0.5': {'host_id': 'caa15869-cfb4-4229-85d7-0f4832986237',
+                                                  'load': '612KB',
+                                                  'owns': '?',
+                                                  'rack': '',
+                                                  'state': 'UN',
+                                                  'tokens': '256'}}}
