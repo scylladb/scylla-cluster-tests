@@ -40,7 +40,7 @@ from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_sta
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR, TestConfig, UserRemoteCredentials, BaseLoaderSet, BaseMonitorSet, \
     BaseScyllaCluster, BaseNode
 from sdcm.argus_test_run import ArgusTestRun
-from sdcm.cluster_azure import ScyllaAzureCluster
+from sdcm.cluster_azure import ScyllaAzureCluster, LoaderSetAzure
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_gce import LoaderSetGCE
 from sdcm.cluster_gce import MonitorSetGCE
@@ -845,7 +845,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         else:
             self.monitors = NoMonitorSet()
 
-    def get_cluster_azure(self, loader_info, db_info, monitor_info):
+    def get_cluster_azure(self, loader_info, db_info, monitor_info):  # pylint: disable=too-many-branches
         provisioner = AzureProvisioner(str(TestConfig().test_id()))
         if db_info['n_nodes'] is None:
             n_db_nodes = self.params.get('n_db_nodes')
@@ -885,9 +885,31 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                              azure_instance_type=db_info['type'],
                                              provisioner=provisioner,
                                              n_nodes=db_info['n_nodes'],
-                                             add_disks=None,  # todo: fix disks
-                                             service_accounts=None,  # todo: fix service_accounts
+                                             add_disks=None,  # todo lukasz: fix disks
+                                             service_accounts=None,  # todo lukasz: fix service_accounts
                                              **common_params)
+        # todo lukasz: these params are not used yet:
+        if loader_info['n_nodes'] is None:
+            loader_info['n_nodes'] = int(self.params.get('n_loaders'))
+        if loader_info['type'] is None:
+            loader_info['type'] = self.params.get('azure_instance_type_loader')
+        if loader_info['disk_type'] is None:
+            loader_info['disk_type'] = self.params.get('azure_root_disk_type_loader')
+        if loader_info['disk_size'] is None:
+            loader_info['disk_size'] = self.params.get('azure_root_disk_size_loader')
+        if loader_info['n_local_ssd'] is None:
+            loader_info['n_local_ssd'] = self.params.get('azure_n_local_ssd_disk_loader')
+        loader_additional_disks = {'pd-ssd': self.params.get('azure_pd_ssd_disk_size_loader')}
+        self.loaders = LoaderSetAzure(
+            loader_version=self.params.get('azure_image_loader'),
+            azure_image_type=loader_info['disk_type'],
+            azure_image_size=loader_info['disk_size'],
+            azure_n_local_ssd=loader_info['n_local_ssd'],
+            azure_instance_type="Standard_D2s_v3",
+            provisioner=provisioner,
+            n_nodes=loader_info['n_nodes'],
+            add_disks=loader_additional_disks,
+            **common_params)
 
     def get_cluster_aws(self, loader_info, db_info, monitor_info):
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches

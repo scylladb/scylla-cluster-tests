@@ -3890,32 +3890,34 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         res = verification_node.run_nodetool('status', publish_event=False)
 
         data_centers = res.stdout.strip().split("Datacenter: ")
+        pattern = re.compile(
+            r"(?P<state>\w{2})\s+"
+            r"(?P<ip>[\d.]+)\s+"
+            r"(?P<load>[\d.]+ [\w]+|\?)\s+"
+            r"(?P<token>[\d]+)\s+"
+            r"(?P<owns>[\w\d?]+)\s+"
+            r"(?P<host_id>[\w\d-]+)\s{2,}"
+            r"(?P<rack>[\d\w]+|$)")
+
         for dc in data_centers:
             if dc:
                 lines = dc.splitlines()
                 dc_name = lines[0]
                 status[dc_name] = {}
                 for line in lines[1:]:
-                    if line.startswith('--'):  # ignore the title line in result
-                        continue
+                    # if line.startswith('--'):  # ignore the title line in result
+                    #     continue
                     try:
-                        splitted_line = line.split()
-                        # Regulary nodetool status returns node load as "21.71 GB"
-                        # Example: "UN  10.0.59.34    21.71 GB   256          ?       e5bcb094-e4de-43aa-8dc9-b1bf74b3b346  1a"
-                        # But it may be the "?" instead and has no load_unit. Add empty string to prevent the failure
-                        # Example: "UN  10.0.198.153  ?          256          ?       fba174cd-917a-40f6-ab62-cc58efaaf301  1a"
-                        if len(splitted_line) == 7 and splitted_line[3].isdigit():
-                            splitted_line.insert(3, '')
-                        state, ip, load, load_unit, tokens, owns, host_id, rack = splitted_line
-                        node_info = {'state': state,
-                                     'load': '%s%s' % (load, load_unit),
-                                     'tokens': tokens,
-                                     'owns': owns,
-                                     'host_id': host_id,
-                                     'rack': rack,
+                        info = pattern.match(line).groupdict()
+                        node_info = {'state': info["state"],
+                                     'load': info["load"].replace(" ", ""),
+                                     'tokens': info["token"],
+                                     'owns': info["owns"],
+                                     'host_id': info["host_id"],
+                                     'rack': info["rack"],
                                      }
-                        status[dc_name][ip] = node_info
-                    except ValueError:
+                        status[dc_name][info["ip"]] = node_info
+                    except AttributeError:
                         pass
         return status
 
