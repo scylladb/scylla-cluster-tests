@@ -17,30 +17,29 @@ from enum import Enum
 from typing import List, Dict, Optional
 
 
-class InstancePurpose(Enum):
-    SCT = "sct"
-    SCYLLA = "db"
-    LOADER = "loader"
-    MONITOR = "monitor"
-    ORACLE = "oracle"
-
-
 class VmArch(Enum):
     X86 = "x86_64"
     ARM = "aarch64"
 
 
 @dataclass
+class DataDisk:
+    type: str
+    size: int
+    iops: int
+
+
+@dataclass
 class InstanceDefinition:  # pylint: disable=too-many-instance-attributes
     name: str
-    purpose: InstancePurpose
-    version: str  # can provide version or image url
-    size: str   # instance_type_db from yaml
-    admin_name: str
-    admin_public_key: str = field(repr=False)
+    image_id: str
+    type: str   # instance_type from yaml
+    user_name: str
+    ssh_public_key: str = field(repr=False)
     tags: Dict[str, str]
     arch: VmArch = VmArch.X86
-    root_disk_size: str = None
+    root_disk_size: Optional[str] = None
+    data_disks: Optional[List[DataDisk]] = None
 
 
 class PricingModel(Enum):
@@ -57,9 +56,8 @@ class PricingModel(Enum):
 @dataclass
 class VmInstance:  # pylint: disable=too-many-instance-attributes
     name: str
-    purpose: InstancePurpose
     region: str
-    admin_name: str
+    user_name: str
     public_ip_address: str
     private_ip_address: str
     tags: Dict[str, str]
@@ -80,9 +78,8 @@ class Provisioner(ABC):
         """Create virtual machine in provided region, specified by InstanceDefinition"""
         raise NotImplementedError()
 
-    def list_virtual_machines(self, region: Optional[str] = None, purpose: Optional[InstancePurpose] = None
-                              ) -> List[VmInstance]:
-        """List virtual machines for given region. Filter by region and/or purpose"""
+    def list_virtual_machines(self, region: Optional[str] = None) -> List[VmInstance]:
+        """List virtual machines for given region. Filter by region."""
         raise NotImplementedError()
 
     def cleanup(self, wait: bool = False) -> None:

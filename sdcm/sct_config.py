@@ -28,6 +28,7 @@ from distutils.util import strtobool
 import anyconfig
 
 from sdcm import sct_abs_path
+from sdcm.provision.azure.utils import get_scylla_images
 from sdcm.utils import alternator
 from sdcm.utils.aws_utils import get_arch_from_instance_type
 from sdcm.utils.common import (
@@ -1483,6 +1484,8 @@ class SCTConfiguration(dict):
                         raise ValueError(f"GCE images for {scylla_version=} not found")
                 self.log.debug("Found GCE image %s for scylla_version='%s'", gce_image.name, scylla_version)
                 self["gce_image_db"] = gce_image.extra["selfLink"]
+            elif not self.get("azure_image_db") and self.get("cluster_backend") == "azure":
+                self["azure_image_db"] = get_scylla_images(scylla_version, self.get('azure_region_name'))[0].id
             elif not self.get('scylla_repo'):
                 self['scylla_repo'] = find_scylla_repo(scylla_version, dist_type, dist_version)
             else:

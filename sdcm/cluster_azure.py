@@ -6,7 +6,7 @@ from typing import Dict, Optional
 from sdcm import cluster
 from sdcm.keystore import KeyStore
 from sdcm.provision.azure.provisioner import AzureProvisioner
-from sdcm.provision.provisioner import InstanceDefinition, PricingModel, InstancePurpose, VmInstance
+from sdcm.provision.provisioner import InstanceDefinition, PricingModel, VmInstance
 
 LOGGER = logging.getLogger(__name__)
 
@@ -142,12 +142,12 @@ class AzureNode(cluster.BaseNode):
 
 
 class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-attributes
-    def __init__(self, scylla_version, azure_image_type, azure_image_size, azure_network, provisioner: AzureProvisioner, credentials,  # pylint: disable=too-many-arguments, too-many-locals
+    def __init__(self, image_id, azure_image_type, azure_image_size, azure_network, provisioner: AzureProvisioner, credentials,  # pylint: disable=too-many-arguments, too-many-locals
                  cluster_uuid=None, azure_instance_type='Standard_L8s_v2', azure_region_names=None,
                  azure_n_local_ssd=1, azure_image_username='root', cluster_prefix='cluster',
                  node_prefix='node', n_nodes=3, add_disks=None, params=None, node_type=None, service_accounts=None):
         self.provisioner: AzureProvisioner = provisioner
-        self._scylla_version = scylla_version
+        self._image_id = image_id
         self._azure_image_type = azure_image_type
         self._azure_image_size = azure_image_size
         self._azure_network = azure_network
@@ -209,12 +209,11 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
         pricing_model = PricingModel.SPOT if 'spot' in self.instance_provision else PricingModel.ON_DEMAND
         instance_definition = InstanceDefinition(
             name="to_be_replaced",
-            purpose=InstancePurpose.SCYLLA,
-            version=self._scylla_version,
-            size=self._azure_instance_type,
-            admin_name=self._azure_image_username,
+            image_id=self._image_id,
+            type=self._azure_instance_type,
+            user_name=self._azure_image_username,
             tags=self.tags,
-            admin_public_key=KeyStore().get_ec2_ssh_key_pair().public_key.decode()
+            ssh_public_key=KeyStore().get_ec2_ssh_key_pair().public_key.decode()
         )
         instances = []
 
@@ -226,20 +225,20 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
 
     def get_node_ips_param(self, public_ip=True):
         # todo lukasz: why gce cluster didn't implement this?
-        pass
+        raise NotImplementedError("get_node_ips_param should not run")
 
     def node_setup(self, node, verbose=False, timeout=3600):
         # todo lukasz: why gce cluster didn't implement this?
-        pass
+        raise NotImplementedError("node_setup should not run")
 
     def wait_for_init(self):
         # todo lukasz: why gce cluster didn't implement this?
-        pass
+        raise NotImplementedError("wait_for_init should not run")
 
 
 class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
 
-    def __init__(self, scylla_version, azure_image_type, azure_image_size, azure_network, provisioner: AzureProvisioner, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, image_id, azure_image_type, azure_image_size, azure_network, provisioner: AzureProvisioner, credentials,  # pylint: disable=too-many-arguments
                  azure_instance_type='Standard_L8s_v2', azure_n_local_ssd=1,
                  azure_image_username='ubuntu',
                  user_prefix=None, n_nodes=3, add_disks=None, params=None, azure_datacenter=None, service_accounts=None):
@@ -248,7 +247,7 @@ class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
         super().__init__(
-            scylla_version=scylla_version,
+            image_id=image_id,
             azure_image_type=azure_image_type,
             azure_image_size=azure_image_size,
             azure_n_local_ssd=azure_n_local_ssd,

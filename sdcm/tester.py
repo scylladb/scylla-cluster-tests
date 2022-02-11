@@ -878,7 +878,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                              params=self.params,
                              azure_datacenter=None,
                              )
-        self.db_cluster = ScyllaAzureCluster(scylla_version=azure_image,
+        self.db_cluster = ScyllaAzureCluster(image_id=azure_image,
                                              azure_image_type=db_info['disk_type'],
                                              azure_image_size=db_info['disk_size'],
                                              azure_n_local_ssd=db_info['n_local_ssd'],

@@ -27,7 +27,7 @@ def get_scylla_images(  # pylint: disable=too-many-branches
     version_bucket = scylla_version.split(":", 1)
     only_latest = False
     tags_to_search = {
-        'arch': arch
+        'arch': arch.value
     }
     if len(version_bucket) == 1:
         if '.' in scylla_version:
@@ -49,7 +49,7 @@ def get_scylla_images(  # pylint: disable=too-many-branches
     output = []
     with suppress(AzureResourceNotFoundError):
         gallery_image_versions = AzureService().compute.images.list_by_resource_group(
-            resource_group_name="scylla-images",
+            resource_group_name="SCYLLA-IMAGES",
         )
         for image in gallery_image_versions:
             # Filter by region

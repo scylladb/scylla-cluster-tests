@@ -18,13 +18,10 @@ from typing import Dict, Any, Optional, List
 import binascii
 
 from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
-from azure.mgmt.network.models import (NetworkSecurityGroup, VirtualNetwork, Subnet, PublicIPAddress,
-                                       NetworkInterface)
+from azure.mgmt.network.models import (NetworkSecurityGroup, VirtualNetwork, Subnet, PublicIPAddress, NetworkInterface)
 from azure.mgmt.resource.resources.models import ResourceGroup
 from sdcm.provision.azure.network_security_group_rules import open_ports_rules
-from sdcm.provision.azure.utils import get_scylla_images
-from sdcm.provision.provisioner import Provisioner, InstanceDefinition, VmArch, InstancePurpose, VmInstance, \
-    PricingModel
+from sdcm.provision.provisioner import Provisioner, InstanceDefinition, VmInstance, PricingModel
 from sdcm.utils.azure_utils import AzureService
 
 LOGGER = logging.getLogger(__name__)
@@ -83,22 +80,6 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         """Create virtual machine in provided region, specified by InstanceDefinition"""
         if definition.name in self._instances_cache:
             return self._instances_cache[definition.name]
-        match definition.purpose:
-            # get storage profile to fail fast if not found
-            case InstancePurpose.SCYLLA:
-                storage_profile = self._get_scylla_storage_profile(region=region,
-                                                                   version=definition.version,
-                                                                   arch=definition.arch,
-                                                                   name=definition.name,
-                                                                   disk_size=definition.root_disk_size)
-            case InstancePurpose.LOADER:
-                raise NotImplementedError()
-            case InstancePurpose.MONITOR:
-                raise NotImplementedError()
-            case InstancePurpose.SCT:
-                raise NotImplementedError()
-            case _:
-                raise ValueError("unknown instance purpose")
         resource_group_name = self._resource_group(region).name
         nic_id = self._network_interface(region, definition.name).id
         LOGGER.info(
@@ -107,9 +88,9 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
             "Instance params: {definition}".format(definition=definition))
         params = {
             "location": region,
-            "tags": definition.tags | {"_nodeType": definition.purpose.value},
+            "tags": definition.tags,
             "hardware_profile": {
-                "vm_size": definition.size,
+                "vm_size": definition.type,
             },
             "network_profile": {
                 "network_interfaces": [{
@@ -118,20 +99,20 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
             },
             "os_profile": {
                 "computer_name": definition.name,
-                "admin_username": definition.admin_name,
+                "admin_username": definition.user_name,
                 "admin_password": binascii.hexlify(os.urandom(20)).decode(),
                 "linux_configuration": {
                     "disable_password_authentication": True,
                     "ssh": {
                         "public_keys": [{
-                            "path": f"/home/{definition.admin_name}/.ssh/authorized_keys",
-                            "key_data": definition.admin_public_key,
+                            "path": f"/home/{definition.user_name}/.ssh/authorized_keys",
+                            "key_data": definition.ssh_public_key,
                         }],
                     },
                 },
             }
         }
-
+        storage_profile = self._get_scylla_storage_profile(image_id=definition.image_id, name=definition.name)
         params.update(storage_profile)
         params.update(self._get_pricing_params(pricing_model))
         v_m = self._azure_service.compute.virtual_machines.begin_create_or_update(
@@ -145,14 +126,11 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         self._instances_cache[instance.name] = instance
         return instance
 
-    def list_virtual_machines(self, region: Optional[str] = None, purpose: Optional[InstancePurpose] = None
-                              ) -> List[VmInstance]:
-        """List virtual machines for given region. Filter by region and/or purpose"""
+    def list_virtual_machines(self, region: Optional[str] = None) -> List[VmInstance]:
+        """List virtual machines for given region. Filter by region."""
         machines = list(self._instances_cache.values())
         if region is not None:
             machines = [machine for machine in machines if machine.region == region]
-        if purpose is not None:
-            machines = [machine for machine in machines if machine.purpose == purpose]
         return machines
 
     def cleanup(self, wait: bool = False) -> None:
@@ -175,7 +153,6 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         pub_address = self._public_ip_address(v_m.location, v_m.name).ip_address
         priv_address = nic.ip_configurations[0].private_ip_address
         tags = v_m.tags.copy()
-        purpose = InstancePurpose(tags.pop("_nodeType"))
         admin = v_m.os_profile.admin_username
         image = str(v_m.storage_profile.image_reference)
         if v_m.priority is VirtualMachinePriorityTypes.REGULAR:
@@ -183,8 +160,8 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         else:
             pricing_model = PricingModel.SPOT
 
-        return VmInstance(name=v_m.name, region=v_m.location, admin_name=admin, public_ip_address=pub_address,
-                          private_ip_address=priv_address, purpose=purpose, tags=tags, pricing_model=pricing_model,
+        return VmInstance(name=v_m.name, region=v_m.location, user_name=admin, public_ip_address=pub_address,
+                          private_ip_address=priv_address, tags=tags, pricing_model=pricing_model,
                           image=image)
 
     def _resource_group(self, region: str) -> ResourceGroup:
@@ -323,27 +300,38 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         return nic
 
     @staticmethod
-    def _get_scylla_storage_profile(region: str, version: str, arch: VmArch, name: str, disk_size: str = None
-                                    ) -> Dict[str, Any]:
-        if version.startswith("/subscriptions/"):
-            image = version
+    def _get_scylla_storage_profile(image_id: str, name: str, disk_size: str = None) -> Dict[str, Any]:
+        """Creates storage profile based on image_id. image_id may refer to scylla-crafted images
+         (starting with '/subscription') or to 'Urn' of image (see output of e.g. `az vm image list --output table`)"""
+        storage_profile = {"storage_profile": {
+            "os_disk": {
+                           "name": f"{name}-os-disk",
+                           "os_type": "linux",
+                           "caching": "ReadWrite",
+                           "create_option": "FromImage",
+                           "managed_disk": {
+                               "storage_account_type": "Premium_LRS",  # SSD
+                           },
+                           } | ({} if disk_size is None else {"disk_size_gb": disk_size}),
+        }}
+        if image_id.startswith("/subscriptions/"):
+            storage_profile.update({
+                "storage_profile": {
+                    "image_reference": {"id": image_id},
+                }
+            })
         else:
-            image = get_scylla_images(version, region, arch.value)[0].id
-        LOGGER.warning(image)
-        storage_profile = {
-            "storage_profile": {
-                "image_reference": {"id": image},
-                "os_disk": {
-                    "name": f"{name}-os-disk",
-                    "os_type": "linux",
-                               "caching": "ReadWrite",
-                               "create_option": "FromImage",
-                               "managed_disk": {
-                                   "storage_account_type": "Premium_LRS",  # SSD
-                               },
-                } | ({} if disk_size is None else {"disk_size_gb": disk_size}),
-            }
-        }
+            image_reference_values = image_id.split(":")
+            storage_profile.update({
+                "storage_profile": {
+                    "image_reference": {
+                        "publisher": image_reference_values[0],
+                        "offer": image_reference_values[1],
+                        "sku": image_reference_values[2],
+                        "version": image_reference_values[3],
+                    },
+                }
+            })
         return storage_profile
 
     @staticmethod
