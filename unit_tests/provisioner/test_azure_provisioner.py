@@ -16,7 +16,8 @@ import pytest
 
 from sdcm.keystore import KeyStore  # pylint: disable=import-error
 from sdcm.provision.azure.provisioner import AzureProvisioner  # pylint: disable=import-error
-from sdcm.provision.provisioner import InstanceDefinition, InstancePurpose  # pylint: disable=import-error
+from sdcm.provision.azure.utils import get_scylla_images
+from sdcm.provision.provisioner import InstanceDefinition  # pylint: disable=import-error
 
 
 class TestProvisionScyllaInstanceAzureE2E:
@@ -26,15 +27,18 @@ class TestProvisionScyllaInstanceAzureE2E:
     def test_id(self):  # pylint: disable=no-self-use
         return f"unit-test-{str(uuid.uuid4())}"
 
+    @pytest.fixture(scope="session")
+    def image_id(self):  # pylint: disable=no-self-use
+        return get_scylla_images("master:latest", "eastus")[0].id
+
     @pytest.fixture(scope='session')
-    def definition(self):  # pylint: disable=no-self-use
+    def definition(self, image_id):  # pylint: disable=no-self-use
         return InstanceDefinition(
             name="test-vm-1",
-            purpose=InstancePurpose.SCYLLA,
-            version="master:latest",
-            size="Standard_D2s_v3",
-            admin_name="tester",
-            admin_public_key=KeyStore().get_ec2_ssh_key_pair().public_key.decode(),
+            image_id=image_id,
+            type="Standard_D2s_v3",
+            user_name="tester",
+            ssh_public_key=KeyStore().get_ec2_ssh_key_pair().public_key.decode(),
             tags={'test-tag': 'test_value'}
         )
 
@@ -47,9 +51,8 @@ class TestProvisionScyllaInstanceAzureE2E:
         region = "eastus"
         v_m = provisioner.create_virtual_machine(region, definition)
         assert v_m.name == definition.name
-        assert v_m.purpose == InstancePurpose.SCYLLA
         assert v_m.region == region
-        assert v_m.admin_name == definition.admin_name
+        assert v_m.user_name == definition.user_name
         assert v_m.public_ip_address
         assert v_m.private_ip_address
         assert v_m.tags == definition.tags
@@ -62,9 +65,8 @@ class TestProvisionScyllaInstanceAzureE2E:
         region = "eastus"
         v_m = provisioner.create_virtual_machine(region, definition)
         assert v_m.name == definition.name
-        assert v_m.purpose == InstancePurpose.SCYLLA
         assert v_m.region == region
-        assert v_m.admin_name == definition.admin_name
+        assert v_m.user_name == definition.user_name
         assert v_m.public_ip_address
         assert v_m.private_ip_address
         assert v_m.tags == definition.tags
