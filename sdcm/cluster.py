@@ -17,6 +17,7 @@ import queue
 import getpass
 import logging
 import os
+import sys
 import random
 import re
 import tempfile
@@ -49,6 +50,7 @@ from cassandra.policies import RetryPolicy
 from cassandra.policies import WhiteListRoundRobinPolicy
 
 from argus.db.cloud_types import ResourceState, CloudInstanceDetails, CloudResource
+from argus.db.db_types import NemesisStatus
 from sdcm.argus_test_run import ArgusTestRun
 from sdcm.collectd import ScyllaCollectdSetup
 from sdcm.db_log_reader import DbLogReader
@@ -4082,10 +4084,35 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if self.nemesis_termination_event.is_set():
             return
         self.log.info('Set _nemesis_termination_event')
+        self.log.debug("There are %s nemesis threads currently running", len(self.nemesis_threads))
         self.nemesis_termination_event.set()
+        threads_tracebacks = []
+        # pylint: disable=protected-access
+        current_thread_frames = sys._current_frames()
         for nemesis_thread in self.nemesis_threads:
             nemesis_thread.join(timeout)
-        self.nemesis_threads = []
+            if nemesis_thread.is_alive():
+                stack_trace = traceback.format_stack(current_thread_frames[nemesis_thread.ident])
+                threads_tracebacks.append("\n".join(stack_trace))
+        self.argus_terminate_remaining_nemeses(stack_trace="\n".join(threads_tracebacks))
+
+    def argus_terminate_remaining_nemeses(self, stack_trace="") -> None:
+        try:
+            run = ArgusTestRun.get()
+            running_nemeses = []
+            for nemesis in run.run_info.results.nemesis_data:
+                if nemesis.nemesis_status == NemesisStatus.RUNNING:
+                    running_nemeses.append(nemesis)
+
+            self.log.info("Attempting to terminate %s running nemeses in Argus", len(running_nemeses))
+            for nemesis in running_nemeses:
+                self.log.debug("Marking nemesis \"%s\" as terminated in argus...", nemesis.name)
+                nemesis.complete(f"Nemesis termination at the end of the test\n{stack_trace}")
+                nemesis.nemesis_status = NemesisStatus.TERMINATED
+            run.save()
+        except Exception:  # pylint: disable=broad-except
+            self.log.warning("Error recording nemesis termination information in Argus")
+            self.log.debug(exc_info=True)
 
     def scylla_configure_non_root_installation(self, node, devname, verbose, timeout):
         node.stop_scylla_server(verify_down=False)
