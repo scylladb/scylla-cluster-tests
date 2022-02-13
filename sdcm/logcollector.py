@@ -793,7 +793,9 @@ class ScyllaLogCollector(LogCollector):
                     CommandLog(name='dmesg.log',
                                command='dmesg -P'),
                     CommandLog(name='kallsyms',
-                               command='sudo cat /proc/kallsyms')
+                               command='sudo cat /proc/kallsyms'),
+                    CommandLog(name='systemctl.status',
+                               command='sudo systemctl status --all --full --no-pager'),
                     ]
     cluster_log_type = "db-cluster"
     cluster_dir_prefix = "db-cluster"
