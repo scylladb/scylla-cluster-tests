@@ -19,8 +19,8 @@ import binascii
 
 from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
 from azure.mgmt.network.models import (NetworkSecurityGroup, VirtualNetwork, Subnet, PublicIPAddress, NetworkInterface)
-from azure.mgmt.resource.resources.models import ResourceGroup
 from sdcm.provision.azure.network_security_group_rules import open_ports_rules
+from sdcm.provision.azure.resource_group_provider import ResourceGroupProvider
 from sdcm.provision.provisioner import Provisioner, InstanceDefinition, VmInstance, PricingModel
 from sdcm.utils.azure_utils import AzureService
 
@@ -32,7 +32,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
     """Provides api for VM provisioning in Azure cloud, tuned for Scylla QA. """
     test_id: str
     _azure_service: AzureService = AzureService()
-    _resource_groups_cache: Dict[str, ResourceGroup] = field(default_factory=dict)
+    _rg_provider: ResourceGroupProvider = field(init=False)
     _network_sec_groups_cache: Dict[str, NetworkSecurityGroup] = field(default_factory=dict)
     _vnet_cache: Dict[str, VirtualNetwork] = field(default_factory=dict)
     _subnet_cache: Dict[str, Subnet] = field(default_factory=dict)
@@ -43,13 +43,10 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
 
     def __post_init__(self) -> None:
         """'Reattaches' to resource group for given test_id by discovery of existing resources and populating cache."""
-        rg_names = [rg.name for rg in list(self._azure_service.resource.resource_groups.list()) if
-                    rg.name.startswith(f"sct-{self.test_id}-")]
-        for resource_group_name in rg_names:
+        self._rg_provider = ResourceGroupProvider(self._resource_group_prefix)
+        for resource_group_name in self._rg_provider.groups():
             LOGGER.info("getting resources for {}...".format(resource_group_name))
             resource_list = list(self._azure_service.resource.resources.list_by_resource_group(resource_group_name))
-            resource_group = self._azure_service.resource.resource_groups.get(resource_group_name)
-            self._resource_groups_cache[resource_group.name] = resource_group
             for resource in resource_list:
                 match resource.type:
                     case "Microsoft.Network/networkSecurityGroups":
@@ -75,12 +72,16 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
             for v_m in self._vm_cache.values():
                 self._instances_cache[v_m.name] = self._vm_to_instance(v_m)
 
+    @property
+    def _resource_group_prefix(self):
+        return f"sct-{self.test_id}"
+
     def create_virtual_machine(self, region: str, definition: InstanceDefinition,
                                pricing_model: PricingModel = PricingModel.SPOT) -> VmInstance:
         """Create virtual machine in provided region, specified by InstanceDefinition"""
         if definition.name in self._instances_cache:
             return self._instances_cache[definition.name]
-        resource_group_name = self._resource_group(region).name
+        resource_group_name = self._rg_provider.get_or_create(region=region).name
         nic_id = self._network_interface(region, definition.name).id
         LOGGER.info(
             "Creating '{name}' VM in resource group {rg}...".format(name=definition.name, rg=resource_group_name))
@@ -137,9 +138,8 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         """Triggers delete of all resources."""
         tasks = []
         LOGGER.info("Initiating cleanup of all resources...")
-        for resource_group_name in self._resource_groups_cache:
-            tasks.append(self._azure_service.resource.resource_groups.begin_delete(resource_group_name))
-        LOGGER.info("Initiated cleanup of all resources")
+        self._rg_provider.clean_all(wait)
+
         for _field in fields(self):  # clear cache
             if _field.name != "test_id":
                 setattr(self, _field.name, {})
@@ -164,27 +164,11 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
                           private_ip_address=priv_address, tags=tags, pricing_model=pricing_model,
                           image=image)
 
-    def _resource_group(self, region: str) -> ResourceGroup:
-        group_name = f"sct-{self.test_id}-{region.lower()}"
-        if group_name in self._resource_groups_cache:
-            return self._resource_groups_cache[group_name]
-        LOGGER.info("Creating SCT resource group in region {region}...".format(region=region))
-        resource_group = self._azure_service.resource.resource_groups.create_or_update(
-            resource_group_name=group_name,
-            parameters={
-                "location": region
-            },
-        )
-        LOGGER.info("Provisioned resource group {name} in the {region} region".format(
-            name=resource_group.name, region=resource_group.location))
-        self._resource_groups_cache[group_name] = resource_group
-        return resource_group
-
     def _network_security_group(self, region: str) -> NetworkSecurityGroup:
         group_name = "default"
         if group_name in self._network_sec_groups_cache:
             return self._network_sec_groups_cache[group_name]
-        resource_group_name = self._resource_group(region).name
+        resource_group_name = self._rg_provider.get_or_create(region=region).name
         LOGGER.info("Creating SCT network security group in resource group {rg}...".format(rg=resource_group_name))
         network_sec_group = self._azure_service.network.network_security_groups.begin_create_or_update(
             resource_group_name=resource_group_name,
@@ -203,7 +187,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         vnet_name = "default"
         if vnet_name in self._vnet_cache:
             return self._vnet_cache[vnet_name]
-        resource_group_name = self._resource_group(region).name
+        resource_group_name = self._rg_provider.get_or_create(region=region).name
         LOGGER.info("Creating vnet in resource group {rg}...".format(rg=resource_group_name))
         vnet = self._azure_service.network.virtual_networks.begin_create_or_update(
             resource_group_name=resource_group_name,
@@ -224,7 +208,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         subnet_name = "default"
         if subnet_name in self._subnet_cache:
             return self._subnet_cache[subnet_name]
-        resource_group_name = self._resource_group(region).name
+        resource_group_name = self._rg_provider.get_or_create(region=region).name
         vnet_name = self._virtual_network(region).name
         network_sec_group_id = self._network_security_group(region).id
         LOGGER.info("Creating subnet in resource group {rg}...".format(rg=resource_group_name))
@@ -249,7 +233,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         ip_name = f"{region.lower()}-{name}-{version.lower()}"
         if ip_name in self._ip_cache:
             return self._ip_cache[ip_name]
-        resource_group_name = self._resource_group(region).name
+        resource_group_name = self._rg_provider.get_or_create(region=region).name
         LOGGER.info("Creating public_ip in resource group {rg}...".format(rg=resource_group_name))
         public_ip_address = self._azure_service.network.public_ip_addresses.begin_create_or_update(
             resource_group_name=resource_group_name,
@@ -273,7 +257,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         if nic_name in self._nic_cache:
             return self._nic_cache[nic_name]
         subnet_id = self._subnet(region).id
-        resource_group_name = self._resource_group(region).name
+        resource_group_name = self._rg_provider.get_or_create(region).name
         parameters = {
             "location": region,
             "ip_configurations": [{
