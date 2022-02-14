@@ -2607,7 +2607,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             try:
                 # HACK: temporary hack to use libssh2 only for nodetool command
                 remote_class = RemoteCmdRunnerBase.remoter_classes.get('libssh2')
-                remoter = remote_class(**self.ssh_login_info | dict(hostname=self.external_address))
+                if self.ssh_login_info:
+                    remoter = remote_class(**self.ssh_login_info)
+                else:
+                    remoter = remote_class(hostname=self.external_address)
                 result = remoter.run(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose)
                 self.log.debug("Command '%s' duration -> %s s" % (result.command, result.duration))
 
