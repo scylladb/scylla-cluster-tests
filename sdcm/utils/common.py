@@ -48,7 +48,6 @@ from libcloud.compute.types import Provider
 
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
-AwsArchType = ['x86_64', 'arm64']
 
 
 try:
@@ -808,7 +807,7 @@ def clean_instances_gce(tags_dict):
 _SCYLLA_AMI_CACHE = defaultdict(list)
 
 
-def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64'):
+def get_scylla_ami_versions(region_name: str, arch='x86_64'):
     """Get the list of all the formal scylla ami from specific region."""
 
     if _SCYLLA_AMI_CACHE[region_name]:
@@ -1048,7 +1047,7 @@ def get_my_ip():
     return ip
 
 
-def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = 'x86_64'):
+def get_branched_ami(scylla_version: str, region_name: str, arch='x86_64'):
     """
     Get a list of AMIs, based on version match
 

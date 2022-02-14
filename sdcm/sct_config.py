@@ -944,8 +944,8 @@ class SCTConfiguration(dict):
 
                     amis = get_scylla_ami_versions(region)
                     for ami in amis:
-                        if scylla_version in ami['Name']:
-                            ami_list.append(ami['ImageId'])
+                        if scylla_version in ami.name:
+                            ami_list.append(ami.image_id)
                             break
                     else:
                         raise ValueError("AMI for scylla version {} wasn't found".format(scylla_version))
@@ -984,8 +984,8 @@ class SCTConfiguration(dict):
                 for region in self.get('region_name').split():
                     amis = get_scylla_ami_versions(region)
                     for ami in amis:
-                        if oracle_scylla_version in ami['Name']:
-                            ami_list.append(ami['ImageId'])
+                        if oracle_scylla_version in ami.name:
+                            ami_list.append(ami.image_id)
                             break
                     else:
                         raise ValueError("AMI for scylla version {} wasn't found".format(scylla_version))
