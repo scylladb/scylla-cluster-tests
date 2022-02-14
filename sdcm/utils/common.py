@@ -29,7 +29,7 @@ import copy
 import string
 import sys
 import warnings
-from typing import Iterable, List, Callable, Literal
+from typing import Iterable, List, Callable
 from urllib.parse import urlparse
 
 from functools import wraps, partial
@@ -48,7 +48,7 @@ from libcloud.compute.types import Provider
 
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
-AwsArchType = Literal['x86_64', 'arm64']
+AwsArchType = ['x86_64', 'arm64']
 
 
 try:
