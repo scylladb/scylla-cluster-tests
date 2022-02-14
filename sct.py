@@ -200,7 +200,7 @@ def list_ami_versions(region):
     tbl.align = "l"
 
     for ami in amis:
-        tbl.add_row([ami['Name'], ami['ImageId'], ami['CreationDate']])
+        tbl.add_row([ami.name, ami.image_id, ami.creation_date])
 
     click.echo(tbl.get_string(title="Scylla AMI versions"))
 
