@@ -1939,6 +1939,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             # `screen' package is missed in CentOS/RHEL 8. Should be installed from EPEL repository.
             if self.distro.is_centos8 or self.distro.is_rhel8 or self.distro.is_oel8 or self.distro.is_rocky8:
                 self.install_epel()
+            self.remoter.run("sudo yum remove -y abrt")  # https://docs.scylladb.com/operating-scylla/admin/#core-dumps
             self.remoter.run('sudo yum install -y rsync tcpdump screen')
             self.download_scylla_repo(scylla_repo)
             # hack cause of broken caused by EPEL

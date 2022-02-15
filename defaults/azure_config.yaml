@@ -11,7 +11,7 @@ azure_instance_type_loader: 'Standard_L8s_v2'
 azure_instance_type_monitor: 'Standard_L8s_v2'
 # TODO: Make loader and monitor images
 azure_image_loader: 'OpenLogic:CentOS:7.5:latest'
-azure_image_monitor: '/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers/Microsoft.Compute/images/ScyllaDB-4.7.dev-0.20211212.b0a8c153f72-1-build-219' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
+azure_image_monitor: 'OpenLogic:CentOS:7.5:latest'
 
 availability_zone: 'a'
 #root_disk_size_monitor: 50  # GB, remove this field if default disk size should be used

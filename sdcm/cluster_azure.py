@@ -274,7 +274,7 @@ class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
 
 class LoaderSetAzure(cluster.BaseLoaderSet, AzureCluster):
 
-    def __init__(self, loader_version, azure_image_type, azure_image_size, azure_network, provisioner, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, image_id, azure_image_type, azure_image_size, azure_network, provisioner, credentials,  # pylint: disable=too-many-arguments
                  azure_instance_type='Standard_D2s_v3', azure_n_local_ssd=1,
                  azure_image_username='centos',
                  user_prefix=None, n_nodes=10, add_disks=None, params=None, azure_datacenter=None):
@@ -284,7 +284,7 @@ class LoaderSetAzure(cluster.BaseLoaderSet, AzureCluster):
         cluster.BaseLoaderSet.__init__(self,
                                        params=params)
         AzureCluster.__init__(self,
-                              image_id=loader_version,
+                              image_id=image_id,
                               azure_image_type=azure_image_type,
                               azure_image_size=azure_image_size,
                               azure_n_local_ssd=azure_n_local_ssd,
@@ -299,5 +299,39 @@ class LoaderSetAzure(cluster.BaseLoaderSet, AzureCluster):
                               add_disks=add_disks,
                               params=params,
                               node_type='loader',
+                              azure_region_names=azure_datacenter
+                              )
+
+
+class MonitorSetAzure(cluster.BaseMonitorSet, AzureCluster):
+
+    def __init__(self, image_id, azure_image_type, azure_image_size, azure_network, provisioner, credentials,  # pylint: disable=too-many-arguments
+                 azure_instance_type='Standard_D2s_v3', azure_n_local_ssd=1,
+                 azure_image_username='centos', user_prefix=None, n_nodes=1,
+                 targets=None, add_disks=None, params=None, azure_datacenter=None):
+        # pylint: disable=too-many-locals
+        node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
+        cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
+
+        targets = targets if targets else {}
+        cluster.BaseMonitorSet.__init__(self,
+                                        targets=targets,
+                                        params=params)
+        AzureCluster.__init__(self,
+                              image_id=image_id,
+                              azure_image_type=azure_image_type,
+                              azure_image_size=azure_image_size,
+                              azure_n_local_ssd=azure_n_local_ssd,
+                              azure_network=azure_network,
+                              azure_instance_type=azure_instance_type,
+                              azure_image_username=azure_image_username,
+                              provisioner=provisioner,
+                              credentials=credentials,
+                              cluster_prefix=cluster_prefix,
+                              node_prefix=node_prefix,
+                              n_nodes=n_nodes,
+                              add_disks=add_disks,
+                              params=params,
+                              node_type='monitor',
                               azure_region_names=azure_datacenter
                               )

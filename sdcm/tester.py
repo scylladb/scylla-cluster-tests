@@ -40,7 +40,7 @@ from sdcm import nemesis, cluster_docker, cluster_k8s, cluster_baremetal, db_sta
 from sdcm.cluster import NoMonitorSet, SCYLLA_DIR, TestConfig, UserRemoteCredentials, BaseLoaderSet, BaseMonitorSet, \
     BaseScyllaCluster, BaseNode
 from sdcm.argus_test_run import ArgusTestRun
-from sdcm.cluster_azure import ScyllaAzureCluster, LoaderSetAzure
+from sdcm.cluster_azure import ScyllaAzureCluster, LoaderSetAzure, MonitorSetAzure
 from sdcm.cluster_gce import ScyllaGCECluster
 from sdcm.cluster_gce import LoaderSetGCE
 from sdcm.cluster_gce import MonitorSetGCE
@@ -845,7 +845,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         else:
             self.monitors = NoMonitorSet()
 
-    def get_cluster_azure(self, loader_info, db_info, monitor_info):  # pylint: disable=too-many-branches
+    def get_cluster_azure(self, loader_info, db_info, monitor_info):
+        # pylint: disable=too-many-branches,too-many-statements
         provisioner = AzureProvisioner(str(TestConfig().test_id()))
         if db_info['n_nodes'] is None:
             n_db_nodes = self.params.get('n_db_nodes')
@@ -901,7 +902,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             loader_info['n_local_ssd'] = self.params.get('azure_n_local_ssd_disk_loader')
         loader_additional_disks = {'pd-ssd': self.params.get('azure_pd_ssd_disk_size_loader')}
         self.loaders = LoaderSetAzure(
-            loader_version=self.params.get('azure_image_loader'),
+            image_id=self.params.get('azure_image_loader'),
             azure_image_type=loader_info['disk_type'],
             azure_image_size=loader_info['disk_size'],
             azure_n_local_ssd=loader_info['n_local_ssd'],
@@ -910,6 +911,34 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             n_nodes=loader_info['n_nodes'],
             add_disks=loader_additional_disks,
             **common_params)
+        if monitor_info['n_nodes'] is None:
+            monitor_info['n_nodes'] = self.params.get('n_monitor_nodes')
+        if monitor_info['type'] is None:
+            monitor_info['type'] = self.params.get('azure_instance_type_monitor')
+        if monitor_info['disk_type'] is None:
+            monitor_info['disk_type'] = self.params.get('azure_root_disk_type_monitor')
+        if monitor_info['disk_size'] is None:
+            monitor_info['disk_size'] = self.params.get('azure_root_disk_size_monitor')
+        if monitor_info['n_local_ssd'] is None:
+            monitor_info['n_local_ssd'] = self.params.get('azure_n_local_ssd_disk_monitor')
+        if monitor_info['n_nodes'] > 0:
+            monitor_additional_disks = {'pd-ssd': self.params.get('azure_pd_ssd_disk_size_monitor')}
+            azure_image_monitor = self.params.get('azure_image_monitor')
+            if not azure_image_monitor:
+                azure_image_monitor = self.params.get('azure_image')
+            self.monitors = MonitorSetAzure(image_id=azure_image_monitor,
+                                            azure_image_type=monitor_info['disk_type'],
+                                            azure_image_size=monitor_info['disk_size'],
+                                            azure_n_local_ssd=monitor_info['n_local_ssd'],
+                                            azure_instance_type=monitor_info['type'],
+                                            provisioner=provisioner,
+                                            n_nodes=monitor_info['n_nodes'],
+                                            add_disks=monitor_additional_disks,
+                                            targets=dict(db_cluster=self.db_cluster,
+                                                         loaders=self.loaders),
+                                            **common_params)
+        else:
+            self.monitors = NoMonitorSet()
 
     def get_cluster_aws(self, loader_info, db_info, monitor_info):
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches
