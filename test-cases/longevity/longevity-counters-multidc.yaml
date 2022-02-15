@@ -24,3 +24,6 @@ internode_encryption: 'dc'
 ip_ssh_connections: 'public'
 
 use_legacy_cluster_init: false
+
+# Temporarily downgrade scylla_bench to a stable version
+scylla_bench_version: v0.1.3
