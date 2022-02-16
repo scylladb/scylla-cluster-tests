@@ -1,3 +1,5 @@
+test_name: artifacts-centos8
+test_group: artifacts
 backtrace_decoding: false
 cluster_backend: 'gce'
 gce_image_db: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-stream-8'

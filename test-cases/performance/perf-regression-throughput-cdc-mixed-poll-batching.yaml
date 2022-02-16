@@ -1,3 +1,5 @@
+test_name: perf-regression-throughput-cdc-mixed-poll-batching
+test_group: performance
 # test runs 4 subtest with duration 60 min
 # and time for clear table between subtest
 test_duration: 500

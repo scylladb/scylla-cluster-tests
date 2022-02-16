@@ -1,3 +1,5 @@
+test_name: longevity-multi-keyspaces
+test_group: longevity
 # Test
 test_duration: 3600
 prepare_write_cmd: ["cassandra-stress write no-warmup cl=QUORUM n=4000000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..4000000 -log interval=30"]

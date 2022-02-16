@@ -1,3 +1,5 @@
+test_name: longevity-in-memory-36GB-1day
+test_group: longevity
 test_duration: 1500
 prepare_write_cmd:  ["cassandra-stress write                         cl=QUORUM n=21000000     -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=500 -pop seq=1..21000000 -col 'size=FIXED(200) n=FIXED(5)' -log interval=10"]
 prepare_verify_cmd: ["cassandra-stress read                          cl=QUORUM n=21000000     -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=500 -pop seq=1..21000000 -col 'size=FIXED(200) n=FIXED(5)' -log interval=10"]

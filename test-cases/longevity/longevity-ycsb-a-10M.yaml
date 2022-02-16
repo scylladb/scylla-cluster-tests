@@ -1,3 +1,5 @@
+test_name: longevity-ycsb-a-10M
+test_group: longevity
 # [Ivan]: I am currently testing CRDB vs ScyllaDB with YCSB workloads.
 #         This scenario shows how to load and run YCSB workload A against Scylla.
 #         It can be run with Jenkins BYO as in https://jenkins.scylladb.com/view/staging/job/scylla-staging/job/ivan/job/ivan-byo-longevity/23/:

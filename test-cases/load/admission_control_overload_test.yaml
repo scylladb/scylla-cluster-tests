@@ -1,3 +1,5 @@
+test_name: admission_control_overload_test
+test_group: load
 test_duration: 50
 
 prepare_write_cmd: "cassandra-stress user profile=/tmp/cs_profile_background_reads_overload.yaml ops'(insert=10)' no-warmup cl=ONE -port jmx=6868 -mode cql3 native -rate threads=1000 -errors ignore"

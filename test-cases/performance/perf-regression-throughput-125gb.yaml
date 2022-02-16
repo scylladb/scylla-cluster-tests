@@ -1,3 +1,5 @@
+test_name: perf-regression-throughput-125gb
+test_group: performance
 test_duration: 580
 
 prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=31250000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=100 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..31250000",

@@ -1,3 +1,5 @@
+test_name: cdc-15m-replication-preimage
+test_group: <FIX_ME>
 test_duration: 120
 
 user_prefix: 'cdc-replication-gemini'

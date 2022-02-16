@@ -1,3 +1,5 @@
+test_name: perf-regression-user-profiles
+test_group: performance
 # TODO: need to qualify
 
 test_duration: 800

@@ -1,3 +1,5 @@
+test_name: longevity-large-collections-12h
+test_group: longevity
 test_duration: 840
 stress_cmd: [
 "JVM_OPTION='-Xms8033M -Xmx8033M -Xmn400M' cassandra-stress user profile=/tmp/large_collections.yaml ops'(insert=3,read1=1,update1=1)' cl=QUORUM duration=720m -port jmx=6868 -mode cql3 native -rate threads=20"

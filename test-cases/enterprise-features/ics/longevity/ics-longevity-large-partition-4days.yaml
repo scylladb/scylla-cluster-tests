@@ -1,1 +1,3 @@
+test_name: ics-longevity-large-partition-4days
+test_group: <FIX_ME>
 compaction_strategy: 'IncrementalCompactionStrategy'

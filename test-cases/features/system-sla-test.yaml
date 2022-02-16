@@ -1,3 +1,5 @@
+test_name: system-sla-test
+test_group: features
 test_duration: 180
 
 n_db_nodes: 3

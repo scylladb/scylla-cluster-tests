@@ -1,3 +1,5 @@
+test_name: artifacts-gce-image
+test_group: artifacts
 cluster_backend: 'gce'
 use_preinstalled_scylla: true
 backtrace_decoding: false

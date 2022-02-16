@@ -1,3 +1,5 @@
+test_name: longevity-cdc-3d-400gb
+test_group: longevity
 test_duration: 4550
 
 prepare_write_cmd: ["cassandra-stress user no-warmup profile=/tmp/cdc_profile_400gb.yaml ops'(insert=1)' cl=QUORUM n=50000000 -port jmx=6868 -mode cql3 native -rate threads=100",

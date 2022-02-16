@@ -1,3 +1,5 @@
+test_name: gemini-3h-with-nondisruptive-nemesis
+test_group: gemini
 test_duration: 500
 n_db_nodes: 3
 n_test_oracle_db_nodes: 1

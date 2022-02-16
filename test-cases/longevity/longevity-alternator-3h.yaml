@@ -1,3 +1,5 @@
+test_name: longevity-alternator-3h
+test_group: short-longevity
 test_duration: 360
 prepare_write_cmd:
   - >-

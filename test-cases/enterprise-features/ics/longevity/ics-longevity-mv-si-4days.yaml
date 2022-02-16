@@ -1,3 +1,5 @@
+test_name: ics-longevity-mv-si-4days
+test_group: <FIX_ME>
 prepare_write_cmd: ["cassandra-stress user profile=/tmp/ics_c-s_profile_4mv_5queries.yaml ops'(insert=15,read1=1,read2=1,read3=1,read4=1,read5=1)' cl=QUORUM n=100000000 -port jmx=6868 -mode cql3 native -rate threads=10",
                     "cassandra-stress user profile=/tmp/ics_c-s_profile_3si_5queries.yaml ops'(insert=25,si_read1=1,si_read2=1,si_read3=1,si_read4=1,si_read5=1)' cl=QUORUM n=100000000 -port jmx=6868 -mode cql3 native -rate threads=10"
                    ]

@@ -1,3 +1,5 @@
+test_name: ics-longevity-50GB-4days-authorization-and-tls-ssl
+test_group: <FIX_ME>
 prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=100000000 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native  -rate threads=500 -pop seq=1..100000000"]
 
 stress_cmd: ["cassandra-stress mixed cl=QUORUM duration=5760m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native  -rate threads=20 -pop seq=1..100000000 -log interval=5",

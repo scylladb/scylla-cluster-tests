@@ -1,3 +1,5 @@
+test_name: longevity-alternator-3h-multidc
+test_group: longevity
 test_duration: 480
 prepare_write_cmd:
   - >-

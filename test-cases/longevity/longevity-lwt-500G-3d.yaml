@@ -1,3 +1,5 @@
+test_name: longevity-lwt-500G-3d
+test_group: longevity
 test_duration: 4450
 prepare_write_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_big_data.yaml n=133333333 ops'(insert_query=1)' cl=QUORUM -mode native cql3 -rate threads=100 -pop seq=1..133333333",
                     "cassandra-stress user profile=/tmp/c-s_lwt_big_data.yaml n=133333333 ops'(insert_query=1)' cl=QUORUM -mode native cql3 -rate threads=100 -pop seq=133333334..266666666",

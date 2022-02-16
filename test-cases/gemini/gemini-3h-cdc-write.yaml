@@ -1,3 +1,5 @@
+test_name: gemini-3h-cdc-write
+test_group: gemini
 test_duration: 300
 n_db_nodes: 3
 n_loaders: 1

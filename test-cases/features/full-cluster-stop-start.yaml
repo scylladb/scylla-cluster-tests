@@ -1,3 +1,5 @@
+test_name: full-cluster-stop-start
+test_group: features
 # TODO: need to qualify
 test_duration: 40
 

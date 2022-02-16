@@ -1,3 +1,5 @@
+test_name: longevity-twcs-48h
+test_group: long-longevity
 test_duration: 3000
 bench_run: true
 

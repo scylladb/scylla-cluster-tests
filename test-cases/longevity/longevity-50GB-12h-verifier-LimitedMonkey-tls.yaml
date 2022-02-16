@@ -1,3 +1,5 @@
+test_name: longevity-50GB-12h-verifier-LimitedMonkey-tls
+test_group: longevity
 test_duration: 750
 prepare_write_cmd: "cassandra-stress write cl=ALL n=50050075  -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1000 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..50050075 -log interval=15"
 

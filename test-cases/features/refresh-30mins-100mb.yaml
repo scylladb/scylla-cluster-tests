@@ -1,3 +1,5 @@
+test_name: refresh-30mins-100mb
+test_group: features
 # TODO: need to qualify
 test_duration: 45
 

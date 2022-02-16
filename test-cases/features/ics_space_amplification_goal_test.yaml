@@ -1,3 +1,5 @@
+test_name: ics_space_amplification_goal_test
+test_group: features
 test_duration: 3600
 
 

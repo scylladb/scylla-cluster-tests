@@ -1,3 +1,5 @@
+test_name: cdc-replication-longevity
+test_group: <FIX_ME>
 test_duration: 900
 
 user_prefix: 'cdc-replication-longevity'

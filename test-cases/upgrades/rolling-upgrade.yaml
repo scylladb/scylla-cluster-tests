@@ -1,3 +1,5 @@
+test_name: rolling-upgrade
+test_group: upgrades
 # TODO: need to qualify on GCE and AWS
 
 test_duration: 360

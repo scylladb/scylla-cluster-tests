@@ -1,3 +1,5 @@
+test_name: longevity-large-partition-200k_pks-4days
+test_group: longevity
 test_duration: 6480
 
 bench_run: true

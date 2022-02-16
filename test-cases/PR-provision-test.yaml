@@ -1,3 +1,5 @@
+test_name: PR-provision-test
+test_group: <FIX_ME>
 test_duration: 60
 max_partitions_in_test_table: 10
 stress_cmd: ["cassandra-stress write cl=QUORUM duration=1m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=1000 -pop seq=1..10000000 -log interval=5",

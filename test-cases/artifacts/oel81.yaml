@@ -1,3 +1,5 @@
+test_name: artifacts-oel81
+test_group: artifacts
 ami_db_scylla_user: 'ec2-user'
 ami_id_db_scylla: 'ami-0e883e67243efea62'
 aws_root_disk_size_db: 50

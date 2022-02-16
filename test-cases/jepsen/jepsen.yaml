@@ -1,3 +1,5 @@
+test_name: jepsen-test-all
+test_group: long-longevity
 test_duration: 720
 cluster_backend: 'gce'
 gce_image_username: 'sct'

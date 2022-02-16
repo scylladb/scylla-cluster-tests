@@ -1,3 +1,5 @@
+test_name: longevity-large-partition-8h
+test_group: longevity
 test_duration: 600
 
 bench_run: true

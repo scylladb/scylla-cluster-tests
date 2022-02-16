@@ -1,3 +1,5 @@
+test_name: perf-regression-latency-in-memory
+test_group: performance
 # TODO: need to qualify
 
 test_duration: 300

@@ -1,3 +1,5 @@
+test_name: manager-repair-control
+test_group: manager
 test_duration: 1200
 
 prepare_write_cmd: [

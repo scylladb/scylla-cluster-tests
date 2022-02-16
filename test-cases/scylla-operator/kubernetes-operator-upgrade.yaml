@@ -1,3 +1,5 @@
+test_name: kubernetes-operator-upgrade
+test_group: scylla-operator
 test_duration: 300
 
 # workloads

@@ -1,3 +1,5 @@
+test_name: perf-regression-throughput-lwt-small
+test_group: performance
 # Test configuration for performance_regression_lwt_test.py:test_lwt_throughput
 
 test_duration: 300

@@ -1,3 +1,5 @@
+test_name: repair-240mins-100G
+test_group: features
 # TODO: need to qualify
 test_duration: 240
 

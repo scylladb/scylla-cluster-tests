@@ -1,3 +1,5 @@
+test_name: destroy-data-then-repair
+test_group: features
 # TODO: need to qualify
 test_duration: 10080
 # stress_write_cmd: "cassandra-stress write cl=QUORUM n=10000 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=500 -col 'size=FIXED(1024) n=FIXED(1)' -pop seq=1..300300300"

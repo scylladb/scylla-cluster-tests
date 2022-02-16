@@ -1,3 +1,5 @@
+test_name: artifacts-docker
+test_group: artifacts
 backtrace_decoding: false
 cluster_backend: 'docker'
 docker_image: 'scylladb/scylla'

@@ -1,3 +1,5 @@
+test_name: manager-regression-multiDC-set-distro
+test_group: manager
 test_duration: 240
 
 stress_cmd: "cassandra-stress write cl=QUORUM n=4000000 -schema 'replication(strategy=NetworkTopologyStrategy,us-eastscylla_node_east=2,us-west-2scylla_node_west=1)' -port jmx=6868 -mode cql3 native -rate threads=200 -pop seq=400000000..600000000"

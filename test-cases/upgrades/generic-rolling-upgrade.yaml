@@ -1,3 +1,5 @@
+test_name: generic-rolling-upgrade
+test_group: upgrades
 # Workloads
 # stress_before_upgrade:           # To be configured in additional yaml
 # stress_during_entire_upgrade:       # To be configured in additional yaml

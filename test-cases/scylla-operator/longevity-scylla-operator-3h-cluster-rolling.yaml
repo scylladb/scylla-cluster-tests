@@ -1,3 +1,5 @@
+test_name: longevity-scylla-operator-3h-cluster-rolling
+test_group: scylla-operator
 test_duration: 300
 stress_cmd: ["cassandra-stress write cl=QUORUM duration=180m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=100 throttle=1000/s -pop seq=1..10000000 -log interval=5"
              ]

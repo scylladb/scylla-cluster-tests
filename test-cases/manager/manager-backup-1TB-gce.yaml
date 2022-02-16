@@ -1,3 +1,5 @@
+test_name: manager-backup-1TB-gce
+test_group: manager
 test_duration: 600
 
 user_prefix: 'mgr-backup-1tb'

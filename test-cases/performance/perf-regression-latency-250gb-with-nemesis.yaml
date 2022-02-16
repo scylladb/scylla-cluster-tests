@@ -1,3 +1,5 @@
+test_name: perf-regression-latency-250gb-with-nemesis
+test_group: performance
 test_duration: 680
 prepare_write_cmd: ["cassandra-stress write no-warmup cl=ALL n=62500000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..62500000",
                     "cassandra-stress write no-warmup cl=ALL n=62500000 -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=200 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=62500001..125000000",

@@ -1,3 +1,5 @@
+test_name: longevity-harry-2h
+test_group: longevity
 test_duration: 240
 stress_cmd: ["cassandra-harry -run-time 2 -run-time-unit HOURS"]
 

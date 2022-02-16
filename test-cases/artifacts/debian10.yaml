@@ -1,3 +1,5 @@
+test_name: artifacts-debian10
+test_group: artifacts
 backtrace_decoding: false
 cluster_backend: 'gce'
 gce_image_db: 'https://www.googleapis.com/compute/v1/projects/debian-cloud/global/images/family/debian-10'

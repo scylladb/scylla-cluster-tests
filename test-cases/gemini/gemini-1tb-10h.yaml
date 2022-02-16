@@ -1,3 +1,5 @@
+test_name: gemini-1tb-10h
+test_group: long-longevity
 test_duration: 780
 n_db_nodes: 3
 n_test_oracle_db_nodes: 1

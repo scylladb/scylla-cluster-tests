@@ -1,3 +1,5 @@
+test_name: longevity-ndbench-192-nodes-4h
+test_group: longevity
 test_duration: 240
 
 prepare_write_cmd: >-

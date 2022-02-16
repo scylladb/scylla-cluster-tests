@@ -1,3 +1,5 @@
+test_name: longevity-1TB-5days-authorization-and-tls-ssl
+test_group: longevity
 test_duration: 7200
 prepare_write_cmd: ["cassandra-stress write cl=QUORUM n=275050075 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=1..275050075",
                     "cassandra-stress write cl=QUORUM n=275050075 -schema 'replication(factor=3) compaction(strategy=LeveledCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=150 -col 'size=FIXED(200) n=FIXED(5)' -pop seq=275050076..550100150",

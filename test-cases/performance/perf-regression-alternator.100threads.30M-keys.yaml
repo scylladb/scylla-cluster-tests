@@ -1,3 +1,5 @@
+test_name: perf-regression-alternator.100threads.30M-keys
+test_group: performance
 test_duration: 120
 
 round_robin: true

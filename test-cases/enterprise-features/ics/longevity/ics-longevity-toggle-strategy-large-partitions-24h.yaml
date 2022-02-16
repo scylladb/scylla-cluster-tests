@@ -1,3 +1,5 @@
+test_name: ics-longevity-toggle-strategy-large-partitions-24h
+test_group: <FIX_ME>
 compaction_strategy: 'IncrementalCompactionStrategy'
 nemesis_class_name: 'ToggleTableIcsMonkey'
 nemesis_interval: 30

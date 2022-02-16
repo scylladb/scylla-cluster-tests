@@ -1,3 +1,5 @@
+test_name: gce-multiple-dc-shutdown-30mins
+test_group: features
 # TODO: need to qualify
 test_duration: 45
 

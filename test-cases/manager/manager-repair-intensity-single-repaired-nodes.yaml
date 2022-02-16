@@ -1,3 +1,5 @@
+test_name: manager-repair-intensity-single-repaired-nodes
+test_group: manager
 test_duration: 1560
 
 prepare_write_cmd: [

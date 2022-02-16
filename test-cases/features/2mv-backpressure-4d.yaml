@@ -1,3 +1,5 @@
+test_name: 2mv-backpressure-4d
+test_group: features
 test_duration: 6480
 
 prepare_write_cmd: "cassandra-stress user profile=/tmp/c-s_profile_2mv_2queries.yaml ops'(insert=1)' cl=QUORUM n=250000000 -port jmx=6868 -mode cql3 native -rate threads=200"

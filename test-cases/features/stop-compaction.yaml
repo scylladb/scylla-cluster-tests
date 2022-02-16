@@ -1,3 +1,5 @@
+test_name: stop-compaction
+test_group: features
 test_duration: 60
 
 n_db_nodes: 3

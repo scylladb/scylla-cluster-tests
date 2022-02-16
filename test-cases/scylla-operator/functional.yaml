@@ -1,3 +1,5 @@
+test_name: functional
+test_group: scylla-operator
 test_duration: 300
 k8s_deploy_monitoring: false
 use_mgmt: true

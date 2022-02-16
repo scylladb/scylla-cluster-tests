@@ -1,3 +1,5 @@
+test_name: corrupt-then-rebuild
+test_group: features
 # TODO: need to qualify
 test_duration: 10080
 

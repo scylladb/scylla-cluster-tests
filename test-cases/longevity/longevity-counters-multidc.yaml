@@ -1,3 +1,5 @@
+test_name: longevity-counters-multidc
+test_group: longevity
 test_duration: 500
 
 pre_create_keyspace: "CREATE KEYSPACE scylla_bench WITH replication = {'class': 'NetworkTopologyStrategy', 'us-eastscylla_node_east': '3', 'us-west-2scylla_node_west': '3', 'eu-westscylla_node_west': '3'};"

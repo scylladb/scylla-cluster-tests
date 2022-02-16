@@ -1,3 +1,5 @@
+test_name: dns-cluster-5min
+test_group: features
 # TODO: need to qualify
 
 test_duration: 20

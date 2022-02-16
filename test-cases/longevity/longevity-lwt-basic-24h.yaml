@@ -1,3 +1,5 @@
+test_name: longevity-lwt-basic-24h
+test_group: longevity
 test_duration: 1500
 prepare_write_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml n=10000000 ops'(insert_query=1)' cl=QUORUM -mode native cql3 -rate threads=30" ]
 stress_cmd: ["cassandra-stress user profile=/tmp/c-s_lwt_basic.yaml ops'(lwt_update_one_column=1,lwt_update_two_columns=1)' cl=QUORUM duration=1440m -mode native cql3 -rate threads=20",

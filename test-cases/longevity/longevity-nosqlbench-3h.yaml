@@ -1,3 +1,5 @@
+test_name: longevity-nosqlbench-3h
+test_group: longevity
 test_duration: 300
 
 stress_cmd: [

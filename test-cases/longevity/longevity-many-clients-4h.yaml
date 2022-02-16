@@ -1,3 +1,5 @@
+test_name: longevity-many-clients-4h
+test_group: longevity
 test_duration: 360
 
 prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=20 -pop seq=1..20971520 -col 'n=FIXED(2) size=FIXED(256)' -log interval=5"
