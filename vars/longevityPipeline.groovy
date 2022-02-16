@@ -5,7 +5,7 @@ def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCl
 
 def call(Map pipelineParams) {
 
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name)
     def functional_test = pipelineParams.functional_test
 
     pipeline {
@@ -21,7 +21,7 @@ def call(Map pipelineParams) {
         }
         parameters {
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
-               description: 'aws|gce',
+               description: 'aws|gce|azure',
                name: 'backend')
 
             string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
@@ -30,12 +30,16 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
+            string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
+                   description: 'Azure location',
+                   name: 'azure_region_name')
             string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
                description: 'Availability zone',
                name: 'availability_zone')
 
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'gce_image_db')
+            string(defaultValue: '', description: '', name: 'azure_image_db')
 
             string(defaultValue: '',
                    description: 'cloud path for RPMs, s3:// or gs://',

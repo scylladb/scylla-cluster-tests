@@ -82,7 +82,7 @@ def region_name_to_location(region_name: str) -> str:
 # [5] https://docs.microsoft.com/en-us/azure/virtual-machines/shared-image-galleries
 class AzureRegion:  # pylint: disable=too-many-public-methods
     SCT_GALLERY_REGION = "eastus"
-    SCT_RESOURCE_GROUP_NAME_PREFIX = "SCT"
+    SCT_RESOURCE_GROUP_NAME_PREFIX = "SCT_IMAGES"
 
     VIRTUAL_NETWORK_NAME_SUFFIX = "vnet"
     NETWORK_SECURITY_GROUP_NAME_SUFFIX = "nsg"

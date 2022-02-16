@@ -1056,14 +1056,25 @@ def clean_instances_gce(tags_dict, dry_run=False):
 
 def clean_instances_azure(tags_dict, dry_run=False):
     """
-    Removes everything related to test_id todo lukasz: cleanup instances by tags, not everything if some have keep-alive
+    Cleans instances by tags.
 
     :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
     :return: None
     """
+
+    test_id = tags_dict.pop("TestId")
+    provisioner = AzureProvisioner(test_id=test_id)
+    all_instances = provisioner.list_virtual_machines()
+    instances = all_instances.copy()
+    for tag_name, tag_value in tags_dict.items():
+        instances = [instance for instance in instances if instance.tags.get(tag_name, "") == tag_value]
+    LOGGER.info("going to clean instances: {names}".format(names=[inst.name for inst in instances]))
     if not dry_run:
-        provisioner = AzureProvisioner(test_id=tags_dict["TestId"])
-        provisioner.cleanup(wait=False)
+        if instances == all_instances:
+            provisioner.cleanup(wait=False)
+        else:
+            for instance in instances:
+                instance.terminate(wait=False)
 
 
 def clean_clusters_gke(tags_dict: dict, dry_run: bool = False) -> None:

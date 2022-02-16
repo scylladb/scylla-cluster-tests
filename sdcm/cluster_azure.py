@@ -7,6 +7,7 @@ from sdcm import cluster
 from sdcm.keystore import KeyStore
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.provisioner import InstanceDefinition, PricingModel, VmInstance
+from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ class AzureNode(cluster.BaseNode):
 
     log = LOGGER
 
-    def __init__(self, azure_instance: VmInstance, vm_provisioner, credentials, parent_cluster,  # pylint: disable=too-many-arguments
+    def __init__(self, azure_instance: VmInstance, vm_provisioner: AzureProvisioner, credentials, parent_cluster,  # pylint: disable=too-many-arguments
                  node_prefix='node', node_index=1, azure_image_username='root',
                  base_logdir=None, dc_idx=0):
         region = parent_cluster.params.get('azure_region_name').split()[dc_idx]
@@ -113,7 +114,7 @@ class AzureNode(cluster.BaseNode):
     def destroy(self):
         self.stop_task_threads()
         self.wait_till_tasks_threads_are_stopped()
-        self._instance_wait_safe(self._safe_destroy)
+        self._instance.terminate(wait=True)
         super().destroy()
 
     def get_console_output(self):
@@ -219,20 +220,25 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
 
         for node_index in range(self._node_index + 1, self._node_index + count + 1):
             instance_definition.name = f"{self._node_prefix}-{region}-{node_index}".lower()
-            instances.append(self.provisioner.create_virtual_machine(region=region, definition=instance_definition,
-                                                                     pricing_model=pricing_model))
+            instances.append(self._provision_instance(region=region, instance_definition=instance_definition,
+                                                      pricing_model=pricing_model))
         return instances
 
+    @retrying(n=3, sleep_time=1)
+    def _provision_instance(self, region: str, instance_definition: InstanceDefinition, pricing_model: PricingModel):
+        return self.provisioner.create_virtual_machine(region=region, definition=instance_definition,
+                                                       pricing_model=pricing_model)
+
     def get_node_ips_param(self, public_ip=True):
-        # todo lukasz: why gce cluster didn't implement this?
+        # todo lukasz: why gce cluster didn't have to implement this?
         raise NotImplementedError("get_node_ips_param should not run")
 
     def node_setup(self, node, verbose=False, timeout=3600):
-        # todo lukasz: why gce cluster didn't implement this?
+        # todo lukasz: why gce cluster didn't have to implement this?
         raise NotImplementedError("node_setup should not run")
 
     def wait_for_init(self):
-        # todo lukasz: why gce cluster didn't implement this?
+        # todo lukasz: why gce cluster didn't have to implement this?
         raise NotImplementedError("wait_for_init should not run")
 
 

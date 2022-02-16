@@ -2,6 +2,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict
 
+from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.resource.resources.models import ResourceGroup
 
 from sdcm.utils.azure_utils import AzureService
@@ -21,9 +22,11 @@ class ResourceGroupProvider:
         rg_names = [rg.name for rg in list(self._azure_service.resource.resource_groups.list()) if
                     rg.name.startswith(self._prefix)]
         for resource_group_name in rg_names:
-            LOGGER.info("getting resources for {}...".format(resource_group_name))
-            resource_group = self._azure_service.resource.resource_groups.get(resource_group_name)
-            self._cache[resource_group.name] = resource_group
+            try:
+                resource_group = self._azure_service.resource.resource_groups.get(resource_group_name)
+                self._cache[resource_group.name] = resource_group
+            except ResourceNotFoundError:
+                pass
 
     def groups(self) -> Dict[str, ResourceGroup]:
         """Returns list of discovered/created resources groups for this provider."""
