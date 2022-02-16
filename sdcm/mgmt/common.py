@@ -22,7 +22,8 @@ def get_distro_name(distro_object):
         Distro.UBUNTU18: "ubuntu18",
         Distro.UBUNTU20: "ubuntu20",
         Distro.OEL7: "centos7",
-        Distro.OEL8: "centos8"
+        Distro.OEL8: "centos8",
+        Distro.ROCKY8: "centos8",
     }
     distro_name = known_distro_dict.get(distro_object, None)
     assert distro_name, f"Unfamiliar distribution: {distro_object}"
