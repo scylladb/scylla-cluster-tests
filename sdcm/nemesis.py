@@ -2565,6 +2565,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         Generates random firewall rule to drop/reject packets for node exporter connections, port 9100
         """
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis("Not implemented for the K8S backend.")
         name = 'RejectNodeExporterNetwork'
         textual_matching_rule, matching_rule = self._iptables_randomly_get_random_matching_rule()
         textual_pkt_action, pkt_action = self._iptables_randomly_get_disrupting_target()
@@ -2583,6 +2585,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         Generates random firewall rule to drop/reject packets for thrift connections, port 9100
         """
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis("Not implemented for the K8S backend.")
         name = 'RejectThriftNetwork'
         textual_matching_rule, matching_rule = self._iptables_randomly_get_random_matching_rule()
         textual_pkt_action, pkt_action = self._iptables_randomly_get_disrupting_target()
