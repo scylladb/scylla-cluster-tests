@@ -33,6 +33,8 @@ from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFound
 from azure.mgmt.compute.models import GalleryImageVersion
 
 from sdcm.keystore import KeyStore
+from sdcm.provision.azure.provisioner import AzureProvisioner
+from sdcm.provision.provisioner import InstanceDefinition, PricingModel, VmInstance
 from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
 from sdcm.utils.common import list_instances_aws, aws_tags_to_dict, list_instances_gce, gce_meta_to_dict
 from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, ec2_ami_get_root_device_name
@@ -797,19 +799,27 @@ class AzureSctRunner(SctRunner):
                 "admin_username": self.LOGIN_USER,
                 "admin_public_key": self.key_pair.public_key.decode(),
             }
+            return azure_region.create_virtual_machine(
+                vm_name=instance_name,
+                vm_size=instance_type,
+                image=base_image,
+                disk_size=self.instance_root_disk_size(test_duration=test_duration),
+                tags=tags | {"launch_time": get_current_datetime_formatted()},
+                **additional_kwargs,
+            )
         else:
+            test_id = tags["TestId"]
+            provisioner = AzureProvisioner(test_id)
             azure_region = self.azure_region
-            additional_kwargs = {
-                "os_state": AzureOsState.SPECIALIZED,
-            }
-        return azure_region.create_virtual_machine(
-            vm_name=instance_name,
-            vm_size=instance_type,
-            image=base_image,
-            disk_size=self.instance_root_disk_size(test_duration=test_duration),
-            tags=tags | {"launch_time": get_current_datetime_formatted()},
-            **additional_kwargs,
-        )
+            vm_params = InstanceDefinition(name=instance_name,
+                                           image_id=base_image["id"],
+                                           type=instance_type,
+                                           user_name=None,
+                                           ssh_public_key=None,
+                                           tags=tags | {"launch_time": get_current_datetime_formatted()},
+                                           root_disk_size=self.instance_root_disk_size(test_duration=test_duration))
+            return provisioner.create_virtual_machine(azure_region.location, definition=vm_params,
+                                                      pricing_model=PricingModel.ON_DEMAND)
 
     def _stop_image_builder_instance(self, instance: Any) -> None:
         self.azure_region_source.deallocate_virtual_machine(vm_name=instance.name)
@@ -821,6 +831,8 @@ class AzureSctRunner(SctRunner):
         return instance.id
 
     def get_instance_public_ip(self, instance: Any) -> str:
+        if isinstance(instance, VmInstance):
+            return instance.public_ip_address
         return self.azure_service.get_virtual_machine_ips(virtual_machine=instance).public_ip
 
     def _create_image(self, instance: Any) -> Any:
@@ -836,7 +848,7 @@ class AzureSctRunner(SctRunner):
         )
 
     def _get_image_id(self, image: Any) -> Any:
-        return image.id
+        return image.name
 
     def _copy_source_image_to_region(self) -> None:
         self.azure_region.append_target_region_to_image_version(
@@ -878,7 +890,13 @@ class AzureSctRunner(SctRunner):
 
     @staticmethod
     def terminate_sct_runner_instance(sct_runner_info: SctRunnerInfo) -> None:
+        test_id = sct_runner_info.instance.tags.get("TestId")
         sct_runner_info.cloud_service_instance.delete_virtual_machine(virtual_machine=sct_runner_info.instance)
+        if test_id:
+            # cleanup all resources if there's no more other vm instances in resource group
+            provisioner = AzureProvisioner(test_id)
+            if not provisioner.list_virtual_machines():
+                provisioner.cleanup(wait=False)
 
 
 def get_sct_runner(cloud_provider: str, region_name: str, availability_zone: str = "") -> SctRunner:

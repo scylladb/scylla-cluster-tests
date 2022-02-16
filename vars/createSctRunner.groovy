@@ -24,7 +24,7 @@ def call(Map params, Integer test_duration, String region) {
     set -xe
     env
 
-    if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" ]]; then
+    if [[ "$cloud_provider" == "aws" || "$cloud_provider" == "gce" || "$cloud_provider" == "azure" ]]; then
         rm -fv sct_runner_ip
         ./docker/env/hydra.sh create-runner-instance \
             --cloud-provider ${cloud_provider} \

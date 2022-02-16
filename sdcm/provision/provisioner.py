@@ -34,11 +34,11 @@ class InstanceDefinition:  # pylint: disable=too-many-instance-attributes
     name: str
     image_id: str
     type: str   # instance_type from yaml
-    user_name: str
-    ssh_public_key: str = field(repr=False)
-    tags: Dict[str, str]
+    user_name: Optional[str] = None
+    ssh_public_key: Optional[str] = field(default=None, repr=False)
+    tags: Dict[str, str] = field(default_factory=dict)
     arch: VmArch = VmArch.X86
-    root_disk_size: Optional[str] = None
+    root_disk_size: Optional[int] = None
     data_disks: Optional[List[DataDisk]] = None
 
 
@@ -63,6 +63,13 @@ class VmInstance:  # pylint: disable=too-many-instance-attributes
     tags: Dict[str, str]
     pricing_model: PricingModel
     image: str
+    provisioner: "Provisioner"
+
+    def terminate(self, wait=True):
+        """terminates VM instance.
+        If wait is set to True, waits until deletion, otherwise, returns when termination
+        was triggered."""
+        self.provisioner.terminate_virtual_machine(self.region, self.name, wait=wait)
 
 
 class Provisioner(ABC):
@@ -76,6 +83,10 @@ class Provisioner(ABC):
                                pricing_model: PricingModel = PricingModel.SPOT
                                ) -> VmInstance:
         """Create virtual machine in provided region, specified by InstanceDefinition"""
+        raise NotImplementedError()
+
+    def terminate_virtual_machine(self, region: str, name: str, wait: bool = False) -> None:
+        """Terminate virtual machine in provided region by name"""
         raise NotImplementedError()
 
     def list_virtual_machines(self, region: Optional[str] = None) -> List[VmInstance]:

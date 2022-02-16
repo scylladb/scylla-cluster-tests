@@ -73,10 +73,27 @@ class TestProvisionScyllaInstanceAzureE2E:
 
         assert v_m == provisioner.list_virtual_machines()[0]
 
+    def test_can_terminate_vm_instance(self, test_id, provisioner, definition):  # pylint: disable=no-self-use
+        """should read from cache instead creating anything - so should be fast (after provisioner initialized)"""
+        region = "eastus"
+        provisioner.terminate_virtual_machine(region, definition.name, wait=True)
+
+        # validate cache has been cleaned up
+        assert not provisioner.list_virtual_machines(region)
+        assert not provisioner._nic_cache  # pylint: disable=protected-access
+        assert not provisioner._ip_cache  # pylint: disable=protected-access
+
+        # verify that truly vm, nic and ip got deleted - not only cache
+        provisioner = AzureProvisioner(test_id)
+
+        assert not provisioner.list_virtual_machines(region)
+        assert not provisioner._nic_cache  # pylint: disable=protected-access
+        assert not provisioner._ip_cache  # pylint: disable=protected-access
+
     def test_can_trigger_cleanup(self, test_id):  # pylint: disable=no-self-use
         provisioner = AzureProvisioner(test_id)
         provisioner.cleanup(wait=True)
-        assert not provisioner.list_virtual_machines(), "failed cleaning up cache"
         # validating real cleanup - this takes most of the testing time (6mins)
         provisioner = AzureProvisioner(test_id)
         assert not provisioner.list_virtual_machines(), "failed cleaning up resources"
+        assert not provisioner._rg_provider.groups(), "resource group was not deleted"  # pylint: disable=protected-access

@@ -1790,7 +1790,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def is_apt_lock_free(self) -> bool:
         result = self.remoter.sudo("lsof /var/lib/dpkg/lock", ignore_status=True)
+<<<<<<< HEAD
         return result.exit_status == 1
+=======
+        return result.return_code == 1
+>>>>>>> feature(azure): longevity 3h test
 
     def install_manager_agent(self, package_path: Optional[str] = None) -> None:
         package_name = "scylla-manager-agent"

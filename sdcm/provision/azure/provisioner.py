@@ -16,6 +16,7 @@ import logging
 from dataclasses import dataclass, field, fields
 from typing import Dict, Any, Optional, List
 import binascii
+from azure.core.exceptions import ResourceNotFoundError
 
 from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
 from azure.mgmt.network.models import (NetworkSecurityGroup, VirtualNetwork, Subnet, PublicIPAddress, NetworkInterface)
@@ -60,21 +61,30 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
                         for subnet in subnets:
                             self._subnet_cache[subnet.name] = subnet
                     case "Microsoft.Network/networkInterfaces":
-                        nic = self._azure_service.network.network_interfaces.get(resource_group_name, resource.name)
-                        self._nic_cache[nic.name] = nic
+                        try:
+                            nic = self._azure_service.network.network_interfaces.get(resource_group_name, resource.name)
+                            self._nic_cache[nic.name] = nic
+                        except ResourceNotFoundError:
+                            pass
                     case "Microsoft.Network/publicIPAddresses":
-                        ip_address = self._azure_service.network.public_ip_addresses.get(resource_group_name,
-                                                                                         resource.name)
-                        self._ip_cache[ip_address.name] = ip_address
+                        try:
+                            ip_address = self._azure_service.network.public_ip_addresses.get(resource_group_name,
+                                                                                             resource.name)
+                            self._ip_cache[ip_address.name] = ip_address
+                        except ResourceNotFoundError:
+                            pass
                     case "Microsoft.Compute/virtualMachines":
-                        v_m = self._azure_service.compute.virtual_machines.get(resource_group_name, resource.name)
-                        self._vm_cache[v_m.name] = v_m
+                        try:
+                            v_m = self._azure_service.compute.virtual_machines.get(resource_group_name, resource.name)
+                            self._vm_cache[v_m.name] = v_m
+                        except ResourceNotFoundError:
+                            pass
             for v_m in self._vm_cache.values():
                 self._instances_cache[v_m.name] = self._vm_to_instance(v_m)
 
     @property
     def _resource_group_prefix(self):
-        return f"sct-{self.test_id}"
+        return f"SCT-{self.test_id}"
 
     def create_virtual_machine(self, region: str, definition: InstanceDefinition,
                                pricing_model: PricingModel = PricingModel.SPOT) -> VmInstance:
@@ -96,24 +106,21 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
             "network_profile": {
                 "network_interfaces": [{
                     "id": nic_id,
+                    "properties": {"deleteOption": "Delete"}
                 }],
             },
-            "os_profile": {
-                "computer_name": definition.name,
-                "admin_username": definition.user_name,
-                "admin_password": binascii.hexlify(os.urandom(20)).decode(),
-                "linux_configuration": {
-                    "disable_password_authentication": True,
-                    "ssh": {
-                        "public_keys": [{
-                            "path": f"/home/{definition.user_name}/.ssh/authorized_keys",
-                            "key_data": definition.ssh_public_key,
-                        }],
-                    },
-                },
-            }
         }
-        storage_profile = self._get_scylla_storage_profile(image_id=definition.image_id, name=definition.name)
+        if definition.user_name is None:
+            # in case we use specialized image, we don't change things like computer_name, usernames, ssh_keys
+            os_profile = {}
+        else:
+            os_profile = self._get_os_profile(computer_name=definition.name,
+                                              admin_username=definition.user_name,
+                                              admin_password=binascii.hexlify(os.urandom(20)).decode(),
+                                              ssh_public_key=definition.ssh_public_key)
+        storage_profile = self._get_scylla_storage_profile(image_id=definition.image_id, name=definition.name,
+                                                           disk_size=definition.root_disk_size)
+        params.update(os_profile)
         params.update(storage_profile)
         params.update(self._get_pricing_params(pricing_model))
         v_m = self._azure_service.compute.virtual_machines.begin_create_or_update(
@@ -127,6 +134,29 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         self._instances_cache[instance.name] = instance
         return instance
 
+    def terminate_virtual_machine(self, region: str, name: str, wait: bool = True) -> None:
+        """Terminates virtual machine, cleaning attached ip address and network interface."""
+        instance = self._vm_cache.get(name)
+        if not instance:
+            LOGGER.warning("Instance {name} does not exist. Should not call it".format(name=name))
+            return
+        LOGGER.info("Triggering termination of instance: {name}".format(name=name))
+        self._azure_service.compute.virtual_machines.begin_update(self._rg_provider.get_or_create(region).name,
+                                                                  vm_name=name, parameters={
+            "storageProfile": {"osDisk": {"createOption": "FromImage", "deleteOption": "Delete"}}})
+
+        task = self._azure_service.compute.virtual_machines.begin_delete(self._rg_provider.get_or_create(region).name,
+                                                                         vm_name=name)
+        if wait is True:
+            LOGGER.info("Waiting for termination of instance: {name}...".format(name=name))
+            task.wait()
+            LOGGER.info("Instance {name} has been terminated.".format(name=name))
+        del self._instances_cache[name]
+        nic = self._network_interface(region, name)
+        del self._nic_cache[nic.name]
+        ip_address = self._public_ip_address(region, name)
+        del self._ip_cache[ip_address.name]
+
     def list_virtual_machines(self, region: Optional[str] = None) -> List[VmInstance]:
         """List virtual machines for given region. Filter by region."""
         machines = list(self._instances_cache.values())
@@ -137,7 +167,6 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
     def cleanup(self, wait: bool = False) -> None:
         """Triggers delete of all resources."""
         tasks = []
-        LOGGER.info("Initiating cleanup of all resources...")
         self._rg_provider.clean_all(wait)
 
         for _field in fields(self):  # clear cache
@@ -153,7 +182,12 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         pub_address = self._public_ip_address(v_m.location, v_m.name).ip_address
         priv_address = nic.ip_configurations[0].private_ip_address
         tags = v_m.tags.copy()
-        admin = v_m.os_profile.admin_username
+        try:
+            admin = v_m.os_profile.admin_username
+        except AttributeError:
+            # specialized machines don't provide usernames
+            # todo lukasz: find a way to get admin name from image (is it possible??)
+            admin = ""
         image = str(v_m.storage_profile.image_reference)
         if v_m.priority is VirtualMachinePriorityTypes.REGULAR:
             pricing_model = PricingModel.ON_DEMAND
@@ -162,7 +196,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
 
         return VmInstance(name=v_m.name, region=v_m.location, user_name=admin, public_ip_address=pub_address,
                           private_ip_address=priv_address, tags=tags, pricing_model=pricing_model,
-                          image=image)
+                          image=image, provisioner=self)
 
     def _network_security_group(self, region: str) -> NetworkSecurityGroup:
         group_name = "default"
@@ -235,7 +269,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
             return self._ip_cache[ip_name]
         resource_group_name = self._rg_provider.get_or_create(region=region).name
         LOGGER.info("Creating public_ip in resource group {rg}...".format(rg=resource_group_name))
-        public_ip_address = self._azure_service.network.public_ip_addresses.begin_create_or_update(
+        self._azure_service.network.public_ip_addresses.begin_create_or_update(
             resource_group_name=resource_group_name,
             public_ip_address_name=ip_name,
             parameters={
@@ -246,7 +280,9 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
                 "public_ip_allocation_method": "Static",
                 "public_ip_address_version": version.upper(),
             },
-        ).result()
+        ).wait()
+        # need to get it separately as seems not always it gets created even if result() returns proper ip_address.
+        public_ip_address = self._azure_service.network.public_ip_addresses.get(resource_group_name, ip_name)
         LOGGER.info("Provisioned public ip {name} ({address}) in the {resource} resource group".format(
             name=public_ip_address.name, resource=resource_group_name, address=public_ip_address.ip_address))
         self._ip_cache[ip_name] = public_ip_address
@@ -270,8 +306,10 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         }
         ip_address = self._public_ip_address(region, name)
         parameters["ip_configurations"][0]["public_ip_address"] = {
-            "id": ip_address.id
+            "id": ip_address.id,
+            "properties": {"deleteOption": "Delete"}
         }
+
         LOGGER.info("Creating nic in resource group {rg}...".format(rg=resource_group_name))
         nic = self._azure_service.network.network_interfaces.begin_create_or_update(
             resource_group_name=resource_group_name,
@@ -284,7 +322,27 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         return nic
 
     @staticmethod
-    def _get_scylla_storage_profile(image_id: str, name: str, disk_size: str = None) -> Dict[str, Any]:
+    def _get_os_profile(computer_name: str, admin_username: str,
+                        admin_password: str, ssh_public_key: str):
+        os_profile = {"os_profile": {
+            "computer_name": computer_name,
+            "admin_username": admin_username,
+            "admin_password": admin_password if admin_password else binascii.hexlify(os.urandom(20)).decode(),
+            "linux_configuration": {
+                "disable_password_authentication": True,
+                "ssh": {
+                    "public_keys": [{
+                        "path": f"/home/{admin_username}/.ssh/authorized_keys",
+                        "key_data": ssh_public_key,
+                    }],
+                },
+            },
+        }
+        }
+        return os_profile
+
+    @staticmethod
+    def _get_scylla_storage_profile(image_id: str, name: str, disk_size: Optional[int] = None) -> Dict[str, Any]:
         """Creates storage profile based on image_id. image_id may refer to scylla-crafted images
          (starting with '/subscription') or to 'Urn' of image (see output of e.g. `az vm image list --output table`)"""
         storage_profile = {"storage_profile": {
@@ -293,15 +351,17 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
                            "os_type": "linux",
                            "caching": "ReadWrite",
                            "create_option": "FromImage",
+                           "deleteOption": "Delete",  # somehow deletion of VM does not delete os_disk anyway...
                            "managed_disk": {
                                "storage_account_type": "Premium_LRS",  # SSD
-                           },
+                           }
                            } | ({} if disk_size is None else {"disk_size_gb": disk_size}),
         }}
         if image_id.startswith("/subscriptions/"):
             storage_profile.update({
                 "storage_profile": {
                     "image_reference": {"id": image_id},
+                    "deleteOption": "Delete"
                 }
             })
         else:
