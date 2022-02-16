@@ -60,6 +60,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('test_config', '')}",
                    description: 'Test configuration file',
                    name: 'test_config')
+            string(defaultValue: "${pipelineParams.get('base_versions', '')}",
+                   description: 'Base version in which the upgrade will start from.\nFormat should be for example -> 4.5,4.6 (or single version, or \'\' to use the auto mode)',
+                   name: 'base_versions')
         }
         options {
             timestamps()
@@ -96,8 +99,9 @@ def call(Map pipelineParams) {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
                                         checkout scm
+                                        ArrayList base_versions_list = params.base_versions.contains('.') ? params.base_versions.split('\\,') : []
                                         supportedVersions = supportedUpgradeFromVersions(
-                                            pipelineParams.base_versions,
+                                            base_versions_list,
                                             pipelineParams.linux_distro,
                                             params.new_scylla_repo
                                         )
