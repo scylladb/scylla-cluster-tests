@@ -4494,7 +4494,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         if not self.params.get('use_mgmt'):
             raise ScyllaManagerError('Scylla-manager configuration is not defined!')
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.scylla_manager_node, scylla_cluster=self)
-        LOGGER.debug("sctool version is : {}".format(manager_tool.version))
+        LOGGER.debug("sctool version is : {}".format(manager_tool.sctool.version))
         cluster_name = self.scylla_manager_cluster_name  # pylint: disable=no-member
         mgr_cluster = manager_tool.get_cluster(cluster_name)
         if not mgr_cluster and create_cluster_if_not_exists:

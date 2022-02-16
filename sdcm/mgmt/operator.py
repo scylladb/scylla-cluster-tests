@@ -54,6 +54,9 @@ class ScyllaOperatorTaskBaseClass(BaseClass):
     start_date: str = None
     # Interval task schedule interval e.g. 3d2h10m, valid units are d, h, m, s (default "0").
     interval: str = None
+    # crontab time to determine the start time/schedule of the task, like so: 5 0 * 8 *.
+    # for more info: https://crontab.guru/
+    cron: list = None
     # num_retries the number of times a scheduled task will retry to run before failing (default 3).
     num_retries: int = None
 
@@ -199,7 +202,7 @@ class OperatorManagerCluster(ManagerCluster):
         self.cluster_name = name
 
     def _create_operator_backup_task(self, dc_list=None, interval=None, keyspace_list=None, location_list=None,
-                                     num_retries=None, rate_limit_list=None, retention=None,
+                                     num_retries=None, rate_limit_list=None, retention=None, cron=None,
                                      snapshot_parallel_list=None, start_date=None, upload_parallel_list=None,
                                      name=None) -> ScyllaOperatorBackupTask:
 
@@ -212,6 +215,7 @@ class OperatorManagerCluster(ManagerCluster):
             dc=dc_list,
             interval=interval,
             keyspace=keyspace_list,
+            cron=cron,
             location=location_list,
             num_retries=num_retries,
             rate_limit=rate_limit_list,
@@ -234,6 +238,7 @@ class OperatorManagerCluster(ManagerCluster):
             dry_run=None,
             interval=None,
             keyspace_list=None,
+            cron=None,
             location_list=None,
             num_retries=None,
             rate_limit_list=None,
@@ -247,6 +252,7 @@ class OperatorManagerCluster(ManagerCluster):
             dc_list=dc_list,
             interval=interval,
             keyspace_list=keyspace_list,
+            cron=cron,
             location_list=location_list,
             num_retries=num_retries,
             rate_limit_list=rate_limit_list,

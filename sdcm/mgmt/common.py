@@ -143,7 +143,9 @@ class TaskStatus:  # pylint: disable=too-few-public-methods
     UNKNOWN = "UNKNOWN"
     ERROR = "ERROR"
     ERROR_FINAL = "ERROR (4/4)"
+    STOPPING = "STOPPING"
     STOPPED = "STOPPED"
+    WAITING = "WAITING"
     STARTING = "STARTING"
     ABORTED = "ABORTED"
 
