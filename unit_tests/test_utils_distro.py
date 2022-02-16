@@ -249,6 +249,22 @@ CPE_NAME="cpe:2.3:o:amazon:amazon_linux:2"
 HOME_URL="https://amazonlinux.com/"
 """,
 
+    "Rocky Linux 8": """\
+NAME="Rocky Linux"
+VERSION="8.5 (Green Obsidian)"
+ID="rocky"
+ID_LIKE="rhel centos fedora"
+VERSION_ID="8.5"
+PLATFORM_ID="platform:el8"
+PRETTY_NAME="Rocky Linux 8.5 (Green Obsidian)"
+ANSI_COLOR="0;32"
+CPE_NAME="cpe:/o:rocky:rocky:8:GA"
+HOME_URL="https://rockylinux.org/"
+BUG_REPORT_URL="https://bugs.rockylinux.org/"
+ROCKY_SUPPORT_PRODUCT="Rocky Linux"
+ROCKY_SUPPORT_PRODUCT_VERSION="8"
+""",
+
     "Unknown": """\
 ID=sillylinux
 VERSION_ID=666
@@ -355,6 +371,12 @@ class TestDistro(unittest.TestCase):
         self.assertTrue(Distro.AMAZON2.is_amazon2)
         distro = Distro.from_os_release(DISTROS_OS_RELEASE["Amazon Linux 2"])
         self.assertTrue(distro.is_amazon2)
+        self.assertTrue(distro.is_rhel_like)
+
+    def test_rocky8(self):
+        self.assertTrue(Distro.ROCKY8.is_rocky8)
+        distro = Distro.from_os_release(DISTROS_OS_RELEASE["Rocky Linux 8"])
+        self.assertTrue(distro.is_rocky8)
         self.assertTrue(distro.is_rhel_like)
 
     def test_parsing_error(self):
