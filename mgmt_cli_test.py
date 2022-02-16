@@ -772,10 +772,10 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
 
         repair_task_list = mgr_cluster.repair_task_list
 
-        manager_from_version = manager_tool.version
+        manager_from_version = manager_tool.sctool.version
         manager_tool.upgrade(scylla_mgmt_upgrade_to_repo=scylla_mgmt_upgrade_to_repo)
 
-        assert manager_from_version[0] != manager_tool.version[0], "Manager version not changed after upgrade."
+        assert manager_from_version[0] != manager_tool.sctool.version[0], "Manager version not changed after upgrade."
         # verify all repair tasks exist
         for repair_task in repair_task_list:
             self.log.debug("{} status: {}".format(repair_task.id, repair_task.status))
@@ -796,9 +796,9 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         scylla_mgmt_address = self.params.get('scylla_mgmt_address')
         manager_node = self.monitors.nodes[0]
         manager_tool = mgmt.get_scylla_manager_tool(manager_node=manager_node)
-        manager_from_version = manager_tool.version
+        manager_from_version = manager_tool.sctool.version
         manager_tool.rollback_upgrade(scylla_mgmt_address=scylla_mgmt_address)
-        assert manager_from_version[0] != manager_tool.version[0], "Manager version not changed after rollback."
+        assert manager_from_version[0] != manager_tool.sctool.version[0], "Manager version not changed after rollback."
         self.log.info('finishing test_manager_rollback_upgrade')
 
     def test_repair_multiple_keyspace_types(self):  # pylint: disable=invalid-name
@@ -814,7 +814,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         assert task_final_status == TaskStatus.DONE, 'Task: {} final status is: {}.'.format(repair_task.id,
                                                                                             str(repair_task.status))
         self.log.info('Task: {} is done.'.format(repair_task.id))
-        self.log.debug("sctool version is : {}".format(manager_tool.version))
+        self.log.debug("sctool version is : {}".format(manager_tool.sctool.version))
 
         expected_keyspaces_to_be_repaired = ["system_auth", "system_distributed", "system_traces",  # pylint: disable=invalid-name
                                              self.SIMPLESTRATEGY_KEYSPACE_NAME]

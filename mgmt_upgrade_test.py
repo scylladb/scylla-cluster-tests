@@ -13,6 +13,7 @@
 
 import logging
 from time import sleep
+from datetime import datetime, timedelta
 
 from sdcm.tester import ClusterTester
 from sdcm.mgmt import get_scylla_manager_tool, TaskStatus
@@ -46,7 +47,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
         manager_node = self.monitors.nodes[0]
         manager_tool = get_scylla_manager_tool(manager_node=manager_node)
         self.update_all_agent_config_files()
-        current_manager_version = manager_tool.version
+        current_manager_version = manager_tool.sctool.version
         mgr_cluster = manager_tool.add_cluster(name=ManagerUpgradeTest.CLUSTER_NAME, db_cluster=self.db_cluster,
                                                auth_token=self.monitors.mgmt_auth_token)
         return mgr_cluster, current_manager_version
@@ -74,7 +75,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
         manager_tool = get_scylla_manager_tool(manager_node=manager_node)
         manager_tool.add_cluster(name="cluster_under_test", db_cluster=self.db_cluster,
                                  auth_token=self.monitors.mgmt_auth_token)
-        current_manager_version = manager_tool.version
+        current_manager_version = manager_tool.sctool.version
 
         LOGGER.debug("Generating load")
         self.generate_load_and_wait_for_results()
@@ -105,7 +106,7 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
                 f"Unknown failure in task {rerunning_backup_task.id}"
 
         with self.subTest("Creating a backup task and stopping it"):
-            legacy_args = "--force" if manager_tool.client_version.startswith("2.1") else None
+            legacy_args = "--force" if manager_tool.sctool.client_version.startswith("2.1") else None
             pausable_backup_task = mgr_cluster.create_backup_task(
                 interval="1d",
                 location_list=self.locations,
@@ -189,15 +190,56 @@ def wait_until_task_finishes_return_details(task, wait=True, timeout=1000, step=
         task.wait_and_get_final_status(timeout=timeout, step=step)
     task_history = task.history
     latest_run_id = task.latest_run_id
-    task_details = {"next run": task.next_run,
+    start_time = task.sctool.get_table_value(parsed_table=task_history, column_name="start time",
+                                             identifier=latest_run_id)
+    duration = task.sctool.get_table_value(parsed_table=task_history, column_name="duration",
+                                           identifier=latest_run_id)
+    if task.sctool.is_v3_cli:
+        next_run_time = time_diff_string_to_datetime(time_diff_string=task.next_run)
+    else:
+        next_run_time = time_string_to_datetime(task.next_run)
+    if task.sctool.is_v3_cli:
+        end_time = time_diff_string_to_datetime(time_diff_string=duration, base_time_string=start_time)
+    else:
+        end_time_string = task.sctool.get_table_value(parsed_table=task_history, column_name="end time",
+                                                      identifier=latest_run_id)
+        end_time = time_string_to_datetime(end_time_string)
+    task_details = {"next run": next_run_time,
                     "latest run id": latest_run_id,
-                    "start time": task.sctool.get_table_value(parsed_table=task_history, column_name="start time",
-                                                              identifier=latest_run_id),
-                    "end time": task.sctool.get_table_value(parsed_table=task_history, column_name="end time",
-                                                            identifier=latest_run_id),
-                    "duration": task.sctool.get_table_value(parsed_table=task_history, column_name="duration",
-                                                            identifier=latest_run_id)}
+                    "start time": start_time,
+                    "end time": end_time,
+                    "duration": duration}
     return task_details
+
+
+def time_diff_string_to_datetime(time_diff_string, base_time_string=None):
+    if " " in time_diff_string:
+        time_diff_string = time_diff_string[time_diff_string.find(" ") + 1:]
+    days, hours, minutes, seconds = 0, 0, 0, 0
+    if "d" in time_diff_string:
+        days = int(time_diff_string[:time_diff_string.find("d")])
+        time_diff_string = time_diff_string[time_diff_string.find("d") + 1:]
+    if "h" in time_diff_string:
+        hours = int(time_diff_string[:time_diff_string.find("h")])
+        time_diff_string = time_diff_string[time_diff_string.find("h") + 1:]
+    if "m" in time_diff_string:
+        minutes = int(time_diff_string[:time_diff_string.find("m")])
+        time_diff_string = time_diff_string[time_diff_string.find("m") + 1:]
+    if "s" in time_diff_string:
+        seconds = int(time_diff_string[:time_diff_string.find("s")])
+    delta = timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
+    if base_time_string is None:
+        base_time = datetime.utcnow()
+    else:
+        base_time = datetime.strptime(base_time_string, "%d %b %y %H:%M:%S %Z")
+    return base_time + delta
+
+
+def time_string_to_datetime(time_string):
+    if " (" in time_string:
+        time_string = time_string[:time_string.find(" (")]
+    datetime_object = datetime.strptime(time_string, "%d %b %y %H:%M:%S %Z")
+    return datetime_object
 
 
 def validate_previous_task_details(task, previous_task_details):
@@ -205,8 +247,15 @@ def validate_previous_task_details(task, previous_task_details):
     Compares the details of the task next run and history to the previously extracted next run and history
     """
     for detail_name, current_value in wait_until_task_finishes_return_details(task, wait=False).items():
-        assert current_value == previous_task_details[detail_name], \
-            f"previous task {detail_name} is not identical to the current history"
+        if current_value is datetime:
+            delta = current_value - previous_task_details[detail_name]
+            assert abs(delta.total_seconds()) < 60, \
+                f"The Next Run value changed from {str(previous_task_details[detail_name])} to {str(current_value)}"
+            # I check that the time delta is smaller than 60 seconds since we calculate the next run time on our own,
+            # and as a result it could be a BIT imprecise
+        else:
+            assert current_value == previous_task_details[detail_name], \
+                f"previous task {detail_name} is not identical to the current history"
 
 
 def upgrade_scylla_manager(
@@ -243,7 +292,7 @@ def upgrade_scylla_manager(
 
     LOGGER.debug("Comparing the new manager versions")
     manager_tool = get_scylla_manager_tool(manager_node=manager_node)
-    new_manager_version = manager_tool.version
+    new_manager_version = manager_tool.sctool.version
     assert new_manager_version != pre_upgrade_manager_version, "Manager failed to upgrade - " \
                                                                "previous and new versions are the same. Test failed!"
 
