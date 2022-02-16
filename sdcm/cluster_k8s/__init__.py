@@ -41,6 +41,7 @@ from packaging import version
 
 import yaml
 import kubernetes as k8s
+from kubernetes.client import exceptions as k8s_exceptions
 from kubernetes.client import V1ConfigMap
 from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance, ResourceList, Subresource
 from invoke.exceptions import CommandTimedOut
@@ -2106,6 +2107,8 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                                          api_version=SCYLLA_API_VERSION,
                                          kind=SCYLLA_CLUSTER_RESOURCE_KIND)
 
+    @retrying(n=20, sleep_time=3, allowed_exceptions=(k8s_exceptions.ApiException, ),
+              message="Failed to update ScyllaCluster's spec...")
     def replace_scylla_cluster_value(self, path: str, value: Any) -> Optional[ANY_KUBERNETES_RESOURCE]:
         LOGGER.debug("Replace `%s' with `%s' in %s's spec", path, value, self.scylla_cluster_name)
         return self._k8s_scylla_cluster_api.patch(body=[{"op": "replace", "path": path, "value": value}],
@@ -2315,9 +2318,8 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                                  namespace=self.namespace,
                                  timeout=node.pod_terminate_timeout * 60 + 10)
         self.terminate_node(node, scylla_shards=scylla_shards)
-        # TBD: Enable rack deletion after https://github.com/scylladb/scylla-operator/issues/287 is resolved
-        # if current_members - 1 == 0:
-        #     self.delete_rack(rack)
+        if current_members == 1:
+            self._delete_k8s_rack(rack)
 
         if monitors := self.test_config.tester_obj().monitors:
             monitors.reconfigure_scylla_monitoring()
