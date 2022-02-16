@@ -49,6 +49,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
                    description: 'email recipients of email report',
                    name: 'email_recipients')
+            string(defaultValue: "${pipelineParams.get('base_versions', '')}",
+                   description: 'Base version in which the upgrade will start from.\nFormat should be for example -> 4.5,4.6 (or single version, or \'\' to use the auto mode)',
+                   name: 'base_versions')
         }
         options {
             timestamps()
@@ -61,8 +64,9 @@ def call(Map pipelineParams) {
                 steps {
                     script {
                         def tasks = [:]
+                        def base_versions_list = params.base_versions.contains('.') ? params.base_versions.split('\\,') : []
 
-                        for (version in supportedUpgradeFromVersions(pipelineParams.base_versions, params.new_scylla_repo)) {
+                        for (version in supportedUpgradeFromVersions(base_versions_list, params.new_scylla_repo)) {
                             def base_version = version
                             tasks["${base_version}"] = {
                                 node(builder.label) {
