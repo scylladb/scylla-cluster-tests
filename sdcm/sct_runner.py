@@ -382,7 +382,7 @@ class AwsSctRunner(SctRunner):
     SOURCE_IMAGE_REGION = "eu-west-2"  # where the source Runner image will be created and copied to other regions
     IMAGE_BUILDER_INSTANCE_TYPE = "t2.small"
     REGULAR_TEST_INSTANCE_TYPE = "t3.large"  # 2 vcpus, 8G, 36 CPU credits/hour
-    LONGTERM_TEST_INSTANCE_TYPE = "r5b.large"  # 2 vcpus, 16G
+    LONGTERM_TEST_INSTANCE_TYPE = "r5.large"  # 2 vcpus, 16G
 
     def __init__(self, region_name: str, availability_zone: str):
         super().__init__(region_name=region_name, availability_zone=availability_zone)
