@@ -28,4 +28,5 @@ authenticator_user: cassandra
 authenticator_password: cassandra
 authorizer: 'CassandraAuthorizer'
 
+logs_transport: "rsyslog"  # can't use syslog-ng because of next option enabled
 scylla_rsyslog_setup: true
