@@ -27,6 +27,10 @@ class TestProvisionScyllaInstanceAzureE2E:
     def test_id(self):  # pylint: disable=no-self-use
         return f"unit-test-{str(uuid.uuid4())}"
 
+    @pytest.fixture(scope='session')
+    def region(self):  # pylint: disable=no-self-use
+        return "eastus"
+
     @pytest.fixture(scope="session")
     def image_id(self):  # pylint: disable=no-self-use
         return get_scylla_images("master:latest", "eastus")[0].id
@@ -43,12 +47,11 @@ class TestProvisionScyllaInstanceAzureE2E:
         )
 
     @pytest.fixture(scope="function")
-    def provisioner(self, test_id):  # pylint: disable=no-self-use
-        return AzureProvisioner(test_id)
+    def provisioner(self, test_id, region):  # pylint: disable=no-self-use
+        return AzureProvisioner(test_id, region)
 
-    def test_can_provision_scylla_vm(self, test_id, definition):  # pylint: disable=no-self-use
-        provisioner = AzureProvisioner(test_id)
-        region = "eastus"
+    def test_can_provision_scylla_vm(self, test_id, region, definition):  # pylint: disable=no-self-use
+        provisioner = AzureProvisioner(test_id, region)
         v_m = provisioner.create_virtual_machine(region, definition)
         assert v_m.name == definition.name
         assert v_m.region == region
@@ -60,9 +63,8 @@ class TestProvisionScyllaInstanceAzureE2E:
         assert v_m == provisioner.list_virtual_machines()[0]
 
     @pytest.mark.timeout(2)
-    def test_can_discover_existing_resources_for_test_id(self, provisioner, definition):  # pylint: disable=no-self-use
+    def test_can_discover_existing_resources_for_test_id(self, region, provisioner, definition):  # pylint: disable=no-self-use
         """should read from cache instead creating anything - so should be fast (after provisioner initialized)"""
-        region = "eastus"
         v_m = provisioner.create_virtual_machine(region, definition)
         assert v_m.name == definition.name
         assert v_m.region == region
@@ -73,27 +75,30 @@ class TestProvisionScyllaInstanceAzureE2E:
 
         assert v_m == provisioner.list_virtual_machines()[0]
 
-    def test_can_terminate_vm_instance(self, test_id, provisioner, definition):  # pylint: disable=no-self-use
+    def test_can_terminate_vm_instance(self, test_id, region, provisioner, definition):  # pylint: disable=no-self-use
         """should read from cache instead creating anything - so should be fast (after provisioner initialized)"""
-        region = "eastus"
-        provisioner.terminate_virtual_machine(region, definition.name, wait=True)
+        provisioner.terminate_virtual_machine(definition.name, wait=True)
 
         # validate cache has been cleaned up
-        assert not provisioner.list_virtual_machines(region)
-        assert not provisioner._nic_cache  # pylint: disable=protected-access
-        assert not provisioner._ip_cache  # pylint: disable=protected-access
+        assert not provisioner.list_virtual_machines()
+        with pytest.raises(KeyError):
+            assert not provisioner._nic_provider.get(definition.name)  # pylint: disable=protected-access
+        with pytest.raises(KeyError):
+            assert not provisioner._ip_provider.get(definition.name)  # pylint: disable=protected-access
 
         # verify that truly vm, nic and ip got deleted - not only cache
-        provisioner = AzureProvisioner(test_id)
+        provisioner = AzureProvisioner(test_id, region)
 
-        assert not provisioner.list_virtual_machines(region)
-        assert not provisioner._nic_cache  # pylint: disable=protected-access
-        assert not provisioner._ip_cache  # pylint: disable=protected-access
+        assert not provisioner.list_virtual_machines()
+        with pytest.raises(KeyError):
+            assert not provisioner._nic_provider.get(definition.name)  # pylint: disable=protected-access
+        with pytest.raises(KeyError):
+            assert not provisioner._ip_provider.get(definition.name)  # pylint: disable=protected-access
 
-    def test_can_trigger_cleanup(self, test_id):  # pylint: disable=no-self-use
-        provisioner = AzureProvisioner(test_id)
+    def test_can_trigger_cleanup(self, test_id, region):  # pylint: disable=no-self-use
+        provisioner = AzureProvisioner(test_id, region)
         provisioner.cleanup(wait=True)
         # validating real cleanup - this takes most of the testing time (6mins)
-        provisioner = AzureProvisioner(test_id)
+        provisioner = AzureProvisioner(test_id, region)
         assert not provisioner.list_virtual_machines(), "failed cleaning up resources"
-        assert not provisioner._rg_provider.groups(), "resource group was not deleted"  # pylint: disable=protected-access
+        assert provisioner._rg_provider._cache is None, "resource group was not deleted"  # pylint: disable=protected-access

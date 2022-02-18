@@ -14,7 +14,7 @@
 from enum import Enum
 
 
-class OpenPorts(Enum):
+class ScyllaOpenPorts(Enum):
     SSH = 22
     GRAFANA = 3000
     CQL = 9042

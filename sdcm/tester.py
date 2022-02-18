@@ -847,7 +847,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def get_cluster_azure(self, loader_info, db_info, monitor_info):
         # pylint: disable=too-many-branches,too-many-statements
-        provisioner = AzureProvisioner(str(TestConfig().test_id()))
+        regions = self.params.get('azure_region_name').split()
+        provisioners: List[AzureProvisioner] = []
+        for region in regions:
+            provisioners.append(AzureProvisioner(str(TestConfig().test_id()), region))
         if db_info['n_nodes'] is None:
             n_db_nodes = self.params.get('n_db_nodes')
             if isinstance(n_db_nodes, int):  # legacy type
@@ -884,7 +887,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                              azure_image_size=db_info['disk_size'],
                                              azure_n_local_ssd=db_info['n_local_ssd'],
                                              azure_instance_type=db_info['type'],
-                                             provisioner=provisioner,
+                                             provisioners=provisioners,
                                              n_nodes=db_info['n_nodes'],
                                              add_disks=None,  # todo lukasz: fix disks
                                              service_accounts=None,  # todo lukasz: fix service_accounts
@@ -907,7 +910,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             azure_image_size=loader_info['disk_size'],
             azure_n_local_ssd=loader_info['n_local_ssd'],
             azure_instance_type="Standard_D2s_v3",
-            provisioner=provisioner,
+            provisioners=provisioners,
             n_nodes=loader_info['n_nodes'],
             add_disks=loader_additional_disks,
             **common_params)
@@ -931,7 +934,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                             azure_image_size=monitor_info['disk_size'],
                                             azure_n_local_ssd=monitor_info['n_local_ssd'],
                                             azure_instance_type=monitor_info['type'],
-                                            provisioner=provisioner,
+                                            provisioners=provisioners,
                                             n_nodes=monitor_info['n_nodes'],
                                             add_disks=monitor_additional_disks,
                                             targets=dict(db_cluster=self.db_cluster,

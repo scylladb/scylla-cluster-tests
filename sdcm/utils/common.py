@@ -1063,7 +1063,7 @@ def clean_instances_azure(tags_dict, dry_run=False):
     """
 
     test_id = tags_dict.pop("TestId")
-    provisioner = AzureProvisioner(test_id=test_id)
+    provisioner = AzureProvisioner(test_id, "eastus")  # todo: get all azure regions
     all_instances = provisioner.list_virtual_machines()
     instances = all_instances.copy()
     for tag_name, tag_value in tags_dict.items():

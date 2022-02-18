@@ -809,8 +809,7 @@ class AzureSctRunner(SctRunner):
             )
         else:
             test_id = tags["TestId"]
-            provisioner = AzureProvisioner(test_id)
-            azure_region = self.azure_region
+            provisioner = AzureProvisioner(test_id, self.azure_region.location)
             vm_params = InstanceDefinition(name=instance_name,
                                            image_id=base_image["id"],
                                            type=instance_type,
@@ -818,7 +817,7 @@ class AzureSctRunner(SctRunner):
                                            ssh_public_key=None,
                                            tags=tags | {"launch_time": get_current_datetime_formatted()},
                                            root_disk_size=self.instance_root_disk_size(test_duration=test_duration))
-            return provisioner.create_virtual_machine(azure_region.location, definition=vm_params,
+            return provisioner.create_virtual_machine(definition=vm_params,
                                                       pricing_model=PricingModel.ON_DEMAND)
 
     def _stop_image_builder_instance(self, instance: Any) -> None:
@@ -890,13 +889,7 @@ class AzureSctRunner(SctRunner):
 
     @staticmethod
     def terminate_sct_runner_instance(sct_runner_info: SctRunnerInfo) -> None:
-        test_id = sct_runner_info.instance.tags.get("TestId")
         sct_runner_info.cloud_service_instance.delete_virtual_machine(virtual_machine=sct_runner_info.instance)
-        if test_id:
-            # cleanup all resources if there's no more other vm instances in resource group
-            provisioner = AzureProvisioner(test_id)
-            if not provisioner.list_virtual_machines():
-                provisioner.cleanup(wait=False)
 
 
 def get_sct_runner(cloud_provider: str, region_name: str, availability_zone: str = "") -> SctRunner:

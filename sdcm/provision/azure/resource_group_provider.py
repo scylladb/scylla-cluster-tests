@@ -1,6 +1,19 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2022 ScyllaDB
+
 import logging
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Optional
 
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.resource.resources.models import ResourceGroup
@@ -13,49 +26,44 @@ LOGGER = logging.getLogger(__name__)
 @dataclass
 class ResourceGroupProvider:
     """Class for providing resource groups and taking care about discovery existing ones."""
-    _prefix: str
+    _name: str
+    _region: str
     _azure_service: AzureService = AzureService()
-    _cache: Dict[str, ResourceGroup] = field(default_factory=dict)
+    _cache: Optional[ResourceGroup] = field(default=None)
 
     def __post_init__(self):
-        """Discover existing rg's for this provider."""
-        rg_names = [rg.name for rg in list(self._azure_service.resource.resource_groups.list()) if
-                    rg.name.startswith(self._prefix)]
-        for resource_group_name in rg_names:
-            try:
-                resource_group = self._azure_service.resource.resource_groups.get(resource_group_name)
-                self._cache[resource_group.name] = resource_group
-            except ResourceNotFoundError:
-                pass
+        """Discover existing resource group for this provider."""
+        try:
+            resource_group = self._azure_service.resource.resource_groups.get(self._name)
+            assert resource_group.location == self._region, \
+                f"resource group {resource_group.name} does not belong to {self._region} region (location)"
+            self._cache = resource_group
+        except ResourceNotFoundError:
+            pass
 
-    def groups(self) -> Dict[str, ResourceGroup]:
-        """Returns list of discovered/created resources groups for this provider."""
-        return self._cache
-
-    def get_or_create(self, region: str) -> ResourceGroup:
-        name = f"{self._prefix}-{region.lower()}"
-        if name in self._cache:
-            LOGGER.debug("Found resource group: {name} in cache".format(name=name))
-            return self._cache[name]
-        LOGGER.info("Creating {name} SCT resource group in region {region}...".format(name=name, region=region))
+    def get_or_create(self) -> ResourceGroup:
+        if self._cache is not None:
+            LOGGER.debug("Found resource group: {name} in cache".format(name=self._name))
+            return self._cache
+        LOGGER.info("Creating {name} SCT resource group in region {region}...".format(
+            name=self._name, region=self._region))
         resource_group = self._azure_service.resource.resource_groups.create_or_update(
-            resource_group_name=name,
+            resource_group_name=self._name,
             parameters={
-                "location": region
+                "location": self._region
             },
         )
         LOGGER.info("Provisioned resource group {name} in the {region} region".format(
             name=resource_group.name, region=resource_group.location))
-        self._cache[name] = resource_group
+        self._cache = resource_group
         return resource_group
 
-    def clean_all(self, wait: bool = False):
-        tasks = []
-        LOGGER.info("Initiating cleanup of all resources...")
-        for resource_group_name in self.groups():
-            tasks.append(self._azure_service.resource.resource_groups.begin_delete(resource_group_name))
-        LOGGER.info("Initiated cleanup of all resources")
+    def delete(self, wait: bool = False):
+        """Deletes resource group along with all contained resources."""
+        LOGGER.info("Initiating cleanup of resource group: {name}...".format(name=self._name))
+        task = self._azure_service.resource.resource_groups.begin_delete(self._name)
+        LOGGER.info("Cleanup initiated")
+        self._cache = None
         if wait is True:
-            LOGGER.info("Waiting for completion of all resources cleanup")
-            for task in tasks:
-                task.wait()
+            LOGGER.info("Waiting for cleanup completion")
+            task.wait()
