@@ -1,7 +1,7 @@
 import logging
 import time
 from functools import cached_property
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 from sdcm import cluster
 from sdcm.keystore import KeyStore
@@ -24,14 +24,14 @@ class AzureNode(cluster.BaseNode):
 
     log = LOGGER
 
-    def __init__(self, azure_instance: VmInstance, vm_provisioner: AzureProvisioner, credentials, parent_cluster,  # pylint: disable=too-many-arguments
+    def __init__(self, azure_instance: VmInstance,  # pylint: disable=too-many-arguments
+                 credentials, parent_cluster,
                  node_prefix='node', node_index=1, azure_image_username='root',
                  base_logdir=None, dc_idx=0):
         region = parent_cluster.params.get('azure_region_name').split()[dc_idx]
         name = f"{node_prefix}-{region}-{node_index}".lower()
         self.node_index = node_index
         self._instance: VmInstance = azure_instance
-        self._vm_provisioner = vm_provisioner
         ssh_login_info = {'hostname': None,
                           'user': azure_image_username,
                           'key_file': credentials.key_file,
@@ -143,16 +143,16 @@ class AzureNode(cluster.BaseNode):
 
 
 class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-attributes
-    def __init__(self, image_id, azure_image_type, azure_image_size, azure_network, provisioner: AzureProvisioner, credentials,  # pylint: disable=too-many-arguments, too-many-locals
+    def __init__(self, image_id, azure_image_type, azure_image_size, azure_network,  # pylint: disable=too-many-arguments, too-many-locals
+                 provisioners: List[AzureProvisioner], credentials,
                  cluster_uuid=None, azure_instance_type='Standard_L8s_v2', azure_region_names=None,
                  azure_n_local_ssd=1, azure_image_username='root', cluster_prefix='cluster',
                  node_prefix='node', n_nodes=3, add_disks=None, params=None, node_type=None, service_accounts=None):
-        self.provisioner: AzureProvisioner = provisioner
+        self.provisioners: List[AzureProvisioner] = provisioners
         self._image_id = image_id
         self._azure_image_type = azure_image_type
         self._azure_image_size = azure_image_size
         self._azure_network = azure_network
-        self._vm_provisioner = provisioner
         self._credentials = credentials
         self._azure_instance_type = azure_instance_type
         self._azure_image_username = azure_image_username
@@ -174,8 +174,8 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):  # pylint: disable=too-many-arguments
         self.log.info("Adding nodes to cluster")
         nodes = []
-        region = self.params.get('azure_region_name').split()[dc_idx]
-        instances = self._create_instances(count, region)
+
+        instances = self._create_instances(count, dc_idx)
 
         self.log.debug('instances: %s', instances)
         for node_index, instance in enumerate(instances, start=self._node_index + 1):
@@ -192,7 +192,6 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
     def _create_node(self, instance, node_index, dc_idx):
         # try:
         node = AzureNode(azure_instance=instance,
-                         vm_provisioner=self.provisioner,
                          credentials=self._credentials[0],
                          parent_cluster=self,
                          azure_image_username=self._azure_image_username,
@@ -205,7 +204,8 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
         # except Exception as ex:
         #     raise CreateAzureNodeError('Failed to create node: %s' % ex) from ex
 
-    def _create_instances(self, count, region):
+    def _create_instances(self, count, dc_idx=0):
+        region = self.params.get('azure_region_name').split()[dc_idx]
         assert region, "no region provided, please add `azure_region_name` param"
         pricing_model = PricingModel.SPOT if 'spot' in self.instance_provision else PricingModel.ON_DEMAND
         instance_definition = InstanceDefinition(
@@ -220,14 +220,14 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
 
         for node_index in range(self._node_index + 1, self._node_index + count + 1):
             instance_definition.name = f"{self._node_prefix}-{region}-{node_index}".lower()
-            instances.append(self._provision_instance(region=region, instance_definition=instance_definition,
-                                                      pricing_model=pricing_model))
+            instances.append(self._provision_instance(instance_definition=instance_definition,
+                                                      pricing_model=pricing_model, dc_idx=dc_idx))
         return instances
 
     @retrying(n=3, sleep_time=1)
-    def _provision_instance(self, region: str, instance_definition: InstanceDefinition, pricing_model: PricingModel):
-        return self.provisioner.create_virtual_machine(region=region, definition=instance_definition,
-                                                       pricing_model=pricing_model)
+    def _provision_instance(self, instance_definition: InstanceDefinition, pricing_model: PricingModel, dc_idx: int):
+        return self.provisioners[dc_idx].create_virtual_machine(definition=instance_definition,
+                                                                pricing_model=pricing_model)
 
     def get_node_ips_param(self, public_ip=True):
         # todo lukasz: why gce cluster didn't have to implement this?
@@ -244,7 +244,9 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
 
 class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
 
-    def __init__(self, image_id, azure_image_type, azure_image_size, azure_network, provisioner: AzureProvisioner, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, image_id, azure_image_type, azure_image_size,  # pylint: disable=too-many-arguments
+                 azure_network,
+                 provisioners: List[AzureProvisioner], credentials,
                  azure_instance_type='Standard_L8s_v2', azure_n_local_ssd=1,
                  azure_image_username='ubuntu',
                  user_prefix=None, n_nodes=3, add_disks=None, params=None, azure_datacenter=None, service_accounts=None):
@@ -260,7 +262,7 @@ class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
             azure_network=azure_network,
             azure_instance_type=azure_instance_type,
             azure_image_username=azure_image_username,
-            provisioner=provisioner,
+            provisioners=provisioners,
             credentials=credentials,
             cluster_prefix=cluster_prefix,
             node_prefix=node_prefix,
@@ -280,15 +282,14 @@ class ScyllaAzureCluster(cluster.BaseScyllaCluster, AzureCluster):
 
 class LoaderSetAzure(cluster.BaseLoaderSet, AzureCluster):
 
-    def __init__(self, image_id, azure_image_type, azure_image_size, azure_network, provisioner, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, image_id, azure_image_type, azure_image_size, azure_network, provisioners, credentials,  # pylint: disable=too-many-arguments
                  azure_instance_type='Standard_D2s_v3', azure_n_local_ssd=1,
                  azure_image_username='centos',
                  user_prefix=None, n_nodes=10, add_disks=None, params=None, azure_datacenter=None):
         # pylint: disable=too-many-locals
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-node')
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'loader-set')
-        cluster.BaseLoaderSet.__init__(self,
-                                       params=params)
+        cluster.BaseLoaderSet.__init__(self, params=params)
         AzureCluster.__init__(self,
                               image_id=image_id,
                               azure_image_type=azure_image_type,
@@ -297,7 +298,7 @@ class LoaderSetAzure(cluster.BaseLoaderSet, AzureCluster):
                               azure_network=azure_network,
                               azure_instance_type=azure_instance_type,
                               azure_image_username=azure_image_username,
-                              provisioner=provisioner,
+                              provisioners=provisioners,
                               credentials=credentials,
                               cluster_prefix=cluster_prefix,
                               node_prefix=node_prefix,
@@ -311,7 +312,7 @@ class LoaderSetAzure(cluster.BaseLoaderSet, AzureCluster):
 
 class MonitorSetAzure(cluster.BaseMonitorSet, AzureCluster):
 
-    def __init__(self, image_id, azure_image_type, azure_image_size, azure_network, provisioner, credentials,  # pylint: disable=too-many-arguments
+    def __init__(self, image_id, azure_image_type, azure_image_size, azure_network, provisioners, credentials,  # pylint: disable=too-many-arguments
                  azure_instance_type='Standard_D2s_v3', azure_n_local_ssd=1,
                  azure_image_username='centos', user_prefix=None, n_nodes=1,
                  targets=None, add_disks=None, params=None, azure_datacenter=None):
@@ -331,7 +332,7 @@ class MonitorSetAzure(cluster.BaseMonitorSet, AzureCluster):
                               azure_network=azure_network,
                               azure_instance_type=azure_instance_type,
                               azure_image_username=azure_image_username,
-                              provisioner=provisioner,
+                              provisioners=provisioners,
                               credentials=credentials,
                               cluster_prefix=cluster_prefix,
                               node_prefix=node_prefix,

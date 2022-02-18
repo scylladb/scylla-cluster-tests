@@ -75,22 +75,30 @@ class VmInstance:  # pylint: disable=too-many-instance-attributes
 class Provisioner(ABC):
     """Abstract class for virtual machines provisioner, cloud-provider and sct agnostic.
     Limits only to machines related to provided test_id. """
-    test_id: str
+    _test_id: str
+    _region: str
+
+    @property
+    def test_id(self):
+        return self._test_id
+
+    @property
+    def region(self):
+        return self._region
 
     def create_virtual_machine(self,
-                               region: str,
                                definition: InstanceDefinition,
                                pricing_model: PricingModel = PricingModel.SPOT
                                ) -> VmInstance:
         """Create virtual machine in provided region, specified by InstanceDefinition"""
         raise NotImplementedError()
 
-    def terminate_virtual_machine(self, region: str, name: str, wait: bool = False) -> None:
-        """Terminate virtual machine in provided region by name"""
+    def terminate_virtual_machine(self, name: str, wait: bool = False) -> None:
+        """Terminate virtual machine by name"""
         raise NotImplementedError()
 
-    def list_virtual_machines(self, region: Optional[str] = None) -> List[VmInstance]:
-        """List virtual machines for given region. Filter by region."""
+    def list_virtual_machines(self) -> List[VmInstance]:
+        """List virtual machines for given provisioner."""
         raise NotImplementedError()
 
     def cleanup(self, wait: bool = False) -> None:
