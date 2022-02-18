@@ -1395,6 +1395,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.debug("This is the list of callable disruptions {}".format(self.disruptions_list))
         return self.disruptions_list
 
+    @property
+    def _disruption_list_names(self):
+        return [nemesis.__name__ for nemesis in self.disruptions_list]
+
     def shuffle_list_of_disruptions(self):
         if self.cluster.params.get('nemesis_seed'):
             nemesis_seed = self.cluster.params.get('nemesis_seed')
@@ -1403,15 +1407,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.info(f'nemesis_seed generated for this test is {nemesis_seed}')
         self.log.debug(f'nemesis_seed to be used is {nemesis_seed}')
 
-        self.log.debug(f"nemesis stack BEFORE SHUFFLE is {self.disruptions_list}")
+        self.log.debug(f"nemesis stack BEFORE SHUFFLE is {self._disruption_list_names}")
         random.Random(nemesis_seed).shuffle(self.disruptions_list)
-        self.log.debug(f"nemesis stack AFTER SHUFFLE is {self.disruptions_list}")
+        self.log.info(f"List of Nemesis to execute: {self._disruption_list_names}")
 
     def call_next_nemesis(self):
-        self.log.info(f'Selecting the next nemesis out of stack {self.disruptions_list}')
         if self.disruptions_list:
+            self.log.debug(f'Selecting the next nemesis out of stack {self._disruption_list_names}')
             self.execute_disrupt_method(disrupt_method=self.disruptions_list.pop())
-            self.log.info(f'Remaining nemesis to execute {self.disruptions_list}')
         else:
             self.log.info('Nemesis stack is empty - setting termination_event')
             self.termination_event.set()
