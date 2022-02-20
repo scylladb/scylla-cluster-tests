@@ -3372,6 +3372,7 @@ class FillDatabaseData(ClusterTester):
                 session.execute(f'INSERT INTO paged_query_test (k, v1, v2) VALUES ({i}, {random_int}, {random_int+i})')
         node = self.db_cluster.nodes[-1]
         with self.db_cluster.cql_connection_patient(node, keyspace=keyspace) as session:
+            session.default_consistency_level = ConsistencyLevel.QUORUM
             create_table()
             self.db_cluster.wait_for_schema_agreement()  # WORKAROUND TO SCHEMA PROPAGATION TAKING TOO LONG
             fill_table()
