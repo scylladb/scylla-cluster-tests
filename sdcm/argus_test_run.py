@@ -189,6 +189,8 @@ class ArgusTestRun:
         "master",
         "branch-2022.1",
         "branch-4.6",
+        "branch-5.0",
+        "branch-5.1",
         "manager-2.7",
         "operator-1.6",
     ]
