@@ -33,8 +33,7 @@ from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFound
 from azure.mgmt.compute.models import GalleryImageVersion
 
 from sdcm.keystore import KeyStore
-from sdcm.provision.azure.provisioner import AzureProvisioner
-from sdcm.provision.provisioner import InstanceDefinition, PricingModel, VmInstance
+from sdcm.provision.provisioner import InstanceDefinition, PricingModel, VmInstance, provisioner_factory
 from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
 from sdcm.utils.common import list_instances_aws, aws_tags_to_dict, list_instances_gce, gce_meta_to_dict
 from sdcm.utils.aws_utils import ec2_instance_wait_public_ip, ec2_ami_get_root_device_name
@@ -809,7 +808,8 @@ class AzureSctRunner(SctRunner):
             )
         else:
             test_id = tags["TestId"]
-            provisioner = AzureProvisioner(test_id, self.azure_region.location)
+            provisioner = provisioner_factory.create_provisioner(backend="azure", test_id=test_id,
+                                                                 region=self.azure_region.location)
             vm_params = InstanceDefinition(name=instance_name,
                                            image_id=base_image["id"],
                                            type=instance_type,
@@ -817,7 +817,7 @@ class AzureSctRunner(SctRunner):
                                            ssh_public_key=None,
                                            tags=tags | {"launch_time": get_current_datetime_formatted()},
                                            root_disk_size=self.instance_root_disk_size(test_duration=test_duration))
-            return provisioner.create_virtual_machine(definition=vm_params,
+            return provisioner.get_or_create_instance(definition=vm_params,
                                                       pricing_model=PricingModel.ON_DEMAND)
 
     def _stop_image_builder_instance(self, instance: Any) -> None:

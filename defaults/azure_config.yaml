@@ -7,8 +7,8 @@ region_name:
 user_credentials_path: '~/.ssh/scylla-qa-ec2'
 
 azure_instance_type_db: 'Standard_L8s_v2'
-azure_instance_type_loader: 'Standard_L8s_v2'
-azure_instance_type_monitor: 'Standard_L8s_v2'
+azure_instance_type_loader: 'Standard_F4s_v2'
+azure_instance_type_monitor: 'Standard_D2_v5'
 # TODO: Make loader and monitor images
 azure_image_loader: 'OpenLogic:CentOS:7.5:latest'
 azure_image_monitor: 'OpenLogic:CentOS:7.5:latest'

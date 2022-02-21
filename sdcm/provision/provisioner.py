@@ -63,13 +63,18 @@ class VmInstance:  # pylint: disable=too-many-instance-attributes
     tags: Dict[str, str]
     pricing_model: PricingModel
     image: str
-    provisioner: "Provisioner"
+    _provisioner: "Provisioner"
 
     def terminate(self, wait=True):
         """terminates VM instance.
         If wait is set to True, waits until deletion, otherwise, returns when termination
         was triggered."""
-        self.provisioner.terminate_virtual_machine(self.region, self.name, wait=wait)
+        self._provisioner.terminate_instance(self.name, wait=wait)
+
+    def reboot(self, wait=True):
+        """Reboots the instance.
+        If wait is set to True, waits until machine is up, otherwise, returns when reboot was triggered."""
+        self._provisioner.reboot_instance(self.name, wait)
 
 
 class Provisioner(ABC):
@@ -86,21 +91,56 @@ class Provisioner(ABC):
     def region(self):
         return self._region
 
-    def create_virtual_machine(self,
+    @classmethod
+    def discover_regions(cls, test_id) -> List["Provisioner"]:
+        """Returns provisioner class instance for each region where resources exist."""
+        raise NotImplementedError()
+
+    def get_or_create_instance(self,
                                definition: InstanceDefinition,
                                pricing_model: PricingModel = PricingModel.SPOT
                                ) -> VmInstance:
-        """Create virtual machine in provided region, specified by InstanceDefinition"""
+        """Create instance in provided region, specified by InstanceDefinition.
+        If instance already exists, returns it."""
         raise NotImplementedError()
 
-    def terminate_virtual_machine(self, name: str, wait: bool = False) -> None:
-        """Terminate virtual machine by name"""
+    def terminate_instance(self, name: str, wait: bool = False) -> None:
+        """Terminate instance by name"""
         raise NotImplementedError()
 
-    def list_virtual_machines(self) -> List[VmInstance]:
-        """List virtual machines for given provisioner."""
+    def reboot_instance(self, name: str, wait: bool) -> None:
+        """Reboot instance by name. """
+        raise NotImplementedError()
+
+    def list_instances(self) -> List[VmInstance]:
+        """List instances for given provisioner."""
         raise NotImplementedError()
 
     def cleanup(self, wait: bool = False) -> None:
         """Cleans up all the resources. If wait == True, waits till cleanup fully completes."""
         raise NotImplementedError()
+
+
+class ProvisionerFactory:
+
+    def __init__(self):
+        self._classes = {}
+
+    def register_provisioner(self, backend: str, provisioner_class: Provisioner) -> None:
+        self._classes[backend] = provisioner_class
+
+    def create_provisioner(self, backend: str, test_id: str, region: str) -> Provisioner:
+        """Creates provisioner for given backend, test_id and region and returns it."""
+        provisioner = self._classes.get(backend)
+        if not provisioner:
+            raise ValueError(backend)
+        return provisioner(test_id, region)
+
+    def discover_provisioners(self, backend: str, test_id: str) -> List[Provisioner]:
+        """Discovers regions where resources for given test_id are created.
+        Returning provisioner class instance for each region."""
+        provisioner = self._classes.get(backend)
+        return provisioner.discover_regions(test_id)
+
+
+provisioner_factory = ProvisionerFactory()

@@ -35,7 +35,6 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
     """Provides api for VM provisioning in Azure cloud, tuned for Scylla QA. """
     _test_id: str
     _region: str
-    _azure_service: AzureService = AzureService()
     _rg_provider: ResourceGroupProvider = field(init=False)
     _network_sec_group_provider: NetworkSecurityGroupProvider = field(init=False)
     _vnet_provider: VirtualNetworkProvider = field(init=False)
@@ -58,7 +57,16 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         for v_m in self._vm_provider.list():
             self._cache[v_m.name] = self._vm_to_instance(v_m)
 
-    def create_virtual_machine(self, definition: InstanceDefinition,
+    @classmethod
+    def discover_regions(cls, test_id: str) -> List["AzureProvisioner"]:
+        all_resource_groups = AzureService().resource.resource_groups.list()
+        test_resource_groups = [rg for rg in all_resource_groups if rg.name.startswith(f"SCT-{test_id}")]
+        provisioners = []
+        for resource_group in test_resource_groups:
+            provisioners.append(cls(test_id, resource_group.location))
+        return provisioners
+
+    def get_or_create_instance(self, definition: InstanceDefinition,
                                pricing_model: PricingModel = PricingModel.SPOT) -> VmInstance:
         """Create virtual machine in provided region, specified by InstanceDefinition"""
         if definition.name in self._cache:
@@ -74,7 +82,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         self._cache[definition.name] = instance
         return instance
 
-    def terminate_virtual_machine(self, name: str, wait: bool = True) -> None:
+    def terminate_instance(self, name: str, wait: bool = True) -> None:
         """Terminates virtual machine, cleaning attached ip address and network interface."""
         instance = self._cache.get(name)
         if not instance:
@@ -85,7 +93,10 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         self._nic_provider.delete(self._nic_provider.get(name))
         self._ip_provider.delete(self._ip_provider.get(name))
 
-    def list_virtual_machines(self) -> List[VmInstance]:
+    def reboot_instance(self, name: str, wait=True) -> None:
+        self._vm_provider.reboot(name, wait)
+
+    def list_instances(self) -> List[VmInstance]:
         """List virtual machines for given provisioner."""
         return list(self._cache.values())
 
@@ -125,4 +136,4 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
 
         return VmInstance(name=v_m.name, region=v_m.location, user_name=admin, public_ip_address=pub_address,
                           private_ip_address=priv_address, tags=tags, pricing_model=pricing_model,
-                          image=image, provisioner=self)
+                          image=image, _provisioner=self)

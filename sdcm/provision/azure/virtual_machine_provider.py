@@ -37,9 +37,9 @@ class VirtualMachineProvider:
     def __post_init__(self):
         """Discover existing virtual machines for resource group."""
         try:
-            ips = self._azure_service.compute.virtual_machines.list(self._resource_group_name)
-            for v_m in ips:
-                v_m = self._azure_service.network.public_ip_addresses.get(self._resource_group_name, v_m.name)
+            v_ms = self._azure_service.compute.virtual_machines.list(self._resource_group_name)
+            for v_m in v_ms:
+                v_m = self._azure_service.compute.virtual_machines.get(self._resource_group_name, v_m.name)
                 self._cache[v_m.name] = v_m
         except ResourceNotFoundError:
             pass
@@ -76,10 +76,11 @@ class VirtualMachineProvider:
         params.update(os_profile)
         params.update(storage_profile)
         params.update(self._get_pricing_params(pricing_model))
-        v_m = self._azure_service.compute.virtual_machines.begin_create_or_update(
+        self._azure_service.compute.virtual_machines.begin_create_or_update(
             resource_group_name=self._resource_group_name,
             vm_name=definition.name,
-            parameters=params).result()
+            parameters=params).wait()
+        v_m = self._azure_service.compute.virtual_machines.get(self._resource_group_name, definition.name)
         LOGGER.info("Provisioned VM {name} in the {resource} resource group".format(
             name=v_m.name, resource=self._resource_group_name))
         self._cache[v_m.name] = v_m
@@ -107,6 +108,14 @@ class VirtualMachineProvider:
             task.wait()
             LOGGER.info("Instance {name} has been terminated.".format(name=name))
         del self._cache[name]
+
+    def reboot(self, name: str, wait: bool = True) -> None:
+        LOGGER.info("Triggering reboot of instance: {name}".format(name=name))
+        task = self._azure_service.compute.virtual_machines.begin_restart(self._resource_group_name, vm_name=name)
+        if wait is True:
+            LOGGER.info("Waiting for reboot of instance: {name}...".format(name=name))
+            task.wait()
+            LOGGER.info("Instance {name} has been rebooted.".format(name=name))
 
     @staticmethod
     def _get_os_profile(computer_name: str, admin_username: str,

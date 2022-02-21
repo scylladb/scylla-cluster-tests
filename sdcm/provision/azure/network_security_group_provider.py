@@ -68,17 +68,20 @@ class NetworkSecurityGroupProvider:
 
     def get_or_create(self, security_rules: Iterable, name="default") -> NetworkSecurityGroup:
         """Creates or gets (if already exists) security group"""
+        if name in self._cache:
+            return self._cache[name]
         open_ports_rules = rules_to_payload(security_rules)
         LOGGER.info(
             "Creating SCT network security group in resource group {rg}...".format(rg=self._resource_group_name))
-        network_sec_group = self._azure_service.network.network_security_groups.begin_create_or_update(
+        self._azure_service.network.network_security_groups.begin_create_or_update(
             resource_group_name=self._resource_group_name,
             network_security_group_name=name,
             parameters={
                 "location": self._region,
                 "security_rules": open_ports_rules,
             },
-        ).result()
+        ).wait()
+        network_sec_group = self._azure_service.network.network_security_groups.get(self._resource_group_name, name)
         LOGGER.info("Provisioned security group {name} in the {resource} resource group".format(
             name=network_sec_group.name, resource=self._resource_group_name))
         self._cache[name] = network_sec_group

@@ -51,6 +51,7 @@ from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.cluster_k8s import mini_k8s, gke, eks, LOADER_CLUSTER_CONFIG
 from sdcm.cluster_k8s.eks import MonitorSetEKS
 from sdcm.provision.azure.provisioner import AzureProvisioner
+from sdcm.provision.provisioner import provisioner_factory
 from sdcm.scan_operation_thread import FullScanThread, FullPartitionScanThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
 from sdcm.scylla_bench_thread import ScyllaBenchThread
@@ -846,11 +847,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.monitors = NoMonitorSet()
 
     def get_cluster_azure(self, loader_info, db_info, monitor_info):
-        # pylint: disable=too-many-branches,too-many-statements
+        # pylint: disable=too-many-branches,too-many-statements,too-many-locals
         regions = self.params.get('azure_region_name').split()
+        test_id = str(TestConfig().test_id())
         provisioners: List[AzureProvisioner] = []
         for region in regions:
-            provisioners.append(AzureProvisioner(str(TestConfig().test_id()), region))
+            provisioners.append(provisioner_factory.create_provisioner(backend="azure", test_id=test_id, region=region))
         if db_info['n_nodes'] is None:
             n_db_nodes = self.params.get('n_db_nodes')
             if isinstance(n_db_nodes, int):  # legacy type
@@ -868,75 +870,40 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 loader_info['n_nodes'] = [int(n) for n in n_loader_nodes.split()]
             else:
                 self.fail('Unsupported parameter type: {}'.format(type(n_loader_nodes)))
-        if monitor_info['n_nodes'] is None:
-            # todo lukasz: fix implementation for monitor
-            pass
-        azure_image = self.params.get("azure_image_db") or self.params.get("scylla_version")
+        azure_image = self.params.get("azure_image_db")
         user_prefix = self.params.get('user_prefix')
         self.credentials.append(UserRemoteCredentials(key_file="~/.ssh/scylla-qa-ec2"))
 
-        common_params = dict(azure_image_username=self.params.get('azure_image_username'),
-                             azure_network=self.params.get('azure_network'),
+        common_params = dict(user_name=self.params.get('azure_image_username'),
                              credentials=self.credentials,
                              user_prefix=user_prefix,
                              params=self.params,
-                             azure_datacenter=None,
+                             region_names=None,
                              )
         self.db_cluster = ScyllaAzureCluster(image_id=azure_image,
-                                             azure_image_type=db_info['disk_type'],
-                                             azure_image_size=db_info['disk_size'],
-                                             azure_n_local_ssd=db_info['n_local_ssd'],
-                                             azure_instance_type=db_info['type'],
+                                             root_disk_size=db_info['disk_size'],
+                                             instance_type=db_info['type'],
                                              provisioners=provisioners,
                                              n_nodes=db_info['n_nodes'],
-                                             add_disks=None,  # todo lukasz: fix disks
-                                             service_accounts=None,  # todo lukasz: fix service_accounts
                                              **common_params)
-        # todo lukasz: these params are not used yet:
-        if loader_info['n_nodes'] is None:
-            loader_info['n_nodes'] = int(self.params.get('n_loaders'))
-        if loader_info['type'] is None:
-            loader_info['type'] = self.params.get('azure_instance_type_loader')
-        if loader_info['disk_type'] is None:
-            loader_info['disk_type'] = self.params.get('azure_root_disk_type_loader')
-        if loader_info['disk_size'] is None:
-            loader_info['disk_size'] = self.params.get('azure_root_disk_size_loader')
-        if loader_info['n_local_ssd'] is None:
-            loader_info['n_local_ssd'] = self.params.get('azure_n_local_ssd_disk_loader')
-        loader_additional_disks = {'pd-ssd': self.params.get('azure_pd_ssd_disk_size_loader')}
         self.loaders = LoaderSetAzure(
             image_id=self.params.get('azure_image_loader'),
-            azure_image_type=loader_info['disk_type'],
-            azure_image_size=loader_info['disk_size'],
-            azure_n_local_ssd=loader_info['n_local_ssd'],
-            azure_instance_type="Standard_D2s_v3",
+            root_disk_size=loader_info['disk_size'],
+            instance_type="Standard_D2s_v3",
             provisioners=provisioners,
             n_nodes=loader_info['n_nodes'],
-            add_disks=loader_additional_disks,
             **common_params)
         if monitor_info['n_nodes'] is None:
             monitor_info['n_nodes'] = self.params.get('n_monitor_nodes')
-        if monitor_info['type'] is None:
-            monitor_info['type'] = self.params.get('azure_instance_type_monitor')
-        if monitor_info['disk_type'] is None:
-            monitor_info['disk_type'] = self.params.get('azure_root_disk_type_monitor')
-        if monitor_info['disk_size'] is None:
-            monitor_info['disk_size'] = self.params.get('azure_root_disk_size_monitor')
-        if monitor_info['n_local_ssd'] is None:
-            monitor_info['n_local_ssd'] = self.params.get('azure_n_local_ssd_disk_monitor')
         if monitor_info['n_nodes'] > 0:
-            monitor_additional_disks = {'pd-ssd': self.params.get('azure_pd_ssd_disk_size_monitor')}
             azure_image_monitor = self.params.get('azure_image_monitor')
             if not azure_image_monitor:
                 azure_image_monitor = self.params.get('azure_image')
             self.monitors = MonitorSetAzure(image_id=azure_image_monitor,
-                                            azure_image_type=monitor_info['disk_type'],
-                                            azure_image_size=monitor_info['disk_size'],
-                                            azure_n_local_ssd=monitor_info['n_local_ssd'],
-                                            azure_instance_type=monitor_info['type'],
+                                            instance_type=self.params.get('azure_instance_type_monitor'),
+                                            root_disk_size=self.params.get('azure_root_disk_type_monitor'),
                                             provisioners=provisioners,
-                                            n_nodes=monitor_info['n_nodes'],
-                                            add_disks=monitor_additional_disks,
+                                            n_nodes=self.params.get('n_monitor_nodes'),
                                             targets=dict(db_cluster=self.db_cluster,
                                                          loaders=self.loaders),
                                             **common_params)
