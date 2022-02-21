@@ -372,12 +372,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def argus_test_run(self):
         try:
             argus_test_run = ArgusTestRun.from_sct_config(test_id=UUID(self.test_id),
-                                                          test_module_path=self.test_config.test_name(),
                                                           sct_config=self.params)
             argus_test_run.save()
             return argus_test_run
-        except Exception:  # pylint: disable=broad-except
-            self.log.error("ERROR SETTING UP ARGUS CONNECTION", exc_info=True)
+        except Exception as exc:  # pylint: disable=broad-except
+            self.log.warning("Unable to set up Argus connection: %s", exc.args[0])
+            self.log.debug("Error details: ", exc_info=True)
             return unittest.mock.MagicMock()
 
     def argus_update_status(self, status: TestStatus):
