@@ -64,11 +64,12 @@ class NetworkInterfaceProvider:
             "properties": {"deleteOption": "Delete"}
         }
         LOGGER.info("Creating nic in resource group {rg}...".format(rg=self._resource_group_name))
-        nic = self._azure_service.network.network_interfaces.begin_create_or_update(
+        self._azure_service.network.network_interfaces.begin_create_or_update(
             resource_group_name=self._resource_group_name,
             network_interface_name=nic_name,
             parameters=parameters,
-        ).result()
+        ).wait()
+        nic = self._azure_service.network.network_interfaces.get(self._resource_group_name, nic_name)
         LOGGER.info("Provisioned nic {name} in the {resource} resource group".format(
             name=nic.name, resource=self._resource_group_name))
         self._cache[nic_name] = nic

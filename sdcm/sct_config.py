@@ -1294,11 +1294,10 @@ class SCTConfiguration(dict):
                 'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'gce_root_disk_size_monitor',
                 'gce_n_local_ssd_disk_monitor', 'gce_datacenter'],
 
-        'azure': ['user_prefix', 'azure_network', 'azure_image_db', 'azure_image_username', 'azure_instance_type_db',
+        'azure': ['user_prefix', 'azure_image_db', 'azure_image_username', 'azure_instance_type_db',
                   'azure_root_disk_type_db', 'azure_n_local_ssd_disk_db',
                   'azure_instance_type_loader', 'azure_root_disk_type_loader', 'azure_n_local_ssd_disk_loader',
-                  'azure_instance_type_monitor', 'azure_root_disk_type_monitor',
-                  'azure_n_local_ssd_disk_monitor', 'azure_region_name'],
+                  'azure_instance_type_monitor', 'azure_n_local_ssd_disk_monitor', 'azure_region_name'],
 
         'docker': ['user_credentials_path', 'scylla_version'],
 

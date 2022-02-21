@@ -37,7 +37,7 @@ class SubnetProvider:
             for vnet in vnets:
                 subnets = self._azure_service.network.subnets.list(self._resource_group_name, vnet.name)
                 for subnet in subnets:
-                    self._cache[subnet.name] = subnet
+                    self._cache[f"{vnet.name}-{subnet.name}"] = subnet
         except ResourceNotFoundError:
             pass
 
@@ -46,7 +46,7 @@ class SubnetProvider:
         if cache_name in self._cache:
             return self._cache[cache_name]
         LOGGER.info("Creating subnet in resource group {rg}...".format(rg=self._resource_group_name))
-        subnet = self._azure_service.network.subnets.begin_create_or_update(
+        self._azure_service.network.subnets.begin_create_or_update(
             resource_group_name=self._resource_group_name,
             virtual_network_name=vnet_name,
             subnet_name=subnet_name,
@@ -56,7 +56,8 @@ class SubnetProvider:
                     "id": network_sec_group_id,
                 },
             },
-        ).result()
+        ).wait()
+        subnet = self._azure_service.network.subnets.get(self._resource_group_name, vnet_name, subnet_name)
         LOGGER.info("Provisioned subnet {name} for the {vnet_name} vnet".format(name=subnet.name, vnet_name=vnet_name))
         self._cache[cache_name] = subnet
         return subnet

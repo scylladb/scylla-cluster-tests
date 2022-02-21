@@ -16,8 +16,8 @@ import pytest
 
 from sdcm.keystore import KeyStore  # pylint: disable=import-error
 from sdcm.provision.azure.provisioner import AzureProvisioner  # pylint: disable=import-error
-from sdcm.provision.azure.utils import get_scylla_images
-from sdcm.provision.provisioner import InstanceDefinition  # pylint: disable=import-error
+from sdcm.provision.azure.utils import get_scylla_images  # pylint: disable=import-error
+from sdcm.provision.provisioner import InstanceDefinition, provisioner_factory  # pylint: disable=import-error
 
 
 class TestProvisionScyllaInstanceAzureE2E:
@@ -48,11 +48,11 @@ class TestProvisionScyllaInstanceAzureE2E:
 
     @pytest.fixture(scope="function")
     def provisioner(self, test_id, region):  # pylint: disable=no-self-use
-        return AzureProvisioner(test_id, region)
+        return provisioner_factory.create_provisioner("azure", test_id, region)
 
     def test_can_provision_scylla_vm(self, test_id, region, definition):  # pylint: disable=no-self-use
-        provisioner = AzureProvisioner(test_id, region)
-        v_m = provisioner.create_virtual_machine(region, definition)
+        provisioner = provisioner_factory.create_provisioner("azure", test_id, region)
+        v_m = provisioner.get_or_create_instance(definition)
         assert v_m.name == definition.name
         assert v_m.region == region
         assert v_m.user_name == definition.user_name
@@ -60,12 +60,13 @@ class TestProvisionScyllaInstanceAzureE2E:
         assert v_m.private_ip_address
         assert v_m.tags == definition.tags
 
-        assert v_m == provisioner.list_virtual_machines()[0]
+        assert v_m == provisioner.list_instances()[0]
 
     @pytest.mark.timeout(2)
     def test_can_discover_existing_resources_for_test_id(self, region, provisioner, definition):  # pylint: disable=no-self-use
         """should read from cache instead creating anything - so should be fast (after provisioner initialized)"""
-        v_m = provisioner.create_virtual_machine(region, definition)
+        assert provisioner.list_instances()[0]
+        v_m = provisioner.get_or_create_instance(definition)
         assert v_m.name == definition.name
         assert v_m.region == region
         assert v_m.user_name == definition.user_name
@@ -73,14 +74,14 @@ class TestProvisionScyllaInstanceAzureE2E:
         assert v_m.private_ip_address
         assert v_m.tags == definition.tags
 
-        assert v_m == provisioner.list_virtual_machines()[0]
+        assert v_m == provisioner.list_instances()[0]
 
     def test_can_terminate_vm_instance(self, test_id, region, provisioner, definition):  # pylint: disable=no-self-use
         """should read from cache instead creating anything - so should be fast (after provisioner initialized)"""
-        provisioner.terminate_virtual_machine(definition.name, wait=True)
+        provisioner.terminate_instance(definition.name, wait=True)
 
         # validate cache has been cleaned up
-        assert not provisioner.list_virtual_machines()
+        assert not provisioner.list_instances()
         with pytest.raises(KeyError):
             assert not provisioner._nic_provider.get(definition.name)  # pylint: disable=protected-access
         with pytest.raises(KeyError):
@@ -89,7 +90,7 @@ class TestProvisionScyllaInstanceAzureE2E:
         # verify that truly vm, nic and ip got deleted - not only cache
         provisioner = AzureProvisioner(test_id, region)
 
-        assert not provisioner.list_virtual_machines()
+        assert not provisioner.list_instances()
         with pytest.raises(KeyError):
             assert not provisioner._nic_provider.get(definition.name)  # pylint: disable=protected-access
         with pytest.raises(KeyError):
@@ -100,5 +101,5 @@ class TestProvisionScyllaInstanceAzureE2E:
         provisioner.cleanup(wait=True)
         # validating real cleanup - this takes most of the testing time (6mins)
         provisioner = AzureProvisioner(test_id, region)
-        assert not provisioner.list_virtual_machines(), "failed cleaning up resources"
+        assert not provisioner.list_instances(), "failed cleaning up resources"
         assert provisioner._rg_provider._cache is None, "resource group was not deleted"  # pylint: disable=protected-access

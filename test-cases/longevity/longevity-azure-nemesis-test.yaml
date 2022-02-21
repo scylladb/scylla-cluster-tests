@@ -1,0 +1,29 @@
+test_duration: 1000
+
+prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(5) size=FIXED(64)' -log interval=5"
+
+stress_cmd: ["cassandra-stress write cl=QUORUM duration=900m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(5) size=FIXED(64)' -log interval=5",
+             "cassandra-stress read  cl=QUORUM duration=900m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 -mode cql3 native -rate threads=40 -pop seq=1..20971520 -col 'n=FIXED(5) size=FIXED(64)' -log interval=5"
+             ]
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+seeds_num: 3
+
+instance_type_db: 'i3.4xlarge'
+azure_instance_type_db: 'Standard_L16s_v2'
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '032'
+nemesis_interval: 5
+nemesis_filter_seeds: false
+
+ssh_transport: 'fabric'
+nemesis_include_filter: ['topology_changes']
+nemesis_multiply_factor: 1
+
+user_prefix: 'longevity-azure-nemesis'
+space_node_threshold: 64424
+
+pre_create_schema: True
+sstable_size: 100

@@ -1063,16 +1063,14 @@ def clean_instances_azure(tags_dict, dry_run=False):
     """
 
     test_id = tags_dict.pop("TestId")
-    provisioner = AzureProvisioner(test_id, "eastus")  # todo: get all azure regions
-    all_instances = provisioner.list_virtual_machines()
-    instances = all_instances.copy()
-    for tag_name, tag_value in tags_dict.items():
-        instances = [instance for instance in instances if instance.tags.get(tag_name, "") == tag_value]
-    LOGGER.info("going to clean instances: {names}".format(names=[inst.name for inst in instances]))
-    if not dry_run:
-        if instances == all_instances:
-            provisioner.cleanup(wait=False)
-        else:
+    provisioners = AzureProvisioner.discover_regions(test_id)
+    for provisioner in provisioners:
+        all_instances = provisioner.list_instances()
+        instances = all_instances.copy()
+        for tag_name, tag_value in tags_dict.items():
+            instances = [instance for instance in instances if instance.tags.get(tag_name, "") == tag_value]
+        LOGGER.info("going to clean instances: {names}".format(names=[inst.name for inst in instances]))
+        if not dry_run:
             for instance in instances:
                 instance.terminate(wait=False)
 

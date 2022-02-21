@@ -88,7 +88,6 @@ from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
 DEFAULT_CLOUD = SUPPORTED_CLOUDS[0]
-
 SCT_RUNNER_HOST = get_sct_runner_ip()
 
 LOGGER = setup_stdout_logger()
