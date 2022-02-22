@@ -67,7 +67,7 @@ class ReactorStalledMixin(Generic[T_log_event]):
 
 
 DatabaseLogEvent.add_subevent_type("WARNING", severity=Severity.WARNING,
-                                   regex="!WARNING ")
+                                   regex=r"!\s*?WARNING ")
 DatabaseLogEvent.add_subevent_type("NO_SPACE_ERROR", severity=Severity.ERROR,
                                    regex="No space left on device")
 DatabaseLogEvent.add_subevent_type("UNKNOWN_VERB", severity=Severity.WARNING,
