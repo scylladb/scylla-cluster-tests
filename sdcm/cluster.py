@@ -1867,7 +1867,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.remoter.sudo(f'{"yum" if self.distro.is_rhel_like else "apt-get"} install -y {package_name}')
 
     def is_apt_lock_free(self) -> bool:
-        return self.remoter.sudo("lsof /var/lib/dpkg/lock", ignore_status=True).ok
+        result = self.remoter.sudo("lsof /var/lib/dpkg/lock", ignore_status=True)
+        return result.exit_status == 1
 
     def install_manager_agent(self, package_path: Optional[str] = None) -> None:
         if package_path:
