@@ -2038,13 +2038,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             wait.wait_for(func=self.is_apt_lock_free, step=30, timeout=60, text='Checking if package manager is free')
         self.remoter.sudo(f'{package_mgr} install -y {package_name}')
 
-    def is_apt_lock_free(self):
-        cmd = 'lsof /var/lib/dpkg/lock'
-        res = self.remoter.sudo(cmd, ignore_status=True)
-        if res.exit_status == 0:
-            return True
-        else:
-            return False
+    def is_apt_lock_free(self) -> bool:
+        result = self.remoter.sudo("lsof /var/lib/dpkg/lock", ignore_status=True)
+        return result.exit_status == 1
 
     def install_manager_agent(self, package_path=None):
         auth_token = Setup.test_id()
