@@ -13,13 +13,22 @@
 #
 # Copyright (c) 2021 ScyllaDB
 from enum import Enum
+import logging
+import time
 import yaml
 
 from kubernetes.client import exceptions as k8s_exceptions
 
-from sdcm.cluster_k8s import SCYLLA_NAMESPACE, ScyllaPodCluster
+from sdcm.cluster_k8s import (
+    SCYLLA_MANAGER_NAMESPACE,
+    SCYLLA_NAMESPACE,
+    ScyllaPodCluster,
+)
 from sdcm.utils.decorators import log_run_info, retrying
+from sdcm.utils.k8s import HelmValues
 from sdcm.wait import wait_for
+
+log = logging.getLogger()
 
 
 class PodStatuses(Enum):
@@ -86,15 +95,15 @@ def scylla_services_names(db_cluster: ScyllaPodCluster) -> list:
             if name not in ('NAME', f"{scylla_cluster_name}-client")]
 
 
-def wait_for_resource_absence(db_cluster: ScyllaPodCluster,
+def wait_for_resource_absence(db_cluster: ScyllaPodCluster,  # pylint: disable=too-many-arguments
                               resource_type: str, resource_name: str,
+                              namespace: str = SCYLLA_NAMESPACE,
                               step: int = 2, timeout: int = 60) -> None:
     def resource_is_absent() -> bool:
         all_resources = db_cluster.k8s_cluster.kubectl(
-            f"get {resource_type} -o=custom-columns=:.metadata.name",
-            namespace=SCYLLA_NAMESPACE,
+            f"get {resource_type} -o=custom-columns=:.metadata.name", namespace=namespace,
         ).stdout.split()
-        return resource_name not in all_resources
+        return not all_resources or resource_name not in all_resources
 
     wait_for(resource_is_absent, step=step, timeout=timeout, throw_exc=True,
              text=f"Waiting for the '{resource_name}' {resource_type} be deleted")
@@ -118,3 +127,38 @@ def get_pod_storage_capacity(db_cluster: ScyllaPodCluster, namespace: str, pod_n
                                       "capacity": pod["status"]["capacity"]["storage"]})
 
     return pods_storage_capacity
+
+
+def reinstall_scylla_manager(db_cluster: ScyllaPodCluster, manager_version: str):
+    values = HelmValues(yaml.safe_load(db_cluster.k8s_cluster.helm(
+        "get values scylla-manager -o yaml", namespace=SCYLLA_MANAGER_NAMESPACE)))
+    if values.get("image.tag") != manager_version:
+        log.info(
+            "Scylla Manager '%s' is going to be installed instead of the '%s' one.",
+            manager_version, values.get("image.tag"))
+        values.set('image.tag', manager_version)
+        values.set('scylla.agentImage.tag', manager_version)
+
+        # Delete the current scylla-manager completely because otherwise
+        # we won't be able to migrate DB state from a newer version to older one.
+        db_cluster.k8s_cluster.helm(
+            "uninstall scylla-manager --wait", namespace=SCYLLA_MANAGER_NAMESPACE)
+        wait_for_resource_absence(
+            db_cluster=db_cluster, step=1, timeout=120, resource_name="",
+            resource_type="pod", namespace=SCYLLA_MANAGER_NAMESPACE)
+        db_cluster.k8s_cluster.kubectl(
+            "delete pvc --all --wait=true", namespace=SCYLLA_MANAGER_NAMESPACE)
+
+        # Deploy Scylla Manager of the specified version
+        log.debug(db_cluster.k8s_cluster.helm_install(
+            target_chart_name="scylla-manager",
+            source_chart_name="scylla-operator/scylla-manager",
+            version=db_cluster.k8s_cluster._scylla_operator_chart_version,  # pylint: disable=protected-access
+            use_devel=True,
+            values=values,
+            namespace=SCYLLA_MANAGER_NAMESPACE,
+        ))
+        time.sleep(5)
+        db_cluster.k8s_cluster.kubectl_wait(
+            "--all --for=condition=Ready pod", namespace=SCYLLA_MANAGER_NAMESPACE, timeout=600)
+        log.info("Scylla Manager '%s' has successfully been installed", manager_version)

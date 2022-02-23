@@ -1303,7 +1303,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def dynamic_client(self) -> k8s.dynamic.DynamicClient:
         return KubernetesOps.dynamic_client(self.api_client)
 
-    @cached_property
+    @property
     def scylla_manager_cluster(self) -> 'ManagerPodCluser':
         return ManagerPodCluser(
             k8s_cluster=self,
