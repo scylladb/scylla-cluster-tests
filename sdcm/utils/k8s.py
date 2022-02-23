@@ -41,7 +41,7 @@ from sdcm.wait import wait_for
 
 
 KUBECTL_BIN = "kubectl"
-HELM_IMAGE = "alpine/helm:3.3.4"
+HELM_IMAGE = "alpine/helm:3.8.0"
 
 KUBECTL_TIMEOUT = 300  # seconds
 
