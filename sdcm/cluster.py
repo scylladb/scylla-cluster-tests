@@ -285,7 +285,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self._init_port_mapping()
 
         self.set_keep_alive()
-        if self.node_type == "db":
+        if self.node_type == "db" and not self.is_kubernetes():
             try:
                 self.remoter.sudo(shell_script_cmd("""\
                 echo 'kernel.perf_event_paranoid = 0' >> /etc/sysctl.conf
