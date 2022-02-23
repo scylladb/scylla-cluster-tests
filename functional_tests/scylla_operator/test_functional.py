@@ -27,6 +27,7 @@ from sdcm.cluster_k8s import (
 )
 from sdcm.mgmt import TaskStatus
 from sdcm.utils.k8s import HelmValues
+
 from functional_tests.scylla_operator.libs.helpers import (
     get_scylla_sysctl_value,
     get_orphaned_services,
@@ -34,6 +35,7 @@ from functional_tests.scylla_operator.libs.helpers import (
     get_pods_and_statuses,
     get_pod_storage_capacity,
     PodStatuses,
+    reinstall_scylla_manager,
     set_scylla_sysctl_value,
     wait_for_resource_absence,
 )
@@ -168,7 +170,13 @@ def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
 
 
 @pytest.mark.requires_mgmt
-def test_mgmt_repair(db_cluster):
+@pytest.mark.parametrize("manager_version", (
+    "2.4.1", "2.5.0", "2.6.1",
+))
+def test_mgmt_repair(db_cluster, manager_version):
+    reinstall_scylla_manager(db_cluster, manager_version)
+
+    # Run manager repair operation
     mgr_cluster = db_cluster.get_cluster_manager()
     mgr_task = mgr_cluster.create_repair_task()
     assert mgr_task, "Failed to create repair task"
@@ -177,14 +185,22 @@ def test_mgmt_repair(db_cluster):
         mgr_task.id, str(mgr_task.status))
 
 
+# NOTE: manager versions 2.3.x will fail with following error:
+#     invalid character '\\x1f' looking for beginning of value
 @pytest.mark.requires_mgmt
-def test_mgmt_backup(db_cluster):
+@pytest.mark.parametrize("manager_version", (
+    "2.6.1", "2.5.0", "2.4.1",
+))
+def test_mgmt_backup(db_cluster, manager_version):
+    reinstall_scylla_manager(db_cluster, manager_version)
+
+    # Run manager backup operation
     mgr_cluster = db_cluster.get_cluster_manager()
     backup_bucket_location = db_cluster.params.get('backup_bucket_location')
     bucket_name = f"s3:{backup_bucket_location.split()[0]}"
     mgr_task = mgr_cluster.create_backup_task(location_list=[bucket_name, ])
     assert mgr_task, "Failed to create backup task"
-    status = mgr_task.wait_and_get_final_status(timeout=54000, step=5, only_final=True)
+    status = mgr_task.wait_and_get_final_status(timeout=7200, step=5, only_final=True)
     assert TaskStatus.DONE == status
 
 
