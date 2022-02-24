@@ -203,7 +203,9 @@ class ArtifactsTest(ClusterTester):
     def check_service_existence(self, service_name):
         res = self.node.remoter.run(f'systemctl list-units --full | grep -Fq "{service_name}"',
                                     ignore_status=True)
-        return not res.exit_status
+        if res.exit_status:
+            return False
+        return True  # exit_status = 1 means the service doesn't exist
 
     def test_scylla_service(self):
         backend = self.params["cluster_backend"]
@@ -241,10 +243,14 @@ class ArtifactsTest(ClusterTester):
             # Checks https://github.com/scylladb/scylla/issues/8339
             # If the instance already has systemd-timesyncd
             is_timesyncd_service_installed = self.check_service_existence(service_name="systemd-timesyncd")
-            is_ntp_service_installed = self.check_service_existence(service_name="ntp")
-            is_chrony_service_installed = self.check_service_existence(service_name="chrony")
             # Do note: On Redhat based distributions the services are named ntpd and chronyd, while on debian based
-            # distributions they're named ntp and chrony. As such, I looked for the shorter name of the two.
+            # distributions they're named ntp and chrony.
+            if self.node.is_rhel_like():
+                is_ntp_service_installed = self.check_service_existence(service_name="ntpd")
+                is_chrony_service_installed = self.check_service_existence(service_name="chronyd")
+            else:
+                is_ntp_service_installed = self.check_service_existence(service_name="ntp")
+                is_chrony_service_installed = self.check_service_existence(service_name="chrony")
             if is_timesyncd_service_installed:
                 assert not is_ntp_service_installed, \
                     "systemd-timesyncd is already installed, yet scylla installed ntp service on top of it"
