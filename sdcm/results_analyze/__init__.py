@@ -636,10 +636,15 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         }
         self.log.debug('Regression analysis:')
         self.log.debug(PP.pformat(results))
-        test_name = full_test_name.split('.')[-1]  # Example: longevity_test.py:LongevityTest.test_custom_time
+        test_name = full_test_name.split('.', 1)[1]  # Example: longevity_test.py:LongevityTest.test_custom_time
         subject = f'Performance Regression Compare Results - {test_name} - {test_version} - {str(test_start_time)}'
         if ycsb:
-            subject = f'(Alternator) Performance Regression - {test_name} - {test_version} - {str(test_start_time)}'
+            if ycsb_engine := ycsb.get('raw_cmd', "").split():
+                if len(ycsb_engine) > 3:
+                    ycsb_engine = ycsb_engine[2]
+                else:
+                    ycsb_engine = 'N/A'
+            subject = f'YCSB({ycsb_engine}) Performance Regression - {test_name} - {test_version} - {str(test_start_time)}'
         if ebs:
             subject = f'{subject} (ebs volume type {ebs_type})'
         if email_subject_postfix:

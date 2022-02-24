@@ -1,0 +1,59 @@
+test_duration: 600
+
+pre_create_keyspace: [
+  "CREATE KEYSPACE ycsb WITH REPLICATION = {'class' : 'SimpleStrategy', 'replication_factor': 3 };",
+  "CREATE TABLE ycsb.usertable (y_id varchar primary key, field0 varchar, field1 varchar, field2 varchar, field3 varchar, field4 varchar, field5 varchar, field6 varchar, field7 varchar, field8 varchar, field9 varchar);"
+]
+
+# there is no sense to use more than 1 loader for 3 nodes cluster,
+# but this is just for example
+prepare_write_cmd:
+  - >-2
+    -threads 84
+    -p readproportion=0 -p insertproportion=1
+    -p fieldcount=10 -p fieldlength=128
+    -p scylla.username=cassandra -p scylla.password=cassandra -p scylla.tokenaware=true
+    -p scylla.coreconnections=14 -p scylla.maxconnections=14
+    -p scylla.readconsistencylevel=QUORUM -p scylla.writeconsistencylevel=QUORUM
+
+# --target must be set to have correct latency results for const throughput - see coordinated omission avoidance problem
+#
+# we need high concurrency per shard to at least somewhat load request queues
+# number of core connections must match number of vCPU (16) on a db node - 2
+#
+# 16 vCPU per node = 14 shards per node =>
+# 14 vCPUs * 20 parallelism factor = 280 connections per host
+#
+# 840 threads = 280 conns / host * 3 nodes = 840 total threads
+# ops count 300 * 10^6 * / 60 = 40 minutes for workload
+#
+# ycsb workloads use zipfian distribution so we will use a single loader with 32 vCPUs
+# fix framework to support custom CL:
+#   -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE
+# or at least
+#   -p scylla.readconsistencylevel=QUORUM -p scylla.writeconsistencylevel=ONE
+#
+# $ bin/ycsb run scylla -s -t -P workloads/workloada -target 120000 -threads 840 -p recordcount=1000000000 -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000 -p scylla.coreconnections=280 -p scylla.maxconnections=280 -p scylla.username=cassandra -p scylla.password=cassandra -p scylla.hosts=10.0.2.51,10.0.3.133,10.0.3.67 -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE -p scylla.tokenaware=true
+stress_cmd: >-2
+  -target 80000 -threads 840
+  -p fieldcount=10 -p fieldlength=128 -p operationcount=300000000 -p maxexecutiontime=1800
+  -p scylla.username=cassandra -p scylla.password=cassandra -p scylla.tokenaware=true
+  -p scylla.coreconnections=280 -p scylla.maxconnections=280
+  -p scylla.readconsistencylevel=ONE -p scylla.writeconsistencylevel=ONE
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.4xlarge'
+instance_type_loader: 'c5.9xlarge'
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'CassandraAuthorizer'
+
+user_prefix: 'perf-ycsb-latency-nemesis'
+email_subject_postfix: 'YCSB workloads'
+store_perf_results: true
+send_email: true
