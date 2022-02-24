@@ -247,10 +247,11 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         self.display_results(results, test_name='test_latency')
         self.check_regression()
 
-    def run_workload(self, stress_cmd, nemesis=False):
+    def run_workload(self, stress_cmd, nemesis=False, sub_type=None):
         # create new document in ES with doc_id = test_id
         # allow to correctly save results for future compare
-        sub_type = 'read' if ' read ' in stress_cmd else 'write' if ' write ' in stress_cmd else 'mixed'
+        if sub_type is None:
+            sub_type = 'read' if ' read ' in stress_cmd else 'write' if ' write ' in stress_cmd else 'mixed'
         test_index = f'latency-during-ops-{sub_type}'
         self.create_test_stats(sub_type=sub_type, append_sub_test_to_name=False, test_index=test_index)
         stress_queue = self.run_stress_thread(stress_cmd=stress_cmd, stress_num=1, stats_aggregate_cmds=False)

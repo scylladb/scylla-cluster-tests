@@ -1,0 +1,12 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+perfRegressionParallelPipeline(
+    backend: "aws",
+    region: "us-east-1",
+    test_name: "ycsb_performance_regression_test.YCSBPerformanceRegression1BRecordsTest",
+    test_config: '''["test-cases/performance/ycsb/perf-base.yaml",]''',
+    sub_tests: ["test_latency"]
+)
