@@ -28,7 +28,7 @@ class SSHAgent:
     def start(cls, verbose: bool = True) -> None:
         if cls.is_running():
             LOGGER.warning("ssh-agent started already:\n\t\tSSH_AUTH_SOCK=%s\n\t\tSSH_AGENT_PID=%s",
-                           os.environ["SSH_AUTH_SOCK"], os.environ["SSH_AGENT_PID"])
+                           os.getenv("SSH_AUTH_SOCK", "N/A"), os.getenv("SSH_AGENT_PID", "N/A"))
             return
 
         res = LOCALRUNNER.run(r"""eval $(ssh-agent -s) && """
