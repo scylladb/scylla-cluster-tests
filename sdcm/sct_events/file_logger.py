@@ -20,7 +20,7 @@ from typing import Tuple, Optional, Callable, Any, Dict, List, cast
 from pathlib import Path
 from functools import partial
 from itertools import chain
-from collections import deque
+from collections import deque as tail
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import SctEvent
@@ -41,6 +41,18 @@ NORMAL_LOG: str = "normal.log"
 LINE_START_RE = re.compile(r"^\d{4}-\d{2}-\d{2} ")  # date in YYYY-MM-DD format
 
 LOGGER = logging.getLogger(__name__)
+
+
+class head(list):  # pylint: disable=invalid-name
+    def __init__(self, maxlen: Optional[int] = None):
+        super().__init__()
+        if maxlen is None:
+            self.append = super().append
+        self.maxlen = maxlen
+
+    def append(self, item: Any) -> None:
+        if len(self) < self.maxlen:
+            super().append(item)
 
 
 class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing.Process):
@@ -98,7 +110,8 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
     def get_events_by_category(self, limit: Optional[int] = None) -> Dict[str, List[str]]:
         output = {}
         for severity, log_file in self.events_logs_by_severity.items():
-            events_bucket = deque(maxlen=limit)
+            # Get first `limit' events with CRITICAL severity and last `limit' for other severities.
+            events_bucket = (head if severity is Severity.CRITICAL else tail)(maxlen=limit)
             event = []
             try:
                 with log_file.open() as fobj:
