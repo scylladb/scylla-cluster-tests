@@ -200,6 +200,13 @@ class ArtifactsTest(ClusterTester):
             write_cache = run(f"cat /sys/block/{nvme_device.removeprefix('/dev/')}/queue/write_cache").stdout.strip()
             self.assertEqual(write_cache, expected_write_cache_value)
 
+    def check_service_existence(self, service_name):
+        res = self.node.remoter.run(f'systemctl list-units --full | grep -Fq "{service_name}"',
+                                    ignore_status=True)
+        if res.exit_status:
+            return False
+        return True  # exit_status = 1 means the service doesn't exist
+
     def test_scylla_service(self):
         backend = self.params["cluster_backend"]
 
@@ -231,6 +238,28 @@ class ArtifactsTest(ClusterTester):
 
         with self.subTest("check Scylla server after installation"):
             self.check_scylla()
+
+        with self.subTest("check if scylla unnecessarily installed a time synchronization service"):
+            # Checks https://github.com/scylladb/scylla/issues/8339
+            # If the instance already has systemd-timesyncd
+            is_timesyncd_service_installed = self.check_service_existence(service_name="systemd-timesyncd")
+            # Do note: On Redhat based distributions the services are named ntpd and chronyd, while on debian based
+            # distributions they're named ntp and chrony.
+            if self.node.is_rhel_like():
+                is_ntp_service_installed = self.check_service_existence(service_name="ntpd")
+                is_chrony_service_installed = self.check_service_existence(service_name="chronyd")
+            else:
+                is_ntp_service_installed = self.check_service_existence(service_name="ntp")
+                is_chrony_service_installed = self.check_service_existence(service_name="chrony")
+            if is_timesyncd_service_installed:
+                assert not is_ntp_service_installed, \
+                    "systemd-timesyncd is already installed, yet scylla installed ntp service on top of it"
+                assert not is_chrony_service_installed, \
+                    "systemd-timesyncd is already installed, yet scylla installed chrony service on top of it"
+            else:
+                assert is_ntp_service_installed or is_chrony_service_installed, \
+                    "systemd-timesyncd is not installed on the instance, yet Scylla did not install ntp or chrony " \
+                    "services as a replacement"
 
             # TODO: implement after the new provision will be added
             # Task: https://trello.com/c/BIdIUwyT/4096-housekeeping-implemented-a-test-that-checks-i-value-when-scylla-
