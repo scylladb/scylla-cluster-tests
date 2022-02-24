@@ -89,7 +89,7 @@
         {% set best_stat=cmp_res.best.res.get(stat_name) %}
         {% set last_stat=cmp_res.last.res.get(stat_name) %}
         <tr>
-            <td>{{ best_stat.val }}</td>
+            <td>{{ "%.1f" % best_stat.val }}</td>
             <td> <span class="fbold">{{ cmp_res.best.version_dst }}</span></td>
             <td>{{ best_stat.best_val }}</td>
             <td>
@@ -112,7 +112,7 @@
                 <div>#{{ best_stat.best_id.commit }}</div>
                 <div>{{ best_stat.best_id.date }}</div>
             </td>
-            <td>{{ last_stat.best_val }}</td>
+            <td>{{ "%.1f" % last_stat.best_val }}</td>
             <td>
                 {% with status = last_stat.status, percent = last_stat.percent,
                    percent_abs = last_stat.percent|replace('%', '')|int %}
