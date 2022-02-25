@@ -117,6 +117,19 @@ class VirtualMachineProvider:
             task.wait()
             LOGGER.info("Instance {name} has been rebooted.".format(name=name))
 
+    def add_tags(self, name: str, tags: Dict[str, str]) -> VirtualMachine:
+        """Adds tags to instance (with waiting for completion)"""
+        if name not in self._cache:
+            raise AttributeError(f"Instance '{name}' does not exist in resource group '{self._resource_group_name}'")
+        current_tags = self._cache[name].tags
+        current_tags.update(tags)
+        self._azure_service.compute.virtual_machines.begin_update(self._resource_group_name, name, parameters={
+            "tags": current_tags
+        }).wait()
+        v_m = self._azure_service.compute.virtual_machines.get(self._resource_group_name, name)
+        self._cache[v_m.name] = v_m
+        return v_m
+
     @staticmethod
     def _get_os_profile(computer_name: str, admin_username: str,
                         admin_password: str, ssh_public_key: str):

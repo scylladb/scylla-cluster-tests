@@ -76,9 +76,14 @@ class VmInstance:  # pylint: disable=too-many-instance-attributes
         If wait is set to True, waits until machine is up, otherwise, returns when reboot was triggered."""
         self._provisioner.reboot_instance(self.name, wait)
 
+    def add_tags(self, tags: Dict[str, str]) -> None:
+        """Adds tags to the instance."""
+        self._provisioner.add_instance_tags(self.name, tags)
+        self.tags.update(tags)
+
 
 class Provisioner(ABC):
-    """Abstract class for virtual machines provisioner, cloud-provider and sct agnostic.
+    """Abstract class for instance (virtual machines) provisioner, cloud-provider and sct agnostic.
     Limits only to machines related to provided test_id. """
     _test_id: str
     _region: str
@@ -118,6 +123,10 @@ class Provisioner(ABC):
 
     def cleanup(self, wait: bool = False) -> None:
         """Cleans up all the resources. If wait == True, waits till cleanup fully completes."""
+        raise NotImplementedError()
+
+    def add_instance_tags(self, name: str, tags: Dict[str, str]) -> None:
+        """Adds tags to instance."""
         raise NotImplementedError()
 
 

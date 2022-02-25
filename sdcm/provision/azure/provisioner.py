@@ -113,6 +113,13 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
             for task in tasks:
                 task.wait()
 
+    def add_instance_tags(self, name: str, tags: Dict[str, str]) -> None:
+        """Adds tags to instance."""
+        LOGGER.info("Adding tags '{tags}' to intance '{name}'...".format(tags=tags, name=name))
+        instance = self._vm_to_instance(self._vm_provider.add_tags(name, tags))
+        self._cache[name] = instance
+        LOGGER.info("Added tags '{tags}' to intance '{name}'".format(tags=tags, name=name))
+
     @property
     def _resource_group_name(self):
         return f"SCT-{self._test_id}-{self._region}"
