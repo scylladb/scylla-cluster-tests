@@ -519,16 +519,12 @@ class UpgradeTest(FillDatabaseData):
             metric_query='collectd_cassandra_stress_write_gauge{type="ops", keyspace="keyspace1"}', n=5)
 
         # start gemini write workload
-        # and cdc log reader
         if self.version_cdc_support():
-            InfoEvent(message="Start gemini and cdc stressor during upgrade").publish()
+            InfoEvent(message="Start gemini during upgrade").publish()
             gemini_thread = self.run_gemini(self.params.get("gemini_cmd"))
             # Let to write_stress_during_entire_test complete the schema changes
             self.metric_has_data(
                 metric_query='gemini_cql_requests', n=10)
-
-            cdc_reader_thread = self.run_cdclog_reader_thread(self.params.get("stress_cdclog_reader_cmd"),
-                                                              keyspace_name="ks1", base_table_name="table1")
 
         with ignore_upgrade_schema_errors():
 
@@ -709,10 +705,9 @@ class UpgradeTest(FillDatabaseData):
                                         'entire test, actual: %d' % (
                 error_factor, schema_load_error_num)
 
-        InfoEvent(message='Step10 - Verify that gemini and cdc stressor are not failed during upgrade').publish()
+        InfoEvent(message='Step10 - Verify that gemini did not failed during upgrade').publish()
         if self.version_cdc_support():
             self.verify_gemini_results(queue=gemini_thread)
-            self.verify_cdclog_reader_results(cdc_reader_thread)
 
         InfoEvent(message='all nodes were upgraded, and last workaround is verified.').publish()
 

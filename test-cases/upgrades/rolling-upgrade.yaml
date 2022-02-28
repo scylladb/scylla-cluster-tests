@@ -41,8 +41,6 @@ append_scylla_args: '--blocked-reactor-notify-ms 500 --abort-on-lsa-bad-alloc 1 
 
 use_mgmt: false
 
-stress_cdclog_reader_cmd: "cdc-stressor -username cassandra -password cassandra -duration 2h -stream-query-round-duration 30s"
-
 gemini_cmd: "gemini -d --duration 2h \
 -c 10 -m write -f --non-interactive --cql-features normal \
 --max-mutation-retries 5 --max-mutation-retries-backoff 500ms \
