@@ -508,6 +508,9 @@ class LongevityTest(ClusterTester):
             table_template = string.Template(profile_yaml['table_definition'])
 
             with self.db_cluster.cql_connection_patient(node=self.db_cluster.nodes[0]) as session:
+                # since we are using connection while nemesis is running (and we have more then 5000 tables in this
+                # use case), we need a bigger timeout here to keep the following CQL commands from failing
+                session.default_timeout = 60.0 * 5
                 try:
                     session.execute(keyspace_definition)
                 except AlreadyExists:
