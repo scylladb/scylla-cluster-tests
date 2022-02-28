@@ -520,7 +520,7 @@ class JepsenEmailReporter(BaseEmailReporter):
 def build_reporter(name: str,
                    email_recipients: Sequence[str] = (),
                    logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
-    #  pylint: disable=too-many-return-statements
+    # pylint: disable=too-many-return-statements
     if "Gemini" in name:
         return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Longevity" in name or 'SlaPerUser' in name:
