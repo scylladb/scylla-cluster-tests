@@ -29,7 +29,7 @@ class QueryFilter:
         for param in self.SETUP_PARAMS + self.setup_instance_parameters():
             if setup_details:
                 setup_details += ' AND '
-            setup_details += 'setup_details.{}: {}'.format(param, self.test_doc['_source']['setup_details'][param])
+            setup_details += 'setup_details.{}: "{}"'.format(param, self.test_doc['_source']['setup_details'][param])
         return setup_details
 
     def filter_test_details(self):
@@ -235,7 +235,9 @@ class QueryFilterYCSB(QueryFilter):
         test_details = ""
         for ycsb in self._YCSB_CMD:
             for param in self._YCSB_PARAMS:
-                param_val = self.test_doc['_source']['test_details'][ycsb][param]
+                param_val = self.test_doc['_source']['test_details'][ycsb].get(param)
+                if not param_val:
+                    continue
                 test_details += ' AND test_details.{}.{}: {}'.format(ycsb, param, param_val)
         return test_details
 
@@ -264,8 +266,3 @@ class CDCQueryFilter(QueryFilter):
 class CDCQueryFilterCS(QueryFilterCS, CDCQueryFilter):
     def cs_params(self):
         return self._PROFILE_PARAMS if 'profiles' in self.test_name else self._PARAMS
-
-
-def query_filter(test_doc, is_gce, use_wide_query=False, lastyear=False):
-    return PerformanceFilterScyllaBench(test_doc, is_gce)() if test_doc['_source']['test_details'].get('scylla-bench') \
-        else PerformanceFilterCS(test_doc, is_gce, use_wide_query, lastyear)()
