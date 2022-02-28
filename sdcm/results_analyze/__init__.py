@@ -28,7 +28,7 @@ from sdcm.es import ES
 from sdcm.db_stats import TestStatsMixin
 from sdcm.send_email import Email, BaseEmailReporter
 from sdcm.sct_events import Severity
-from sdcm.utils.es_queries import query_filter, QueryFilter, PerformanceFilterYCSB, PerformanceFilterScyllaBench, \
+from sdcm.utils.es_queries import QueryFilter, PerformanceFilterYCSB, PerformanceFilterScyllaBench, \
     PerformanceFilterCS, CDCQueryFilterCS
 from test_lib.utils import MagicList, get_data_by_path
 from .test import TestResultClass
@@ -428,15 +428,15 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         return val1 if val2 == 0 or val1 < val2 else val2  # latency
 
     @staticmethod
-    def _query_filter(test_doc, is_gce):
+    def _query_filter(test_doc, is_gce,  use_wide_query=False, lastyear=False):
         if test_doc['_source']['test_details'].get('scylla-bench'):
-            return PerformanceFilterScyllaBench(test_doc, is_gce)()
+            return PerformanceFilterScyllaBench(test_doc, is_gce, use_wide_query, lastyear)()
         elif test_doc['_source']['test_details'].get('ycsb'):
-            return PerformanceFilterYCSB(test_doc, is_gce)()
+            return PerformanceFilterYCSB(test_doc, is_gce, use_wide_query, lastyear)()
         elif "cdc" in test_doc['_source']['test_details'].get('sub_type'):
-            return CDCQueryFilterCS(test_doc, is_gce)()
+            return CDCQueryFilterCS(test_doc, is_gce, use_wide_query, lastyear)()
         else:
-            return PerformanceFilterCS(test_doc, is_gce)()
+            return PerformanceFilterCS(test_doc, is_gce, use_wide_query, lastyear)()
 
     def cmp(self, src, dst, version_dst, best_test_id):
         """
@@ -495,7 +495,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             return False
 
         # filter tests
-        query = query_filter(doc, is_gce, use_wide_query, lastyear)
+        query = self._query_filter(doc, is_gce, use_wide_query, lastyear)
         if not query:
             return False
         self.log.debug("Query to ES: %s", query)

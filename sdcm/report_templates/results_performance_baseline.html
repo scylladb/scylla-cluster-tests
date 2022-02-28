@@ -64,7 +64,7 @@
     {% endif %}
 
     {% if ycsb_raw_cmd %}
-    <h1>YCSB (dynamodb) stats comparison</h1>
+    <h1>YCSB ({{ ycsb_raw_cmd.split()[2] }}) stats comparison</h1>
     <h3>Command</h3>
     <table id="results_table">
     <tr><td>{{ ycsb_raw_cmd }}</td></tr>
