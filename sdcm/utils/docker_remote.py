@@ -35,6 +35,10 @@ class RemoteDocker(BaseNode):
     def private_ip_address(self):
         return self.internal_ip_address
 
+    @property
+    def cql_ip_address(self):
+        return self.internal_ip_address
+
     def get_port(self, internal_port):
         """
         get specific port mapping

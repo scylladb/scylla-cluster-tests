@@ -130,7 +130,7 @@ def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, eve
 
     # 3. do read with dataintegrity=true
     cmd = 'bin/ycsb run dynamodb -P workloads/workloada -threads 5 -p recordcount=100 ' \
-          '-p fieldcount=10 -p fieldlength=512 -p dataintegrity=true -p operationcount=100000000'
+          '-p fieldcount=10 -p fieldlength=512 -p dataintegrity=true -p operationcount=30000'
     ycsb_thread2 = YcsbStressThread(loader_set, cmd, node_list=[docker_scylla], timeout=30, params=TEST_PARAMS)
 
     def cleanup_thread2():
@@ -138,10 +138,8 @@ def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, eve
 
     request.addfinalizer(cleanup_thread2)
 
-    ycsb_thread2.run()
-
     # 4. wait for expected metrics to be available
-    @timeout(timeout=60)
+    @timeout(timeout=120)
     def check_metrics():
         output = requests.get("http://{}/metrics".format(prom_address)).text
         regex = re.compile(r'^collectd_ycsb_verify_gauge.*?([0-9\.]*?)$', re.MULTILINE)
@@ -152,9 +150,10 @@ def test_02_dynamodb_api_dataintegrity(request, docker_scylla, prom_address, eve
         matches = regex.findall(output)
         assert all(float(i) >= 0 for i in matches), output
 
-    check_metrics()
     file_logger = events.get_events_logger()
-    with events.wait_for_n_events(file_logger, count=7, timeout=60):
+    with events.wait_for_n_events(file_logger, count=3, timeout=60):
+        ycsb_thread2.run()
+        check_metrics()
         ycsb_thread2.get_results()
 
     # 5. check that events with the expected error were raised

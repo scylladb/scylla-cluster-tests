@@ -74,6 +74,7 @@ class LocalLoaderSetDummy:
     def __init__(self):
         self.name = "LocalLoaderSetDummy"
         self.nodes = [LocalNode("loader_node", parent_cluster=self), ]
+        self.params = {}
 
     @staticmethod
     def get_db_auth():
@@ -84,6 +85,7 @@ class LocalScyllaClusterDummy(BaseScyllaCluster):
     # pylint: disable=super-init-not-called
     def __init__(self):
         self.name = "LocalScyllaClusterDummy"
+        self.params = {}
 
     @staticmethod
     def get_db_auth():
