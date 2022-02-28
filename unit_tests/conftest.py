@@ -58,8 +58,8 @@ def docker_scylla():
                           extra_docker_opts=f'-p 8000 -p 9042 --cpus="1" -v {entryfile_path}:/entry.sh --entrypoint'
                           f' /entry.sh')
 
-    DummyRemoter = collections.namedtuple('DummyRemoter', 'run')
-    scylla.remoter = DummyRemoter(run=scylla.run)
+    DummyRemoter = collections.namedtuple('DummyRemoter', ['run', 'sudo'])
+    scylla.remoter = DummyRemoter(run=scylla.run, sudo=scylla.run)
 
     def db_up():
         try:
