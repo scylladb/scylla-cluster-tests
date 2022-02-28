@@ -53,7 +53,7 @@ class PerformanceRegressionAlternatorTest(PerformanceRegressionTest):
             self.alternator.delete_table(node=node, table_name=table_name)
         # create new tables
         self.log.info("Going to create alternator tables")
-        self.alternator.create_table(node=node, schema=schema, alternator_write_isolation=alternator_write_isolation)
+        self.alternator.create_table(node=node, schema=schema, isolation=alternator_write_isolation)
 
         self.run_fstrim_on_all_db_nodes()
         self.wait_no_compactions_running()
