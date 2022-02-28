@@ -320,7 +320,7 @@ class SlaPerUserTest(LongevityTest):
             read_users.append({'user': User(session=session, name='user%d' % share, password='user%d' % share),
                                'role': Role(session=session, name='role%d' % share),
                                'service_level': ServiceLevel(session=session, name='sla%d' % share,
-                                                             service_shares=share)})
+                                                             shares=share)})
 
         expected_shares_ratio = self.calculate_metrics_ratio_per_user(two_users_list=read_users)
 
@@ -386,7 +386,7 @@ class SlaPerUserTest(LongevityTest):
             read_users.append({'user': User(session=session, name='user%d' % share, password='user%d' % share),
                                'role': Role(session=session, name='role%d' % share),
                                'service_level': ServiceLevel(session=session, name='sla%d' % share,
-                                                             service_shares=share)})
+                                                             shares=share)})
 
         # Create Service Levels/Roles/Users
         self.create_auths(entities_list_of_dict=read_users)
@@ -439,7 +439,7 @@ class SlaPerUserTest(LongevityTest):
             read_users.append({'user': User(session=session, name='user%d' % share, password='user%d' % share),
                                'role': Role(session=session, name='role%d' % share),
                                'service_level': ServiceLevel(session=session, name='sla%d' % share,
-                                                             service_shares=share)})
+                                                             shares=share)})
 
         # Create Service Levels/Roles/Users
         self.create_auths(entities_list_of_dict=read_users)
@@ -498,7 +498,7 @@ class SlaPerUserTest(LongevityTest):
             read_users.append({'user': User(session=session, name='user%d' % share, password='user%d' % share),
                                'role': Role(session=session, name='role%d' % share),
                                'service_level': ServiceLevel(session=session, name='sla%d' % share,
-                                                             service_shares=share)})
+                                                             shares=share)})
 
         # Create Service Levels/Roles/Users
         self.create_auths(entities_list_of_dict=read_users)
@@ -548,7 +548,7 @@ class SlaPerUserTest(LongevityTest):
             read_users.append({'user': User(session=session, name='user%d' % share, password='user%d' % share),
                                'role': Role(session=session, name='role%d' % share),
                                'service_level': ServiceLevel(session=session, name='sla%d' % share,
-                                                             service_shares=share)})
+                                                             shares=share)})
 
         # Create Service Levels/Roles/Users
         self.create_auths(entities_list_of_dict=read_users)
