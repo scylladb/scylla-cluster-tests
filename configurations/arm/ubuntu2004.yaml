@@ -5,4 +5,4 @@ instance_type_db: 'r6gd.large'
 use_preinstalled_scylla: false
 # enhanced network isn't supported
 append_scylla_setup_args: ' --no-ec2-check '
-use_mgmt: false
+use_mgmt: true
