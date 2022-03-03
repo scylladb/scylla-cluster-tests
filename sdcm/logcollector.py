@@ -1222,6 +1222,34 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                                                       instance=instance,
                                                       global_ip=instance.public_ips[0],
                                                       tags={**self.tags, "NodeType": "loader", }))
+        if self.params["use_cloud_manager"]:
+            try:
+                from cluster_cloud import \
+                    get_gce_manager_instance_by_cluster_id  # pylint: disable=import-outside-toplevel
+            except ImportError:
+                LOGGER.error("Couldn't collect Siren manager logs, cluster_cloud module isn't installed")
+            else:
+                cloud_manager_id = self.params.get["cloud_manager_id"]
+                LOGGER.info("GCE manager instance id: %s", cloud_manager_id)
+                if cloud_manager_id:
+                    cloud_cluster_id = self.params["cloud_cluster_id"]
+                    try:
+                        instance = get_gce_manager_instance_by_cluster_id(cluster_id=cloud_cluster_id)
+                        if not instance:
+                            raise ValueError(f"Cloud manager for the cluster {cloud_cluster_id} not found")
+                    except Exception as exc:  # pylint: disable=broad-except
+                        LOGGER.error("Failed to get cloud manager instance. Error: %s", exc)
+                        return
+
+                    LOGGER.info("GCE manager instance: %s", instance)
+                    ssh_login_info = {"hostname": instance["publicip"],
+                                      "user": "support",
+                                      "key_file": self.params["cloud_credentials_path"]}
+                    LOGGER.info("GCE manager instance ssh_login_info: %s", ssh_login_info)
+                    self.siren_manager_set.append(CollectingNode(name=instance["externalid"],
+                                                                 ssh_login_info=ssh_login_info,
+                                                                 instance=instance,
+                                                                 global_ip=instance["publicip"]))
 
     def get_docker_instances_by_testid(self):
         instances = list_instances_gce({"TestId": self.test_id}, running=True)
