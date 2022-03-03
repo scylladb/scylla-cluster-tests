@@ -1,4 +1,4 @@
-test_duration: 120
+test_duration: 240
 
 round_robin: true
 prepare_write_cmd:
