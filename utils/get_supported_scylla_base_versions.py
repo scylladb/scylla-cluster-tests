@@ -88,7 +88,7 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
                     # Choose the last two releases as upgrade base
                     ent_base_version += ent_release_list[idx-1:][:2]
             elif version == 'enterprise' or parse_version(version) > parse_version(ent_release_list[0]):
-                oss_base_version.append(ent_release_list[-1])
+                ent_base_version.append(ent_release_list[-1])
             elif re.match(r'\d+.\d+', version) and parse_version(version) >= parse_version(ent_release_list[0]):
                 oss_base_version.append(oss_release_list[-1])
                 ent_base_version += ent_release_list[-2:]
@@ -115,19 +115,17 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
         ent_base_version = [v for v in ent_base_version if v in supported_versions]
 
         # if there's only release candidates in those repos, skip this version
-        oss_base_version = self.filter_rc_only_version(oss_base_version, oss_release_list)
-        ent_base_version = self.filter_rc_only_version(ent_base_version, ent_release_list)
+        oss_base_version = self.filter_rc_only_version(oss_base_version)
+        ent_base_version = self.filter_rc_only_version(ent_base_version)
 
         return oss_base_version + ent_base_version
 
-    def filter_rc_only_version(self, base_version_list, release_list):
-        if base_version_list:
+    def filter_rc_only_version(self, base_version_list):
+        if base_version_list and len(base_version_list) > 1:
             # if there's only release candidates in this repo, skip this version
             filter_rc = {v for v in get_all_versions(self.repo_maps[base_version_list[-1]]) if 'rc' not in v}
             if not filter_rc:
                 base_version_list = base_version_list[:-1]
-                if not base_version_list:
-                    base_version_list.append(release_list[-2])
         return base_version_list
 
     def get_version_list(self):
