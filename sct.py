@@ -888,9 +888,11 @@ def unit_tests(test):
 @cli.command('pre-commit', help="Run pre-commit checkers")
 def pre_commit():
     result = 0
+    target = "origin/$CHANGE_TARGET" if 'CHANGE_TARGET' in os.environ else 'upstream/master'
     result += os.system(
-        'bash -c "git show -s --format=%B > /tmp/commit-msg; '
-        'pre-commit run --hook-stage commit-msg --commit-msg-filename /tmp/commit-msg"'
+        "bash -ec 'rm *.commit_msg || true ;"
+        f"for c in $(git rev-list {target}..HEAD --no-merges); do git show -s --format='%B' $c > $c.commit_msg ; done; "
+        "for f in *.commit_msg ; do echo linting $f ; pre-commit run --hook-stage commit-msg --commit-msg-filename $f; done'"
     )
     result += os.system('pre-commit run -a --show-diff-on-failure')
     result = 1 if result else 0
