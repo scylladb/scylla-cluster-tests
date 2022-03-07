@@ -228,6 +228,7 @@ function run_in_docker () {
         ${JENKINS_OPTIONS} \
         ${AWS_OPTIONS} \
         --env GIT_BRANCH \
+        --env CHANGE_TARGET \
         --net=host \
         --name="${SCT_TEST_ID}_$(date +%s)" \
         ${DOCKER_REPO}:${VERSION} \
