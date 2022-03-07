@@ -112,7 +112,7 @@ def start_rsyslog(docker_name, log_dir, port="514"):
     res = local_runner.run('docker port {0} 514'.format(RSYSLOG_DOCKER_ID))
     listening_port = res.stdout.strip().split(':')[1]
 
-    return listening_port
+    return listening_port.strip()
 
 
 def stop_rsyslog():
