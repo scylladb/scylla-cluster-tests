@@ -631,8 +631,8 @@ def _run_yaml_test(backend, full_path, env):
     os.environ['SCT_CONFIG_FILES'] = full_path
     logging.getLogger().handlers = []
     logging.getLogger().disabled = True
-    config = SCTConfiguration()
     try:
+        config = SCTConfiguration()
         config.verify_configuration()
         config.check_required_files()
     except Exception as exc:  # pylint: disable=broad-except
