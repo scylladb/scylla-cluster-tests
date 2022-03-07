@@ -123,15 +123,11 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
     def filter_rc_only_version(self, base_version_list, release_list):
         if base_version_list:
             # if there's only release candidates in this repo, skip this version
-            current_version = base_version_list[-1]
-            filter_rc = {v for v in get_all_versions(self.repo_maps[current_version]) if 'rc' not in v}
+            filter_rc = {v for v in get_all_versions(self.repo_maps[base_version_list[-1]]) if 'rc' not in v}
             if not filter_rc:
                 base_version_list = base_version_list[:-1]
                 if not base_version_list:
-                    release_list.remove(current_version)
-                    base_version_list.append(release_list[-1])
-                    # check the next version in line
-                    base_version_list = self.filter_rc_only_version(base_version_list, release_list)
+                    base_version_list.append(release_list[-2])
         return base_version_list
 
     def get_version_list(self):
