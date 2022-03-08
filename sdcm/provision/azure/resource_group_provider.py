@@ -43,24 +43,22 @@ class ResourceGroupProvider:
 
     def get_or_create(self) -> ResourceGroup:
         if self._cache is not None:
-            LOGGER.debug("Found resource group: {name} in cache".format(name=self._name))
+            LOGGER.debug("Found resource group: %s in cache", self._name)
             return self._cache
-        LOGGER.info("Creating {name} SCT resource group in region {region}...".format(
-            name=self._name, region=self._region))
+        LOGGER.info("Creating %s SCT resource group in region %s...", self._name, self._region)
         resource_group = self._azure_service.resource.resource_groups.create_or_update(
             resource_group_name=self._name,
             parameters={
                 "location": self._region
             },
         )
-        LOGGER.info("Provisioned resource group {name} in the {region} region".format(
-            name=resource_group.name, region=resource_group.location))
+        LOGGER.info("Provisioned resource group %s in the %s region", resource_group.name, resource_group.location)
         self._cache = resource_group
         return resource_group
 
     def delete(self, wait: bool = False):
         """Deletes resource group along with all contained resources."""
-        LOGGER.info("Initiating cleanup of resource group: {name}...".format(name=self._name))
+        LOGGER.info("Initiating cleanup of resource group: %s...", self._name)
         task = self._azure_service.resource.resource_groups.begin_delete(self._name)
         LOGGER.info("Cleanup initiated")
         self._cache = None

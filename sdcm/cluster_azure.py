@@ -1,6 +1,19 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright (c) 2022 ScyllaDB
+
 import logging
 from functools import cached_property
-from typing import Dict, Optional, List
+from typing import Dict, List
 
 from sdcm import cluster
 from sdcm.keystore import KeyStore
@@ -105,10 +118,10 @@ class AzureNode(cluster.BaseNode):
     def image(self):
         return self._instance.image
 
-    def _get_public_ip_address(self) -> Optional[str]:
+    def _get_public_ip_address(self) -> str | None:
         return self._instance.public_ip_address
 
-    def _get_private_ip_address(self) -> Optional[str]:
+    def _get_private_ip_address(self) -> str | None:
         return self._instance.private_ip_address
 
 
@@ -180,7 +193,7 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
                 type=self._instance_type,
                 user_name=self._user_name,
                 tags=self.tags,
-                ssh_public_key=KeyStore().get_ec2_ssh_key_pair().public_key.decode()
+                ssh_public_key=KeyStore().get_gce_ssh_key_pair().public_key.decode()
             )
             instances.append(self._provision_instance(instance_definition=instance_definition,
                                                       pricing_model=pricing_model, dc_idx=dc_idx))

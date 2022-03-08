@@ -3891,14 +3891,15 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         res = verification_node.run_nodetool('status', publish_event=False)
 
         data_centers = res.stdout.strip().split("Datacenter: ")
+        # see TestNodetoolStatus test in test_cluster.py
         pattern = re.compile(
             r"(?P<state>\w{2})\s+"
             r"(?P<ip>[\d.]+)\s+"
             r"(?P<load>[\d.]+ [\w]+|\?)\s+"
-            r"(?P<token>[\d]+)\s+"
-            r"(?P<owns>[\w\d?]+)\s+"
-            r"(?P<host_id>[\w\d-]+)\s{2,}"
-            r"(?P<rack>[\d\w]+|$)")
+            r"(?P<tokens>[\d]+)\s+"
+            r"(?P<owns>[\w?]+)\s+"
+            r"(?P<host_id>[\w-]+)\s{2,}"
+            r"(?P<rack>[\w]+|$)")
 
         for dc in data_centers:
             if dc:
@@ -3906,20 +3907,11 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 dc_name = lines[0]
                 status[dc_name] = {}
                 for line in lines[1:]:
-                    # if line.startswith('--'):  # ignore the title line in result
-                    #     continue
-                    try:
-                        info = pattern.match(line).groupdict()
-                        node_info = {'state': info["state"],
-                                     'load': info["load"].replace(" ", ""),
-                                     'tokens': info["token"],
-                                     'owns': info["owns"],
-                                     'host_id': info["host_id"],
-                                     'rack': info["rack"],
-                                     }
-                        status[dc_name][info["ip"]] = node_info
-                    except AttributeError:
-                        pass
+                    if match := pattern.match(line):
+                        node_info = match.groupdict()
+                        node_ip = node_info.pop("ip")
+                        node_info["load"] = node_info["load"].replace(" ", "")
+                        status[dc_name][node_ip] = node_info
         return status
 
     @staticmethod

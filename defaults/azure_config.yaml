@@ -9,9 +9,9 @@ user_credentials_path: '~/.ssh/scylla-qa-ec2'
 azure_instance_type_db: 'Standard_L8s_v2'
 azure_instance_type_loader: 'Standard_F4s_v2'
 azure_instance_type_monitor: 'Standard_D2_v5'
-# TODO: Make loader and monitor images
-azure_image_loader: 'OpenLogic:CentOS:7.5:latest'
-azure_image_monitor: 'OpenLogic:CentOS:7.5:latest'
+# get images urn's by running: `az vm image list --output table --all --offer CentOS --publisher OpenLogic`
+azure_image_loader: 'OpenLogic:CentOS:7_9:latest'
+azure_image_monitor: 'OpenLogic:CentOS:7_9:latest'
 
 availability_zone: 'a'
 #root_disk_size_monitor: 50  # GB, remove this field if default disk size should be used

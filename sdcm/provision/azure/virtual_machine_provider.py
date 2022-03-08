@@ -48,8 +48,8 @@ class VirtualMachineProvider:
         if definition.name in self._cache:
             return self._cache[definition.name]
         LOGGER.info(
-            "Creating '{name}' VM in resource group {rg}...".format(name=definition.name, rg=self._resource_group_name))
-        LOGGER.info("Instance params: {definition}".format(definition=definition))
+            "Creating '%s' VM in resource group %s...", definition.name, self._resource_group_name)
+        LOGGER.info("Instance params: %s", definition)
         params = {
             "location": self._region,
             "tags": definition.tags,
@@ -81,8 +81,7 @@ class VirtualMachineProvider:
             vm_name=definition.name,
             parameters=params).wait()
         v_m = self._azure_service.compute.virtual_machines.get(self._resource_group_name, definition.name)
-        LOGGER.info("Provisioned VM {name} in the {resource} resource group".format(
-            name=v_m.name, resource=self._resource_group_name))
+        LOGGER.info("Provisioned VM %s in the %s resource group", v_m.name, self._resource_group_name)
         self._cache[v_m.name] = v_m
         return v_m
 
@@ -90,7 +89,7 @@ class VirtualMachineProvider:
         return list(self._cache.values())
 
     def delete(self, name: str, wait: bool = True):
-        LOGGER.info("Triggering termination of instance: {name}".format(name=name))
+        LOGGER.info("Triggering termination of instance: %s", name)
         self._azure_service.compute.virtual_machines.begin_update(self._resource_group_name,
                                                                   vm_name=name,
                                                                   parameters={
@@ -104,18 +103,18 @@ class VirtualMachineProvider:
 
         task = self._azure_service.compute.virtual_machines.begin_delete(self._resource_group_name, vm_name=name)
         if wait is True:
-            LOGGER.info("Waiting for termination of instance: {name}...".format(name=name))
+            LOGGER.info("Waiting for termination of instance: %s...", name)
             task.wait()
-            LOGGER.info("Instance {name} has been terminated.".format(name=name))
+            LOGGER.info("Instance %s has been terminated.", name)
         del self._cache[name]
 
     def reboot(self, name: str, wait: bool = True) -> None:
-        LOGGER.info("Triggering reboot of instance: {name}".format(name=name))
+        LOGGER.info("Triggering reboot of instance: %s", name)
         task = self._azure_service.compute.virtual_machines.begin_restart(self._resource_group_name, vm_name=name)
         if wait is True:
-            LOGGER.info("Waiting for reboot of instance: {name}...".format(name=name))
+            LOGGER.info("Waiting for reboot of instance: %s...", name)
             task.wait()
-            LOGGER.info("Instance {name} has been rebooted.".format(name=name))
+            LOGGER.info("Instance %s has been rebooted.", name)
 
     def add_tags(self, name: str, tags: Dict[str, str]) -> VirtualMachine:
         """Adds tags to instance (with waiting for completion)"""

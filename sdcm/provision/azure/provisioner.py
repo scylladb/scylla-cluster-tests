@@ -46,7 +46,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
 
     def __post_init__(self) -> None:
         """'Reattaches' to resource group for given test_id by discovery of existing resources and populating cache."""
-        LOGGER.info("getting resources for {}...".format(self._resource_group_name))
+        LOGGER.info("getting resources for %s...", self._resource_group_name)
         self._rg_provider = ResourceGroupProvider(self._resource_group_name, self._region)
         self._network_sec_group_provider = NetworkSecurityGroupProvider(self._resource_group_name, self._region)
         self._vnet_provider = VirtualNetworkProvider(self._resource_group_name, self._region)
@@ -86,7 +86,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         """Terminates virtual machine, cleaning attached ip address and network interface."""
         instance = self._cache.get(name)
         if not instance:
-            LOGGER.warning("Instance {name} does not exist. Shouldn't have called it".format(name=name))
+            LOGGER.warning("Instance %s does not exist. Shouldn't have called it", name)
             return
         self._vm_provider.delete(name, wait=wait)
         del self._cache[name]
@@ -115,10 +115,10 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
 
     def add_instance_tags(self, name: str, tags: Dict[str, str]) -> None:
         """Adds tags to instance."""
-        LOGGER.info("Adding tags '{tags}' to intance '{name}'...".format(tags=tags, name=name))
+        LOGGER.info("Adding tags '%s' to intance '%s'...", tags, name)
         instance = self._vm_to_instance(self._vm_provider.add_tags(name, tags))
         self._cache[name] = instance
-        LOGGER.info("Added tags '{tags}' to intance '{name}'".format(tags=tags, name=name))
+        LOGGER.info("Added tags '%s' to intance '%s'", tags, name)
 
     @property
     def _resource_group_name(self):

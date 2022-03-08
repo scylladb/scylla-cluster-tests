@@ -104,7 +104,7 @@ EndPointSnitchType = Literal[
     'Ec2MultiRegionSnitch',
     'RackInferringSnitch',
     'GoogleCloudSnitch',
-    'AzureSnitch'
+    'AzureSnitch',
 ]
 
 
