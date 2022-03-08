@@ -872,7 +872,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 self.fail('Unsupported parameter type: {}'.format(type(n_loader_nodes)))
         azure_image = self.params.get("azure_image_db")
         user_prefix = self.params.get('user_prefix')
-        self.credentials.append(UserRemoteCredentials(key_file="~/.ssh/scylla-qa-ec2"))
+        self.credentials.append(UserRemoteCredentials(key_file="~/.ssh/scylla-test"))
 
         common_params = dict(user_name=self.params.get('azure_image_username'),
                              credentials=self.credentials,

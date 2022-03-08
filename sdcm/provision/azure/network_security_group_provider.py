@@ -72,7 +72,7 @@ class NetworkSecurityGroupProvider:
             return self._cache[name]
         open_ports_rules = rules_to_payload(security_rules)
         LOGGER.info(
-            "Creating SCT network security group in resource group {rg}...".format(rg=self._resource_group_name))
+            "Creating SCT network security group in resource group %s...", self._resource_group_name)
         self._azure_service.network.network_security_groups.begin_create_or_update(
             resource_group_name=self._resource_group_name,
             network_security_group_name=name,
@@ -82,8 +82,8 @@ class NetworkSecurityGroupProvider:
             },
         ).wait()
         network_sec_group = self._azure_service.network.network_security_groups.get(self._resource_group_name, name)
-        LOGGER.info("Provisioned security group {name} in the {resource} resource group".format(
-            name=network_sec_group.name, resource=self._resource_group_name))
+        LOGGER.info("Provisioned security group %s in the %s resource group", network_sec_group.name,
+                    self._resource_group_name)
         self._cache[name] = network_sec_group
         return network_sec_group
 

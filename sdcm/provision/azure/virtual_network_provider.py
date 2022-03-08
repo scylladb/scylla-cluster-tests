@@ -44,7 +44,7 @@ class VirtualNetworkProvider:
     def get_or_create(self, name: str = "default") -> VirtualNetwork:
         if name in self._cache:
             return self._cache[name]
-        LOGGER.info("Creating vnet in resource group {rg}...".format(rg=self._resource_group_name))
+        LOGGER.info("Creating vnet in resource group %s...", self._resource_group_name)
         self._azure_service.network.virtual_networks.begin_create_or_update(
             resource_group_name=self._resource_group_name,
             virtual_network_name=name,
@@ -56,8 +56,7 @@ class VirtualNetworkProvider:
             }
         ).wait()
         vnet = self._azure_service.network.virtual_networks.get(self._resource_group_name, name)
-        LOGGER.info("Provisioned vnet {name} in the {resource} resource group".format(
-            name=vnet.name, resource=self._resource_group_name))
+        LOGGER.info("Provisioned vnet %s in the %s resource group", vnet.name, self._resource_group_name)
         self._cache[vnet.name] = vnet
         return vnet
 

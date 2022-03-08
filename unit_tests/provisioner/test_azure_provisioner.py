@@ -20,7 +20,7 @@ from sdcm.provision.azure.utils import get_scylla_images  # pylint: disable=impo
 from sdcm.provision.provisioner import InstanceDefinition, provisioner_factory  # pylint: disable=import-error
 
 
-class TestProvisionScyllaInstanceAzureE2E:
+class DisabledTestProvisionScyllaInstanceAzureE2E:
     """this is rather e2e test - takes around 8 minutes (2m provisioning, 6 min cleanup with wait=True)"""
 
     @pytest.fixture(scope='session')

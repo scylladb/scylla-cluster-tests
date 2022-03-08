@@ -45,7 +45,7 @@ class IpAddressProvider:
         ip_name = self._get_ip_name(name, version)
         if ip_name in self._cache:
             return self._cache[ip_name]
-        LOGGER.info("Creating public_ip in resource group {rg}...".format(rg=self._resource_group_name))
+        LOGGER.info("Creating public_ip in resource group %s...", self._resource_group_name)
         self._azure_service.network.public_ip_addresses.begin_create_or_update(
             resource_group_name=self._resource_group_name,
             public_ip_address_name=ip_name,
@@ -60,8 +60,8 @@ class IpAddressProvider:
         ).wait()
         # need to get it separately as seems not always it gets created even if result() returns proper ip_address.
         public_ip_address = self._azure_service.network.public_ip_addresses.get(self._resource_group_name, ip_name)
-        LOGGER.info("Provisioned public ip {name} ({address}) in the {resource} resource group".format(
-            name=public_ip_address.name, resource=self._resource_group_name, address=public_ip_address.ip_address))
+        LOGGER.info("Provisioned public ip %s (%s) in the %s resource group", public_ip_address.name,
+                    self._resource_group_name, public_ip_address.ip_address)
         self._cache[ip_name] = public_ip_address
         return public_ip_address
 
