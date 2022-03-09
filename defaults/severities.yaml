@@ -109,3 +109,4 @@ InstanceStatusEvent.STARTUP: WARNING
 InstanceStatusEvent.REBOOT: WARNING
 InstanceStatusEvent.POWER_OFF: WARNING
 CompactionEvent: NORMAL
+ScyllaHousekeepingServiceEvent: ERROR

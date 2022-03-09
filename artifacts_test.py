@@ -17,6 +17,8 @@ from functools import cached_property
 
 import yaml
 
+from sdcm.sct_events import Severity
+from sdcm.sct_events.database import ScyllaHousekeepingServiceEvent
 from sdcm.tester import ClusterTester
 from sdcm.utils.housekeeping import HousekeepingDB
 
@@ -118,6 +120,30 @@ class ArtifactsTest(ClusterTester):
         self.run_cassandra_stress("write n=10000 -mode cql3 native -pop seq=1..10000")
         self.run_cassandra_stress("mixed duration=1m -mode cql3 native -rate threads=10 -pop seq=1..10000")
 
+    def check_housekeeping_service_status(self, backend: str):
+        housekeeping_service_name = "scylla-housekeeping" if backend == "docker" else "scylla-housekeeping-restart"
+        status_out = self.node.get_service_status(housekeeping_service_name, ignore_status=True)
+        # When the test runs with OEL81 operation system error "TMOUT: readonly variable" is printed from /etc/bashrc.
+        # Ignore it
+        if status_out.stderr and "TMOUT" not in status_out.stderr:
+            ScyllaHousekeepingServiceEvent(message=f"scylla-housekeeping-restart service error: {status_out.stderr}",
+                                           severity=Severity.ERROR).publish()
+            return
+
+        status = status_out.stdout.strip()
+        # Expected output:
+        #     "scylla-housekeeping-restart.service: Succeeded" - ubuntu, centos
+        #     "RUNNING" - docker
+        #     "Started Scylla Housekeeping restart mode" - other
+        if "scylla-housekeeping-restart.service: Succeeded" in status or \
+                "Started Scylla Housekeeping restart mode" in status or \
+                "RUNNING" in status:
+            ScyllaHousekeepingServiceEvent(message="scylla-housekeeping-restart service running",
+                                           severity=Severity.NORMAL).publish()
+        else:
+            ScyllaHousekeepingServiceEvent(message=f"scylla-housekeeping-restart service is not running: {status}",
+                                           severity=Severity.ERROR).publish()
+
     def verify_users(self):
         # We can't ship the image with Scylla internal users inside. So we
         # need to verify that mistakenly we didn't create all the users that we have project wide in the image
@@ -207,6 +233,7 @@ class ArtifactsTest(ClusterTester):
             return False
         return True  # exit_status = 1 means the service doesn't exist
 
+    # pylint: disable=too-many-statements
     def test_scylla_service(self):
         backend = self.params["cluster_backend"]
 
@@ -272,10 +299,12 @@ class ArtifactsTest(ClusterTester):
             # To validate version after installation, we need to perform validation before re-config.
             # For that the test should be changed to be able to call "add_nodes" function from BaseCluster.
             # if not self.node.is_nonroot_install:
-            #   self.log.info("Validate version after install")
-            #   self.check_scylla_version_in_housekeepingdb(prev_id=0,
-            #                                               expected_status_code='i',
-            #                                               new_row_expected=False)
+            #     self.log.info("Validate version after install")
+            #     self.check_housekeeping_service_status()
+            #     self.check_scylla_version_in_housekeepingdb(prev_id=0,
+            #                                                 expected_status_code='i',
+            #                                                 new_row_expected=False,
+            #                                                 backend=backend)
 
         version_id_after_stop = 0
         with self.subTest("check Scylla server after stop/start"):
@@ -288,6 +317,7 @@ class ArtifactsTest(ClusterTester):
 
             if not self.node.is_nonroot_install:
                 self.log.info("Validate version after stop/start")
+                self.check_housekeeping_service_status(backend=backend)
                 version_id_after_stop = self.check_scylla_version_in_housekeepingdb(
                     prev_id=0,
                     expected_status_code=expected_housekeeping_status_code,
@@ -300,6 +330,7 @@ class ArtifactsTest(ClusterTester):
 
             if not self.node.is_nonroot_install:
                 self.log.info("Validate version after restart")
+                self.check_housekeeping_service_status(backend=backend)
                 self.check_scylla_version_in_housekeepingdb(prev_id=version_id_after_stop,
                                                             expected_status_code=expected_housekeeping_status_code,
                                                             new_row_expected=True,

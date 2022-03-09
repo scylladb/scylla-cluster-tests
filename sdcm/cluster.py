@@ -2396,7 +2396,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             cmd = f'sudo service {service_name} {cmd}'
         else:
             cmd = f'{self.systemctl} {cmd} {service_name}.service'
-        self.remoter.run(cmd, timeout=timeout, ignore_status=ignore_status)
+        return self.remoter.run(cmd, timeout=timeout, ignore_status=ignore_status)
+
+    def get_service_status(self, service_name: str, timeout: int = 500, ignore_status=False):
+        return self._service_cmd(service_name=service_name, cmd='status', timeout=timeout, ignore_status=ignore_status)
 
     def start_service(self, service_name: str, timeout: int = 500, ignore_status=False):
         self._service_cmd(service_name=service_name, cmd='start', timeout=timeout, ignore_status=ignore_status)
