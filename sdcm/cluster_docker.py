@@ -102,6 +102,10 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
     def restart(self):
         ContainerManager.get_container(self, "node").restart()
 
+    def get_service_status(self, service_name: str, timeout: int = 500, ignore_status=False):
+        return self.remoter.sudo('sh -c "{0} || {0}.service"'.format(f"supervisorctl status {service_name}"),
+                                 timeout=timeout, ignore_status=ignore_status)
+
     def start_scylla_server(self, verify_up=True, verify_down=False, timeout=300, verify_up_timeout=300):
         if verify_down:
             self.wait_db_down(timeout=timeout)

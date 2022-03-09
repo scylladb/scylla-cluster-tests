@@ -189,6 +189,17 @@ ScyllaHelpErrorEvent.add_subevent_type("duplicate")
 ScyllaHelpErrorEvent.add_subevent_type("filtered")
 
 
+class ScyllaHousekeepingServiceEvent(InformationalEvent):
+    def __init__(self, message: str, severity: Severity = Severity.NORMAL):
+        super().__init__(severity=severity)
+
+        self.message = message
+
+    @property
+    def msgfmt(self) -> str:
+        return super().msgfmt + ": message={0.message}"
+
+
 class IndexSpecialColumnErrorEvent(InformationalEvent):
     def __init__(self, message: str, severity: Severity = Severity.ERROR):
         super().__init__(severity=severity)
