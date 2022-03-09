@@ -1204,6 +1204,7 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
         ('artifacts', 'SCT Artifacts Tests'),
         ('load-test', 'SCT Load Tests'),
         ('repair-based-operation', "SCT RBO Tests"),
+        ('scale', 'SCT Scale Tests'),
     ]:
         server.create_directory(name=group_name, display_name=group_desc)
 
