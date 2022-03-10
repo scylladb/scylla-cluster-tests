@@ -303,7 +303,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             instance_details = CloudInstanceDetails(public_ip=self.public_ip_address, region=self.region,
                                                     provider=self.parent_cluster.cluster_backend,
                                                     private_ip=self.ip_address, creation_time=int(time.time()))
-            resource = CloudResource(name=self.name, state=ResourceState.RUNNING,
+            resource = CloudResource(name=self.name, state=ResourceState.RUNNING,  # pylint: disable=no-value-for-parameter
                                      instance_info=instance_details)
             self.argus_resource = resource
             run.run_info.resources.attach_resource(resource)
@@ -5344,36 +5344,52 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         """)
         node.remoter.run("bash -ce '%s'" % kill_script)
 
-    def get_grafana_screenshot_and_snapshot(self, test_start_time=None):
+    def get_grafana_screenshot_and_snapshot(self, test_start_time: Optional[int] = None) -> dict[str, list[str]]:
         """
             Take screenshot of the Grafana per-server-metrics dashboard and upload to S3
         """
         if not test_start_time:
             self.log.error("No start time for test")
             return {}
+
+        screenshot_links = []
+        snapshot_links = []
+        for node in self.nodes:
+            screenshot_links.extend(self.get_grafana_screenshots(node, test_start_time))
+            snapshot_links.extend(self.get_grafana_snapshots(node, test_start_time))
+
+        return {'screenshots': screenshot_links, 'snapshots': snapshot_links}
+
+    def get_grafana_screenshots(self, node: BaseNode, test_start_time: float) -> list[str]:
+        screenshot_links = []
+        grafana_extra_dashboards = []
+        if 'alternator_port' in self.params:
+            grafana_extra_dashboards = [AlternatorDashboard()]
         date_time = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
 
+        screenshot_collector = GrafanaScreenShot(name="grafana-screenshot",
+                                                 test_start_time=test_start_time,
+                                                 extra_entities=grafana_extra_dashboards)
+        screenshot_files = screenshot_collector.collect(node, self.logdir)
+        for screenshot in screenshot_files:
+            s3_path = "{test_id}/{date}".format(test_id=self.test_config.test_id(), date=date_time)
+            screenshot_links.append(S3Storage().upload_file(screenshot, s3_path))
+
+        return screenshot_links
+
+    def get_grafana_snapshots(self, node: BaseNode, test_start_time: float) -> list[str]:
+        snapshot_links = []
         grafana_extra_dashboards = []
         if 'alternator_port' in self.params:
             grafana_extra_dashboards = [AlternatorDashboard()]
 
-        screenshot_links = []
-        snapshots = []
-        for node in self.nodes:
-            screenshot_collector = GrafanaScreenShot(name="grafana-screenshot",
-                                                     test_start_time=test_start_time,
-                                                     extra_entities=grafana_extra_dashboards)
-            screenshot_files = screenshot_collector.collect(node, self.logdir)
-            for screenshot in screenshot_files:
-                s3_path = "{test_id}/{date}".format(test_id=self.test_config.test_id(), date=date_time)
-                screenshot_links.append(S3Storage().upload_file(screenshot, s3_path))
+        snapshots_collector = GrafanaSnapshot(name="grafana-snapshot",
+                                              test_start_time=test_start_time,
+                                              extra_entities=grafana_extra_dashboards)
+        snapshots_data = snapshots_collector.collect(node, self.logdir)
+        snapshot_links.extend(snapshots_data.get('links', []))
 
-            snapshots_collector = GrafanaSnapshot(name="grafana-snapshot",
-                                                  test_start_time=test_start_time,
-                                                  extra_entities=grafana_extra_dashboards)
-            snapshots_data = snapshots_collector.collect(node, self.logdir)
-            snapshots.extend(snapshots_data.get('links', []))
-        return {'screenshots': screenshot_links, 'snapshots': snapshots}
+        return snapshot_links
 
     def upload_annotations_to_s3(self):
         annotations_url = ''

@@ -96,6 +96,8 @@ def calculate_latency(latency_results):
         temp_dict = {}
         for cycle in latency_results[key]['cycles']:
             for metric, value in cycle.items():
+                if metric == "screenshots":
+                    continue
                 if metric not in temp_dict:
                     temp_dict[metric] = []
                 temp_dict[metric].append(value)
