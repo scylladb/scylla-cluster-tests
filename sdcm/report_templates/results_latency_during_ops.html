@@ -75,6 +75,13 @@
                         {% endfor %}
                     </table>
                     <span STYLE="font-size:12px" class="red">* All latency values are in ms.</span>
+                    <div>
+                        {% for cycle in results['cycles'] %}
+                            {% for screenshot in cycle['screenshots'] %}
+                                <span style="vertical-align: top"><img src="{{ screenshot }}"  height="250" width="150"></span>
+                            {% endfor %}
+                        {% endfor %}
+                    </div>
                 {% endif %}
             {% endfor %}
         </div>
