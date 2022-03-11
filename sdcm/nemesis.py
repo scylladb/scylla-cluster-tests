@@ -1155,6 +1155,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.monitoring_set.reconfigure_scylla_monitoring()
 
     def disrupt_terminate_and_replace_node(self):  # pylint: disable=invalid-name
+
+        def get_node_state(node_ip: str) -> List["str"] | None:
+            """Gets node state by IP address from nodetool status response"""
+            status = self.cluster.get_nodetool_status()
+            states = [val['state'] for dc in status.values() for ip, val in dc.items() if ip == node_ip]
+            return states[0] if states else None
+
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis(
                 'Use "disrupt_terminate_and_replace_node_kubernetes" instead this one for K8S')
@@ -1163,6 +1170,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         is_old_node_seed = self.target_node.is_seed
         InfoEvent(message='StartEvent - Terminate node and wait 5 minutes').publish()
         self._terminate_and_wait(target_node=self.target_node)
+        assert get_node_state(old_node_ip) == "DN", "Removed node state should be DN"
         InfoEvent(message='FinishEvent - target_node was terminated').publish()
         new_node = self.replace_node(old_node_ip, rack=self.target_node.rack)
         try:
@@ -1175,9 +1183,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # scylla: [shard 0] gossip - FatClient 10.0.22.115 has been silent for 30000ms, removing from gossip
             @retrying(n=20, sleep_time=20, allowed_exceptions=(AssertionError,))
             def wait_for_old_node_to_removed():
-                status = self.cluster.get_nodetool_status(verification_node=new_node)
-                nodes_ips = [ip for dc in status.values() for ip in dc.keys()]
-                assert old_node_ip not in nodes_ips, f"'{old_node_ip}' shouldn't be in: {nodes_ips}"
+                state = get_node_state(old_node_ip)
+                if old_node_ip == new_node.ip_address:
+                    assert state == "UN", \
+                        f"New node with the same IP as removed one should be in UN state but was: {state}"
+                else:
+                    assert state is None, \
+                        f"Old node should have been removed from status but it wasn't. State was: {state}"
 
             wait_for_old_node_to_removed()
 
