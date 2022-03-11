@@ -1767,7 +1767,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if errors:
             self.log.warning("cassandra-stress errors on nodes:\n%s", "\n".join(errors))
 
-    def get_stress_results(self, queue, store_results=True):
+    def get_stress_results(self, queue, store_results=True) -> list[dict | None]:
         results = queue.get_results()
         if store_results and self.create_stats:
             self.update_stress_results(results)

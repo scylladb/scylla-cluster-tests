@@ -12,14 +12,17 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
-
+import logging
 import time
 
 from longevity_test import LongevityTest
 from sdcm.db_stats import PrometheusDBStats
 from test_lib.sla import ServiceLevel, Role, User
 
+logger = logging.getLogger(__name__)
 
+
+# pylint: disable=too-many-public-methods
 class SlaPerUserTest(LongevityTest):
     """
     Test SLA per user feature using cassandra-stress.
@@ -54,6 +57,7 @@ class SlaPerUserTest(LongevityTest):
         self.backgroud_task = None
         self.class_users = {}
         self.connection_cql = None
+        self._comparison_results = None
 
     def prepare_schema(self):
         self.prometheus_stats = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
@@ -248,13 +252,17 @@ class SlaPerUserTest(LongevityTest):
         self.run_stress_and_verify_threads(params={'stress_cmd': read_cmds})
 
     # pylint: disable=too-many-arguments, too-many-locals
-    def define_read_cassandra_stress_command(self, user, load_type, workload_type, threads, stress_duration_min,
-                                             max_rows_for_read=None, stress_command=STRESS_READ_CMD,
-                                             throttle=20000, **kwargs):
+    def define_read_cassandra_stress_command(self,
+                                             role: Role, load_type: str,
+                                             c_s_workload_type: str,
+                                             threads: int, stress_duration_min: int,
+                                             max_rows_for_read: int = None,
+                                             stress_command: str = STRESS_READ_CMD,
+                                             throttle: int = 20000, **kwargs):
         """
-        :param user: dict with User/Role/ServiceLevel objects
+        :param role: Role object
         :param load_type: cache_only/disk_only/mixed
-        :param workload_type: latency: with ops restriction - using throttle
+        :param c_s_workload_type: latency: with ops restriction - using throttle
                                 or
                               throughput: no restriction
         """
@@ -282,16 +290,15 @@ class SlaPerUserTest(LongevityTest):
                 max_rows_for_read = int(self.num_of_partitions * 0.3)
             return 'seq=%d..%d' % (max_rows_for_read, max_rows_for_read+int(self.num_of_partitions*0.25))
 
-        user_name = user['user'].name
-
-        rate = locals()[workload_type]()  # define -rate for c-s command depend on workload type
+        rate = locals()[c_s_workload_type]()  # define -rate for c-s command depend on workload type
         pop = locals()[load_type](max_rows_for_read)  # define -pop for c-s command depend on load type
 
-        params = {'n': self.num_of_partitions, 'user': user_name, 'password': user_name, 'pop': pop,
+        params = {'n': self.num_of_partitions, 'user': role.name, 'password': role.password, 'pop': pop,
                   'duration': '%dm' % stress_duration_min, 'threads': rate}
         if kwargs:
             params.update(kwargs['kwargs'])
         c_s_cmd = stress_command.format(**params)
+        logger.info("Created cassandra-stress command: %s", c_s_cmd)
 
         return c_s_cmd
 
@@ -333,11 +340,11 @@ class SlaPerUserTest(LongevityTest):
         self.create_auths(entities_list_of_dict=read_users)
 
         stress_duration = 10  # minutes
-        read_cmds = [self.define_read_cassandra_stress_command(user=read_users[0], load_type=load,
-                                                               workload_type=self.WORKLOAD_THROUGHPUT, threads=250,
+        read_cmds = [self.define_read_cassandra_stress_command(role=read_users[0]["role"], load_type=load,
+                                                               c_s_workload_type=self.WORKLOAD_THROUGHPUT, threads=250,
                                                                stress_duration_min=stress_duration),
-                     self.define_read_cassandra_stress_command(user=read_users[1], load_type=load,
-                                                               workload_type=self.WORKLOAD_THROUGHPUT, threads=250,
+                     self.define_read_cassandra_stress_command(role=read_users[1]["role"], load_type=load,
+                                                               c_s_workload_type=self.WORKLOAD_THROUGHPUT, threads=250,
                                                                stress_duration_min=stress_duration)
                      ]
 
@@ -397,14 +404,14 @@ class SlaPerUserTest(LongevityTest):
         self.create_auths(entities_list_of_dict=read_users)
 
         # Define stress commands
-        read_cmds = {'troughput': self.define_read_cassandra_stress_command(user=read_users[0],
+        read_cmds = {'troughput': self.define_read_cassandra_stress_command(role=read_users[0]["role"],
                                                                             load_type=self.MIXED_LOAD,
-                                                                            workload_type=self.WORKLOAD_THROUGHPUT,
+                                                                            c_s_workload_type=self.WORKLOAD_THROUGHPUT,
                                                                             threads=200,
                                                                             stress_duration_min=stress_duration),
-                     'latency': self.define_read_cassandra_stress_command(user=read_users[1],
+                     'latency': self.define_read_cassandra_stress_command(role=read_users[1]["role"],
                                                                           load_type=self.MIXED_LOAD,
-                                                                          workload_type=self.WORKLOAD_LATENCY,
+                                                                          c_s_workload_type=self.WORKLOAD_LATENCY,
                                                                           threads=250,
                                                                           stress_duration_min=stress_duration)
                      }
@@ -449,15 +456,15 @@ class SlaPerUserTest(LongevityTest):
         # Create Service Levels/Roles/Users
         self.create_auths(entities_list_of_dict=read_users)
 
-        read_cmds = {'troughput': self.define_read_cassandra_stress_command(user=read_users[0],
+        read_cmds = {'troughput': self.define_read_cassandra_stress_command(role=read_users[0]["role"],
                                                                             load_type=self.CACHE_ONLY_LOAD,
-                                                                            workload_type=self.WORKLOAD_THROUGHPUT,
+                                                                            c_s_workload_type=self.WORKLOAD_THROUGHPUT,
                                                                             threads=200,
                                                                             stress_duration_min=stress_duration,
                                                                             max_rows_for_read=max_key_for_read),
-                     'latency': self.define_read_cassandra_stress_command(user=read_users[1],
+                     'latency': self.define_read_cassandra_stress_command(role=read_users[1]["role"],
                                                                           load_type=self.CACHE_ONLY_LOAD,
-                                                                          workload_type=self.WORKLOAD_LATENCY,
+                                                                          c_s_workload_type=self.WORKLOAD_LATENCY,
                                                                           threads=250,
                                                                           stress_duration_min=stress_duration,
                                                                           max_rows_for_read=max_key_for_read)
@@ -508,21 +515,21 @@ class SlaPerUserTest(LongevityTest):
         # Create Service Levels/Roles/Users
         self.create_auths(entities_list_of_dict=read_users)
 
-        read_cmds = {'troughput': self.define_read_cassandra_stress_command(user=read_users[0],
+        read_cmds = {'troughput': self.define_read_cassandra_stress_command(role=read_users[0]["role"],
                                                                             load_type=self.DISK_ONLY_LOAD,
-                                                                            workload_type=self.WORKLOAD_THROUGHPUT,
+                                                                            c_s_workload_type=self.WORKLOAD_THROUGHPUT,
                                                                             threads=200,
                                                                             stress_duration_min=stress_duration,
                                                                             max_rows_for_read=max_key_for_cache*2),
-                     'latency': self.define_read_cassandra_stress_command(user=read_users[1],
+                     'latency': self.define_read_cassandra_stress_command(role=read_users[1]["role"],
                                                                           load_type=self.DISK_ONLY_LOAD,
-                                                                          workload_type=self.WORKLOAD_LATENCY,
+                                                                          c_s_workload_type=self.WORKLOAD_LATENCY,
                                                                           threads=250,
                                                                           stress_duration_min=stress_duration,
                                                                           max_rows_for_read=max_key_for_cache*3),
-                     'latency_only': self.define_read_cassandra_stress_command(user=read_users[1],
+                     'latency_only': self.define_read_cassandra_stress_command(role=read_users[1]["role"],
                                                                                load_type=self.DISK_ONLY_LOAD,
-                                                                               workload_type=self.WORKLOAD_LATENCY,
+                                                                               c_s_workload_type=self.WORKLOAD_LATENCY,
                                                                                threads=250,
                                                                                stress_duration_min=stress_duration,
                                                                                max_rows_for_read=max_key_for_cache)
@@ -558,15 +565,16 @@ class SlaPerUserTest(LongevityTest):
         # Create Service Levels/Roles/Users
         self.create_auths(entities_list_of_dict=read_users)
 
-        read_cmds = {'troughput': self.define_read_cassandra_stress_command(user=read_users[0], load_type=self.MIXED_LOAD,
-                                                                            workload_type=self.WORKLOAD_THROUGHPUT,
+        read_cmds = {'troughput': self.define_read_cassandra_stress_command(role=read_users[0]["role"],
+                                                                            load_type=self.MIXED_LOAD,
+                                                                            c_s_workload_type=self.WORKLOAD_THROUGHPUT,
                                                                             threads=120,
                                                                             stress_duration_min=stress_duration_min,
                                                                             stress_command=self.STRESS_MIXED_CMD,
                                                                             kwargs={'write_ratio': 1, 'read_ratio': 1}),
-                     'latency': self.define_read_cassandra_stress_command(user=read_users[1],
+                     'latency': self.define_read_cassandra_stress_command(role=read_users[1]["role"],
                                                                           load_type=self.MIXED_LOAD,
-                                                                          workload_type=self.WORKLOAD_LATENCY,
+                                                                          c_s_workload_type=self.WORKLOAD_LATENCY,
                                                                           threads=120,
                                                                           stress_duration_min=stress_duration_min,
                                                                           stress_command=self.STRESS_MIXED_CMD,
@@ -574,6 +582,60 @@ class SlaPerUserTest(LongevityTest):
                      }
 
         self._throughput_latency_tests_run(read_users=read_users, read_cmds=read_cmds, latency_user=read_users[1])
+
+    def test_workload_types(self):
+        """
+        Test scenario: run 2 workload types (batch, interactive) using
+        Roles with relevant ServiceLevel objects attached to them.
+        Validate that the metrics differ and that the difference is
+        within the expected margins.
+        """
+        session = self.prepare_schema()
+        self.create_test_data(rows_amount=100_000)
+
+        stress_duration_min = 180
+
+        # Define Service Levels/Roles/Users
+        interactive_role = Role(session=session, name="interactive",
+                                password="interactive", login=True, verbose=True).create()
+        batch_role = Role(session=session, name="batch", password="batch", login=True, verbose=True).create()
+        interactive_sla = ServiceLevel(session=session, name="interactive", shares=None,
+                                       workload_type="interactive").create()
+        batch_sla = ServiceLevel(session=session, name="batch", shares=None,
+                                 workload_type="batch").create()
+        interactive_role.attach_service_level(interactive_sla)
+        batch_role.attach_service_level(batch_sla)
+
+        read_cmds = {
+            'throughput_interactive': self.define_read_cassandra_stress_command(
+                role=interactive_role,
+                load_type=self.MIXED_LOAD,
+                c_s_workload_type=self.WORKLOAD_THROUGHPUT,
+                threads=120,
+                stress_duration_min=stress_duration_min,
+                stress_command=self.STRESS_MIXED_CMD,
+                kwargs={'write_ratio': 1, 'read_ratio': 1}
+            ),
+            'throughput_batch': self.define_read_cassandra_stress_command(
+                role=batch_role,
+                load_type=self.MIXED_LOAD,
+                c_s_workload_type=self.WORKLOAD_THROUGHPUT,
+                threads=120,
+                stress_duration_min=stress_duration_min,
+                stress_command=self.STRESS_MIXED_CMD,
+                kwargs={'write_ratio': 1, 'read_ratio': 1}
+            )}
+
+        try:
+            self.log.debug('Running interactive and batch workloads in sequence...')
+            workloads_queue = self.run_stress_and_verify_threads(params={'stress_cmd': [
+                read_cmds['throughput_interactive'],
+                read_cmds["throughput_batch"]
+            ],
+                'round_robin': True})
+            self._compare_workloads_c_s_metrics(workloads_queue)
+        finally:
+            pass
 
     def _throughput_latency_tests_run(self, read_cmds, read_users, latency_user):
         # pylint: disable=too-many-locals
@@ -627,3 +689,76 @@ class SlaPerUserTest(LongevityTest):
             self.log.info(result_print_str)
         finally:
             self.clean_auth(entities_list_of_dict=read_users)
+
+    def _compare_workloads_c_s_metrics(self, workloads_queue: list) -> dict:
+        # define what difference margin is expected for interactive vs. batch workload metrics
+        comparison_axis = {"latency 95th percentile": 1.5,
+                           "latency 99th percentile": 1.5,
+                           "op rate": 0.3}
+        workloads_results = {}
+        for workload in workloads_queue:
+            result = self.get_stress_results(queue=workload, store_results=False)
+
+            workloads_results.update({result[0].get("username"): result[0]})
+
+        assert len(workloads_results) == 2, \
+            "Expected workload_results length to be 2, got: %s. workload_results: %s" % (
+                len(workloads_results), workloads_results)
+        comparison_results = {}
+        try:
+            for item, target_margin in comparison_axis.items():
+                interactive = float(workloads_results["interactive"][item])
+                batch = float(workloads_results["batch"][item])
+                ratio = batch / interactive
+
+                comparison_results.update(
+                    {
+                        item: {
+                            "interactive": interactive,
+                            "batch": batch,
+                            "diff": batch - interactive,
+                            "within_margin": ratio <= target_margin if item == "op rate" else ratio >= target_margin
+                        }
+                    }
+                )
+            return comparison_results
+        except Exception:
+            logger.info("Failed to compare c-s results for batch and interactive"
+                        "workloads.")
+            raise
+
+    def get_email_data(self):
+        self.log.info("Prepare data for email")
+        email_data = {}
+        grafana_dataset = {}
+
+        try:
+            email_data = self._get_common_email_data()
+        except Exception as error:  # pylint: disable=broad-except
+            self.log.error("Error in gathering common email data: Error:\n%s", error)
+
+        try:
+            grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(
+                self.start_time) if self.monitors else {}
+        except Exception as error:  # pylint: disable=broad-except
+            self.log.error("Error in gathering Grafana screenshots and snapshots. Error:\n%s", error)
+
+        email_data.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
+                           "grafana_snapshots": grafana_dataset.get("snapshots", []),
+                           "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
+                           "workload_comparison": self._comparison_results if self._comparison_results else {}
+                           })
+
+        return email_data
+
+    # pylint: disable=inconsistent-return-statements
+    def get_test_status(self) -> str:
+        if self._comparison_results:
+            try:
+                if all((item["within_margin"] for item in self._comparison_results.values())):
+                    return "SUCCESS"
+                else:
+                    return "FAILED"
+            except KeyError as exc:
+                logger.error("Exception on attempting to check workload comparison results:\n%s", exc)
+                return super().get_test_status()
