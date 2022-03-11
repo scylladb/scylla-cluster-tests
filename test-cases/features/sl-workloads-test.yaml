@@ -1,0 +1,18 @@
+test_duration: 300
+
+n_db_nodes: 3
+n_loaders: 2
+n_monitor_nodes: 1
+
+instance_type_db: 'i3.xlarge'
+instance_type_loader: 'c5.2xlarge'
+
+user_prefix: 'sl-workloads'
+
+space_node_threshold: 64424
+round_robin: true
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'ScyllaAuthorizer'
