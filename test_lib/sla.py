@@ -43,8 +43,7 @@ class ServiceLevelAttributes:
         for item in fields(self):
             value = getattr(self, item.name) if item.repr else None
             if value is not None:
-                # pylint: disable=literal-comparison
-                if item.type is str:
+                if item.type == "str":
                     attr_strings.append(f" AND {item.name} = '{value}'")
                 else:
                     attr_strings.append(f" AND {item.name} = {value}")
@@ -66,7 +65,7 @@ class ServiceLevel:
                  timeout: str = None,
                  workload_type: str = None):
         self.session = session
-        self._name = f'"{name}"'
+        self._name = f"'{name}'"
         self.verbose = True
         self._created = False
         self._sl_attributes = ServiceLevelAttributes(
@@ -128,7 +127,7 @@ class ServiceLevel:
         return "%s: name: %s, attributes: %s" % (self.__class__.__name__, self.name, self._sl_attributes)
 
     def create(self, if_not_exists=True) -> ServiceLevel:
-        query = 'CREATE SERVICE_LEVEL{if_not_exists} {service_level_name}{query_attributes}'\
+        query = "CREATE SERVICE_LEVEL{if_not_exists} {service_level_name}{query_attributes}"\
                 .format(if_not_exists=' IF NOT EXISTS' if if_not_exists else '',
                         service_level_name=self.name,
                         query_attributes=self._sl_attributes.query_string)
@@ -196,7 +195,7 @@ class UserRoleBase:
     AUTHENTICATION_ENTITY = ''
 
     def __init__(self, session, name, password=None, superuser=None, verbose=False, **kwargs):
-        self._name = name
+        self._name = f'"{name}"'
         self.password = password
         self.session = session
         self.superuser = superuser
@@ -316,7 +315,7 @@ class Role(UserRoleBase):
         if role_options_str:
             role_options_str = ' WITH {}'.format(role_options_str)
 
-        query = 'CREATE ROLE {name}{role_options_str}'.format(name=self.name, role_options_str=role_options_str)
+        query = "CREATE ROLE {name}{role_options_str}".format(name=self.name, role_options_str=role_options_str)
         if self.verbose:
             LOGGER.debug('CREATE role query: {}'.format(query))
         self.session.execute(query)
