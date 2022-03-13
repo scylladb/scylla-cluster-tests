@@ -1005,13 +1005,11 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             raise ValueError(f"Not familiar with task type: {task_type}")
         assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), \
             f"task {suspendable_task.id} failed to reach status {TaskStatus.RUNNING}"
-        with mgr_cluster.suspend_manager_then_resume(start_tasks=False):
-            mgr_cluster.suspend()
+        with mgr_cluster.suspend_manager_then_resume(start_tasks=True):
             assert suspendable_task.wait_for_status(list_status=[TaskStatus.STOPPED], timeout=300, step=10), \
                 f"task {suspendable_task.id} failed to reach status {TaskStatus.STOPPED}"
-            mgr_cluster.resume(start_tasks=True)
-            assert suspendable_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=1200, step=10), \
-                f"task {suspendable_task.id} failed to reach status {TaskStatus.DONE}"
+        assert suspendable_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=1200, step=10), \
+            f"task {suspendable_task.id} failed to reach status {TaskStatus.DONE}"
         self.log.info('finishing test_suspend_and_resume_{}'.format(task_type))
 
     def test_suspend_and_resume_without_starting_tasks(self):
