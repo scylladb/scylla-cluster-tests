@@ -116,6 +116,11 @@ def ignore_no_space_errors(node):
         ))
         stack.enter_context(DbEventsFilter(
             db_event=DatabaseLogEvent.FILESYSTEM_ERROR,
+            line="filesystem error",
+            node=node,
+        ))
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.FILESYSTEM_ERROR,
             line="No space left on device",
             node=node,
         ))
