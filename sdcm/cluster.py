@@ -1568,24 +1568,29 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             if self.termination_event.is_set() and self.test_config.DECODING_QUEUE.empty():
                 break
 
-    def copy_scylla_debug_info(self, node, debug_file):
+    def copy_scylla_debug_info(self, node_name: str, debug_file: str):
         """Copy scylla debug file from db-node to monitor-node
 
         Copy via builder
-        :param node: db node
-        :type node: BaseNode
+        :param node_name: db node name
+        :type node_name: str
         :param scylla_debug_file: path to scylla_debug_file on db-node
         :type scylla_debug_file: str
         :returns: path on monitor node
         :rtype: {str}
         """
+
+        db_nodes = self.parent_cluster.targets['db_cluster'].nodes
+        db_node = next(iter([n for n in db_nodes if n.name == node_name]), None)
+        assert db_node, f"Node named: {node_name} wasn't found"
+
         base_scylla_debug_file = os.path.basename(debug_file)
-        transit_scylla_debug_file = os.path.join(node.parent_cluster.logdir,
+        transit_scylla_debug_file = os.path.join(db_node.parent_cluster.logdir,
                                                  base_scylla_debug_file)
         final_scylla_debug_file = os.path.join("/tmp", base_scylla_debug_file)
 
         if not os.path.exists(transit_scylla_debug_file):
-            node.remoter.receive_files(debug_file, transit_scylla_debug_file)
+            db_node.remoter.receive_files(debug_file, transit_scylla_debug_file)
         res = self.remoter.run(
             "test -f {}".format(final_scylla_debug_file), ignore_status=True, verbose=False)
         if res.exited != 0:
