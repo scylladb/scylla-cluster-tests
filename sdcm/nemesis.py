@@ -2774,7 +2774,6 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         add_nodes_number = self.tester.params.get('nemesis_add_node_cnt')
         self.log.info("Start shrink cluster by %s nodes", add_nodes_number)
         InfoEvent(message=f'Start shrink cluster by {add_nodes_number} nodes').publish()
-        start_time = time.time()
         # Check that number of nodes is enough for decommission:
         cur_num_nodes_in_dc = len([n for n in self.cluster.nodes if n.dc_idx == self.target_node.dc_idx])
         initial_db_size = self.tester.params.get("n_db_nodes")
@@ -2785,13 +2784,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             decommission_nodes_number = min(cur_num_nodes_in_dc - initial_db_size_in_dc, add_nodes_number)
 
         if decommission_nodes_number < 1:
-            end_time = time.time()
-            time_elapsed = int(time.time() - start_time)
-            log_info = {"error": "Not enough nodes for decommission"}
-            DisruptionEvent(type=self.get_disrupt_name(), subtype="end", status=False, node=self.target_node,
-                            end=end_time, duration=time_elapsed, **log_info).publish()
-            self.log.warning("Shrink cluster skipped. Error: %s", log_info['error'])
-            return
+            error = "Not enough nodes for decommission"
+            self.log.warning("Shrink cluster skipped. Error: %s", error)
+            raise Exception(error)
 
         self.log.info("Start shrink cluster by %s nodes", decommission_nodes_number)
         # Currently on kubernetes first two nodes of each rack are getting seed status
