@@ -28,7 +28,7 @@ from unit_tests.lib.events_utils import EventsUtilsMixin
 
 class DecodeDummyNode(DummyNode):  # pylint: disable=abstract-method
 
-    def copy_scylla_debug_info(self, node, debug_file):
+    def copy_scylla_debug_info(self, node_name, debug_file):
         return "scylla_debug_info_file"
 
 
@@ -117,6 +117,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
             for line in events_file.readlines():
                 events.append(json.loads(line))
 
+        assert any(event.get('raw_backtrace') for event in events), "should have at least one backtrace"
         for event in events:
             if event.get('raw_backtrace'):
                 self.assertIsNone(event['backtrace'])
@@ -137,6 +138,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
             for line in events_file.readlines():
                 events.append(json.loads(line))
 
+        assert any(event.get('raw_backtrace') for event in events), "should have at least one backtrace"
         for event in events:
             if event.get('backtrace') and event.get('raw_backtrace'):
                 self.assertEqual(event['backtrace'].strip(),
@@ -161,6 +163,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
             for line in events_file.readlines():
                 events.append(json.loads(line))
 
+        assert any(event.get('raw_backtrace') for event in events), "should have at least one backtrace"
         for event in events:
             if event.get('backtrace') and event.get('raw_backtrace'):
                 self.assertEqual(event['backtrace'].strip(),
@@ -185,6 +188,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
             for line in events_file.readlines():
                 events.append(json.loads(line))
 
+        assert any(event.get('raw_backtrace') for event in events), "should have at least one backtrace"
         for event in events:
             if event.get('backtrace') and event.get('raw_backtrace'):
                 self.assertEqual(event['backtrace'].strip(),
