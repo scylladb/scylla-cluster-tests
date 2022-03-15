@@ -969,7 +969,7 @@ class UpgradeTest(FillDatabaseData):
             f"{self.params.get('k8s_scylla_datacenter')}-{self.params.get('k8s_scylla_rack')}"
             " --watch=true --timeout=20m",
             timeout=1205,
-            namespace=self.k8s_cluster._scylla_namespace)  # pylint: disable=protected-access
+            namespace=self.db_cluster.namespace)
         self.k8s_cluster.check_scylla_cluster_sa_annotations()
 
         InfoEvent(message='Step7 - Add new member to the Scylla cluster').publish()
@@ -1040,7 +1040,7 @@ class UpgradeTest(FillDatabaseData):
         InfoEvent(message='Step7 - Check scylla pods after kubernetes platform upgrade').publish()
         self.k8s_cluster.kubectl_wait(
             "--all --for=condition=Ready pod",
-            namespace=self.k8s_cluster._scylla_namespace,  # pylint: disable=protected-access
+            namespace=self.db_cluster.namespace,
             timeout=600)
         self.k8s_cluster.check_scylla_cluster_sa_annotations()
 

@@ -33,6 +33,7 @@ from sdcm.cluster_k8s import (
     CloudK8sNodePool,
     KubernetesCluster,
     ScyllaPodCluster,
+    SCYLLA_NAMESPACE,
 )
 from sdcm.cluster_k8s.iptables import IptablesPodIpRedirectMixin, IptablesClusterOpsMixin
 from sdcm.remote import LOCALRUNNER
@@ -576,9 +577,10 @@ class EksScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
                  n_nodes: Union[list, int] = 3,
                  params: Optional[dict] = None,
                  node_pool: EksNodePool = None,
+                 namespace: str = SCYLLA_NAMESPACE,
                  ) -> None:
         super().__init__(k8s_cluster=k8s_cluster, scylla_cluster_name=scylla_cluster_name, user_prefix=user_prefix,
-                         n_nodes=n_nodes, params=params, node_pool=node_pool)
+                         n_nodes=n_nodes, params=params, node_pool=node_pool, namespace=namespace)
     # pylint: disable=too-many-arguments
 
     def add_nodes(self,
