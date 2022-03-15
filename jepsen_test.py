@@ -42,7 +42,8 @@ class JepsenTest(ClusterTester):
         """))
         clone_repo(remoter=remoter,
                    repo_url=self.params.get('jepsen_scylla_repo'),
-                   destination_dir_name="jepsen-scylla")
+                   destination_dir_name="jepsen-scylla",
+                   clone_as_root=False)
         for db_node in self.db_cluster.nodes:
             remoter.run(f"ssh-keyscan -t rsa {db_node.ip_address} >> ~/.ssh/known_hosts")
         remoter.send_files(os.path.expanduser(self.db_cluster.nodes[0].ssh_login_info["key_file"]), DB_SSH_KEY)
