@@ -162,7 +162,7 @@ SYSTEM_ERROR_EVENTS = (
 )
 SYSTEM_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex, re.IGNORECASE), event) for event in SYSTEM_ERROR_EVENTS]
-BACKTRACE_RE = re.compile(r'(?P<other_bt>/lib.*?\+0x[0-f]*\n)|(?P<scylla_bt>0x[0-f]*\n)', re.IGNORECASE)
+BACKTRACE_RE = re.compile(r'(?P<other_bt>/lib.*?\+0x[0-f]*$)|(?P<scylla_bt>0x[0-f]*$)', re.IGNORECASE)
 
 
 class ScyllaHelpErrorEvent(SctEvent, abstract=True):
