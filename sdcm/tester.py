@@ -1441,11 +1441,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     # pylint: disable=too-many-arguments,too-many-return-statements
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',
                           round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, use_single_loader=False,
-                          stop_test_on_failure=True):
+                          stop_test_on_failure=True, loader_set=None, node_list=None):
 
         params = dict(stress_cmd=stress_cmd, duration=duration, stress_num=stress_num, keyspace_num=keyspace_num,
                       keyspace_name=keyspace_name, profile=profile, prefix=prefix, round_robin=round_robin,
-                      stats_aggregate_cmds=stats_aggregate_cmds, use_single_loader=use_single_loader)
+                      stats_aggregate_cmds=stats_aggregate_cmds, use_single_loader=use_single_loader,
+                      loader_set=loader_set, node_list=node_list)
 
         if 'cassandra-stress' in stress_cmd:  # cs cmdline might started with JVM_OPTION
             params['stop_test_on_failure'] = stop_test_on_failure
@@ -1470,23 +1471,24 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         else:
             raise ValueError(f'Unsupported stress command: "{stress_cmd[:50]}..."')
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments,too-many-locals
     def run_stress_cassandra_thread(
             self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='', round_robin=False,
-            stats_aggregate_cmds=True, keyspace_name=None, stop_test_on_failure=True, **_):
+            stats_aggregate_cmds=True, keyspace_name=None, stop_test_on_failure=True, loader_set=None, node_list=None,
+            **_):
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
         timeout = self.get_duration(duration)
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, prefix, stresser="cassandra-stress",
                                            aggregate=stats_aggregate_cmds)
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
-        cs_thread = CassandraStressThread(loader_set=self.loaders,
+        cs_thread = CassandraStressThread(loader_set=loader_set or self.loaders,
                                           stress_cmd=stress_cmd,
                                           timeout=timeout,
                                           stress_num=stress_num,
                                           keyspace_num=keyspace_num,
                                           profile=profile,
-                                          node_list=self.db_cluster.nodes,
+                                          node_list=node_list or self.db_cluster.nodes,
                                           round_robin=round_robin,
                                           client_encrypt=self.db_cluster.nodes[0].is_client_encrypt,
                                           keyspace_name=keyspace_name,
@@ -1527,11 +1529,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.alter_test_tables_encryption(scylla_encryption_options=scylla_encryption_options)
         return bench_thread
 
-    def run_stress_thread_harry(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',
+    def run_stress_thread_harry(self, stress_cmd, duration=None,
                                 # pylint: disable=too-many-arguments,unused-argument
-                                round_robin=False, stats_aggregate_cmds=True, keyspace_name=None,
+                                round_robin=False, stats_aggregate_cmds=True,
                                 use_single_loader=False,
-                                stop_test_on_failure=True):  # pylint: disable=too-many-arguments,unused-argument
+                                stop_test_on_failure=True, **_):  # pylint: disable=too-many-arguments,unused-argument
 
         timeout = self.get_duration(duration)
 
@@ -2674,9 +2676,9 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.update_test_details()
             results_analyzer.check_regression(test_id=self._test_id, data=latency_results)
 
-    def check_regression(self):
-        results_analyzer = PerformanceResultsAnalyzer(es_index=self._test_index,
-                                                      es_doc_type=self._es_doc_type,
+    def check_regression(self, es_index=None, es_doc_type=None):
+        results_analyzer = PerformanceResultsAnalyzer(es_index=es_index or self._test_index,
+                                                      es_doc_type=es_doc_type or self._es_doc_type,
                                                       email_recipients=self.params.get('email_recipients'),
                                                       events=get_events_grouped_by_category(
                                                           _registry=self.events_processes_registry,
