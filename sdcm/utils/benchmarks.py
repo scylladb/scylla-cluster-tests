@@ -14,6 +14,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field, asdict
+from typing import NamedTuple
 
 from sdcm.es import ES
 from sdcm.remote import RemoteCmdRunnerBase, shell_script_cmd
@@ -24,6 +25,23 @@ from sdcm.utils.metaclasses import Singleton
 
 LOGGER = logging.getLogger(__name__)
 ES_INDEX = "node_benchmarks"
+
+
+class ComparableResult(NamedTuple):
+    sysbench_eps: float = 0.0
+    cassandra_fio_read_bw: float = 0.0
+    cassandra_fio_write_bw: float = 0.0
+
+    def __getitem__(self, item):
+        return self.__getattribute__(item)
+
+
+class Margins(ComparableResult):
+    ...
+
+
+class Averages(ComparableResult):
+    ...
 
 
 @dataclass
@@ -74,6 +92,11 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
         self._nodes: list["BaseNode"] = []
         self._benchmark_runners: list[ScyllaNodeBenchmarkRunner] = []
         self._es = ES()
+        self._comparison = {}
+
+    @property
+    def comparison(self):
+        return self._comparison
 
     def add_node(self, new_node: "BaseNode"):
         if new_node.distro.is_debian_like:
@@ -99,6 +122,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
         except TimeoutError as exc:
             LOGGER.warning("Run into TimeoutError during running benchmarks. Exception:\n%s", exc)
         self._collect_benchmark_output()
+        self._compare_results()
 
     def _collect_benchmark_output(self):
         """
@@ -119,6 +143,65 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
                 self._es.create_doc(index=ES_INDEX, doc_type=None, doc_id=doc_id, body=results)
             else:
                 LOGGER.info("No benchmarks results for node: %s", runner.node_name)
+
+    def _get_all_benchmark_results(self) -> dict:
+        return self._es.get_all("node_benchmarks")
+
+    def _compare_results(self):
+        for runner in self._benchmark_runners:
+            if runner.benchmark_results:
+                result = ComparableResult(
+                    sysbench_eps=runner.benchmark_results["sysbench_events_per_second"],
+                    cassandra_fio_read_bw=runner.benchmark_results["cassandra_fio_lcs_64k_read"]["read"]["bw"],
+                    cassandra_fio_write_bw=runner.benchmark_results["cassandra_fio_lcs_64k_write"]["write"]["bw"]
+                )
+                averages = self._get_average_results(es_docs=self._get_all_benchmark_results(),
+                                                     instance_type=runner.node_instance_type,
+                                                     test_id=TestConfig().test_id())
+                self._comparison.update(
+                    self._check_results(node_name=runner.node_name,
+                                        averages=averages,
+                                        result=result,
+                                        margins=Margins(sysbench_eps=0.03,
+                                                        cassandra_fio_read_bw=0.01,
+                                                        cassandra_fio_write_bw=0.01)))
+
+    @staticmethod
+    def _check_results(node_name: str, averages: Averages, result: ComparableResult, margins: Margins) -> dict:
+        results = {node_name: {}}
+
+        for item in result._fields:
+            avg_ratio = result[item] / averages[item] if averages[item] > 0 else 1.0
+            results[node_name][item] = {
+                "value": result[item],
+                "average": averages[item],
+                "average_ratio": avg_ratio,
+                "is_within_margin": avg_ratio > (1 - margins[item])
+            }
+        return results
+
+    @staticmethod
+    def _get_average_results(es_docs: dict, instance_type: str, test_id: str):
+        sources = [item["_source"] for item in es_docs["hits"]["hits"]]
+        docs = [doc for doc in sources if doc["node_instance_type"] == instance_type and doc["test_id"] != test_id]
+        results = []
+
+        if not docs:
+            return Averages()
+
+        for item in docs:
+            results.append(ComparableResult(
+                sysbench_eps=item["sysbench_events_per_second"],
+                cassandra_fio_read_bw=item["cassandra_fio_lcs_64k_read"]["read"]["bw"],
+                cassandra_fio_write_bw=item["cassandra_fio_lcs_64k_write"]["write"]["bw"]
+            ))
+        eps = [item.sysbench_eps for item in results]
+        read_bw = [item.cassandra_fio_read_bw for item in results]
+        write_bw = [item.cassandra_fio_write_bw for item in results]
+
+        return Averages(sysbench_eps=sum(eps) / len(eps),
+                        cassandra_fio_read_bw=sum(read_bw) / len(read_bw),
+                        cassandra_fio_write_bw=sum(write_bw) / len(write_bw))
 
 
 class ScyllaNodeBenchmarkRunner:

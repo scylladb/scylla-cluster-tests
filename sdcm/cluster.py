@@ -3446,6 +3446,13 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.node_benchmark_manager.add_nodes(self.nodes)
         self.node_benchmark_manager.install_benchmark_tools()
         self.node_benchmark_manager.run_benchmarks()
+        self.get_node_benchmarks_results()
+
+    def get_node_benchmarks_results(self):
+        if not self.params.get("run_db_node_benchmarks") or not self.nodes:
+            return None
+
+        return self.node_benchmark_manager.comparison
 
     @property
     def cluster_backend(self):
