@@ -978,7 +978,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.start_scylla_cluster_events_thread(namespace)
 
     @log_run_info
-    def deploy_loaders_cluster(self, config: str, node_pool: CloudK8sNodePool = None) -> None:
+    def deploy_loaders_cluster(self, config: str, node_pool: CloudK8sNodePool = None, namespace: str = "sct-loaders") -> None:
         LOGGER.info("Create and initialize a loaders cluster")
         if node_pool:
             self.deploy_node_pool(node_pool)
@@ -993,11 +993,11 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         cpu_limit = convert_cpu_units_to_k8s_value(cpu_limit)
         memory_limit = convert_memory_units_to_k8s_value(memory_limit)
 
-        self.apply_file(config, environ={'CPU_LIMIT': cpu_limit, 'MEMORY_LIMIT': memory_limit},
+        self.apply_file(config, environ={'CPU_LIMIT': cpu_limit, 'MEMORY_LIMIT': memory_limit, 'NAMESPACE': namespace},
                         modifiers=affinity_modifiers)
         LOGGER.debug("Check the loaders cluster")
-        self.kubectl("get statefulset", namespace="sct-loaders")
-        self.kubectl("get pods", namespace="sct-loaders")
+        self.kubectl("get statefulset", namespace=namespace)
+        self.kubectl("get pods", namespace=namespace)
 
     @log_run_info
     def deploy_monitoring_cluster(self, namespace: str = "monitoring",
@@ -2418,6 +2418,7 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
                  n_nodes: Union[list, int] = 3,
                  params: Optional[dict] = None,
                  node_pool: CloudK8sNodePool = None,
+                 namespace: str = "sct-loaders"
                  ) -> None:
 
         self.loader_cluster_config = loader_cluster_config
@@ -2427,7 +2428,7 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
         cluster.BaseLoaderSet.__init__(self, params=params)
         PodCluster.__init__(self,
                             k8s_cluster=k8s_cluster,
-                            namespace="sct-loaders",
+                            namespace=namespace,
                             container="cassandra-stress",
                             cluster_prefix=cluster.prepend_user_prefix(user_prefix, "loader-set"),
                             node_prefix=cluster.prepend_user_prefix(user_prefix, "loader-node"),
@@ -2460,7 +2461,8 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
         if self.loader_cluster_created:
             raise NotImplementedError("Changing number of nodes in LoaderPodCluster is not supported.")
 
-        self.k8s_cluster.deploy_loaders_cluster(self.loader_cluster_config, node_pool=self.node_pool)
+        self.k8s_cluster.deploy_loaders_cluster(self.loader_cluster_config, node_pool=self.node_pool,
+                                                namespace=self.namespace)
         new_nodes = super().add_nodes(count=count,
                                       ec2_user_data=ec2_user_data,
                                       dc_idx=dc_idx,
