@@ -3188,18 +3188,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 **{dc_name: replication_strategy.replication_factor})
             network_replication.apply(node, keyspace)
 
-    def _get_user_keyspaces(self):
-        node = self.cluster.nodes[0]
-        keyspaces = node.run_cqlsh("describe keyspaces").stdout.split()
-        return [ks for ks in keyspaces if not ks.startswith("system")]
-
     def disrupt_add_remove_dc(self) -> None:
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("Operator doesn't support multi-DC yet. Skipping.")
         InfoEvent(message='Starting New DC Nemesis').publish()
         node = self.cluster.nodes[0]
         system_keyspaces = ["system_auth", "system_distributed", "system_traces"]
-        self._switch_to_network_replication_strategy(self._get_user_keyspaces() + system_keyspaces)
+        self._switch_to_network_replication_strategy(self.cluster.get_test_keyspaces() + system_keyspaces)
         with temporary_replication_strategy_setter(node) as replication_strategy_setter:
             new_node = self._add_new_node_in_new_dc()
             datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())

@@ -4026,19 +4026,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 
     def get_test_keyspaces(self):
-        out = self.nodes[0].run_cqlsh('select keyspace_name from system_schema.keyspaces',
-                                      split=True)
-        # Possible output:
-        # Warning: Cannot create directory at `/home/scyllaadm/.cassandra`. Command history will not be saved.
-        #
-        #
-        #  keyspace_name
-        # --------------------
-        #         system_auth
-        #
-        # (1 rows)
-        ks_names_index = [i for i, ks in enumerate(out) if '--------' in ks][0]
-        return [ks.strip() for ks in out[ks_names_index + 1:-3] if 'system' not in ks]
+        """Function returning a list of non-system keyspaces (created by test)"""
+        keyspaces = self.nodes[0].run_cqlsh("describe keyspaces").stdout.split()
+        return [ks for ks in keyspaces if not ks.startswith("system")]
 
     def cfstat_reached_threshold(self, key, threshold, keyspaces=None):
         """
