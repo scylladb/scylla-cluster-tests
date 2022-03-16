@@ -422,7 +422,7 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
 
 
 class GkeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
-    NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/gke/scylla-node-prepare.yaml")
+    node_prepare_file = sct_abs_path("sdcm/k8s_configs/gke/scylla-node-prepare.yaml")
     node_terminate_methods = [
         'drain_k8s_node',
         # NOTE: uncomment below when following scylla-operator bug is fixed:

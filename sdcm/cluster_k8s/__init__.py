@@ -2054,7 +2054,7 @@ class PodCluster(cluster.BaseCluster):
 
 
 class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disable=too-many-public-methods
-    NODE_PREPARE_FILE = None
+    node_prepare_file = None
     node_setup_requires_scylla_restart = False
     node_terminate_methods: List[str] = None
 
@@ -2068,7 +2068,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                  namespace: str = SCYLLA_NAMESPACE) -> None:
         k8s_cluster.deploy_scylla_cluster(
             node_pool=node_pool,
-            node_prepare_config=self.NODE_PREPARE_FILE,
+            node_prepare_config=self.node_prepare_file,
             namespace=namespace
         )
         self.scylla_cluster_name = scylla_cluster_name

@@ -557,7 +557,7 @@ class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
 
 
 class EksScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
-    NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/eks/scylla-node-prepare.yaml")
+    node_prepare_file = sct_abs_path("sdcm/k8s_configs/eks/scylla-node-prepare.yaml")
     node_terminate_methods = [
         'drain_k8s_node',
         # NOTE: uncomment below when following scylla-operator bug is fixed:
@@ -578,7 +578,9 @@ class EksScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
                  params: Optional[dict] = None,
                  node_pool: EksNodePool = None,
                  namespace: str = SCYLLA_NAMESPACE,
+                 skip_node_prepare: bool = False,
                  ) -> None:
+        self.node_prepare_file = None if skip_node_prepare else self.node_prepare_file
         super().__init__(k8s_cluster=k8s_cluster, scylla_cluster_name=scylla_cluster_name, user_prefix=user_prefix,
                          n_nodes=n_nodes, params=params, node_pool=node_pool, namespace=namespace)
     # pylint: disable=too-many-arguments
