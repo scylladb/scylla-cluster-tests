@@ -1113,6 +1113,31 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         if not self._test_id:
             self._test_id = search_test_id_in_latest(self.sct_result_dir)
 
+    def find_and_append_cloud_manager_instance_to_collecting_nodes(self):
+        try:
+            from cluster_cloud import get_manager_instance_by_cluster_id  # pylint: disable=import-outside-toplevel
+        except ImportError:
+            LOGGER.error("Couldn't collect Siren manager logs, cluster_cloud module isn't installed")
+        else:
+            cloud_cluster_id = self.params["cloud_cluster_id"]
+            try:
+                instance = get_manager_instance_by_cluster_id(cluster_id=cloud_cluster_id)
+                if not instance:
+                    raise ValueError(f"Cloud manager for the cluster {cloud_cluster_id} not found")
+            except Exception as exc:  # pylint: disable=broad-except
+                LOGGER.error("Failed to get cloud manager instance. Error: %s", exc)
+                return
+
+            LOGGER.info("Manager instance: %s", instance)
+            ssh_login_info = {"hostname": instance["publicip"],
+                              "user": "support",
+                              "key_file": self.params["cloud_credentials_path"]}
+            LOGGER.info("Manager instance ssh_login_info: %s", ssh_login_info)
+            self.siren_manager_set.append(CollectingNode(name=instance["externalid"],
+                                                         ssh_login_info=ssh_login_info,
+                                                         instance=instance,
+                                                         global_ip=instance["publicip"]))
+
     def get_aws_instances_by_testid(self):
         instances = list_instances_aws({"TestId": self.test_id}, running=True)
         filtered_instances = filter_aws_instances_by_type(instances)
@@ -1139,29 +1164,8 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                                                    global_ip=instance['PublicIpAddress'],
                                                    tags={**self.tags, "NodeType": "monitor", }))
         if self.params["use_cloud_manager"]:
-            try:
-                from cluster_cloud import get_aws_manager_instance_by_cluster_id  # pylint: disable=import-outside-toplevel
-            except ImportError:
-                LOGGER.error("Couldn't collect Siren manager logs, cluster_cloud module isn't installed")
-            else:
-                cloud_manager_id = self.params["cloud_manager_id"] if "cloud_manager_id" in self.params else None
-                LOGGER.info("Found cloud manager with id: %s", cloud_manager_id)
-                if cloud_manager_id:
-                    instance = get_aws_manager_instance_by_cluster_id(cluster_id=self.params["cloud_cluster_id"],
-                                                                      region_name=self.params["region_name"][0],
-                                                                      cloud_manager_id=cloud_manager_id)
-                    LOGGER.info("AWS manager instance: %s", instance)
-                    name = [tag["Value"] for tag in instance["Tags"] if tag["Key"] == "Name"]
+            self.find_and_append_cloud_manager_instance_to_collecting_nodes()
 
-                    ssh_login_info = {"hostname": instance["PublicIpAddress"],
-                                      "user": "support",
-                                      "key_file": self.params["cloud_credentials_path"]}
-                    LOGGER.info("AWS manager instance ssh_login_info: %s", ssh_login_info)
-                    self.siren_manager_set.append(CollectingNode(name=name[0],
-                                                                 ssh_login_info=ssh_login_info,
-                                                                 instance=instance,
-                                                                 global_ip=instance["PublicIpAddress"],
-                                                                 tags={**self.tags, "NodeType": "siren-manager", }))
         for instance in filtered_instances['loader_nodes']:
             name = [tag['Value']
                     for tag in instance['Tags'] if tag['Key'] == 'Name']
@@ -1225,30 +1229,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                                                       global_ip=instance.public_ips[0],
                                                       tags={**self.tags, "NodeType": "loader", }))
         if self.params["use_cloud_manager"]:
-            try:
-                from cluster_cloud import \
-                    get_gce_manager_instance_by_cluster_id  # pylint: disable=import-outside-toplevel
-            except ImportError:
-                LOGGER.error("Couldn't collect Siren manager logs, cluster_cloud module isn't installed")
-            else:
-                cloud_cluster_id = self.params["cloud_cluster_id"]
-                try:
-                    instance = get_gce_manager_instance_by_cluster_id(cluster_id=cloud_cluster_id)
-                    if not instance:
-                        raise ValueError(f"Cloud manager for the cluster {cloud_cluster_id} not found")
-                except Exception as exc:  # pylint: disable=broad-except
-                    LOGGER.error("Failed to get cloud manager instance. Error: %s", exc)
-                    return
-
-                LOGGER.info("GCE manager instance: %s", instance)
-                ssh_login_info = {"hostname": instance["publicip"],
-                                  "user": "support",
-                                  "key_file": self.params["cloud_credentials_path"]}
-                LOGGER.info("GCE manager instance ssh_login_info: %s", ssh_login_info)
-                self.siren_manager_set.append(CollectingNode(name=instance["externalid"],
-                                                             ssh_login_info=ssh_login_info,
-                                                             instance=instance,
-                                                             global_ip=instance["publicip"]))
+            self.find_and_append_cloud_manager_instance_to_collecting_nodes()
 
     def get_docker_instances_by_testid(self):
         instances = list_instances_gce({"TestId": self.test_id}, running=True)
