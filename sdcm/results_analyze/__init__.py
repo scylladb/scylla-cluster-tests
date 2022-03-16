@@ -661,7 +661,7 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
             return False
 
         # filter tests
-        query = self._query_filter(doc, is_gce)
+        query = self._query_filter(doc, is_gce, use_wide_query=True)
         self.log.debug(query)
         if not query:
             return False
