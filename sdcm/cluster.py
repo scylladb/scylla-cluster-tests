@@ -488,7 +488,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # destination_dir_name=str(cassandra_harry_path))
         self.remoter.run(shell_script_cmd(f"""rm -rf {cassandra_harry_path}"""))
         clone_repo(remoter=self.remoter, repo_url="https://github.com/apache/cassandra-harry.git",
-                   destination_dir_name=str(cassandra_harry_path))
+                   destination_dir_name=str(cassandra_harry_path), clone_as_root=False)
         self.remoter.run(shell_script_cmd(f"""\
             cd {cassandra_harry_path}
             git checkout standalone
