@@ -358,6 +358,7 @@ class LongevityEmailReporter(BaseEmailReporter):
         "nemesis_details",
         "nemesis_name",
         "scylla_ami_id",
+        "node_benchmarks",
         "parallel_timelines_report",
     )
     email_template_file = "results_longevity.html"
