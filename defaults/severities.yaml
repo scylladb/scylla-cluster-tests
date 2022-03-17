@@ -29,6 +29,7 @@ DatabaseLogEvent.BAD_ALLOC: ERROR
 DatabaseLogEvent.SCHEMA_FAILURE: ERROR
 DatabaseLogEvent.RUNTIME_ERROR: ERROR
 DatabaseLogEvent.FILESYSTEM_ERROR: ERROR
+DatabaseLogEvent.DISK_ERROR: ERROR
 DatabaseLogEvent.STACKTRACE: ERROR
 DatabaseLogEvent.BACKTRACE: ERROR
 DatabaseLogEvent.ABORTING_ON_SHARD: ERROR
