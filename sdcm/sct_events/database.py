@@ -45,6 +45,7 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     RUNTIME_ERROR: Type[LogEventProtocol]
     FILESYSTEM_ERROR: Type[LogEventProtocol]
     STACKTRACE: Type[LogEventProtocol]
+    DISK_ERROR: Type[LogEventProtocol]
 
     # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
     REACTOR_STALLED: Type[LogEventProtocol]
@@ -110,6 +111,8 @@ DatabaseLogEvent.add_subevent_type("RUNTIME_ERROR", severity=Severity.ERROR,
                                    regex="std::runtime_error")
 DatabaseLogEvent.add_subevent_type("FILESYSTEM_ERROR", severity=Severity.ERROR,
                                    regex="filesystem_error")
+DatabaseLogEvent.add_subevent_type("DISK_ERROR", severity=Severity.ERROR,
+                                   regex=r"storage_service - .*due to I\/O errors.*Disk error: std::system_error")
 DatabaseLogEvent.add_subevent_type("STACKTRACE", severity=Severity.ERROR,
                                    regex="stacktrace")
 
@@ -148,6 +151,7 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.SCHEMA_FAILURE(),
     DatabaseLogEvent.RUNTIME_ERROR(),
     DatabaseLogEvent.FILESYSTEM_ERROR(),
+    DatabaseLogEvent.DISK_ERROR(),
     DatabaseLogEvent.STACKTRACE(),
 
     # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
