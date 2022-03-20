@@ -800,6 +800,9 @@ class SCTConfiguration(dict):
         dict(name="k8s_minio_storage_size", env="SCT_K8S_MINIO_STORAGE_SIZE", type=str,
              help=""),
 
+        dict(name="k8s_tenants_num", env="SCT_K8S_TENANTS_NUM", type=int,
+             help=""),
+
         # docker config options
         dict(name="mgmt_docker_image", env="SCT_MGMT_DOCKER_IMAGE", type=str,
              help="Scylla manager docker image, i.e. 'scylladb/scylla-manager:2.2.1' "),

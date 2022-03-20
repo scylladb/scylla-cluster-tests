@@ -870,6 +870,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     @log_run_info
     def deploy_scylla_cluster(self, node_pool: CloudK8sNodePool, node_prepare_config: str = None,
                               namespace: str = SCYLLA_NAMESPACE) -> None:
+        # pylint: disable=too-many-statements
         if self.params.get('reuse_cluster'):
             try:
                 self.wait_till_cluster_is_operational()
@@ -926,10 +927,15 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 cpu_limit = new_cpu_limit
         memory_limit = (
             memory_limit
-            - OPERATOR_CONTAINERS_RESOURCES['memory']
-            - COMMON_CONTAINERS_RESOURCES['memory']
-            - SCYLLA_MANAGER_AGENT_RESOURCES['memory']
+            - OPERATOR_CONTAINERS_RESOURCES['memory'] * self.params.get('k8s_tenants_num')
+            - COMMON_CONTAINERS_RESOURCES['memory'] * self.params.get('k8s_tenants_num')
+            - SCYLLA_MANAGER_AGENT_RESOURCES['memory'] * self.params.get('k8s_tenants_num')
         )
+
+        # split cpu/memory available for each tenant
+        cpu_limit = cpu_limit / self.params.get('k8s_tenants_num')
+        memory_limit = memory_limit / self.params.get('k8s_tenants_num')
+
         self.calculated_cpu_limit = convert_cpu_units_to_k8s_value(cpu_limit)
         self.calculated_memory_limit = convert_memory_units_to_k8s_value(memory_limit)
 
@@ -990,6 +996,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             memory_limit = 4
             affinity_modifiers = []
 
+        # split cpu/memory available for each tenant
+        cpu_limit = cpu_limit / self.params.get('k8s_tenants_num')
+        memory_limit = memory_limit / self.params.get('k8s_tenants_num')
+        
         cpu_limit = convert_cpu_units_to_k8s_value(cpu_limit)
         memory_limit = convert_memory_units_to_k8s_value(memory_limit)
 

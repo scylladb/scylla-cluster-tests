@@ -31,3 +31,5 @@ backtrace_decoding: false
 append_scylla_args: ''
 docker_image: ''
 backup_bucket_location: 'minio-bucket'
+
+k8s_tenants_num: 1
