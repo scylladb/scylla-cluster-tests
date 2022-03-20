@@ -796,7 +796,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             },
             'developerMode': False,
             'cpuset': True,
-            'hostNetworking': True,
+            'hostNetworking': not self.params.get('k8s_tenants_num') > 1,
             'automaticOrphanedNodeCleanup': True,
             # NOTE: '5578536' value is defined in the scylla repo here:
             #       dist/common/sysctl.d/99-scylla-aio.conf
@@ -999,7 +999,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         # split cpu/memory available for each tenant
         cpu_limit = cpu_limit / self.params.get('k8s_tenants_num')
         memory_limit = memory_limit / self.params.get('k8s_tenants_num')
-        
+
         cpu_limit = convert_cpu_units_to_k8s_value(cpu_limit)
         memory_limit = convert_memory_units_to_k8s_value(memory_limit)
 
