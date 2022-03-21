@@ -353,9 +353,7 @@ class JMXServiceEvent(ScyllaDatabaseContinuousEvent):
 SCYLLA_DATABASE_CONTINUOUS_EVENTS = [
     ScyllaServerStatusEvent,
     BootstrapEvent,
-    RepairEvent,
     JMXServiceEvent,
-    CompactionEvent
 ]
 
 
