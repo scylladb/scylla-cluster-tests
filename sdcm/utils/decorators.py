@@ -15,9 +15,12 @@ import sys
 import time
 import logging
 import datetime
-from functools import wraps, partial, cached_property
 import json
 import os
+
+from functools import wraps, partial, cached_property
+from typing import Optional, Callable
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -149,7 +152,7 @@ def measure_time(func):
     return wrapped
 
 
-def latency_calculator_decorator(func):
+def latency_calculator_decorator(original_function: Optional[Callable] = None, *, legend: Optional[str] = None):
     """
     Gets the start time, end time and then calculates the latency based on function 'calculate_latency'.
 
@@ -159,55 +162,64 @@ def latency_calculator_decorator(func):
     # calling this import here, because of circular import
     from sdcm.utils import latency  # pylint: disable=import-outside-toplevel
 
-    @wraps(func)
-    def wrapped(*args, **kwargs):  # pylint: disable=too-many-branches, too-many-locals
-        start = time.time()
-        start_node_list = args[0].cluster.nodes[:]
-        res = func(*args, **kwargs)
-        end_node_list = args[0].cluster.nodes[:]
-        all_nodes_list = list(set(start_node_list + end_node_list))
-        end = time.time()
-        test_name = args[0].tester.__repr__().split('testMethod=')[-1].split('>')[0]
-        if not args[0].monitoring_set or not args[0].monitoring_set.nodes:
+    def wrapper(func):
+
+        @wraps(func)
+        def wrapped(*args, **kwargs):  # pylint: disable=too-many-branches, too-many-locals
+            start = time.time()
+            start_node_list = args[0].cluster.nodes[:]
+            res = func(*args, **kwargs)
+            end_node_list = args[0].cluster.nodes[:]
+            all_nodes_list = list(set(start_node_list + end_node_list))
+            end = time.time()
+            test_name = args[0].tester.__repr__().split('testMethod=')[-1].split('>')[0]
+            if not args[0].monitoring_set or not args[0].monitoring_set.nodes:
+                return res
+            monitor = args[0].monitoring_set.nodes[0]
+            screenshots = args[0].monitoring_set.get_grafana_screenshots(node=monitor, test_start_time=start)
+            if 'read' in test_name:
+                workload = 'read'
+            elif 'write' in test_name:
+                workload = 'write'
+            elif 'mixed' in test_name:
+                workload = 'mixed'
+            else:
+                return res
+
+            latency_results_file_path = args[0].tester.latency_results_file
+            if not os.path.exists(latency_results_file_path):
+                latency_results = {}
+            else:
+                with open(latency_results_file_path, encoding="utf-8") as file:
+                    data = file.read().strip()
+                    latency_results = json.loads(data or '{}')
+
+            if "steady" not in func.__name__.lower():
+                if func.__name__ not in latency_results:
+                    latency_results[func.__name__] = {"legend": legend or func.__name__}
+                if 'cycles' not in latency_results[func.__name__]:
+                    latency_results[func.__name__]['cycles'] = []
+
+            result = latency.collect_latency(monitor, start, end, workload, args[0].cluster, all_nodes_list)
+            result["screenshots"] = screenshots
+
+            if "steady" in func.__name__.lower():
+                if 'Steady State' not in latency_results:
+                    latency_results['Steady State'] = result
+            else:
+                latency_results[func.__name__]['cycles'].append(result)
+
+            with open(latency_results_file_path, 'w', encoding="utf-8") as file:
+                json.dump(latency_results, file)
+
             return res
-        monitor = args[0].monitoring_set.nodes[0]
-        screenshots = args[0].monitoring_set.get_grafana_screenshots(node=monitor, test_start_time=start)
-        if 'read' in test_name:
-            workload = 'read'
-        elif 'write' in test_name:
-            workload = 'write'
-        elif 'mixed' in test_name:
-            workload = 'mixed'
-        else:
-            return res
 
-        latency_results_file_path = args[0].tester.latency_results_file
-        if not os.path.exists(latency_results_file_path):
-            latency_results = {}
-        else:
-            with open(latency_results_file_path, encoding="utf-8") as file:
-                data = file.read().strip()
-                latency_results = json.loads(data or '{}')
+        return wrapped
 
-        if "steady" not in func.__name__.lower():
-            if func.__name__ not in latency_results:
-                latency_results[func.__name__] = {}
-            if 'cycles' not in latency_results[func.__name__]:
-                latency_results[func.__name__]['cycles'] = []
-        result = latency.collect_latency(monitor, start, end, workload, args[0].cluster, all_nodes_list)
-        result["screenshots"] = screenshots
-        if "steady" in func.__name__.lower():
-            if 'Steady State' not in latency_results:
-                latency_results['Steady State'] = result
-        else:
-            latency_results[func.__name__]['cycles'].append(result)
+    if original_function:
+        return wrapper(original_function)
 
-        with open(latency_results_file_path, 'w', encoding="utf-8") as file:
-            json.dump(latency_results, file)
-
-        return res
-
-    return wrapped
+    return wrapper
 
 
 class NoValue(Exception):

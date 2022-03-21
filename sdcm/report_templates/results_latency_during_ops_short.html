@@ -42,6 +42,7 @@
                 {% if operation != 'Steady State' %}
                     <h2>{{ operation }}</h2>
                     <table id="results_table">
+                        <caption>{{ results['legend'] }}</caption>
                         <th>Latency Type</th>
                         {% for cycle in results['cycles'] %}
                             <th>Cycle #{{ loop.index }}</th>
