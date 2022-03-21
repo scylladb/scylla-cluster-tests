@@ -901,9 +901,18 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                     if "scylla-machine-image:" in container_data["image"]:
                         container_data["args"] = scylla_machine_image_args
 
+            def multi_tenant_disks_modifier(obj):
+                if obj["kind"] != "DaemonSet":
+                    return
+                for container_data in obj["spec"]["template"]["spec"]["containers"]:
+                    if "pv-setup" in container_data["name"]:
+                        for env_data in container_data["env"]:
+                            if env_data["name"] == "NUM_OF_TENANTS":
+                                env_data["value"] = f"{self.params.get('k8s_tenants_num')}"
+
             self.apply_file(
                 node_prepare_config,
-                modifiers=affinity_modifiers + [scylla_machine_image_args_modifier],
+                modifiers=affinity_modifiers + [scylla_machine_image_args_modifier, multi_tenant_disks_modifier],
                 envsubst=False)
 
             LOGGER.info("Install local volume provisioner")
@@ -975,6 +984,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 pool_name=node_pool.name if node_pool else None),
             namespace=namespace,
         ))
+
+        # hack delete all the pvs and let them be recreated with the correct sizes
+        #    total_expected_pvs = self.params.get('k8s_tenants_num') * node_pool.num_nodes
+        #    KubernetesOps.wait_for_pvs_readiness(self, total_pvs=total_expected_pvs, readiness_timeout=5)
+        #    self.kubectl("delete pv --all")
+        #    KubernetesOps.wait_for_pvs_readiness(self, total_pvs=total_expected_pvs, readiness_timeout=5)
 
         self.wait_till_cluster_is_operational()
 

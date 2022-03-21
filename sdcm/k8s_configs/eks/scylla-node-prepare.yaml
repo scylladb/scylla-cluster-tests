@@ -194,6 +194,38 @@ spec:
           - name: hostirqbalanceconfig
             mountPath: /etc/conf.d/irqbalance
             mountPropagation: Bidirectional
+      - name: pv-setup
+        image: registry.access.redhat.com/ubi8/ubi:latest
+        imagePullPolicy: Always
+        command:
+          - "/bin/bash"
+          - "-euExo"
+          - "pipefail"
+          - "-c"
+          - |
+            while true; do
+              if [[ -z $(mount | grep  "/dev/md0") ]]; then
+                sleep 5;
+                continue
+              fi
+              for d in $(seq -f "pv-%05g" 1 $NUM_OF_TENANTS); do
+                if [[ ! -d "/host/mnt/raid-disks/disk0/${d}" ]]; then
+                  mkdir "/host/mnt/raid-disks/disk0/${d}"
+                fi
+                ( mount | grep "/host/mnt/raid-disks/disk0/${d} " 2>/dev/null 1>&2 ) || \
+                mount --bind "/host/mnt/raid-disks/disk0/${d}"{,}
+              done
+              sleep 30
+            done
+        env:
+          - name: NUM_OF_TENANTS
+            value: 1
+        securityContext:
+          privileged: true
+        volumeMounts:
+          - name: hostfs
+            mountPath: /host
+            mountPropagation: Bidirectional
       volumes:
         - name: hostfs
           hostPath:

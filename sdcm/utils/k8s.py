@@ -415,6 +415,24 @@ class KubernetesOps:  # pylint: disable=too-many-public-methods
 
         wait_cluster_is_ready()
 
+    @staticmethod
+    def wait_for_pvs_readiness(kluster, total_pvs: Union[int, Callable], readiness_timeout: float,
+                               sleep: int = 10):
+        @timeout_decor(message=f"Wait for {total_pvs} pv(s) to become ready...",
+                       timeout=readiness_timeout * 60,
+                       sleep_time=sleep)
+        def wait_cluster_is_ready():
+            result = kluster.kubectl("get pv -o jsonpath='{.items[*].status.phase}'")
+            count = result.stdout.count('Available')
+            if isinstance(total_pvs, (int, float)):
+                if total_pvs != count:
+                    raise RuntimeError('Not all pv(s) reported')
+            elif callable(total_pvs):
+                if not total_pvs(count):
+                    raise RuntimeError('Not all pv(s) reported')
+
+        wait_cluster_is_ready()
+
     @classmethod
     def patch_kube_config(cls, static_token_path, kube_config_path: str = None) -> None:
         # It assumes that config is already created by gcloud
