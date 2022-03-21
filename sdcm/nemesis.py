@@ -35,6 +35,7 @@ from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectio
 
 from invoke import UnexpectedExit
 from cassandra import ConsistencyLevel
+from argus.db.db_types import NemesisStatus, NemesisRunInfo, NodeDescription
 
 from sdcm.paths import SCYLLA_YAML_PATH
 from sdcm.cluster import NodeSetupTimeout, NodeSetupFailed, ClusterNodesNotReady
@@ -72,7 +73,6 @@ from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
 from sdcm.argus_test_run import ArgusTestRun
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
-from argus.db.db_types import NemesisStatus, NemesisRunInfo, NodeDescription
 
 
 class NoFilesFoundToDestroy(Exception):
