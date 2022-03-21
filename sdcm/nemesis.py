@@ -829,12 +829,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             new_seed_node.set_seed_flag(True)
             self.cluster.update_seed_provider()
 
-    @latency_calculator_decorator
+    @latency_calculator_decorator(legend="Terminate node and wait before adding new node")
     def _terminate_and_wait(self, target_node, sleep_time=300):
         self._terminate_cluster_node(target_node)
         time.sleep(sleep_time)  # Sleeping for 5 mins to let the cluster live with a missing node for a while
 
-    @latency_calculator_decorator
+    @latency_calculator_decorator(legend="Replace a node in cluster with new one")
     def replace_node(self, old_node_ip, rack=0):
         return self._add_and_init_new_cluster_node(old_node_ip, rack=rack)
 
@@ -1123,7 +1123,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.info('Nemesis stack is empty - setting termination_event')
             self.termination_event.set()
 
-    @latency_calculator_decorator
+    @latency_calculator_decorator(legend="Run repair process with nodetool repair")
     def repair_nodetool_repair(self, node=None, publish_event=True):
         node = node if node else self.target_node
         node.run_nodetool(sub_cmd="repair", publish_event=publish_event)
@@ -1765,7 +1765,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             mgr_task.stop()
             assert False, f'Backup task {mgr_task.id} timed out - while on status {status}'
 
-    @latency_calculator_decorator
+    @latency_calculator_decorator(legend="Scylla-Manger repair")
     def disrupt_mgmt_repair_cli(self):
         if not self.cluster.params.get('use_mgmt') and not self.cluster.params.get('use_cloud_manager'):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
@@ -2528,11 +2528,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             for ks in self.cluster.get_test_keyspaces():
                 self.target_node.run_nodetool("scrub", args=f"--skip-corrupted {ks}")
 
-    @latency_calculator_decorator
+    @latency_calculator_decorator(legend="Adding new node")
     def add_new_node(self, rack=0):
         return self._add_and_init_new_cluster_node(rack=rack)
 
-    @latency_calculator_decorator
+    @latency_calculator_decorator(legend="Decommission node: remove node from cluster")
     def decommission_node(self, node):
         self.cluster.decommission(node)
 
