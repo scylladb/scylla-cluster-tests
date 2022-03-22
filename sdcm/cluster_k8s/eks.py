@@ -90,6 +90,10 @@ class EksNodePool(CloudK8sNodePool):
         self.user_data = user_data
 
     @property
+    def tags(self):
+        return {**super().tags, **{'Name': self.name}}
+
+    @property
     def launch_template_name(self) -> str:
         return f'sct-{self.k8s_cluster.short_cluster_name}-{self.name}'
 
