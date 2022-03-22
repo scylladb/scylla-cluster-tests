@@ -21,3 +21,4 @@ space_node_threshold: 64424
 
 gce_n_local_ssd_disk_db: 2
 use_preinstalled_scylla: true
+run_db_node_benchmarks: true
