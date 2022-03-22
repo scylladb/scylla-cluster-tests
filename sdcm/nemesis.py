@@ -2664,12 +2664,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if self._is_it_on_kubernetes():
             # NOTE: on K8S nodes come up longer.
             wait_db_up_timeout = 1800
-        if new_node:
-            new_node.wait_db_up(verbose=True, timeout=wait_db_up_timeout)
-            new_node.run_nodetool('rebuild')
-        else:
-            self.target_node.wait_db_up(verbose=True, timeout=wait_db_up_timeout)
-            self.target_node.run_nodetool('rebuild')
+        node_to_rebuild = new_node if new_node else self.target_node
+        node_to_rebuild.wait_db_up(verbose=True, timeout=wait_db_up_timeout)
+        node_to_rebuild.wait_jmx_up(timeout=wait_db_up_timeout)
+        node_to_rebuild.run_nodetool('rebuild')
 
     def disrupt_decommission_streaming_err(self):
         """
