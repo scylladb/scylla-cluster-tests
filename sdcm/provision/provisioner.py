@@ -85,15 +85,17 @@ class VmInstance:  # pylint: disable=too-many-instance-attributes
 class Provisioner(ABC):
     """Abstract class for instance (virtual machines) provisioner, cloud-provider and sct agnostic.
     Limits only to machines related to provided test_id. """
-    _test_id: str
-    _region: str
+
+    def __init__(self, test_id, region):
+        self._test_id = test_id
+        self._region = region
 
     @property
-    def test_id(self):
+    def test_id(self) -> str:
         return self._test_id
 
     @property
-    def region(self):
+    def region(self) -> str:
         return self._region
 
     @classmethod
@@ -132,24 +134,24 @@ class Provisioner(ABC):
 
 class ProvisionerFactory:
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._classes = {}
 
     def register_provisioner(self, backend: str, provisioner_class: Provisioner) -> None:
         self._classes[backend] = provisioner_class
 
-    def create_provisioner(self, backend: str, test_id: str, region: str) -> Provisioner:
+    def create_provisioner(self, backend: str, test_id: str, region: str, **config) -> Provisioner:
         """Creates provisioner for given backend, test_id and region and returns it."""
         provisioner = self._classes.get(backend)
         if not provisioner:
             raise ValueError(backend)
-        return provisioner(test_id, region)
+        return provisioner(test_id, region, **config)
 
-    def discover_provisioners(self, backend: str, test_id: str) -> List[Provisioner]:
+    def discover_provisioners(self, backend: str, test_id: str, **config) -> List[Provisioner]:
         """Discovers regions where resources for given test_id are created.
         Returning provisioner class instance for each region."""
         provisioner = self._classes.get(backend)
-        return provisioner.discover_regions(test_id)
+        return provisioner.discover_regions(test_id, **config)
 
 
 provisioner_factory = ProvisionerFactory()

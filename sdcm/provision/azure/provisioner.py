@@ -12,7 +12,6 @@
 # Copyright (c) 2022 ScyllaDB
 
 import logging
-from dataclasses import dataclass, field, fields
 from typing import Dict, List
 from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
 
@@ -30,30 +29,23 @@ from sdcm.utils.azure_utils import AzureService
 LOGGER = logging.getLogger(__name__)
 
 
-@dataclass
 class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attributes
     """Provides api for VM provisioning in Azure cloud, tuned for Scylla QA. """
-    _test_id: str
-    _region: str
-    _rg_provider: ResourceGroupProvider = field(init=False)
-    _network_sec_group_provider: NetworkSecurityGroupProvider = field(init=False)
-    _vnet_provider: VirtualNetworkProvider = field(init=False)
-    _subnet_provider: SubnetProvider = field(init=False)
-    _ip_provider: IpAddressProvider = field(init=False)
-    _nic_provider: NetworkInterfaceProvider = field(init=False)
-    _vm_provider: VirtualMachineProvider = field(init=False)
-    _cache: Dict[str, VmInstance] = field(default_factory=dict)
 
-    def __post_init__(self) -> None:
-        """'Reattaches' to resource group for given test_id by discovery of existing resources and populating cache."""
+    def __init__(self, test_id: str, region: str,  # pylint: disable=unused-argument
+                 azure_service: AzureService = AzureService(), **kwargs):
+        super().__init__(test_id, region)
+        self._azure_service: AzureService = azure_service
+        self._cache: Dict[str, VmInstance] = {}
         LOGGER.info("getting resources for %s...", self._resource_group_name)
-        self._rg_provider = ResourceGroupProvider(self._resource_group_name, self._region)
-        self._network_sec_group_provider = NetworkSecurityGroupProvider(self._resource_group_name, self._region)
-        self._vnet_provider = VirtualNetworkProvider(self._resource_group_name, self._region)
-        self._subnet_provider = SubnetProvider(self._resource_group_name)
-        self._ip_provider = IpAddressProvider(self._resource_group_name, self._region)
-        self._nic_provider = NetworkInterfaceProvider(self._resource_group_name, self._region)
-        self._vm_provider = VirtualMachineProvider(self._resource_group_name, self._region)
+        self._rg_provider = ResourceGroupProvider(self._resource_group_name, self._region, self._azure_service)
+        self._network_sec_group_provider = NetworkSecurityGroupProvider(self._resource_group_name, self._region,
+                                                                        self._azure_service)
+        self._vnet_provider = VirtualNetworkProvider(self._resource_group_name, self._region, self._azure_service)
+        self._subnet_provider = SubnetProvider(self._resource_group_name, self._azure_service)
+        self._ip_provider = IpAddressProvider(self._resource_group_name, self._region, self._azure_service)
+        self._nic_provider = NetworkInterfaceProvider(self._resource_group_name, self._region, self._azure_service)
+        self._vm_provider = VirtualMachineProvider(self._resource_group_name, self._region, self._azure_service)
         for v_m in self._vm_provider.list():
             self._cache[v_m.name] = self._vm_to_instance(v_m)
 
@@ -104,10 +96,13 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         """Triggers delete of all resources."""
         tasks = []
         self._rg_provider.delete(wait)
-
-        for _field in fields(self):  # clear cache
-            if _field.name not in ("_test_id", "_region"):
-                setattr(self, _field.name, {})
+        self._network_sec_group_provider.clear_cache()
+        self._vnet_provider.clear_cache()
+        self._subnet_provider.clear_cache()
+        self._ip_provider.clear_cache()
+        self._nic_provider.clear_cache()
+        self._vm_provider.clear_cache()
+        self._cache = {}
         if wait is True:
             LOGGER.info("Waiting for completion of all resources cleanup")
             for task in tasks:
