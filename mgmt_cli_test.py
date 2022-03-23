@@ -15,8 +15,7 @@
 # pylint: disable=too-many-lines
 
 # pylint: disable=too-many-lines
-
-from random import randint
+import random
 from pathlib import Path
 from functools import cached_property
 import re
@@ -29,6 +28,7 @@ import libcloud.storage.types
 import libcloud.storage.providers
 from invoke import exceptions
 from pkg_resources import parse_version
+from tenacity import RetryError
 
 from sdcm import mgmt
 from sdcm.mgmt import ScyllaManagerError, TaskStatus, HostStatus, HostSsl, HostRestStatus
@@ -555,7 +555,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
             or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
                                         auth_token=self.monitors.mgmt_auth_token)
-        rate_limit_list = [f'{dc}:{randint(15, 25)}' for dc in self.get_all_dcs_names()]
+        rate_limit_list = [f'{dc}:{random.randint(15, 25)}' for dc in self.get_all_dcs_names()]
         self.log.info('rate limit will be {}'.format(rate_limit_list))
         backup_task = mgr_cluster.create_backup_task(location_list=self.locations, rate_limit_list=rate_limit_list)
         task_status = backup_task.wait_and_get_final_status(timeout=18000)
@@ -1007,6 +1007,10 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
             self._suspend_and_resume_task_template(task_type="repair")
         with self.subTest('Suspend and resume without starting task'):
             self.test_suspend_and_resume_without_starting_tasks()
+        with self.subTest('Suspend with on resume start tasks flag after duration has passed'):
+            self._template_suspend_with_on_resume_start_tasks_flag(wait_for_duration=True)
+        with self.subTest('Suspend with on resume start tasks flag before duration has passed'):
+            self._template_suspend_with_on_resume_start_tasks_flag(wait_for_duration=False)
 
     def _suspend_and_resume_task_template(self, task_type):
         # task types: backup/repair
@@ -1029,6 +1033,45 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         assert suspendable_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=1200, step=10), \
             f"task {suspendable_task.id} failed to reach status {TaskStatus.DONE}"
         self.log.info('finishing test_suspend_and_resume_{}'.format(task_type))
+
+    def _template_suspend_with_on_resume_start_tasks_flag(self, wait_for_duration):
+        suspension_duration = 75
+        test_name_filler = "after_duration_passed" if wait_for_duration else "before_duration_passed"
+        self.log.info('starting test_suspend_with_on_resume_start_tasks_flag_{}'.format(test_name_filler))
+        manager_tool = mgmt.get_scylla_manager_tool(manager_node=self.monitors.nodes[0])
+        mgr_cluster = manager_tool.get_cluster(cluster_name=self.CLUSTER_NAME) \
+            or manager_tool.add_cluster(name=self.CLUSTER_NAME, db_cluster=self.db_cluster,
+                                        auth_token=self.monitors.mgmt_auth_token)
+        task_type = random.choice(["backup", "repair"])
+        if task_type == "backup":
+            suspendable_task = mgr_cluster.create_backup_task(location_list=self.locations)
+        else:
+            suspendable_task = mgr_cluster.create_repair_task()
+        assert suspendable_task.wait_for_status(list_status=[TaskStatus.RUNNING], timeout=300, step=5), \
+            f"task {suspendable_task.id} failed to reach status {TaskStatus.RUNNING}"
+        with mgr_cluster.suspend_manager_then_resume(start_tasks=False, start_tasks_in_advance=True,
+                                                     duration=f"{suspension_duration}s"):
+            assert suspendable_task.wait_for_status(list_status=[TaskStatus.STOPPED], timeout=60, step=2), \
+                f"task {suspendable_task.id} failed to reach status {TaskStatus.STOPPED}"
+            if wait_for_duration:  # Whether waiting for the duration time to pass or not
+                time.sleep(suspension_duration+5)
+        if wait_for_duration:
+            assert suspendable_task.wait_for_status(list_status=[TaskStatus.DONE], timeout=1200, step=10), \
+                f"After the cluster was resumed (while resuming AFTER the suspend duration has passed)," \
+                f" task {suspendable_task.id} failed to reach status " \
+                f"{TaskStatus.DONE}, but instead stayed in {suspendable_task.status}"
+        else:
+            try:
+                suspendable_task.wait_for_status(list_status=TaskStatus.all_statuses() - {TaskStatus.STOPPED},
+                                                 timeout=1200, step=10)
+            except RetryError:
+                self.log.debug("As expected, the task was continued after the resume. It specifically reached the "
+                               "{} status".format(suspendable_task.status))
+            else:
+                raise ScyllaManagerError(f"After the cluster was resumed (while resuming BEFORE the suspend duration "
+                                         f"has passed), task {suspendable_task.id} failed to stay in status "
+                                         f"{TaskStatus.STOPPED}, but instead reached {suspendable_task.status}")
+        self.log.info('finishing test_suspend_with_on_resume_start_tasks_flag_{}'.format(test_name_filler))
 
     def test_suspend_and_resume_without_starting_tasks(self):
         self.log.info('starting test_suspend_and_resume_without_starting_tasks')

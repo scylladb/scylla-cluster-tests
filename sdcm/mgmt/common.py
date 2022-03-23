@@ -157,3 +157,7 @@ class TaskStatus:  # pylint: disable=too-few-public-methods
             return getattr(cls, output_str)
         except AttributeError as err:
             raise ScyllaManagerError("Could not recognize returned task status: {}".format(output_str)) from err
+
+    @classmethod
+    def all_statuses(cls):
+        return set(getattr(cls, name) for name in dir(cls) if name.isupper())
