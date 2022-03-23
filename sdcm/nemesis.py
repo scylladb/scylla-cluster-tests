@@ -1218,7 +1218,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     with self.cluster.cql_connection_patient(self.target_node) as session:
                         session.execute(f'DROP TABLE drop_table_during_repair_ks_{i}.standard1')
             finally:
-                thread.result(timeout=120)
+                thread.result()
 
     def disrupt_major_compaction(self):
         self.target_node.run_nodetool("compact")
