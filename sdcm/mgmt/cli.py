@@ -813,8 +813,12 @@ class ManagerCluster(ScyllaManagerBase):
             return value_list[0]
         return default_value
 
-    def suspend(self):
+    def suspend(self, on_resume_start_tasks=False, duration=None):
         cmd = f"suspend -c {self.id}"
+        if on_resume_start_tasks:
+            cmd += " --on-resume-start-tasks"
+        if duration is not None:
+            cmd += f" --duration {duration}"
         self.sctool.run(cmd=cmd)
 
     def resume(self, start_tasks=True):
@@ -824,8 +828,8 @@ class ManagerCluster(ScyllaManagerBase):
         self.sctool.run(cmd=cmd)
 
     @contextmanager
-    def suspend_manager_then_resume(self, start_tasks=True):
-        self.suspend()
+    def suspend_manager_then_resume(self, start_tasks=True, start_tasks_in_advance=False, duration=None):
+        self.suspend(on_resume_start_tasks=start_tasks_in_advance, duration=duration)
         try:
             yield
         finally:
