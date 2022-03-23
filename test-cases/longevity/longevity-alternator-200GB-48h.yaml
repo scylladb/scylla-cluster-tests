@@ -21,10 +21,10 @@ prepare_write_cmd:
     -p insertstart=150150225 -p insertcount=50050075
 
 stress_cmd: [
-  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=200200300 -p fieldcount=8 -p fieldlength=128 -p operationcount=2140000000 -p dataintegrity=true",
-  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=200200300 -p fieldcount=8 -p fieldlength=128 -p operationcount=2140000000 -p dataintegrity=true",
-  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=200200300 -p fieldcount=8 -p fieldlength=128 -p operationcount=2140000000 -p dataintegrity=true",
-  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=200200300 -p fieldcount=8 -p fieldlength=128 -p operationcount=2140000000 -p dataintegrity=true",
+  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=200200300 -p fieldcount=8 -p fieldlength=128 -p operationcount=2140000000 -p dataintegrity=true -p maxexecutiontime=147600",
+  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=200200300 -p fieldcount=8 -p fieldlength=128 -p operationcount=2140000000 -p dataintegrity=true -p maxexecutiontime=147600",
+  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=200200300 -p fieldcount=8 -p fieldlength=128 -p operationcount=2140000000 -p dataintegrity=true -p maxexecutiontime=147600",
+  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=200200300 -p fieldcount=8 -p fieldlength=128 -p operationcount=2140000000 -p dataintegrity=true -p maxexecutiontime=147600",
 ]
 
 round_robin: true
