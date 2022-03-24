@@ -104,17 +104,13 @@ def call(Map pipelineParams) {
                    description: 'If empty - the default manager version will be taken',
                    name: 'scylla_mgmt_address')
 
-            string(defaultValue: "master_latest",
-                   description: 'master_latest|2.6|2.5|2.4|2.3',
-                   name: 'manager_version')
-
-            string(defaultValue: "${pipelineParams.get('target_manager_version', '')}",
-                   description: 'master_latest|2.6|2.5|2.4|2.3',
-                   name: 'target_manager_version')
-
             string(defaultValue: "${pipelineParams.get('scylla_mgmt_agent_address', '')}",
                    description: 'manager agent repo',
                    name: 'scylla_mgmt_agent_address')
+
+            string(defaultValue: "master_latest",
+                   description: 'master_latest|2.6|2.5|2.4|2.3',
+                   name: 'manager_version')
 
             string(defaultValue: "${pipelineParams.get('target_scylla_mgmt_server_address', '')}",
                    description: 'Link to the repository of the manager that will be used as a target of the manager server in the manager upgrade test',
@@ -123,6 +119,10 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('target_scylla_mgmt_agent_address', '')}",
                    description: 'Link to the repository of the manager that will be used as a target of the manager agents in the manager upgrade test',
                    name: 'target_scylla_mgmt_agent_address')
+
+            string(defaultValue: "${pipelineParams.get('target_manager_version', '')}",
+                   description: 'master_latest|2.6|2.5|2.4|2.3',
+                   name: 'target_manager_version')
 
             string(defaultValue: "'qa@scylladb.com','mgmt@scylladb.com'",
                    description: 'email recipients of email report',
