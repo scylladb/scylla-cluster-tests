@@ -42,6 +42,9 @@ data:
        {{- if $classConfig.fsType }}
        fsType: {{ $classConfig.fsType }}
        {{- end }}
+       {{- if $classConfig.namePattern }}
+       namePattern: {{ $classConfig.namePattern | quote }}
+       {{- end }}
     {{- end }}
 ---
 apiVersion: apps/v1

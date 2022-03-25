@@ -1916,7 +1916,7 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
             self.log.warning(f"Could not find scylla disks path on '{self.node_name}'")
         podname, path = podname_path_list[0].split()
         self.parent_cluster.k8s_cluster.kubectl(
-            f"exec -ti {podname} -- sh -c 'fstrim -v {path}/*'",
+            f"exec -ti {podname} -- sh -c 'fstrim -v {path}'",
             namespace="default")
 
 

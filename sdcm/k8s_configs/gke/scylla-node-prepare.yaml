@@ -1,3 +1,39 @@
+# ClusterRole for cpu-policy-daemonset.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pv-setup
+rules:
+  - apiGroups:
+      - scylla.scylladb.com
+    resources:
+      - scyllaclusters
+    verbs:
+      - get
+      - list
+      - watch
+---
+# ServiceAccount for cpu-policy daemonset.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pv-setup
+  namespace: default
+---
+# Bind cpu-policy daemonset ServiceAccount with ClusterRole.
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: pv-setup
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: pv-setup
+subjects:
+- kind: ServiceAccount
+  name: pv-setup
+  namespace: default
+---
 # Daemonset that converts ephemeral-storage to xfs
 apiVersion: apps/v1
 kind: DaemonSet
@@ -13,6 +49,7 @@ spec:
         app: xfs-formatter
     spec:
       hostPID: true
+      serviceAccountName: pv-setup
       nodeSelector:
         cloud.google.com/gke-nodepool: "scylla-pool"
       tolerations:
@@ -91,6 +128,55 @@ spec:
                 xfs_info "$( { grep -E '/mnt/raid-disks/disk0($| )' /proc/mounts || test $? = 1; } | sed -E -e 's/([^ ]+) .+/\1/' )"
           initialDelaySeconds: 10
           periodSeconds: 10
+      - name: pv-setup
+        image: bitnami/kubectl:1.21.4
+        imagePullPolicy: Always
+        env:
+          - name: HOSTFS
+            value: /mnt/hostfs
+          - name: KUBELET_CONFIG_PATH
+            value: /home/kubernetes/kubelet-config.yaml
+        securityContext:
+          privileged: true
+          runAsUser: 0
+        volumeMounts:
+          - name: hostfs
+            mountPath: /mnt/hostfs
+            mountPropagation: Bidirectional
+        command:
+          - "/bin/bash"
+          - "-c"
+          - "--"
+        args:
+          - |
+            set -ex
+            if [ ! -f "$HOSTFS$KUBELET_CONFIG_PATH" ]; then
+                echo "Kublet config not found"
+                exit 1
+            fi
+            TOKEN_PATH=$(find /mnt/hostfs -name token | grep pv-setup -m1)
+            TOKEN=$(cat $TOKEN_PATH)
+            CA_CRT=$TOKEN_PATH/../ca.crt
+            kubectl config set-cluster scylla --server=https://kubernetes.default --certificate-authority=$CA_CRT
+            kubectl config set-credentials qa@scylladb.com --token=$TOKEN
+            kubectl config set-context scylla --cluster=scylla --user=qa@scylladb.com
+            kubectl config use-context scylla
+
+            # Create directories for each Scylla cluster on each K8S node which will host PVs
+            while true; do
+              if [[ -z $(mount | grep  "/dev/md127") ]]; then
+                sleep 5;
+                continue
+              fi
+              for i in $(seq -f "pv-%02g" $( kubectl get scyllaclusters -A --field-selector metadata.name!=scylla-manager --no-headers | grep -c " " ) ); do
+                if [[ ! -d "/mnt/hostfs/mnt/raid-disks/disk0/${i}" ]]; then
+                  mkdir "/mnt/hostfs/mnt/raid-disks/disk0/${i}"
+                fi
+                ( mount | grep "/mnt/hostfs/mnt/raid-disks/disk0/${i} " 2>/dev/null 1>&2 ) || \
+                mount --bind "/mnt/hostfs/mnt/raid-disks/disk0/${i}"{,}
+              done
+              sleep 30
+            done
       volumes:
       - name: hostfs
         hostPath:
