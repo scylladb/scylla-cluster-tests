@@ -58,13 +58,19 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
             self._cache[v_m.name] = self._vm_to_instance(v_m)
 
     @classmethod
-    def discover_regions(cls, test_id: str) -> List["AzureProvisioner"]:
-        all_resource_groups = AzureService().resource.resource_groups.list()
-        test_resource_groups = [rg for rg in all_resource_groups if rg.name.startswith(f"SCT-{test_id}")]
-        provisioners = []
-        for resource_group in test_resource_groups:
-            provisioners.append(cls(test_id, resource_group.location))
-        return provisioners
+    def discover_regions(cls, test_id: str = "") -> List["AzureProvisioner"]:
+        """Discovers provisioners for in each region for given test id.
+
+        If test_id is not provided, it discovers all related to SCT provisioners."""
+        all_resource_groups = [rg for rg in AzureService().resource.resource_groups.list()
+                               if rg.name.startswith("SCT-")]
+        if test_id:
+            provisioner_params = [(test_id, rg.location) for rg in all_resource_groups if test_id in rg.name]
+        else:
+            # extract test_id from rg names where rg.name format is: SCT-<test_id>-<region>
+            provisioner_params = [(test_id, rg.location) for rg in all_resource_groups
+                                  if (test_id := "-".join(rg.name.split("-")[1:-1]))]
+        return [cls(*params) for params in provisioner_params]
 
     def get_or_create_instance(self, definition: InstanceDefinition,
                                pricing_model: PricingModel = PricingModel.SPOT) -> VmInstance:
