@@ -1061,18 +1061,22 @@ def clean_instances_azure(tags_dict, dry_run=False):
     :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
     :return: None
     """
-
-    test_id = tags_dict.pop("TestId")
-    provisioners = AzureProvisioner.discover_regions(test_id)
+    assert tags_dict, "Running clean instances without tags would remove all SCT related resources in all regions"
+    provisioners = AzureProvisioner.discover_regions(tags_dict.get("TestId", ""))
     for provisioner in provisioners:
         all_instances = provisioner.list_instances()
-        instances = all_instances.copy()
-        for tag_name, tag_value in tags_dict.items():
-            instances = [instance for instance in instances if instance.tags.get(tag_name, "") == tag_value]
-        LOGGER.info("going to clean instances: {names}".format(names=[inst.name for inst in instances]))
-        if not dry_run:
-            for instance in instances:
-                instance.terminate(wait=False)
+        instances_to_clean = [instance for instance in all_instances if tags_dict.items() <= instance.tags.items()]
+        if len(all_instances) == len(instances_to_clean):
+            LOGGER.info("Cleaning everything for test id: %s in region: %s",
+                        provisioner.test_id, provisioner.region)
+            if not dry_run:
+                provisioner.cleanup(wait=False)
+        else:
+            LOGGER.info("test id %s from %s - instances to clean: %s",
+                        provisioner.test_id, provisioner.region, [inst.name for inst in instances_to_clean])
+            if not dry_run:
+                for instance in instances_to_clean:
+                    instance.terminate(wait=False)
 
 
 def clean_clusters_gke(tags_dict: dict, dry_run: bool = False) -> None:
