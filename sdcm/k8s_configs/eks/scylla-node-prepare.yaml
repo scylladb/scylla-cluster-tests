@@ -30,10 +30,15 @@ rules:
       - pods/eviction
     verbs:
       - create
-
-
+  - apiGroups:
+      - scylla.scylladb.com
+    resources:
+      - scyllaclusters
+    verbs:
+      - get
+      - list
+      - watch
 ---
-
 # ServiceAccount for node-setup daemonset.
 apiVersion: v1
 kind: ServiceAccount
@@ -104,7 +109,7 @@ spec:
                 exit 1
             fi
 
-            TOKEN_PATH=$(find / -name token | grep node-setup-daemonset -m1)
+            TOKEN_PATH=$(find /mnt/hostfs -name token | grep node-setup-daemonset -m1)
             TOKEN=$(cat $TOKEN_PATH)
             CA_CRT=$TOKEN_PATH/../ca.crt
             kubectl config set-cluster scylla --server=https://kubernetes.default --certificate-authority=$CA_CRT
@@ -167,7 +172,6 @@ spec:
     spec:
       hostPID: true
       hostIPC: true
-      hostNetwork: true
       serviceAccountName: node-setup-daemonset
       containers:
       - name: node-setup
@@ -194,6 +198,56 @@ spec:
           - name: hostirqbalanceconfig
             mountPath: /etc/conf.d/irqbalance
             mountPropagation: Bidirectional
+      - name: pv-setup
+        image: bitnami/kubectl:1.21.4
+        imagePullPolicy: Always
+        env:
+          - name: HOSTFS
+            value: /mnt/hostfs
+          - name: KUBELET_CONFIG_PATH
+            value: /etc/kubernetes/kubelet/kubelet-config.json
+        securityContext:
+          privileged: true
+          runAsUser: 0
+        volumeMounts:
+          - name: hostfs
+            mountPath: /mnt/hostfs
+            mountPropagation: Bidirectional
+        command:
+          - "/bin/bash"
+          - "-c"
+          - "--"
+        args:
+          - |
+            set -ex
+            if [ ! -f "$HOSTFS$KUBELET_CONFIG_PATH" ]; then
+                echo "Kublet config not found"
+                exit 1
+            fi
+
+            TOKEN_PATH=$(find /mnt/hostfs -name token | grep node-setup-daemonset -m1)
+            TOKEN=$(cat $TOKEN_PATH)
+            CA_CRT=$TOKEN_PATH/../ca.crt
+            kubectl config set-cluster scylla --server=https://kubernetes.default --certificate-authority=$CA_CRT
+            kubectl config set-credentials qa@scylladb.com --token=$TOKEN
+            kubectl config set-context scylla --cluster=scylla --user=qa@scylladb.com
+            kubectl config use-context scylla
+
+            # Create directories for each Scylla cluster on each K8S node which will host PVs
+            while true; do
+              if [[ -z $(mount | grep  "/dev/md0") ]]; then
+                sleep 5;
+                continue
+              fi
+              for i in $(seq -f "pv-%02g" $( kubectl get scyllaclusters -A --field-selector metadata.name!=scylla-manager --no-headers | grep -c " " ) ); do
+                if [[ ! -d "/mnt/hostfs/mnt/raid-disks/disk0/${i}" ]]; then
+                  mkdir "/mnt/hostfs/mnt/raid-disks/disk0/${i}"
+                fi
+                ( mount | grep "/mnt/hostfs/mnt/raid-disks/disk0/${i} " 2>/dev/null 1>&2 ) || \
+                mount --bind "/mnt/hostfs/mnt/raid-disks/disk0/${i}"{,}
+              done
+              sleep 10
+            done
       volumes:
         - name: hostfs
           hostPath:

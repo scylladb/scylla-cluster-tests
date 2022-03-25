@@ -44,7 +44,7 @@ classes:
 - name: local-raid-disks # Defines name of storage classes.
   # Path on the host where local volumes of this storage class are mounted
   # under.
-  hostDir: /mnt/raid-disks
+  hostDir: /mnt/raid-disks/disk0/
   # Optionally specify mount path of local volumes. By default, we use same
   # path as hostDir in container.
   # mountDir: /mnt/fast-disks
@@ -56,6 +56,8 @@ classes:
   # and desire volume mode is Filesystem.
   # Must be a filesystem type supported by the host operating system.
   fsType: xfs
+  # File name pattern to discover. By default, discover all file names.
+  namePattern: "pv-"
   blockCleanerCommand:
   #  Do a quick reset of the block device during its cleanup.
   #  - "/scripts/quick_reset.sh"
