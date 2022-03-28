@@ -163,7 +163,7 @@ class GCENode(cluster.BaseNode):
         self._instance_wait_safe(self._instance.reboot)
 
     def hard_reboot(self):
-        self._instance_wait_safe(self._instance.reboot_instance)
+        self._instance_wait_safe(self._instance.reboot)
 
     def _safe_destroy(self):
         try:
