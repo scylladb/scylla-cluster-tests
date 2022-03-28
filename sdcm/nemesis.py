@@ -1660,6 +1660,26 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         self.run_deletions(queries=queries, ks_cf=ks_cf)
 
+    def disrupt_delete_overlapping_row_ranges(self):
+        """
+        Delete several overlapping row ranges in the table with large partitions.
+        """
+        self.verify_initial_inputs_for_delete_nemesis()
+        ks_cf = 'scylla_bench.test'
+        partitions_for_delete = self.choose_partitions_for_delete(10, ks_cf, with_clustering_key_data=True)
+        if not partitions_for_delete:
+            self.log.error('No partitions for delete found!')
+            raise UnsupportedNemesis("DeleteOverlappingRowRangesMonkey: No partitions for delete found!")
+
+        self.log.debug('Delete random row ranges in few partitions')
+        queries = []
+        for pkey, ckey in partitions_for_delete.items():
+            for _ in range(random.randint(3, 20)):  # Get a random number of ranges to delete.
+                min_ck = random.randint(0, ckey[1])  # Generate a random range of rows to delete in a single partition.
+                max_ck = random.randint(min_ck, ckey[1])
+                queries.append(f"delete from {ks_cf} where pk = {pkey} and ck > {min_ck} and ck < {max_ck}")
+        self.run_deletions(queries=queries, ks_cf=ks_cf)
+
     def disrupt_delete_by_rows_range(self):
         """
         Delete few partitions in the table with large partitions
@@ -3474,6 +3494,14 @@ class DeleteByRowsRangeMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_delete_by_rows_range()
+
+
+class DeleteOverlappingRowRangesMonkey(Nemesis):
+    disruptive = False
+    kubernetes = True
+
+    def disrupt(self):
+        self.disrupt_delete_overlapping_row_ranges()
 
 
 class ChaosMonkey(Nemesis):
