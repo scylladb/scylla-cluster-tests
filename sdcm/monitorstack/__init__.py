@@ -250,6 +250,10 @@ def get_monitoring_stack_scylla_version(monitoring_stack_dir):
         with open(os.path.join(monitoring_stack_dir, 'monitor_version'), encoding="utf-8") as f:  # pylint: disable=invalid-name
             versions = f.read().strip()
         monitoring_version, scylla_version = versions.split(':')
+        if not requests.head(f'https://github.com/scylladb/scylla-monitoring/tree/{monitoring_version}'
+                             f'/grafana/build/ver_{scylla_version}').ok:
+            scylla_version = 'master'
+
         return monitoring_version, scylla_version
     except Exception:  # pylint: disable=broad-except
         return 'branch-3.0', 'master'
