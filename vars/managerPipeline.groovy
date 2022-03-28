@@ -104,7 +104,7 @@ def call(Map pipelineParams) {
                    description: 'If empty - the default manager version will be taken',
                    name: 'scylla_mgmt_address')
 
-            string(defaultValue: "master_latest",
+            string(defaultValue: "${pipelineParams.get('manager_version', 'master_latest')",
                    description: 'master_latest|2.6|2.5|2.4|2.3',
                    name: 'manager_version')
 
