@@ -413,7 +413,12 @@ def verify_grafana_is_available():
             LOGGER.error("Dashboard %s is not available. Error: %s", dashboard.title, details)
             grafana_statuses.append(False)
 
-    return all(grafana_statuses)
+    result = any(grafana_statuses)
+
+    if not result:
+        LOGGER.error("None of the expected dashboards are available.")
+
+    return result
 
 
 def verify_prometheus_is_available():
