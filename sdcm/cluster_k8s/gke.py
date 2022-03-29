@@ -151,6 +151,7 @@ class GkeCluster(KubernetesCluster):
     AUXILIARY_POOL_NAME = 'default-pool'  # This is default pool that is deployed with the cluster
     POOL_LABEL_NAME = 'cloud.google.com/gke-nodepool'
     IS_NODE_TUNING_SUPPORTED = True
+    NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/gke/scylla-node-prepare.yaml")
     pools: Dict[str, GkeNodePool]
 
     # pylint: disable=too-many-arguments
@@ -409,7 +410,6 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
 
 
 class GkeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
-    NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/gke/scylla-node-prepare.yaml")
     node_terminate_methods = [
         'drain_k8s_node',
         # NOTE: uncomment below when following scylla-operator bug is fixed:
