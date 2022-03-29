@@ -103,7 +103,7 @@ def fixture_db_cluster(tester: ScyllaOperatorFunctionalClusterTester):
     if not tester.healthy_flag:
         pytest.skip('cluster is not healthy, skipping rest of the tests')
 
-    with tester.db_cluster.scylla_config_map as scylla_config_map:
+    with tester.db_cluster.scylla_config_map() as scylla_config_map:
         original_scylla_config_map = scylla_config_map
     original_scylla_cluster_spec = tester.db_cluster.get_scylla_cluster_plain_value('/spec')
 
@@ -142,7 +142,7 @@ def _bring_cluster_back_to_original_state(
             original_rack_specs.extend(new_racks)
 
         # Restore config-map scylla-config
-        with db_cluster.scylla_config_map as recover_config_map:
+        with db_cluster.scylla_config_map() as recover_config_map:
             if recover_config_map != config_map:
                 recover_config_map.clear()
                 recover_config_map.update(config_map)

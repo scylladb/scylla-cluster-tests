@@ -264,7 +264,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     _scylla_manager_journal_thread: Optional[ScyllaManagerLogger] = None
     _scylla_operator_journal_thread: Optional[ScyllaOperatorLogger] = None
     _scylla_operator_scheduling_thread: Optional[KubernetesWrongSchedulingLogger] = None
-    _scylla_cluster_events_thread: Optional[KubectlClusterEventsLogger] = None
+    _scylla_cluster_events_threads: Dict[str, KubectlClusterEventsLogger] = {}
 
     _scylla_operator_log_monitor_thread: Optional[ScyllaOperatorLogMonitoring] = None
     _token_update_thread: Optional[TokenUpdateThread] = None
@@ -293,12 +293,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             ('scylla-operator.scylladb.com/node-config-job-type', 'Node'),
             ('scylla-operator.scylladb.com/node-config-job-type', 'Containers'),
         ]
+        self._scylla_cluster_events_threads = {}
 
     # NOTE: Following class attr(s) are defined for consumers of this class
     #       such as 'sdcm.utils.remote_logger.ScyllaOperatorLogger'.
     _scylla_operator_namespace = SCYLLA_OPERATOR_NAMESPACE
     _scylla_manager_namespace = SCYLLA_MANAGER_NAMESPACE
-    _scylla_namespace = SCYLLA_NAMESPACE
 
     @property
     def allowed_labels_on_scylla_node(self):
@@ -597,9 +597,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def scylla_operator_log(self) -> str:
         return os.path.join(self.logdir, "scylla_operator.log")
 
-    @property
-    def scylla_cluster_event_log(self) -> str:
-        return os.path.join(self.logdir, "scylla_cluster_events.log")
+    def scylla_cluster_event_log(self, namespace: str = SCYLLA_NAMESPACE) -> str:
+        return os.path.join(self.logdir, f"{namespace}_cluster_events.log")
 
     def start_scylla_operator_journal_thread(self) -> None:
         self._scylla_operator_journal_thread = ScyllaOperatorLogger(self, self.scylla_operator_log)
@@ -609,9 +608,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self._scylla_operator_log_monitor_thread = ScyllaOperatorLogMonitoring(self)
         self._scylla_operator_log_monitor_thread.start()
 
-    def start_scylla_cluster_events_thread(self) -> None:
-        self._scylla_cluster_events_thread = KubectlClusterEventsLogger(self, self.scylla_cluster_event_log)
-        self._scylla_cluster_events_thread.start()
+    def start_scylla_cluster_events_thread(self, namespace: str = SCYLLA_NAMESPACE) -> None:
+        self._scylla_cluster_events_threads[namespace] = KubectlClusterEventsLogger(
+            self, self.scylla_cluster_event_log(namespace=namespace), namespace=namespace)
+        self._scylla_cluster_events_threads[namespace].start()
 
     @log_run_info
     def deploy_scylla_operator(self, pool_name: str = None) -> None:
@@ -737,11 +737,11 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.kubectl("rollout status deployment scylla-operator",
                      namespace=SCYLLA_OPERATOR_NAMESPACE)
 
-    def check_scylla_cluster_sa_annotations(self):
+    def check_scylla_cluster_sa_annotations(self, namespace: str = SCYLLA_NAMESPACE):
         # Make sure that ScyllaCluster ServiceAccount annotations stay unchanged
         raw_sa_data = self.kubectl(
             f"get sa {self.params.get('k8s_scylla_cluster_name')}-member -o yaml",
-            namespace=SCYLLA_NAMESPACE).stdout
+            namespace=namespace).stdout
         sa_data = yaml.safe_load(raw_sa_data)
         error_msg = (
             "ServiceAccount annotations don't have expected values.\n"
@@ -770,13 +770,16 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.kubectl_wait("-l app=minio --for=condition=Ready pod",
                           timeout=600, namespace=MINIO_NAMESPACE)
 
-    def get_scylla_cluster_helm_values(self, cpu_limit, memory_limit, pool_name: str = None) -> HelmValues:
+    def get_scylla_cluster_helm_values(self, cpu_limit, memory_limit, pool_name: str = None,
+                                       cluster_name=None) -> HelmValues:
         mgmt_agent_cpu_limit = convert_cpu_units_to_k8s_value(SCYLLA_MANAGER_AGENT_RESOURCES['cpu'])
         mgmt_agent_memory_limit = convert_memory_units_to_k8s_value(
             SCYLLA_MANAGER_AGENT_RESOURCES['memory'])
+        if not cluster_name:
+            cluster_name = self.params.get('k8s_scylla_cluster_name')
         return HelmValues({
             'nameOverride': '',
-            'fullnameOverride': self.params.get('k8s_scylla_cluster_name'),
+            'fullnameOverride': cluster_name,
             'scyllaImage': {
                 'repository': self.params.get('docker_image'),
                 'tag': self.params.get('scylla_version')
@@ -788,7 +791,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             'serviceAccount': {
                 'create': True,
                 'annotations': SCYLLA_CLUSTER_SA_ANNOTATIONS,
-                'name': f"{self.params.get('k8s_scylla_cluster_name')}-member"
+                'name': f"{cluster_name}-member"
             },
             'alternator': {
                 'enabled': False,
@@ -918,20 +921,20 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         time.sleep(5)
 
     @log_run_info
-    def deploy_scylla_cluster(self, node_pool: CloudK8sNodePool) -> None:
+    def deploy_scylla_cluster(self, node_pool: CloudK8sNodePool, namespace: str = SCYLLA_NAMESPACE,
+                              cluster_name=None) -> None:
         if self.params.get('reuse_cluster'):
             try:
                 self.wait_till_cluster_is_operational()
                 LOGGER.debug("Check Scylla cluster")
-                self.kubectl("get scyllaclusters.scylla.scylladb.com", namespace=SCYLLA_NAMESPACE)
+                self.kubectl("get scyllaclusters.scylla.scylladb.com", namespace=namespace)
                 self.start_scylla_cluster_events_thread()
                 return
             except Exception as exc:
                 raise RuntimeError(
                     "SCT_REUSE_CLUSTER is set, but target scylla cluster is unhealthy") from exc
         LOGGER.info("Create and initialize a Scylla cluster")
-        self.kubectl(f"create namespace {SCYLLA_NAMESPACE}")
-        self.create_scylla_manager_agent_config()
+        self.create_scylla_manager_agent_config(namespace=namespace)
 
         # Calculate cpu and memory limits to occupy all available amounts by scylla pods
         cpu_limit, memory_limit = node_pool.cpu_and_memory_capacity
@@ -958,7 +961,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.calculated_memory_limit = convert_memory_units_to_k8s_value(memory_limit)
 
         # Init 'scylla-config' configMap before installation of Scylla to avoid redundant restart
-        self.init_scylla_config_map()
+        self.init_scylla_config_map(namespace=namespace)
         self.scylla_restart_required = False
 
         # Deploy scylla cluster
@@ -970,15 +973,17 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             values=self.get_scylla_cluster_helm_values(
                 cpu_limit=self.calculated_cpu_limit,
                 memory_limit=self.calculated_memory_limit,
-                pool_name=node_pool.name if node_pool else None),
-            namespace=SCYLLA_NAMESPACE,
+                pool_name=node_pool.name if node_pool else None,
+                cluster_name=cluster_name),
+            namespace=namespace,
         ))
         self.wait_till_cluster_is_operational()
 
         LOGGER.debug("Check Scylla cluster")
-        self.kubectl("get scyllaclusters.scylla.scylladb.com", namespace=SCYLLA_NAMESPACE)
-        LOGGER.debug("Wait for %d secs before we start to apply changes to the cluster", DEPLOY_SCYLLA_CLUSTER_DELAY)
-        self.start_scylla_cluster_events_thread()
+        self.kubectl("get scyllaclusters.scylla.scylladb.com", namespace=namespace)
+        LOGGER.debug("Wait for %d secs before we start to apply changes to the cluster",
+                     DEPLOY_SCYLLA_CLUSTER_DELAY)
+        self.start_scylla_cluster_events_thread(namespace=namespace)
 
     @log_run_info
     def deploy_loaders_cluster(self, config: str, node_pool: CloudK8sNodePool = None) -> None:
@@ -1244,8 +1249,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             self._scylla_operator_journal_thread.stop(timeout)
         if self._scylla_operator_scheduling_thread:
             self._scylla_operator_scheduling_thread.stop(timeout)
-        if self._scylla_cluster_events_thread:
-            self._scylla_cluster_events_thread.stop(timeout)
+        for thread in self._scylla_cluster_events_threads.values():
+            thread.stop(timeout)
 
     @property
     def minio_pod(self) -> Resource:
@@ -1410,13 +1415,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def upgrade_kubernetes_platform(self):
         raise NotImplementedError("Kubernetes upgrade is not implemented on this backend")
 
-    @property
     @contextlib.contextmanager
-    def scylla_config_map(self) -> dict:
+    def scylla_config_map(self, namespace: str = SCYLLA_NAMESPACE) -> dict:
         with self.scylla_config_lock:
             try:
                 config_map = self.k8s_core_v1_api.read_namespaced_config_map(
-                    name=SCYLLA_CONFIG_NAME, namespace=SCYLLA_NAMESPACE).data or {}
+                    name=SCYLLA_CONFIG_NAME, namespace=namespace).data or {}
                 exists = True
             except Exception:  # pylint: disable=broad-except
                 config_map = {}
@@ -1429,12 +1433,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             if exists:
                 self.k8s_core_v1_api.patch_namespaced_config_map(
                     name=SCYLLA_CONFIG_NAME,
-                    namespace=SCYLLA_NAMESPACE,
+                    namespace=namespace,
                     body=[{"op": "replace", "path": '/data', "value": config_map}]
                 )
             else:
                 self.k8s_core_v1_api.create_namespaced_config_map(
-                    namespace=SCYLLA_NAMESPACE,
+                    namespace=namespace,
                     body=V1ConfigMap(
                         data=config_map,
                         metadata={'name': SCYLLA_CONFIG_NAME}
@@ -1442,7 +1446,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 )
 
     @contextlib.contextmanager
-    def manage_file_in_scylla_config_map(self, filename: str) -> ContextManager:
+    def manage_file_in_scylla_config_map(self, filename: str, namespace: str = SCYLLA_NAMESPACE) -> ContextManager:
         """Update scylla.yaml or cassandra-rackdc.properties, k8s way
 
         Scylla Operator handles file updates using ConfigMap resource
@@ -1451,7 +1455,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
         Details: https://operator.docs.scylladb.com/master/generic#configure-scylla
         """
-        with self.scylla_config_map as scylla_config_map:
+        with self.scylla_config_map(namespace=namespace) as scylla_config_map:
             old_data = yaml.safe_load(scylla_config_map.get(filename, "")) or {}
             new_data = deepcopy(old_data)
             yield new_data
@@ -1469,17 +1473,19 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 scylla_config_map[filename] = new_data_as_str
             self.scylla_restart_required = True
 
-    def remote_scylla_yaml(self) -> ContextManager:
-        return self.manage_file_in_scylla_config_map(filename='scylla.yaml')
+    def remote_scylla_yaml(self, namespace: str = SCYLLA_NAMESPACE) -> ContextManager:
+        return self.manage_file_in_scylla_config_map(
+            filename='scylla.yaml', namespace=namespace)
 
-    def remote_cassandra_rackdc_properties(self) -> ContextManager:
-        return self.manage_file_in_scylla_config_map(filename='cassandra-rackdc.properties')
+    def remote_cassandra_rackdc_properties(self, namespace: str = SCYLLA_NAMESPACE) -> ContextManager:
+        return self.manage_file_in_scylla_config_map(
+            filename='cassandra-rackdc.properties', namespace=namespace)
 
-    def init_scylla_config_map(self, **kwargs):
+    def init_scylla_config_map(self, namespace: str = SCYLLA_NAMESPACE, **kwargs):
         # NOTE: operator sets all the scylla options itself based on the configuration of the ScyllaCluster CRD.
         #       It allows to redefine options using 'scylla-config' configMap opject.
         #       So, define some options here by default. It may be extended later if needed.
-        with self.remote_scylla_yaml() as scylla_yml:
+        with self.remote_scylla_yaml(namespace=namespace) as scylla_yml:
             # Process cluster params
             if self.params.get("experimental"):
                 scylla_yml["experimental"] = self.params.get("experimental")
@@ -1695,14 +1701,14 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
     def hard_reboot(self):
         self.parent_cluster.k8s_cluster.kubectl(
             f'delete pod {self.name} --now',
-            namespace='scylla',
+            namespace=self.parent_cluster.namespace,
             timeout=self.pod_terminate_timeout * 60 + 10)
 
     def soft_reboot(self):
         # Kubernetes brings pods back to live right after it is deleted
         self.parent_cluster.k8s_cluster.kubectl(
             f'delete pod {self.name} --grace-period={self.pod_terminate_timeout * 60}',
-            namespace='scylla',
+            namespace=self.parent_cluster.namespace,
             timeout=self.pod_terminate_timeout * 60 + 10)
 
     # On kubernetes there is no stop/start, closest analog of node restart would be soft_restart
@@ -2056,6 +2062,17 @@ class PodCluster(cluster.BaseCluster):
             namespace=self.namespace
         )
 
+    def generate_namespace(self, namespace_template: str) -> str:
+        # Pick up not used namespace knowing that we may have more than 1 Scylla cluster
+        namespaces = self.k8s_cluster.kubectl(
+            "get namespaces --no-headers -o=custom-columns=:.metadata.name").stdout.split()
+        for i in range(1, len(namespaces)):
+            candidate_namespace = f"{namespace_template}{'-' + str(i) if i > 1 else ''}"
+            if candidate_namespace not in namespaces:
+                self.k8s_cluster.kubectl(f"create namespace {candidate_namespace}")
+                return candidate_namespace
+        raise RuntimeError("No available namespace for a Scylla cluster was found")
+
 
 class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disable=too-many-public-methods
     node_setup_requires_scylla_restart = False
@@ -2069,10 +2086,13 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                  params: Optional[dict] = None,
                  node_pool: CloudK8sNodePool = None,
                  ) -> None:
-        k8s_cluster.deploy_scylla_cluster(node_pool=node_pool)
+        self.k8s_cluster = k8s_cluster
+        self.namespace = self.generate_namespace(namespace_template=SCYLLA_NAMESPACE)
         self.scylla_cluster_name = scylla_cluster_name
+        k8s_cluster.deploy_scylla_cluster(
+            node_pool=node_pool, namespace=self.namespace, cluster_name=self.scylla_cluster_name)
         super().__init__(k8s_cluster=k8s_cluster,
-                         namespace="scylla",
+                         namespace=self.namespace,
                          container="scylla",
                          cluster_prefix=cluster.prepend_user_prefix(user_prefix, 'db-cluster'),
                          node_prefix=cluster.prepend_user_prefix(user_prefix, 'db-node'),
@@ -2376,10 +2396,9 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
     def restart_scylla(self, nodes=None, random_order=False):
         # TODO: add support for the "nodes" param to have compatible logic with
         # other backends.
-        scyllacluster_name = self.params.get("k8s_scylla_cluster_name")
         patch_data = {"spec": {"forceRedeploymentReason": f"Triggered at {time.time()}"}}
         self.k8s_cluster.kubectl(
-            f"patch scyllacluster {scyllacluster_name} --type merge -p '{json.dumps(patch_data)}'",
+            f"patch scyllacluster {self.scylla_cluster_name} --type merge -p '{json.dumps(patch_data)}'",
             namespace=self.namespace)
 
         # NOTE: sleep for some time to avoid races.

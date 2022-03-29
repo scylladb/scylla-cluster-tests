@@ -167,8 +167,11 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
         LOGGER.info("Install kubectl to %s", self.host_node)
         MinimalK8SOps.setup_kubectl(node=self.host_node, kubectl_version=self.local_kubectl_version)
 
-    def get_scylla_cluster_helm_values(self, cpu_limit, memory_limit, pool_name: str = None) -> HelmValues:
-        values = super().get_scylla_cluster_helm_values(cpu_limit, memory_limit, pool_name)
+    def get_scylla_cluster_helm_values(self, cpu_limit, memory_limit, pool_name: str = None,
+                                       cluster_name: str = None) -> HelmValues:
+        values = super().get_scylla_cluster_helm_values(
+            cpu_limit=cpu_limit, memory_limit=memory_limit,
+            pool_name=pool_name, cluster_name=cluster_name)
         values.delete('racks.[0].storage.storageClassName')
         values.set('cpuset', False)
         values.set('developerMode', False)
