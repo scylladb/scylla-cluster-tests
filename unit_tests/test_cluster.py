@@ -184,9 +184,9 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             print(event_backtrace1)
             print(event_backtrace2)
 
-            assert event_backtrace1["type"] == "DATABASE_ERROR"
+            assert event_backtrace1["type"] == "BACKTRACE"
             assert event_backtrace1["raw_backtrace"]
-            assert event_backtrace2["type"] == "DATABASE_ERROR"
+            assert event_backtrace2["type"] == "BACKTRACE"
             assert event_backtrace2["raw_backtrace"]
 
     def test_gate_closed_ignored_exception_is_catched(self):
@@ -197,14 +197,14 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
         with self.get_raw_events_log().open() as events_file:
             events = [json.loads(line) for line in events_file]
 
-            event_backtrace1, event_backtrace2 = events[-3], events[-2]
+            event_backtrace1, event_backtrace2 = events[-2], events[-1]
             print(event_backtrace1)
             print(event_backtrace2)
 
             assert event_backtrace1["type"] == "GATE_CLOSED"
             assert event_backtrace1["line_number"] == 1
-            assert event_backtrace2["type"] == "DATABASE_ERROR"
-            assert event_backtrace2["line_number"] == 2
+            assert event_backtrace2["type"] == "GATE_CLOSED"
+            assert event_backtrace2["line_number"] == 3
 
     def test_compaction_stopped_exception_is_catched(self):
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'compaction_stopped_exception.log')

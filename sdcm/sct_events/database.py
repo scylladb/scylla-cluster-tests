@@ -39,7 +39,6 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     GATE_CLOSED: Type[LogEventProtocol]
     RESTARTED_DUE_TO_TIME_OUT: Type[LogEventProtocol]
     EMPTY_NESTED_EXCEPTION: Type[LogEventProtocol]
-    DATABASE_ERROR: Type[LogEventProtocol]
     BAD_ALLOC: Type[LogEventProtocol]
     SCHEMA_FAILURE: Type[LogEventProtocol]
     RUNTIME_ERROR: Type[LogEventProtocol]
@@ -51,12 +50,14 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
     REACTOR_STALLED: Type[LogEventProtocol]
     KERNEL_CALLSTACK: Type[LogEventProtocol]
-    BACKTRACE: Type[LogEventProtocol]
     ABORTING_ON_SHARD: Type[LogEventProtocol]
     SEGMENTATION: Type[LogEventProtocol]
     INTEGRITY_CHECK: Type[LogEventProtocol]
     SUPPRESSED_MESSAGES: Type[LogEventProtocol]
     stream_exception: Type[LogEventProtocol]
+    RPC_CONNECTION: Type[LogEventProtocol]
+    DATABASE_ERROR: Type[LogEventProtocol]
+    BACKTRACE: Type[LogEventProtocol]
 
 
 MILLI_RE = re.compile(r"(\d+) ms")
@@ -77,7 +78,7 @@ class ReactorStalledMixin(Generic[T_log_event]):
 
 
 DatabaseLogEvent.add_subevent_type("WARNING", severity=Severity.WARNING,
-                                   regex=r"!\s*?WARNING ")
+                                   regex=r"(^WARNING|!\s*?WARNING).*\[shard.*\]")
 DatabaseLogEvent.add_subevent_type("NO_SPACE_ERROR", severity=Severity.ERROR,
                                    regex="No space left on device")
 DatabaseLogEvent.add_subevent_type("UNKNOWN_VERB", severity=Severity.WARNING,
@@ -104,8 +105,6 @@ DatabaseLogEvent.add_subevent_type("EMPTY_NESTED_EXCEPTION", severity=Severity.W
                                          r"seastar::nested_exception \(seastar::nested_exception\)$")
 DatabaseLogEvent.add_subevent_type("COMPACTION_STOPPED", severity=Severity.NORMAL,
                                    regex="compaction_stopped_exception")
-DatabaseLogEvent.add_subevent_type("DATABASE_ERROR", severity=Severity.ERROR,
-                                   regex="Exception ")
 DatabaseLogEvent.add_subevent_type("BAD_ALLOC", severity=Severity.ERROR,
                                    regex="std::bad_alloc")
 DatabaseLogEvent.add_subevent_type("SCHEMA_FAILURE", severity=Severity.ERROR,
@@ -124,8 +123,6 @@ DatabaseLogEvent.add_subevent_type("REACTOR_STALLED", mixin=ReactorStalledMixin,
                                    regex="Reactor stalled")
 DatabaseLogEvent.add_subevent_type("KERNEL_CALLSTACK", severity=Severity.DEBUG,
                                    regex="kernel callstack: 0x.{16}")
-DatabaseLogEvent.add_subevent_type("BACKTRACE", severity=Severity.ERROR,
-                                   regex="backtrace")
 DatabaseLogEvent.add_subevent_type("ABORTING_ON_SHARD", severity=Severity.ERROR,
                                    regex="Aborting on shard")
 DatabaseLogEvent.add_subevent_type("SEGMENTATION", severity=Severity.ERROR,
@@ -136,8 +133,12 @@ DatabaseLogEvent.add_subevent_type("SUPPRESSED_MESSAGES", severity=Severity.WARN
                                    regex="journal: Suppressed")
 DatabaseLogEvent.add_subevent_type("stream_exception", severity=Severity.ERROR,
                                    regex="stream_exception")
-
-
+DatabaseLogEvent.add_subevent_type("RPC_CONNECTION", severity=Severity.WARNING,
+                                   regex=r'(^ERROR|!ERR).*rpc - client .*(connection dropped|fail to connect)')
+DatabaseLogEvent.add_subevent_type("DATABASE_ERROR", severity=Severity.ERROR,
+                                   regex=r"(^ERROR|!\s*?ERR).*\[shard.*\]")
+DatabaseLogEvent.add_subevent_type("BACKTRACE", severity=Severity.ERROR,
+                                   regex="backtrace")
 SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.WARNING(),
     DatabaseLogEvent.NO_SPACE_ERROR(),
@@ -150,7 +151,6 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.RESTARTED_DUE_TO_TIME_OUT(),
     DatabaseLogEvent.EMPTY_NESTED_EXCEPTION(),
     DatabaseLogEvent.COMPACTION_STOPPED(),
-    DatabaseLogEvent.DATABASE_ERROR(),
     DatabaseLogEvent.BAD_ALLOC(),
     DatabaseLogEvent.SCHEMA_FAILURE(),
     DatabaseLogEvent.RUNTIME_ERROR(),
@@ -161,12 +161,15 @@ SYSTEM_ERROR_EVENTS = (
     # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
     DatabaseLogEvent.REACTOR_STALLED(),
     DatabaseLogEvent.KERNEL_CALLSTACK(),
-    DatabaseLogEvent.BACKTRACE(),
+
     DatabaseLogEvent.ABORTING_ON_SHARD(),
     DatabaseLogEvent.SEGMENTATION(),
     DatabaseLogEvent.INTEGRITY_CHECK(),
     DatabaseLogEvent.SUPPRESSED_MESSAGES(),
     DatabaseLogEvent.stream_exception(),
+    DatabaseLogEvent.RPC_CONNECTION(),
+    DatabaseLogEvent.DATABASE_ERROR(),
+    DatabaseLogEvent.BACKTRACE(),
 )
 SYSTEM_ERROR_EVENTS_PATTERNS: List[Tuple[re.Pattern, LogEventProtocol]] = \
     [(re.compile(event.regex, re.IGNORECASE), event) for event in SYSTEM_ERROR_EVENTS]
