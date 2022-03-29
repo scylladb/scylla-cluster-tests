@@ -255,6 +255,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     LOADER_POOL_NAME = 'loader-pool'
     POOL_LABEL_NAME: str = None
     IS_NODE_TUNING_SUPPORTED: bool = False
+    NODE_PREPARE_FILE = None
 
     api_call_rate_limiter: Optional[ApiCallRateLimiter] = None
 
@@ -868,7 +869,56 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         return self.params.get('k8s_enable_performance_tuning') and self.IS_NODE_TUNING_SUPPORTED
 
     @log_run_info
-    def deploy_scylla_cluster(self, node_pool: CloudK8sNodePool, node_prepare_config: str = None) -> None:
+    def prepare_k8s_scylla_nodes(self, node_pool: CloudK8sNodePool) -> None:
+        if not self.NODE_PREPARE_FILE:
+            return
+        LOGGER.info("Install DaemonSets required by scylla nodes")
+        scylla_machine_image_args = ['--all']
+        if version.LegacyVersion(self._scylla_operator_chart_version) > version.LegacyVersion("v1.5.0"):
+            # NOTE: operator versions newer than v1.5.0 have it's own perf tuning,
+            #       so, we should not do anything else than disk setup in such a case.
+            scylla_machine_image_args = ['--setup-disks']
+
+        def scylla_machine_image_args_modifier(obj):
+            if obj["kind"] != "DaemonSet":
+                return
+            for container_data in obj["spec"]["template"]["spec"]["containers"]:
+                if "scylla-machine-image:" in container_data["image"]:
+                    container_data["args"] = scylla_machine_image_args
+
+        self.apply_file(
+            self.NODE_PREPARE_FILE,
+            modifiers=node_pool.affinity_modifiers + [scylla_machine_image_args_modifier],
+            envsubst=False)
+
+        LOGGER.info("Install local volume provisioner")
+        self.helm(f"install local-provisioner {LOCAL_PROVISIONER_DIR}",
+                  values=node_pool.helm_affinity_values)
+
+        # Tune performance of the Scylla nodes
+        if not self.is_performance_tuning_enabled:
+            return
+        LOGGER.info("Tune K8S nodes dedicated for Scylla")
+        self.kubectl_wait(
+            "--for condition=established crd/scyllaoperatorconfigs.scylla.scylladb.com")
+        self.kubectl_wait("--for condition=established crd/nodeconfigs.scylla.scylladb.com")
+
+        if scylla_utils_docker_image := self.params.get('k8s_scylla_utils_docker_image'):
+            self.kubectl(
+                "patch scyllaoperatorconfigs.scylla.scylladb.com cluster --type merge "
+                "-p '{\"spec\":{\"scyllaUtilsImage\":\"%s\"}}'" % scylla_utils_docker_image,
+                ignore_status=False)
+
+        self.apply_file(
+            "sdcm/k8s_configs/node-config-crd.yaml",
+            modifiers=node_pool.affinity_modifiers, envsubst=False)
+        # NOTE: no need to wait explicitly for the new objects readiness.
+        #       Scylla pods will get in sync automatically.
+        #       Just sleep for some time to avoid races.
+        time.sleep(5)
+
+    @log_run_info
+    def deploy_scylla_cluster(self, node_pool: CloudK8sNodePool) -> None:
         if self.params.get('reuse_cluster'):
             try:
                 self.wait_till_cluster_is_operational()
@@ -882,31 +932,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         LOGGER.info("Create and initialize a Scylla cluster")
         self.kubectl(f"create namespace {SCYLLA_NAMESPACE}")
         self.create_scylla_manager_agent_config()
-
-        affinity_modifiers = node_pool.affinity_modifiers
-        if node_prepare_config:
-            LOGGER.info("Install DaemonSets required by scylla nodes")
-            scylla_machine_image_args = ['--all']
-            if version.LegacyVersion(self._scylla_operator_chart_version) > version.LegacyVersion("v1.5.0"):
-                # NOTE: operator versions newer than v1.5.0 have it's own perf tuning,
-                #       so, we should not do anything else than disk setup in such a case.
-                scylla_machine_image_args = ['--setup-disks']
-
-            def scylla_machine_image_args_modifier(obj):
-                if obj["kind"] != "DaemonSet":
-                    return
-                for container_data in obj["spec"]["template"]["spec"]["containers"]:
-                    if "scylla-machine-image:" in container_data["image"]:
-                        container_data["args"] = scylla_machine_image_args
-
-            self.apply_file(
-                node_prepare_config,
-                modifiers=affinity_modifiers + [scylla_machine_image_args_modifier],
-                envsubst=False)
-
-            LOGGER.info("Install local volume provisioner")
-            self.helm(f"install local-provisioner {LOCAL_PROVISIONER_DIR}",
-                      values=node_pool.helm_affinity_values)
 
         # Calculate cpu and memory limits to occupy all available amounts by scylla pods
         cpu_limit, memory_limit = node_pool.cpu_and_memory_capacity
@@ -936,26 +961,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.init_scylla_config_map()
         self.scylla_restart_required = False
 
-        if self.is_performance_tuning_enabled and node_pool:
-            LOGGER.info("Tune K8S nodes dedicated for Scylla")
-            self.kubectl_wait(
-                "--for condition=established crd/scyllaoperatorconfigs.scylla.scylladb.com")
-            self.kubectl_wait("--for condition=established crd/nodeconfigs.scylla.scylladb.com")
-
-            if scylla_utils_docker_image := self.params.get('k8s_scylla_utils_docker_image'):
-                self.kubectl(
-                    "patch scyllaoperatorconfigs.scylla.scylladb.com cluster --type merge "
-                    "-p '{\"spec\":{\"scyllaUtilsImage\":\"%s\"}}'" % scylla_utils_docker_image,
-                    ignore_status=False)
-
-            self.apply_file(
-                "sdcm/k8s_configs/node-config-crd.yaml",
-                modifiers=affinity_modifiers, envsubst=False)
-            # NOTE: no need to wait explicitly for the new objects readiness.
-            #       Scylla pods will get in sync automatically.
-            #       Just sleep for some time to avoid races.
-            time.sleep(5)
-
         # Deploy scylla cluster
         LOGGER.debug(self.helm_install(
             target_chart_name="scylla",
@@ -968,7 +973,6 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 pool_name=node_pool.name if node_pool else None),
             namespace=SCYLLA_NAMESPACE,
         ))
-
         self.wait_till_cluster_is_operational()
 
         LOGGER.debug("Check Scylla cluster")
@@ -2054,7 +2058,6 @@ class PodCluster(cluster.BaseCluster):
 
 
 class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disable=too-many-public-methods
-    NODE_PREPARE_FILE = None
     node_setup_requires_scylla_restart = False
     node_terminate_methods: List[str] = None
 
@@ -2066,10 +2069,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                  params: Optional[dict] = None,
                  node_pool: CloudK8sNodePool = None,
                  ) -> None:
-        k8s_cluster.deploy_scylla_cluster(
-            node_pool=node_pool,
-            node_prepare_config=self.NODE_PREPARE_FILE
-        )
+        k8s_cluster.deploy_scylla_cluster(node_pool=node_pool)
         self.scylla_cluster_name = scylla_cluster_name
         super().__init__(k8s_cluster=k8s_cluster,
                          namespace="scylla",

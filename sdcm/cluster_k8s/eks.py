@@ -216,6 +216,7 @@ class EksTokenUpdateThread(TokenUpdateThread):
 class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
     POOL_LABEL_NAME = 'eks.amazonaws.com/nodegroup'
     IS_NODE_TUNING_SUPPORTED = True
+    NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/eks/scylla-node-prepare.yaml")
     pools: Dict[str, EksNodePool]
     short_cluster_name: str
 
@@ -538,7 +539,6 @@ class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
 
 
 class EksScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
-    NODE_PREPARE_FILE = sct_abs_path("sdcm/k8s_configs/eks/scylla-node-prepare.yaml")
     node_terminate_methods = [
         'drain_k8s_node',
         # NOTE: uncomment below when following scylla-operator bug is fixed:
