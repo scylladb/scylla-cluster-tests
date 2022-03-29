@@ -100,7 +100,7 @@ source s_network_tcp {{
 }};
 
 template default_template {{
-  template("${{ISODATE}} ${{HOST}} !$(padding $(uppercase ${{LEVEL}}) 8) | ${{MESSAGE}}\n");
+  template("${{R_ISODATE}} ${{HOST}} $(padding $(uppercase !${{LEVEL}}) 9) | ${{MSGHDR}}${{MESSAGE}}\n");
 }};
 
 destination d_local {{
