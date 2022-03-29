@@ -259,10 +259,13 @@ class KubectlGeneralLogger(CommandNodeLoggerBase):
 class KubectlClusterEventsLogger(CommandClusterLoggerBase):
     restart_delay = 30
 
+    def __init__(self, *args, namespace=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.namespace = namespace
+
     @property
     def _logger_cmd(self) -> str:
-        cmd = self._cluster.kubectl_cmd("get events -w",
-                                        namespace=self._cluster._scylla_namespace)  # pylint: disable=protected-access
+        cmd = self._cluster.kubectl_cmd("get events -w", namespace=self.namespace)
         return f"{cmd} >> {self._target_log_file} 2>&1"
 
 

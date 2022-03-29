@@ -79,7 +79,7 @@ def get_pods_without_probe(db_cluster: ScyllaPodCluster,
 
 def scylla_pod_names(db_cluster: ScyllaPodCluster) -> list:
     pods = db_cluster.k8s_cluster.kubectl(
-        f"get pods -n {SCYLLA_NAMESPACE} --no-headers "
+        f"get pods -n {db_cluster.namespace} --no-headers "
         f"-l scylla/cluster={db_cluster.params.get('k8s_scylla_cluster_name')} "
         f"-o=custom-columns='NAME:.metadata.name'")
     return pods.stdout.split()
@@ -88,7 +88,7 @@ def scylla_pod_names(db_cluster: ScyllaPodCluster) -> list:
 def scylla_services_names(db_cluster: ScyllaPodCluster) -> list:
     scylla_cluster_name = db_cluster.params.get('k8s_scylla_cluster_name')
     services = db_cluster.k8s_cluster.kubectl(
-        f"get svc -n {SCYLLA_NAMESPACE} --no-headers "
+        f"get svc -n {db_cluster.namespace} --no-headers "
         f"-l scylla/cluster={scylla_cluster_name} "
         f"-o=custom-columns='NAME:.metadata.name'")
     return [name for name in services.stdout.split()
