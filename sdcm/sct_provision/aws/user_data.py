@@ -53,6 +53,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
             aws_additional_interface=self.params.get('extra_network_interface') or False,
             aws_ipv6_workaround=self.params.get('ip_ssh_connections') == 'ipv6',
             syslog_host_port=self.syslog_host_port,
+            logs_transport=self.params.get('logs_transport'),
             disable_ssh_while_running=True,
         ).to_string()
         return base64.b64encode(post_boot_script.encode('utf-8')).decode('ascii')
@@ -81,6 +82,7 @@ class AWSInstanceUserDataBuilder(UserDataBuilderBase):
             # Monitoring and loader nodes does not use additional interface
             aws_additional_interface=False,
             aws_ipv6_workaround=self.params.get('ip_ssh_connections') == 'ipv6',
+            logs_transport=self.params.get('logs_transport'),
             syslog_host_port=self.syslog_host_port,
             disable_ssh_while_running=True,
         ).to_string()
