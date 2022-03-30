@@ -4,7 +4,16 @@ from enum import Enum
 
 import yaml
 
+from sdcm.cluster import BaseNode
+
 LOGGER = logging.getLogger(__name__)
+
+
+class GcMode(Enum):
+    REPAIR = "repair"
+    DISABLED = "disabled"
+    TIMEOUT = "timeout"
+    IMMEDIATE = "immediate"
 
 
 class CompactionStrategy(Enum):
@@ -21,6 +30,36 @@ class CompactionStrategy(Enum):
         except AttributeError as attr_err:
             err_msg = "Could not recognize compaction strategy value: {} - {}".format(output_str, attr_err)
             raise ValueError(err_msg) from attr_err
+
+
+def get_gc_mode(node: BaseNode, keyspace: str, table: str) -> str | GcMode:
+    """Get a given table GC mode
+
+    :Arguments:
+        node
+        keyspace
+        table
+    """
+    table_gc_mode_result = node.run_cqlsh(
+        f'SELECT extensions FROM system_schema.tables where keyspace_name = {keyspace} and table_name = {table}',
+        split=True)
+    LOGGER.debug("Query result for %s.%s GC mode is: %s", keyspace, table, table_gc_mode_result)
+    gc_mode = 'N/A'
+    if table_gc_mode_result and len(table_gc_mode_result) >= 4:
+        extensions_value = table_gc_mode_result[3]
+        # TODO: A temporary workaround until 5.0 query-table-extensions issue is fixed:
+        # https://github.com/scylladb/scylla/issues/10309
+        if '6d6f646506000000' in extensions_value:
+            return GcMode.REPAIR
+        elif '6d6f646507000000' in extensions_value:
+            return GcMode.TIMEOUT
+        elif '6d6f646509000000' in extensions_value:
+            return GcMode.IMMEDIATE
+        elif '6d6f646508000000' in extensions_value:
+            return GcMode.DISABLED
+
+    LOGGER.debug("Query result for %s.%s GC mode is: %s", keyspace, table, gc_mode)
+    return gc_mode
 
 
 def get_compaction_strategy(node, keyspace, table):
