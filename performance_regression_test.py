@@ -19,6 +19,9 @@ import time
 import yaml
 
 from sdcm.tester import ClusterTester
+from sdcm.sct_events import Severity
+from sdcm.sct_events.filters import EventsSeverityChangerFilter
+from sdcm.sct_events.loaders import CassandraStressEvent
 
 KB = 1024
 
@@ -155,6 +158,14 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         with open(email_data_path, 'w'):
             pass
 
+    def _stop_load_after_one_nemesis_cycle(self):
+        time.sleep(300)  # wait 5 minutes to be sure nemesis has started
+        self.db_cluster.stop_nemesis(timeout=None)  # wait for Nemesis to end and don't start another cycle
+        with EventsSeverityChangerFilter(new_severity=Severity.NORMAL,  # killing stress creates Critical error
+                                         event_class=CassandraStressEvent,
+                                         extra_time_to_expiration=60):
+            self.loaders.kill_cassandra_stress_thread()
+
     def preload_data(self):
         # if test require a pre-population of data
         prepare_write_cmd = self.params.get('prepare_write_cmd')
@@ -248,6 +259,7 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             time.sleep(interval * 60)  # Sleeping one interval (in minutes) before starting the nemesis
             self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
             self.db_cluster.start_nemesis(interval=interval)
+            self._stop_load_after_one_nemesis_cycle()
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details(scrap_metrics_step=60)
         self.display_results(results, test_name='test_latency' if not nemesis else 'test_latency_with_nemesis')
