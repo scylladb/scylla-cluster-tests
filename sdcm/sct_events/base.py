@@ -67,6 +67,16 @@ class EventPeriod(Enum):
     NOT_DEFINED = "not-set"
 
 
+LOG_LEVEL_MAPPING = {
+    Severity.WARNING: logging.DEBUG,
+    Severity.CRITICAL: logging.CRITICAL,
+    Severity.ERROR: logging.ERROR,
+    Severity.DEBUG: logging.DEBUG,
+    Severity.NORMAL: logging.INFO,
+    Severity.UNKNOWN: logging.WARNING,
+}
+
+
 class SctEvent:
     _sct_event_types_registry: SctEventTypesRegistry = SctEventTypesRegistry()
     _events_processes_registry: Optional[EventsProcessesRegistry] = None
@@ -109,7 +119,7 @@ class SctEvent:
         self.severity = severity
         self._ready_to_publish = True
         self.event_id = str(uuid.uuid4())
-        self.log_level = logging.INFO
+        self.log_level = LOG_LEVEL_MAPPING.get(severity, logging.ERROR)
 
     @classmethod
     def is_abstract(cls) -> bool:

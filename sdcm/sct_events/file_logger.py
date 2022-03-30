@@ -75,7 +75,7 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
         super().__init__(_registry=_registry)
 
     def run(self) -> None:
-        LOGGER.info("Writing to %s", self.events_log)
+        LOGGER.debug("Writing to %s", self.events_log)
 
         for log_file in chain((self.events_log, self.events_summary_log, ), self.events_logs_by_severity.values(), ):
             log_file.touch()
@@ -136,7 +136,7 @@ class EventsFileLogger(BaseEventsProcess[Tuple[str, Any], None], multiprocessing
                     events_bucket.append("\n".join(event))
             except Exception as exc:  # pylint: disable=broad-except
                 error_msg = f"{self}: failed to read {log_file}: {exc}"
-                LOGGER.info(error_msg)
+                LOGGER.error(error_msg)
                 if not events_bucket:
                     events_bucket.append(error_msg)
             output[severity.name] = list(events_bucket)

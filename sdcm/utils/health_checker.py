@@ -38,10 +38,10 @@ def check_nodes_status(nodes_status: dict, current_node, removed_nodes_list=()) 
     if not nodes_status:
         LOGGER.warning("Node status info is not available. Search for the warning above")
         return
-    LOGGER.info("Status for %s node %s", node_type, current_node.name)
+    LOGGER.debug("Status for %s node %s", node_type, current_node.name)
     for node, node_properties in nodes_status.items():
         if node_properties['status'] != "UN":
-            LOGGER.info("All nodes that have been removed up until this point: %s", str(removed_nodes_list))
+            LOGGER.debug("All nodes that have been removed up until this point: %s", str(removed_nodes_list))
             is_target = current_node.print_node_running_nemesis(node.ip_address)
             yield ClusterHealthValidatorEvent.NodeStatus(
                 severity=Severity.CRITICAL,
@@ -251,5 +251,5 @@ def check_schema_agreement_in_gossip_and_peers(node, retries: int = CHECK_NODE_H
     else:
         return False  # Something was wrong even on the last cycle.
 
-    LOGGER.info('Schema agreement has been completed on all nodes')
+    LOGGER.debug('Schema agreement has been completed on all nodes')
     return True

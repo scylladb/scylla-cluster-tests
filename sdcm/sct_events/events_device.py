@@ -92,7 +92,7 @@ class EventsDevice(multiprocessing.Process):
                 self._sub_port.value = pub.bind_to_random_port("tcp://*")
                 self._running.set()
 
-                LOGGER.info("EventsDevice listen on %s", self.subscribe_address)
+                LOGGER.debug("EventsDevice listen on %s", self.subscribe_address)
 
                 # Delivery verification subscriber.
                 sub.connect(self.subscribe_address)
@@ -128,7 +128,7 @@ class EventsDevice(multiprocessing.Process):
             self._events_counter.value += 1
 
     def _sub_socket(self, ctx: zmq.Context) -> zmq.Socket:
-        LOGGER.info("Subscribe to %s", self.subscribe_address)
+        LOGGER.debug("Subscribe to %s", self.subscribe_address)
         sub = ctx.socket(zmq.SUB)
         sub.connect(self.subscribe_address)
         sub.subscribe(b"")

@@ -51,7 +51,7 @@ class SyslogNGContainerMixin:  # pylint: disable=too-few-public-methods
         basedir, logdir = os.path.split(logdir)
         logdir = os.path.abspath(os.path.join(os.environ.get("_SCT_LOGDIR", basedir), logdir))
         os.makedirs(logdir, exist_ok=True)
-        LOGGER.info("syslog-ng will store logs at %s", logdir)
+        LOGGER.debug("syslog-ng will store logs at %s", logdir)
         volumes = {
             self.syslogng_confpath: {"bind": "/config/syslog-ng.conf", "mode": "ro"},
             logdir: {"bind": "/var/log"},

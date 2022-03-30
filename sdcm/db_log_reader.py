@@ -187,9 +187,9 @@ class DbLogReader(Process):
         """
         Keep reporting new events from db log, every 30 seconds.
         """
-        LOGGER.info('Logging for node %s is started with following configuration:\nsystem_log=%s'
-                    '\nlog_lines=%s\ndecoding_queue=%s',
-                    self._node_name, self._system_log, self._log_lines, self._decoding_queue is not None)
+        LOGGER.debug('Logging for node %s is started with following configuration:\nsystem_log=%s'
+                     '\nlog_lines=%s\ndecoding_queue=%s',
+                     self._node_name, self._system_log, self._log_lines, self._decoding_queue is not None)
         make_threads_be_daemonic_by_default()
         while not self._terminate_event.wait(0.1):
             try:
