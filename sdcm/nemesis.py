@@ -91,7 +91,8 @@ from sdcm.cluster_k8s import PodCluster, ScyllaPodCluster
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
 from sdcm.argus_test_run import ArgusTestRun
 from sdcm.wait import wait_for
-from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
+from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params, \
+    get_gc_mode, GcMode
 from test_lib.cql_types import CQLTypeBuilder
 
 LOGGER = logging.getLogger(__name__)
@@ -1888,6 +1889,34 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         self._modify_table_property(name="bloom_filter_fp_chance", val=random.random() / 2)
 
+    def toggle_table_gc_mode(self):
+        """
+            Alters a non-system table tombstone_gc_mode option.
+            Choose the alternate option of 'repair' / 'timeout'
+             (*) The other available values of 'disabled' / 'immediate' are not tested by
+             this nemesis since not applicable to a longevity test.
+        """
+        all_ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
+        non_mview_ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node, filter_out_mv=True)
+
+        if not all_ks_cfs:
+            raise UnsupportedNemesis(
+                'Non-system keyspace and table are not found. toggle_table_gc_mode nemesis can\'t run')
+
+        mview_ks_cfs = list(set(all_ks_cfs) - set(non_mview_ks_cfs))
+        keyspace_table = random.choice(all_ks_cfs)
+        keyspace, table = keyspace_table.split('.')
+        if get_gc_mode(node=self.target_node, keyspace=keyspace, table=table) != GcMode.REPAIR:
+            new_gc_mode = GcMode.REPAIR
+        else:
+            new_gc_mode = GcMode.TIMEOUT
+        new_gc_mode_as_dict = {'mode': new_gc_mode.value}
+
+        alter_command_prefix = 'ALTER TABLE ' if keyspace_table not in mview_ks_cfs else 'ALTER MATERIALIZED VIEW '
+        cmd = alter_command_prefix + f" {keyspace_table} WITH tombstone_gc = {new_gc_mode_as_dict};"
+        self.log.info("Alter GC mode query to execute: %s", cmd)
+        self.target_node.run_cqlsh(cmd)
+
     def toggle_table_ics(self):  # pylint: disable=too-many-locals
         """
             Alters a non-system table compaction strategy from ICS to any-other and vise versa.
@@ -2045,6 +2074,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def disrupt_toggle_table_ics(self):
         self.toggle_table_ics()
+
+    def disrupt_toggle_table_gc_mode(self):
+        self.toggle_table_gc_mode()
 
     def disrupt_modify_table(self):
         # randomly select and run one of disrupt_modify_table* methods
@@ -3951,6 +3983,14 @@ class ToggleTableIcsMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_toggle_table_ics()
+
+
+class ToggleGcModeMonkey(Nemesis):
+    kubernetes = True
+    disruptive = False
+
+    def disrupt(self):
+        self.disrupt_toggle_table_gc_mode()
 
 
 class MgmtBackup(Nemesis):
