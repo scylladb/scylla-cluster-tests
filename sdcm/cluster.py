@@ -552,8 +552,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @cached_property
     def distro(self):
-        self.log.info("Trying to detect Linux distribution...")
-        return Distro.from_os_release(self.remoter.run("cat /etc/os-release", ignore_status=True, retry=5).stdout)
+        self.log.debug("Trying to detect Linux distribution...")
+        _distro = Distro.from_os_release(self.remoter.run("cat /etc/os-release", ignore_status=True, retry=5).stdout)
+        self.log.info("Detected Linux distribution: %s", _distro.name)
+        return _distro
 
     @cached_property
     def is_nonroot_install(self):
@@ -969,13 +971,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             target_log_file=self.system_log,
         )
         if self._journal_thread:
-            self.log.info("Use %s as logging daemon", type(self._journal_thread).__name__)
+            self.log.debug("Use %s as logging daemon", type(self._journal_thread).__name__)
             self._journal_thread.start()
         else:
             if logs_transport == 'rsyslog':
-                self.log.info("Use no logging daemon since log transport is rsyslog")
+                self.log.debug("Use no logging daemon since log transport is rsyslog")
             elif logs_transport == 'syslog-ng':
-                self.log.info("Use no logging daemon since log transport is syslog-ng")
+                self.log.debug("Use no logging daemon since log transport is syslog-ng")
             else:
                 TestFrameworkEvent(
                     source=self.__class__.__name__,
@@ -2130,7 +2132,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         else:
             cmd = fr"apt-get install -y {self.scylla_pkg()}-server-dbg={self.scylla_version}\*"
 
-        self.log.info("Installing Scylla debug info...")
+        self.log.debug("Installing Scylla debug info...")
         self.remoter.sudo(cmd, ignore_status=True)
 
     def is_scylla_installed(self, raise_if_not_installed=False):
@@ -2979,7 +2981,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def disable_daily_triggered_services(self):
         if self.distro.uses_systemd and (self.is_ubuntu() or self.is_debian()):
-            LOGGER.info("Disabling 'apt-daily' and 'apt-daily-upgrade' services...")
+            LOGGER.debug("Disabling 'apt-daily' and 'apt-daily-upgrade' services...")
             self.remoter.sudo('systemctl disable apt-daily.timer')
             self.remoter.sudo('systemctl disable apt-daily-upgrade.timer')
             self.remoter.sudo('systemctl disable apt-daily.service', ignore_status=True)
@@ -4231,7 +4233,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node.increase_jmx_heap_memory(jmx_memory)
                 node.restart_scylla_jmx()
 
-            self.log.info('io.conf right after reboot: %s', node.remoter.sudo('cat /etc/scylla.d/io.conf').stdout)
+            self.log.debug('io.conf right after reboot: %s', node.remoter.sudo('cat /etc/scylla.d/io.conf').stdout)
 
             if self.params.get('use_mgmt'):
                 self.install_scylla_manager(node)

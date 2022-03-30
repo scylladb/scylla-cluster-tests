@@ -89,7 +89,7 @@ class Distro(enum.Enum):
         if distro == cls.UNKNOWN:
             LOGGER.error("Unable to detect Linux distribution name")
         else:
-            LOGGER.info("Detected Linux distribution: %s", distro.name)
+            LOGGER.debug("Detected Linux distribution: %s", distro.name)
 
         return distro
 

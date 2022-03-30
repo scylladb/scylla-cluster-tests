@@ -471,7 +471,7 @@ class AWSNode(cluster.BaseNode):
 
     @retrying(n=3, sleep_time=5, allowed_exceptions=NETWORK_EXCEPTIONS, message="Retrying set_hostname")
     def set_hostname(self):
-        self.log.info('Changing hostname to %s', self.name)
+        self.log.debug('Changing hostname to %s', self.name)
         # Using https://aws.amazon.com/premiumsupport/knowledge-center/linux-static-hostname-rhel7-centos7/
         # FIXME: workaround to avoid host rename generating errors on other commands
         if self.is_debian():

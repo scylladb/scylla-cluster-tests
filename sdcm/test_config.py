@@ -198,10 +198,10 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
         if not syslog_logdir:
             raise RuntimeError("Can't fund syslog docker log directory")
         if syslog_logdir == current_logdir:
-            LOGGER.info("Syslog docker is running on the same directory where SCT is running")
+            LOGGER.debug("Syslog docker is running on the same directory where SCT is running")
             return
-        LOGGER.info("Syslog docker is running on the another directory. Linking it's directory %s to %s",
-                    syslog_logdir, current_logdir)
+        LOGGER.debug("Syslog docker is running on the another directory. Linking it's directory %s to %s",
+                     syslog_logdir, current_logdir)
         current_logdir = Path(current_logdir) / "hosts"
         docker_logdir = Path(syslog_logdir) / "hosts"
         if current_logdir.exists():

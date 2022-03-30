@@ -202,18 +202,18 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
                 run_args["name"] += f"-{name.member}"
             try:
                 container = docker_client.containers.get(run_args.get("name"))
-                LOGGER.info("Found container %s, re-use it and re-run", container)
+                LOGGER.debug("Found container %s, re-use it and re-run", container)
                 container.start()
             except (NotFound, NullResource, ):
                 if run_args.pop("pull", None):
                     docker_client.images.pull(*image_tag.split(":", maxsplit=1))
                 container = docker_client.containers.run(**run_args)
             instance._containers[name.full] = container
-            LOGGER.info("Container %s started.", container)
+            LOGGER.debug("Container %s started.", container)
         elif container.status != 'running':
             LOGGER.warning("Re-run container %s", container)
             container.start()
-            LOGGER.info('Cotainer %s status %s', container, container.status)
+            LOGGER.debug('Container %s status %s', container, container.status)
         else:
             LOGGER.debug("Container %s is running already.", container)
         return container
@@ -233,11 +233,11 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
             except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.error("Unable to write container logs to %s", logfile, exc_info=exc)
             else:
-                LOGGER.info("Container %s logs written to %s", container, logfile)
+                LOGGER.debug("Container %s logs written to %s", container, logfile)
         if ignore_keepalive or not container.name.endswith(cls.keep_alive_suffix):
             cls.unregister_container(instance, name)
             container.remove(v=True, force=True)
-            LOGGER.info("Container %s destroyed", container)
+            LOGGER.debug("Container %s destroyed", container)
             return True
         LOGGER.info("Container %s has keep-alive tag and not destroyed", container)
         return False
@@ -260,7 +260,7 @@ class ContainerManager:  # pylint: disable=too-many-public-methods)
         if container.name.endswith(cls.keep_alive_suffix):
             return
         container.rename(container.name + cls.keep_alive_suffix)
-        LOGGER.info("Container %s set to keep alive.", container)
+        LOGGER.debug("Container %s set to keep alive.", container)
 
     @classmethod
     def set_all_containers_keep_alive(cls, instance: object) -> None:
@@ -447,22 +447,22 @@ def get_docker_bridge_gateway(remoter):
 
 @cache
 def get_docker_hub_credentials() -> dict:
-    LOGGER.info("Get Docker Hub credentials")
+    LOGGER.debug("Get Docker Hub credentials")
     return KeyStore().get_docker_hub_credentials()
 
 
 def docker_hub_login(remoter: CommandRunner) -> None:
     docker_info = remoter.run("docker info", ignore_status=True)
     if docker_info.failed:
-        remoter.log.info("Can't get docker info, probably there is no running Docker daemon on the host")
+        remoter.log.error("Can't get docker info, probably there is no running Docker daemon on the host")
         return
     if match := re.search(r"^\s+Username: (.+)$", docker_info.stdout, re.MULTILINE):
-        remoter.log.info("Docker daemon is already logged in as `%s'.", match.group(1))
+        remoter.log.debug("Docker daemon is already logged in as `%s'.", match.group(1))
         return
     docker_hub_creds = get_docker_hub_credentials()
     password_file = remoter.run("mktemp").stdout.strip()
     with remote_file(remoter=remoter, remote_path=password_file) as fobj:
         fobj.write(docker_hub_creds["password"])
-    remoter.log.info("Login to Docker Hub as `%s'", docker_hub_creds["username"])
+    remoter.log.debug("Login to Docker Hub as `%s'", docker_hub_creds["username"])
     remoter.run(cmd=f"docker login --username {docker_hub_creds['username']} --password-stdin < '{password_file}'")
     remoter.run(f"rm '{password_file}'")

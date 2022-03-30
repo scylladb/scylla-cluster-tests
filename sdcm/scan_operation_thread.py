@@ -86,7 +86,7 @@ class ScanOperationThread:
             consistency_level=ConsistencyLevel.ONE))
 
     def fetch_result_pages(self, result, read_pages):
-        self.log.info('Will fetch up to %s result pages.."', read_pages)
+        self.log.debug('Will fetch up to %s result pages.."', read_pages)
         pages = 0
         while result.has_more_pages and pages <= read_pages:
             result.fetch_next_page()
@@ -119,8 +119,8 @@ class ScanOperationThread:
                     self.fetch_result_pages(result=result, read_pages=self.read_pages)
                     self.time_elapsed = time.time() - start_time
                     self.update_stats()
-                    self.log.info('[%s] last scan duration of %s rows is: %s', {type(self).__name__},
-                                  self.number_of_rows_read, self.time_elapsed)
+                    self.log.debug('[%s] last scan duration of %s rows is: %s', {type(self).__name__},
+                                   self.number_of_rows_read, self.time_elapsed)
                     operation_event.message = f"{type(self).__name__} operation ended successfully"
                 except Exception as exc:  # pylint: disable=broad-except
                     msg = str(exc)
@@ -138,7 +138,7 @@ class ScanOperationThread:
             self.db_node = random.choice(self.db_cluster.nodes)
             self.read_pages = random.choice([100, 1000, 0])
             self.run_scan_operation()
-            self.log.info('Executed %s number: %s', self.scan_event.__name__, self.scans_counter)
+            self.log.debug('Executed %s number: %s', self.scan_event.__name__, self.scans_counter)
             time.sleep(self.interval)
 
     def start(self):
@@ -203,8 +203,8 @@ class FullPartitionScanThread(ScanOperationThread):
                 with self.create_session(node) as session:
                     return get_table_clustering_order(ks_cf=self.ks_cf, ck_name=self.ck_name, session=session)
             except Exception as error:  # pylint: disable=broad-except
-                self.log.info('Failed getting table %s clustering order through node %s : %s', self.ks_cf, node.name,
-                              error)
+                self.log.error('Failed getting table %s clustering order through node %s : %s', self.ks_cf, node.name,
+                               error)
         raise Exception('Failed getting table clustering order from all db nodes')
 
     def randomly_form_cql_statement(self) -> Optional[tuple[str, str]]:  # pylint: disable=too-many-branches
@@ -273,26 +273,26 @@ class FullPartitionScanThread(ScanOperationThread):
                     self.limit = random.randint(a=1, b=rows_count)
                     query_suffix = f' limit {self.limit}' + query_suffix
                 reversed_query += f' order by {ck_name} {self.reversed_order}' + query_suffix
-                self.log.info('Randomly formed normal query is: %s', normal_query)
-                self.log.info('[scan: %s, type: %s] Randomly formed reversed query is: %s', self.scans_counter,
-                              ck_filter, reversed_query)
+                self.log.debug('Randomly formed normal query is: %s', normal_query)
+                self.log.debug('[scan: %s, type: %s] Randomly formed reversed query is: %s', self.scans_counter,
+                               ck_filter, reversed_query)
             else:
-                self.log.info('No partition keys found for table: %s! A reversed query cannot be executed!', self.ks_cf)
+                self.log.debug('No partition keys found for table: %s! A reversed query cannot be executed!', self.ks_cf)
                 return None
         return normal_query, reversed_query
 
     def fetch_result_pages(self, result: ResponseFuture, read_pages):
-        self.log.info('Will fetch up to %s result pages.."', read_pages)
+        self.log.debug('Will fetch up to %s result pages.."', read_pages)
         self.number_of_rows_read = 0
         handler = PagedResultHandler(future=result, scan_operation_thread=self)
         handler.finished_event.wait()
         if handler.error:
             self.log.warning("Got a Page Handler error: %s", handler.error)
             raise handler.error
-        self.log.info('Fetched a total of %s pages', handler.current_read_pages)
+        self.log.debug('Fetched a total of %s pages', handler.current_read_pages)
 
     def execute_query(self, session, cmd: str):
-        self.log.info('Will run command "%s"', cmd)
+        self.log.debug('Will run command "%s"', cmd)
         session.default_fetch_size = self.page_size
         session.default_consistency_level = ConsistencyLevel.ONE
         return session.execute_async(cmd)
@@ -349,7 +349,7 @@ class FullPartitionScanThread(ScanOperationThread):
         self.reversed_query_filter_ck_stats[self.ck_filter]['total_scan_duration'] += self.time_elapsed
         count = self.reversed_query_filter_ck_stats[self.ck_filter]['count']
         average = self.reversed_query_filter_ck_stats[self.ck_filter]['total_scan_duration'] / count
-        self.log.info('Average %s scans duration of %s executions is: %s', self.ck_filter, count, average)
+        self.log.debug('Average %s scans duration of %s executions is: %s', self.ck_filter, count, average)
         if self.full_partition_scan_params.get('validate_data'):
             self.log.debug('Executing the normal query: %s', normal_query)
             self.scan_event = FullPartitionScanEvent
@@ -396,7 +396,7 @@ class PagedResultHandler:
                         self._row_to_string(row=row, include_data_column=include_data_column))
 
         if self.future.has_more_pages and self.current_read_pages <= self.max_read_pages:
-            self.log.info('Will fetch the next page: %s', self.current_read_pages)
+            self.log.debug('Will fetch the next page: %s', self.current_read_pages)
             self.future.start_fetching_next_page()
             if self.max_read_pages > 0:
                 self.current_read_pages += 1

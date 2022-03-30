@@ -610,7 +610,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         ]
 
         num_of_reboots = random.randint(2, 10)
-        InfoEvent(message=f'MultipleHardRebootNode {self.target_node}')
+        InfoEvent(message=f'MultipleHardRebootNode {self.target_node}').publish()
         for i in range(num_of_reboots):
             self.log.debug("Rebooting %s out of %s times", i + 1, num_of_reboots)
             cdc_expected_error = self.target_node.follow_system_log(patterns=cdc_expected_error_patterns)
