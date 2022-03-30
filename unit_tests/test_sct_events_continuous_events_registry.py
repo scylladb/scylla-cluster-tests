@@ -75,6 +75,7 @@ class TestContinuousEventsRegistry:
                         if 'You should create default EventsProcessRegistry first' not in str(rex):
                             raise
 
+    @pytest.mark.skip(reason="https://trello.com/c/Mu3lGc7C/4828-disable-compaction-and-repair-continuous-events")
     def test_get_compact_events_by_continues_hash_from_log(self, populated_registry: ContinuousEventsRegistry):
         self._read_events_from_file("test_data/compaction_event_start.log")
 
