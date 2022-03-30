@@ -4682,8 +4682,9 @@ class BaseLoaderSet():
     def kill_cassandra_stress_thread(self):
         for loader in self.nodes:
             try:
-                loader.remoter.run(cmd='pgrep -f cassandra-stress | xargs -I{}  kill -TERM -{}',
+                loader.remoter.run(cmd='pgrep -f cassandra.stress | xargs -I{}  kill -TERM {}',
                                    verbose=False, ignore_status=True)
+                self.log.info("Killed cassandra stress on node: %s", loader.name)
             except Exception as ex:  # pylint: disable=broad-except
                 self.log.warning("failed to kill stress-command on [%s]: [%s]",
                                  str(loader), str(ex))
@@ -4692,6 +4693,7 @@ class BaseLoaderSet():
         for loader in self.nodes:
             try:
                 loader.remoter.run(cmd='docker ps -a -q | docker rm -f', verbose=False, ignore_status=True)
+                self.log.info("Killed docker loader on node: %s", loader.name)
             except Exception as ex:  # pylint: disable=broad-except
                 self.log.warning("failed to kill docker stress command on [%s]: [%s]",
                                  str(loader), str(ex))
