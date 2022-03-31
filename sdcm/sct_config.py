@@ -1304,13 +1304,13 @@ class SCTConfiguration(dict):
         'baremetal': ['db_nodes_private_ip', 'db_nodes_public_ip', 'user_credentials_path'],
 
         'aws-siren': ["user_prefix", "instance_type_loader", "region_name", "cloud_credentials_path",
-                      "cloud_cluster_id", "nemesis_filter_seeds"],
+                      "nemesis_filter_seeds"],
 
         'gce-siren': ['user_prefix', 'gce_network', 'gce_image_username', 'gce_instance_type_db',
                       'gce_root_disk_type_db', 'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db',
                       'gce_instance_type_loader', 'gce_root_disk_type_loader', 'gce_n_local_ssd_disk_loader',
                       'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'gce_root_disk_size_monitor',
-                      'gce_n_local_ssd_disk_monitor', 'gce_datacenter', "cloud_cluster_id"],
+                      'gce_n_local_ssd_disk_monitor', 'gce_datacenter'],
 
         'k8s-local-kind': ['user_credentials_path', 'scylla_version', 'scylla_mgmt_agent_version',
                            'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter', 'k8s_scylla_rack',
