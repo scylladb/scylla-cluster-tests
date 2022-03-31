@@ -19,6 +19,7 @@ from datetime import datetime
 from functools import cached_property
 from threading import Thread, Event as ThreadEvent
 from multiprocessing import Process, Event
+from textwrap import dedent
 
 from sdcm import wait
 from sdcm.remote import RemoteCmdRunnerBase
@@ -116,17 +117,46 @@ class SSHLoggerBase(NodeLoggerBase):
 
 
 class SSHScyllaSystemdLogger(SSHLoggerBase):
+    @staticmethod
+    def reformat_output_command(cmd):
+        """
+        Wrapping journalctl -f command with a python program
+        that read a s json stream, and add the level/priority that
+        is missing from regular output
+        """
+        return dedent("""
+            PYTHON_PROG="
+            import json,sys, datetime
+
+            priorities = \\"emerg,alert,critical,error,warning,notice,info,debug\\"
+            prio_map = {{str(i) : str(prio).upper() for i, prio in enumerate(priorities.split(','))}}
+
+            for line in iter(sys.stdin.readline, b''):
+                d = json.loads(line)
+                o = str(datetime.datetime.fromtimestamp(int(d.get('__REALTIME_TIMESTAMP', '1000')) / 1000**2).isoformat(timespec='milliseconds'))
+                o += f\\" {{d.get('_HOSTNAME', 'unknown')}}\\"
+                o += f\\" !{{prio_map.get(d.get('PRIORITY', '7'), '???')}} |\\"
+                o += f\\" {{d.get('SYSLOG_IDENTIFIER', 'unknown')}}[{{d.get('_PID', '0')}}]:\\"
+                o += f\\" {{d.get('MESSAGE', '')}}\\"
+                print(o)
+            "
+                      """
+                      f'{cmd} -o json | python3 -c "$PYTHON_PROG"'
+                      )
+
     @property
     def _logger_cmd(self) -> str:
-        return f'{self.node.journalctl} -f --no-tail --no-pager ' \
-               '--utc {since} ' \
-               '-u scylla-ami-setup.service ' \
-               '-u scylla-image-setup.service ' \
-               '-u scylla-io-setup.service ' \
-               '-u scylla-server.service ' \
-               '-u scylla-jmx.service ' \
-               '-u scylla-housekeeping-restart.service ' \
-               '-u scylla-housekeeping-daily.service'
+        return self.reformat_output_command(
+            f'{self.node.journalctl} -f --no-tail --no-pager '
+            '--utc {since} '
+            '-u scylla-ami-setup.service '
+            '-u scylla-image-setup.service '
+            '-u scylla-io-setup.service '
+            '-u scylla-server.service '
+            '-u scylla-jmx.service '
+            '-u scylla-housekeeping-restart.service '
+            '-u scylla-housekeeping-daily.service'
+        )
 
 
 class SSHNonRootScyllaSystemdLogger(SSHLoggerBase):
