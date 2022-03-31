@@ -1021,7 +1021,9 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
             table.add_row([current_cluster_type, link])
 
     click.echo(table.get_string(title="Collected logs by test-id: {}".format(collector.test_id)))
-    store_logs_in_argus(test_id=UUID(collector.test_id), logs=collected_logs)
+
+    if test_id:
+        store_logs_in_argus(test_id=UUID(collector.test_id), logs=collected_logs)
 
 
 def store_logs_in_argus(test_id: UUID, logs: dict[str, list[list[str] | str]]):
