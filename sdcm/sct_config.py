@@ -50,7 +50,7 @@ from sdcm.utils.version_utils import (
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 
 
-def str_or_list(value: Union[str, List[str]]) -> List[str]:  # pylint: disable=unsubscriptable-object
+def str_or_list(value: Union[str, List[str], List[List[str]]]) -> List[str]:  # pylint: disable=unsubscriptable-object
     """Convert an environment variable into a Python's list."""
 
     if isinstance(value, str):
@@ -1661,13 +1661,17 @@ class SCTConfiguration(dict):
             for stress_cmd in stress_cmds:
                 if not stress_cmd:
                     continue
-                if stress_tool := stress_cmd.split(maxsplit=2)[0]:
-                    stress_tools.add(stress_tool)
+                if not isinstance(stress_cmd, list):
+                    stress_cmd = [stress_cmd]
+                for cmd in stress_cmd:
+                    if stress_tool := cmd.split(maxsplit=2)[0]:
+                        stress_tools.add(stress_tool)
 
         return stress_tools
 
     def check_required_files(self):
         # pylint: disable=too-many-nested-blocks
+        # pylint: disable=too-many-branches
         for param_name in self.stress_cmd_params:
             stress_cmds = self.get(param_name)
             if stress_cmds is None:
@@ -1677,9 +1681,13 @@ class SCTConfiguration(dict):
             for stress_cmd in stress_cmds:
                 if not stress_cmd:
                     continue
-                stress_cmd = stress_cmd.strip(' ')
-                if stress_cmd.startswith('cassandra-stress'):
-                    for option in stress_cmd.split():
+                if not isinstance(stress_cmd, list):
+                    stress_cmd = [stress_cmd]
+                for cmd in stress_cmd:
+                    cmd = cmd.strip(' ')
+                    if not cmd.startswith('cassandra-stress'):
+                        continue
+                    for option in cmd.split():
                         if option.startswith('profile='):
                             option = option.split('=', 1)
                             if len(option) < 2:
@@ -1932,12 +1940,16 @@ class SCTConfiguration(dict):
             for stress_cmd in stress_cmds:
                 if not stress_cmd:
                     continue
-                stress_cmd = stress_cmd.strip(' ')
-                if stress_cmd.startswith('scylla-bench'):
-                    if "-mode=" not in stress_cmd:
-                        raise ValueError(f"Scylla-bench command {stress_cmd} doesn't have parameter -mode")
-                    if "-workload=" not in stress_cmd:
-                        raise ValueError(f"Scylla-bench command {stress_cmd} doesn't have parameter -workload")
+                if not isinstance(stress_cmd, list):
+                    stress_cmd = [stress_cmd]
+                for cmd in stress_cmd:
+                    cmd = cmd.strip(' ')
+                    if not cmd.startswith('scylla-bench'):
+                        continue
+                    if "-mode=" not in cmd:
+                        raise ValueError(f"Scylla-bench command {cmd} doesn't have parameter -mode")
+                    if "-workload=" not in cmd:
+                        raise ValueError(f"Scylla-bench command {cmd} doesn't have parameter -workload")
 
 
 def init_and_verify_sct_config() -> SCTConfiguration:
