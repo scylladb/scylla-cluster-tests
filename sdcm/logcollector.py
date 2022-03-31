@@ -1120,7 +1120,11 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         except ImportError:
             LOGGER.error("Couldn't collect Siren manager logs, cluster_cloud module isn't installed")
         else:
-            cloud_cluster_id = self.params["cloud_cluster_id"]
+            cloud_cluster_id = self.params["cloud_cluster_id"] if "cloud_cluster_id" in self.params else None
+            if not cloud_cluster_id:
+                LOGGER.error("Cloud cluster id is not found. Probably the cluster has not been created")
+                return
+
             try:
                 instance = get_manager_instance_by_cluster_id(cluster_id=cloud_cluster_id)
                 if not instance:
