@@ -300,6 +300,17 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     _scylla_operator_namespace = SCYLLA_OPERATOR_NAMESPACE
     _scylla_manager_namespace = SCYLLA_MANAGER_NAMESPACE
 
+    @cached_property
+    def tenants_number(self) -> int:
+        for stress_param in self.params.stress_cmd_params:
+            stress_cmds = self.params.get(stress_param)
+            if not isinstance(stress_cmds, list):
+                continue
+            if any((isinstance(stress_cmd, list) for stress_cmd in stress_cmds)):
+                if (tenants_number := len(stress_cmds)) > 1:
+                    return tenants_number
+        return 1
+
     @property
     def allowed_labels_on_scylla_node(self):
         # keep pods labels that are allowed to be scheduled on the Scylla node
@@ -941,9 +952,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         # TBD: Remove reduction logic after https://github.com/scylladb/scylla-operator/issues/384 is fixed
         cpu_limit = int(
             cpu_limit
-            - OPERATOR_CONTAINERS_RESOURCES['cpu']
+            - OPERATOR_CONTAINERS_RESOURCES['cpu'] * self.tenants_number
             - COMMON_CONTAINERS_RESOURCES['cpu']
-            - SCYLLA_MANAGER_AGENT_RESOURCES['cpu']
+            - SCYLLA_MANAGER_AGENT_RESOURCES['cpu'] * self.tenants_number
         )
         if self.is_performance_tuning_enabled:
             # NOTE: we should use at max 7 from each 8 cores.
@@ -951,12 +962,14 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             new_cpu_limit = math.ceil(cpu_limit / 8) * 7
             if new_cpu_limit < cpu_limit:
                 cpu_limit = new_cpu_limit
+        cpu_limit = cpu_limit // self.tenants_number or 1
         memory_limit = (
             memory_limit
-            - OPERATOR_CONTAINERS_RESOURCES['memory']
+            - OPERATOR_CONTAINERS_RESOURCES['memory'] * self.tenants_number
             - COMMON_CONTAINERS_RESOURCES['memory']
-            - SCYLLA_MANAGER_AGENT_RESOURCES['memory']
+            - SCYLLA_MANAGER_AGENT_RESOURCES['memory'] * self.tenants_number
         )
+        memory_limit = memory_limit / self.tenants_number
         self.calculated_cpu_limit = convert_cpu_units_to_k8s_value(cpu_limit)
         self.calculated_memory_limit = convert_memory_units_to_k8s_value(memory_limit)
 
