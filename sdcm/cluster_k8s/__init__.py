@@ -104,6 +104,7 @@ DEPLOY_SCYLLA_CLUSTER_DELAY = 15  # seconds
 SCYLLA_OPERATOR_NAMESPACE = "scylla-operator"
 SCYLLA_MANAGER_NAMESPACE = "scylla-manager"
 SCYLLA_NAMESPACE = "scylla"
+LOADER_NAMESPACE = "sct-loaders"
 MINIO_NAMESPACE = "minio"
 SCYLLA_CONFIG_NAME = "scylla-config"
 SCYLLA_AGENT_CONFIG_NAME = "scylla-agent-config"
@@ -986,8 +987,11 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.start_scylla_cluster_events_thread(namespace=namespace)
 
     @log_run_info
-    def deploy_loaders_cluster(self, config: str, node_pool: CloudK8sNodePool = None) -> None:
-        LOGGER.info("Create and initialize a loaders cluster")
+    def deploy_loaders_cluster(self, config: str,
+                               node_pool: CloudK8sNodePool = None,
+                               cluster_name: str = LOADER_NAMESPACE,
+                               namespace: str = LOADER_NAMESPACE) -> None:
+        LOGGER.info("Create and initialize a loaders cluster in the '%s' namespace", namespace)
         if node_pool:
             self.deploy_node_pool(node_pool)
             cpu_limit, memory_limit = node_pool.cpu_and_memory_capacity
@@ -1001,11 +1005,16 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         cpu_limit = convert_cpu_units_to_k8s_value(cpu_limit)
         memory_limit = convert_memory_units_to_k8s_value(memory_limit)
 
-        self.apply_file(config, environ={'CPU_LIMIT': cpu_limit, 'MEMORY_LIMIT': memory_limit},
-                        modifiers=affinity_modifiers)
-        LOGGER.debug("Check the loaders cluster")
-        self.kubectl("get statefulset", namespace="sct-loaders")
-        self.kubectl("get pods", namespace="sct-loaders")
+        self.apply_file(config, modifiers=affinity_modifiers, environ={
+            "CPU_LIMIT": cpu_limit,
+            "MEMORY_LIMIT": memory_limit,
+            "SCT_K8S_LOADER_CLUSTER_NAME": cluster_name,
+            "SCT_K8S_LOADER_NAMESPACE": namespace,
+        })
+        LOGGER.debug("Check the '%s' loaders cluster in the '%s' namespace",
+                     cluster_name, namespace)
+        self.kubectl("get statefulset", namespace=namespace)
+        self.kubectl("get pods", namespace=namespace)
 
     @log_run_info
     def deploy_monitoring_cluster(self, namespace: str = "monitoring",
@@ -2437,14 +2446,16 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
                  node_pool: CloudK8sNodePool = None,
                  ) -> None:
 
+        self.k8s_cluster = k8s_cluster
         self.loader_cluster_config = loader_cluster_config
         self.loader_cluster_name = loader_cluster_name
         self.loader_cluster_created = False
+        self.namespace = self.generate_namespace(namespace_template=LOADER_NAMESPACE)
 
         cluster.BaseLoaderSet.__init__(self, params=params)
         PodCluster.__init__(self,
-                            k8s_cluster=k8s_cluster,
-                            namespace="sct-loaders",
+                            k8s_cluster=self.k8s_cluster,
+                            namespace=self.namespace,
                             container="cassandra-stress",
                             cluster_prefix=cluster.prepend_user_prefix(user_prefix, "loader-set"),
                             node_prefix=cluster.prepend_user_prefix(user_prefix, "loader-node"),
@@ -2477,7 +2488,11 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
         if self.loader_cluster_created:
             raise NotImplementedError("Changing number of nodes in LoaderPodCluster is not supported.")
 
-        self.k8s_cluster.deploy_loaders_cluster(self.loader_cluster_config, node_pool=self.node_pool)
+        self.k8s_cluster.deploy_loaders_cluster(
+            config=self.loader_cluster_config,
+            node_pool=self.node_pool,
+            cluster_name=self.loader_cluster_name,
+            namespace=self.namespace)
         new_nodes = super().add_nodes(count=count,
                                       ec2_user_data=ec2_user_data,
                                       dc_idx=dc_idx,
