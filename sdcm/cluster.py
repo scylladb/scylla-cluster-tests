@@ -5223,7 +5223,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             cd -P {self.monitor_install_path}
             mkdir -p {self.monitoring_data_dir}
             echo "" > UA.sh
-            ./start-all.sh \
+            PATH=$PATH:/usr/sbin ./start-all.sh \
             -D "{labels}" \
             -s `realpath "{self.monitoring_conf_dir}/scylla_servers.yml"` \
             -n `realpath "{self.monitoring_conf_dir}/node_exporter_servers.yml"` \
