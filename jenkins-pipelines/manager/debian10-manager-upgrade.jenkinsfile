@@ -8,8 +8,6 @@ managerPipeline(
     backend: 'aws',
     region: 'us-east-1',
 
-    target_manager_version: 'master_latest',
-
     manager_version: '2.6',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
