@@ -195,7 +195,8 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, services, credentials,  # pylint: disable=too-many-arguments
                  cluster_uuid=None, gce_instance_type='n1-standard-1', gce_region_names=None,
                  gce_n_local_ssd=1, gce_image_username='root', cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=3, add_disks=None, params=None, node_type=None, service_accounts=None):
+                 node_prefix='node', n_nodes=3, add_disks=None, params=None, node_type=None,
+                 service_accounts=None, add_nodes=True):
 
         # pylint: disable=too-many-locals
         self._gce_image = gce_image
@@ -219,7 +220,8 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                          params=params,
                          # services=services,
                          region_names=gce_region_names,
-                         node_type=node_type)
+                         node_type=node_type,
+                         add_nodes=add_nodes)
         self.log.debug("GCECluster constructor")
 
     def __str__(self):
@@ -541,15 +543,16 @@ class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
     def __init__(self, gce_image, gce_image_type, gce_image_size, gce_network, service, credentials,  # pylint: disable=too-many-arguments
                  gce_instance_type='n1-standard-1', gce_n_local_ssd=1,
                  gce_image_username='centos', user_prefix=None, n_nodes=1,
-                 targets=None, add_disks=None, params=None, gce_datacenter=None):
+                 targets=None, add_disks=None, params=None, gce_datacenter=None,
+                 add_nodes=True, monitor_id=None):
         # pylint: disable=too-many-locals
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
 
         targets = targets if targets else {}
-        cluster.BaseMonitorSet.__init__(self,
-                                        targets=targets,
-                                        params=params)
+        cluster.BaseMonitorSet.__init__(
+            self, targets=targets, params=params, monitor_id=monitor_id,
+        )
         GCECluster.__init__(self,
                             gce_image=gce_image,
                             gce_image_type=gce_image_type,
@@ -566,5 +569,6 @@ class MonitorSetGCE(cluster.BaseMonitorSet, GCECluster):
                             add_disks=add_disks,
                             params=params,
                             node_type='monitor',
-                            gce_region_names=gce_datacenter
+                            gce_region_names=gce_datacenter,
+                            add_nodes=add_nodes,
                             )

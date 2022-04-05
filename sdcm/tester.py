@@ -598,6 +598,13 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def setUp(self):  # pylint: disable=too-many-branches,too-many-statements
         self.credentials = []
         self.db_cluster = None
+
+        # NOTE: following are used only on K8S for testing multi-tenancy case
+        self.db_clusters_multitenant = []
+        self.loaders_multitenant = []
+        self.monitors_multitenant = []
+        self.prometheus_db_multitenant = []
+
         self.cs_db_cluster = None
         self.loaders = None
         self.monitors = None
@@ -615,25 +622,32 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.init_resources()
 
-        if self.db_cluster and self.db_cluster.nodes:
+        if self.db_cluster and not self.db_clusters_multitenant:
+            self.db_clusters_multitenant = [self.db_cluster]
+        for db_cluster in self.db_clusters_multitenant:
+            if not (db_cluster and db_cluster.nodes):
+                continue
             if self.params.get('use_legacy_cluster_init'):
-                self.legacy_init_nodes(db_cluster=self.db_cluster)
+                self.legacy_init_nodes(db_cluster=db_cluster)
             else:
-                self.init_nodes(db_cluster=self.db_cluster)
+                self.init_nodes(db_cluster=db_cluster)
 
             # running `set_system_auth_rf()` before changing authorization/authentication protocols
-            self.set_system_auth_rf()
+            self.set_system_auth_rf(db_cluster=db_cluster)
 
             if (not self.params.get('are_ldap_users_on_scylla') and
                 (self.params.get('use_ldap_authorization') or
                  self.params.get('use_ms_ad_ldap'))) \
                     or self.params.get('prepare_saslauthd'):
-                self.db_cluster.nodes[0].create_ldap_users_on_scylla()
+                db_cluster.nodes[0].create_ldap_users_on_scylla()
                 self.params['are_ldap_users_on_scylla'] = True
 
-            db_node_address = self.db_cluster.nodes[0].ip_address
-            if self.loaders:
-                self.loaders.wait_for_init(db_node_address=db_node_address)
+            db_node_address = db_cluster.nodes[0].ip_address
+            if self.loaders and not self.loaders_multitenant:
+                self.loaders_multitenant = [self.loaders]
+            for loaders in self.loaders_multitenant:
+                if loaders:
+                    loaders.wait_for_init(db_node_address=db_node_address)
 
         # cs_db_cluster is created in case MIXED_CLUSTER. For example, gemini test
         if self.cs_db_cluster:
@@ -647,22 +661,32 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             # sync test_start_time with ES
             self.start_time = self.get_test_start_time()
 
-        if self.monitors:
-            self.monitors.wait_for_init()
+        if self.monitors and not self.monitors_multitenant:
+            self.monitors_multitenant = [self.monitors]
+        for monitors in self.monitors_multitenant:
+            monitors.wait_for_init()
 
         self.argus_collect_packages()
 
         # cancel reuse cluster - for new nodes added during the test
         self.test_config.reuse_cluster(False)
-        if self.monitors and self.monitors.nodes:
-            self.prometheus_db = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
+
+        for monitors in self.monitors_multitenant:
+            if monitors and monitors.nodes:
+                self.prometheus_db_multitenant.append(
+                    PrometheusDBStats(host=monitors.nodes[0].public_ip_address))
+        self.prometheus_db = (self.prometheus_db_multitenant or [None])[0]
+
         self.start_time = time.time()
         self.timeout_thread = self._init_test_timeout_thread()
 
-        if self.db_cluster:
-            self.db_cluster.validate_seeds_on_all_nodes()
+        for db_cluster in self.db_clusters_multitenant:
+            if db_cluster:
+                db_cluster.validate_seeds_on_all_nodes()
 
-    def set_system_auth_rf(self):
+    def set_system_auth_rf(self, db_cluster=None):
+        if not db_cluster:
+            db_cluster = self.db_cluster
         # No need to change system tables when running via scylla-cloud
         # Also, when running a Alternator via scylla-cloud, we don't have CQL access to the cluster
         if self.params.get('db_type') == 'cloud_scylla':
@@ -673,10 +697,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         system_auth_rf = self.params.get('system_auth_rf')
         if system_auth_rf > 1 and not self.test_config.REUSE_CLUSTER:
             self.log.info('change RF of system_auth to %s', system_auth_rf)
-            node = self.db_cluster.nodes[0]
-            credentials = self.db_cluster.get_db_auth()
+            node = db_cluster.nodes[0]
+            credentials = db_cluster.get_db_auth()
             username, password = credentials if credentials else (None, None)
-            with self.db_cluster.cql_connection_patient(node, user=username, password=password) as session:
+            with db_cluster.cql_connection_patient(node, user=username, password=password) as session:
                 session.execute("ALTER KEYSPACE system_auth WITH replication = "
                                 "{'class': 'org.apache.cassandra.locator.SimpleStrategy', "
                                 "'replication_factor': %s};" % system_auth_rf)
@@ -1145,6 +1169,23 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         else:
             self.monitors = NoMonitorSet()
 
+    @staticmethod
+    def _add_and_wait_for_cluster_nodes_in_parallel(clusters):
+        def _add_and_wait_for_cluster_nodes(cluster):
+            if cluster.node_type == 'loader':
+                count = cluster.params.get("k8s_n_loader_pods_per_cluster") or cluster.params.get("n_loaders")
+            elif cluster.node_type == 'monitor':
+                count = 1
+            else:
+                count = cluster.params.get("n_db_nodes")
+            cluster.add_nodes(count=count, enable_auto_bootstrap=cluster.auto_bootstrap)
+
+        add_nodes_in_parallel = ParallelObject(
+            timeout=3600, objects=[[cluster] for cluster in clusters])
+        add_nodes_in_parallel.run(
+            func=_add_and_wait_for_cluster_nodes,
+            unpack_objects=True, ignore_exceptions=False)
+
     def get_cluster_k8s_gke(self):
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
 
@@ -1211,12 +1252,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_cluster.wait_all_node_pools_to_be_ready()
         self.k8s_cluster.prepare_k8s_scylla_nodes(node_pool=scylla_pool)
 
-        self.db_cluster = gke.GkeScyllaPodCluster(k8s_cluster=self.k8s_cluster,
-                                                  scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
-                                                  user_prefix=self.params.get("user_prefix"),
-                                                  n_nodes=self.params.get("n_db_nodes"),
-                                                  params=self.params,
-                                                  node_pool=scylla_pool)
+        for i in range(self.k8s_cluster.tenants_number):
+            self.db_clusters_multitenant.append(gke.GkeScyllaPodCluster(
+                k8s_cluster=self.k8s_cluster,
+                scylla_cluster_name=self.params.get("k8s_scylla_cluster_name") + (f"-{i + 1}" if i else ""),
+                user_prefix=self.params.get("user_prefix"),
+                n_nodes=self.params.get("n_db_nodes"),
+                params=self.params,
+                node_pool=scylla_pool,
+                add_nodes=False,
+            ))
+        self.db_cluster = self.db_clusters_multitenant[0]
 
         if self.params.get('k8s_deploy_monitoring'):
             self.k8s_cluster.deploy_monitoring_cluster(
@@ -1225,32 +1271,52 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             )
 
         if self.params.get("n_loaders"):
-            self.loaders = cluster_k8s.LoaderPodCluster(k8s_cluster=self.k8s_cluster,
-                                                        loader_cluster_config=LOADER_CLUSTER_CONFIG,
-                                                        loader_cluster_name=self.params.get("k8s_loader_cluster_name"),
-                                                        user_prefix=self.params.get("user_prefix"),
-                                                        n_nodes=self.params.get("n_loaders"),
-                                                        params=self.params,
-                                                        node_pool=loader_pool)
+            for i in range(self.k8s_cluster.tenants_number):
+                self.loaders_multitenant.append(cluster_k8s.LoaderPodCluster(
+                    k8s_cluster=self.k8s_cluster,
+                    loader_cluster_config=LOADER_CLUSTER_CONFIG,
+                    loader_cluster_name=self.params.get("k8s_loader_cluster_name") + (f"-{i + 1}" if i else ""),
+                    user_prefix=(f"{i + 1}-" if i else "") + self.params.get("user_prefix"),
+                    n_nodes=self.params.get("k8s_n_loader_pods_per_cluster") or self.params.get("n_loaders"),
+                    params=self.params,
+                    node_pool=loader_pool,
+                    add_nodes=False,
+                ))
+            self.loaders = self.loaders_multitenant[0]
+
+        # NOTE: wait for Scylla and loader clusters nodes creation
+        self._add_and_wait_for_cluster_nodes_in_parallel(
+            self.db_clusters_multitenant + self.loaders_multitenant)
 
         if self.params.get("n_monitor_nodes") > 0:
-            self.monitors = gke.MonitorSetGKE(
-                gce_image=self.params.get("gce_image_monitor"),
-                gce_image_type=self.params.get("gce_root_disk_type_monitor"),
-                gce_image_size=self.params.get('gce_root_disk_size_monitor'),
-                gce_network=self.params.get("gce_network"),
-                service=services[:1],
-                credentials=self.credentials,
-                gce_instance_type=self.params.get("gce_instance_type_monitor"),
-                gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_monitor"),
-                gce_image_username=self.params.get("gce_image_username"),
-                user_prefix=self.params.get("user_prefix"),
-                n_nodes=self.params.get('n_monitor_nodes'),
-                targets=dict(db_cluster=self.db_cluster, loaders=self.loaders),
-                params=self.params,
-                gce_datacenter=gce_datacenter)
+            for i in range(self.k8s_cluster.tenants_number):
+                self.log.debug("Create monitor for the DB cluster №%s", i + 1)
+                self.monitors_multitenant.append(gke.MonitorSetGKE(
+                    gce_image=self.params.get("gce_image_monitor"),
+                    gce_image_username=self.params.get("gce_image_username"),
+                    gce_image_type=self.params.get("gce_root_disk_type_monitor"),
+                    gce_image_size=self.params.get('gce_root_disk_size_monitor'),
+                    gce_network=self.params.get("gce_network"),
+                    gce_instance_type=self.params.get("gce_instance_type_monitor"),
+                    gce_n_local_ssd=self.params.get("gce_n_local_ssd_disk_monitor"),
+                    gce_datacenter=gce_datacenter,
+                    service=services[:1],
+                    credentials=self.credentials,
+                    user_prefix=(f"{i + 1}-" if i else "") + self.params.get("user_prefix"),
+                    n_nodes=self.params.get('n_monitor_nodes'),
+                    targets={
+                        "db_cluster": self.db_clusters_multitenant[i],
+                        "loaders": self.loaders_multitenant[i],
+                    },
+                    params=self.params,
+                    add_nodes=False,
+                    monitor_id=self.test_config.test_id() + (f"-{i + 1}" if i else ""),
+                ))
+            self.monitors = self.monitors_multitenant[0]
+            self._add_and_wait_for_cluster_nodes_in_parallel(self.monitors_multitenant)
         else:
             self.monitors = NoMonitorSet()
+            self.monitors_multitenant = [self.monitors]
 
     def get_cluster_k8s_eks(self):
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
@@ -1343,14 +1409,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.params.get('use_mgmt'):
             self.k8s_cluster.deploy_scylla_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
 
-        self.db_cluster = eks.EksScyllaPodCluster(
-            k8s_cluster=self.k8s_cluster,
-            scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
-            user_prefix=self.params.get("user_prefix"),
-            n_nodes=self.params.get("n_db_nodes"),
-            params=self.params,
-            node_pool=scylla_pool
-        )
+        for i in range(self.k8s_cluster.tenants_number):
+            self.db_clusters_multitenant.append(eks.EksScyllaPodCluster(
+                k8s_cluster=self.k8s_cluster,
+                scylla_cluster_name=self.params.get("k8s_scylla_cluster_name") + (f"-{i + 1}" if i else ""),
+                user_prefix=(f"{i + 1}-" if i else "") + self.params.get("user_prefix"),
+                n_nodes=self.params.get("n_db_nodes"),
+                params=self.params,
+                node_pool=scylla_pool,
+                add_nodes=False,
+            ))
+        self.db_cluster = self.db_clusters_multitenant[0]
 
         if self.params.get('k8s_deploy_monitoring'):
             self.k8s_cluster.deploy_monitoring_cluster(
@@ -1359,26 +1428,45 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             )
 
         if self.params.get("n_loaders"):
-            self.loaders = cluster_k8s.LoaderPodCluster(k8s_cluster=self.k8s_cluster,
-                                                        loader_cluster_config=LOADER_CLUSTER_CONFIG,
-                                                        loader_cluster_name=self.params.get("k8s_loader_cluster_name"),
-                                                        user_prefix=self.params.get("user_prefix"),
-                                                        n_nodes=self.params.get("n_loaders"),
-                                                        params=self.params,
-                                                        node_pool=loader_pool)
+            for i in range(self.k8s_cluster.tenants_number):
+                self.loaders_multitenant.append(cluster_k8s.LoaderPodCluster(
+                    k8s_cluster=self.k8s_cluster,
+                    loader_cluster_config=LOADER_CLUSTER_CONFIG,
+                    loader_cluster_name=self.params.get("k8s_loader_cluster_name") + (f"-{i + 1}" if i else ""),
+                    user_prefix=(f"{i + 1}-" if i else "") + self.params.get("user_prefix"),
+                    n_nodes=self.params.get("k8s_n_loader_pods_per_cluster") or self.params.get("n_loaders"),
+                    params=self.params,
+                    node_pool=loader_pool,
+                    add_nodes=False,
+                ))
+            self.loaders = self.loaders_multitenant[0]
+
+        # NOTE: wait for Scylla and loader clusters nodes creation
+        self._add_and_wait_for_cluster_nodes_in_parallel(
+            self.db_clusters_multitenant + self.loaders_multitenant)
 
         if monitor_info['n_nodes']:
-            self.monitors = MonitorSetEKS(
-                ec2_ami_id=self.params.get('ami_id_monitor').split(),
-                ec2_ami_username=self.params.get('ami_monitor_user'),
-                ec2_instance_type=monitor_info['type'],
-                ec2_block_device_mappings=monitor_info['device_mappings'],
-                n_nodes=monitor_info['n_nodes'],
-                targets=dict(db_cluster=self.db_cluster,
-                             loaders=self.loaders),
-                **common_params)
+            for i in range(self.k8s_cluster.tenants_number):
+                self.log.debug("Create monitor for the DB cluster №%s", i + 1)
+                common_params["user_prefix"] = (f"{i + 1}-" if i else "") + common_params["user_prefix"]
+                self.monitors_multitenant.append(MonitorSetEKS(
+                    ec2_ami_id=self.params.get('ami_id_monitor').split(),
+                    ec2_ami_username=self.params.get('ami_monitor_user'),
+                    ec2_instance_type=monitor_info['type'],
+                    ec2_block_device_mappings=monitor_info['device_mappings'],
+                    n_nodes=monitor_info['n_nodes'],
+                    targets={
+                        "db_cluster": self.db_clusters_multitenant[i],
+                        "loaders": self.loaders_multitenant[i],
+                    },
+                    add_nodes=False,
+                    monitor_id=self.test_config.test_id() + (f"-{i + 1}" if i else ""),
+                    **common_params))
+            self.monitors = self.monitors_multitenant[0]
+            self._add_and_wait_for_cluster_nodes_in_parallel(self.monitors_multitenant)
         else:
             self.monitors = NoMonitorSet()
+            self.monitors_multitenant = [self.monitors]
 
     def init_resources(self, loader_info=None, db_info=None,
                        monitor_info=None):

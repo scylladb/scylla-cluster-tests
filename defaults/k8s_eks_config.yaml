@@ -41,6 +41,7 @@ k8s_minio_storage_size: '60Gi'
 
 n_monitor_nodes: 1
 n_loaders: 1
+k8s_n_loader_pods_per_cluster: 1
 n_db_nodes: 3
 
 append_scylla_args: ''

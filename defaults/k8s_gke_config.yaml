@@ -41,6 +41,7 @@ k8s_loader_cluster_name: 'sct-loaders'
 gce_instance_type_loader: 'e2-standard-4'
 
 n_loaders: 1
+k8s_n_loader_pods_per_cluster: 1
 
 gce_image_monitor: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
 gce_instance_type_monitor: 'e2-medium'

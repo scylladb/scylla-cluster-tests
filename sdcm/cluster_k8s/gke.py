@@ -22,6 +22,7 @@ import tenacity
 
 from sdcm import sct_abs_path, cluster
 from sdcm.wait import exponential_retry
+from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.k8s import ApiCallRateLimiter, TokenUpdateThread
 from sdcm.utils.gce_utils import GcloudContextManager
 from sdcm.utils.ci_tools import get_test_name
@@ -203,8 +204,12 @@ class GkeCluster(KubernetesCluster):
             ('k8s-app', 'gke-metrics-agent'),
             ('component', 'kube-proxy'),
             ('k8s-app', 'gcp-compute-persistent-disk-csi-driver'),
-            ('scylla/cluster', self.k8s_scylla_cluster_name),
         ]
+        if self.tenants_number > 1:
+            allowed_labels_on_scylla_node.append(('app.kubernetes.io/name', 'scylla'))
+            allowed_labels_on_scylla_node.append(('app', 'scylla'))
+        else:
+            allowed_labels_on_scylla_node.append(('scylla/cluster', self.k8s_scylla_cluster_name))
         if self.is_performance_tuning_enabled:
             # NOTE: add performance tuning related pods only if we expect it to be.
             #       When we have tuning disabled it must not exist.
@@ -449,3 +454,34 @@ class MonitorSetGKE(MonitorSetGCE):
 
     def install_scylla_manager(self, node):
         pass
+
+    # NOTE: setting and filtering of the "monitorid" tag is needed for the multi-tenant setup.
+    def _get_instances(self, dc_idx):
+        if not self.monitor_id:
+            raise ValueError("'monitor_id' must exist")
+        instances_by_nodetype = list_instances_gce(
+            tags_dict={'MonitorId': self.monitor_id, 'NodeType': self.node_type})
+        instances_by_zone = self._get_instances_by_prefix(dc_idx)
+        instances = []
+        attr_name = 'public_ips' if self._node_public_ips else 'private_ips'
+        for node_zone in instances_by_zone:
+            # Filter nodes by zone and by ip addresses
+            if not getattr(node_zone, attr_name):
+                continue
+            for node_nodetype in instances_by_nodetype:
+                if node_zone.uuid == node_nodetype.uuid:
+                    instances.append(node_zone)
+
+        def sort_by_index(node):
+            metadata = gce_meta_to_dict(node.extra['metadata'])
+            return metadata.get('NodeIndex', 0)
+
+        instances = sorted(instances, key=sort_by_index)
+        return instances
+
+    # pylint: disable=protected-access
+    def _create_node(self, instance, node_index, dc_idx):
+        node = super()._create_node(instance=instance, node_index=node_index, dc_idx=dc_idx)
+        node._instance_wait_safe(
+            node._gce_service.ex_set_node_labels, node._instance, {"monitorid": self.monitor_id})
+        return node

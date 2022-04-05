@@ -791,6 +791,9 @@ class SCTConfiguration(dict):
 
         dict(name="k8s_loader_cluster_name", env="SCT_K8S_LOADER_CLUSTER_NAME", type=str,
              help=""),
+        dict(name="k8s_n_loader_pods_per_cluster", env="SCT_K8S_N_LOADER_PODS_PER_CLUSTER",
+             type=int_or_list,
+             help="Number of loader pods per loader cluster."),
 
         dict(name="mini_k8s_version", env="SCT_MINI_K8S_VERSION", type=str,
              help=""),

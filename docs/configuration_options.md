@@ -172,6 +172,7 @@
 | **<a href="#user-content-k8s_scylla_cluster_name" name="k8s_scylla_cluster_name">k8s_scylla_cluster_name</a>**  |  | N/A | SCT_K8S_SCYLLA_CLUSTER_NAME
 | **<a href="#user-content-k8s_scylla_disk_gi" name="k8s_scylla_disk_gi">k8s_scylla_disk_gi</a>**  |  | N/A | SCT_K8S_SCYLLA_DISK_GI
 | **<a href="#user-content-k8s_loader_cluster_name" name="k8s_loader_cluster_name">k8s_loader_cluster_name</a>**  |  | N/A | SCT_K8S_LOADER_CLUSTER_NAME
+| **<a href="#user-content-k8s_n_loader_pods_per_cluster" name="k8s_n_loader_pods_per_cluster">k8s_n_loader_pods_per_cluster</a>**  |  | N/A | SCT_K8S_N_LOADER_PODS_PER_CLUSTER
 | **<a href="#user-content-mini_k8s_version" name="mini_k8s_version">mini_k8s_version</a>**  |  | N/A | SCT_MINI_K8S_VERSION
 | **<a href="#user-content-k8s_cert_manager_version" name="k8s_cert_manager_version">k8s_cert_manager_version</a>**  |  | N/A | SCT_K8S_CERT_MANAGER_VERSION
 | **<a href="#user-content-k8s_minio_storage_size" name="k8s_minio_storage_size">k8s_minio_storage_size</a>**  |  | N/A | SCT_K8S_MINIO_STORAGE_SIZE

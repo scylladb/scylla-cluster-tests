@@ -35,7 +35,7 @@ from difflib import unified_diff
 from functools import cached_property, partialmethod, partial
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from textwrap import dedent
-from threading import RLock
+from threading import Lock, RLock
 from typing import Optional, Union, List, Dict, Any, ContextManager, Type, Tuple, Callable
 from packaging import version
 
@@ -86,6 +86,7 @@ from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring
 ANY_KUBERNETES_RESOURCE = Union[  # pylint: disable=invalid-name
     Resource, ResourceField, ResourceInstance, ResourceList, Subresource,
 ]
+NAMESPACE_CREATION_LOCK = Lock()
 
 CERT_MANAGER_TEST_CONFIG = sct_abs_path("sdcm/k8s_configs/cert-manager-test.yaml")
 LOADER_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/loaders.yaml")
@@ -1002,6 +1003,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     @log_run_info
     def deploy_loaders_cluster(self, config: str,
                                node_pool: CloudK8sNodePool = None,
+                               pods_number: int = 1,
                                cluster_name: str = LOADER_NAMESPACE,
                                namespace: str = LOADER_NAMESPACE) -> None:
         LOGGER.info("Create and initialize a loaders cluster in the '%s' namespace", namespace)
@@ -1021,6 +1023,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         self.apply_file(config, modifiers=affinity_modifiers, environ={
             "CPU_LIMIT": cpu_limit,
             "MEMORY_LIMIT": memory_limit,
+            "SCT_N_LOADERS": pods_number,
             "SCT_K8S_LOADER_CLUSTER_NAME": cluster_name,
             "SCT_K8S_LOADER_NAMESPACE": namespace,
         })
@@ -1964,6 +1967,7 @@ class PodCluster(cluster.BaseCluster):
                  n_nodes: Union[list, int] = 3,
                  params: Optional[dict] = None,
                  node_pool: Optional[dict] = None,
+                 add_nodes: Optional[bool] = True,
                  ) -> None:
         self.k8s_cluster = k8s_cluster
         self.namespace = namespace
@@ -1976,7 +1980,8 @@ class PodCluster(cluster.BaseCluster):
                          n_nodes=n_nodes,
                          params=params,
                          region_names=k8s_cluster.datacenter,
-                         node_type=node_type)
+                         node_type=node_type,
+                         add_nodes=add_nodes)
 
     def __str__(self):
         return f"{type(self).__name__} {self.name} | Namespace: {self.namespace}"
@@ -2084,14 +2089,15 @@ class PodCluster(cluster.BaseCluster):
 
     def generate_namespace(self, namespace_template: str) -> str:
         # Pick up not used namespace knowing that we may have more than 1 Scylla cluster
-        namespaces = self.k8s_cluster.kubectl(
-            "get namespaces --no-headers -o=custom-columns=:.metadata.name").stdout.split()
-        for i in range(1, len(namespaces)):
-            candidate_namespace = f"{namespace_template}{'-' + str(i) if i > 1 else ''}"
-            if candidate_namespace not in namespaces:
-                self.k8s_cluster.kubectl(f"create namespace {candidate_namespace}")
-                return candidate_namespace
-        raise RuntimeError("No available namespace for a Scylla cluster was found")
+        with NAMESPACE_CREATION_LOCK:
+            namespaces = self.k8s_cluster.kubectl(
+                "get namespaces --no-headers -o=custom-columns=:.metadata.name").stdout.split()
+            for i in range(1, len(namespaces)):
+                candidate_namespace = f"{namespace_template}{'-' + str(i) if i > 1 else ''}"
+                if candidate_namespace not in namespaces:
+                    self.k8s_cluster.kubectl(f"create namespace {candidate_namespace}")
+                    return candidate_namespace
+        raise RuntimeError("No available namespace was found")
 
 
 class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disable=too-many-public-methods
@@ -2105,6 +2111,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                  n_nodes: Union[list, int] = 3,
                  params: Optional[dict] = None,
                  node_pool: CloudK8sNodePool = None,
+                 add_nodes: bool = True,
                  ) -> None:
         self.k8s_cluster = k8s_cluster
         self.namespace = self.generate_namespace(namespace_template=SCYLLA_NAMESPACE)
@@ -2119,7 +2126,8 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                          node_type="scylla-db",
                          n_nodes=n_nodes,
                          params=params,
-                         node_pool=node_pool)
+                         node_pool=node_pool,
+                         add_nodes=add_nodes)
 
     get_scylla_args = cluster_docker.ScyllaDockerCluster.get_scylla_args
 
@@ -2457,6 +2465,7 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
                  n_nodes: Union[list, int] = 3,
                  params: Optional[dict] = None,
                  node_pool: CloudK8sNodePool = None,
+                 add_nodes: bool = True,
                  ) -> None:
 
         self.k8s_cluster = k8s_cluster
@@ -2476,6 +2485,7 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
                             n_nodes=n_nodes,
                             params=params,
                             node_pool=node_pool,
+                            add_nodes=add_nodes,
                             )
 
     def node_setup(self,
@@ -2504,6 +2514,7 @@ class LoaderPodCluster(cluster.BaseLoaderSet, PodCluster):
         self.k8s_cluster.deploy_loaders_cluster(
             config=self.loader_cluster_config,
             node_pool=self.node_pool,
+            pods_number=count,
             cluster_name=self.loader_cluster_name,
             namespace=self.namespace)
         new_nodes = super().add_nodes(count=count,

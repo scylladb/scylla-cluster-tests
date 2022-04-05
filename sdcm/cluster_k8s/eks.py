@@ -15,7 +15,7 @@ import os
 import logging
 import time
 from textwrap import dedent
-from typing import List, Dict, Optional, Union, Literal, ParamSpec, TypeVar
+from typing import List, Dict, Literal, ParamSpec, TypeVar
 from functools import cached_property
 from collections.abc import Callable
 
@@ -27,8 +27,10 @@ from mypy_boto3_ec2.type_defs import LaunchTemplateBlockDeviceMappingRequestType
 
 from sdcm import sct_abs_path, cluster
 from sdcm.cluster_aws import MonitorSetAWS
+from sdcm import ec2_client
 from sdcm.utils.aws_utils import tags_as_ec2_tags, EksClusterCleanupMixin
 from sdcm.utils.ci_tools import get_test_name
+from sdcm.utils.common import list_instances_aws
 from sdcm.utils.k8s import TokenUpdateThread
 from sdcm.wait import wait_for, exponential_retry
 from sdcm.cluster_k8s import (
@@ -253,8 +255,12 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
             ('k8s-app', 'aws-node'),
             ('app', 'local-volume-provisioner'),
             ('k8s-app', 'kube-proxy'),
-            ('scylla/cluster', self.k8s_scylla_cluster_name),
         ]
+        if self.tenants_number > 1:
+            allowed_labels_on_scylla_node.append(('app', 'scylla'))
+            allowed_labels_on_scylla_node.append(('app.kubernetes.io/name', 'scylla'))
+        else:
+            allowed_labels_on_scylla_node.append(('scylla/cluster', self.k8s_scylla_cluster_name))
         if self.is_performance_tuning_enabled:
             # NOTE: add performance tuning related pods only if we expect it to be.
             #       When we have tuning disabled it must not exist.
@@ -551,18 +557,6 @@ class EksScyllaPodCluster(ScyllaPodCluster):
     nodes: List[EksScyllaPodContainer]
 
     # pylint: disable=too-many-arguments
-    def __init__(self,
-                 k8s_cluster: KubernetesCluster,
-                 scylla_cluster_name: Optional[str] = None,
-                 user_prefix: Optional[str] = None,
-                 n_nodes: Union[list, int] = 3,
-                 params: Optional[dict] = None,
-                 node_pool: EksNodePool = None,
-                 ) -> None:
-        super().__init__(k8s_cluster=k8s_cluster, scylla_cluster_name=scylla_cluster_name, user_prefix=user_prefix,
-                         n_nodes=n_nodes, params=params, node_pool=node_pool)
-
-    # pylint: disable=too-many-arguments
     def add_nodes(self,
                   count: int,
                   ec2_user_data: str = "",
@@ -591,3 +585,34 @@ class MonitorSetEKS(MonitorSetAWS):
 
     def install_scylla_manager(self, node):
         pass
+
+    # NOTE: setting and filtering of the "MonitorId" tag is needed for the multi-tenant setup.
+    def _get_instances(self, dc_idx):
+        if not self.monitor_id:
+            raise ValueError("'monitor_id' must exist")
+
+        ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx],
+                                          spot_max_price_percentage=self.params.get('spot_max_price'))
+        results = list_instances_aws(
+            tags_dict={'MonitorId': self.monitor_id, 'NodeType': self.node_type},
+            region_name=self.region_names[dc_idx],
+            group_as_region=True,
+        )
+        instances = results[self.region_names[dc_idx]]
+
+        def sort_by_index(item):
+            for tag in item['Tags']:
+                if tag['Key'] == 'NodeIndex':
+                    return tag['Value']
+            return '0'
+        instances = sorted(instances, key=sort_by_index)
+        return [ec2.get_instance(instance['InstanceId']) for instance in instances]
+
+    def _create_instances(self, count, ec2_user_data='', dc_idx=0):
+        instances = super()._create_instances(count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx)
+        for instance in instances:
+            self._ec2_services[dc_idx].create_tags(
+                Resources=[instance.id],
+                Tags=[{"Key": "MonitorId", "Value": self.monitor_id}],
+            )
+        return instances
