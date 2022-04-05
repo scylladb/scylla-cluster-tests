@@ -576,10 +576,14 @@ class LongevityTest(ClusterTester):
         except Exception as error:  # pylint: disable=broad-except
             self.log.error("Error in gathering Grafana screenshots and snapshots. Error:\n%s", error)
 
+        benchmarks_results = self.db_cluster.get_node_benchmarks_results() if self.db_cluster else {}
+        # If cluster was not created, not need to collect nemesis stats - they do not exist
+        nemeses_stats = self.get_nemesises_stats() if self.db_cluster else {}
+
         email_data.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
                            "grafana_snapshots": grafana_dataset.get("snapshots", []),
-                           "node_benchmarks": self.db_cluster.get_node_benchmarks_results(),
-                           "nemesis_details": self.get_nemesises_stats(),
+                           "node_benchmarks": benchmarks_results,
+                           "nemesis_details": nemeses_stats,
                            "nemesis_name": self.params.get("nemesis_class_name"),
                            "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-", })
         return email_data
