@@ -202,8 +202,7 @@ class ManagerTask:
         """
         Gets the task's arguments
         """
-        cmd = f"-c {self.cluster_id} progress {self.id}"
-        res = self.sctool.run(cmd=cmd, is_verify_errorless_result=True, parse_table_res=False)
+        res = self.progress_string()
 
         arguments_string = ""  # If arguments parameter doesn't exist, there were no arguments in this task
         # Output example:
