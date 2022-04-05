@@ -82,7 +82,8 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                  ec2_instance_type='c5.xlarge', ec2_ami_username='root',
                  ec2_user_data='', ec2_block_device_mappings=None,
                  cluster_prefix='cluster',
-                 node_prefix='node', n_nodes=10, params=None, node_type=None, extra_network_interface=False):
+                 node_prefix='node', n_nodes=10, params=None, node_type=None,
+                 extra_network_interface=False, add_nodes=True):
         # pylint: disable=too-many-locals
         region_names = params.region_names
         if len(credentials) > 1 or len(region_names) > 1:
@@ -109,7 +110,8 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                          params=params,
                          region_names=self.region_names,
                          node_type=node_type,
-                         extra_network_interface=extra_network_interface
+                         extra_network_interface=extra_network_interface,
+                         add_nodes=add_nodes,
                          )
 
     def __str__(self):
@@ -980,14 +982,15 @@ class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
                  services, credentials, ec2_instance_type='c5.xlarge',
                  ec2_block_device_mappings=None,
                  ec2_ami_username='centos',
-                 user_prefix=None, n_nodes=10, targets=None, params=None):
+                 user_prefix=None, n_nodes=10, targets=None, params=None,
+                 add_nodes=True, monitor_id=None):
         # pylint: disable=too-many-locals
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-node')
         node_type = 'monitor'
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'monitor-set')
-        cluster.BaseMonitorSet.__init__(self,
-                                        targets=targets,
-                                        params=params)
+        cluster.BaseMonitorSet.__init__(
+            self, targets=targets, params=params, monitor_id=monitor_id,
+        )
 
         AWSCluster.__init__(self,
                             ec2_ami_id=ec2_ami_id,
@@ -1002,4 +1005,5 @@ class MonitorSetAWS(cluster.BaseMonitorSet, AWSCluster):
                             node_prefix=node_prefix,
                             n_nodes=n_nodes,
                             params=params,
-                            node_type=node_type)
+                            node_type=node_type,
+                            add_nodes=add_nodes)

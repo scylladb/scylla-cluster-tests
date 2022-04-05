@@ -3051,7 +3051,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
     # pylint: disable=too-many-arguments
     def __init__(self, cluster_uuid=None, cluster_prefix='cluster', node_prefix='node', n_nodes=3, params=None,
-                 region_names=None, node_type=None, extra_network_interface=False):
+                 region_names=None, node_type=None, extra_network_interface=False, add_nodes=True):
         self.extra_network_interface = extra_network_interface
         if params is None:
             params = {}
@@ -3087,14 +3087,17 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             self._node_private_ips = self.params.get(self.get_node_ips_param(public_ip=False)) or []
             self.log.debug('Node public IPs: {}, private IPs: {}'.format(self._node_public_ips, self._node_private_ips))
 
-        if isinstance(n_nodes, list):
-            for dc_idx, num in enumerate(n_nodes):
-                self.add_nodes(num, dc_idx=dc_idx, enable_auto_bootstrap=self.auto_bootstrap)
-        elif isinstance(n_nodes, int):  # legacy type
-            self.add_nodes(n_nodes, enable_auto_bootstrap=self.auto_bootstrap)
-        else:
-            raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
-        self.run_node_benchmarks()
+        # NOTE: following is needed in case of K8S where we init multiple DB clusters first
+        #       and only then we add nodes to it calling code in parallel.
+        if add_nodes:
+            if isinstance(n_nodes, list):
+                for dc_idx, num in enumerate(n_nodes):
+                    self.add_nodes(num, dc_idx=dc_idx, enable_auto_bootstrap=self.auto_bootstrap)
+            elif isinstance(n_nodes, int):  # legacy type
+                self.add_nodes(n_nodes, enable_auto_bootstrap=self.auto_bootstrap)
+            else:
+                raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
+            self.run_node_benchmarks()
         self.coredumps = {}
         super().__init__()
 
@@ -4830,7 +4833,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
     DB_NODES_IP_ADDRESS = 'ip_address'
     json_file_params_for_replace = {"$test_name": get_test_name()}
 
-    def __init__(self, targets, params):
+    def __init__(self, targets, params, monitor_id: str = None):
         self.targets = targets
         self.params = params
         self.local_metrics_addr = start_metrics_server()  # start prometheus metrics server locally and return local ip
@@ -4842,6 +4845,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         self.grafana_start_time = 0
         self._sct_dashboard_json_file = None
         self.test_config = TestConfig()
+        self.monitor_id = monitor_id or self.test_config.test_id()
 
     @staticmethod
     @retrying(n=5)
@@ -4925,7 +4929,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                 node.create_swap_file(monitor_swap_size)
         # update repo cache and system after system is up
         node.update_repo_cache()
-        self.mgmt_auth_token = self.test_config.test_id()  # pylint: disable=attribute-defined-outside-init
+        self.mgmt_auth_token = self.monitor_id  # pylint: disable=attribute-defined-outside-init
 
         if self.test_config.REUSE_CLUSTER:
             self.configure_scylla_monitoring(node)
@@ -5334,7 +5338,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                                                      extra_entities=grafana_extra_dashboards)
             screenshot_files = screenshot_collector.collect(node, self.logdir)
             for screenshot in screenshot_files:
-                s3_path = "{test_id}/{date}".format(test_id=self.test_config.test_id(), date=date_time)
+                s3_path = "{monitor_id}/{date}".format(monitor_id=self.monitor_id, date=date_time)
                 screenshot_links.append(S3Storage().upload_file(screenshot, s3_path))
 
             snapshots_collector = GrafanaSnapshot(name="grafana-snapshot",
@@ -5351,7 +5355,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         try:
             annotations = self.get_grafana_annotations(self.nodes[0])
             if annotations:
-                annotations_url = S3Storage().generate_url('annotations.json', self.test_config.test_id())
+                annotations_url = S3Storage().generate_url('annotations.json', self.monitor_id)
                 self.log.info("Uploading 'annotations.json' to {s3_url}".format(
                     s3_url=annotations_url))
                 response = requests.put(annotations_url, data=annotations, headers={
@@ -5369,7 +5373,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         try:
             if snapshot_archive := PrometheusSnapshots(name='prometheus_snapshot').collect(self.nodes[0], self.logdir):
                 self.log.debug("Snapshot local path: %s", snapshot_archive)
-                return upload_archive_to_s3(snapshot_archive, self.test_config.test_id())
+                return upload_archive_to_s3(snapshot_archive, self.monitor_id)
         except Exception as details:  # pylint: disable=broad-except
             self.log.error("Error downloading prometheus data dir: %s", details)
         return ""

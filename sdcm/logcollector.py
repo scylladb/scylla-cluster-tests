@@ -1007,7 +1007,7 @@ class KubernetesLogCollector(SCTLogCollector):
         FileLog(name='cert_manager.log', search_locally=True),
         FileLog(name='scylla_manager.log', search_locally=True),
         FileLog(name='scylla_operator.log', search_locally=True),
-        FileLog(name='scylla_cluster_events.log', search_locally=True),
+        FileLog(name='*_cluster_events.log', search_locally=True),
         FileLog(name='kubectl.version', search_locally=True),
         DirLog(name='cluster-scoped-resources/*', search_locally=True),
         DirLog(name='namespaces/*', search_locally=True),
