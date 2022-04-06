@@ -8,6 +8,14 @@ from sdcm.cluster import BaseNode, BaseCluster, BaseScyllaCluster
 from sdcm.rest.storage_service_client import StorageServiceClient
 
 
+class CompactionTypes(NamedTuple):
+    COMPACTION: str = "COMPACTION"
+    CLEANUP: str = "CLEANUP"
+    SCRUB: str = "SCRUB"
+    RESHAPE: str = "RESHAPE"
+    UPGRADE: str = "UPGRADE"
+
+
 class ScrubModes(NamedTuple):
     ABORT: str = "ABORT"
     SKIP: str = "SKIP"
@@ -113,3 +121,6 @@ class StartStopCompactionArgs(NamedTuple):
     timeout: int
     target_node: BaseNode
     compaction_ops: CompactionOps
+
+
+COMPACTION_TYPES = CompactionTypes()
