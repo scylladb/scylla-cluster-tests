@@ -104,6 +104,10 @@ class NoKeyspaceFound(Exception):
     pass
 
 
+class NoTableFound(Exception):
+    pass
+
+
 class FilesNotCorrupted(Exception):
     pass
 
@@ -149,14 +153,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     # nemesis flags:
     topology_changes: bool = False  # flag that signal that nemesis is changing cluster topology,
     # i.e. adding/removing nodes/data centers
-    disruptive: bool = False        # flag that signal that nemesis disrupts node/cluster,
+    disruptive: bool = False  # flag that signal that nemesis disrupts node/cluster,
     # i.e reboot,kill, hardreboot, terminate
-    run_with_gemini: bool = True    # flag that signal that nemesis runs with gemini tests
-    networking: bool = False        # flag that signal that nemesis interact with nemesis,
+    run_with_gemini: bool = True  # flag that signal that nemesis runs with gemini tests
+    networking: bool = False  # flag that signal that nemesis interact with nemesis,
     # i.e switch off/on network interface, network issues
-    kubernetes: bool = False        # flag that signal that nemesis run with k8s cluster
-    limited: bool = False           # flag that signal that nemesis are belong to limited set of nemesises
-    has_steady_run: bool = False    # flag that signal that nemesis should be run with perf tests with steady run
+    kubernetes: bool = False  # flag that signal that nemesis run with k8s cluster
+    limited: bool = False  # flag that signal that nemesis are belong to limited set of nemesises
+    has_steady_run: bool = False  # flag that signal that nemesis should be run with perf tests with steady run
 
     def __new__(cls, tester_obj, termination_event, *args):  # pylint: disable=unused-argument
         for name, member in inspect.getmembers(cls, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
@@ -560,8 +564,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # If this error happens during the first boot with the missing disk this issue is expected and it's not an issue
         with DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,
                             line="Can't find a column family with UUID", node=self.target_node), \
-            DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE,
-                           line="Can't find a column family with UUID", node=self.target_node):
+                DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE,
+                               line="Can't find a column family with UUID", node=self.target_node):
             self.target_node.restart()
 
         self.log.info('Waiting scylla services to start after node restart')
@@ -1125,7 +1129,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.mark_to_be_replaced()
         self._kubernetes_wait_till_node_up_after_been_recreated(self.target_node, old_uid=old_uid)
 
-    def _disrupt_terminate_decommission_add_node_kubernetes(self, node, node_terminate_method_name):  # pylint: disable=invalid-name
+    def _disrupt_terminate_decommission_add_node_kubernetes(self, node,
+                                                            node_terminate_method_name):  # pylint: disable=invalid-name
         self.log.info('Terminate %s', node)
         node_terminate_method = getattr(node, node_terminate_method_name)
         node_terminate_method()
@@ -1134,7 +1139,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         new_node = self.add_new_node(rack=node.rack)
         self.unset_current_running_nemesis(new_node)
 
-    def _disrupt_terminate_and_replace_node_kubernetes(self, node, node_terminate_method_name):  # pylint: disable=invalid-name
+    def _disrupt_terminate_and_replace_node_kubernetes(self, node,
+                                                       node_terminate_method_name):  # pylint: disable=invalid-name
         old_uid = node.k8s_pod_uid
         self.log.info('TerminateNode %s (uid=%s)', node, old_uid)
         node_terminate_method = getattr(node, node_terminate_method_name)
@@ -2125,15 +2131,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             with DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,
                                 line="repair's stream failed: streaming::stream_exception",
                                 node=self.target_node), \
-                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                               line="Can not find stream_manager",
-                               node=self.target_node), \
-                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                               line="is aborted",
-                               node=self.target_node), \
-                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                               line="Failed to repair",
-                               node=self.target_node):
+                    DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                                   line="Can not find stream_manager",
+                                   node=self.target_node), \
+                    DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                                   line="is aborted",
+                                   node=self.target_node), \
+                    DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                                   line="Failed to repair",
+                                   node=self.target_node):
                 self.target_node.remoter.run(
                     "curl -X POST --header 'Content-Type: application/json' --header 'Accept: application/json'"
                     " http://127.0.0.1:10000/storage_service/force_terminate_repair"
@@ -2518,7 +2524,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.log.error(f"nodetool removenode command exited with status {exit_status}")
                 self.log.debug(
                     f"Remove failed node {node_to_remove} from dead node list {self.cluster.dead_nodes_list}")
-                node = next((n for n in self.cluster.dead_nodes_list if n.ip_address == node_to_remove.ip_address), None)
+                node = next((n for n in self.cluster.dead_nodes_list if n.ip_address == node_to_remove.ip_address),
+                            None)
                 if node:
                     self.cluster.dead_nodes_list.remove(node)
                 else:
@@ -2527,7 +2534,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # verify node is removed by nodetool status
             removed_node_status = self.cluster.get_node_status_dictionary(
                 ip_address=node_to_remove.ip_address, verification_node=verification_node)
-            assert removed_node_status is None,\
+            assert removed_node_status is None, \
                 "Node was not removed properly (Node status:{})".format(removed_node_status)
 
             # add new node
@@ -2789,15 +2796,15 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
                             line="This node was decommissioned and will not rejoin",
                             node=self.target_node), \
-            DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                           line="Fail to send STREAM_MUTATION_DONE",
-                           node=self.target_node), \
-            DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,
-                           line="streaming::stream_exception",
-                           node=self.target_node), \
-            DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                           line="got error in row level repair",
-                           node=self.target_node):
+                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                               line="Fail to send STREAM_MUTATION_DONE",
+                               node=self.target_node), \
+                DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,
+                               line="streaming::stream_exception",
+                               node=self.target_node), \
+                DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                               line="got error in row level repair",
+                               node=self.target_node):
             self.target_node.reboot(hard=True, verify_ssh=True)
             streaming_thread.join(60)
 
@@ -2959,7 +2966,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if not self.cluster.params.get('server_encrypt'):
             raise UnsupportedNemesis('Server Encryption is not enabled, hence skipping')
 
-        @timeout_decor(timeout=20, allowed_exceptions=(LogContentNotFound, ))
+        @timeout_decor(timeout=20, allowed_exceptions=(LogContentNotFound,))
         def check_ssl_reload_log(node_system_log):
             if not list(node_system_log):
                 raise LogContentNotFound('Reload SSL message not found in node log')
@@ -3218,6 +3225,47 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         assert not [dc for dc in datacenters if dc.endswith("_nemesis_dc")], "new datacenter was not unregistered"
         self._verify_multi_dc_keyspace_data(consistency_level="QUORUM")
 
+    # def disrupt_auditing_ddl_log_into_table(self):
+    #     pass
+    #
+    # def distupt_auditing_query_log_into_syslog(self):
+    #     pass
+
+    def disrupt_auditing_dml_table(self):
+        """
+        Enables auditing feature. This feature is available only on enterprise clusters.
+        Auditing configuration-
+        audit: "table"
+        audit_categories: "DML"
+        """
+        if not self.cluster.nodes[0].is_enterprise:
+            raise UnsupportedNemesis('Auditing feature is supported only for enterprise. Skipping the test')
+
+        # need to make sure that there is a keyspace with a table filled with data
+        keyspaces = self._get_user_keyspaces()
+        if not keyspaces:
+            raise NoKeyspaceFound('No user keyspaces were found. Skipping the test')
+        ks = random.choice(keyspaces) if keyspaces else keyspaces
+        logging.info(msg=f"ks={ks}")
+
+        keyspace_table = None
+        if not keyspace_table:
+            raise NoTableFound(f'No tables were found in keyspace {keyspaces}')
+
+        dict_for_scylla_yaml = {"audit": "table", "audit_tables": "",
+                                "audit_categories": "DML", "audit_keyspaces": "mykespace"}
+        for node in self.cluster.nodes:
+            with node.remote_scylla_yaml() as scylla_yaml:
+                scylla_yaml.update(dict_for_scylla_yaml)
+                node.restart_scylla_server(verify_up_before=True, verify_up_after=True)
+
+        # TODO: need to check that audit log table was created:
+        # SELECT * FROM audit.audit_log ;
+        # query_verify = f"SELECT * FROM keyspace1.standard1 WHERE key={key}"
+        query = "SELECT * FROM audit.audit_log"
+        result = self.target_node.run_cqlsh(query)
+        logging.info(msg=f"result={result}")
+
 
 def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
     """
@@ -3388,7 +3436,6 @@ class NoOpMonkey(Nemesis):
 
 
 class AddRemoveDcNemesis(Nemesis):
-
     disruptive = False
     kubernetes = False
     run_with_gemini = False
@@ -4290,7 +4337,6 @@ class CDCStressorMonkey(Nemesis):
 
 
 class DecommissionStreamingErrMonkey(Nemesis):
-
     disruptive = True
     topology_changes = True
 
@@ -4299,7 +4345,6 @@ class DecommissionStreamingErrMonkey(Nemesis):
 
 
 class RebuildStreamingErrMonkey(Nemesis):
-
     disruptive = True
 
     def disrupt(self):
@@ -4307,7 +4352,6 @@ class RebuildStreamingErrMonkey(Nemesis):
 
 
 class RepairStreamingErrMonkey(Nemesis):
-
     disruptive = True
 
     def disrupt(self):
@@ -4372,3 +4416,16 @@ class StartStopValidationCompaction(Nemesis):
 
     def disrupt(self):
         self.disrupt_start_stop_validation_compaction()
+
+
+class EnableAuditingDmlTable(Nemesis):
+    """
+    class for auditing nemesis. The feature is available only on enterprise versions.
+    Auditing configuration-
+    audit: "table"
+    audit_categories: "DML"
+    """
+    disruptive = False
+
+    def disrupt(self):
+        self.disrupt_auditing_dml_table()
