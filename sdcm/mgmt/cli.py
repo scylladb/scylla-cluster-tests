@@ -122,10 +122,9 @@ class ManagerTask:
             cmd = "task history {} -c {}".format(self.id, self.cluster_id)
         res = self.sctool.run(cmd=cmd, is_verify_errorless_result=True)
         if self.sctool.is_v3_cli:
-            _, _, _, history_table_titles = res[:4]
-            history_table_values = res[4:]
+            _, _, _, *history_table = res
             # The info command returns some unnecessary values: task_name, cron, retry
-            return [history_table_titles, history_table_values]
+            return history_table
         return res  # or can be specified like: self.get_property(parsed_table=res, column_name='status')
 
     @property
