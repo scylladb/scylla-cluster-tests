@@ -190,11 +190,16 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
             return Averages()
 
         for item in docs:
-            results.append(ComparableResult(
-                sysbench_eps=item["sysbench_events_per_second"],
-                cassandra_fio_read_bw=item["cassandra_fio_lcs_64k_read"]["read"]["bw"],
-                cassandra_fio_write_bw=item["cassandra_fio_lcs_64k_write"]["write"]["bw"]
-            ))
+            try:
+                results.append(ComparableResult(
+                    sysbench_eps=item["sysbench_events_per_second"],
+                    cassandra_fio_read_bw=item["cassandra_fio_lcs_64k_read"]["read"]["bw"],
+                    cassandra_fio_write_bw=item["cassandra_fio_lcs_64k_write"]["write"]["bw"]
+                ))
+            except Exception as exc:  # pylint: disable=broad-except
+                LOGGER.warning(
+                    "Failed to generate comparable result for the following item:\n%s"
+                    "\nException:%s", item, exc)
         eps = [item.sysbench_eps for item in results]
         read_bw = [item.cassandra_fio_read_bw for item in results]
         write_bw = [item.cassandra_fio_write_bw for item in results]
