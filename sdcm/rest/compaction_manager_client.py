@@ -33,3 +33,10 @@ class CompactionManagerClient(RemoteCurlClient):
         params = {"type": compaction_type.upper()}
 
         return self.run_remoter_curl(method="POST", path="stop_compaction", params=params, timeout=360)
+
+    def stop_keyspace_compaction(self, keyspace: str, compaction_type: str, tables: list, timeout: int = 360):
+        LOGGER.debug("Stopping keyspace compaction via REST API")
+        params = {"type": compaction_type, "tables": tables}
+        path = f"stop_keyspace_compaction/{keyspace}"
+
+        return self.run_remoter_curl(method="POST", path=path, params=params, timeout=timeout)
