@@ -16,12 +16,15 @@ Wait functions appropriate for tests that have high timing variance.
 """
 import time
 import logging
+from typing import TypeVar, cast
+from collections.abc import Callable
 
 import tenacity
-from tenacity.retry import retry_if_result, retry_if_exception_type
-from tenacity import RetryError
 
-LOGGER = logging.getLogger('sdcm.wait')
+
+LOGGER = logging.getLogger("sdcm.wait")
+
+R = TypeVar("R")  # pylint: disable=invalid-name
 
 
 def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, **kwargs):
@@ -56,7 +59,7 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, **kwargs):
             stop=tenacity.stop_after_delay(timeout),
             wait=tenacity.wait_fixed(step),
             before_sleep=retry_logger,
-            retry=(retry_if_result(lambda value: not value) | retry_if_exception_type())
+            retry=(tenacity.retry_if_result(lambda value: not value) | tenacity.retry_if_exception_type())
         )
         res = retry(func, **kwargs)
 
@@ -69,7 +72,7 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, **kwargs):
             LOGGER.error("last error: %r", ex)
         if throw_exc:
             if hasattr(ex, 'last_attempt') and not ex.last_attempt._result:  # pylint: disable=protected-access,no-member
-                raise RetryError(err) from ex
+                raise tenacity.RetryError(err) from ex
             raise
 
     return res
@@ -97,3 +100,27 @@ def forever_wait_for(func, step=1, text=None, **kwargs):
         if text is not None:
             LOGGER.debug('%s (%s s)', text, time_elapsed)
     return ok
+
+
+def exponential_retry(func: Callable[[], R],
+                      exceptions: tuple[type[BaseException]] | type[BaseException] = Exception,
+                      threshold: float = 300,
+                      retries: int = 10,
+                      logger: logging.Logger | None = LOGGER) -> R:
+    """
+    Retry using an exponential backoff algorithm, similar to what Amazon recommends for its own service [1].
+
+    :see: [1] http://docs.aws.amazon.com/general/latest/gr/api-retries.html
+    """
+    def retry_logger(retry_state: tenacity.RetryCallState) -> None:
+        logger.error("Call to method %s (retries: %s) failed: %s",
+                     retry_state.fn, retry_state.attempt_number, retry_state.outcome.exception())
+
+    retry = tenacity.Retrying(
+        stop=tenacity.stop_after_attempt(max_attempt_number=retries),
+        wait=tenacity.wait_exponential(multiplier=2, max=threshold),
+        retry=tenacity.retry_if_exception_type(exception_types=exceptions),
+        before_sleep=retry_logger if logger else None,
+    )
+
+    return cast(R, retry(func))

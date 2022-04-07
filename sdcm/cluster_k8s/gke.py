@@ -10,21 +10,24 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+
 import logging
-import time
 from textwrap import dedent
-from typing import List, Dict
+from typing import List, Dict, ParamSpec, TypeVar
 from functools import cached_property
+from collections.abc import Callable
 
 import yaml
+import tenacity
 
 from sdcm import sct_abs_path, cluster
+from sdcm.wait import exponential_retry
 from sdcm.utils.k8s import ApiCallRateLimiter, TokenUpdateThread
 from sdcm.utils.gce_utils import GcloudContextManager
 from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BaseScyllaPodContainer, CloudK8sNodePool
-
 from sdcm.cluster_k8s.iptables import IptablesPodIpRedirectMixin, IptablesClusterOpsMixin
 from sdcm.cluster_gce import MonitorSetGCE
+
 
 GKE_API_CALL_RATE_LIMIT = 5  # ops/s
 GKE_API_CALL_QUEUE_SIZE = 1000  # ops
@@ -33,6 +36,9 @@ GKE_URLLIB_BACKOFF_FACTOR = 0.1
 
 LOADER_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/gke-loaders.yaml")
 LOGGER = logging.getLogger(__name__)
+
+P = ParamSpec("P")  # pylint: disable=invalid-name
+R = TypeVar("R")  # pylint: disable=invalid-name
 
 
 class GkeNodePool(CloudK8sNodePool):
@@ -367,32 +373,13 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
         if self.k8s_node:
             self.k8s_node.destroy()
 
-    def _instance_wait_safe(self, instance_method, *args, **kwargs):
-        """
-        Wrapper around GCE instance methods that is safer to use.
-
-        Let's try a method, and if it fails, let's retry using an exponential
-        backoff algorithm, similar to what Amazon recommends for it's own
-        service [1].
-
-        :see: [1] http://docs.aws.amazon.com/general/latest/gr/api-retries.html
-        """
-        threshold = 300
-        ok = False
-        retries = 0
-        max_retries = 9
-        while not ok and retries <= max_retries:
-            try:
-                return instance_method(*args, **kwargs)
-            except Exception as details:  # pylint: disable=broad-except
-                self.log.error('Call to method %s (retries: %s) failed: %s',
-                               instance_method, retries, details)
-                time.sleep(min((2 ** retries) * 2, threshold))
-                retries += 1
-
-        if not ok:
-            raise cluster.NodeError('GCE instance %s method call error after '
-                                    'exponential backoff wait' % self.k8s_node.id)
+    def _instance_wait_safe(self, instance_method: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
+        try:
+            return exponential_retry(func=lambda: instance_method(*args, **kwargs), logger=self.log)
+        except tenacity.RetryError:
+            raise cluster.NodeError(
+                f"Timeout while running '{instance_method.__name__}' method on GCE instance '{self.k8s_node.id}'"
+            ) from None
 
     def terminate_k8s_node(self):
         """
