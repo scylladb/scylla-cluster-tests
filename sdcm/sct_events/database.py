@@ -46,6 +46,7 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     FILESYSTEM_ERROR: Type[LogEventProtocol]
     STACKTRACE: Type[LogEventProtocol]
     DISK_ERROR: Type[LogEventProtocol]
+    COMPACTION_STOPPED: Type[LogEventProtocol]
 
     # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
     REACTOR_STALLED: Type[LogEventProtocol]
@@ -101,6 +102,8 @@ DatabaseLogEvent.add_subevent_type("RESTARTED_DUE_TO_TIME_OUT", severity=Severit
 DatabaseLogEvent.add_subevent_type("EMPTY_NESTED_EXCEPTION", severity=Severity.WARNING,
                                    regex=r"cql_server - exception while processing connection: "
                                          r"seastar::nested_exception \(seastar::nested_exception\)$")
+DatabaseLogEvent.add_subevent_type("COMPACTION_STOPPED", severity=Severity.NORMAL,
+                                   regex="compaction_stopped_exception")
 DatabaseLogEvent.add_subevent_type("DATABASE_ERROR", severity=Severity.ERROR,
                                    regex="Exception ")
 DatabaseLogEvent.add_subevent_type("BAD_ALLOC", severity=Severity.ERROR,
@@ -153,6 +156,7 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.FILESYSTEM_ERROR(),
     DatabaseLogEvent.DISK_ERROR(),
     DatabaseLogEvent.STACKTRACE(),
+    DatabaseLogEvent.COMPACTION_STOPPED(),
 
     # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
     DatabaseLogEvent.REACTOR_STALLED(),
