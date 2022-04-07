@@ -9,7 +9,7 @@ managerPipeline(
     test_config: 'test-cases/manager/manager-regression-gce.yaml',
     scylla_version: '',  // In the manager scylla_version has a value by default,  but hydra currently can't find gce images by specific version number.
     // Therefore, I set scylla_version to be empty for this run, and instead set a predetermined scylla machine image
-    gce_image_db: 'https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/7436007548560002989',  // scylla 4.5.2
+    gce_image_db: 'https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/3864288805022866043',  // scylla 4.6.1
 
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
