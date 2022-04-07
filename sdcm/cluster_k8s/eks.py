@@ -15,10 +15,12 @@ import os
 import logging
 import time
 from textwrap import dedent
-from typing import List, Dict, Optional, Union, Literal
+from typing import List, Dict, Optional, Union, Literal, ParamSpec, TypeVar
 from functools import cached_property
+from collections.abc import Callable
 
 import boto3
+import tenacity
 from mypy_boto3_ec2.type_defs import LaunchTemplateBlockDeviceMappingRequestTypeDef, \
     LaunchTemplateEbsBlockDeviceRequestTypeDef, RequestLaunchTemplateDataTypeDef, \
     LaunchTemplateTagSpecificationRequestTypeDef
@@ -27,7 +29,7 @@ from sdcm import sct_abs_path, cluster
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.utils.aws_utils import tags_as_ec2_tags, EksClusterCleanupMixin
 from sdcm.utils.k8s import TokenUpdateThread
-from sdcm.wait import wait_for
+from sdcm.wait import wait_for, exponential_retry
 from sdcm.cluster_k8s import (
     BaseScyllaPodContainer,
     CloudK8sNodePool,
@@ -39,6 +41,9 @@ from sdcm.remote import LOCALRUNNER
 
 
 LOGGER = logging.getLogger(__name__)
+
+P = ParamSpec("P")  # pylint: disable=invalid-name
+R = TypeVar("R")  # pylint: disable=invalid-name
 
 
 # pylint: disable=too-many-instance-attributes
@@ -506,32 +511,13 @@ class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
         if ec2_host:
             ec2_host.terminate()
 
-    def _instance_wait_safe(self, instance_method, *args, **kwargs):
-        """
-        Wrapper around GCE instance methods that is safer to use.
-
-        Let's try a method, and if it fails, let's retry using an exponential
-        backoff algorithm, similar to what Amazon recommends for it's own
-        service [1].
-
-        :see: [1] http://docs.aws.amazon.com/general/latest/gr/api-retries.html
-        """
-        threshold = 300
-        ok = False
-        retries = 0
-        max_retries = 9
-        while not ok and retries <= max_retries:
-            try:
-                return instance_method(*args, **kwargs)
-            except Exception as details:  # pylint: disable=broad-except
-                self.log.error('Call to method %s (retries: %s) failed: %s',
-                               instance_method, retries, details)
-                time.sleep(min((2 ** retries) * 2, threshold))
-                retries += 1
-
-        if not ok:
-            raise cluster.NodeError('GCE instance %s method call error after '
-                                    'exponential backoff wait' % self.ec2_host.id)
+    def _instance_wait_safe(self, instance_method: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
+        try:
+            return exponential_retry(func=lambda: instance_method(*args, **kwargs), logger=self.log)
+        except tenacity.RetryError:
+            raise cluster.NodeError(
+                f"Timeout while running '{instance_method.__name__}' method on AWS instance '{self.ec2_host.id}'"
+            ) from None
 
     def terminate_k8s_node(self):
         """

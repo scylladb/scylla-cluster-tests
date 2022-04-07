@@ -12,25 +12,32 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
+import json
 import time
 import logging
+from typing import Dict, Any, ParamSpec, TypeVar
 from textwrap import dedent
-from typing import Dict, Any
 from functools import cached_property
-import json
+from collections.abc import Callable
 
+import tenacity
 from libcloud.common.google import GoogleBaseError, ResourceNotFoundError, InvalidRequestError
 
 from sdcm import cluster
+from sdcm.wait import exponential_retry
 from sdcm.keystore import pub_key_from_private_key_file
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.decorators import retrying
 
+
 SPOT_TERMINATION_CHECK_DELAY = 1
 SPOT_TERMINATION_METADATA_CHECK_TIMEOUT = 15
 
 LOGGER = logging.getLogger(__name__)
+
+P = ParamSpec("P")  # pylint: disable=invalid-name
+R = TypeVar("R")  # pylint: disable=invalid-name
 
 
 class CreateGCENodeError(Exception):
@@ -87,32 +94,13 @@ class GCENode(cluster.BaseNode):
         return self._instance_wait_safe(self._gce_service.ex_set_node_labels, self._instance, {"keep": "alive"}) and \
             super()._set_keep_alive()
 
-    def _instance_wait_safe(self, instance_method, *args, **kwargs):
-        """
-        Wrapper around GCE instance methods that is safer to use.
-
-        Let's try a method, and if it fails, let's retry using an exponential
-        backoff algorithm, similar to what Amazon recommends for it's own
-        service [1].
-
-        :see: [1] http://docs.aws.amazon.com/general/latest/gr/api-retries.html
-        """
-        threshold = 300
-        ok = False
-        retries = 0
-        max_retries = 9
-        while not ok and retries <= max_retries:
-            try:
-                return instance_method(*args, **kwargs)
-            except Exception as details:  # pylint: disable=broad-except
-                self.log.error('Call to method %s (retries: %s) failed: %s',
-                               instance_method, retries, details)
-                time.sleep(min((2 ** retries) * 2, threshold))
-                retries += 1
-
-        if not ok:
-            raise cluster.NodeError('GCE instance %s method call error after '
-                                    'exponential backoff wait' % self._instance.id)
+    def _instance_wait_safe(self, instance_method: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
+        try:
+            return exponential_retry(func=lambda: instance_method(*args, **kwargs), logger=self.log)
+        except tenacity.RetryError:
+            raise cluster.NodeError(
+                f"Timeout while running '{instance_method.__name__}' method on GCE instance '{self._instance.id}'"
+            ) from None
 
     def _refresh_instance_state(self):
         node_name = self._instance.name

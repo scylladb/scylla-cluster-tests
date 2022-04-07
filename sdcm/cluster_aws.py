@@ -23,19 +23,21 @@ import random
 import logging
 import tempfile
 from math import floor
-from typing import Dict, Optional
+from typing import Dict, Optional, ParamSpec, TypeVar
 from datetime import datetime
 from textwrap import dedent
 from functools import cached_property
 from contextlib import ExitStack
+from collections.abc import Callable
 
 import yaml
 import boto3
+import tenacity
 from mypy_boto3_ec2 import EC2Client
 from pkg_resources import parse_version
-from botocore.exceptions import WaiterError
 
 from sdcm import ec2_client, cluster, wait
+from sdcm.wait import exponential_retry
 from sdcm.provision.aws.utils import configure_eth1_script, network_config_ipv6_workaround_script, \
     configure_set_preserve_hostname_script
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
@@ -62,6 +64,9 @@ SPOT_TERMINATION_CHECK_OVERHEAD = 15
 LOCAL_CMD_RUNNER = LocalCmdRunner()
 EBS_VOLUME = "attached"
 INSTANCE_STORE = "instance_store"
+
+P = ParamSpec("P")  # pylint: disable=invalid-name
+R = TypeVar("R")  # pylint: disable=invalid-name
 
 # pylint: disable=too-many-lines
 
@@ -553,42 +558,19 @@ class AWSNode(cluster.BaseNode):
         self._eth1_private_ip_address = [interface for interface in self._instance.network_interfaces if
                                          interface.attachment['DeviceIndex'] == 1][0].private_ip_address
 
-    def _instance_wait_safe(self, instance_method, *args, **kwargs):
-        """
-        Wrapper around AWS instance waiters that is safer to use.
-
-        Since AWS adopts an eventual consistency model, sometimes the method
-        wait_until_running will raise a botocore.exceptions.WaiterError saying
-        the instance does not exist. AWS API guide [1] recommends that the
-        procedure is retried using an exponencial backoff algorithm [2].
-
-        :see: [1] http://docs.aws.amazon.com/AWSEC2/latest/APIReference/query-api-troubleshooting.html#eventual-consistency
-        :see: [2] http://docs.aws.amazon.com/general/latest/gr/api-retries.html
-        """
-        threshold = 300
-        ok = False
-        retries = 0
-        max_retries = 9
-        while not ok and retries <= max_retries:
-            try:
-                instance_method(*args, **kwargs)
-                ok = True
-            except WaiterError:
-                time.sleep(min((2 ** retries) * 2, threshold))
-                retries += 1
-
-        if not ok:
+    def _instance_wait_safe(self, instance_method: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
+        try:
+            return exponential_retry(func=lambda: instance_method(*args, **kwargs), logger=None)
+        except tenacity.RetryError:
             try:
                 self._instance.reload()
             except Exception as ex:  # pylint: disable=broad-except
                 LOGGER.exception("Error while reloading instance metadata: %s", ex)
             finally:
-                method_name = instance_method.__name__
-                instance_id = self._instance.id
                 LOGGER.debug(self._instance.meta.data)
-                msg = "Timeout while running '{method_name}' method on AWS instance '{instance_id}'".format(
-                    method_name=method_name, instance_id=instance_id)
-                raise cluster.NodeError(msg)
+                raise cluster.NodeError(
+                    f"Timeout while running '{instance_method.__name__}' method on AWS instance '{self._instance.id}'"
+                ) from None
 
     def _wait_public_ip(self):
         ec2_instance_wait_public_ip(self._instance)
