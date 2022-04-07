@@ -178,6 +178,16 @@ def ignore_scrub_invalid_errors():
 
 
 @contextmanager
+def ignore_compaction_stopped_exceptions():
+    with ExitStack() as stack:
+        stack.enter_context(DbEventsFilter(
+            db_event=DatabaseLogEvent.DATABASE_ERROR,
+            line="was stopped due to: user request"
+        ))
+        yield
+
+
+@contextmanager
 def ignore_view_error_gate_closed_exception():
     with EventsFilter(event_class=DatabaseLogEvent, regex='.*view - Error applying view update.*gate_closed_exception'):
         yield
