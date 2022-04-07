@@ -41,6 +41,7 @@ DatabaseLogEvent.BOOT: NORMAL
 DatabaseLogEvent.STOP: NORMAL
 DatabaseLogEvent.SUPPRESSED_MESSAGES: WARNING
 DatabaseLogEvent.stream_exception: ERROR
+DatabaseLogEvent.COMPACTION_STOPPED: NORMAL
 IndexSpecialColumnErrorEvent: ERROR
 CassandraHarryEvent.failure: CRITICAL
 CassandraHarryEvent.error: ERROR
