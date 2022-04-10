@@ -586,18 +586,23 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.wait_jmx_up()
         self.cluster.wait_for_nodes_up_and_normal(nodes=[self.target_node])
 
-    def disrupt_multiple_hard_reboot_node(self):  # pylint: disable=invalid-name
-        # If this messages appeared, cdc successfully update generation
-        cdc_success_msg = ["streams description table already updated",
-                           "CDC description table successfully updated with generation"]
+    def disrupt_multiple_hard_reboot_node(self) -> None:
+        cdc_expected_error_patterns = [
+            "cdc - Could not update CDC description table with generation",
+        ]
+
+        # If this messages appeared, CDC successfully updated generation.
+        cdc_success_msg_patterns = [
+            "streams description table already updated",
+            "CDC description table successfully updated with generation",
+        ]
+
         num_of_reboots = random.randint(2, 10)
         InfoEvent(message=f'MultipleHardRebootNode {self.target_node}')
         for i in range(num_of_reboots):
-            self.log.debug("Rebooting {} out of {} times".format(i + 1, num_of_reboots))
-            cdc_expected_error = self.target_node.follow_system_log(
-                patterns=["cdc - Could not update CDC description table with generation"])
-            cdc_success_msg = self.target_node.follow_system_log(
-                patterns=cdc_success_msg)
+            self.log.debug("Rebooting %s out of %s times", i + 1, num_of_reboots)
+            cdc_expected_error = self.target_node.follow_system_log(patterns=cdc_expected_error_patterns)
+            cdc_success_msg = self.target_node.follow_system_log(patterns=cdc_success_msg_patterns)
             self.target_node.reboot(hard=True)
             if random.choice([True, False]):
                 self.log.info('Waiting scylla services to start after node reboot')
@@ -612,14 +617,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 # if cdc error message "cdc - Could not update CDC description..."
                 # was found in log during reboot, but after that success messages:
                 # "streams description updated" or "CDC desc table updated" were not
-                # found in logs, raise Exception to fail the nemesis.
+                # found in logs, raise the exception to fail the nemesis.
                 raise CdcStreamsWasNotUpdated(
                     f"After '{found_cdc_error[0]}', messages '{' or '.join(cdc_success_msg)}' were not found")
 
-            cdc_success_msg = cdc_expected_error = None
             sleep_time = random.randint(0, 100)
-            self.log.info(
-                'Sleep {} seconds after hard reboot and service-up for node {}'.format(sleep_time, self.target_node))
+            self.log.info("Sleep %s seconds after hard reboot and service-up for node %s", sleep_time, self.target_node)
             time.sleep(sleep_time)
 
     def disrupt_soft_reboot_node(self):
