@@ -28,7 +28,8 @@ import uuid
 import itertools
 import json
 import ipaddress
-from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager
+
+from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager, Any
 from datetime import datetime
 from textwrap import dedent
 from functools import cached_property, wraps
@@ -2983,6 +2984,17 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         else:
             return cmd.stderr
 
+    def get_list_of_sstables(self, keyspace_name: str, table_name: str, suffix: str = "-Statistics.db") -> List[str]:
+        statistics_files = []
+        find_cmd = f"find /var/lib/scylla/data/{keyspace_name}/{table_name}-* -name *{suffix}"
+
+        result = self.remoter.run(find_cmd, ignore_status=True, verbose=True)
+
+        if result.ok:
+            statistics_files = result.stdout.strip().split()
+
+        return statistics_files
+
 
 class FlakyRetryPolicy(RetryPolicy):
 
@@ -3472,6 +3484,36 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.log.debug(ks_tables_with_cdc)
 
         return ks_tables_with_cdc
+
+    def get_all_tables_with_twcs(self, db_node: BaseNode) -> List[Dict[str, Union[Dict[str, Any], int, str]]]:
+        """ Get list of keyspace.table with TWCS
+            example of returning dict: {
+                "name": ks.test,
+                "compaction": {"class": "TimeWindowCompactionStrategy",
+                                "compaction_window_size": 1,
+                                "compaction_window_unit": "MINUTES"},
+                "gc": 100,
+                "dttl": 100,
+                }
+        """
+        all_ks_cf = self.get_any_ks_cf_list(db_node, filter_out_system=True, filter_out_mv=True)
+        self.log.debug("Found user's tables: %s", all_ks_cf)
+        twcs_tables_list = []
+        twcs_query_search = "SELECT default_time_to_live as dttl, gc_grace_seconds as gc, compaction from system_schema.tables\
+                             WHERE keyspace_name='{ks}' and table_name='{cf}'"
+
+        with self.cql_connection_patient(db_node) as session:
+            for ks_cf in all_ks_cf:
+                ks, cf = ks_cf.split(".")
+                result = session.execute(twcs_query_search.format(ks=ks, cf=cf))
+
+                if result and result[0].compaction["class"] == "TimeWindowCompactionStrategy":
+                    twcs_tables_list.append({"name": ks_cf,
+                                             "compaction": dict(result[0].compaction),
+                                             "gc": result[0].gc,
+                                             "dttl": result[0].dttl})
+
+        return twcs_tables_list
 
     def run_node_benchmarks(self):
         if not self.params.get("run_db_node_benchmarks") or not self.nodes:
