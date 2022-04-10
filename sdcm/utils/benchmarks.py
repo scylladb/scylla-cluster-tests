@@ -200,7 +200,7 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
                 LOGGER.warning(
                     "Failed to generate comparable result for the following item:\n%s"
                     "\nException:%s", item, exc)
-                
+
         eps = [item.sysbench_eps for item in results]
         read_bw = [item.cassandra_fio_read_bw for item in results]
         write_bw = [item.cassandra_fio_write_bw for item in results]
