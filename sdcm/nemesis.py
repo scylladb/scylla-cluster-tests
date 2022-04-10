@@ -3218,6 +3218,48 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         assert not [dc for dc in datacenters if dc.endswith("_nemesis_dc")], "new datacenter was not unregistered"
         self._verify_multi_dc_keyspace_data(consistency_level="QUORUM")
 
+    # def disrupt_auditing_ddl_log_into_table(self):
+    #     pass
+    #
+    # def distupt_auditing_query_log_into_syslog(self):
+    #     pass
+
+    def disrupt_auditing_dml_table(self):
+        """
+        Enables auditing feature. This feature is available only on enterprise clusters.
+        The test randomly choose one user keyspace and enables DML auditing on all the
+        tables in the keyspace. The output is written to audit.audit_log table.
+        Auditing configuration-
+        audit: "table"
+        audit_categories: "DML"
+        """
+        if not self.cluster.nodes[0].is_enterprise:
+            raise UnsupportedNemesis('Auditing feature is supported only for enterprise. Skipping the test')
+
+        # need to make sure that there is a keyspace with a table filled with data
+        keyspaces = self.cluster.get_test_keyspaces()
+        if not keyspaces:
+            raise NoKeyspaceFound('No user keyspaces were found. Skipping the test')
+        ks = random.choice(keyspaces) if keyspaces else keyspaces
+        logging.info(msg=f"ks={ks}")
+        # keyspace_table = None
+        # if not keyspace_table:
+        #     raise NoTableFound(f'No tables were found in keyspace {keyspaces}')
+
+        dict_for_scylla_yaml = {"audit": "table", "audit_tables": "",
+                                "audit_categories": "DML", "audit_keyspaces": f"{ks}"}
+        for node in self.cluster.nodes:
+            with node.remote_scylla_yaml() as scylla_yaml:
+                scylla_yaml.update(dict_for_scylla_yaml)
+                node.restart_scylla_server(verify_up_before=True, verify_up_after=True)
+
+        # TODO: need to check that audit log table was created:
+        # SELECT * FROM audit.audit_log ;
+        # query_verify = f"SELECT * FROM keyspace1.standard1 WHERE key={key}"
+        query = "SELECT * FROM audit.audit_log"
+        result = self.target_node.run_cqlsh(query)
+        logging.info(msg=f"result={result}")
+
 
 def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
     """
@@ -4372,3 +4414,16 @@ class StartStopValidationCompaction(Nemesis):
 
     def disrupt(self):
         self.disrupt_start_stop_validation_compaction()
+
+
+class EnableAuditingDmlTable(Nemesis):
+    """
+    class for auditing nemesis. The feature is available only on enterprise versions.
+    Auditing configuration-
+    audit: "table"
+    audit_categories: "DML"
+    """
+    disruptive = False
+
+    def disrupt(self):
+        self.disrupt_auditing_dml_table()
