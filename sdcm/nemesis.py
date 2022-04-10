@@ -19,18 +19,20 @@ Classes that introduce disruption in clusters.
 import copy
 import datetime
 import inspect
-import json
 import logging
 import os
 import random
 import re
 import time
 import traceback
+import json
+
+from typing import Any, List, Optional, Type, Tuple, Callable, Dict, Set, Union
+from functools import wraps, partial
+
 from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
-from functools import wraps, partial
 from threading import Lock
-from typing import List, Optional, Type, Callable, Tuple, Dict, Set, Union
 from types import MethodType  # pylint: disable=no-name-in-module
 
 from cassandra import ConsistencyLevel
@@ -256,6 +258,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
         setattr(cls, func.__name__, wrapper)  # bind it to Nemesis class
         return func  # returning func means func can still be used normally
+
+    def use_nemesis_seed(self):
+        if nemesis_seed := self.tester.params["nemesis_seed"]:
+            random.seed(nemesis_seed)
 
     def update_stats(self, disrupt, status=True, data=None):
         if not data:
@@ -1770,15 +1776,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # do the actual truncation
         self.target_node.run_cqlsh(cmd='TRUNCATE {}.{}'.format(ks_name, table), timeout=120)
 
-    def _modify_table_property(self, name, val, filter_out_table_with_counter=False):
+    def _modify_table_property(self, name, val, filter_out_table_with_counter=False, keyspace_table=None):
         disruption_name = "".join([p.strip().capitalize() for p in name.split("_")])
         InfoEvent('ModifyTableProperties%s %s' % (disruption_name, self.target_node)).publish()
 
-        ks_cfs = self.cluster.get_non_system_ks_cf_list(
-            db_node=self.target_node, filter_out_table_with_counter=filter_out_table_with_counter,
-            filter_out_mv=True)  # not allowed to modify MV
+        if not keyspace_table:
+            self.use_nemesis_seed()
 
-        keyspace_table = random.choice(ks_cfs) if ks_cfs else ks_cfs
+            ks_cfs = self.cluster.get_non_system_ks_cf_list(
+                db_node=self.target_node, filter_out_table_with_counter=filter_out_table_with_counter,
+                filter_out_mv=True)  # not allowed to modify MV
+
+            keyspace_table = random.choice(ks_cfs) if ks_cfs else ks_cfs
+
         if not keyspace_table:
             raise UnsupportedNemesis(
                 'Non-system keyspace and table are not found. ModifyTableProperties nemesis can\'t be run')
@@ -2346,6 +2356,119 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                    "'%spercentile'" % random.randint(1, 99),
                    "'%sms'" % random.randint(1, 1000))
         self._modify_table_property(name="speculative_retry", val=random.choice(options))
+
+    def modify_table_twcs_window_size(self):
+        """ Change window size for tables with TWCS
+
+            After window size of TWCS changed, tables should be
+            reshaped. Process should not bring write amplification
+            if size of sstables in timewindow is differs significantly
+        """
+        self.use_nemesis_seed()
+
+        def set_new_twcs_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
+            """ Recommended number of sstables for twcs is 20 - 30
+                if number of sstables more than 32, sstables are picked up
+                in bucket by 32
+
+                if number of sstables more than 100, then 99 sstables contain 1 time window
+                and 100th sstables will contain more than 1 sstable
+                default value for twcs_max_window_count = 50
+                number_of_sstables = ttl / unit size ~=~ 100 min / 1 min = 100 sstables
+
+                example of settings param:
+                    {"name": ks_cf,
+                     "compaction":  {'class': 'TimeWindowCompactionStrategy',
+                                     'compaction_window_size': '1',
+                                     'compaction_window_unit': 'MINUTES'},
+                     "gc": 864000,
+                     "dttl": 86400}
+
+            """
+            current_unit = settings["compaction"]["compaction_window_unit"]
+            current_size = int(settings["compaction"]["compaction_window_size"])
+            multiplier = 3600 if current_unit in ["DAYS", "HOURS"] else 60
+            expected_sstable_number = 35
+
+            if current_unit == "DAYS":
+                current_size = current_size + 1
+            elif current_unit == "HOURS":
+                if (current_size // 24) > 2:
+                    current_unit = "DAYS"
+                    current_size = 3
+                else:
+                    current_size += 10
+            else:
+                if (current_size // 60) > 10:
+                    current_unit = "HOURS"
+                    current_size = 11
+                else:
+                    current_size += 35
+
+            settings["gc"] = current_size * multiplier * expected_sstable_number // 2
+            settings["dttl"] = current_size * multiplier * expected_sstable_number
+            settings["compaction"]["compaction_window_unit"] = current_unit
+            settings["compaction"]["compaction_window_size"] = current_size
+
+            return settings
+
+        all_ks_cs_with_twcs = self.cluster.get_all_tables_with_twcs(self.target_node)
+        self.log.debug("All tables with TWCS %s", all_ks_cs_with_twcs)
+
+        if not all_ks_cs_with_twcs:
+            raise UnsupportedNemesis('No table found with TWCS')
+
+        target_ks_cs_with_settings = random.choice(all_ks_cs_with_twcs)
+
+        ks_cs_settings = set_new_twcs_settings(target_ks_cs_with_settings)
+        keyspace, table = ks_cs_settings["name"].split(".")
+
+        num_sstables_before_change = len(self.target_node.get_list_of_sstables(keyspace, table, suffix="-Data.db"))
+
+        self.log.debug("New TWCS settings: %s", str(ks_cs_settings))
+        self._modify_table_property(
+            name="compaction", val=ks_cs_settings["compaction"], keyspace_table=ks_cs_settings["name"])
+        self._modify_table_property(name="default_time_to_live",
+                                    val=ks_cs_settings["dttl"], keyspace_table=ks_cs_settings["name"])
+        self._modify_table_property(name="gc_grace_seconds",
+                                    val=ks_cs_settings["gc"], keyspace_table=ks_cs_settings["name"])
+
+        self.cluster.wait_for_schema_agreement()
+        # wait timeout  equal 2% of test duration for generating sstables with timewindow settings
+        sleep_timeout = int(0.02 * self.tester.params["test_duration"])
+        time.sleep(sleep_timeout)
+
+        self.target_node.stop_scylla()
+
+        reshape_twcs_records = self.target_node.follow_system_log(
+            patterns=["need reshape. Starting reshape process",
+                      "Reshaping",
+                      f"Reshape {ks_cs_settings['name']} .* Reshaped"])
+
+        self.target_node.start_scylla()
+
+        reshape_twcs_records = list(reshape_twcs_records)
+        if not reshape_twcs_records:
+            self.log.warning("Log message with sstables for reshape was not found. Autocompaction already"
+                             "compact sstables by timewindows")
+        self.log.debug("Reshape log %s", reshape_twcs_records)
+
+        num_sstables_after_change = len(self.target_node.get_list_of_sstables(keyspace, table, suffix="-Data.db"))
+
+        self.log.info("Number of sstables before: %s and after %s change twcs settings",
+                      num_sstables_before_change, num_sstables_after_change)
+        if num_sstables_before_change > num_sstables_after_change:
+            self.log.error("Number of sstables after change settings larger than before")
+        # run major compaction on all nodes
+        # to reshape sstables on other nodes
+        for node in self.cluster.nodes:
+            num_sstables_before_change = len(node.get_list_of_sstables(keyspace, table, suffix="-Data.db"))
+            node.run_nodetool("compact", args=f"{keyspace} {table}")
+            num_sstables_after_change = len(node.get_list_of_sstables(keyspace, table, suffix="-Data.db"))
+            self.log.info("Number of sstables before: %s and after %s change twcs settings on node: %s",
+                          num_sstables_before_change, num_sstables_after_change, node.name)
+            if num_sstables_before_change > num_sstables_after_change:
+                self.log.error("Number of sstables after change settings larger than before")
 
     def disrupt_toggle_table_ics(self):
         self.toggle_table_ics()
