@@ -10,6 +10,7 @@ longevityPipeline(
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: 'test-cases/manager/manager-backup-1TB-gce.yaml',
 
+    timeout: [time: 750, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
     post_behavior_monitor_nodes: 'destroy'
