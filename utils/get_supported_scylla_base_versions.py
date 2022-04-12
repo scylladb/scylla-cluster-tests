@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import logging
 import sys
 import re
 import os
@@ -9,6 +9,9 @@ from sdcm.utils.version_utils import is_enterprise, get_all_versions
 from sdcm.utils.common import get_s3_scylla_repos_mapping
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 # We support to migrate from specific OSS version to enterprise
@@ -33,39 +36,46 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
         self.product, self.scylla_version = self.get_product_and_version(scylla_version)
         self.repo_maps = get_s3_scylla_repos_mapping(self.dist_type, self.dist_version)
 
-    def get_product_and_version(self, scylla_version: str = None):
+    def get_product_and_version(self, scylla_version: str = None) -> tuple[str, str]:
         """
         return scylla product name and major version. if scylla_version isn't assigned,
         we will try to get the major version from the scylla_repo url.
         """
+        LOGGER.info("Getting scylla product and major version for upgrade versions listing...")
         if scylla_version is None:
-            assert 'unstable/' in self.scylla_repo
+            assert 'unstable/' in self.scylla_repo, "Did not find 'unstable/' in scylla_repo. " \
+                                                    "Scylla repo: %s" % self.scylla_repo
             product, version = self.scylla_repo.split('unstable/')[1].split('/')[0:2]
             scylla_version = version.replace('branch-', '').replace('enterprise-', '')
         else:
             product = 'scylla-enterprise' if is_enterprise(scylla_version) else 'scylla'
+        LOGGER.info("Scylla product and major version used for upgrade versions listing: %s, %s", product, version)
         return product, scylla_version
 
-    def get_start_support_version(self):
+    def set_start_support_version(self) -> None:
         """
         We can't detect the support versions for this distro, which shares the repo with others, eg: centos8
         so we need to assign the start support versions for it.
         """
-        if (self.dist_type not in ['debian', 'ubuntu'] and self.linux_distro != 'centos'):
+        LOGGER.info("Setting start support version...")
+        if self.dist_type not in ['debian', 'ubuntu'] and self.linux_distro != 'centos':
             versions_dict = start_support_versions.get(self.linux_distro, None)
             if versions_dict is None:
                 raise Exception(
                     f"We can't detect the support versions for this distro, which shares the repo with {self.dist_type}.")
             self.oss_start_support_version = versions_dict['scylla']
             self.ent_start_support_version = versions_dict['enterprise']
+            LOGGER.info("Support start versions set: oss=%s enterprise=%s", self.oss_start_support_version,
+                        self.ent_start_support_version)
 
-    def get_supported_scylla_base_versions(self, supported_versions):  # pylint: disable=too-many-branches
+    def get_supported_scylla_base_versions(self, supported_versions) -> list:  # pylint: disable=too-many-branches
         """
         We have special base versions list for each release, and we don't support to upgraded from enterprise
         to opensource. This function is used to get the base versions list which will be used in the upgrade test.
 
         @supported_version: all scylla release versions, the base versions will be filtered out from the supported_version
         """
+        LOGGER.info("Getting supported scylla base versions...")
         oss_base_version = []
         ent_base_version = []
 
@@ -117,21 +127,23 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
         # if there's only release candidates in those repos, skip this version
         oss_base_version = self.filter_rc_only_version(oss_base_version)
         ent_base_version = self.filter_rc_only_version(ent_base_version)
-
+        LOGGER.info("Supported scylla base versions for: oss=%s enterprise=%s", oss_base_version, ent_base_version)
         return oss_base_version + ent_base_version
 
-    def filter_rc_only_version(self, base_version_list):
+    def filter_rc_only_version(self, base_version_list: list) -> list:
+        LOGGER.info("Filtering rc versions from base version list...")
         if base_version_list and len(base_version_list) > 1:
             # if there's only release candidates in this repo, skip this version
-            filter_rc = {v for v in get_all_versions(self.repo_maps[base_version_list[-1]]) if 'rc' not in v}
+            filter_rc = [v for v in get_all_versions(self.repo_maps[base_version_list[-1]]) if 'rc' not in v]
             if not filter_rc:
                 base_version_list = base_version_list[:-1]
         return base_version_list
 
-    def get_version_list(self):
+    def get_version_list(self) -> tuple[list, list]:
         """
         return all supported releases versions, and the supported base versions of upgrade test.
         """
+        LOGGER.info("Getting the supported releases version list...")
         supported_versions = []
 
         # Filter out the unsupported versions
@@ -149,4 +161,5 @@ class UpgradeBaseVersion:  # pylint: disable=too-many-instance-attributes
                 continue
             supported_versions.append(version_prefix)
         version_list = self.get_supported_scylla_base_versions(supported_versions)
+        LOGGER.info("Got supported releases version list: %s", version_list)
         return supported_versions, version_list
