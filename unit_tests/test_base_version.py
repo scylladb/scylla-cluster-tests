@@ -21,7 +21,7 @@ def general_test(scylla_repo='', linux_distro=''):
     scylla_version = None
 
     version_detector = UpgradeBaseVersion(scylla_repo, linux_distro, scylla_version)
-    version_detector.get_start_support_version()
+    version_detector.set_start_support_version()
     _, version_list = version_detector.get_version_list()
     return version_list
 
