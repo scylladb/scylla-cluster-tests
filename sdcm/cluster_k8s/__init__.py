@@ -797,7 +797,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             },
             'developerMode': False,
             'cpuset': True,
-            'hostNetworking': True,
+            'hostNetworking': False,
             'automaticOrphanedNodeCleanup': True,
             # NOTE: '5578536' value is defined in the scylla repo here:
             #       dist/common/sysctl.d/99-scylla-aio.conf
@@ -1604,13 +1604,11 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
     def _refresh_instance_state(self):
         public_ips = []
         private_ips = []
-
-        if cluster_ip_service := self._cluster_ip_service:
-            private_ips.append(cluster_ip_service.spec.cluster_ip)
-
         if pod_status := self._pod_status:
             public_ips.append(pod_status.host_ip)
             private_ips.append(pod_status.pod_ip)
+        if cluster_ip_service := self._cluster_ip_service:
+            private_ips.append(cluster_ip_service.spec.cluster_ip)
         return (public_ips or [None, ], private_ips or [None, ])
 
     @property

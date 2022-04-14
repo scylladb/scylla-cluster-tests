@@ -36,7 +36,6 @@ from sdcm.cluster_k8s import (
     KubernetesCluster,
     ScyllaPodCluster,
 )
-from sdcm.cluster_k8s.iptables import IptablesPodIpRedirectMixin, IptablesClusterOpsMixin
 from sdcm.remote import LOCALRUNNER
 
 
@@ -471,7 +470,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         return upgrade_version
 
 
-class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
+class EksScyllaPodContainer(BaseScyllaPodContainer):
     parent_cluster: 'EksScyllaPodCluster'
 
     pod_readiness_delay = 30  # seconds
@@ -480,11 +479,11 @@ class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
 
     @cached_property
     def hydra_dest_ip(self) -> str:
-        return self.public_ip_address
+        return self.private_ip_address
 
     @cached_property
     def nodes_dest_ip(self) -> str:
-        return self.public_ip_address
+        return self.private_ip_address
 
     @property
     def ec2_host(self):
@@ -538,7 +537,7 @@ class EksScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
         self.ec2_instance_destroy(ec2_host=ec2_host)
 
 
-class EksScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
+class EksScyllaPodCluster(ScyllaPodCluster):
     node_terminate_methods = [
         'drain_k8s_node',
         # NOTE: uncomment below when following scylla-operator bug is fixed:
@@ -561,8 +560,8 @@ class EksScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
                  ) -> None:
         super().__init__(k8s_cluster=k8s_cluster, scylla_cluster_name=scylla_cluster_name, user_prefix=user_prefix,
                          n_nodes=n_nodes, params=params, node_pool=node_pool)
-    # pylint: disable=too-many-arguments
 
+    # pylint: disable=too-many-arguments
     def add_nodes(self,
                   count: int,
                   ec2_user_data: str = "",
@@ -577,14 +576,11 @@ class EksScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
         for node in new_nodes:
             self.k8s_cluster.set_security_groups(node.ec2_host)
             self.k8s_cluster.set_tags(node.ec2_host.id)
-        self.add_hydra_iptables_rules(nodes=new_nodes)
-        self.update_nodes_iptables_redirect_rules(nodes=new_nodes, loaders=False)
         return new_nodes
 
 
 class MonitorSetEKS(MonitorSetAWS):
-    # On EKS nodes you can't communicate to cluster nodes outside of it, so we have to enforce using public ip
-    DB_NODES_IP_ADDRESS = 'public_ip_address'
+    DB_NODES_IP_ADDRESS = 'ip_address'
 
     def install_scylla_manager(self, node):
         pass
