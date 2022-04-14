@@ -1234,11 +1234,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                         node_pool=loader_pool)
 
         if self.params.get("n_monitor_nodes") > 0:
-            self.log.debug("Update startup script with iptables rules")
-            startup_script = "\n".join((self.test_config.get_startup_script(), *
-                                        self.db_cluster.nodes_iptables_redirect_rules(),))
-            self.test_config.get_startup_script = lambda: startup_script
-
             self.monitors = gke.MonitorSetGKE(
                 gce_image=self.params.get("gce_image_monitor"),
                 gce_image_type=self.params.get("gce_root_disk_type_monitor"),
@@ -1373,11 +1368,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                                         node_pool=loader_pool)
 
         if monitor_info['n_nodes']:
-            self.log.debug("Update startup script with iptables rules")
-            startup_script = "\n".join((self.test_config.get_startup_script(), *
-                                        self.db_cluster.nodes_iptables_redirect_rules(),))
-            self.test_config.get_startup_script = lambda: startup_script
-
             self.monitors = MonitorSetEKS(
                 ec2_ami_id=self.params.get('ami_id_monitor').split(),
                 ec2_ami_username=self.params.get('ami_monitor_user'),

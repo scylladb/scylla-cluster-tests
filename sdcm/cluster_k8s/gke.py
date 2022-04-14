@@ -26,7 +26,6 @@ from sdcm.utils.k8s import ApiCallRateLimiter, TokenUpdateThread
 from sdcm.utils.gce_utils import GcloudContextManager
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BaseScyllaPodContainer, CloudK8sNodePool
-from sdcm.cluster_k8s.iptables import IptablesPodIpRedirectMixin, IptablesClusterOpsMixin
 from sdcm.cluster_gce import MonitorSetGCE
 
 
@@ -332,7 +331,7 @@ class GkeCluster(KubernetesCluster):
         return upgrade_version
 
 
-class GkeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
+class GkeScyllaPodContainer(BaseScyllaPodContainer):
     parent_cluster: 'GkeScyllaPodCluster'
 
     pod_readiness_delay = 30  # seconds
@@ -410,7 +409,7 @@ class GkeScyllaPodContainer(BaseScyllaPodContainer, IptablesPodIpRedirectMixin):
         )
 
 
-class GkeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
+class GkeScyllaPodCluster(ScyllaPodCluster):
     node_terminate_methods = [
         'drain_k8s_node',
         # NOTE: uncomment below when following scylla-operator bug is fixed:
@@ -436,15 +435,11 @@ class GkeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
                                       dc_idx=dc_idx,
                                       rack=rack,
                                       enable_auto_bootstrap=enable_auto_bootstrap)
-
-        self.add_hydra_iptables_rules(nodes=new_nodes)
-        self.update_nodes_iptables_redirect_rules(nodes=new_nodes, loaders=False)
-
         return new_nodes
 
 
 class MonitorSetGKE(MonitorSetGCE):
-    DB_NODES_IP_ADDRESS = 'public_ip_address'
+    DB_NODES_IP_ADDRESS = 'ip_address'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

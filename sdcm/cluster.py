@@ -837,6 +837,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def _get_ipv6_ip_address(self) -> Optional[str]:
         raise NotImplementedError()
 
+    def get_all_ip_addresses(self):
+        public_ipv4_addresses, private_ipv4_addresses = self._refresh_instance_state()
+        return list(set(public_ipv4_addresses + private_ipv4_addresses + [self._get_ipv6_ip_address()]))
+
     def _wait_public_ip(self):
         public_ips, _ = self._refresh_instance_state()
         while not public_ips:
@@ -3920,16 +3924,25 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             r"(?P<rack>[\w]+|$)")
 
         for dc in data_centers:
-            if dc:
-                lines = dc.splitlines()
-                dc_name = lines[0]
-                status[dc_name] = {}
-                for line in lines[1:]:
-                    if match := pattern.match(line):
-                        node_info = match.groupdict()
-                        node_ip = node_info.pop("ip")
-                        node_info["load"] = node_info["load"].replace(" ", "")
-                        status[dc_name][node_ip] = node_info
+            if not dc:
+                continue
+            lines = dc.splitlines()
+            dc_name = lines[0]
+            status[dc_name] = {}
+            for line in lines[1:]:
+                match = pattern.match(line)
+                if not match:
+                    continue
+                node_info = match.groupdict()
+                node_ip = node_info.pop("ip")
+                # NOTE: following replacement is needed for the K8S case where
+                #       registered IP is different than the one used for network connections
+                if verification_node.is_kubernetes():
+                    for node in self.nodes:
+                        if node_ip in node.get_all_ip_addresses() and node_ip != node.ip_address:
+                            node_ip = node.ip_address
+                node_info["load"] = node_info["load"].replace(" ", "")
+                status[dc_name][node_ip] = node_info
         return status
 
     @staticmethod
