@@ -14,7 +14,7 @@
 import logging
 from dataclasses import dataclass, field
 
-from typing import Dict
+from typing import Dict, List
 
 from azure.core.exceptions import ResourceNotFoundError
 from azure.mgmt.network.models import NetworkInterface
@@ -44,35 +44,43 @@ class NetworkInterfaceProvider:
     def get(self, name: str) -> NetworkInterface:
         return self._cache[self.get_nic_name(name)]
 
-    def get_or_create(self, subnet_id: str, ip_address_id: str, name: str) -> NetworkInterface:
+    def get_or_create(self, subnet_id: str, ip_addresses_ids: List[str], names: List[str]) -> List[NetworkInterface]:
         """Creates or gets (if already exists) network interface"""
-        nic_name = self.get_nic_name(name)
-        if nic_name in self._cache:
-            return self._cache[nic_name]
-        parameters = {
-            "location": self._region,
-            "ip_configurations": [{
-                "name": nic_name,
-                "subnet": {
-                    "id": subnet_id,
-                },
-            }],
-            "enable_accelerated_networking": True,
-        }
-        parameters["ip_configurations"][0]["public_ip_address"] = {
-            "id": ip_address_id,
-            "properties": {"deleteOption": "Delete"}
-        }
-        LOGGER.info("Creating nic in resource group %s...", self._resource_group_name)
-        self._azure_service.network.network_interfaces.begin_create_or_update(
-            resource_group_name=self._resource_group_name,
-            network_interface_name=nic_name,
-            parameters=parameters,
-        ).wait()
-        nic = self._azure_service.network.network_interfaces.get(self._resource_group_name, nic_name)
-        LOGGER.info("Provisioned nic %s in the %s resource group", nic.name, self._resource_group_name)
-        self._cache[nic_name] = nic
-        return nic
+        nics = []
+        pollers = []
+        for name, address in zip(names, ip_addresses_ids):
+            nic_name = self.get_nic_name(name)
+            if nic_name in self._cache:
+                nics.append(self._cache[nic_name])
+                continue
+            parameters = {
+                "location": self._region,
+                "ip_configurations": [{
+                    "name": nic_name,
+                    "subnet": {
+                        "id": subnet_id,
+                    },
+                }],
+                "enable_accelerated_networking": True,
+            }
+            parameters["ip_configurations"][0]["public_ip_address"] = {
+                "id": address,
+                "properties": {"deleteOption": "Delete"}
+            }
+            LOGGER.info("Creating nic in resource group %s...", self._resource_group_name)
+            poller = self._azure_service.network.network_interfaces.begin_create_or_update(
+                resource_group_name=self._resource_group_name,
+                network_interface_name=nic_name,
+                parameters=parameters,
+            )
+            pollers.append((nic_name, poller))
+        for nic_name, poller in pollers:
+            poller.wait()
+            nic = self._azure_service.network.network_interfaces.get(self._resource_group_name, nic_name)
+            LOGGER.info("Provisioned nic %s in the %s resource group", nic.name, self._resource_group_name)
+            self._cache[nic_name] = nic
+            nics.append(nic)
+        return nics
 
     def delete(self, nic: NetworkInterface):
         # just remove from cache as it should be deleted along with network interface

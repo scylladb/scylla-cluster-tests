@@ -14,7 +14,6 @@
 import logging
 from typing import Dict, List
 
-from azure.core.exceptions import AzureError
 from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
 
 from sdcm.provision.azure.ip_provider import IpAddressProvider
@@ -24,7 +23,7 @@ from sdcm.provision.azure.resource_group_provider import ResourceGroupProvider
 from sdcm.provision.azure.subnet_provider import SubnetProvider
 from sdcm.provision.azure.virtual_machine_provider import VirtualMachineProvider
 from sdcm.provision.azure.virtual_network_provider import VirtualNetworkProvider
-from sdcm.provision.provisioner import Provisioner, InstanceDefinition, VmInstance, PricingModel, ProvisionError
+from sdcm.provision.provisioner import Provisioner, InstanceDefinition, VmInstance, PricingModel
 from sdcm.provision.security import ScyllaOpenPorts
 from sdcm.utils.azure_utils import AzureService
 
@@ -69,18 +68,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
     def get_or_create_instance(self, definition: InstanceDefinition,
                                pricing_model: PricingModel = PricingModel.SPOT) -> VmInstance:
         """Create virtual machine in provided region, specified by InstanceDefinition"""
-        if definition.name in self._cache:
-            return self._cache[definition.name]
-        self._rg_provider.get_or_create()
-        sec_group_id = self._network_sec_group_provider.get_or_create(security_rules=ScyllaOpenPorts).id
-        vnet_name = self._vnet_provider.get_or_create().name
-        subnet_id = self._subnet_provider.get_or_create(vnet_name, sec_group_id).id
-        ip_address_id = self._ip_provider.get_or_create(definition.name).id
-        nic_id = self._nic_provider.get_or_create(subnet_id, ip_address_id, name=definition.name).id
-        v_m = self._vm_provider.get_or_create(definition, nic_id, pricing_model)
-        instance = self._vm_to_instance(v_m)
-        self._cache[definition.name] = instance
-        return instance
+        return self.get_or_create_instances(definitions=[definition], pricing_model=pricing_model)[0]
 
     def get_or_create_instances(self,
                                 definitions: List[InstanceDefinition],
@@ -89,16 +77,28 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         """Create a set of instances specified by a list of InstanceDefinition.
         If instances already exist, returns them."""
         provisioned_vm_instances = []
-        provision_errors = []
+        definitions_to_provision = []
         for definition in definitions:
-            try:
-                provisioned_vm_instances.append(
-                    self.get_or_create_instance(definition=definition, pricing_model=pricing_model)
-                )
-            except AzureError as exc:
-                provision_errors.append(f"Failed to provision {definition.name}: {str(exc)}")
-        if provision_errors:
-            raise ProvisionError("\n".join(provision_errors))
+            if definition.name in self._cache:
+                provisioned_vm_instances.append(self._cache[definition.name])
+            else:
+                definitions_to_provision.append(definition)
+        if not definitions_to_provision:
+            return provisioned_vm_instances
+
+        self._rg_provider.get_or_create()
+        sec_group_id = self._network_sec_group_provider.get_or_create(security_rules=ScyllaOpenPorts).id
+        vnet_name = self._vnet_provider.get_or_create().name
+        subnet_id = self._subnet_provider.get_or_create(vnet_name, sec_group_id).id
+        ip_addresses = self._ip_provider.get_or_create(names=[d.name for d in definitions_to_provision], version="IPV4")
+        nics = self._nic_provider.get_or_create(subnet_id, ip_addresses_ids=[address.id for address in ip_addresses], names=[
+                                                definition.name for definition in definitions_to_provision])
+        v_ms = self._vm_provider.get_or_create(definitions=definitions_to_provision, nics_ids=[
+                                               nic.id for nic in nics], pricing_model=pricing_model)
+        for definition, v_m in zip(definitions, v_ms):
+            instance = self._vm_to_instance(v_m)
+            self._cache[definition.name] = instance
+            provisioned_vm_instances.append(instance)
         return provisioned_vm_instances
 
     def terminate_instance(self, name: str, wait: bool = True) -> None:

@@ -15,13 +15,13 @@ import logging
 import os
 from dataclasses import dataclass, field
 
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 
 import binascii
-from azure.core.exceptions import ResourceNotFoundError
+from azure.core.exceptions import ResourceNotFoundError, AzureError
 from azure.mgmt.compute.models import VirtualMachine
 
-from sdcm.provision.provisioner import InstanceDefinition, PricingModel
+from sdcm.provision.provisioner import InstanceDefinition, PricingModel, ProvisionError
 from sdcm.utils.azure_utils import AzureService
 
 LOGGER = logging.getLogger(__name__)
@@ -44,46 +44,66 @@ class VirtualMachineProvider:
         except ResourceNotFoundError:
             pass
 
-    def get_or_create(self, definition: InstanceDefinition, nic_id: str, pricing_model: PricingModel) -> VirtualMachine:
-        if definition.name in self._cache:
-            return self._cache[definition.name]
-        LOGGER.info(
-            "Creating '%s' VM in resource group %s...", definition.name, self._resource_group_name)
-        LOGGER.info("Instance params: %s", definition)
-        params = {
-            "location": self._region,
-            "tags": definition.tags,
-            "hardware_profile": {
-                "vm_size": definition.type,
-            },
-            "network_profile": {
-                "network_interfaces": [{
-                    "id": nic_id,
-                    "properties": {"deleteOption": "Delete"}
-                }],
-            },
-        }
-        if definition.user_name is None:
-            # in case we use specialized image, we don't change things like computer_name, usernames, ssh_keys
-            os_profile = {}
-        else:
-            os_profile = self._get_os_profile(computer_name=definition.name,
-                                              admin_username=definition.user_name,
-                                              admin_password=binascii.hexlify(os.urandom(20)).decode(),
-                                              ssh_public_key=definition.ssh_public_key)
-        storage_profile = self._get_scylla_storage_profile(image_id=definition.image_id, name=definition.name,
-                                                           disk_size=definition.root_disk_size)
-        params.update(os_profile)
-        params.update(storage_profile)
-        params.update(self._get_pricing_params(pricing_model))
-        self._azure_service.compute.virtual_machines.begin_create_or_update(
-            resource_group_name=self._resource_group_name,
-            vm_name=definition.name,
-            parameters=params).wait()
-        v_m = self._azure_service.compute.virtual_machines.get(self._resource_group_name, definition.name)
-        LOGGER.info("Provisioned VM %s in the %s resource group", v_m.name, self._resource_group_name)
-        self._cache[v_m.name] = v_m
-        return v_m
+    def get_or_create(self, definitions: List[InstanceDefinition], nics_ids: List[str], pricing_model: PricingModel
+                      ) -> List[VirtualMachine]:
+        v_ms = []
+        pollers = []
+        error_to_raise = None
+        for definition, nic_id in zip(definitions, nics_ids):
+            if definition.name in self._cache:
+                v_ms.append(self._cache[definition.name])
+                continue
+            LOGGER.info(
+                "Creating '%s' VM in resource group %s...", definition.name, self._resource_group_name)
+            LOGGER.info("Instance params: %s", definition)
+            params = {
+                "location": self._region,
+                "tags": definition.tags,
+                "hardware_profile": {
+                    "vm_size": definition.type,
+                },
+                "network_profile": {
+                    "network_interfaces": [{
+                        "id": nic_id,
+                        "properties": {"deleteOption": "Delete"}
+                    }],
+                },
+            }
+            if definition.user_name is None:
+                # in case we use specialized image, we don't change things like computer_name, usernames, ssh_keys
+                os_profile = {}
+            else:
+                os_profile = self._get_os_profile(computer_name=definition.name,
+                                                  admin_username=definition.user_name,
+                                                  admin_password=binascii.hexlify(os.urandom(20)).decode(),
+                                                  ssh_public_key=definition.ssh_public_key)
+            storage_profile = self._get_scylla_storage_profile(image_id=definition.image_id, name=definition.name,
+                                                               disk_size=definition.root_disk_size)
+            params.update(os_profile)
+            params.update(storage_profile)
+            params.update(self._get_pricing_params(pricing_model))
+            try:
+                poller = self._azure_service.compute.virtual_machines.begin_create_or_update(
+                    resource_group_name=self._resource_group_name,
+                    vm_name=definition.name,
+                    parameters=params)
+                pollers.append((definition, poller))
+            except AzureError as err:
+                LOGGER.error("Error when sending create vm request for VM %s: %s", definition.name, str(err))
+                error_to_raise = err
+        for definition, poller in pollers:
+            try:
+                poller.wait()
+                v_m = self._azure_service.compute.virtual_machines.get(self._resource_group_name, definition.name)
+                LOGGER.info("Provisioned VM %s in the %s resource group", v_m.name, self._resource_group_name)
+                self._cache[v_m.name] = v_m
+                v_ms.append(v_m)
+            except AzureError as err:
+                LOGGER.error("Error when waiting for VM %s: %s", definition.name, str(err))
+                error_to_raise = err
+        if error_to_raise:
+            raise ProvisionError(error_to_raise)
+        return v_ms
 
     def list(self):
         return list(self._cache.values())
