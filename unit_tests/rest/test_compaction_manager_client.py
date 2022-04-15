@@ -12,15 +12,17 @@
 # Copyright (c) 2022 ScyllaDB
 
 # pylint: disable=W,C,R
-from sdcm.remote.libssh2_client import Result
+from functools import partial
 
-from sdcm.utils.scylla_api import ScyllaApiClient
+from sdcm.remote.libssh2_client import Result
+from sdcm.rest.compaction_manager_client import CompactionManagerClient
 
 
 class FakeRemoter:
 
     def run(self,
             cmd: str,
+            timeout: int,
             ) -> Result:
         return Result(stdout=cmd, stderr="", exited=0)
 
@@ -33,7 +35,7 @@ class FakeNode:
 
 
 def test_compaction_manager_stop_compaction():
-    client = ScyllaApiClient(FakeNode())
-    result = client.compaction_manager.stop_reshape_compaction()
+    client = CompactionManagerClient(FakeNode())
+    result = partial(client.stop_compaction, compaction_type="reshape")()
 
-    assert result.stdout == f"curl -S -X POST http://localhost:10000/compaction_manager/stop_compaction?type=RESHAPE"
+    assert result.stdout == f'curl -v -X POST "http://localhost:10000/compaction_manager/stop_compaction?type=RESHAPE"'
