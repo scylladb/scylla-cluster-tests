@@ -9,10 +9,4 @@
 #
 # See LICENSE for more details.
 #
-# Copyright (c) 2021 ScyllaDB
-
-from sdcm.sct_provision.azure.azure_instance_request_definition_builder import azure_instance_request_builder
-from sdcm.sct_provision.instances_request_definition_builder import InstancesRequestBuilder
-
-instances_request_builder = InstancesRequestBuilder()
-instances_request_builder.register_builder(backend="azure", builder_function=azure_instance_request_builder)
+# Copyright (c) 2022 ScyllaDB

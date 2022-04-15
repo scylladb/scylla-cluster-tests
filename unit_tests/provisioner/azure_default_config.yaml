@@ -1,10 +1,7 @@
-# TODO: Go over it and fix detauls
+cluster_backend: azure
+user_prefix: unit-test
 instance_provision: 'spot'
-spot_max_price: 0.60
 instance_provision_fallback_on_demand: false
-region_name:
-  - westeurope
-user_credentials_path: '~/.ssh/scylla-qa-ec2'
 
 azure_instance_type_db: 'Standard_L8s_v2'
 azure_instance_type_loader: 'Standard_F4s_v2'
@@ -17,24 +14,8 @@ availability_zone: 'a'
 azure_root_disk_size_monitor: 50  # GB, remove this field if default disk size should be used
 azure_root_disk_size_db: 30  # GB, increase root disk for larger swap (maximum: 16G)
 azure_root_disk_size_loader: 30  # GB, Increase loader disk in order to have extra space for a larger swap
-loader_swap_size: 10240  #10GB SWAP space
 azure_image_username: 'scyllaadm'
 # used prepared centos7 AMI for loader
 ami_loader_user: 'centos'
 # centos7 is used for monitor
 ami_monitor_user: 'centos'
-aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'
-
-ami_id_db_scylla: ''
-ami_id_db_oracle: ''
-
-use_preinstalled_scylla: true
-
-backup_bucket_backend: 's3'
-backup_bucket_location: 'manager-backup-tests-us-east-1'
-backup_bucket_region: 'us-east-1'
-
-data_volume_disk_num: 0
-data_volume_disk_type: 'gp2'
-data_volume_disk_size: 500
-data_volume_disk_iops: 10000 # depend on type iops could be 100-16000 for io2|io3 and 3000-16000 for gp3

@@ -686,7 +686,7 @@ class SCTConfiguration(dict):
              help=""),
 
         # azure options
-        dict(name="azure_region_name", env="SCT_AZURE_REGION_NAME", type=str,
+        dict(name="azure_region_name", env="SCT_AZURE_REGION_NAME", type=str_or_list,
              help="Supported: eastus "),
 
         dict(name="azure_instance_type_loader", env="SCT_AZURE_INSTANCE_TYPE_LOADER", type=str,
@@ -711,6 +711,15 @@ class SCTConfiguration(dict):
              help=""),
 
         dict(name="azure_image_username", env="SCT_AZURE_IMAGE_USERNAME", type=str,
+             help=""),
+
+        dict(name="azure_root_disk_size_monitor", env="SCT_AZURE_ROOT_DISK_SIZE_MONITOR", type=int,
+             help=""),
+
+        dict(name="azure_root_disk_size_db", env="SCT_AZURE_ROOT_DISK_SIZE_DB", type=int,
+             help=""),
+
+        dict(name="azure_root_disk_size_loader", env="SCT_AZURE_ROOT_DISK_SIZE_LOADER", type=int,
              help=""),
 
         # k8s-eks options
@@ -1297,7 +1306,8 @@ class SCTConfiguration(dict):
         'azure': ['user_prefix', 'azure_image_db', 'azure_image_username', 'azure_instance_type_db',
                   'azure_root_disk_type_db', 'azure_n_local_ssd_disk_db',
                   'azure_instance_type_loader', 'azure_root_disk_type_loader', 'azure_n_local_ssd_disk_loader',
-                  'azure_instance_type_monitor', 'azure_n_local_ssd_disk_monitor', 'azure_region_name'],
+                  'azure_instance_type_monitor', 'azure_n_local_ssd_disk_monitor', 'azure_region_name',
+                  'azure_root_disk_size_monitor', 'azure_root_disk_size_db', 'azure_root_disk_size_loader'],
 
         'docker': ['user_credentials_path', 'scylla_version'],
 

@@ -18,7 +18,7 @@ import shutil
 from pathlib import Path
 from typing import List, Any, Dict
 
-from azure.core.exceptions import ResourceNotFoundError
+from azure.core.exceptions import ResourceNotFoundError, AzureError
 from azure.mgmt.network.models import (NetworkSecurityGroup, Subnet, PublicIPAddress, NetworkInterface, VirtualNetwork)
 from azure.mgmt.resource.resources.models import ResourceGroup
 from azure.mgmt.compute.models import VirtualMachine
@@ -438,6 +438,10 @@ class FakeVirtualMachines:
         parameters = dict_keys_to_camel_case(parameters)
         location = parameters.pop("location")
         tags = parameters.pop("tags")
+        priority = parameters.get("priority") or ""
+        if tags.get("JenkinsJobTag") == "FailSpotDB" and priority.lower() == "spot" and tags.get("NodeType") == "db":
+            # for testing fallback on demand
+            raise AzureError("Failing creating db spot instance because JenkinsJobTag is FailSpotDB")
 
         base = {
             "id": f"/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/{resource_group_name}"
@@ -506,11 +510,6 @@ class FakeVirtualMachines:
                             }
                         }
                     ]
-                },
-                "priority": "Spot",
-                "evictionPolicy": "Delete",
-                "billingProfile": {
-                    "maxPrice": -1.0
                 },
                 "provisioningState": "Succeeded",
                 "vmId": "ce7b8d6c-4204-4262-9504-862189431e5d"

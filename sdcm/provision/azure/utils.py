@@ -15,6 +15,7 @@ from contextlib import suppress
 
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
 from azure.mgmt.compute.models import GalleryImageVersion
+
 from sdcm.provision.provisioner import VmArch
 from sdcm.utils.azure_utils import AzureService
 

@@ -197,7 +197,9 @@ class VirtualMachineProvider:
                 }
             }
         else:
-            return {}
+            return {
+                "priority": "Regular"
+            }
 
     def clear_cache(self):
         self._cache = {}

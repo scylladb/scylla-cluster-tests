@@ -13,6 +13,8 @@
 
 import logging
 from typing import Dict, List
+
+from azure.core.exceptions import AzureError
 from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
 
 from sdcm.provision.azure.ip_provider import IpAddressProvider
@@ -22,7 +24,7 @@ from sdcm.provision.azure.resource_group_provider import ResourceGroupProvider
 from sdcm.provision.azure.subnet_provider import SubnetProvider
 from sdcm.provision.azure.virtual_machine_provider import VirtualMachineProvider
 from sdcm.provision.azure.virtual_network_provider import VirtualNetworkProvider
-from sdcm.provision.provisioner import Provisioner, InstanceDefinition, VmInstance, PricingModel
+from sdcm.provision.provisioner import Provisioner, InstanceDefinition, VmInstance, PricingModel, ProvisionError
 from sdcm.provision.security import ScyllaOpenPorts
 from sdcm.utils.azure_utils import AzureService
 
@@ -79,6 +81,25 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         instance = self._vm_to_instance(v_m)
         self._cache[definition.name] = instance
         return instance
+
+    def get_or_create_instances(self,
+                                definitions: List[InstanceDefinition],
+                                pricing_model: PricingModel = PricingModel.SPOT
+                                ) -> List[VmInstance]:
+        """Create a set of instances specified by a list of InstanceDefinition.
+        If instances already exist, returns them."""
+        provisioned_vm_instances = []
+        provision_errors = []
+        for definition in definitions:
+            try:
+                provisioned_vm_instances.append(
+                    self.get_or_create_instance(definition=definition, pricing_model=pricing_model)
+                )
+            except AzureError as exc:
+                provision_errors.append(f"Failed to provision {definition.name}: {str(exc)}")
+        if provision_errors:
+            raise ProvisionError("\n".join(provision_errors))
+        return provisioned_vm_instances
 
     def terminate_instance(self, name: str, wait: bool = True) -> None:
         """Terminates virtual machine, cleaning attached ip address and network interface."""
@@ -137,7 +158,11 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
             # todo lukasz: find a way to get admin name from image (is it possible??)
             admin = ""
         image = str(v_m.storage_profile.image_reference)
-        if v_m.priority is VirtualMachinePriorityTypes.REGULAR:
+        try:
+            priority = VirtualMachinePriorityTypes(v_m.priority)
+        except ValueError:
+            priority = VirtualMachinePriorityTypes.REGULAR
+        if priority is VirtualMachinePriorityTypes.REGULAR:
             pricing_model = PricingModel.ON_DEMAND
         else:
             pricing_model = PricingModel.SPOT
