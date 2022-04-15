@@ -19,11 +19,11 @@ from functools import partial
 from sdcm.cluster import BaseNode
 from sdcm.nemesis import StartStopMajorCompaction, StartStopScrubCompaction, StartStopCleanupCompaction, \
     StartStopValidationCompaction
+from sdcm.rest.compaction_manager_client import CompactionManagerClient
 from sdcm.rest.storage_service_client import StorageServiceClient
 from sdcm.tester import ClusterTester
 from sdcm.utils.common import ParallelObject
 from sdcm.utils.compaction_ops import CompactionOps
-from sdcm.utils.scylla_api import ScyllaApiClient
 
 LOGGER = logging.getLogger(__name__)
 
@@ -195,10 +195,10 @@ class StopCompactionTest(ClusterTester):
         """
         node = self.node
         compaction_ops = CompactionOps(cluster=self.db_cluster, node=node)
-        scylla_api = ScyllaApiClient(node=self.node)
+        compaction_manager_client = CompactionManagerClient(self.node)
         if reshape_on_boot is True:
             # during reshape on boot, JMX port is not open and cannot use nodetool. Using scylla api directly.
-            stop_reshape_func = scylla_api.compaction_manager.stop_reshape_compaction
+            stop_reshape_func = partial(compaction_manager_client.stop_compaction, compaction_type="reshape")
         else:
             stop_reshape_func = compaction_ops.stop_reshape_compaction
         timeout = 900
