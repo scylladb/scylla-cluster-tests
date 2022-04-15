@@ -18,20 +18,9 @@ from azure.core.exceptions import ResourceNotFoundError
 from sdcm.keystore import KeyStore  # pylint: disable=import-error
 from sdcm.provision.azure.utils import get_scylla_images  # pylint: disable=import-error
 from sdcm.provision.provisioner import InstanceDefinition, provisioner_factory  # pylint: disable=import-error
-from sdcm.utils.azure_utils import AzureService  # pylint: disable=import-error
-from unit_tests.provisioner.fake_azure_service import FakeAzureService  # pylint: disable=import-error
 
 
 class TestProvisionScyllaInstanceAzureE2E:
-    """this is rather e2e test - takes around 8 minutes (2m provisioning, 6 min cleanup with wait=True)"""
-
-    @pytest.fixture(scope="session")
-    def azure_service(self, tmp_path_factory) -> AzureService:  # pylint: disable=no-self-use
-        run_on_real_azure = False   # make it True to test with real Azure
-        if run_on_real_azure:
-            # When true this becomes e2e test - takes around 8 minutes (2m provisioning, 6 min cleanup with wait=True)
-            return AzureService()
-        return FakeAzureService(tmp_path_factory.mktemp("azure-provision"))
 
     @pytest.fixture(scope='session')
     def test_id(self):  # pylint: disable=no-self-use

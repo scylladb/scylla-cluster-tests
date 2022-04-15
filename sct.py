@@ -40,6 +40,7 @@ from sdcm.remote import LOCALRUNNER
 from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_configuration
+from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_runner, clean_sct_runners
 from sdcm.utils.azure_utils import AzureService
 from sdcm.utils.azure_region import AzureRegion, region_name_to_location
@@ -81,8 +82,8 @@ from sdcm.utils.get_username import get_username
 from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter, \
     send_perf_email
 from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
-from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module
-from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module
+from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module,import-error
+from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module,import-error
 from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module
 
 
@@ -198,6 +199,9 @@ def provision_resources(backend, test_name: str, config: str):
 
     params = create_sct_configuration(test_name=test_name)
     test_config = get_test_config()
+    test_id = test_config.test_id()
+    if test_id is None or test_id == "None":
+        raise ValueError("No test_id was provided. Aborting provisioning.")
     localhost = LocalHost(user_prefix=params.get("user_prefix"), test_id=test_config.test_id())
 
     if params.get("logs_transport") == 'rsyslog':
@@ -210,8 +214,13 @@ def provision_resources(backend, test_name: str, config: str):
         click.echo("No need provision logging service")
 
     click.echo(f"Provision {backend} cloud resources")
-    layout = SCTProvisionLayout(params=params)
-    layout.provision()
+    if backend == "aws":
+        layout = SCTProvisionLayout(params=params)
+        layout.provision()
+    elif backend == "azure":
+        provision_sct_resources(sct_config=params)
+    else:
+        raise ValueError(f"backend {backend} is not supported")
 
 
 @cli.command('clean-resources', help='clean tagged instances in both clouds (AWS/GCE)')

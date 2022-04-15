@@ -40,7 +40,7 @@ class AzureNode(cluster.BaseNode):
                  credentials, parent_cluster,
                  node_prefix='node', node_index=1, user_name='root',
                  base_logdir=None, dc_idx=0):
-        region = parent_cluster.params.get('azure_region_name').split()[dc_idx]
+        region = parent_cluster.params.get('azure_region_name')[dc_idx]
         name = f"{node_prefix}-{region}-{node_index}".lower()
         self.node_index = node_index
         self._instance: VmInstance = azure_instance
@@ -182,7 +182,7 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
             raise CreateAzureNodeError('Failed to create node: %s' % ex) from ex
 
     def _create_instances(self, count, dc_idx=0):
-        region = self.params.get('azure_region_name').split()[dc_idx]
+        region = self.params.get('azure_region_name')[dc_idx]
         assert region, "no region provided, please add `azure_region_name` param"
         pricing_model = PricingModel.SPOT if 'spot' in self.instance_provision else PricingModel.ON_DEMAND
         instances = []

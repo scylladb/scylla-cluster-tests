@@ -42,12 +42,16 @@ class InstanceDefinition:  # pylint: disable=too-many-instance-attributes
     data_disks: Optional[List[DataDisk]] = None
 
 
+class ProvisionError(Exception):
+    pass
+
+
 class PricingModel(Enum):
     ON_DEMAND = 'on_demand'
     SPOT = 'spot'
     SPOT_FLEET = 'spot_fleet'
-    SPOT_LOW_PRICE = 'spot_low_price'  # maybe not needed
-    SPOT_DURATION = 'spot_duration'  # maybe not needed
+    SPOT_LOW_PRICE = 'spot_low_price'
+    SPOT_DURATION = 'spot_duration'
 
     def is_spot(self) -> bool:
         return self is not PricingModel.ON_DEMAND
@@ -107,8 +111,16 @@ class Provisioner(ABC):
                                definition: InstanceDefinition,
                                pricing_model: PricingModel = PricingModel.SPOT
                                ) -> VmInstance:
-        """Create instance in provided region, specified by InstanceDefinition.
+        """Create an instance specified by an InstanceDefinition.
         If instance already exists, returns it."""
+        raise NotImplementedError()
+
+    def get_or_create_instances(self,
+                                definitions: List[InstanceDefinition],
+                                pricing_model: PricingModel = PricingModel.SPOT
+                                ) -> List[VmInstance]:
+        """Create a set of instances specified by a list of InstanceDefinition.
+        If instances already exist, returns them."""
         raise NotImplementedError()
 
     def terminate_instance(self, name: str, wait: bool = False) -> None:

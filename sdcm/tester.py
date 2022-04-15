@@ -848,11 +848,12 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def get_cluster_azure(self, loader_info, db_info, monitor_info):
         # pylint: disable=too-many-branches,too-many-statements,too-many-locals
-        regions = self.params.get('azure_region_name').split()
+        regions = self.params.get('azure_region_name')
         test_id = str(TestConfig().test_id())
         provisioners: List[AzureProvisioner] = []
         for region in regions:
-            provisioners.append(provisioner_factory.create_provisioner(backend="azure", test_id=test_id, region=region))
+            provisioners.append(provisioner_factory.create_provisioner(backend="azure", test_id=test_id,
+                                region=region))
         if db_info['n_nodes'] is None:
             n_db_nodes = self.params.get('n_db_nodes')
             if isinstance(n_db_nodes, int):  # legacy type
@@ -874,17 +875,18 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         user_prefix = self.params.get('user_prefix')
         self.credentials.append(UserRemoteCredentials(key_file="~/.ssh/scylla-test"))
 
-        common_params = dict(user_name=self.params.get('azure_image_username'),
-                             credentials=self.credentials,
-                             user_prefix=user_prefix,
-                             params=self.params,
-                             region_names=None,
-                             )
+        common_params = dict(
+            credentials=self.credentials,
+            user_prefix=user_prefix,
+            params=self.params,
+            region_names=None,
+        )
         self.db_cluster = ScyllaAzureCluster(image_id=azure_image,
                                              root_disk_size=db_info['disk_size'],
                                              instance_type=db_info['type'],
                                              provisioners=provisioners,
                                              n_nodes=db_info['n_nodes'],
+                                             user_name=self.params.get('azure_image_username'),
                                              **common_params)
         self.loaders = LoaderSetAzure(
             image_id=self.params.get('azure_image_loader'),
@@ -892,6 +894,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             instance_type="Standard_D2s_v3",
             provisioners=provisioners,
             n_nodes=loader_info['n_nodes'],
+            user_name=self.params.get('ami_loader_user'),
             **common_params)
         if monitor_info['n_nodes'] is None:
             monitor_info['n_nodes'] = self.params.get('n_monitor_nodes')
@@ -906,6 +909,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                             n_nodes=self.params.get('n_monitor_nodes'),
                                             targets=dict(db_cluster=self.db_cluster,
                                                          loaders=self.loaders),
+                                            user_name=self.params.get('ami_monitor_user'),
                                             **common_params)
         else:
             self.monitors = NoMonitorSet()
