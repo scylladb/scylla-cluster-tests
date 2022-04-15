@@ -539,14 +539,27 @@ class SnitchEmailReporter(BaseEmailReporter):
     pass
 
 
+class SlaPerUserEmailReporter(LongevityEmailReporter):
+    _fields = (
+        "grafana_screenshots",
+        "grafana_snapshots",
+        "scylla_ami_id",
+        "parallel_timelines_report",
+        "workload_comparison"
+    )
+    email_template_file = "results_sl_workloads.html"
+
+
 def build_reporter(name: str,
                    email_recipients: Sequence[str] = (),
                    logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
     #  pylint: disable=too-many-return-statements,too-many-branches
     if "Gemini" in name:
         return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)
-    elif "Longevity" in name or 'SlaPerUser' in name:
+    elif "Longevity" in name:
         return LongevityEmailReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "SlaPerUser" in name:
+        return SlaPerUserEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "ManagerUpgrade" in name:
         return ManagerUpgradeEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Upgrade" in name:

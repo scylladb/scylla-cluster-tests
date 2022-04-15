@@ -592,7 +592,6 @@ class SlaPerUserTest(LongevityTest):
         """
         session = self.prepare_schema()
         self.create_test_data(rows_amount=100_000)
-
         stress_duration_min = 180
 
         # Define Service Levels/Roles/Users
@@ -633,7 +632,8 @@ class SlaPerUserTest(LongevityTest):
                 read_cmds["throughput_batch"]
             ],
                 'round_robin': True})
-            self._compare_workloads_c_s_metrics(workloads_queue)
+            self._comparison_results = self._compare_workloads_c_s_metrics(workloads_queue)
+            logger.info("C-S comparison results:\n%s", self._comparison_results)
         finally:
             pass
 
@@ -691,7 +691,6 @@ class SlaPerUserTest(LongevityTest):
             self.clean_auth(entities_list_of_dict=read_users)
 
     def _compare_workloads_c_s_metrics(self, workloads_queue: list) -> dict:
-        # define what difference margin is expected for interactive vs. batch workload metrics
         comparison_axis = {"latency 95th percentile": 1.5,
                            "latency 99th percentile": 1.5,
                            "op rate": 0.3}
@@ -746,6 +745,7 @@ class SlaPerUserTest(LongevityTest):
         email_data.update({"grafana_screenshots": grafana_dataset.get("screenshots", []),
                            "grafana_snapshots": grafana_dataset.get("snapshots", []),
                            "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
+                           "region": self.params.get("region_name") or "-",
                            "workload_comparison": self._comparison_results if self._comparison_results else {}
                            })
 
