@@ -2423,7 +2423,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             package_names = '{0}scylla-manager-server* {0}scylla-manager-client*'.format(package_url)
         else:
             self.download_scylla_manager_repo(scylla_mgmt_repo)
-            package_names = 'scylla-manager'
+            package_names = "scylla-manager-server scylla-manager-client"
         if self.is_docker():
             self.remoter.run('sudo yum remove -y scylla scylla-jmx scylla-tools scylla-tools-core'
                              ' scylla-server scylla-conf')
@@ -2460,7 +2460,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         manager_prometheus_port = self.parent_cluster.params.get("manager_prometheus_port")
         if self.is_rhel_like():  # TODO: Add debian and ubuntu support
             configuring_manager_command = dedent("""
-            scyllamgr_ssl_cert_gen
             sed -i 's/#tls_cert_file/tls_cert_file/' /etc/scylla-manager/scylla-manager.yaml
             sed -i 's/#tls_key_file/tls_key_file/' /etc/scylla-manager/scylla-manager.yaml
             sed -i 's/#prometheus: .*/prometheus: :{}/' /etc/scylla-manager/scylla-manager.yaml
