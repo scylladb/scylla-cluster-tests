@@ -484,10 +484,14 @@ class LocalMinimalScyllaPodCluster(ScyllaPodCluster):
             return ['drain_k8s_node']
         return []
 
-    @retrying(n=20, sleep_time=60, allowed_exceptions=(cluster.ClusterNodesNotReady, UnexpectedExit),
-              message="Waiting for nodes to join the cluster")
-    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None):
-        super().wait_for_nodes_up_and_normal(nodes, verification_node)
+    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=20, sleep_time=60, timeout=0):  # pylint: disable=too-many-arguments
+        @retrying(n=iterations, sleep_time=sleep_time,
+                  allowed_exceptions=(cluster.ClusterNodesNotReady, UnexpectedExit),
+                  message="Waiting for nodes to join the cluster", timeout=timeout)
+        def _wait_for_nodes_up_and_normal():
+            super().check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
+
+        _wait_for_nodes_up_and_normal()
 
     @cluster.wait_for_init_wrap
     def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):  # pylint: disable=unused-argument

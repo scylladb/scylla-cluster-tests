@@ -2083,7 +2083,8 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
 
     get_scylla_args = cluster_docker.ScyllaDockerCluster.get_scylla_args
 
-    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None):
+    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=None, sleep_time=None,
+                                     timeout=None):  # pylint: disable=too-many-arguments
         self.wait_for_pods_readiness(pods_to_wait=len(nodes), total_pods=len(self.nodes))
         self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 

@@ -45,6 +45,7 @@ from sdcm.cluster import (
     ClusterNodesNotReady,
     DB_LOG_PATTERN_RESHARDING_START,
     DB_LOG_PATTERN_RESHARDING_FINISH,
+    MAX_TIME_WAIT_FOR_NEW_NODE_UP,
     NodeSetupFailed,
     NodeSetupTimeout,
     NodeStayInClusterAfterDecommission,
@@ -141,8 +142,6 @@ class CdcStreamsWasNotUpdated(Exception):
 
 class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-methods
 
-    MINUTE_IN_SEC: int = 60
-    HOUR_IN_SEC: int = 60 * MINUTE_IN_SEC
     disruptions_list: list[Callable] = []
     DISRUPT_NAME_PREF: str = "disrupt_"
 
@@ -894,7 +893,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise LdapNotRunning("LDAP server was supposed to be running, but it is not")
 
     @retrying(n=3, sleep_time=60, allowed_exceptions=(NodeSetupFailed, NodeSetupTimeout))
-    def _add_and_init_new_cluster_node(self, old_node_ip=None, timeout=HOUR_IN_SEC * 6, rack=0):
+    def _add_and_init_new_cluster_node(self, old_node_ip=None, timeout=MAX_TIME_WAIT_FOR_NEW_NODE_UP, rack=0):
         """When old_node_private_ip is not None replacement node procedure is initiated"""
         # TODO: make it work on K8S when we have decommissioned (by nodetool) nodes.
         #       Now it will fail because pod which hosts decommissioned Scylla member is reported

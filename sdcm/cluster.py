@@ -140,6 +140,11 @@ DB_LOG_PATTERN_RESHARDING_FINISH = "(?i)storage_service - Restarting a node in N
 
 SPOT_TERMINATION_CHECK_DELAY = 5
 
+MINUTE_IN_SEC: int = 60
+HOUR_IN_SEC: int = 60 * MINUTE_IN_SEC
+MAX_TIME_WAIT_FOR_NEW_NODE_UP: int = HOUR_IN_SEC * 6
+MAX_TIME_WAIT_FOR_ALL_NODES_UP: int = MAX_TIME_WAIT_FOR_NEW_NODE_UP + HOUR_IN_SEC
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -4027,10 +4032,13 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 break
         return node_status
 
-    @retrying(n=60, sleep_time=3, allowed_exceptions=NETWORK_EXCEPTIONS + (ClusterNodesNotReady,),
-              message="Waiting for nodes to join the cluster")
-    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None):
-        self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
+    def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=60, sleep_time=3, timeout=0):  # pylint: disable=too-many-arguments
+        @retrying(n=iterations, sleep_time=sleep_time, allowed_exceptions=NETWORK_EXCEPTIONS + (ClusterNodesNotReady,),
+                  message="Waiting for nodes to join the cluster", timeout=timeout)
+        def _wait_for_nodes_up_and_normal():
+            self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
+
+        _wait_for_nodes_up_and_normal()
 
     def get_test_keyspaces(self):
         """Function returning a list of non-system keyspaces (created by test)"""
