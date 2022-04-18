@@ -149,7 +149,9 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
 
     def _compare_results(self):
         for runner in self._benchmark_runners:
-            if runner.benchmark_results:
+            if not runner.benchmark_results:
+                continue
+            try:
                 result = ComparableResult(
                     sysbench_eps=runner.benchmark_results["sysbench_events_per_second"],
                     cassandra_fio_read_bw=runner.benchmark_results["cassandra_fio_lcs_64k_read"]["read"]["bw"],
@@ -165,6 +167,11 @@ class ScyllaClusterBenchmarkManager(metaclass=Singleton):
                                         margins=Margins(sysbench_eps=0.03,
                                                         cassandra_fio_read_bw=0.01,
                                                         cassandra_fio_write_bw=0.01)))
+            except Exception as exc:  # pylint: disable=broad-except
+                LOGGER.warning(
+                    "Failed to generate comparable result for the following item:\n%s"
+                    "\nException:%s", runner.benchmark_results, exc)
+                continue
 
     @staticmethod
     def _check_results(node_name: str, averages: Averages, result: ComparableResult, margins: Margins) -> dict:
