@@ -231,8 +231,10 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             test_version = ''
             build_id = ''
 
-        last_events, events_summary = self.get_events(event_severity=[
-            Severity.CRITICAL.name, Severity.ERROR.name])
+        last_error_events, error_events_summary = self.get_events(event_severity=[Severity.ERROR.name])
+        last_critical_events, critical_events_summary = self.get_events(event_severity=[Severity.CRITICAL.name])
+        last_events = {Severity.ERROR.name: last_error_events[:100], Severity.CRITICAL.name: last_critical_events[:100]}
+        events_summary = error_events_summary + critical_events_summary
         reactor_stall_events = self.get_reactor_stall_events()
         reactor_stall_events_summary = {Severity.DEBUG.name: len(reactor_stall_events)}
         kernel_callstack_events = self.get_kernel_callstack_events()
@@ -241,6 +243,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
                   f' {test_name} - {test_version} - {str(test_start_time)}'
         results = dict(
             events_summary=events_summary,
+            # limiting to 100 entries of each severity, to avoid oversized emails
             last_events=last_events,
             # limiting to 100 entries, avoiding oversize email
             reactor_stall_events={Severity.DEBUG.name: reactor_stall_events[:100]},
