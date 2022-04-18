@@ -10,10 +10,11 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
-import time
+
 import logging
 import unittest.mock
 from uuid import UUID
+from datetime import datetime
 
 from argus.db.db_types import TestStatus
 from argus.db.testrun import TestRunWithHeartbeat, TestRunInfo, TestDetails, TestResources, TestLogs, TestResults, \
@@ -169,45 +170,6 @@ def _prepare_docker_resource_setup(sct_config: SCTConfiguration):
     return cloud_setup
 
 
-def parse_run_details(details: list) -> tuple:
-    """
-    Parse a jenkins job url into a three element tuple containing
-    release, group, test names. Most runs should fit into this pattern easily
-    and some will need some additional parsing / adjustments
-    Examples:
-    scylla-master/artifacts/artifacts-amazon2-test
-    -> [scylla-master, artifacts, artifacts-amazon2-test]
-    manager-master/ubuntu20-sanity-test
-    -> [manager-master, manager-tests, ubuntu20-sanity-test]
-    """
-    release = ""
-    group = ""
-    name = ""
-    if "manager" in details[0]:
-        release, *name = details
-        name = "-".join(name)
-        group = "manager-tests"
-    elif "scylla-operator" in details[0]:
-        _, release, group, *name = details
-        name = "-".join(name)
-    elif "scylla-staging" in details[0]:
-        release, group, *name_split = details
-        name = "-".join(name_split)
-    elif len(details) == 3:
-        release, group, name = details
-    elif len(details) < 3:
-        LOGGER.warning("Non-parseable build name detected, this run won't be stored in argus: %s", details)
-    else:
-        # try to make up a test name from arbitrary nesting
-        release, *group, name = details
-        group = "-".join(group)
-
-    # FIXUP: some groups have a trailing dash
-    group = group.strip("-")
-
-    return release, group, name
-
-
 class ArgusTestRun:
     WARNINGS_SENT = set()
     TESTRUN_INSTANCE: TestRunWithHeartbeat | None = None
@@ -249,20 +211,16 @@ class ArgusTestRun:
 
         LOGGER.info("Preparing Test Details...")
         job_name = get_job_name()
+        job_url = get_job_url()
         if job_name == "local_run":
             raise ArgusTestRunError("Will not track a locally run job")
-
-        job_url = get_job_url()
-        release_name, group_name, test_name = parse_run_details(job_name.split("/"))
-        if not release_name:
-            raise ArgusTestRunError(f"Unable to track a job: {job_name}", job_name)
 
         config_files = sct_config.get("config_files")
         started_by = get_username()
 
-        details = TestDetails(name=test_name, scm_revision_id=get_git_commit_id(), started_by=started_by,
-                              build_job_name=job_name, build_job_url=job_url,
-                              yaml_test_duration=sct_config.get("test_duration"), start_time=int(time.time()),
+        details = TestDetails(scm_revision_id=get_git_commit_id(), started_by=started_by, build_job_url=job_url,
+                              yaml_test_duration=sct_config.get("test_duration"),
+                              start_time=datetime.utcnow().replace(microsecond=0),
                               config_files=config_files, packages=[])
 
         LOGGER.info("Preparing Resource Setup...")
@@ -285,8 +243,8 @@ class ArgusTestRun:
 
         run_info = TestRunInfo(details=details, setup=setup_details, resources=resources, logs=logs, results=results)
         LOGGER.info("Initializing TestRun...")
-        cls.TESTRUN_INSTANCE = TestRunWithHeartbeat(test_id=test_id, group=group_name, release_name=release_name,
-                                                    assignee="",
+        cls.TESTRUN_INSTANCE = TestRunWithHeartbeat(test_id=test_id, build_id=job_name,
+                                                    assignee=None,
                                                     run_info=run_info,
                                                     config=cls.config())
 
