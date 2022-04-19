@@ -1301,7 +1301,12 @@ def create_runner_image(cloud_provider, region, availability_zone):
 @click.option("-i", "--instance-type", required=False, type=str, default="", help="Instance type")
 @click.option("-t", "--test-id", required=True, type=str, help="Test ID")
 @click.option("-d", "--duration", required=True, type=int, help="Test duration in MINUTES")
-def create_runner_instance(cloud_provider, region, availability_zone, instance_type, test_id, duration):
+@click.option("-rm", "--restore-monitor", required=False, type=bool,
+              help="Is the runner for restore monitor purpose or not")
+@click.option("-rt", "--restored-test-id", required=False, type=str,
+              help="Test ID of the test that the runner is created for restore monitor")
+def create_runner_instance(cloud_provider, region, availability_zone, instance_type, test_id, duration,
+                           restore_monitor=False, restored_test_id=""):
     if cloud_provider == "aws":
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
     add_file_logger()
@@ -1312,6 +1317,8 @@ def create_runner_instance(cloud_provider, region, availability_zone, instance_t
         instance_type=instance_type,
         test_id=test_id,
         test_duration=duration,
+        restore_monitor=restore_monitor,
+        restored_test_id=restored_test_id,
     )
     if not instance:
         sys.exit(1)

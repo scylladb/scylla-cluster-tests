@@ -339,7 +339,8 @@ class SctRunner(ABC):
     def _get_base_image(self, image: Optional[Any] = None) -> Any:
         ...
 
-    def create_instance(self, test_id: str, test_duration: int, instance_type: str = "") -> Any:
+    def create_instance(self, test_id: str, test_duration: int, instance_type: str = "",  # pylint: disable=too-many-arguments
+                        restore_monitor: bool = False, restored_test_id: str = "") -> Any:
         LOGGER.info("Creating SCT Runner instance...")
         image = self.image
         if not image:
@@ -347,17 +348,22 @@ class SctRunner(ABC):
                          "Use `hydra create-runner-image --cloud-provider %s --region %s'",
                          self.region_name, self.CLOUD_PROVIDER, self.region_name)
             return None
+
+        tags = {
+            "TestId": test_id,
+            "NodeType": self.NODE_TYPE,
+            "RunByUser": get_username(),
+            "keep": str(ceil(test_duration / 60) + 6),  # keep SCT Runner for 6h more than test_duration
+            "keep_action": "terminate",
+        }
+        if restore_monitor and restored_test_id:
+            tags.update({"RestoredTestId": restored_test_id})
+
         return self._create_instance(
             instance_type=instance_type or self.instance_type(test_duration=test_duration),
             base_image=self._get_base_image(self.image),
-            tags={
-                "TestId": test_id,
-                "NodeType": self.NODE_TYPE,
-                "RunByUser": get_username(),
-                "keep": str(ceil(test_duration / 60) + 6),  # keep SCT Runner for 6h more than test_duration
-                "keep_action": "terminate",
-            },
-            instance_name=f"{self.image_name}-instance-{test_id[:8]}",
+            tags=tags,
+            instance_name=f"{self.image_name}-{'restored-monitor-' if restore_monitor else ''}instance-{test_id[:8]}",
             region_az=self.region_az(
                 region_name=self.region_name,
                 availability_zone=self.availability_zone,
