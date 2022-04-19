@@ -114,12 +114,22 @@ if [[ -n "${CREATE_RUNNER_INSTANCE}" ]]; then
     else
         HYDRA="echo $0"
     fi
+
+    if [[ -n "${RESTORED_TEST_ID}" ]]; then
+        RESTORED_TEST_ID="--restored-test-id ${RESTORED_TEST_ID}"
+    else
+        RESTORED_TEST_ID=""
+    fi
+
     ${HYDRA} create-runner-instance \
       --cloud-provider aws \
       --region "${RUNNER_REGION:-us-east-1}" \
       --availability-zone "${RUNNER_AZ:-a}" \
       --test-id "${SCT_TEST_ID}" \
-      --duration "${RUNNER_DURATION:-1440}"
+      --duration "${RUNNER_DURATION:-1440}" \
+      --restore-monitor "${RESTORE_MONITOR_RUNNER:-False}" \
+      ${RESTORED_TEST_ID}
+
     if [[ -z "${HYDRA_DRY_RUN}" ]]; then
         RUNNER_IP=$(<"${RUNNER_IP_FILE}")
     else

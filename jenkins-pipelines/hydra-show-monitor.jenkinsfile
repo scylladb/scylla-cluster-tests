@@ -66,6 +66,8 @@ pipeline {
                     export RUNNER_DURATION="${params.duration}"
                     export RUNNER_REGION="${params.region}"
                     export RUNNER_AZ="${params.availability_zone}"
+                    export RESTORE_MONITOR_RUNNER="True"
+                    export RESTORED_TEST_ID="${params.test_id}"
 
                     ./docker/env/hydra.sh --execute-on-new-runner investigate show-monitor "${params.test_id}"
                 """
