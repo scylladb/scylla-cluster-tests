@@ -12,7 +12,7 @@ module.exports = {
         'type-empty': [2, 'never'],
         // Scope
         'scope-empty': [2, 'never'],
-        'scope-min-length': [2, 'always', 5],
+        'scope-min-length': [2, 'always', 3],
         // Body
         'body-min-length': [2, 'always', 30],
         'body-max-line-length': [2, 'always', 100],
