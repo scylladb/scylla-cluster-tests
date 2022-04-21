@@ -171,6 +171,10 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
         """systemd is not used in Docker"""
         return "docker"
 
+    @property
+    def region(self):
+        return "docker"
+
 
 class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
     node_container_user = "scylla-test"
