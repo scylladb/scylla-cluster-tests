@@ -301,8 +301,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def _init_argus_resource(self):
         try:
             run = ArgusTestRun.get()
-            shards = self.scylla_shards if "db-node" in self.instance_name else self.cpu_cores
-            shards = int(shards) if shards else 0
+            shards = -1 if "db-node" in self.instance_name else self.cpu_cores
             instance_details = CloudInstanceDetails(public_ip=self.public_ip_address, region=self.region,
                                                     provider=self.parent_cluster.cluster_backend,
                                                     private_ip=self.ip_address, creation_time=int(time.time()),
@@ -314,6 +313,18 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             run.save()
         except Exception:  # pylint: disable=broad-except
             LOGGER.error("Encountered an unhandled exception while interacting with Argus", exc_info=True)
+
+    def argus_resource_set_shards(self) -> CloudResource | None:
+        try:
+            if not self.argus_resource:
+                return None
+            shards = self.scylla_shards if "db-node" in self.instance_name else self.cpu_cores
+            shards = int(shards) if shards else 0
+            self.argus_resource.instance_info.shards_amount = shards
+            return self.argus_resource
+        except Exception:  # pylint: disable=broad-except
+            LOGGER.error("Encountered an unhandled exception while interacting with Argus", exc_info=True)
+            return None
 
     def _destroy_argus_resource(self):
         try:
@@ -3489,10 +3500,12 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
         _queue = queue.Queue()
 
         @raise_event_on_failure
-        def node_setup(_node):
+        def node_setup(_node: BaseNode):
             exception_details = None
             try:
                 cl_inst.node_setup(_node, **setup_kwargs)
+                _node.argus_resource_set_shards()
+                ArgusTestRun.get().save()
             except Exception as ex:  # pylint: disable=broad-except
                 exception_details = (str(ex), traceback.format_exc())
             _queue.put((_node, exception_details))
