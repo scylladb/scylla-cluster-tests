@@ -28,6 +28,7 @@ from mypy_boto3_ec2.type_defs import LaunchTemplateBlockDeviceMappingRequestType
 from sdcm import sct_abs_path, cluster
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.utils.aws_utils import tags_as_ec2_tags, EksClusterCleanupMixin
+from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.k8s import TokenUpdateThread
 from sdcm.wait import wait_for, exponential_retry
 from sdcm.cluster_k8s import (
@@ -585,6 +586,12 @@ class EksScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
 class MonitorSetEKS(MonitorSetAWS):
     # On EKS nodes you can't communicate to cluster nodes outside of it, so we have to enforce using public ip
     DB_NODES_IP_ADDRESS = 'public_ip_address'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.json_file_params_for_replace = {
+            "$test_name": f"{get_test_name()}--{self.targets['db_cluster'].scylla_cluster_name}",
+        }
 
     def install_scylla_manager(self, node):
         pass
