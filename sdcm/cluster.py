@@ -17,6 +17,7 @@ import queue
 import getpass
 import logging
 import os
+import shutil
 import sys
 import random
 import re
@@ -4879,7 +4880,15 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             if not os.path.exists(sct_dashboard_json_path):
                 sct_dashboard_json_filename = "scylla-dash-per-server-nemesis.master.json"
                 sct_dashboard_json_path = get_data_dir_path(sct_dashboard_json_filename)
-            self._sct_dashboard_json_file = sct_dashboard_json_path
+
+            # NOTE: use separate path per monitoring to support multi-tenant setups in K8S
+            original_path_parts = sct_dashboard_json_path.split("/")
+            current_sct_dashboard_json_path = "/".join(
+                original_path_parts[:-1]
+                + [f"sct-monitor-{generate_random_string(5)}-{original_path_parts[-1]}"])
+            shutil.copyfile(sct_dashboard_json_path, current_sct_dashboard_json_path)
+
+            self._sct_dashboard_json_file = current_sct_dashboard_json_path
             self.sct_dashboard_json_file_content_update(update_params=self.json_file_params_for_replace,
                                                         json_file=self._sct_dashboard_json_file)
         return self._sct_dashboard_json_file

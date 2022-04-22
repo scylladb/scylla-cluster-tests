@@ -24,6 +24,7 @@ from sdcm import sct_abs_path, cluster
 from sdcm.wait import exponential_retry
 from sdcm.utils.k8s import ApiCallRateLimiter, TokenUpdateThread
 from sdcm.utils.gce_utils import GcloudContextManager
+from sdcm.utils.ci_tools import get_test_name
 from sdcm.cluster_k8s import KubernetesCluster, ScyllaPodCluster, BaseScyllaPodContainer, CloudK8sNodePool
 from sdcm.cluster_k8s.iptables import IptablesPodIpRedirectMixin, IptablesClusterOpsMixin
 from sdcm.cluster_gce import MonitorSetGCE
@@ -444,6 +445,12 @@ class GkeScyllaPodCluster(ScyllaPodCluster, IptablesClusterOpsMixin):
 
 class MonitorSetGKE(MonitorSetGCE):
     DB_NODES_IP_ADDRESS = 'public_ip_address'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.json_file_params_for_replace = {
+            "$test_name": f"{get_test_name()}--{self.targets['db_cluster'].scylla_cluster_name}",
+        }
 
     def install_scylla_manager(self, node):
         pass
