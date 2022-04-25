@@ -21,7 +21,7 @@ def general_test(scylla_repo='', linux_distro=''):
     scylla_version = None
 
     version_detector = UpgradeBaseVersion(scylla_repo, linux_distro, scylla_version)
-    version_detector.get_start_support_version()
+    version_detector.set_start_support_version()
     _, version_list = version_detector.get_version_list()
     return version_list
 
@@ -33,7 +33,7 @@ class TestBaseVersion(unittest.TestCase):
         scylla_repo = self.url_base + 'unstable/scylla/master/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
         linux_distro = 'centos'
         version_list = general_test(scylla_repo, linux_distro)
-        self.assertEqual(version_list, ['4.6'])
+        self.assertEqual(version_list, ['5.0'])
 
     def test_4_5_with_centos8(self):
         scylla_repo = self.url_base + 'unstable/scylla/branch-4.5/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
@@ -57,7 +57,7 @@ class TestBaseVersion(unittest.TestCase):
         scylla_repo = self.url_base + 'unstable/scylla-enterprise/enterprise/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
         linux_distro = 'centos'
         version_list = general_test(scylla_repo, linux_distro)
-        self.assertEqual(version_list, ['2021.1'])
+        self.assertEqual(version_list, ['2022.1'])
 
     def test_2021_1(self):
         scylla_repo = self.url_base + 'unstable/scylla-enterprise/branch-2021.1/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'

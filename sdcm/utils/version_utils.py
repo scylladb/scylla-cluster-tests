@@ -168,6 +168,33 @@ def get_branch_version_from_centos_repository(urls):
     return max(result, key=result.count)
 
 
+def get_all_versions_from_debian_repository(urls: set[str]) -> set[str]:
+    def get_version(url: str) -> set[str]:
+        data = '\n'.join(get_url_content(url=url))
+        # Get only the major version (i.e. "2019.1.1-0.20190709.9f724fedb-1~stretch", get only "2019.1.1")
+        major_versions = [version.split('-', maxsplit=1)[0] for version in REPO_VERSIONS_REGEX.findall(data)]
+        return set(major_versions)
+
+    threads = ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=get_version)
+    result = set.union(*[thread.result for thread in threads])
+    return result
+
+
+def get_all_versions_from_centos_repository(urls: set[str]) -> set[str]:
+    def get_version(url: str) -> set[str]:
+        data = '\n'.join(get_url_content(url=url))
+        primary_path = PRIMARY_XML_GZ_REGEX.search(data).groups()[0]
+        xml_url = url.replace(REPOMD_XML_PATH, primary_path)
+
+        parser = Parser(url=xml_url)
+        major_versions = [package['version'][1]['ver'] for package in parser.getList()]
+        return set(major_versions)
+
+    threads = ParallelObject(objects=urls, timeout=SCYLLA_URL_RESPONSE_TIMEOUT).run(func=get_version)
+    result = set.union(*[thread.result for thread in threads])
+    return result
+
+
 def get_repository_details(url):
     urls = list({*get_url_content(url=url)})
 
@@ -190,6 +217,18 @@ def get_branch_version(url):
         return get_branch_version_from_centos_repository(urls=urls)
     # To overcome on Pylint's "inconsistent-return-statements", a value must be returned
     return []
+
+
+def get_all_versions(url: str) -> set[str]:
+    repo_details = get_repository_details(url=url)
+    urls = get_scylla_urls_from_repository(repo_details=repo_details)
+
+    if repo_details.type == ScyllaFileType.DEBIAN:
+        return get_all_versions_from_debian_repository(urls=urls)
+    elif repo_details.type == ScyllaFileType.YUM:
+        return get_all_versions_from_centos_repository(urls=urls)
+    # To overcome on Pylint's "inconsistent-return-statements", a value must be returned
+    return set()
 
 
 def get_branch_version_for_multiple_repositories(urls):
