@@ -2840,8 +2840,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             wait_db_up_timeout = 1800
         node_to_rebuild = new_node if new_node else self.target_node
         node_to_rebuild.wait_db_up(verbose=True, timeout=wait_db_up_timeout)
+        rebuild_in_log = node_to_rebuild.follow_system_log(patterns=["range_streamer - Rebuild.*"],
+                                                           start_from_beginning=False)
         node_to_rebuild.wait_jmx_up(timeout=wait_db_up_timeout)
-        node_to_rebuild.run_nodetool('rebuild')
+        rebuild_found = list(rebuild_in_log)
+        if not rebuild_found:
+            node_to_rebuild.run_nodetool('rebuild')
+        else:
+            self.log.debug("Another operation rebuild is in progress. Rebuild process will not start")
 
     def disrupt_decommission_streaming_err(self):
         """
