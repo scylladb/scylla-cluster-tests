@@ -26,7 +26,7 @@ nemesis_during_prepare: false
 nemesis_filter_seeds: false
 seeds_num: 3
 
-user_prefix: 'longevity-tls-2tb-4d-1dis-2nondis'
+user_prefix: 'longevity-tls-2tb-48h-1dis-2nondis'
 space_node_threshold: 644245094
 server_encrypt: true
 client_encrypt: true
