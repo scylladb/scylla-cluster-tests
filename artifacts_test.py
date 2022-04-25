@@ -241,6 +241,16 @@ class ArtifactsTest(ClusterTester):
             write_cache = run(f"cat /sys/block/{nvme_device}/queue/write_cache").stdout.strip()
             self.assertEqual(write_cache, expected_write_cache_value)
 
+    def verify_xfs_online_discard_enabled(self) -> None:
+        run = self.node.remoter.sudo
+
+        self.log.info("Verify XFS mount options for /var/lib/scylla contain `discard'")
+        mount_options = run("findmnt -no options -t xfs -T /var/lib/scylla").stdout.strip().split(",")
+        self.assertIn("discard", mount_options)
+
+        self.log.info("Ensure that we don't run fstrim")
+        self.assertEqual(run("systemctl is-enabled fstrim.timer", ignore_status=True).stdout.strip(), "disabled")
+
     def check_service_existence(self, service_name):
         res = self.node.remoter.run(f'systemctl list-units --full | grep -Fq "{service_name}"',
                                     ignore_status=True)
@@ -261,6 +271,10 @@ class ArtifactsTest(ClusterTester):
 
         with self.subTest("verify write cache for NVMe devices"):
             self.verify_nvme_write_cache()
+
+        if backend != "docker":
+            with self.subTest("verify XFS online discard enabled"):
+                self.verify_xfs_online_discard_enabled()
 
         if backend == "gce":
             with self.subTest("verify users"):
