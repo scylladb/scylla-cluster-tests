@@ -3048,6 +3048,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.remoter.sudo('yum install -y stress-ng')
         elif self.target_node.distro.is_ubuntu:
             # Install stress on Ubuntu: https://snapcraft.io/install/stress-ng/ubuntu
+            self.target_node.remoter.sudo('apt -y install snapd')
             self.target_node.remoter.sudo('snap install stress-ng')
         else:
             raise UnsupportedNemesis(f"{self.target_node.distro} OS not supported!")
