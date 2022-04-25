@@ -3852,36 +3852,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 node_list = self.nodes
             self._update_db_packages(new_scylla_bin, node_list, start_service=start_service)
 
-    def get_node_info_list(self, verification_node):
-        """
-            !!! Deprecated !!!!
-            use self.get_nodetool_status instead
-        """
-        assert verification_node in self.nodes
-        cmd_result = verification_node.run_nodetool('status')
-        node_info_list = []
-        for line in cmd_result.stdout.splitlines():
-            line = line.strip()
-            if line.startswith('UN'):
-                try:
-                    status, ip, load, _, tokens, owns, host_id, rack = line.split()
-                    node_info = {'status': status,
-                                 'ip': ip,
-                                 'load': load,
-                                 'tokens': tokens,
-                                 'owns': owns,
-                                 'host_id': host_id,
-                                 'rack': rack}
-                    # Cassandra banners have nodetool status output as well.
-                    # Need to guarantee unique set of results.
-                    node_ips = [node_info['ip']
-                                for node_info in node_info_list]
-                    if node_info['ip'] not in node_ips:
-                        node_info_list.append(node_info)
-                except ValueError:
-                    pass
-        return node_info_list
-
     @retrying(n=3, sleep_time=5)
     def get_nodetool_status(self, verification_node=None):  # pylint: disable=too-many-locals
         """
