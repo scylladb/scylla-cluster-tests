@@ -504,7 +504,8 @@ def list_ami_branch(region, version):
         test_status = [click.style(k, fg='green') for k, v in test_status if v == 'PASSED'] + \
                       [click.style(k, fg='red') for k, v in test_status if not v == 'PASSED']
         test_status = ", ".join(test_status) if test_status else click.style('Unknown', fg='yellow')
-        tbl.add_row([ami.name, ami.image_id, ami.creation_date, tags['build-id'], test_status])
+        tbl.add_row([ami.name, ami.image_id, ami.creation_date,
+                     tags.get('build-id', tags.get('build_id')), test_status])
     click.echo(tbl.get_string(title="Scylla AMI branch versions"))
 
 
