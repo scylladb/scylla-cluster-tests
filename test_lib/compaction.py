@@ -13,6 +13,7 @@ class CompactionStrategy(Enum):
     TIME_WINDOW = "TimeWindowCompactionStrategy"
     INCREMENTAL = "IncrementalCompactionStrategy"
     IN_MEMORY = "InMemoryCompactionStrategy"
+    DATE_TIERED = "DateTieredCompactionStrategy"
 
     @classmethod
     def from_str(cls, output_str):
