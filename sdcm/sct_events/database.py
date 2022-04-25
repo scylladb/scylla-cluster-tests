@@ -149,6 +149,7 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.GATE_CLOSED(),
     DatabaseLogEvent.RESTARTED_DUE_TO_TIME_OUT(),
     DatabaseLogEvent.EMPTY_NESTED_EXCEPTION(),
+    DatabaseLogEvent.COMPACTION_STOPPED(),
     DatabaseLogEvent.DATABASE_ERROR(),
     DatabaseLogEvent.BAD_ALLOC(),
     DatabaseLogEvent.SCHEMA_FAILURE(),
@@ -156,7 +157,6 @@ SYSTEM_ERROR_EVENTS = (
     DatabaseLogEvent.FILESYSTEM_ERROR(),
     DatabaseLogEvent.DISK_ERROR(),
     DatabaseLogEvent.STACKTRACE(),
-    DatabaseLogEvent.COMPACTION_STOPPED(),
 
     # REACTOR_STALLED must be above BACKTRACE as it has "Backtrace" in its message
     DatabaseLogEvent.REACTOR_STALLED(),
