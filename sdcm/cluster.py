@@ -2857,13 +2857,13 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                           sudo /sbin/mkswap /var/sct_configured_swapfile
                           sudo chmod 600 /var/sct_configured_swapfile
                           sudo /sbin/swapon /var/sct_configured_swapfile""".format(size))
-        self.log.info("Add swap file to loader %s", self)
+        self.log.info("Add swap file to %s", self)
         result = self.remoter.run(commands, ignore_status=True)
         if not result.ok:
-            self.log.warning("Swap file was not created on loader node %s.\nError details: %s", self, result.stderr)
+            self.log.warning("Swap file was not created on node %s.\nError details: %s", self, result.stderr)
         result = self.remoter.run("grep /sct_configured_swapfile /proc/swaps", ignore_status=True)
         if "sct_configured_swapfile" not in result.stdout:
-            self.log.warning("Swap file is not used on loader node %s.\nError details: %s", self, result.stderr)
+            self.log.warning("Swap file is not used on node %s.\nError details: %s", self, result.stderr)
 
     def set_hostname(self):
         self.log.warning('Method set_hostname is not implemented for %s' % self.__class__.__name__)
