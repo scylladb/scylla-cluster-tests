@@ -587,7 +587,7 @@ def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_pri
 
     # We can't detect the support versions for this distro, which shares the repo with others, eg: centos8
     # so we need to assign the start support versions for it.
-    version_detector.get_start_support_version()
+    version_detector.set_start_support_version()
 
     supported_versions, version_list = version_detector.get_version_list()
     click.echo(f'Supported Versions: {supported_versions}')
@@ -631,8 +631,8 @@ def _run_yaml_test(backend, full_path, env):
     os.environ['SCT_CONFIG_FILES'] = full_path
     logging.getLogger().handlers = []
     logging.getLogger().disabled = True
-    config = SCTConfiguration()
     try:
+        config = SCTConfiguration()
         config.verify_configuration()
         config.check_required_files()
     except Exception as exc:  # pylint: disable=broad-except
