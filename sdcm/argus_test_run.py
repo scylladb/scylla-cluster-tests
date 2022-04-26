@@ -206,6 +206,17 @@ class ArgusTestRun:
         "docker": _prepare_docker_resource_setup,
         "unknown": _prepare_unknown_resource_setup,
     }
+
+    REGION_PROPERTY_MAP = {
+        "aws": "region_name",
+        "aws-siren": "region_name",
+        "k8s-eks": "region_name",
+        "gce": "gce_datacenter",
+        "gce-siren": "gce_datacenter",
+        "k8s-gke": "gce_datacenter",
+        "azure": "azure_region_name",
+        "default": "region_name",
+    }
     _config: ArgusConfig = None
 
     def __init__(self):
@@ -246,7 +257,8 @@ class ArgusTestRun:
 
         LOGGER.info("Preparing Resource Setup...")
         backend = sct_config.get("cluster_backend")
-        raw_regions = sct_config.get("region_name") or sct_config.get("gce_datacenter") or "undefined_region"
+        region_key = cls.REGION_PROPERTY_MAP.get(backend, cls.REGION_PROPERTY_MAP["default"])
+        raw_regions = sct_config.get(region_key) or "undefined_region"
         regions = raw_regions.split()
         primary_region = regions[0]
 
