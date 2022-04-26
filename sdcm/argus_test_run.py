@@ -46,7 +46,7 @@ def _get_node_amounts(config: SCTConfiguration) -> tuple[int, int]:
     return num_db_node, num_loaders
 
 
-def _prepare_aws_resource_setup(sct_config: SCTConfiguration):
+def _prepare_aws_resource_setup(sct_config: SCTConfiguration) -> AWSSetupDetails:
     num_db_nodes, n_loaders = _get_node_amounts(sct_config)
     db_node_setup = CloudNodesInfo(image_id=sct_config.get("ami_id_db_scylla"),
                                    instance_type=sct_config.get("instance_type_db"),
@@ -66,7 +66,7 @@ def _prepare_aws_resource_setup(sct_config: SCTConfiguration):
     return cloud_setup
 
 
-def _prepare_gce_resource_setup(sct_config: SCTConfiguration):
+def _prepare_gce_resource_setup(sct_config: SCTConfiguration) -> GCESetupDetails:
     num_db_nodes, n_loaders = _get_node_amounts(sct_config)
     db_node_setup = CloudNodesInfo(image_id=sct_config.get("gce_image_db"),
                                    instance_type=sct_config.get("gce_instance_type_db"),
@@ -86,7 +86,27 @@ def _prepare_gce_resource_setup(sct_config: SCTConfiguration):
     return cloud_setup
 
 
-def _prepare_unknown_resource_setup(sct_config: SCTConfiguration):
+def _prepare_azure_resource_setup(sct_config: SCTConfiguration) -> BaseCloudSetupDetails:
+    num_db_nodes, n_loaders = _get_node_amounts(sct_config)
+    db_node_setup = CloudNodesInfo(image_id=sct_config.get("azure_image_db"),
+                                   instance_type=sct_config.get("azure_instance_type_db"),
+                                   node_amount=num_db_nodes,
+                                   post_behaviour=sct_config.get("post_behavior_db_nodes"))
+    loader_node_setup = CloudNodesInfo(image_id=sct_config.get("azure_image_loader"),
+                                       instance_type=sct_config.get("azure_instance_type_loader"),
+                                       node_amount=n_loaders,
+                                       post_behaviour=sct_config.get("post_behavior_loader_nodes"))
+    monitor_node_setup = CloudNodesInfo(image_id=sct_config.get("azure_image_monitor"),
+                                        instance_type=sct_config.get("azure_instance_type_monitor"),
+                                        node_amount=sct_config.get("n_monitor_nodes"),
+                                        post_behaviour=sct_config.get("post_behavior_monitor_nodes"))
+    cloud_setup = BaseCloudSetupDetails(db_node=db_node_setup, loader_node=loader_node_setup,
+                                        monitor_node=monitor_node_setup, backend=sct_config.get("cluster_backend"))
+
+    return cloud_setup
+
+
+def _prepare_unknown_resource_setup(sct_config: SCTConfiguration) -> BaseCloudSetupDetails:
     LOGGER.error("Unknown backend encountered: %s", sct_config.get("cluster_backend"))
     db_node_setup = CloudNodesInfo(image_id="UNKNOWN",
                                    instance_type="UNKNOWN",
@@ -106,7 +126,7 @@ def _prepare_unknown_resource_setup(sct_config: SCTConfiguration):
     return cloud_setup
 
 
-def _prepare_bare_metal_resource_setup(sct_config: SCTConfiguration):
+def _prepare_bare_metal_resource_setup(sct_config: SCTConfiguration) -> BaseCloudSetupDetails:
     db_node_setup = CloudNodesInfo(image_id="bare_metal",
                                    instance_type="bare_metal",
                                    node_amount=sct_config.get("n_db_nodes"),
@@ -125,7 +145,7 @@ def _prepare_bare_metal_resource_setup(sct_config: SCTConfiguration):
     return cloud_setup
 
 
-def _prepare_k8s_gce_minikube_resource_setup(sct_config: SCTConfiguration):
+def _prepare_k8s_gce_minikube_resource_setup(sct_config: SCTConfiguration) -> BaseCloudSetupDetails:
     cloud_setup = _prepare_gce_resource_setup(sct_config)
 
     image_id = sct_config.get("scylla_version")
@@ -135,7 +155,7 @@ def _prepare_k8s_gce_minikube_resource_setup(sct_config: SCTConfiguration):
     return cloud_setup
 
 
-def _prepare_k8s_gke_resource_setup(sct_config: SCTConfiguration):
+def _prepare_k8s_gke_resource_setup(sct_config: SCTConfiguration) -> BaseCloudSetupDetails:
     cloud_setup = _prepare_gce_resource_setup(sct_config)
     image_id = sct_config.get("scylla_version")
     cloud_setup.db_node.image_id = f"scylladb/scylladb:{image_id}"
@@ -145,13 +165,13 @@ def _prepare_k8s_gke_resource_setup(sct_config: SCTConfiguration):
     return cloud_setup
 
 
-def _prepare_k8s_eks_resource_setup(sct_config: SCTConfiguration):
+def _prepare_k8s_eks_resource_setup(sct_config: SCTConfiguration) -> BaseCloudSetupDetails:
     cloud_setup = _prepare_aws_resource_setup(sct_config)
 
     return cloud_setup
 
 
-def _prepare_docker_resource_setup(sct_config: SCTConfiguration):
+def _prepare_docker_resource_setup(sct_config: SCTConfiguration) -> BaseCloudSetupDetails:
     db_node_setup = CloudNodesInfo(image_id=sct_config.get('docker_image'),
                                    instance_type="docker",
                                    node_amount=sct_config.get("n_db_nodes"),
@@ -176,6 +196,7 @@ class ArgusTestRun:
     BACKEND_MAP = {
         "aws": _prepare_aws_resource_setup,
         "aws-siren": _prepare_aws_resource_setup,
+        "azure": _prepare_azure_resource_setup,
         "gce": _prepare_gce_resource_setup,
         "gce-siren": _prepare_gce_resource_setup,
         "k8s-eks": _prepare_k8s_eks_resource_setup,
