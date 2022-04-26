@@ -179,16 +179,18 @@ class BackupFunctionsMixIn:
         self.restore_backup_from_backup_task(mgr_cluster=mgr_cluster, backup_task=backup_task,
                                              keyspace_and_table_list=per_keyspace_tables_dict)
 
-    def _generate_load(self):
+    def _generate_load(self, keyspace_name_to_replace=None):
         self.log.info('Starting c-s write workload')
         stress_cmd = self.params.get('stress_cmd')
+        if keyspace_name_to_replace:
+            stress_cmd = stress_cmd.replace("keyspace1", keyspace_name_to_replace)
         stress_thread = self.run_stress_thread(stress_cmd=stress_cmd)
         self.log.info('Sleeping for 15s to let cassandra-stress run...')
         time.sleep(15)
         return stress_thread
 
-    def generate_load_and_wait_for_results(self):
-        load_thread = self._generate_load()
+    def generate_load_and_wait_for_results(self, keyspace_name_to_replace=None):
+        load_thread = self._generate_load(keyspace_name_to_replace=keyspace_name_to_replace)
         load_results = load_thread.get_results()
         self.log.info(f'load={load_results}')
 
