@@ -126,8 +126,12 @@ class ManagerUpgradeTest(BackupFunctionsMixIn, ClusterTester):
         manager_tool = get_scylla_manager_tool(manager_node=manager_node)
         # make sure that the cluster is still added to the manager
         manager_tool.get_cluster(cluster_name="cluster_under_test")
-        validate_previous_task_details(task=repair_task, previous_task_details=repair_task_current_details)
-        validate_previous_task_details(task=backup_task, previous_task_details=backup_task_current_details)
+
+        with self.subTest("Checking that the details of the repair that was created before the upgrade didn't change"):
+            validate_previous_task_details(task=repair_task, previous_task_details=repair_task_current_details)
+
+        with self.subTest("Checking that the details of the backup that was created before the upgrade didn't change"):
+            validate_previous_task_details(task=backup_task, previous_task_details=backup_task_current_details)
 
         with self.subTest("Continuing a older version stopped backup task with newer version manager"):
             pausable_backup_task.start()
