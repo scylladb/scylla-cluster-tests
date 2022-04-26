@@ -247,7 +247,7 @@ def validate_previous_task_details(task, previous_task_details):
     Compares the details of the task next run and history to the previously extracted next run and history
     """
     for detail_name, current_value in wait_until_task_finishes_return_details(task, wait=False).items():
-        if current_value is datetime:
+        if isinstance(current_value, datetime):
             delta = current_value - previous_task_details[detail_name]
             assert abs(delta.total_seconds()) < 60, \
                 f"The Next Run value changed from {str(previous_task_details[detail_name])} to {str(current_value)}"
