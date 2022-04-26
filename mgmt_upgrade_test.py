@@ -242,20 +242,36 @@ def time_string_to_datetime(time_string):
     return datetime_object
 
 
+def _create_mismatched_details_error_message(previous_task_details, current_task_details, mismatched_details_name_list):
+    error_message_format = "\n{}: from {} to {}"
+    complete_error_description = ""
+    for name in mismatched_details_name_list:
+        complete_error_description += error_message_format.format(name,
+                                                                  previous_task_details[name],
+                                                                  current_task_details[name])
+    return complete_error_description
+
+
 def validate_previous_task_details(task, previous_task_details):
     """
     Compares the details of the task next run and history to the previously extracted next run and history
     """
-    for detail_name, current_value in wait_until_task_finishes_return_details(task, wait=False).items():
+    mismatched_details_name_list = []
+    current_task_details = wait_until_task_finishes_return_details(task, wait=False)
+    for detail_name, current_value in current_task_details.items():
         if isinstance(current_value, datetime):
             delta = current_value - previous_task_details[detail_name]
-            assert abs(delta.total_seconds()) < 60, \
-                f"The Next Run value changed from {str(previous_task_details[detail_name])} to {str(current_value)}"
             # I check that the time delta is smaller than 60 seconds since we calculate the next run time on our own,
             # and as a result it could be a BIT imprecise
+            if abs(delta.total_seconds()) > 60:
+                mismatched_details_name_list.append(detail_name)
         else:
-            assert current_value == previous_task_details[detail_name], \
-                f"previous task {detail_name} is not identical to the current history"
+            if current_value != previous_task_details[detail_name]:
+                mismatched_details_name_list.append(detail_name)
+    complete_error_description = _create_mismatched_details_error_message(previous_task_details,
+                                                                          current_task_details,
+                                                                          mismatched_details_name_list)
+    assert not mismatched_details_name_list, f"Task details of {task.id} changed:{complete_error_description}"
 
 
 def upgrade_scylla_manager(
