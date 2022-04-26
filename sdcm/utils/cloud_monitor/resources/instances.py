@@ -67,7 +67,7 @@ class GCEInstance(CloudInstance):
             name=instance.name,
             instance_id=instance.id,
             region_az=instance.extra["zone"].name,
-            state=instance.state,
+            state=str(instance.state),
             lifecycle=InstanceLifecycle.SPOT if is_preemptible else InstanceLifecycle.ON_DEMAND,
             instance_type=instance.size,
             owner=tags.get("RunByUser", NA) if tags else NA,
