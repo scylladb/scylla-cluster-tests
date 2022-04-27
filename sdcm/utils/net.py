@@ -21,16 +21,18 @@ def get_my_ip():
 
 
 def get_my_public_ip() -> str:
-    hostnames = ['https://api4.my-ip.io/ip', "https://api.ipify.org", 'https://ip4.seeip.org/ip',
+    hostnames = ['https://api4.my-ip.io/ip', 'https://api.ipify.org', 'https://ip4.seeip.org/ip',
                  'http://ipv4.icanhazip.com']
 
-    for hostname in hostnames:
-        result = requests.get(hostname, timeout=10)
-        if result.ok:
-            try:
-                ip_address = result.text.strip()
-                ipaddress.ip_address(ip_address)  # validating that we got IP address
-                return ip_address
-            except ValueError:
-                continue
-    return ""
+    ip_address = "[Not Found]"
+    for idx, hostname in enumerate(hostnames):
+        try:
+            result = requests.get(hostname, timeout=10)
+            result.raise_for_status()
+
+            ip_address = result.text.strip()
+            ipaddress.ip_address(ip_address)  # validating that we got IP address
+        except (ValueError, requests.exceptions.RequestException):
+            if idx == len(hostnames) - 1:
+                raise
+    return ip_address
