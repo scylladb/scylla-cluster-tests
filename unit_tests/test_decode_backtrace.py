@@ -22,7 +22,7 @@ from sdcm.db_log_reader import DbLogReader
 from sdcm.sct_events.database import SYSTEM_ERROR_EVENTS_PATTERNS
 
 from unit_tests.dummy_remote import DummyRemote
-from unit_tests.test_cluster import DummyNode
+from unit_tests.test_utils_common import DummyNode
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
 

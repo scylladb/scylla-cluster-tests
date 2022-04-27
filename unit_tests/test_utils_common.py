@@ -94,6 +94,10 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
     is_enterprise = False
     distro = Distro.CENTOS7
 
+    def init(self):
+        super().init()
+        self.remoter.stop()
+
     def _get_private_ip_address(self) -> str:
         return '127.0.0.1'
 
@@ -124,6 +128,14 @@ class DummyNode(BaseNode):  # pylint: disable=abstract-method
     @property
     def is_nonroot_install(self) -> bool:  # pylint: disable=invalid-overridden-method
         return False
+
+    @property
+    def scylla_shards(self):
+        return 0
+
+    @property
+    def cpu_cores(self) -> int:
+        return 0
 
 
 class TestSstableLoadUtils(unittest.TestCase):

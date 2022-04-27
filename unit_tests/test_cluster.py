@@ -38,55 +38,7 @@ from sdcm.utils.distro import Distro
 
 from unit_tests.dummy_remote import DummyRemote
 from unit_tests.lib.events_utils import EventsUtilsMixin
-
-
-class DummyNode(BaseNode):  # pylint: disable=abstract-method
-    _system_log = None
-    is_enterprise = False
-    distro = Distro.CENTOS7
-
-    def init(self):
-        super().init()
-        self.remoter.stop()
-
-    def _get_private_ip_address(self):
-        return '127.0.0.1'
-
-    def _get_public_ip_address(self):
-        return '127.0.0.1'
-
-    def start_task_threads(self):
-        # disable all background threads
-        pass
-
-    @property
-    def system_log(self):
-        return self._system_log
-
-    @system_log.setter
-    def system_log(self, log):
-        self._system_log = log
-
-    def set_hostname(self):
-        pass
-
-    def configure_remote_logging(self):
-        pass
-
-    def wait_ssh_up(self, verbose=True, timeout=500):
-        pass
-
-    @property
-    def is_nonroot_install(self):  # pylint: disable=invalid-overridden-method
-        return False
-
-    @property
-    def scylla_shards(self):
-        return 0
-
-    @property
-    def cpu_cores(self) -> int:
-        return 0
+from unit_tests.test_utils_common import DummyNode
 
 
 class DummyDbCluster(BaseCluster):  # pylint: disable=abstract-method
