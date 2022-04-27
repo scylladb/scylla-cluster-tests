@@ -12,14 +12,12 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2016 ScyllaDB
-import logging
 import time
 
 from longevity_test import LongevityTest
 from sdcm.db_stats import PrometheusDBStats
+from sdcm.es import ES
 from test_lib.sla import ServiceLevel, Role, User
-
-logger = logging.getLogger(__name__)
 
 
 # pylint: disable=too-many-public-methods
@@ -49,6 +47,7 @@ class SlaPerUserTest(LongevityTest):
     CACHE_ONLY_LOAD = 'cache_only'
     DISK_ONLY_LOAD = 'disk_only'
     MIXED_LOAD = 'mixed'
+    WORKLOAD_TYPES_INDEX = "workload_tests"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -57,7 +56,8 @@ class SlaPerUserTest(LongevityTest):
         self.backgroud_task = None
         self.class_users = {}
         self.connection_cql = None
-        self._comparison_results = None
+        self._comparison_results = {}
+        self._es = ES()
 
     def prepare_schema(self):
         self.prometheus_stats = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
@@ -298,7 +298,7 @@ class SlaPerUserTest(LongevityTest):
         if kwargs:
             params.update(kwargs['kwargs'])
         c_s_cmd = stress_command.format(**params)
-        logger.info("Created cassandra-stress command: %s", c_s_cmd)
+        self.log.info("Created cassandra-stress command: %s", c_s_cmd)
 
         return c_s_cmd
 
@@ -623,17 +623,19 @@ class SlaPerUserTest(LongevityTest):
                 stress_duration_min=stress_duration_min,
                 stress_command=self.STRESS_MIXED_CMD,
                 kwargs={'write_ratio': 1, 'read_ratio': 1}
-            )}
+            ),
+        }
 
         try:
             self.log.debug('Running interactive and batch workloads in sequence...')
             workloads_queue = self.run_stress_and_verify_threads(params={'stress_cmd': [
                 read_cmds['throughput_interactive'],
-                read_cmds["throughput_batch"]
+                read_cmds["throughput_batch"],
             ],
                 'round_robin': True})
             self._comparison_results = self._compare_workloads_c_s_metrics(workloads_queue)
-            logger.info("C-S comparison results:\n%s", self._comparison_results)
+            self.log.info("C-S comparison results:\n%s", self._comparison_results)
+            self.upload_c_s_comparison_to_es()
         finally:
             pass
 
@@ -691,9 +693,9 @@ class SlaPerUserTest(LongevityTest):
             self.clean_auth(entities_list_of_dict=read_users)
 
     def _compare_workloads_c_s_metrics(self, workloads_queue: list) -> dict:
-        comparison_axis = {"latency 95th percentile": 1.5,
-                           "latency 99th percentile": 1.5,
-                           "op rate": 0.3}
+        comparison_axis = {"latency 95th percentile": 2.0,
+                           "latency 99th percentile": 2.0,
+                           "op rate": 2.0}
         workloads_results = {}
         for workload in workloads_queue:
             result = self.get_stress_results(queue=workload, store_results=False)
@@ -708,7 +710,7 @@ class SlaPerUserTest(LongevityTest):
             for item, target_margin in comparison_axis.items():
                 interactive = float(workloads_results["interactive"][item])
                 batch = float(workloads_results["batch"][item])
-                ratio = batch / interactive
+                ratio = interactive / batch if item == "op rate" else batch / interactive
 
                 comparison_results.update(
                     {
@@ -716,15 +718,30 @@ class SlaPerUserTest(LongevityTest):
                             "interactive": interactive,
                             "batch": batch,
                             "diff": batch - interactive,
-                            "within_margin": ratio <= target_margin if item == "op rate" else ratio >= target_margin
+                            "ratio": ratio,
+                            "within_margin": ratio >= target_margin
                         }
                     }
                 )
             return comparison_results
         except Exception:
-            logger.info("Failed to compare c-s results for batch and interactive"
-                        "workloads.")
+            self.log.info("Failed to compare c-s results for batch and interactive"
+                          "workloads.")
             raise
+
+    def upload_c_s_comparison_to_es(self) -> None:
+        self.log.info("Uploading c-s comparison to ES...")
+        es_body = {
+            self.db_cluster.get_node().db_node_instance_type: {
+                "test_id": self.test_id,
+                "backend": self.db_cluster.params.get("cluster_backend"),
+                "scylla_version": self.get_scylla_versions(),
+                **self._comparison_results
+            }
+        }
+        self._es.create_doc(index="workload_types", doc_type="test_stats",
+                            doc_id=self.test_id, body=es_body)
+        self.log.info("C-s comparison uploaded to ES.")
 
     def get_email_data(self):
         self.log.info("Prepare data for email")
@@ -760,5 +777,5 @@ class SlaPerUserTest(LongevityTest):
                 else:
                     return "FAILED"
             except KeyError as exc:
-                logger.error("Exception on attempting to check workload comparison results:\n%s", exc)
+                self.log.error("Exception on attempting to check workload comparison results:\n%s", exc)
                 return super().get_test_status()

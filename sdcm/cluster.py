@@ -370,6 +370,22 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         raise AssertionError(f"Could not find the requested node {self.ip_address} in nodetool status")
 
     @property
+    def db_node_instance_type(self) -> Optional[str]:
+        backend = self.parent_cluster.cluster_backend()
+        if backend in ("aws", "aws-siren"):
+            return self.parent_cluster.params.get("instance_type_db")
+        elif backend == "azure":
+            return self.parent_cluster.params.get('azure_instance_type_db')
+        elif backend in ("gce", "gce-siren"):
+            return self.parent_cluster.params.get("gce_instance_type_db")
+        elif backend == "docker":
+            return "docker"
+        else:
+            self.log.warning("Unrecognized backend type, defaulting to 'Unknown' for"
+                             "db instance type.")
+            return None
+
+    @property
     def _proposed_scylla_yaml_properties(self) -> dict:
         node_params_builder = ScyllaYamlNodeAttrBuilder(params=self.parent_cluster.params, node=self)
         certificate_params_builder = ScyllaYamlCertificateAttrBuilder(params=self.parent_cluster.params, node=self)
