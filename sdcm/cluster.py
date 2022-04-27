@@ -511,6 +511,22 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 return full_nodetool_status[data_center][self.ip_address]['host_id']
         raise AssertionError(f"Could not find the requested node {self.ip_address} in nodetool status")
 
+    @property
+    def db_node_instance_type(self) -> Optional[str]:
+        backend = self.parent_cluster.cluster_backend()
+        if backend in ("aws", "aws-siren"):
+            return self.parent_cluster.params.get("instance_type_db")
+        elif backend == "azure":
+            return self.parent_cluster.params.get('azure_instance_type_db')
+        elif backend in ("gce", "gce-siren"):
+            return self.parent_cluster.params.get("gce_instance_type_db")
+        elif backend == "docker":
+            return "docker"
+        else:
+            self.log.warning("Unrecognized backend type, defaulting to 'Unknown' for"
+                             "db instance type.")
+            return None
+
     def refresh_ip_address(self):
         # Invalidate ip address cache
         self._private_ip_address_cached = self._public_ip_address_cached = self._ipv6_ip_address_cached = None
