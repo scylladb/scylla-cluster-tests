@@ -49,9 +49,6 @@ class ServiceLevelAttributes:
                     attr_strings.append(f" AND {item.name} = {value}")
         if attr_strings:
             attr_strings[0] = attr_strings[0].replace(" AND", " WITH")
-        else:
-            self.query_string = ""
-            return
 
         self.query_string = "".join(attr_strings)
 
@@ -132,9 +129,9 @@ class ServiceLevel:
                         service_level_name=self.name,
                         query_attributes=self._sl_attributes.query_string)
         if self.verbose:
-            LOGGER.debug('Create service level query: {}'.format(query))
+            LOGGER.debug('Create service level query: %s', query)
         self.session.execute(query)
-        LOGGER.debug('Service level "{}" has been created'.format(self.name))
+        LOGGER.debug('Service level %s has been created', self.name)
         self.created = True
         return self
 
@@ -144,9 +141,9 @@ class ServiceLevel:
                 .format(service_level_name=self.name,
                         query_string=sla.query_string)
         if self.verbose:
-            LOGGER.debug('Change service level query: {}'.format(query))
+            LOGGER.debug('Change service level query: %s', query)
         self.session.execute(query)
-        LOGGER.debug('Service level "{}" has been altered'.format(self.name))
+        LOGGER.debug('Service level %s has been altered', self.name)
         self.shares = new_shares
 
     def drop(self, if_exists=True):
@@ -154,15 +151,15 @@ class ServiceLevel:
                 .format(service_level_name=self.name,
                         if_exists=' IF EXISTS' if if_exists else '')
         if self.verbose:
-            LOGGER.debug('Drop service level query: {}'.format(query))
+            LOGGER.debug('Drop service level query: %s', query)
         self.session.execute(query)
-        LOGGER.debug('Service level "{}" has been dropped'.format(self.name))
+        LOGGER.debug('Service level %s has been dropped', self.name)
         self.created = False
 
     def list_service_level(self) -> ServiceLevel | None:
         query = 'LIST SERVICE_LEVEL {}'.format(self.name)
         if self.verbose:
-            LOGGER.debug('List service level query: {}'.format(query))
+            LOGGER.debug('List service level query: %s', query)
         res = self.session.execute(query).all()
         assert len(res) <= 1, "Received %s service levels when expecting to receive only 1" % len(res)
 
@@ -177,7 +174,7 @@ class ServiceLevel:
     def list_all_service_levels(self) -> list[ServiceLevel]:
         query = 'LIST ALL SERVICE_LEVELS'
         if self.verbose:
-            LOGGER.debug('List all service levels query: {}'.format(query))
+            LOGGER.debug('List all service levels query: %s', query)
         res_list = self.session.execute(query).all()
         output = []
 
@@ -224,72 +221,66 @@ class UserRoleBase:
         """
         :param auth_name: it may be role name or user name
         """
-        query = 'ATTACH SERVICE_LEVEL {service_level_name} TO {role_name}'\
-                .format(service_level_name=service_level.name,
-                        role_name=self.name)
+        query = f'ATTACH SERVICE_LEVEL {service_level.name} TO {self.name}'
         if self.verbose:
-            LOGGER.debug('Attach service level query: {}'.format(query))
+            LOGGER.debug('Attach service level query: %s', query)
         self.session.execute(query)
-        LOGGER.debug('Service level "{}" has been attached to {} role'.format(service_level.name, self.name))
+        LOGGER.debug('Service level %s has been attached to %s role', service_level.name, self.name)
         self._attached_service_level = service_level
 
     def detach_service_level(self):
         """
         :param auth_name: it may be role name or user name
         """
-        query = 'DETACH SERVICE_LEVEL FROM {role_name}'\
-                .format(role_name=self.name)
+        query = f'DETACH SERVICE_LEVEL FROM {self.name}'
         if self.verbose:
-            LOGGER.debug('Detach service level query: {}'.format(query))
+            LOGGER.debug('Detach service level query: %s', query)
         self.session.execute(query)
-        LOGGER.debug('The service level has been detached from {} role'.format(self.name))
+        LOGGER.debug('The service level has been detached from %s role', self.name)
         self._attached_service_level = None
 
     def grant_me_to(self, grant_to):
         role_be_granted = self.name
         grant_to = grant_to.name
-        query = 'GRANT {role_be_granted} to {grant_to}'.format(**locals())
+        query = f'GRANT {role_be_granted} to {grant_to}'
         if self.verbose:
-            LOGGER.debug('GRANT role query: {}'.format(query))
+            LOGGER.debug('GRANT role query: %s', query)
         self.session.execute(query)
-        LOGGER.debug('Role "{role_be_granted}" has been granted to {grant_to}'.format(**locals()))
+        LOGGER.debug('Role %s has been granted to %s', role_be_granted, grant_to)
 
     def revoke_me_from(self, revoke_from):
         role_be_revoked = self.name
         role_revokes_from = revoke_from.name
-        query = 'REVOKE ROLE {role_be_revoked} FROM {role_revokes_from}'.format(**locals())
+        query = f'REVOKE ROLE {role_be_revoked} FROM {role_revokes_from}'
         if self.verbose:
-            LOGGER.debug('REVOKE role query: {}'.format(query))
+            LOGGER.debug('REVOKE role query: %s', query)
         self.session.execute(query)
-        LOGGER.debug('Role "{role_be_revoked}" has been revocked from {role_revokes_from}'.format(**locals()))
+        LOGGER.debug('Role %s has been revoked from %s', role_be_revoked, role_revokes_from)
 
     def attach_another_sla_to_role(self, service_level):
         self.detach_service_level()
         self.attach_service_level(service_level=service_level)
 
     def list_user_role_attached_service_levels(self):
-        query = 'LIST ATTACHED SERVICE_LEVEL OF {}'.format(self.name)
+        query = f'LIST ATTACHED SERVICE_LEVEL OF {self.name}'
         if self.verbose:
-            LOGGER.debug('List attached service level(s) query: {}'.format(query))
-        # res = list(self.session.execute(query))
+            LOGGER.debug('List attached service level(s) query: %s', query)
         return self.session.execute(query).all()
 
     def list_all_attached_service_levels(self):
         query = 'LIST ATTACHED ALL SERVICE_LEVELS'
         if self.verbose:
-            LOGGER.debug('List attached service level(s) query: {}'.format(query))
+            LOGGER.debug('List attached service level(s) query: %s', query)
         res = list(self.session.execute(query))
         return res
 
     def drop(self, if_exists=True):
-        query = 'DROP {entity}{if_exists} {name}'.format(entity=self.AUTHENTICATION_ENTITY,
-                                                         name=self.name,
-                                                         if_exists=' IF EXISTS' if if_exists else '')
+        query = f"""DROP {self.AUTHENTICATION_ENTITY}{' IF EXISTS' if if_exists else ''} {self.name}"""
         if self.verbose:
-            LOGGER.debug('Drop {entity} query: {query}'.format(entity=self.AUTHENTICATION_ENTITY, query=query))
+            LOGGER.debug('Drop %s query: %s', self.AUTHENTICATION_ENTITY, query)
 
         self.session.execute(query)
-        LOGGER.debug('{entity} "{name}" has been dropped'.format(entity=self.AUTHENTICATION_ENTITY, name=self.name))
+        LOGGER.debug('%s %s has been dropped', self.AUTHENTICATION_ENTITY, self.name)
 
 
 class Role(UserRoleBase):
@@ -315,11 +306,11 @@ class Role(UserRoleBase):
         if role_options_str:
             role_options_str = ' WITH {}'.format(role_options_str)
 
-        query = "CREATE ROLE {name}{role_options_str}".format(name=self.name, role_options_str=role_options_str)
+        query = f"CREATE ROLE {self.name}{role_options_str}"
         if self.verbose:
-            LOGGER.debug('CREATE role query: {}'.format(query))
+            LOGGER.debug('CREATE role query: %s', query)
         self.session.execute(query)
-        LOGGER.debug('Role "{}" has been created'.format(self.name))
+        LOGGER.debug('Role %s has been created', self.name)
         return self
 
 
@@ -338,10 +329,10 @@ class User(UserRoleBase):
         if user_options_str:
             user_options_str = ' WITH {}'.format(user_options_str)
 
-        query = 'CREATE USER {name}{user_options_str}'.format(name=self.name, user_options_str=user_options_str)
+        query = f'CREATE USER {self.name}{user_options_str}'
         if self.verbose:
-            LOGGER.debug('Create user query: {}'.format(query))
+            LOGGER.debug('Create user query: %s', query)
 
         self.session.execute(query)
-        LOGGER.debug('User "{}" has been created'.format(self.name))
+        LOGGER.debug('User %s has been created', self.name)
         return self
