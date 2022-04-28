@@ -388,7 +388,10 @@ class ScyllaYamlTest(unittest.TestCase):
                 'ldap_bind_dn': None,
                 'ldap_bind_passwd': None,
                 'ldap_url_template': None,
-                'saslauthd_socket_path': None
+                'saslauthd_socket_path': None,
+                'system_key_directory': None,
+                'system_info_encryption': None,
+                'kmip_hosts': None,
             }
         )
 
