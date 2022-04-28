@@ -23,9 +23,15 @@ import socket
 import tempfile
 from collections import defaultdict
 import contextlib
+import warnings
 
 # disable InsecureRequestWarning
 import urllib3
+
+# HACK: since cryptography==37.0.0 CryptographyDeprecationWarning is being raised
+# this is until https://github.com/paramiko/paramiko/issues/2038 would be solved
+from cryptography.utils import CryptographyDeprecationWarning
+warnings.filterwarnings(action='ignore', category=CryptographyDeprecationWarning)
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from sdcm.results_analyze import BaseResultsAnalyzer  # pylint: disable=wrong-import-position
