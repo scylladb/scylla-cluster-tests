@@ -66,11 +66,6 @@ hydra run-test artifacts_test --backend gce --config test-cases/artifacts/centos
 hydra run-test artifacts_test --backend gce --config test-cases/artifacts/centos8.yaml
 ```
 
-## Debian 9 (stretch)
-```sh
-hydra run-test artifacts_test --backend gce --config test-cases/artifacts/debian9.yaml
-```
-
 ## Debian 10 (buster)
 ```sh
 hydra run-test artifacts_test --backend gce --config test-cases/artifacts/debian10.yaml
@@ -99,11 +94,6 @@ hydra run-test artifacts_test --backend aws --config test-cases/artifacts/oel76.
 ## Amazon Linux 2
 ```sh
 hydra run-test artifacts_test --backend aws --config test-cases/artifacts/amazon2.yaml
-```
-
-## Ubuntu 16.04 LTS (xenial)
-```sh
-hydra run-test artifacts_test --backend gce --config test-cases/artifacts/ubuntu1604.yaml
 ```
 
 ## Ubuntu 18.04 LTS (bionic)
