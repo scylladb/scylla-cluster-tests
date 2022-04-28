@@ -35,8 +35,8 @@ class AttrBuilder(BaseModel):
     def dict(
         self,
         *,
-        include: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
-        exclude: Union['AbstractSetIntStr', 'MappingIntStrAny'] = None,
+        include: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
+        exclude: Union['MappingIntStrAny', 'AbstractSetIntStr'] = None,
         by_alias: bool = False,
         skip_defaults: bool = None,
         exclude_unset: bool = False,
