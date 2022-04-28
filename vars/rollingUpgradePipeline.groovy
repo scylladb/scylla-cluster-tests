@@ -66,7 +66,11 @@ def call(Map pipelineParams) {
                         def tasks = [:]
                         ArrayList base_versions_list = params.base_versions.contains('.') ? params.base_versions.split('\\,') : []
 
-                        for (version in supportedUpgradeFromVersions(base_versions_list, params.new_scylla_repo)) {
+                        for (version in supportedUpgradeFromVersions(
+                                        base_versions_list,
+                                        pipelineParams.linux_distro,
+                                        params.new_scylla_repo
+                                    )) {
                             def base_version = version
                             tasks["${base_version}"] = {
                                 node(builder.label) {
