@@ -472,6 +472,16 @@ class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
     def terminate_k8s_host(self):
         raise NotImplementedError("Not supported on local K8S backends")
 
+    def _refresh_instance_state(self):
+        # NOTE: Local K8S must use service IP address for connections, not pod's
+        public_ips, private_ips = [], []
+        if cluster_ip_service := self._cluster_ip_service:
+            private_ips.append(cluster_ip_service.spec.cluster_ip)
+        if pod_status := self._pod_status:
+            public_ips.append(pod_status.host_ip)
+            private_ips.append(pod_status.pod_ip)
+        return (public_ips or [None, ], private_ips or [None, ])
+
 
 # pylint: disable=too-many-ancestors
 class LocalMinimalScyllaPodCluster(ScyllaPodCluster):
