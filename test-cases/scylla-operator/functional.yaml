@@ -1,8 +1,23 @@
 test_duration: 300
-k8s_deploy_monitoring: false
-use_mgmt: true
 user_prefix: 'functional'
 
 n_db_nodes: 3
 n_loaders: 0
 n_monitor_nodes: 0
+
+use_mgmt: true
+
+mgmt_docker_image: 'scylladb/scylla-manager:2.6.3'
+scylla_mgmt_agent_version: '2.6.3'
+scylla_version: '4.6.3'
+
+k8s_cert_manager_version: '1.2.0'
+# Possible values for the 'k8s_scylla_operator_helm_repo' option are following:
+# - https://storage.googleapis.com/scylla-operator-charts/latest
+# - https://storage.googleapis.com/scylla-operator-charts/stable
+k8s_scylla_operator_helm_repo: 'https://storage.googleapis.com/scylla-operator-charts/stable'
+k8s_scylla_operator_chart_version: 'v1.7.2'
+# NOTE: If 'k8s_scylla_operator_docker_image' option is not set
+# then the one from helm chart will be used.
+k8s_scylla_operator_docker_image: ''
+k8s_deploy_monitoring: false
