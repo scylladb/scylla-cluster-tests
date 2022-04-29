@@ -46,6 +46,7 @@ class InstanceDefinition:  # pylint: disable=too-many-instance-attributes
     data_disks: List[DataDisk] | None = None
     user_data: List[UserDataObject] | None = field(
         default_factory=list, repr=False)  # None when no cloud-init use at all
+    startup_script: str | None = None
 
 
 class ProvisionError(Exception):
