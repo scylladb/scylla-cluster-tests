@@ -491,10 +491,10 @@ class LocalMinimalScyllaPodCluster(ScyllaPodCluster):
         @retrying(n=iterations, sleep_time=sleep_time,
                   allowed_exceptions=(cluster.ClusterNodesNotReady, UnexpectedExit),
                   message="Waiting for nodes to join the cluster", timeout=timeout)
-        def _wait_for_nodes_up_and_normal():
+        def _wait_for_nodes_up_and_normal(self):  # pylint: disable=unused-argument
             super().check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 
-        _wait_for_nodes_up_and_normal()
+        _wait_for_nodes_up_and_normal(self)
 
     @cluster.wait_for_init_wrap
     def wait_for_init(self, *_, node_list=None, verbose=False, timeout=None, **__):  # pylint: disable=unused-argument
