@@ -186,10 +186,12 @@ def test_mgmt_repair(db_cluster, manager_version):
 
 
 # NOTE: manager versions 2.3.x will fail with following error:
-#     invalid character '\\x1f' looking for beginning of value
+#       invalid character '\\x1f' looking for beginning of value
+#       Versions '2.4.x' are not covered as old ones.
 @pytest.mark.requires_mgmt
 @pytest.mark.parametrize("manager_version", (
-    "2.6.1", "2.5.0", "2.4.1",
+    "2.6.3",
+    "2.5.4",
 ))
 def test_mgmt_backup(db_cluster, manager_version):
     reinstall_scylla_manager(db_cluster, manager_version)
