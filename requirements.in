@@ -6,7 +6,7 @@ boto3==1.18.55
 boto3-stubs[s3,ec2,dynamodb,pricing]==1.18.55.0
 awscli==1.20.55
 aexpect==1.6.2
-scylla-driver==3.24.8
+scylla-driver==3.25.4
 apache-libcloud==3.3.1
 requests==2.26.0
 elasticsearch==7.15.0
@@ -33,7 +33,7 @@ python-jenkins==1.7.0
 # ssh2-python==0.22.0
 # fix segmentation fault with ssh2-python
 https://github.com/enaydanov/ssh2-python/archive/fix_segmentation_plus_3_10.zip  # based on 0.26.0
-argus-alm==0.7.1
+argus-alm==0.7.3
 parameterized==0.8.1
 pylint==2.11.1  # Needed for pre-commit hooks
 autopep8==1.5.7  # Needed for pre-commit hooks
