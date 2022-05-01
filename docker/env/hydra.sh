@@ -9,7 +9,6 @@ DOCKER_REPO=docker.io/scylladb/hydra
 SCT_DIR=$(dirname "${DOCKER_ENV_DIR}")
 SCT_DIR=$(dirname "${SCT_DIR}")
 VERSION=v$(cat "${DOCKER_ENV_DIR}/version")
-WORK_DIR=/sct
 HOST_NAME=SCT-CONTAINER
 RUN_BY_USER=$(python3 "${SCT_DIR}/sdcm/utils/get_username.py")
 USER_ID=$(id -u "${USER}")
@@ -175,15 +174,9 @@ if [[ -z "$HYDRA_HELP" ]]; then
     fi
 fi
 
-# change ownership of results directories
-echo "Making sure the ownerships of results directories are of the user"
 if [ -z "$HYDRA_DRY_RUN" ]; then
-    sudo chown -R `whoami`:`whoami` ~/sct-results &> /dev/null || true
-    sudo chown -R `whoami`:`whoami` "${SCT_DIR}/sct-results" &> /dev/null || true
     DOCKER_GROUP_ARGS=()
 else
-    echo "sudo chown -R `whoami`:`whoami` ~/sct-results &> /dev/null || true"
-    echo "sudo chown -R `whoami`:`whoami` \"${SCT_DIR}/sct-results\" &> /dev/null || true"
     # Setting it for testing purpose
     DOCKER_GROUP_ARGS='--group-add 1 --group-add 2 --group-add 3'
 fi
@@ -371,7 +364,7 @@ if [ -z "${DOCKER_GROUP_ARGS[@]}" ]; then
     done
 fi
 
-PREPARE_CMD="sudo ln -s '${SCT_DIR}' '${WORK_DIR}'"
+PREPARE_CMD="test"
 
 if [[ -n "${AWS_MOCK}" ]]; then
     if [[ -z "${HYDRA_DRY_RUN}" ]]; then
@@ -391,7 +384,7 @@ if [[ -n "${AWS_MOCK}" ]]; then
 fi
 
 if [[ -z "${HYDRA_HELP}" ]]; then
-    PREPARE_CMD+="; ${WORK_DIR}/get-qa-ssh-keys.sh"
+    PREPARE_CMD+="; ${SCT_DIR}/get-qa-ssh-keys.sh"
 fi
 
 COMMAND=${HYDRA_COMMAND[0]}
