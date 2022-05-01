@@ -55,7 +55,7 @@ class YcsbStatsPublisher(FileFollowerThread):
 
     def set_metric(self, operation, name, value):
         metric = self.METRICS[self.gauge_name(operation)]
-        metric.labels(self.loader_node.cql_ip_address, self.loader_idx, self.uuid, name).set(value)
+        metric.labels(self.loader_node.ip_address, self.loader_idx, self.uuid, name).set(value)
 
     def handle_verify_metric(self, line):
         verify_status_regex = re.compile(r"Return\((?P<status>.*?)\)=(?P<value>\d*)")
