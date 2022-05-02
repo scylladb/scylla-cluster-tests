@@ -233,19 +233,20 @@ class LogWriteWatcher(StreamWatcher):  # pylint: disable=too-few-public-methods
         super().__init__()
         self.len = 0
         self.log_file = log_file
+        # open fail with line buffering, so prom stats would be as accuracte as possible
+        # pylint: disable=consider-using-with
+        self.file_object = open(self.log_file, "a+", encoding="utf-8", buffering=1)
 
     def submit(self, stream: str) -> list:
         stream_buffer = stream[self.len:]
 
-        with open(self.log_file, "a+", encoding="utf-8") as log_file:
-            log_file.write(stream_buffer)
+        self.file_object.write(stream_buffer)
 
         self.len = len(stream)
         return []
 
     def submit_line(self, line: str):
-        with open(self.log_file, "a+", encoding="utf-8") as log_file:
-            log_file.write(line)
+        self.file_object.write(line)
 
 
 class FailuresWatcher(Responder):
