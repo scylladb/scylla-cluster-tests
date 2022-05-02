@@ -2103,7 +2103,7 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
 
     def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=None, sleep_time=None,
                                      timeout=None):  # pylint: disable=too-many-arguments
-        self.wait_for_pods_readiness(pods_to_wait=len(nodes), total_pods=len(self.nodes))
+        self.wait_for_pods_readiness(pods_to_wait=len(nodes or self.nodes), total_pods=len(self.nodes))
         self.check_nodes_up_and_normal(nodes=nodes, verification_node=verification_node)
 
     @timeout_wrapper(timeout=180, sleep_time=3, allowed_exceptions=NETWORK_EXCEPTIONS + (ClusterNodesNotReady,),
