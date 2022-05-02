@@ -4969,14 +4969,11 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
                 sudo apt-get update
                 sudo apt-get install -y docker docker.io
                 apt-get install -y software-properties-common
-                add-apt-repository -y ppa:deadsnakes/ppa
-                apt-get update
-                apt-get install -y python3.6 python3.6-dev
+                apt-get install -y python3 python3-dev
                 apt-get install -y python-setuptools unzip wget
-                apt install -y python3-pip
-                python3.6 -m pip install --upgrade pip
-                python3.6 -m pip install pyyaml
-                pip3 install -I -U psutil
+                apt-get install -y python3-pip
+                python3 -m pip install pyyaml
+                python3 -m pip install -I -U psutil
                 systemctl start docker
             """)
         elif node.is_debian9() or node.is_debian10():
