@@ -178,6 +178,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             stress_cmd += f" -p scylla.hosts={hosts}"
         if 'maxexecutiontime' not in stress_cmd:
             stress_cmd += f' -p maxexecutiontime={self.timeout}'
+
         return stress_cmd
 
     @staticmethod
