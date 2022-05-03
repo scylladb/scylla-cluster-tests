@@ -387,8 +387,9 @@ class LongevityTest(ClusterTester):
                 for i in range(num_of_newly_created_tables):
                     batch += self.create_templated_user_stress_params(extra_tables_idx + i, cs_profile=cs_profile)
 
+            nodes_ips = self.all_node_ips_for_stress_command
             for params in batch:
-                batch_params['stress_cmd'] += [params['stress_cmd']]
+                batch_params['stress_cmd'] += [params['stress_cmd'] + nodes_ips]
 
             self._run_all_stress_cmds(stress_queue, params=batch_params)
             for stress in stress_queue:
@@ -406,10 +407,14 @@ class LongevityTest(ClusterTester):
         for batch in range(0, num_of_batches):
             for i in range(1 + batch * batch_size, (batch + 1) * batch_size + 1):
                 keyspace_name = self._get_keyspace_name(i)
-                self._run_all_stress_cmds(stress_queue, params={'stress_cmd': stress_cmd,
+                self._run_all_stress_cmds(stress_queue, params={'stress_cmd': stress_cmd + self.all_node_ips_for_stress_command,
                                                                 'keyspace_name': keyspace_name, 'round_robin': True})
             for stress in stress_queue:
                 self.verify_stress_thread(cs_thread_pool=stress)
+
+    @property
+    def all_node_ips_for_stress_command(self):
+        return f' -node {[n.cql_ip_address for n in self.db_cluster.nodes]}'
 
     def _create_counter_table(self):
         """
