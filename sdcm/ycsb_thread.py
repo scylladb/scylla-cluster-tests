@@ -178,6 +178,9 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
             stress_cmd += f" -p scylla.hosts={hosts}"
         if 'maxexecutiontime' not in stress_cmd:
             stress_cmd += f' -p maxexecutiontime={self.timeout}'
+
+        # disable logging totally
+        stress_cmd.replace('bin/ycsb', "bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF'")
         return stress_cmd
 
     @staticmethod
