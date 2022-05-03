@@ -139,14 +139,39 @@ def call(Map pipelineParams) {
                             tasks["sub_test=${sub_test}"] = {
                                 node(builder.label) {
                                     withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
-                                                 "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",]) {
+                                             "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
+                                             "SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
+                                        stage("Checkout for ${sub_test}") {
+                                            catchError(stageResult: 'FAILURE') {
+                                                timeout(time: 5, unit: 'MINUTES') {
+                                                    script {
+                                                        wrap([$class: 'BuildUser']) {
+                                                            dir('scylla-cluster-tests') {
+                                                                checkout scm
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        stage("Create SCT Runner for ${sub_test}") {
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        timeout(time: 5, unit: 'MINUTES') {
+                                                            createSctRunner(params, runnerTimeout, builder.region)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
                                         stage("Run ${sub_test}"){
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
                                                     def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
                                                     def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
                                                     timeout(time: testRunTimeout, unit: 'MINUTES') { dir('scylla-cluster-tests') {
-                                                        checkout scm
 
                                                         sh """
                                                         #!/bin/bash
@@ -212,7 +237,12 @@ def call(Map pipelineParams) {
                                                         fi
 
                                                         echo "start test ......."
-                                                        ./docker/env/hydra.sh run-test ${perf_test} --backend ${params.backend}  --logdir "`pwd`"
+                                                        SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
+                                                        if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
+                                                            ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} run-test ${perf_test} --backend ${params.backend}
+                                                        else
+                                                            ./docker/env/hydra.sh run-test ${perf_test} --backend ${params.backend}  --logdir "`pwd`"
+                                                        fi
                                                         echo "end test ....."
                                                         """
                                                     }}
@@ -222,80 +252,44 @@ def call(Map pipelineParams) {
                                         stage("Collect logs for ${sub_test}") {
                                             catchError(stageResult: 'FAILURE') {
                                                 wrap([$class: 'BuildUser']) {
-                                                    timeout(time: collectLogsTimeout, unit: 'MINUTES') { dir('scylla-cluster-tests') {
-                                                        def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
-                                                        sh """
-                                                        #!/bin/bash
-
-                                                        set -xe
-                                                        env
-
-                                                        export SCT_CLUSTER_BACKEND="${params.backend}"
-                                                        export SCT_REGION_NAME=${region}
-                                                        if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
-                                                            export SCT_GCE_DATACENTER=${params.gce_datacenter}
-                                                        fi
-                                                        export SCT_CONFIG_FILES=${test_config}
-
-                                                        echo "start collect logs ..."
-                                                        ./docker/env/hydra.sh collect-logs --logdir "`pwd`"
-                                                        echo "end collect logs"
-                                                        """
-                                                    }}
+                                                    timeout(time: collectLogsTimeout, unit: 'MINUTES') {
+                                                        dir('scylla-cluster-tests') {
+                                                            runCollectLogs(params, builder.region)
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
                                         stage("Clean resources for ${sub_test}") {
                                             catchError(stageResult: 'FAILURE') {
-                                                timeout(time: resourceCleanupTimeout, unit: 'MINUTES') { script {
-                                                    wrap([$class: 'BuildUser']) {
-                                                        dir('scylla-cluster-tests') {
-                                                            def region = groovy.json.JsonOutput.toJson(params.region)
-                                                            def test_config = groovy.json.JsonOutput.toJson(pipelineParams.test_config)
-
-                                                            sh """
-                                                            #!/bin/bash
-
-                                                            set -xe
-                                                            env
-
-                                                            export SCT_CONFIG_FILES=${test_config}
-                                                            export SCT_CLUSTER_BACKEND="${params.backend}"
-                                                            export SCT_REGION_NAME=${region}
-                                                            export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
-                                                            export SCT_POST_BEHAVIOR_LOADER_NODES="${params.post_behavior_loader_nodes}"
-                                                            export SCT_POST_BEHAVIOR_MONITOR_NODES="${params.post_behavior_monitor_nodes}"
-                                                            export SCT_POST_BEHAVIOR_K8S_CLUSTER="${params.post_behavior_k8s_cluster}"
-
-                                                            echo "start clean resources ..."
-                                                            ./docker/env/hydra.sh clean-resources --post-behavior --logdir "`pwd`"
-                                                            echo "end clean resources"
-                                                            """
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        timeout(time: resourceCleanupTimeout, unit: 'MINUTES') {
+                                                            runCleanupResource(params, builder.region)
                                                         }
                                                     }
-                                                }}
+                                                }
                                             }
                                         }
-                                        stage("Send email for ${sub_test}") {
+                                        stage("Send email for Upgrade from ${sub_test}") {
+                                            def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
                                             catchError(stageResult: 'FAILURE') {
-                                                timeout(time: 10, unit: 'MINUTES') { script {
-                                                    wrap([$class: 'BuildUser']) {
-                                                        dir('scylla-cluster-tests') {
-                                                            def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
-
-                                                            sh """
-                                                            #!/bin/bash
-
-                                                            set -xe
-                                                            env
-
-                                                            echo "start send-email stage ..."
-                                                            ./docker/env/hydra.sh send-email --test-id "`cat latest/test_id`" --email-recipients $email_recipients --logdir "`pwd`"
-                                                            echo "end send-email stage"
-                                                            """
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        timeout(time: 10, unit: 'MINUTES') {
+                                                            runSendEmail(params, currentBuild)
                                                         }
                                                     }
-                                                }}
+                                                }
+                                            }
+                                        }
+                                        stage('Clean SCT Runners') {
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        cleanSctRunners(params, currentBuild)
+                                                    }
+                                                }
                                             }
                                         }
                                     }
