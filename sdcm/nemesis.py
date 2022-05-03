@@ -1456,7 +1456,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         test_keyspaces = self.cluster.get_test_keyspaces()
         # if keyspace or table doesn't exist, create it by cassandra-stress
         if ks not in test_keyspaces or not table_exist:
-            stress_cmd = "cassandra-stress write n=400000 cl=QUORUM -port jmx=6868 -mode native cql3 " \
+            stress_cmd = "cassandra-stress write n=400000 cl=QUORUM -mode native cql3 " \
                          f"-schema 'replication(factor={self.tester.reliable_replication_factor})' -log interval=5"
             cs_thread = self.tester.run_stress_thread(
                 stress_cmd=stress_cmd, keyspace_name=ks, stop_test_on_failure=False)
@@ -3183,7 +3183,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message='Writing and reading data with new dc').publish()
         write_cmd = f"cassandra-stress write no-warmup cl=ALL n=10000 -schema 'keyspace=keyspace_new_dc " \
                     f"replication(strategy=NetworkTopologyStrategy,{datacenters[0]}=3,{datacenters[1]}=1) " \
-                    f"compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' -port jmx=6868 " \
+                    f"compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' " \
                     f"-mode cql3 native compression=lz4 -rate threads=5 -pop seq=1..10000 -log interval=5"
         write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, use_single_loader=True)
         self.tester.verify_stress_thread(cs_thread_pool=write_thread)
@@ -3191,7 +3191,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _verify_multi_dc_keyspace_data(self, consistency_level: str = "ALL"):
         read_cmd = f"cassandra-stress read no-warmup cl={consistency_level} n=10000 -schema 'keyspace=keyspace_new_dc " \
-                   f"compression=LZ4Compressor' -port jmx=6868 -mode cql3 native compression=lz4 -rate threads=5 " \
+                   f"compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=5 " \
                    f"-pop seq=1..10000 -log interval=5"
         read_thread = self.tester.run_stress_thread(stress_cmd=read_cmd, use_single_loader=True)
         self.tester.verify_stress_thread(cs_thread_pool=read_thread)

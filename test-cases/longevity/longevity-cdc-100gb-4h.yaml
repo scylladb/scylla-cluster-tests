@@ -1,9 +1,9 @@
 test_duration: 290
 
-stress_cmd: [ "cassandra-stress user no-warmup profile=/tmp/cdc_profile.yaml ops'(insert=2,read1=1,update_number=1,update_name=1,delete1=1)' cl=QUORUM duration=200m -port jmx=6868 -mode cql3 native -rate threads=100",
-              "cassandra-stress user no-warmup profile=/tmp/cdc_profile_preimage.yaml ops'(insert=2,read1=1,update_number=1,update_name=1,delete1=1)' cl=QUORUM duration=200m -port jmx=6868 -mode cql3 native -rate threads=100",
-              "cassandra-stress user no-warmup profile=/tmp/cdc_profile_postimage.yaml ops'(insert=2,read1=1,update_number=1,update_name=1,delete1=1)' cl=QUORUM duration=200m -port jmx=6868 -mode cql3 native -rate threads=100",
-              "cassandra-stress user no-warmup profile=/tmp/cdc_profile_preimage_postimage.yaml ops'(insert=2,read1=1,update_number=1,update_name=1,delete1=1)' cl=QUORUM duration=200m -port jmx=6868 -mode cql3 native -rate threads=100"
+stress_cmd: [ "cassandra-stress user no-warmup profile=/tmp/cdc_profile.yaml ops'(insert=2,read1=1,update_number=1,update_name=1,delete1=1)' cl=QUORUM duration=200m -mode cql3 native -rate threads=100",
+              "cassandra-stress user no-warmup profile=/tmp/cdc_profile_preimage.yaml ops'(insert=2,read1=1,update_number=1,update_name=1,delete1=1)' cl=QUORUM duration=200m -mode cql3 native -rate threads=100",
+              "cassandra-stress user no-warmup profile=/tmp/cdc_profile_postimage.yaml ops'(insert=2,read1=1,update_number=1,update_name=1,delete1=1)' cl=QUORUM duration=200m -mode cql3 native -rate threads=100",
+              "cassandra-stress user no-warmup profile=/tmp/cdc_profile_preimage_postimage.yaml ops'(insert=2,read1=1,update_number=1,update_name=1,delete1=1)' cl=QUORUM duration=200m -mode cql3 native -rate threads=100"
              ]
 
 n_db_nodes: 6

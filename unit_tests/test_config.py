@@ -279,8 +279,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
         os.environ['SCT_STRESS_CMD'] = """cassandra-stress user profile=/tmp/cs_profile_background_reads_overload.yaml \
-            ops'(insert=100)' no-warmup cl=ONE duration=10m -port jmx=6868 \
-            -mode cql3 native -rate threads=3000 -errors ignore"""
+            ops'(insert=100)' no-warmup cl=ONE duration=10m -mode cql3 native -rate threads=3000 -errors ignore"""
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         conf.check_required_files()
@@ -289,7 +288,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
         os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/stress_cmd_with_bad_profile.yaml'
         os.environ['SCT_STRESS_CMD'] = """cassandra-stress user profile=/tmp/1232123123123123123.yaml ops'(insert=100)'\
-            no-warmup cl=ONE duration=10m -port jmx=6868 -mode cql3 native -rate threads=3000 -errors ignore"""
+            no-warmup cl=ONE duration=10m -mode cql3 native -rate threads=3000 -errors ignore"""
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
         try:

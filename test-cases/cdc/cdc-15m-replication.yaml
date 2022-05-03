@@ -20,4 +20,4 @@ nemesis_interval: 1
 # Required by the nemesis:
 extra_network_interface: true
 
-stress_cmd: "cassandra-stress user no-warmup profile=/tmp/cdc_replication_profile.yaml 'ops(update=1)' cl=QUORUM duration=15m -port jmx=6868 -mode cql3 native -rate threads=10 -log interval=5 -errors retries=999"
+stress_cmd: "cassandra-stress user no-warmup profile=/tmp/cdc_replication_profile.yaml 'ops(update=1)' cl=QUORUM duration=15m -mode cql3 native -rate threads=10 -log interval=5 -errors retries=999"

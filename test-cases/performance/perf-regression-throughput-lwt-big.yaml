@@ -2,7 +2,7 @@
 
 test_duration: 300
 prepare_write_cmd: [
-  "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(insert=1)' no-warmup cl=ALL n=60000000 -port jmx=6868 -mode cql3 native -rate threads=100"
+  "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(insert=1)' no-warmup cl=ALL n=60000000 -mode cql3 native -rate threads=100"
 ]
 
 # This is diskbound performance test, should have dataset size
@@ -30,16 +30,16 @@ prepare_write_cmd: [
 # That is why you see ops(stmt-insert=2,stmt-select=4,stmt-update=5) in stress_cmd_lwt_i
 
 
-stress_cmd_lwt_i: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-insert=2,stmt-select=4,stmt-update=5)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100"
-stress_cmd_lwt_u: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-select=4,stmt-update=4)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100"
-stress_cmd_lwt_d: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-select=2,stmt-delete=1,stmt-update=2)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100"
-stress_cmd_lwt_ine: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-insert-if-not-exists=1)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100"
-stress_cmd_lwt_uc: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-update-if-cond=1)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100"
-stress_cmd_lwt_ue: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-update-if-exists=1)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100"
-stress_cmd_lwt_dc: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-delete-if-cond=1)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100"
-stress_cmd_lwt_de: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-delete-if-exists=1)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100"
-stress_cmd_lwt_mixed: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-insert-if-not-exists=1,stmt-update-if-cond=1,stmt-update-if-exists=1,stmt-delete-if-cond=1,stmt-delete-if-exists=1)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100"
-stress_cmd_lwt_mixed_baseline: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-insert=2,stmt-select=16,stmt-delete=2,stmt-update=21)' no-warmup cl=QUORUM duration=10m -port jmx=6868 -mode cql3 native -rate threads=100"
+stress_cmd_lwt_i: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-insert=2,stmt-select=4,stmt-update=5)' no-warmup cl=QUORUM duration=10m -mode cql3 native -rate threads=100"
+stress_cmd_lwt_u: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-select=4,stmt-update=4)' no-warmup cl=QUORUM duration=10m -mode cql3 native -rate threads=100"
+stress_cmd_lwt_d: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-select=2,stmt-delete=1,stmt-update=2)' no-warmup cl=QUORUM duration=10m -mode cql3 native -rate threads=100"
+stress_cmd_lwt_ine: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-insert-if-not-exists=1)' no-warmup cl=QUORUM duration=10m -mode cql3 native -rate threads=100"
+stress_cmd_lwt_uc: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-update-if-cond=1)' no-warmup cl=QUORUM duration=10m -mode cql3 native -rate threads=100"
+stress_cmd_lwt_ue: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-update-if-exists=1)' no-warmup cl=QUORUM duration=10m -mode cql3 native -rate threads=100"
+stress_cmd_lwt_dc: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-delete-if-cond=1)' no-warmup cl=QUORUM duration=10m -mode cql3 native -rate threads=100"
+stress_cmd_lwt_de: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-delete-if-exists=1)' no-warmup cl=QUORUM duration=10m -mode cql3 native -rate threads=100"
+stress_cmd_lwt_mixed: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-insert-if-not-exists=1,stmt-update-if-cond=1,stmt-update-if-exists=1,stmt-delete-if-cond=1,stmt-delete-if-exists=1)' no-warmup cl=QUORUM duration=10m -mode cql3 native -rate threads=100"
+stress_cmd_lwt_mixed_baseline: "cassandra-stress user profile=/tmp/cs_lwt_perf_big.yaml 'ops(stmt-insert=2,stmt-select=16,stmt-delete=2,stmt-update=21)' no-warmup cl=QUORUM duration=10m -mode cql3 native -rate threads=100"
 
 n_db_nodes: 3
 n_loaders: 1
