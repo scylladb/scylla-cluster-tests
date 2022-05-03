@@ -3,34 +3,34 @@ test_duration: 300
 round_robin: true
 prepare_write_cmd:
   - >-
-    bin/ycsb load dynamodb -P workloads/workloada -threads 150 -p recordcount=30000000
+    bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' load dynamodb -P workloads/workloada -threads 150 -p recordcount=30000000
     -p requestdistribution=uniform -p fieldcount=10 -p fieldlength=256
     -p insertorder=hashed -p insertstart=0 -p insertcount=10000000
 
   - >-
-    bin/ycsb load dynamodb -P workloads/workloada -threads 150 -p recordcount=30000000
+    bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' load dynamodb -P workloads/workloada -threads 150 -p recordcount=30000000
     -p requestdistribution=uniform -p fieldcount=10 -p fieldlength=256
     -p insertorder=hashed -p insertstart=10000000 -p insertcount=10000000
 
   - >-
-    bin/ycsb load dynamodb -P workloads/workloada -threads 150 -p recordcount=30000000
+    bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' load dynamodb -P workloads/workloada -threads 150 -p recordcount=30000000
     -p requestdistribution=uniform -p fieldcount=10 -p fieldlength=256
     -p insertorder=hashed -p insertstart=20000000 -p insertcount=10000000
 
 stress_cmd_w: >-2
-  bin/ycsb run  dynamodb -P workloads/workloada -threads 100 -p recordcount=30000000
+  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run  dynamodb -P workloads/workloada -threads 100 -p recordcount=30000000
   -p requestdistribution=uniform -p fieldcount=10 -p fieldlength=256
   -p readproportion=0 -p updateproportion=0 -p scanproportion=0 -p insertproportion=1
   -p maxexecutiontime=1200 -p operationcount=60000000
 
 stress_cmd_r: >-2
-  bin/ycsb run  dynamodb -P workloads/workloada -threads 200 -p recordcount=30000000
+  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run  dynamodb -P workloads/workloada -threads 200 -p recordcount=30000000
   -p requestdistribution=uniform -p fieldcount=10 -p fieldlength=256
   -p readproportion=1 -p updateproportion=0 -p scanproportion=0 -p insertproportion=0
   -p maxexecutiontime=1200 -p operationcount=60000000
 
 stress_cmd_m: >-2
-  bin/ycsb run  dynamodb -P workloads/workloada -threads 100 -p recordcount=30000000
+  bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run  dynamodb -P workloads/workloada -threads 100 -p recordcount=30000000
   -p requestdistribution=uniform -p fieldcount=10 -p fieldlength=256
   -p readproportion=0.5 -p updateproportion=0 -p scanproportion=0 -p insertproportion=0.5
   -p maxexecutiontime=1200 -p operationcount=60000000

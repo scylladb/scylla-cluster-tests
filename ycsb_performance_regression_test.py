@@ -54,7 +54,7 @@ class BaseYCSBPerformanceRegressionTest(PerformanceRegressionTest):
 
     def _create_prepare_cmds(self, workload: YcsbWorkload):
         self.params['prepare_write_cmd'] = [
-            "bin/ycsb load scylla -s"
+            "bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' load scylla -s"
             f" -P workloads/{workload.name}"
             f" -p recordcount={self.records_size}"
             f" -p insertcount={self.records_size}"
@@ -63,7 +63,7 @@ class BaseYCSBPerformanceRegressionTest(PerformanceRegressionTest):
         ]
 
     def _create_stress_cmd(self, workload: YcsbWorkload):
-        cmd = f"bin/ycsb run scylla -s -P workloads/{workload.name}" \
+        cmd = f"bin/ycsb -jvm-args='-Dorg.slf4j.simpleLogger.defaultLogLevel=OFF' run scylla -s -P workloads/{workload.name}" \
               f" -p recordcount={self.records_size}" \
               f" -p operationcount={self.records_size}" \
               f" {self.params['stress_cmd']}"
