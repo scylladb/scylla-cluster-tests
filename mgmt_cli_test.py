@@ -899,7 +899,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         num_of_nodes = self.params.get("n_db_nodes")
         num_of_rows_per_insertion = int(total_num_of_rows / (num_of_nodes - 1))
         stress_command_template = "cassandra-stress write cl=QUORUM n={} -schema 'keyspace={} replication(factor=3)'" \
-                                  " -col 'size=FIXED(1024) n=FIXED(1)' -pop seq={}..{} -port jmx=6868 -mode cql3" \
+                                  " -col 'size=FIXED(1024) n=FIXED(1)' -pop seq={}..{} -mode cql3" \
                                   " native -rate threads=200 -log interval=5"
         start_of_range = 1
         # We can't shut down node 1 since it's the default contact point of the stress command, and we have no way

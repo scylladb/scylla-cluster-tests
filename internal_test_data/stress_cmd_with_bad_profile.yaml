@@ -7,4 +7,4 @@ user_prefix: 'fruch-testing'
 db_type: scylla
 instance_type_db: 'i3.large'
 ami_id_db_scylla: 'ami-06f919eb'
-stress_cmd: ["cassandra-stress user profile=/tmp/1232123123123123123.yaml ops'(insert=100)' no-warmup cl=ONE duration=10m -port jmx=6868 -mode cql3 native -rate threads=3000 -errors ignore"]
+stress_cmd: ["cassandra-stress user profile=/tmp/1232123123123123123.yaml ops'(insert=100)' no-warmup cl=ONE duration=10m -mode cql3 native -rate threads=3000 -errors ignore"]

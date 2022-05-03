@@ -1,6 +1,6 @@
 # workloads
-stress_before_upgrade: cassandra-stress user profile=/tmp/c-s_null_inserts.yaml 'ops(null-insert=1)' no-warmup cl=ONE n=60000000 -port jmx=6868 -mode cql3 native -rate threads=1000
-stress_during_entire_upgrade: cassandra-stress user profile=/tmp/c-s_null_inserts.yaml 'ops(insert=1)' no-warmup cl=QUORUM duration=30m -port jmx=6868 -mode cql3 native -rate threads=200
-stress_after_cluster_upgrade: cassandra-stress user profile=/tmp/c-s_null_inserts.yaml 'ops(pk-select=1)' no-warmup cl=QUORUM n=60000000 -port jmx=6868 -mode cql3 native -rate threads=200
+stress_before_upgrade: cassandra-stress user profile=/tmp/c-s_null_inserts.yaml 'ops(null-insert=1)' no-warmup cl=ONE n=60000000 -mode cql3 native -rate threads=1000
+stress_during_entire_upgrade: cassandra-stress user profile=/tmp/c-s_null_inserts.yaml 'ops(insert=1)' no-warmup cl=QUORUM duration=30m -mode cql3 native -rate threads=200
+stress_after_cluster_upgrade: cassandra-stress user profile=/tmp/c-s_null_inserts.yaml 'ops(pk-select=1)' no-warmup cl=QUORUM n=60000000 -mode cql3 native -rate threads=200
 
 upgrade_sstables: false
