@@ -767,7 +767,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
     def _destroy_data_and_restart_scylla(self):
 
-        ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
+        ks_cfs = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node, filter_empty_tables=False)
         if not ks_cfs:
             raise UnsupportedNemesis(
                 'Non-system keyspace and table are not found. CorruptThenRepair nemesis can\'t be run')
@@ -776,9 +776,18 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
 
         try:
+            tables = []
+            for table in ks_cfs:
+                has_data = self.cluster.is_table_has_data(db_node=self.target_node, table_name=table)
+                if has_data:
+                    tables.append(table)
+                if len(tables) > 20:
+                    break
+
             # Remove 5 data files
             for _ in range(5):
-                file_for_destroy = self._choose_file_for_destroy(ks_cfs)
+
+                file_for_destroy = self._choose_file_for_destroy(tables)
 
                 result = self.target_node.remoter.sudo('rm -f %s' % file_for_destroy)
                 if result.stderr:
@@ -2800,7 +2809,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             return len(streaming_logs) > 0 or len(repair_logs) > 0
 
         wait.wait_for(func=is_streaming_started, timeout=600, step=1,
-                      text='Wait for streaming starts', throw_exc=False)
+                      text='Wait for streaming starts', throw_exc=True)
         sleep_time = random.randint(10, 600)
         self.log.debug('wait for random between 10s to 10m --> %s seconds', sleep_time)
         time.sleep(sleep_time)
