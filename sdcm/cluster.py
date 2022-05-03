@@ -3222,7 +3222,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
             user = self.params.get('authenticator_user')
             password = self.params.get('authenticator_password')
             # default password of Role cassandra is `cassandra`, the weak password isn't allowed in MS-AD.
-            if self.added_password_suffix or self.use_saslauthd_authenticator:
+            if self.added_password_suffix:
                 password = self.params.get('authenticator_password') + DEFAULT_PWD_SUFFIX
         return (user, password) if user and password else None
 
