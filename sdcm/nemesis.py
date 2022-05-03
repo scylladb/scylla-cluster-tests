@@ -2478,7 +2478,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         5. Run nodetool cleanup (on each node) for each keyspace
         """
         if self.cluster.params.get("db_type") == 'cloud_scylla':
-            raise UnsupportedNemesis("Skipping this nemesis due this job run from Siren cloud with 2019 version!")
+            raise UnsupportedNemesis("Skipping this nemesis due the replace node option that supported by Cloud "
+                                     "is tested by CloudReplaceNonResponsiveNode nemesis")
         if self._is_it_on_kubernetes():
             raise UnsupportedNemesis("On K8S nodes get removed differently. Skipping.")
 
