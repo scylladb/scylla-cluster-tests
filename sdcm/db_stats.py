@@ -752,10 +752,20 @@ class TestStatsMixin(Stats):
                 setup_details.update({"scylla_args": output(f"grep ^SCYLLA_ARGS {scylla_server_conf}"),
                                       "io_conf": output("grep -v ^# /etc/scylla.d/io.conf"),
                                       "cpuset_conf": output("grep -v ^# /etc/scylla.d/cpuset.conf"), })
+            sysctl_excludes = (
+                'net.bridge', 'net.ipv', 'net.netfilter', 'kernel.sched_', 'sunrpc',
+            )
             for node in self.db_cluster.nodes:
                 result = node.get_sysctl_properties()
                 if result:
-                    setup_details["sysctl_output"].append(result)
+                    # NOTE: exclude huge sets of not needed data to avoid following errors in ES:
+                    #       elasticsearch.exceptions.RequestError: RequestError(
+                    #           400,
+                    #           'illegal_argument_exception',
+                    #           'Limit of total fields [1000] has been exceeded')
+                    setup_details["sysctl_output"].append(
+                        {key: value for key, value in result.items()
+                         if not any(tag in key for tag in sysctl_excludes)})
 
         self.update(update_data)
 
