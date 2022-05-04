@@ -140,7 +140,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
     def _create_spot_instances(self, count, interfaces, ec2_user_data='', dc_idx=0):  # pylint: disable=too-many-arguments
         # pylint: disable=too-many-locals
-        ec2 = ec2_client.EC2ClientWarpper(region_name=self.region_names[dc_idx],
+        ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx],
                                           spot_max_price_percentage=self.params.get('spot_max_price'))
         subnet_info = ec2.get_subnet_info(self._ec2_subnet_id[dc_idx])
         spot_params = dict(instance_type=self._ec2_instance_type,
@@ -310,7 +310,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         if not test_id:
             raise ValueError("test_id should be configured for using reuse_cluster")
 
-        ec2 = ec2_client.EC2ClientWarpper(region_name=self.region_names[dc_idx],
+        ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx],
                                           spot_max_price_percentage=self.params.get('spot_max_price'))
         results = list_instances_aws(tags_dict={'TestId': test_id, 'NodeType': self.node_type},
                                      region_name=self.region_names[dc_idx], group_as_region=True)

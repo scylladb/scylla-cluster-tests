@@ -40,7 +40,7 @@ class CreateSpotFleetError(ClientError):
     pass
 
 
-class EC2ClientWarpper():
+class EC2ClientWrapper():
 
     def __init__(self, timeout=REQUEST_TIMEOUT, region_name=None, spot_max_price_percentage=None):
         self._client = self._get_ec2_client(region_name)
