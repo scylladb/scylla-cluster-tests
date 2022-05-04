@@ -172,6 +172,12 @@ def configure_logging(exception_handler=None,  # pylint: disable=too-many-argume
             'anyconfig': {
                 'level': 'ERROR'
             },
+            'urllib3.connectionpool': {
+                'level': 'INFO'
+            },
+            'selenium.webdriver.remote.remote_connection': {
+                'level': 'INFO'
+            },
             'argus': {
                 'handlers': ['argus'],
                 'level': 'DEBUG',
