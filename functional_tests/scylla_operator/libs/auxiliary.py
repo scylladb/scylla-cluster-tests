@@ -12,6 +12,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2021 ScyllaDB
+import logging
 import os
 
 from sdcm.cluster_k8s import ScyllaPodCluster
@@ -19,6 +20,7 @@ from sdcm.tester import ClusterTester
 
 
 SCT_ROOT = os.path.realpath(os.path.join(__file__, '..', '..', '..', '..'))
+LOGGER = logging.getLogger(__name__)
 
 
 class ScyllaOperatorFunctionalClusterTester(ClusterTester):
@@ -36,16 +38,17 @@ class ScyllaOperatorFunctionalClusterTester(ClusterTester):
         return email_data
 
     def update_test_status(self, test_name, status, error=None):
+        LOGGER.debug("Updating test status: %s - %s", test_name, status)
         self.test_data[test_name] = (status, error)
 
     def get_test_failures(self):
         pass
 
-    def get_test_status(self):
-        for _, test_data in self.test_data.items():
-            if test_data[0] != 'SUCCESS':
-                return 'FAILED'
-        return 'SUCCESS'
+    def get_test_status(self) -> str:
+        cumulative_status = all(v[0] == 'SUCCESS' for v in self.test_data.values())
+        status = 'SUCCESS' if cumulative_status else 'FAILED'
+        LOGGER.debug("Setting overall status for this run: %s", status)
+        return status
 
 
 def sct_abs_path(relative_filename=""):
