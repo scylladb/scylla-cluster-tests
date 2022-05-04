@@ -25,6 +25,7 @@ from sortedcontainers import SortedDict
 import jinja2
 
 from sdcm.es import ES
+from sdcm.test_config import TestConfig
 from sdcm.db_stats import TestStatsMixin
 from sdcm.send_email import Email, BaseEmailReporter
 from sdcm.sct_events import Severity
@@ -177,6 +178,7 @@ class BaseResultsAnalyzer:  # pylint: disable=too-many-instance-attributes
         return "%s/%s" % (self._conf.get('kibana_url'), dashboard_path)
 
     def save_email_data_file(self, subject, email_data, file_path='email_data.json'):
+        file_path = os.path.join(TestConfig.logdir(), file_path)
         if os.path.exists(file_path):
             try:
                 with open(file_path, encoding="utf-8") as file:
