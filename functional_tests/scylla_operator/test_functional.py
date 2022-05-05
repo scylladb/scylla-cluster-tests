@@ -169,9 +169,15 @@ def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
     db_cluster.wait_for_pods_readiness(pods_to_wait=1, total_pods=len(db_cluster.nodes))
 
 
+# NOTE: Scylla manager versions notes:
+#       - '2.3.x' will fail with following error:
+#         invalid character '\\x1f' looking for beginning of value
+#       - '2.3.x' and ''2.4.x' are not covered as old ones.
+#       - '2.5.4' is broken: https://github.com/scylladb/scylla-manager/issues/3147
 @pytest.mark.requires_mgmt
 @pytest.mark.parametrize("manager_version", (
-    "2.4.1", "2.5.0", "2.6.1",
+    "2.6.3",
+    "2.5.3",
 ))
 def test_mgmt_repair(db_cluster, manager_version):
     reinstall_scylla_manager(db_cluster, manager_version)
@@ -185,13 +191,15 @@ def test_mgmt_repair(db_cluster, manager_version):
         mgr_task.id, str(mgr_task.status))
 
 
-# NOTE: manager versions 2.3.x will fail with following error:
-#       invalid character '\\x1f' looking for beginning of value
-#       Versions '2.4.x' are not covered as old ones.
+# NOTE: Scylla manager versions notes:
+#       - '2.3.x' will fail with following error:
+#         invalid character '\\x1f' looking for beginning of value
+#       - '2.3.x' and ''2.4.x' are not covered as old ones.
+#       - '2.5.4' is broken: https://github.com/scylladb/scylla-manager/issues/3147
 @pytest.mark.requires_mgmt
 @pytest.mark.parametrize("manager_version", (
     "2.6.3",
-    "2.5.4",
+    "2.5.3",
 ))
 def test_mgmt_backup(db_cluster, manager_version):
     reinstall_scylla_manager(db_cluster, manager_version)
