@@ -715,18 +715,18 @@ class ManagerCluster(ScyllaManagerBase):
         task_list = []
         table_res = self._get_task_list()
         if len(table_res) > 1:
-            task_row_list = [row for row in table_res[1:] if row[0].startswith(f"{prefix}/")]
+            task_row_list = [row for row in table_res[1:] if row[0].startswith(f"{prefix}")]
             for row in task_row_list:
                 task_list.append(task_class(task_id=row[0], cluster_id=self.id, manager_node=self.manager_node))
         return task_list
 
     @property
     def repair_task_list(self):
-        return self._get_task_list_filtered('repair', RepairTask)
+        return self._get_task_list_filtered('repair/', RepairTask)
 
     @property
     def backup_task_list(self):
-        return self._get_task_list_filtered('backup', BackupTask)
+        return self._get_task_list_filtered('backup/', BackupTask)
 
     def get_healthcheck_task(self):
         healthcheck_id = self.sctool.get_table_value(parsed_table=self._get_task_list(), column_name="task",
