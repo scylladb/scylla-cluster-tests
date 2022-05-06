@@ -15,9 +15,15 @@ import logging
 from typing import List, Optional
 from dataclasses import dataclass, asdict, fields
 
+from sdcm.mgmt.cli import (
+    BackupTask,
+    HealthcheckTask,
+    ManagerCluster,
+    RepairTask,
+    ScyllaManagerTool,
+)
+from sdcm.mgmt.common import TaskStatus
 from sdcm.wait import wait_for
-
-from .cli import ScyllaManagerTool, ManagerCluster, RepairTask, BackupTask
 
 
 LOGGER = logging.getLogger(__name__)
@@ -201,6 +207,27 @@ class OperatorManagerCluster(ManagerCluster):
     def set_cluster_name(self, name: str):
         self.cluster_name = name
 
+    def are_healthchecks_done(self):
+        # NOTE: operator has 3 healthchecks which we should check:
+        # +---------------------------------+-----------+-------------------------------+--------+
+        # | Task                            | Arguments | Next run                      | Status |
+        # +---------------------------------+-----------+-------------------------------+--------+
+        # | healthcheck/uuid-foo            |           | 06 May 22 12:27:45 UTC (+15s) | DONE   |
+        # | healthcheck_alternator/uuid-bar |           | 06 May 22 12:27:45 UTC (+15s) | DONE   |
+        # | healthcheck_rest/uuid-quuz      |           | 06 May 22 12:28:30 UTC (+1m)  | DONE   |
+        # +---------------------------------+-----------+-------------------------------+--------+
+        healthchecks = self._get_task_list_filtered(prefix="healthcheck", task_class=HealthcheckTask)
+        return all((healthcheck.status == TaskStatus.DONE for healthcheck in healthchecks))
+
+    def wait_for_healthchecks(self):
+        wait_for(
+            func=self.are_healthchecks_done,
+            text="Waiting for the healthchecks to have 'DONE' status",
+            step=3,
+            timeout=300,
+            throw_exc=True,
+        )
+
     def _create_operator_backup_task(self, dc_list=None, interval=None, keyspace_list=None, location_list=None,
                                      num_retries=None, rate_limit_list=None, retention=None, cron=None,
                                      snapshot_parallel_list=None, start_date=None, upload_parallel_list=None,
@@ -248,6 +275,10 @@ class OperatorManagerCluster(ManagerCluster):
             start_date=None,
             upload_parallel_list=None,
             legacy_args=None) -> BackupTask:
+
+        # NOTE: wait for the 'healthcheck' tasks be 'DONE' before starting the backup one.
+        self.wait_for_healthchecks()
+
         so_task = self._create_operator_backup_task(
             dc_list=dc_list,
             interval=interval,
@@ -292,6 +323,9 @@ class OperatorManagerCluster(ManagerCluster):
     def create_repair_task(self, dc_list=None,  # pylint: disable=too-many-arguments,arguments-differ
                            keyspace=None, interval=None, num_retries=None, fail_fast=None,
                            intensity=None, parallel=None, name=None) -> RepairTask:
+        # NOTE: wait for the 'healthcheck' tasks be 'DONE' before starting the repair one.
+        self.wait_for_healthchecks()
+
         # TBD: After https://github.com/scylladb/scylla-operator/issues/272 is solved,
         #   replace RepairTask with ScyllaOperatorRepairTask and move relate logic there
         so_task = self._create_scylla_operator_repair_task(dc_list=dc_list, keyspace=keyspace, interval=interval,
