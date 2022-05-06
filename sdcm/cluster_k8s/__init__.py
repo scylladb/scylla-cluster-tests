@@ -1712,7 +1712,7 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
         return self._container_status.image
 
     def _get_ipv6_ip_address(self):
-        self.log.warning("We don't support IPv6 for k8s-* backends")
+        # NOTE: We don't support IPv6 for k8s-* backends
         return ""
 
     def restart(self):
