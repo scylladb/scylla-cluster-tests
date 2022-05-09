@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 from time import sleep
+from enum import Enum
 
 from ldap3 import Server, Connection, ALL, ALL_ATTRIBUTES
 from ldap3.core.exceptions import LDAPSocketOpenError
@@ -36,6 +37,15 @@ SASLAUTHD_AUTHENTICATOR = 'com.scylladb.auth.SaslauthdAuthenticator'
 
 class LdapServerNotReady(Exception):
     pass
+
+
+class LdapConfigurationError(Exception):
+    pass
+
+
+class LdapServerType(str, Enum):
+    MS_AD = "ms_ad"
+    OPENLDAP = "openldap"
 
 
 class LdapContainerMixin:  # pylint: disable=too-few-public-methods
