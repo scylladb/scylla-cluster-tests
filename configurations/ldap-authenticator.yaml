@@ -1,6 +1,8 @@
+use_ldap: true
+ldap_server_type: 'openldap'
+use_ldap_authentication: true
 authenticator: 'com.scylladb.auth.SaslauthdAuthenticator'
 prepare_saslauthd: true
-use_saslauthd_authenticator: true
 authenticator_user: 'cassandra'
 authenticator_password: 'cassandra'
 

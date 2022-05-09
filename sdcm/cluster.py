@@ -83,9 +83,7 @@ from sdcm.utils.common import (
     normalize_ipv6_url,
     download_dir_from_cloud,
     generate_random_string,
-    update_authenticator,
     prepare_and_start_saslauthd_service,
-    change_default_password,
 )
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.distro import Distro
@@ -110,8 +108,8 @@ from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.monitorstack.ui import AlternatorDashboard
 from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3
-from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LDAP_BASE_OBJECT, LDAP_PASSWORD, LDAP_USERS, LDAP_ROLE, \
-    LDAP_PORT, DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR
+from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LDAP_BASE_OBJECT, LDAP_PASSWORD, LDAP_USERS, \
+    LDAP_PORT, DEFAULT_PWD_SUFFIX
 from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
@@ -1648,27 +1646,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 'ldap_bind_dn': ldap_bind_dn,
                 'ldap_bind_pw': ldap_bind_pw}
 
-    def create_ldap_users_on_scylla(self):
-        self.run_cqlsh(f'CREATE ROLE \'{LDAP_ROLE}\' WITH SUPERUSER=true')
-        for user in LDAP_USERS:
-            # Cannot create passwords with SaslauthdAuthenticator
-            self.run_cqlsh(f'CREATE ROLE \'{user}\' WITH login=true')
-        orig_auth = None
-        if self.parent_cluster.use_saslauthd_authenticator:
-            orig_auth = SASLAUTHD_AUTHENTICATOR
-            opposite_auth = 'PasswordAuthenticator'
-            update_authenticator([self], opposite_auth)
-        # First LDAP_USERS will be used to alter system tables, so change it to superuser.
-        self.run_cqlsh(f'ALTER ROLE \'{LDAP_USERS[0]}\' with SUPERUSER=true and password=\'{LDAP_PASSWORD}\'')
-
-        # Default password of Role `cassandra` is same as username, MS-AD doesn't allow the weak password.
-        # Here we change password of `cassandra`, then the cassandra user can smoothly work in switching Authenticator.
-        change_default_password(node=self,
-                                user=self.parent_cluster.params.get('authenticator_user'),
-                                password=self.parent_cluster.params.get('authenticator_password'))
-        if orig_auth:
-            update_authenticator([self], orig_auth)
-
     # pylint: disable=invalid-name,too-many-arguments,too-many-locals,too-many-statements,unused-argument,too-many-branches
     def config_setup(self,
                      append_scylla_args='',
@@ -3069,7 +3046,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         self.params = params
         self.datacenter = region_names or []
         self.dead_nodes_list = []
-        self.use_saslauthd_authenticator = self.params.get('use_saslauthd_authenticator')
+        self.use_ldap_authentication = self.params.get('use_ldap_authentication')
         # default 'cassandra' password is weak password, MS AD doesn't allow to use it.
         self.added_password_suffix = False
         self.node_benchmark_manager = ScyllaClusterBenchmarkManager()
@@ -3225,8 +3202,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         node.destroy()
 
     def get_db_auth(self):
-        if (self.params.get('use_ldap_authorization') or self.use_saslauthd_authenticator or
-                self.params.get('use_ms_ad_ldap')) and self.params.get('are_ldap_users_on_scylla'):
+        if self.params.get('use_ldap') and self.params.get('are_ldap_users_on_scylla'):
             user = LDAP_USERS[0]
             password = LDAP_PASSWORD
         else:

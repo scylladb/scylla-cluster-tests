@@ -69,7 +69,7 @@ from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType
 from sdcm.utils.ssh_agent import SSHAgent
 from sdcm.utils.decorators import retrying
 from sdcm import wait
-from sdcm.utils.ldap import LDAP_PASSWORD, LDAP_USERS, DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR
+from sdcm.utils.ldap import DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR, LdapServerType
 from sdcm.keystore import KeyStore
 from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.gce_utils import GcloudContainerMixin
@@ -2366,11 +2366,9 @@ def update_authenticator(nodes, authenticator='AllowAllAuthenticator', restart=T
             scylla_yml.authenticator = authenticator
         if restart:
             if authenticator == SASLAUTHD_AUTHENTICATOR:
-                node.run_cqlsh(f'ALTER ROLE \'{LDAP_USERS[0]}\' with password=\'{LDAP_PASSWORD}\'')
-                node.parent_cluster.use_saslauthd_authenticator = True
+                node.parent_cluster.use_ldap_authentication = True
             else:
-                node.parent_cluster.use_saslauthd_authenticator = False
-            node.parent_cluster.params['are_ldap_users_on_scylla'] = node.parent_cluster.use_saslauthd_authenticator
+                node.parent_cluster.use_ldap_authentication = False
             node.restart_scylla_server()
             node.wait_db_up()
 
@@ -2396,7 +2394,7 @@ def prepare_and_start_saslauthd_service(node):
         """)
     node.wait_apt_not_running()
     node.remoter.run('bash -cxe "%s"' % setup_script)
-    if node.parent_cluster.params.get('use_ms_ad_ldap'):
+    if node.parent_cluster.params.get('ldap_server_type') == LdapServerType.MS_AD:
         conf = node.get_saslauthd_ms_ad_config()
     else:
         conf = node.get_saslauthd_config()
