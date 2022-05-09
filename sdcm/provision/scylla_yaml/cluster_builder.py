@@ -17,7 +17,7 @@ from typing import Optional, Any
 from pydantic import Field
 
 from sdcm.provision.scylla_yaml.auxiliaries import ScyllaYamlAttrBuilderBase
-from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT
+from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LdapServerType
 
 
 class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
@@ -126,11 +126,11 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @property
     def _is_msldap_authorization(self):
-        return self._is_ldap_authorization and self.params.get('use_ms_ad_ldap')
+        return self._is_ldap_authorization and self.params.get('ldap_server_type') == LdapServerType.MS_AD
 
     @property
     def _is_openldap_authorization(self):
-        return self._is_ldap_authorization and not self.params.get('use_ms_ad_ldap')
+        return self._is_ldap_authorization and not self.params.get('ldap_server_type') == LdapServerType.MS_AD
 
     @property
     def _is_ldap_authorization(self):

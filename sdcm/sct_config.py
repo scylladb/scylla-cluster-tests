@@ -290,17 +290,20 @@ class SCTConfiguration(dict):
         dict(name="use_cloud_manager", env="SCT_USE_CLOUD_MANAGER", type=boolean,
              help="When define true, will install scylla cloud manager"),
 
+        dict(name="use_ldap", env="SCT_USE_LDAP", type=boolean,
+             help="When defined true, LDAP is going to be used."),
+
         dict(name="use_ldap_authorization", env="SCT_USE_LDAP_AUTHORIZATION", type=boolean,
              help="When defined true, will create a docker container with LDAP and configure scylla.yaml to use it"),
 
-        dict(name="use_saslauthd_authenticator", env="SCT_USE_LDAP_AUTHENTICATOR", type=boolean,
+        dict(name="use_ldap_authentication", env="SCT_USE_LDAP_AUTHENTICATION", type=boolean,
              help="When defined true, will create a docker container with LDAP and configure scylla.yaml to use it"),
 
         dict(name="prepare_saslauthd", env="SCT_PREPARE_SASLAUTHD", type=boolean,
              help="When defined true, will install and start saslauthd service"),
 
-        dict(name="use_ms_ad_ldap", env="SCT_USE_MS_AD_LDAP", type=boolean,
-             help="This option will use ldap server of QA MS Active Directory, not default openldap"),
+        dict(name="ldap_server_type", env="SCT_LDAP_SERVER_TYPE", type=str,
+             help="This option indicates which server is going to be used for LDAP operations. [openldap, ms_ad]"),
 
         dict(name="use_mgmt", env="SCT_USE_MGMT", type=boolean,
              help="When define true, will install scylla management"),

@@ -60,10 +60,12 @@ from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_netwo
     get_common_params, init_db_info_from_params, ec2_ami_get_root_device_name
 from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, update_certificates, \
     download_dir_from_cloud, get_post_behavior_actions, get_testrun_status, download_encrypt_keys, PageFetcher, \
-    rows_to_list, make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks
+    rows_to_list, make_threads_be_daemonic_by_default, ParallelObject, clear_out_all_exit_hooks, \
+    change_default_password
 from sdcm.utils.get_username import get_username
 from sdcm.utils.decorators import log_run_info, retrying
-from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT
+from sdcm.utils.ldap import LDAP_USERS, LDAP_PASSWORD, LDAP_ROLE, LDAP_BASE_OBJECT, \
+    LdapConfigurationError, LdapServerType
 from sdcm.utils.log import configure_logging, handle_exception
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.results_analyze import PerformanceResultsAnalyzer, SpecifiedStatsPerformanceAnalyzer, \
@@ -93,6 +95,7 @@ from sdcm.utils import alternator
 from sdcm.utils.profiler import ProfilerFactory
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.utils.gce_utils import get_gce_services
+from sdcm.utils.auth_context import temp_authenticator
 from sdcm.keystore import KeyStore
 from sdcm.utils.latency import calculate_latency
 
@@ -330,44 +333,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.test_config.configure_syslogng(self.localhost)
 
         self.alternator: alternator.api.Alternator = alternator.api.Alternator(sct_params=self.params)
-        if self.params.get("use_ms_ad_ldap"):
-            ldap_ms_ad_credentials = KeyStore().get_ldap_ms_ad_credentials()
-            self.test_config.LDAP_ADDRESS = ldap_ms_ad_credentials["server_address"]
-        elif self.params.get("use_ldap_authorization") or self.params.get("prepare_saslauthd") or self.params.get(
-                "use_saslauthd_authenticator"):
-            self.configure_ldap(node=self.localhost, use_ssl=False)
-
-        ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
-        if self.params.get("use_ldap_authorization") and not self.params.get("use_ms_ad_ldap"):
-            self.params['are_ldap_users_on_scylla'] = False
-            ldap_role = LDAP_ROLE
-            ldap_users = LDAP_USERS.copy()
-            ldap_address = list(self.test_config.LDAP_ADDRESS).copy()
-            unique_members_list = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}' for user in ldap_users]
-            user_password = LDAP_PASSWORD  # not in use not for authorization, but must be in the config
-            ldap_entry = [f'cn={ldap_role},{LDAP_BASE_OBJECT}',
-                          ['groupOfUniqueNames', 'simpleSecurityObject', 'top'],
-                          {'uniqueMember': unique_members_list, 'userPassword': user_password}]
-            self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
-                                          user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
-        if (self.params.get("prepare_saslauthd")
-                or self.params.get("use_saslauthd_authenticator")) and not self.params.get("use_ms_ad_ldap"):
-            ldap_users = LDAP_USERS.copy()
-            ldap_address = list(self.test_config.LDAP_ADDRESS).copy()
-            ldap_entry = [f'ou=Person,{LDAP_BASE_OBJECT}',
-                          ['organizationalUnit', 'top'],
-                          {'ou': 'Person'}]
-            self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
-                                          user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
-            # Buildin user also need to be added in ldap server, otherwise it can't login to create LDAP_USERS
-            for user in [self.params.get('authenticator_user')] + LDAP_USERS:
-                password = LDAP_PASSWORD if user in LDAP_USERS else self.params.get("authenticator_password")
-                ldap_entry = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}',
-                              ['uidObject', 'organizationalPerson', 'top'],
-                              {'userPassword': password, 'sn': 'PersonSn', 'cn': 'PersonCn'}]
-                self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
-                                              user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
         self.alternator = alternator.api.Alternator(sct_params=self.params)
+
+        if self.params.get("use_ldap"):
+            self._init_ldap()
+
         start_events_device(log_dir=self.logdir, _registry=self.events_processes_registry)
         time.sleep(0.5)
         InfoEvent(message=f"TEST_START test_id={self.test_config.test_id()}").publish()
@@ -435,19 +405,78 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error saving logs to Argus", exc_info=True)
 
+    def _init_ldap(self):
+        self.params['are_ldap_users_on_scylla'] = False
+
+        match self.params.get("ldap_server_type"):
+            case LdapServerType.MS_AD:
+                self.log.debug("Configuring LDAP for MS Active Directory Services")
+                self._init_ldap_ms_ad()
+            case LdapServerType.OPENLDAP:
+                self.log.debug("Configuring LDAP for OpenLDAP Server")
+                self._init_ldap_openldap()
+            case _:
+                raise LdapConfigurationError("LDAP Configuration requested, but no mode provided")
+
+    def _init_ldap_ms_ad(self):
+        ldap_ms_ad_credentials = KeyStore().get_ldap_ms_ad_credentials()
+        self.test_config.LDAP_ADDRESS = ldap_ms_ad_credentials["server_address"]
+
+    def _init_ldap_openldap(self):
+        self.configure_ldap(node=self.localhost, use_ssl=False)
+
+    def _setup_ldap_roles(self, db_cluster: BaseScyllaCluster):
+        self.log.debug("Configuring LDAP Roles.")
+        node = db_cluster.nodes[0]
+        node.run_cqlsh(f'CREATE ROLE \'{LDAP_ROLE}\' WITH SUPERUSER=true')
+        for user in LDAP_USERS:
+            node.run_cqlsh(f'CREATE ROLE \'{user}\' WITH login=true')
+        node.run_cqlsh(f'ALTER ROLE \'{LDAP_USERS[0]}\' with SUPERUSER=true and password=\'{LDAP_PASSWORD}\'')
+        self.params['are_ldap_users_on_scylla'] = True
+
     def configure_ldap(self, node, use_ssl=False):
         self.test_config.configure_ldap(node=node, use_ssl=use_ssl)
+        ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
         ldap_role = LDAP_ROLE
         ldap_users = LDAP_USERS.copy()
         ldap_address = list(self.test_config.LDAP_ADDRESS).copy()
         unique_members_list = [f'uid={user},ou=Person,{LDAP_BASE_OBJECT}' for user in ldap_users]
-        ldap_username = f'cn=admin,{LDAP_BASE_OBJECT}'
         user_password = LDAP_PASSWORD  # not in use not for authorization, but must be in the config
-        ldap_entry = [f'cn={ldap_role},{LDAP_BASE_OBJECT}',
-                      ['groupOfUniqueNames', 'simpleSecurityObject', 'top'],
-                      {'uniqueMember': unique_members_list, 'userPassword': user_password}]
+        role_entry = [
+            f'cn={ldap_role},{LDAP_BASE_OBJECT}',
+            ['groupOfUniqueNames', 'simpleSecurityObject', 'top'],
+            {
+                'uniqueMember': unique_members_list,
+                'userPassword': user_password
+            }
+        ]
         self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
-                                      user=ldap_username, password=LDAP_PASSWORD, ldap_entry=ldap_entry)
+                                      user=ldap_username, password=LDAP_PASSWORD, ldap_entry=role_entry)
+
+        organizational_unit_entry = [
+            f'ou=Person,{LDAP_BASE_OBJECT}',
+            ['organizationalUnit', 'top'],
+            {
+                'ou': 'Person'
+            }
+        ]
+        self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
+                                      user=ldap_username, password=LDAP_PASSWORD, ldap_entry=organizational_unit_entry)
+
+        # Built-in user also need to be added in ldap server, otherwise it can't log in to create LDAP_USERS
+        for user in [self.params.get('authenticator_user')] + LDAP_USERS:
+            password = LDAP_PASSWORD if user in LDAP_USERS else self.params.get("authenticator_password")
+            user_entry = [
+                f'uid={user},ou=Person,{LDAP_BASE_OBJECT}',
+                ['uidObject', 'organizationalPerson', 'top'],
+                {
+                    'userPassword': password,
+                    'sn': 'PersonSn',
+                    'cn': 'PersonCn'
+                }
+            ]
+            self.localhost.add_ldap_entry(ip=ldap_address[0], ldap_port=ldap_address[1],
+                                          user=ldap_username, password=LDAP_PASSWORD, ldap_entry=user_entry)
 
     def _init_test_timeout_thread(self) -> threading.Timer:
         start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
@@ -601,7 +630,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.db_cluster = None
 
         # NOTE: following are used only on K8S for testing multi-tenancy case
-        self.db_clusters_multitenant = []
+        self.db_clusters_multitenant: list[BaseScyllaCluster] = []
         self.loaders_multitenant = []
         self.monitors_multitenant = []
         self.prometheus_db_multitenant = []
@@ -633,15 +662,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             else:
                 self.init_nodes(db_cluster=db_cluster)
 
-            # running `set_system_auth_rf()` before changing authorization/authentication protocols
-            self.set_system_auth_rf(db_cluster=db_cluster)
-
-            if (not self.params.get('are_ldap_users_on_scylla') and
-                (self.params.get('use_ldap_authorization') or
-                 self.params.get('use_ms_ad_ldap'))) \
-                    or self.params.get('prepare_saslauthd'):
-                db_cluster.nodes[0].create_ldap_users_on_scylla()
-                self.params['are_ldap_users_on_scylla'] = True
+            with temp_authenticator(db_cluster.nodes[0], "org.apache.cassandra.auth.PasswordAuthenticator"):
+                # running `set_system_auth_rf()` before changing authorization/authentication protocols
+                self.set_system_auth_rf(db_cluster=db_cluster)
+                if self.params.get('use_ldap'):
+                    self._setup_ldap_roles(db_cluster=db_cluster)
+                if self.params.get('ldap_server_type') == LdapServerType.MS_AD:
+                    change_default_password(node=db_cluster.nodes[0],
+                                            user=self.params.get('authenticator_user'),
+                                            password=self.params.get('authenticator_password'))
+                    self.loaders.added_password_suffix = True
+                    self.monitors.added_password_suffix = True  # FIXME: Replace with strong password generation.
 
             db_node_address = db_cluster.nodes[0].ip_address
             if self.loaders and not self.loaders_multitenant:
