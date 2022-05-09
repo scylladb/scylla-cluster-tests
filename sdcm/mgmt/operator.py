@@ -102,11 +102,8 @@ class ScyllaOperatorRepairTaskStatus(ScyllaOperatorRepairTask):
 
     error: str = None
     status: str = None
+    name: str = None
     id: str = None
-
-    @property
-    def mgmt_task_id(self) -> str:
-        return f'repair/{self.id}'
 
 
 @dataclass
@@ -162,11 +159,8 @@ class ScyllaOperatorBackupTaskStatus(ScyllaOperatorBackupTask):
 
     error: str = None
     status: str = None
+    name: str = None
     id: str = None
-
-    @property
-    def mgmt_task_id(self) -> str:
-        return f'backup/{self.id}'
 
 
 class OperatorManagerCluster(ManagerCluster):
@@ -292,17 +286,14 @@ class OperatorManagerCluster(ManagerCluster):
             start_date=start_date,
             upload_parallel_list=upload_parallel_list,
         )
-        return wait_for(
-            lambda: self.get_mgr_backup_task_by_id(self.wait_for_operator_backup_task_status(so_task).mgmt_task_id),
-            timeout=120,
-        )
+        return wait_for(lambda: self.get_mgr_backup_task(so_task), step=2, timeout=300)
 
     def _create_scylla_operator_repair_task(self, dc_list=None, keyspace=None, interval=None, num_retries=None,
                                             fail_fast=None, intensity=None, parallel=None,
                                             name=None) -> ScyllaOperatorRepairTask:
         if name is None:
             name = self._pick_original_name(
-                'Default repair task name', [so_task.name for so_task in self.operator_repair_tasks])
+                'default-repair-task-name', [so_task.name for so_task in self.operator_repair_tasks])
         so_repair_task = ScyllaOperatorRepairTask(
             name=name,
             dc=dc_list,
@@ -331,42 +322,31 @@ class OperatorManagerCluster(ManagerCluster):
         so_task = self._create_scylla_operator_repair_task(dc_list=dc_list, keyspace=keyspace, interval=interval,
                                                            num_retries=num_retries, fail_fast=fail_fast,
                                                            intensity=intensity, parallel=parallel, name=name)
-        return wait_for(
-            lambda: self.get_mgr_repair_task_by_id(self.wait_for_operator_repair_task_status(so_task).mgmt_task_id),
-            timeout=120,
-        )
+        return wait_for(lambda: self.get_mgr_repair_task(so_task), step=2, timeout=300)
 
-    def wait_for_operator_repair_task_status(
-            self, so_repair_task: ScyllaOperatorRepairTask, timeout=120, step=1) -> ScyllaOperatorRepairTaskStatus:
-        return wait_for(
+    def get_mgr_repair_task(self, so_repair_task: ScyllaOperatorRepairTask) -> Optional[RepairTask]:
+        so_repair_task_status = wait_for(
             func=self.get_operator_repair_task_status,
-            step=step,
             text=f"Waiting until operator repair task: {so_repair_task.name} get it's status",
-            timeout=timeout,
+            step=2,
+            timeout=300,
             task_name=so_repair_task.name,
-            throw_exc=True,
-        )
-
-    def wait_for_operator_backup_task_status(
-            self, so_backup_task: ScyllaOperatorBackupTask, timeout=120, step=1) -> ScyllaOperatorBackupTaskStatus:
-        return wait_for(
-            func=self.get_operator_backup_task_status,
-            step=step,
-            text=f"Waiting until operator backup task '{so_backup_task.name}' get it's status",
-            timeout=timeout,
-            task_name=so_backup_task.name,
-            throw_exc=True,
-        )
-
-    def get_mgr_repair_task_by_id(self, task_id: str) -> Optional[RepairTask]:
+            throw_exc=True)
         for mgr_task in self.repair_task_list:
-            if mgr_task.id == task_id:
+            if mgr_task.id.split("/", 1)[-1] in (so_repair_task_status.name, so_repair_task_status.id):
                 return mgr_task
         return None
 
-    def get_mgr_backup_task_by_id(self, task_id: str) -> Optional[BackupTask]:
+    def get_mgr_backup_task(self, so_backup_task: ScyllaOperatorBackupTask) -> Optional[BackupTask]:
+        so_backup_task_status = wait_for(
+            func=self.get_operator_backup_task_status,
+            text=f"Waiting until operator backup task '{so_backup_task.name}' get it's status",
+            step=2,
+            timeout=300,
+            task_name=so_backup_task.name,
+            throw_exc=True)
         for mgr_task in self.backup_task_list:
-            if mgr_task.id == task_id:
+            if mgr_task.id.split("/", 1)[-1] in (so_backup_task_status.name, so_backup_task_status.id):
                 return mgr_task
         return None
 
