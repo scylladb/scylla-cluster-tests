@@ -65,7 +65,7 @@ def start_events_device(log_dir: Optional[Union[str, Path]] = None,
                                 regex='cdc - Could not update CDC description table with generation').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: supressed').publish()
     DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE, line='Rate-limit: suppressed').publish()
-
+    DbEventsFilter(db_event=DatabaseLogEvent.WARNING, line='abort_requested_exception').publish()
     atexit.register(stop_events_device, _registry=_registry)
 
 
