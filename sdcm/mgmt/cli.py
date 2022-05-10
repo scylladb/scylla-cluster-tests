@@ -23,7 +23,8 @@ from contextlib import contextmanager
 from distutils.version import LooseVersion
 
 import requests
-from invoke.exceptions import UnexpectedExit, Failure
+from invoke.exceptions import Failure as InvokeFailure
+from sdcm.remote.libssh2_client.exceptions import Failure as Libssh2Failure
 
 from sdcm import wait
 from sdcm.mgmt.common import \
@@ -1056,7 +1057,7 @@ class SCTool:
         try:
             res = self.manager_node.remoter.sudo(f"sctool {cmd}")
             LOGGER.debug("sctool output: %s", res.stdout)
-        except (UnexpectedExit, Failure) as ex:
+        except (InvokeFailure, Libssh2Failure) as ex:
             raise ScyllaManagerError(f"Encountered an error on sctool command: {cmd}: {ex}") from ex
 
         if replace_broken_unicode_values:
