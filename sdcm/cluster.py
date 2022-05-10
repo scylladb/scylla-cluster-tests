@@ -493,21 +493,17 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 apt-get update
                 apt-get install -y git make maven
             """))
-        # TODO: Needs to uncomment the following lines after https://github.com/apache/cassandra-harry/pull/12 will
-        # self.remoter.run(shell_script_cmd(f"""rm -rf {cassandra_harry_path}"""))
-        # clone_repo(remoter=self.remoter, repo_url="https://github.com/apache/cassandra-harry.git",
-        # destination_dir_name=str(cassandra_harry_path))
         self.remoter.run(shell_script_cmd(f"""rm -rf {cassandra_harry_path}"""))
         clone_repo(remoter=self.remoter, repo_url="https://github.com/apache/cassandra-harry.git",
                    destination_dir_name=str(cassandra_harry_path), clone_as_root=False)
         self.remoter.run(shell_script_cmd(f"""\
             cd {cassandra_harry_path}
-            git checkout standalone
             make standalone
         """))
         cassandra_harry_tool_path = cassandra_harry_path / "scripts" / "cassandra-harry"
         # Edit the "cassandra-harry' file and set the correct HARRY_HOME value (the value should be repo's path)
         self.remoter.run(rf"sed -i '2s;^;HARRY_HOME={cassandra_harry_path}\n;' {cassandra_harry_tool_path}")
+        self.remoter.run(f"sed -i 's/external-.*-SNAPSHOT.jar/external-*-SNAPSHOT.jar/' {cassandra_harry_tool_path}")
         self.remoter.sudo(f"ln -svf {cassandra_harry_tool_path} /usr/bin/cassandra-harry", ignore_status=True)
         self.is_cassandra_harry_installed = True
 
