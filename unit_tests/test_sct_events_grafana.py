@@ -18,11 +18,18 @@ import unittest.mock
 from sdcm.sct_events import Severity
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.setup import EVENTS_SUBSCRIBERS_START_DELAY
-from sdcm.sct_events.grafana import \
-    GrafanaAnnotator, GrafanaEventAggregator, GrafanaEventPostman, \
-    start_grafana_pipeline, get_grafana_postman, set_grafana_url
+from sdcm.sct_events.grafana import (
+    GrafanaAnnotator,
+    GrafanaEventAggregator,
+    GrafanaEventPostman,
+    get_grafana_postman,
+    set_grafana_url,
+    start_grafana_pipeline,
+    start_posting_grafana_annotations,
+)
 from sdcm.sct_events.events_processes import \
     EVENTS_GRAFANA_ANNOTATOR_ID, EVENTS_GRAFANA_AGGREGATOR_ID, get_events_process
+from sdcm.wait import wait_for
 
 from unit_tests.lib.events_utils import EventsUtilsMixin
 
@@ -65,7 +72,6 @@ class TestGrafana(unittest.TestCase, EventsUtilsMixin):
             grafana_aggregator.time_window = 1
 
             set_grafana_url("http://localhost", _registry=self.events_processes_registry)
-
             with unittest.mock.patch("requests.post") as mock:
                 for runs in range(1, 4):
                     with self.wait_for_n_events(grafana_annotator, count=10, timeout=1):
@@ -73,6 +79,10 @@ class TestGrafana(unittest.TestCase, EventsUtilsMixin):
                             self.events_main_device.publish_event(
                                 ClusterHealthValidatorEvent.NodeStatus(severity=Severity.NORMAL))
                     time.sleep(1)
+                self.assertEqual(mock.call_count, 0)
+
+                start_posting_grafana_annotations(_registry=self.events_processes_registry)
+                wait_for(lambda: mock.call_count == runs * 5, timeout=10, step=0.1, throw_exc=False)
 
                 self.assertEqual(mock.call_count, runs * 5)
                 self.assertEqual(

@@ -102,8 +102,7 @@ class GrafanaEventPostman(BaseEventsProcess[Annotation, None], threading.Thread)
 
     def __init__(self, _registry: EventsProcessesRegistry):
         self.url_set = threading.Event()
-        self._grafana_post_url = ""
-
+        self._grafana_post_urls = []
         super().__init__(_registry=_registry)
 
     def run(self) -> None:
@@ -111,14 +110,19 @@ class GrafanaEventPostman(BaseEventsProcess[Annotation, None], threading.Thread)
         self.url_set.wait()
 
         for annotation in self.inbound_events():  # events from GrafanaAggregator
-            with verbose_suppress("GrafanaEventPostman failed to post an annotation %s", annotation):
-                requests.post(self._grafana_post_url, json=annotation, auth=self.api_auth).raise_for_status()
+            for grafana_post_url in self._grafana_post_urls:
+                with verbose_suppress("GrafanaEventPostman failed to post an annotation to '%s' "
+                                      "endpoint.\nAnnotation: %s", grafana_post_url, annotation):
+                    requests.post(
+                        grafana_post_url, json=annotation, auth=self.api_auth).raise_for_status()
 
     def set_grafana_url(self, grafana_base_url: str) -> None:
         if not grafana_base_url:
             LOGGER.error("Reject to set an empty Grafana URL")
             return
-        self._grafana_post_url = grafana_base_url + self.api_endpoint
+        self._grafana_post_urls.append(grafana_base_url + self.api_endpoint)
+
+    def start_posting_grafana_annotations(self):
         self.url_set.set()
 
     def terminate(self) -> None:
@@ -142,4 +146,8 @@ def set_grafana_url(url: str, _registry: Optional[EventsProcessesRegistry] = Non
     get_grafana_postman(_registry=_registry).set_grafana_url(url)
 
 
-__all__ = ("start_grafana_pipeline", "set_grafana_url", )
+def start_posting_grafana_annotations(_registry: Optional[EventsProcessesRegistry] = None) -> None:
+    get_grafana_postman(_registry=_registry).start_posting_grafana_annotations()
+
+
+__all__ = ("start_grafana_pipeline", "set_grafana_url", "start_posting_grafana_annotations")

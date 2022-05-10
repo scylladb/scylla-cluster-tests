@@ -74,6 +74,7 @@ from sdcm.sct_events.setup import start_events_device, stop_events_device
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEvent, TestTimeoutEvent
 from sdcm.sct_events.file_logger import get_events_grouped_by_category, get_logger_event_summary
 from sdcm.sct_events.events_analyzer import stop_events_analyzer
+from sdcm.sct_events.grafana import start_posting_grafana_annotations
 from sdcm.stress_thread import CassandraStressThread
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.log_time_consistency import DbLogTimeConsistencyAnalyzer
@@ -1417,6 +1418,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         elif cluster_backend == 'azure':
             self.get_cluster_azure(loader_info=loader_info, db_info=db_info,
                                    monitor_info=monitor_info)
+
+        # NOTE: following starts processing of the monitoring inbound events which will be posted
+        #       for each of the Grafana instances (may be more than 1 in case of K8S multi-tenant setup)
+        start_posting_grafana_annotations()
 
     def _cs_add_node_flag(self, stress_cmd):
         if '-node' not in stress_cmd:
