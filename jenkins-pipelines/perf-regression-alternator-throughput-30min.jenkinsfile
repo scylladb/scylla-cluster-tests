@@ -9,6 +9,4 @@ perfRegressionParallelPipeline(
     test_name: "performance_regression_alternator_test.PerformanceRegressionAlternatorTest",
     test_config: "test-cases/performance/perf-regression-alternator.100threads.30M-keys.yaml",
     sub_tests: ["test_write", "test_read", "test_mixed"],
-
-    email_recipients: 'qa@scylladb.com'
 )
