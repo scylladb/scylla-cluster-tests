@@ -1850,14 +1850,22 @@ def get_builder_by_test_id(test_id):
 
 def get_post_behavior_actions(config):
     action_per_type = {
-        "db_nodes": {"NodeType": "scylla-db", "action": None},
-        "monitor_nodes": {"NodeType": "monitor", "action": None},
-        "loader_nodes": {"NodeType": "loader", "action": None},
-        "k8s_cluster": {"NodeType": "k8s", "action": None},
+        "db_nodes": {"node_types": ["scylla-db"], "action": None},
+        "monitor_nodes": {"node_types": ["monitor"], "action": None},
+        "loader_nodes": {"node_types": ["loader"], "action": None},
+        "k8s_cluster": {"node_types": ["k8s"], "action": None},
     }
 
     for key, value in action_per_type.items():
         value["action"] = config.get(f"post_behavior_{key}")
+
+    match config.get("db_type"):
+        case "cassandra":
+            action_per_type["db_nodes"]["node_types"] = ["cs-db"]
+        case "mixed":
+            action_per_type["db_nodes"]["node_types"].append("cs-db")
+        case "mixed_scylla":
+            action_per_type["db_nodes"]["node_types"].append("oracle-db")
 
     return action_per_type
 
@@ -1877,12 +1885,14 @@ def clean_resources_according_post_behavior(params, config, logdir, dry_run=Fals
             LOGGER.info("Post behavior %s for %s. Keep resources running", action_type["action"], cluster_nodes_type)
         elif action_type["action"] == "destroy":
             LOGGER.info("Post behavior %s for %s. Clean resources", action_type["action"], cluster_nodes_type)
-            clean_cloud_resources({**params, "NodeType": action_type["NodeType"]}, dry_run=dry_run)
+            for node_type in action_type["node_types"]:
+                clean_cloud_resources(params | {"NodeType": node_type}, dry_run=dry_run)
             continue
         elif action_type["action"] == "keep-on-failure" and not critical_events:
             LOGGER.info("Post behavior %s for %s. Test run Successful. Clean resources",
                         action_type["action"], cluster_nodes_type)
-            clean_cloud_resources({**params, "NodeType": action_type["NodeType"]}, dry_run=dry_run)
+            for node_type in action_type["node_types"]:
+                clean_cloud_resources(params | {"NodeType": node_type}, dry_run=dry_run)
             continue
         else:
             LOGGER.info("Post behavior %s for %s. Test run Failed. Keep resources running",
