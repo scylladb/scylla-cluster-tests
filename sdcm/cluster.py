@@ -4615,7 +4615,7 @@ class BaseLoaderSet():
                 node.install_scylla_bench()
         if 'cassandra-harry' in self.params.list_of_stress_tools:
             if not node.is_cassandra_harry_installed:
-                node.install_cassandra_harry(node)
+                node.install_cassandra_harry()
 
         # install docker
         docker_install = dedent("""
