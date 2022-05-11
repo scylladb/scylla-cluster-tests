@@ -22,21 +22,21 @@ def call(String backend, String region=null, String datacenter=null, String loca
 
     def cloud_provider = getCloudProviderFromBackend(backend)
 
-    if ((cloud_provider == 'aws' && region) || (cloud_provider == 'gce' && datacenter) || (cloud_provider == 'azure' && location))
-    {
-        if (cloud_provider == 'aws')
-        {
-            def supported_regions = ["eu-west-2", "eu-north-1", "eu-central-1"]
+    if ((cloud_provider == 'aws' && region) || (cloud_provider == 'gce' && datacenter) || (cloud_provider == 'azure' && location)) {
+        def supported_regions = []
+
+        if (cloud_provider == 'aws') {
+            supported_regions = ["eu-west-2", "eu-north-1", "eu-central-1"]
         } else if (cloud_provider == 'gce') {
-            def supported_regions = ["us-east1", "us-west1"]
+            supported_regions = ["us-east1", "us-west1"]
             region = datacenter
         } else {
-            def supported_regions = ["eastus"]
+            supported_regions = ["eastus"]
             region = location
         }
 
         println("Finding builder for region: " + region)
-        if (region == "random" || datacenter == "random"){
+        if (region == "random" || datacenter == "random") {
             Collections.shuffle(supported_regions)
             region = supported_regions[0]
         }
@@ -45,15 +45,13 @@ def call(String backend, String region=null, String datacenter=null, String loca
         println("Checking if we have a label for " + cp_region)
 
         def label = jenkins_labels.get(cp_region, null)
-        if (label != null){
+        if (label != null) {
             println("Found builder with label: " + label)
             return [ "label": label, "region": region ]
         } else {
             throw new Exception("=================== ${cloud_provider} region ${region} not supported ! ===================")
         }
-    }
-    else
-    {
+    } else {
         return [ "label": jenkins_labels[cloud_provider], "region": region ]
     }
 }
