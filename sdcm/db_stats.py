@@ -470,6 +470,9 @@ class TestStatsMixin(Stats):
         """
         # avoid cyclic-decencies between cluster and db_stats
         doc_id = self.test_config.test_id()
+        # NOTE: 'cluster_index' is needed in case of multi-tenant perf test on K8S
+        if hasattr(self, 'cluster_index'):
+            doc_id += f"--{self.cluster_index}"
         if doc_id_with_timestamp:
             doc_id += "_{}".format(datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
         return doc_id
@@ -558,10 +561,10 @@ class TestStatsMixin(Stats):
 
         if not self.create_stats:
             return
-        if not test_index:
-            self._test_index = self.__class__.__name__.lower()
-        else:
+        if test_index:
             self._test_index = test_index
+        elif not self._test_index:
+            self._test_index = self.__class__.__name__.lower()
         self._test_id = self._create_test_id(doc_id_with_timestamp)
         self._stats = self._init_stats()
         self._stats['setup_details'] = self.get_setup_details()
