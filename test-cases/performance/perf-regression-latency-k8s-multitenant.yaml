@@ -1,0 +1,47 @@
+test_duration: 480
+prepare_write_cmd: [[
+    "cassandra-stress write no-warmup cl=ALL n=11250000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=13 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..11250000",
+    "cassandra-stress write no-warmup cl=ALL n=11250000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=13 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=11250001..22500000",
+], [
+    "cassandra-stress write no-warmup cl=ALL n=11240000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=25 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=1..11240000",
+    "cassandra-stress write no-warmup cl=ALL n=11240000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=25 -col 'size=FIXED(128) n=FIXED(8)' -pop seq=11240001..22480000",
+]]
+# NOTE: 'stress_cmd_w', 'stress_cmd_r' and 'stress_cmd_m' are lists of strs where
+#       one str is dedicated for one of DB clusters.
+#       If it is just one str then the same command will be used for each of DB clusters
+stress_cmd_w: [
+    "cassandra-stress write no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=30 throttle=3000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..11250000,22500000)' ",
+    "cassandra-stress write no-warmup cl=QUORUM duration=29m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=30 throttle=3000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..11250000,22500000)' ",
+]
+stress_cmd_r: [
+    "cassandra-stress read no-warmup  cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=30 throttle=2000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..11250000,22500000)' ",
+    "cassandra-stress read no-warmup  cl=QUORUM duration=29m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=30 throttle=2000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..11250000,22500000)' ",
+]
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=30m -schema 'replication(factor=3)' -mode cql3 native -rate 'threads=30 throttle=2000/s' -col 'size=FIXED(128) n=FIXED(8)' -pop 'dist=gauss(1..11250000,22500000)' "
+
+# NOTE: we disable second type of monitoring - K8S based one. It is redundant while we use standalone ones.
+k8s_deploy_monitoring: false
+
+n_db_nodes: 3
+n_monitor_nodes: 1
+
+# NOTE: we deploy here 2 K8S nodes of the 'loader' type and going to create 2 pairs of loader pods.
+n_loaders: 4
+k8s_n_loader_pods_per_cluster: 2
+
+instance_type_loader: 'c4.2xlarge'
+instance_type_monitor: 't3.small'
+instance_type_db: 'i3.4xlarge'
+
+user_prefix: 'perf-regression-latency'
+space_node_threshold: 644245094
+ami_id_db_scylla_desc: 'VERSION_DESC'
+backtrace_decoding: false
+
+round_robin: true
+append_scylla_args: '--blocked-reactor-notify-ms 4'
+
+store_perf_results: true
+use_mgmt: false
+send_email: true
+email_recipients: ['scylla-perf-results@scylladb.com']
