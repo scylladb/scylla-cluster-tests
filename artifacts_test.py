@@ -272,7 +272,7 @@ class ArtifactsTest(ClusterTester):
         with self.subTest("verify write cache for NVMe devices"):
             self.verify_nvme_write_cache()
 
-        if backend != "docker":
+        if backend != "docker" and not self.params.get("nonroot_offline_install"):
             with self.subTest("verify XFS online discard enabled"):
                 self.verify_xfs_online_discard_enabled()
 
