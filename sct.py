@@ -587,7 +587,7 @@ def get_scylla_base_versions(scylla_version, scylla_repo, linux_distro, only_pri
 
     # We can't detect the support versions for this distro, which shares the repo with others, eg: centos8
     # so we need to assign the start support versions for it.
-    version_detector.get_start_support_version()
+    version_detector.set_start_support_version()
 
     supported_versions, version_list = version_detector.get_version_list()
     click.echo(f'Supported Versions: {supported_versions}')
@@ -631,8 +631,8 @@ def _run_yaml_test(backend, full_path, env):
     os.environ['SCT_CONFIG_FILES'] = full_path
     logging.getLogger().handlers = []
     logging.getLogger().disabled = True
-    config = SCTConfiguration()
     try:
+        config = SCTConfiguration()
         config.verify_configuration()
         config.check_required_files()
     except Exception as exc:  # pylint: disable=broad-except
@@ -1193,6 +1193,7 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
     base_job_dir = f'{branch}'
     server = JenkinsPipelines(username=username, password=password, base_job_dir=base_job_dir,
                               sct_branch_name=sct_branch, sct_repo=sct_repo)
+    base_path = f'{server.base_sct_dir}/jenkins-pipelines'
 
     for group_name, group_desc in [
         ('longevity', 'SCT Longevity Tests'),
@@ -1202,29 +1203,34 @@ def create_test_release_jobs(branch, username, password, sct_branch, sct_repo):
         ('artifacts', 'SCT Artifacts Tests'),
         ('load-test', 'SCT Load Tests'),
         ('repair-based-operation', "SCT RBO Tests"),
+        ('operator', 'SCT Operator Tests'),
     ]:
         server.create_directory(name=group_name, display_name=group_desc)
 
-        for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/{group_name}*.jenkinsfile'):
+        for jenkins_file in glob.glob(f'{base_path}/{group_name}*.jenkinsfile'):
             server.create_pipeline_job(jenkins_file, group_name)
-
         if group_name == 'load-test':
-            for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/admission_control_overload*'):
+            for jenkins_file in glob.glob(f'{base_path}/admission_control_overload*'):
                 server.create_pipeline_job(jenkins_file, group_name)
         if group_name == 'repair-based-operation':
-            for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/repair-based-operation/*'):
+            for jenkins_file in glob.glob(f'{base_path}/repair-based-operation/*'):
+                server.create_pipeline_job(jenkins_file, group_name)
+        if group_name == 'operator':
+            for jenkins_file in glob.glob(f'{base_path}/operator/functional/*aws*.jenkinsfile'):
                 server.create_pipeline_job(jenkins_file, group_name)
 
-    server.create_directory(name='artifacts-offline-install', display_name='SCT Artifacts Offline Install Tests')
+    server.create_directory(
+        name='artifacts-offline-install', display_name='SCT Artifacts Offline Install Tests')
 
     def jenkinsfile_generator():
         for i in ['ami', 'amazon2', 'docker', 'gce-image']:
             yield f'-{i}.jenkinsfile' in jenkins_file
-    for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/artifacts-*.jenkinsfile'):
+
+    for jenkins_file in glob.glob(f'{base_path}/artifacts-*.jenkinsfile'):
         if any(jenkinsfile_generator()):
             continue
         server.create_pipeline_job(jenkins_file, 'artifacts-offline-install')
-    for jenkins_file in glob.glob(f'{server.base_sct_dir}/jenkins-pipelines/nonroot-offline-install/*.jenkinsfile'):
+    for jenkins_file in glob.glob(f'{base_path}/nonroot-offline-install/*.jenkinsfile'):
         server.create_pipeline_job(jenkins_file, 'artifacts-offline-install',
                                    job_name=str(Path(jenkins_file).stem) + '-nonroot')
 

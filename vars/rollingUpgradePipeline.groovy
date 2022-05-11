@@ -1,5 +1,6 @@
 #!groovy
 
+List supportedVersions = []
 (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
@@ -60,6 +61,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('test_config', '')}",
                    description: 'Test configuration file',
                    name: 'test_config')
+            string(defaultValue: "${pipelineParams.get('base_versions', '')}",
+                   description: 'Base version in which the upgrade will start from.\nFormat should be for example -> 4.5,4.6 (or single version, or \'\' to use the auto mode)',
+                   name: 'base_versions')
         }
         options {
             timestamps()
@@ -83,13 +87,41 @@ def call(Map pipelineParams) {
                     }
                 }
             }
+            stage('Get supported Scylla versions and test duration') {
+                agent {
+                    label {
+                        label builder.label
+                    }
+                }
+                steps {
+                    timeout(time: 10, unit: 'MINUTES') {
+                        script {
+                            wrap([$class: 'BuildUser']) {
+                                dir('scylla-cluster-tests') {
+                                    checkout scm
+                                    ArrayList base_versions_list = params.base_versions.contains('.') ? params.base_versions.split('\\,') : []
+                                    supportedVersions = supportedUpgradeFromVersions(
+                                        base_versions_list,
+                                        pipelineParams.linux_distro,
+                                        params.new_scylla_repo
+                                    )
+                                    (testDuration,
+                                     testRunTimeout,
+                                     runnerTimeout,
+                                     collectLogsTimeout,
+                                     resourceCleanupTimeout) = getJobTimeouts(params, builder.region)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             stage('Run SCT stages') {
                 steps {
                     script {
                         def tasks = [:]
 
-                        for (version in supportedUpgradeFromVersions(pipelineParams.base_versions, pipelineParams.linux_distro,
-                                                                     params.new_scylla_repo)) {
+                        for (version in supportedVersions) {
                             def base_version = version
 
                             tasks["${base_version}"] = {

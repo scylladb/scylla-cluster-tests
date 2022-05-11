@@ -19,11 +19,11 @@ from functools import partial
 from sdcm.cluster import BaseNode
 from sdcm.nemesis import StartStopMajorCompaction, StartStopScrubCompaction, StartStopCleanupCompaction, \
     StartStopValidationCompaction
+from sdcm.rest.compaction_manager_client import CompactionManagerClient
 from sdcm.rest.storage_service_client import StorageServiceClient
 from sdcm.tester import ClusterTester
 from sdcm.utils.common import ParallelObject
 from sdcm.utils.compaction_ops import CompactionOps
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -60,6 +60,9 @@ class StopCompactionTest(ClusterTester):
 
         with self.subTest("Stop reshape compaction test"):
             self.stop_reshape_compaction()
+
+        with self.subTest("Stop reshape on boot compaction test"):
+            self.stop_reshape_compaction(reshape_on_boot=True)
 
     def stop_major_compaction(self):
         """
@@ -172,7 +175,7 @@ class StopCompactionTest(ClusterTester):
         finally:
             self.node.running_nemesis = False
 
-    def stop_reshape_compaction(self):
+    def stop_reshape_compaction(self, reshape_on_boot: bool = True):
         """
         Test that we can stop a reshape compaction with <nodetool stop RESHAPE>.
         To trigger a reshape compaction, the current CompactionStrategy
@@ -183,7 +186,8 @@ class StopCompactionTest(ClusterTester):
         1. Flush the memtable data to sstables.
         2. Copy sstable files to the upload and staging dirs.
         3. Change the compaction strategy to TimeWindowCompactionStrategy.
-        4. Run <nodetool refresh> command to trigger the compaction.
+        4a. if reshape_on_boot==False: Run <nodetool refresh> command to trigger the compaction.
+        4b. if reshape_on_boot==True: restart scylla
         5. Stop the compaction mid-flight with <nodetool stop RESHAPE>.
         6. Grep the logs for a line informing of the reshape compaction
         being stopped due to a user request.
@@ -191,7 +195,13 @@ class StopCompactionTest(ClusterTester):
         """
         node = self.node
         compaction_ops = CompactionOps(cluster=self.db_cluster, node=node)
-        timeout = 600
+        compaction_manager_client = CompactionManagerClient(self.node)
+        if reshape_on_boot is True:
+            # during reshape on boot, JMX port is not open and cannot use nodetool. Using scylla api directly.
+            stop_reshape_func = partial(compaction_manager_client.stop_compaction, compaction_type="reshape")
+        else:
+            stop_reshape_func = compaction_ops.stop_reshape_compaction
+        timeout = 900
 
         def _trigger_reshape(node: BaseNode, tester, keyspace: str = "keyspace1"):
             twcs = {'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': 1,
@@ -211,7 +221,10 @@ class StopCompactionTest(ClusterTester):
             LOGGER.info("Finished copying data files to ./staging and ./upload directories.")
             cmd = f"ALTER TABLE standard1 WITH compaction={twcs}"
             node.run_cqlsh(cmd=cmd, keyspace="keyspace1")
-            node.run_nodetool("refresh -- keyspace1 standard1")
+            if reshape_on_boot is True:
+                node.restart_scylla(verify_up_after=True)
+            else:
+                node.run_nodetool("refresh -- keyspace1 standard1")
 
         trigger_func = partial(_trigger_reshape,
                                node=node,
@@ -221,7 +234,7 @@ class StopCompactionTest(ClusterTester):
                              mark=node.mark_log(),
                              watch_for="Reshape keyspace1.standard1",
                              timeout=timeout,
-                             stop_func=compaction_ops.stop_reshape_compaction)
+                             stop_func=stop_reshape_func)
         try:
             ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
         finally:

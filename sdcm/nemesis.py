@@ -586,18 +586,23 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.target_node.wait_jmx_up()
         self.cluster.wait_for_nodes_up_and_normal(nodes=[self.target_node])
 
-    def disrupt_multiple_hard_reboot_node(self):  # pylint: disable=invalid-name
-        # If this messages appeared, cdc successfully update generation
-        cdc_success_msg = ["streams description table already updated",
-                           "CDC description table successfully updated with generation"]
+    def disrupt_multiple_hard_reboot_node(self) -> None:
+        cdc_expected_error_patterns = [
+            "cdc - Could not update CDC description table with generation",
+        ]
+
+        # If this messages appeared, CDC successfully updated generation.
+        cdc_success_msg_patterns = [
+            "streams description table already updated",
+            "CDC description table successfully updated with generation",
+        ]
+
         num_of_reboots = random.randint(2, 10)
         InfoEvent(message=f'MultipleHardRebootNode {self.target_node}')
         for i in range(num_of_reboots):
-            self.log.debug("Rebooting {} out of {} times".format(i + 1, num_of_reboots))
-            cdc_expected_error = self.target_node.follow_system_log(
-                patterns=["cdc - Could not update CDC description table with generation"])
-            cdc_success_msg = self.target_node.follow_system_log(
-                patterns=cdc_success_msg)
+            self.log.debug("Rebooting %s out of %s times", i + 1, num_of_reboots)
+            cdc_expected_error = self.target_node.follow_system_log(patterns=cdc_expected_error_patterns)
+            cdc_success_msg = self.target_node.follow_system_log(patterns=cdc_success_msg_patterns)
             self.target_node.reboot(hard=True)
             if random.choice([True, False]):
                 self.log.info('Waiting scylla services to start after node reboot')
@@ -612,14 +617,12 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 # if cdc error message "cdc - Could not update CDC description..."
                 # was found in log during reboot, but after that success messages:
                 # "streams description updated" or "CDC desc table updated" were not
-                # found in logs, raise Exception to fail the nemesis.
+                # found in logs, raise the exception to fail the nemesis.
                 raise CdcStreamsWasNotUpdated(
                     f"After '{found_cdc_error[0]}', messages '{' or '.join(cdc_success_msg)}' were not found")
 
-            cdc_success_msg = cdc_expected_error = None
             sleep_time = random.randint(0, 100)
-            self.log.info(
-                'Sleep {} seconds after hard reboot and service-up for node {}'.format(sleep_time, self.target_node))
+            self.log.info("Sleep %s seconds after hard reboot and service-up for node %s", sleep_time, self.target_node)
             time.sleep(sleep_time)
 
     def disrupt_soft_reboot_node(self):
@@ -1655,6 +1658,26 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for partition_key in partitions_for_delete.keys():
             queries.append(f"delete from {ks_cf} where pk = {partition_key}")
 
+        self.run_deletions(queries=queries, ks_cf=ks_cf)
+
+    def disrupt_delete_overlapping_row_ranges(self):
+        """
+        Delete several overlapping row ranges in the table with large partitions.
+        """
+        self.verify_initial_inputs_for_delete_nemesis()
+        ks_cf = 'scylla_bench.test'
+        partitions_for_delete = self.choose_partitions_for_delete(10, ks_cf, with_clustering_key_data=True)
+        if not partitions_for_delete:
+            self.log.error('No partitions for delete found!')
+            raise UnsupportedNemesis("DeleteOverlappingRowRangesMonkey: No partitions for delete found!")
+
+        self.log.debug('Delete random row ranges in few partitions')
+        queries = []
+        for pkey, ckey in partitions_for_delete.items():
+            for _ in range(random.randint(3, 20)):  # Get a random number of ranges to delete.
+                min_ck = random.randint(0, ckey[1])  # Generate a random range of rows to delete in a single partition.
+                max_ck = random.randint(min_ck, ckey[1])
+                queries.append(f"delete from {ks_cf} where pk = {pkey} and ck > {min_ck} and ck < {max_ck}")
         self.run_deletions(queries=queries, ks_cf=ks_cf)
 
     def disrupt_delete_by_rows_range(self):
@@ -3471,6 +3494,14 @@ class DeleteByRowsRangeMonkey(Nemesis):
 
     def disrupt(self):
         self.disrupt_delete_by_rows_range()
+
+
+class DeleteOverlappingRowRangesMonkey(Nemesis):
+    disruptive = False
+    kubernetes = True
+
+    def disrupt(self):
+        self.disrupt_delete_overlapping_row_ranges()
 
 
 class ChaosMonkey(Nemesis):
