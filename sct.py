@@ -82,6 +82,7 @@ from sdcm.utils.get_username import get_username
 from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter, \
     send_perf_email
 from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
+from sdcm.utils.aws_utils import AwsArchType
 from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module,import-error
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module,import-error
 from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module
@@ -481,11 +482,12 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
               type=CloudRegion(cloud_provider="aws"),
               default='eu-west-1',
               help="a region to look for AMIs (default: eu-west-1)")
-def list_ami_versions(region):
+@click.option('-a', '--arch', type=click.Choice(['x86_64', 'arm64']))
+def list_ami_versions(region: str, arch: AwsArchType):
     add_file_logger()
 
     tbl = PrettyTable(field_names=["Name", "ImageId", "CreationDate"], align="l")
-    for ami in get_scylla_ami_versions(region_name=region):
+    for ami in get_scylla_ami_versions(region_name=region, arch=arch):
         tbl.add_row([ami.name, ami.image_id, ami.creation_date])
     click.echo(tbl.get_string(title="Scylla AMI versions"))
 
@@ -496,8 +498,9 @@ def list_ami_versions(region):
               type=CloudRegion(cloud_provider="aws"),
               default='eu-west-1',
               help="a region to look for AMIs (default: eu-west-1)")
+@click.option('-a', '--arch', type=click.Choice(['x86_64', 'arm64']))
 @click.argument('version', type=str, default='branch-3.1:all')
-def list_ami_branch(region, version):
+def list_ami_branch(region: str, arch: AwsArchType, version: str):
     add_file_logger()
 
     def get_tags(ami):
@@ -507,7 +510,7 @@ def list_ami_branch(region, version):
         version += ":all"
 
     tbl = PrettyTable(field_names=["Name", "ImageId", "CreationDate", "BuildId", "Test Status"], align="l")
-    for ami in get_branched_ami(scylla_version=version, region_name=region):
+    for ami in get_branched_ami(scylla_version=version, region_name=region, arch=arch):
         tags = get_tags(ami)
         test_status = [(k, v) for k, v in tags.items() if k.startswith('JOB:')]
         test_status = [click.style(k, fg='green') for k, v in test_status if v == 'PASSED'] + \
