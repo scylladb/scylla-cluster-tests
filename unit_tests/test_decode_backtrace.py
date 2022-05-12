@@ -13,7 +13,7 @@
 
 import os
 import json
-import queue
+from multiprocessing import Queue
 import unittest
 from functools import cached_property
 
@@ -125,7 +125,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
     def test_02_reactor_stalls_is_decoded_if_enabled(self):
         self.test_config.BACKTRACE_DECODING = True
 
-        self.test_config.DECODING_QUEUE = queue.Queue()
+        self.test_config.DECODING_QUEUE = Queue()
 
         self.monitor_node.start_decode_on_monitor_node_thread()
         self._read_and_publish_events()
@@ -146,7 +146,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
 
     def test_03_decode_interlace_reactor_stall(self):  # pylint: disable=invalid-name
 
-        self.test_config.DECODING_QUEUE = queue.Queue()
+        self.test_config.DECODING_QUEUE = Queue()
         self.test_config.BACKTRACE_DECODING = True
 
         self.monitor_node.start_decode_on_monitor_node_thread()
@@ -171,7 +171,7 @@ class TestDecodeBactraces(unittest.TestCase, EventsUtilsMixin):
 
     def test_04_decode_backtraces_core(self):
 
-        self.test_config.DECODING_QUEUE = queue.Queue()
+        self.test_config.DECODING_QUEUE = Queue()
         self.test_config.BACKTRACE_DECODING = True
 
         self.monitor_node.start_decode_on_monitor_node_thread()

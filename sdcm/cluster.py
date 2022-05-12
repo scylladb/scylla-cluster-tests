@@ -1458,20 +1458,19 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             try:
                 obj = self.test_config.DECODING_QUEUE.get(timeout=5)
                 if obj is None:
-                    self.test_config.DECODING_QUEUE.task_done()
                     break
                 event = obj["event"]
                 if not scylla_debug_file:
                     scylla_debug_file = self.copy_scylla_debug_info(obj["node"], obj["debug_file"])
                 output = self.decode_raw_backtrace(scylla_debug_file, " ".join(event.raw_backtrace.split('\n')))
                 event.backtrace = output.stdout
-                self.test_config.DECODING_QUEUE.task_done()
             except queue.Empty:
                 pass
             except Exception as details:  # pylint: disable=broad-except
                 self.log.error("failed to decode backtrace %s", details)
             finally:
                 if event:
+                    event.ready_to_publish()
                     event.publish()
 
             if self.termination_event.is_set() and self.test_config.DECODING_QUEUE.empty():
