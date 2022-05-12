@@ -84,8 +84,6 @@ def call(Map pipelineParams) {
         }
         options {
             timestamps()
-            // Timeout for the whole test, add 30 MINUTES for waiting the builder
-            timeout([time: pipelineParams.timeout.time + 30, unit: 'MINUTES'])
             buildDiscarder(logRotator(numToKeepStr: "${pipelineParams.get('builds_to_keep', '20')}",))
         }
         stages {
@@ -114,7 +112,7 @@ def call(Map pipelineParams) {
                             tasks["${instance_type}"] = {
                                 node(builder.label) {
                                     // Timeout for the test itself
-                                    timeout(pipelineParams.timeout) {
+                                    timeout(time: pipelineParams.timeout.time, unit: 'MINUTES') {
                                         withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                                  "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
                                                  "SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
@@ -214,7 +212,9 @@ def call(Map pipelineParams) {
                                                 catchError(stageResult: 'FAILURE') {
                                                     wrap([$class: 'BuildUser']) {
                                                         dir('scylla-cluster-tests') {
-                                                            runCollectLogs(params, builder.region)
+                                                            timeout(time: 30, unit: 'MINUTES') {
+                                                                runCollectLogs(params, builder.region)
+                                                            }
                                                         }
                                                     }
                                                 }
