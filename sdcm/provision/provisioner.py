@@ -14,7 +14,9 @@
 from abc import ABC
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Dict, Optional
+from typing import List, Dict
+
+from sdcm.keystore import SSHKey
 
 
 class VmArch(Enum):
@@ -34,12 +36,12 @@ class InstanceDefinition:  # pylint: disable=too-many-instance-attributes
     name: str
     image_id: str
     type: str   # instance_type from yaml
-    user_name: Optional[str] = None
-    ssh_public_key: Optional[str] = field(default=None, repr=False)
+    user_name: str
+    ssh_key: SSHKey = field(repr=False)
     tags: Dict[str, str] = field(default_factory=dict)
     arch: VmArch = VmArch.X86
-    root_disk_size: Optional[int] = None
-    data_disks: Optional[List[DataDisk]] = None
+    root_disk_size: int | None = None
+    data_disks: List[DataDisk] | None = None
 
 
 class ProvisionError(Exception):
@@ -62,6 +64,7 @@ class VmInstance:  # pylint: disable=too-many-instance-attributes
     name: str
     region: str
     user_name: str
+    ssh_key_name: str
     public_ip_address: str
     private_ip_address: str
     tags: Dict[str, str]

@@ -435,11 +435,11 @@ class FakeVirtualMachines:
 
     def begin_create_or_update(self, resource_group_name: str, vm_name: str, parameters: Dict[str, Any]
                                ) -> WaitableObject:
+        tags = parameters.pop("tags") if "tags" in parameters else {}
         parameters = dict_keys_to_camel_case(parameters)
         location = parameters.pop("location")
-        tags = parameters.pop("tags")
         priority = parameters.get("priority") or ""
-        if tags.get("JenkinsJobTag") == "FailSpotDB" and priority.lower() == "spot" and tags.get("NodeType") == "db":
+        if tags.get("JenkinsJobTag") == "FailSpotDB" and priority.lower() == "spot" and tags.get("NodeType") == "scylla-db":
             # for testing fallback on demand
             raise AzureError("Failing creating db spot instance because JenkinsJobTag is FailSpotDB")
 

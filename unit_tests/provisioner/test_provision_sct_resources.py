@@ -23,7 +23,7 @@ def test_can_provision_instances_according_to_sct_configuration(sct_config, azur
     provisioner_eastus = provisioner_factory.create_provisioner(
         backend="azure", test_id=sct_config.get("test_id"), region="eastus", azure_service=azure_service)
     eastus_instances = provisioner_eastus.list_instances()
-    db_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "db"]
+    db_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "scylla-db"]
     loader_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "loader"]
     monitor_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "monitor"]
 
@@ -32,13 +32,13 @@ def test_can_provision_instances_according_to_sct_configuration(sct_config, azur
     assert len(monitor_nodes) == 1
     db_node = db_nodes[0]
     assert db_node.region == "eastus"
-    assert list(db_node.tags.keys()) == list(tags.keys()) + ["NodeType", "keepAction"]
+    assert list(db_node.tags.keys()) == list(tags.keys()) + ["NodeType", "keep_action", "NodeIndex"]
     assert db_node.pricing_model == PricingModel.SPOT
 
     provisioner_easteu = provisioner_factory.create_provisioner(backend="azure", test_id=sct_config.get("test_id"),
                                                                 region="easteu", azure_service=azure_service)
     easteu_instances = provisioner_easteu.list_instances()
-    db_nodes = [node for node in easteu_instances if node.tags['NodeType'] == "db"]
+    db_nodes = [node for node in easteu_instances if node.tags['NodeType'] == "scylla-db"]
     loader_nodes = [node for node in easteu_instances if node.tags['NodeType'] == "loader"]
     monitor_nodes = [node for node in easteu_instances if node.tags['NodeType'] == "monitor"]
 
@@ -47,7 +47,7 @@ def test_can_provision_instances_according_to_sct_configuration(sct_config, azur
     assert len(monitor_nodes) == 0
     db_node = db_nodes[0]
     assert db_node.region == "easteu"
-    assert list(db_node.tags.keys()) == list(tags.keys()) + ["NodeType", "keepAction"]
+    assert list(db_node.tags.keys()) == list(tags.keys()) + ["NodeType", "keep_action", "NodeIndex"]
     assert db_node.pricing_model == PricingModel.SPOT
 
 
@@ -57,7 +57,7 @@ def test_fallback_on_demand_when_spot_fails(fallback_on_demand, sct_config, azur
     provisioner_eastus = provisioner_factory.create_provisioner(
         backend="azure", test_id=sct_config.get("test_id"), region="eastus", azure_service=azure_service)
     eastus_instances = provisioner_eastus.list_instances()
-    db_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "db"]
+    db_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "scylla-db"]
     loader_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "loader"]
     monitor_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "monitor"]
 

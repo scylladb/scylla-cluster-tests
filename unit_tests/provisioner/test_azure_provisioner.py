@@ -41,7 +41,7 @@ class TestProvisionScyllaInstanceAzureE2E:
             image_id=image_id,
             type="Standard_D2s_v3",
             user_name="tester",
-            ssh_public_key=KeyStore().get_ec2_ssh_key_pair().public_key.decode(),
+            ssh_key=KeyStore().get_ec2_ssh_key_pair(),
             tags={'test-tag': 'test_value'}
         )
 

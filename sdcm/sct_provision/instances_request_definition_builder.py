@@ -12,10 +12,13 @@
 # Copyright (c) 2022 ScyllaDB
 
 from dataclasses import dataclass
-from typing import Callable, List
+from typing import Callable, List, Literal
 
 from sdcm.provision.provisioner import InstanceDefinition
 from sdcm.sct_config import SCTConfiguration
+
+
+NodeTypeType = Literal["scylla-db", "loader", "monitor"]
 
 
 @dataclass

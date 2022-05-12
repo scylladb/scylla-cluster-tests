@@ -30,6 +30,21 @@ def provision_with_retry(provisioner: Provisioner, definitions: List[InstanceDef
     return provisioner.get_or_create_instances(definitions=definitions, pricing_model=pricing_model)
 
 
+def provision_instances_with_fallback(provisioner: Provisioner, definitions: List[InstanceDefinition], pricing_model: PricingModel,
+                                      fallback_on_demand: bool
+                                      ) -> List[VmInstance]:
+    try:
+        provision_with_retry(provisioner, definitions=definitions, pricing_model=pricing_model)
+    except ProvisionError:
+        if pricing_model.is_spot() and fallback_on_demand:
+            provision_with_retry(provisioner, definitions=definitions, pricing_model=PricingModel.ON_DEMAND)
+        else:
+            raise
+
+    provisioned_instances = provisioner.get_or_create_instances(definitions=definitions)
+    return provisioned_instances
+
+
 def provision_sct_resources(sct_config: SCTConfiguration, **provisioner_config: Any):
     """Provisions instances according to SCT Configuration."""
     definitions_per_region = instances_request_builder.build(sct_config=sct_config)
@@ -40,10 +55,7 @@ def provision_sct_resources(sct_config: SCTConfiguration, **provisioner_config: 
                                                              test_id=request.test_id,
                                                              region=request.region,
                                                              **provisioner_config)
-        try:
-            provision_with_retry(provisioner, definitions=request.definitions, pricing_model=pricing_model)
-        except ProvisionError:
-            if pricing_model.is_spot() and provision_fallback_on_demand:
-                provision_with_retry(provisioner, definitions=request.definitions, pricing_model=PricingModel.ON_DEMAND)
-            else:
-                raise
+        provision_instances_with_fallback(provisioner=provisioner,
+                                          definitions=request.definitions,
+                                          pricing_model=pricing_model,
+                                          fallback_on_demand=provision_fallback_on_demand)
