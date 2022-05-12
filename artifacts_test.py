@@ -248,8 +248,10 @@ class ArtifactsTest(ClusterTester):
         mount_options = run("findmnt -no options -t xfs -T /var/lib/scylla").stdout.strip().split(",")
         self.assertIn("discard", mount_options)
 
-        self.log.info("Ensure that we don't run fstrim")
-        self.assertEqual(run("systemctl is-enabled fstrim.timer", ignore_status=True).stdout.strip(), "disabled")
+        # we only test this in images created by scylla-machine-image
+        if self.params.get("use_preinstalled_scylla"):
+            self.log.info("Ensure that we don't run fstrim")
+            self.assertEqual(run("systemctl is-enabled fstrim.timer", ignore_status=True).stdout.strip(), "disabled")
 
     def check_service_existence(self, service_name):
         res = self.node.remoter.run(f'systemctl list-units --full | grep -Fq "{service_name}"',
