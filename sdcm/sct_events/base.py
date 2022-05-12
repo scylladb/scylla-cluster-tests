@@ -228,6 +228,9 @@ class SctEvent:
         self._ready_to_publish = False
         LOGGER.debug("%s marked to not publish", self)
 
+    def ready_to_publish(self):
+        self._ready_to_publish = True
+
     def to_json(self, encoder: Type[JSONEncoder] = JSONEncoder) -> str:
         return json.dumps({
             "base": self.base,
