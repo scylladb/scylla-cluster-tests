@@ -87,10 +87,26 @@ class BackupFunctionsMixIn:
         self._run_cmd_with_retry(executor=node.remoter.sudo, cmd=shell_script_cmd(cmd))
 
     def install_gsutil_dependencies(self, node):
-        self._run_cmd_with_retry(executor=node.remoter.run, cmd=shell_script_cmd("""\
-            curl https://sdk.cloud.google.com > install.sh
-            bash install.sh --disable-prompts
-        """))
+        def is_dir_exists(path):
+            shell = dedent(f"""
+            if [ -d {path} ]
+            then
+                exit 0
+            else
+                exit 1
+            fi
+            """)
+            result = node.remoter.sudo(shell, ignore_status=True)
+            return result.exited == 0
+
+        sdk_directory_path = '$HOME/google-cloud-sdk'
+        if not is_dir_exists(path=sdk_directory_path):
+            self._run_cmd_with_retry(executor=node.remoter.run, cmd=shell_script_cmd("""\
+                        curl https://sdk.cloud.google.com > install.sh
+                        bash install.sh --disable-prompts
+                    """))
+        else:
+            self.log.info("gsutil dependencies are now pre-installed, no need to install them on {}".format(node))
 
     def install_azcopy_dependencies(self, node):
         self._run_cmd_with_retry(executor=node.remoter.sudo, cmd=shell_script_cmd("""\
