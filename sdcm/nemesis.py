@@ -17,27 +17,27 @@
 Classes that introduce disruption in clusters.
 """
 import copy
-import inspect
-import logging
-import random
-import time
 import datetime
-import threading
-import os
-import re
-import traceback
+import inspect
 import json
-from typing import List, Optional, Type, Callable, Tuple, Dict, Set, Union
-from functools import wraps, partial
+import logging
+import os
+import random
+import re
+import time
+import traceback
 from collections import defaultdict, Counter, namedtuple
 from concurrent.futures import ThreadPoolExecutor
+from functools import wraps, partial
+from typing import List, Optional, Type, Callable, Tuple, Dict, Set, Union
 
-from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
-from invoke import UnexpectedExit
 from cassandra import ConsistencyLevel
+from invoke import UnexpectedExit
+from elasticsearch.exceptions import ConnectionTimeout as ElasticSearchConnectionTimeout
 from argus.db.db_types import NemesisStatus, NemesisRunInfo, NodeDescription
 
-from sdcm.paths import SCYLLA_YAML_PATH
+from sdcm import wait
+from sdcm.argus_test_run import ArgusTestRun
 from sdcm.cluster import (
     BaseCluster,
     BaseNode,
@@ -49,17 +49,32 @@ from sdcm.cluster import (
     NodeSetupTimeout,
     NodeStayInClusterAfterDecommission,
 )
+from sdcm.cluster_k8s import PodCluster, ScyllaPodCluster
 from sdcm.cluster_k8s.mini_k8s import LocalKindCluster
+from sdcm.db_stats import PrometheusDBStats
+from sdcm.log import SDCMAdapter
 from sdcm.mgmt import TaskStatus
-from sdcm.utils.compaction_ops import CompactionOps
+from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
+from sdcm.paths import SCYLLA_YAML_PATH
+from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.provision.scylla_yaml import SeedProvider
 from sdcm.remote import shell_script_cmd
-from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR
+from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
+from sdcm.sct_events import Severity
+from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.decorators import raise_event_on_failure
+from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter
+from sdcm.sct_events.group_common_events import (ignore_alternator_client_errors, ignore_no_space_errors,
+                                                 ignore_scrub_invalid_errors)
+from sdcm.sct_events.loaders import CassandraStressLogEvent
+from sdcm.sct_events.nemesis import DisruptionEvent
+from sdcm.sct_events.system import InfoEvent
+from sdcm.utils import cdc
 from sdcm.utils.common import (get_db_tables, generate_random_string,
                                update_certificates, reach_enospc_on_node, clean_enospc_on_node,
                                parse_nodetool_listsnapshots,
                                update_authenticator, ParallelObject)
-from sdcm.utils import cdc
+from sdcm.utils.compaction_ops import CompactionOps
 from sdcm.utils.decorators import retrying, latency_calculator_decorator
 from sdcm.utils.decorators import timeout as timeout_decor
 from sdcm.utils.docker_utils import ContainerManager
@@ -67,28 +82,12 @@ from sdcm.utils.k8s import (
     convert_cpu_units_to_k8s_value,
     convert_cpu_value_from_k8s_to_units,
 )
-from sdcm.log import SDCMAdapter
-from sdcm.prometheus import nemesis_metrics_obj
-from sdcm import wait
-from sdcm.sct_events import Severity
-from sdcm.sct_events.system import InfoEvent
-from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter
-from sdcm.sct_events.loaders import CassandraStressLogEvent
-from sdcm.sct_events.nemesis import DisruptionEvent
-from sdcm.sct_events.database import DatabaseLogEvent
-from sdcm.sct_events.decorators import raise_event_on_failure
-from sdcm.sct_events.group_common_events import (ignore_alternator_client_errors, ignore_no_space_errors,
-                                                 ignore_scrub_invalid_errors)
-from sdcm.db_stats import PrometheusDBStats
+from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.utils.toppartition_util import NewApiTopPartitionCmd, OldApiTopPartitionCmd
 from sdcm.utils.version_utils import MethodVersionNotFound, scylla_versions
-from sdcm.remote.libssh2_client.exceptions import UnexpectedExit as Libssh2UnexpectedExit
-from sdcm.cluster_k8s import PodCluster, ScyllaPodCluster
-from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
-from sdcm.argus_test_run import ArgusTestRun
 from sdcm.wait import wait_for
 from test_lib.compaction import CompactionStrategy, get_compaction_strategy, get_compaction_random_additional_params
 from test_lib.cql_types import CQLTypeBuilder
@@ -2754,12 +2753,56 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.target_node.start_network_interface()
             self._wait_all_nodes_un()
 
-    def break_streaming_task_and_rebuild(self, task='decommission'):  # pylint: disable=too-many-statements
+    def _call_disrupt_func_after_expression_logged(self,
+                                                   expression: str,
+                                                   disrupt_func: Callable,
+                                                   disrupt_func_kwargs: dict = None,
+                                                   sleep: int = 1,
+                                                   delay: int = 10,
+                                                   timeout: int = 600):
         """
-        Stop streaming task in middle and rebuild the data on the node.
+        This method watches the target node logs for an expression
+        with a <sleep> time step. Once the expression is found it
+        will call the callable <disrupt_func> with <disrupt_func_kwargs> keyword
+        arguments after a <delay>.
         """
+        start_time = time.time()
+        target_node_logs = self.target_node.follow_system_log(patterns=[expression])
 
+        with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                            line="This node was decommissioned and will not rejoin",
+                            node=self.target_node), \
+            DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                           line="Fail to send STREAM_MUTATION_DONE",
+                           node=self.target_node), \
+            DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,
+                           line="streaming::stream_exception",
+                           node=self.target_node), \
+            DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
+                           line="got error in row level repair",
+                           node=self.target_node):
+            while time.time() - start_time < timeout:
+                if list(target_node_logs):
+                    time.sleep(delay)
+                    disrupt_func(**disrupt_func_kwargs)
+                    break
+                time.sleep(sleep)
+
+    def start_and_interrupt_decommission_streaming(self):
+        """
+        1. Start to decommission the target node using <nodetool decommission>.
+        2. Stop the decommission with a hard reboot once unbootstrapping starts.
+        3. Verify that the node was not decommissioned completely or add
+        a new node in its place in case it was.
+        4. Trigger a rebuild on the decommissioned node.
+        """
         def decommission_post_action():
+            """
+            Verify that the decommission ocurred, was interrupted and
+            is still in the cluster ip list. If that is not the case,
+            add a new node to the cluster (to keep the desired number
+            of nodes) and raise a DecommissionNotStopped exception.
+            """
             target_is_seed = self.target_node.is_seed
             try:
                 self.cluster.verify_decommission(self.target_node)
@@ -2777,88 +2820,67 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.unset_current_running_nemesis(new_node)
             return new_node
 
-        def streaming_task_thread(nodetool_task='rebuild'):
-            """
-            Execute some nodetool command to start persistent streaming
-            task: decommission | rebuild | repair
-            """
-            if nodetool_task in ['repair', 'rebuild']:
-                self._destroy_data_and_restart_scylla()
+        trigger = partial(
+            self.target_node.run_nodetool, sub_cmd="decommission", warning_event_on_exception=(Exception,)
+        )
 
-            try:
-                self.target_node.run_nodetool(nodetool_task, warning_event_on_exception=(Exception,))
-            except Exception:  # pylint: disable=broad-except
-                self.log.debug('%s is stopped' % nodetool_task)
+        watcher = partial(
+            self._call_disrupt_func_after_expression_logged,
+            expression="DECOMMISSIONING: unbootstrap starts",
+            disrupt_func=self.target_node.reboot,
+            disrupt_func_kwargs={"hard": True, "verify_ssh": True},
+            delay=0
+        )
+        ParallelObject(objects=[trigger, watcher], timeout=600).call_objects()
+        decommission_post_action()
+        self.target_node.run_nodetool("rebuild")
 
-        self.task_used_streaming = None
-        streaming_logs_stream = self.target_node.follow_system_log(
-            patterns=["range_streamer - Unbootstrap starts|range_streamer - Rebuild starts"])
-        repair_logs_stream = self.target_node.follow_system_log(patterns=['repair - Repair 1 out of'])
-        streaming_error_logs_stream = self.target_node.follow_system_log(patterns=['streaming.*err'])
+    def start_and_interrupt_repair_streaming(self):
+        """
+        1. Destroy some data on the target node and restart it.
+        2. Start a repair on the target node using <nodetool repair>.
+        3. Stop it with a hard reboot once the repair starts.
+        4. Trigger a rebuild on the target node after the reboot.
+        """
+        self._destroy_data_and_restart_scylla()
+        trigger = partial(
+            self.target_node.run_nodetool, sub_cmd="repair", warning_event_on_exception=(Exception,)
+        )
 
-        streaming_thread = threading.Thread(target=streaming_task_thread, kwargs={'nodetool_task': task},
-                                            name='StreamingThread', daemon=True)
-        streaming_thread.start()
+        watcher = partial(
+            self._call_disrupt_func_after_expression_logged,
+            expression="Repair 1 out of",
+            disrupt_func=self.target_node.reboot,
+            disrupt_func_kwargs={"hard": True, "verify_ssh": True},
+            delay=1
+        )
+        ParallelObject(objects=[trigger, watcher], timeout=600).call_objects()
+        self.target_node.run_nodetool("rebuild")
 
-        def is_streaming_started():
-            streaming_logs = list(streaming_logs_stream)
-            self.log.debug(streaming_logs)
-            if streaming_logs:
-                self.task_used_streaming = True
+    def start_and_interrupt_rebuild_streaming(self):
+        """
+        1. Destroy some data on the target node and restart it.
+        2. Start a rebuild on the target node using <nodetool rebuild>.
+        3. Stop it with a hard reboot once the rebuild starts.
+        4. Trigger another rebuild after the hard reboot on the target node.
+        """
+        self._destroy_data_and_restart_scylla()
 
-            # In latest master, repair always won't use streaming
-            repair_logs = list(repair_logs_stream)
-            self.log.debug(repair_logs)
-            return len(streaming_logs) > 0 or len(repair_logs) > 0
+        trigger = partial(
+            self.target_node.run_nodetool, sub_cmd="rebuild", warning_event_on_exception=(Exception,)
+        )
+        timeout = 1800 if self._is_it_on_kubernetes() else 300
 
-        wait.wait_for(func=is_streaming_started, timeout=600, step=1,
-                      text='Wait for streaming starts', throw_exc=True)
-        sleep_time = random.randint(10, 600)
-        self.log.debug('wait for random between 10s to 10m --> %s seconds', sleep_time)
-        time.sleep(sleep_time)
-
-        self.log.debug('Interrupt the task by hard reboot')
-
-        new_node = None
-        with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                            line="This node was decommissioned and will not rejoin",
-                            node=self.target_node), \
-            DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                           line="Fail to send STREAM_MUTATION_DONE",
-                           node=self.target_node), \
-            DbEventsFilter(db_event=DatabaseLogEvent.DATABASE_ERROR,
-                           line="streaming::stream_exception",
-                           node=self.target_node), \
-            DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
-                           line="got error in row level repair",
-                           node=self.target_node):
-            self.target_node.reboot(hard=True, verify_ssh=True)
-            streaming_thread.join(60)
-
-            if task == 'decommission':
-                new_node = decommission_post_action()
-
-        if self.task_used_streaming:
-            err = list(streaming_error_logs_stream)
-            self.log.debug(err)
-        else:
-            self.log.debug('Streaming is not used. In latest Scylla, it is optional to use streaming for rebuild and '
-                           'decommission, and repair will not use streaming.')
-        self.log.info('Recover the target node by a final rebuild')
-        wait_db_up_timeout = 300
-        if self._is_it_on_kubernetes():
-            # NOTE: on K8S nodes come up longer.
-            wait_db_up_timeout = 1800
-        node_to_rebuild = new_node if new_node else self.target_node
-        node_to_rebuild.wait_db_up(verbose=True, timeout=wait_db_up_timeout)
-        rebuild_in_log = node_to_rebuild.follow_system_log(patterns=["range_streamer - Rebuild.*"],
-                                                           start_from_beginning=False)
-        node_to_rebuild.wait_jmx_up(timeout=wait_db_up_timeout)
-        rebuild_found = list(rebuild_in_log)
-        if not rebuild_found:
-            node_to_rebuild.run_nodetool('rebuild')
-        else:
-            self.log.debug("Another operation rebuild is in progress. Rebuild process will not start")
+        watcher = partial(
+            self._call_disrupt_func_after_expression_logged,
+            expression="Rebuild starts",
+            disrupt_func=self.target_node.reboot,
+            disrupt_func_kwargs={"hard": True, "verify_ssh": True},
+            timeout=timeout,
+            delay=1
+        )
+        ParallelObject(objects=[trigger, watcher], timeout=timeout + 60).call_objects()
+        self.target_node.run_nodetool("rebuild")
 
     def disrupt_decommission_streaming_err(self):
         """
@@ -2869,19 +2891,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise UnsupportedNemesis(
                 "This nemesis logic is not compatible with K8S approach "
                 "for handling Scylla member's decommissioning.")
-        self.break_streaming_task_and_rebuild(task='decommission')
+        self.start_and_interrupt_decommission_streaming()
 
     def disrupt_rebuild_streaming_err(self):
         """
         Stop rebuild in middle to trigger some streaming fails, then rebuild the data on the node.
         """
-        self.break_streaming_task_and_rebuild(task='rebuild')
+        self.start_and_interrupt_rebuild_streaming()
 
     def disrupt_repair_streaming_err(self):
         """
         Stop repair in middle to trigger some streaming fails, then rebuild the data on the node.
         """
-        self.break_streaming_task_and_rebuild(task='repair')
+        self.start_and_interrupt_repair_streaming()
 
     def _corrupt_data_file(self):
         """Randomly corrupt data file by dd"""

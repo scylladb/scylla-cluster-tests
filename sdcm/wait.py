@@ -32,9 +32,9 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, **kwargs):
     :param step: Time to sleep between attempts in seconds
     :param text: Text to print while waiting, for debug purposes
     :param timeout: Timeout in seconds
-    :param throw_exc: Raise exception if timeout expired, but func result is not True
-    :param kwargs: Keyword arguments to func
-    :return: Return value of func.
+    :param throw_exc: Raise exception if timeout expired, but disrupt_func result is not True
+    :param kwargs: Keyword arguments to disrupt_func
+    :return: Return value of disrupt_func.
     """
     if not timeout:
         return forever_wait_for(func, step, text, **kwargs)
@@ -77,7 +77,7 @@ def wait_for(func, step=1, text=None, timeout=None, throw_exc=True, **kwargs):
 
 def forever_wait_for(func, step=1, text=None, **kwargs):
     """
-    Wait indefinitely until func evaluates to True.
+    Wait indefinitely until disrupt_func evaluates to True.
 
     This is similar to avocado.utils.wait.wait(), but there's no
     timeout, we'll just keep waiting for it.
@@ -85,8 +85,8 @@ def forever_wait_for(func, step=1, text=None, **kwargs):
     :param func: Function to evaluate.
     :param step: Amount of time to sleep before another try.
     :param text: Text to log, for debugging purposes.
-    :param kwargs: Keyword arguments to func
-    :return: Return value of func.
+    :param kwargs: Keyword arguments to disrupt_func
+    :return: Return value of disrupt_func.
     """
     ok = False
     start_time = time.time()
