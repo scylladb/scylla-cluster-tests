@@ -345,16 +345,16 @@ class ParallelObject:
         """Constructor for ParallelObject
 
         Build instances of Parallel object. Item of objects is used as parameter for
-        func which will be run in parallel.
+        disrupt_func which will be run in parallel.
 
-        :param objects: if item in object is list, it will be upacked to func argument, ex *arg
-                if item in object is dict, it will be upacked to func keyword argument, ex **kwarg
-                if item in object is any other type, will be passed to func as is.
+        :param objects: if item in object is list, it will be upacked to disrupt_func argument, ex *arg
+                if item in object is dict, it will be upacked to disrupt_func keyword argument, ex **kwarg
+                if item in object is any other type, will be passed to disrupt_func as is.
                 if function accept list as parameter, the item shuld be list of list item = [[]]
 
         :param timeout: global timeout for running all
         :param num_workers: num of parallel threads, defaults to None
-        :param disable_logging: disable logging for running func, defaults to False
+        :param disable_logging: disable logging for running disrupt_func, defaults to False
         """
         self.objects = objects
         self.timeout = timeout
@@ -363,7 +363,7 @@ class ParallelObject:
         self._thread_pool = ThreadPoolExecutor(max_workers=self.num_workers)  # pylint: disable=consider-using-with
 
     def run(self, func: Callable, ignore_exceptions=False, unpack_objects: bool = False):
-        """Run callable object "func" in parallel
+        """Run callable object "disrupt_func" in parallel
 
         Allow to run callable object in parallel.
         if ignore_exceptions is true,  return
@@ -377,7 +377,7 @@ class ParallelObject:
 
         :param func: Callable object to run in parallel
         :param ignore_exceptions: ignore exception and return result, defaults to False
-        :param unpack_objects: set to True when unpacking of objects to the func as args or kwargs needed
+        :param unpack_objects: set to True when unpacking of objects to the disrupt_func as args or kwargs needed
         :returns: list of FutureResult object
         :rtype: {List[FutureResult]}
         """
@@ -472,7 +472,7 @@ class ParallelObjectResult:  # pylint: disable=too-few-public-methods
     """Object for result of future in ParallelObject
 
     Return as a result of ParallelObject.run method
-    and contain result of func was run in parallel
+    and contain result of disrupt_func was run in parallel
     and exception if it happened during run.
     """
 
