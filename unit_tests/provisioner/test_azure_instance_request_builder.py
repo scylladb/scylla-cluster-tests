@@ -43,18 +43,19 @@ def test_can_create_basic_scylla_instance_definition_from_sct_config():
     os.environ.update(env_config._asdict())
     config = SCTConfiguration()
     tags = TestConfig.common_tags()
-    ssh_public_key = KeyStore().get_gce_ssh_key_pair().public_key.decode()
+    ssh_key = KeyStore().get_gce_ssh_key_pair()
     prefix = config.get('user_prefix')
     instance_requests = instances_request_builder.build(sct_config=config)
 
     definition = InstanceDefinition(name=f"{prefix}-db-node-eastus-1", image_id=env_config.SCT_AZURE_IMAGE_DB,
                                     type="Standard_L8s_v2", user_name="scyllaadm", root_disk_size=30,
-                                    tags=tags | {"NodeType": "db", "keep_action": ""},
-                                    ssh_public_key=ssh_public_key)
+                                    tags=tags | {"NodeType": "scylla-db", "keep_action": "", 'NodeIndex': '1'},
+                                    ssh_key=ssh_key)
     assert len(instance_requests) == 2
     actual_request = instance_requests[0]
+
     assert actual_request.test_id == env_config.SCT_TEST_ID
     assert actual_request.backend == "azure"
     assert actual_request.region == "eastus"
-    assert actual_request.definitions[0] == definition  # remember ssh_public_key is not shown
-    # - if actual looks the same as expected possibly ssh_public_key differ
+    # ssh_key is not shown, if actual looks the same as expected possibly ssh_key differ
+    assert definition == actual_request.definitions[0]

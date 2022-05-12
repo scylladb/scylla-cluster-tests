@@ -819,8 +819,8 @@ class AzureSctRunner(SctRunner):
             vm_params = InstanceDefinition(name=instance_name,
                                            image_id=base_image["id"],
                                            type=instance_type,
-                                           user_name=None,
-                                           ssh_public_key=None,
+                                           user_name="specialized",
+                                           ssh_key=self.key_pair,
                                            tags=tags | {"launch_time": get_current_datetime_formatted()},
                                            root_disk_size=self.instance_root_disk_size(test_duration=test_duration))
             return provisioner.get_or_create_instance(definition=vm_params,

@@ -201,7 +201,7 @@ def provision_resources(backend, test_name: str, config: str):
     params = create_sct_configuration(test_name=test_name)
     test_config = get_test_config()
     test_id = test_config.test_id()
-    if test_id is None or test_id == "None":
+    if not test_id or test_id == "None":
         raise ValueError("No test_id was provided. Aborting provisioning.")
     localhost = LocalHost(user_prefix=params.get("user_prefix"), test_id=test_config.test_id())
 

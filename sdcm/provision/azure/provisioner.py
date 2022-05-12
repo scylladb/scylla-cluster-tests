@@ -151,13 +151,17 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         nic = self._nic_provider.get(v_m.name)
         priv_address = nic.ip_configurations[0].private_ip_address
         tags = v_m.tags.copy()
-        try:
-            admin = v_m.os_profile.admin_username
-        except AttributeError:
-            # specialized machines don't provide usernames
-            # todo lukasz: find a way to get admin name from image (is it possible??)
-            admin = ""
+        ssh_user = tags.pop("ssh_user")
+        ssh_key = tags.pop("ssh_key")
         image = str(v_m.storage_profile.image_reference)
+        pricing_model = self._get_pricing_model(v_m)
+
+        return VmInstance(name=v_m.name, region=v_m.location, user_name=ssh_user, ssh_key_name=ssh_key, public_ip_address=pub_address,
+                          private_ip_address=priv_address, tags=tags, pricing_model=pricing_model,
+                          image=image, _provisioner=self)
+
+    @staticmethod
+    def _get_pricing_model(v_m: VirtualMachine) -> PricingModel:
         try:
             priority = VirtualMachinePriorityTypes(v_m.priority)
         except ValueError:
@@ -166,7 +170,4 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
             pricing_model = PricingModel.ON_DEMAND
         else:
             pricing_model = PricingModel.SPOT
-
-        return VmInstance(name=v_m.name, region=v_m.location, user_name=admin, public_ip_address=pub_address,
-                          private_ip_address=priv_address, tags=tags, pricing_model=pricing_model,
-                          image=image, _provisioner=self)
+        return pricing_model

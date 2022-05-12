@@ -23,6 +23,7 @@ from sdcm.cluster import BaseNode
 from sdcm.prometheus import start_metrics_server
 from sdcm.utils.docker_remote import RemoteDocker
 
+
 from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
 
 from unit_tests.lib.events_utils import EventsUtilsMixin
