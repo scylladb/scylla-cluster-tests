@@ -10,16 +10,19 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
+from invoke import Result
 
 from sdcm.provision.provisioner import PricingModel, provisioner_factory
 from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.test_config import TestConfig
 
 
-def test_can_provision_instances_according_to_sct_configuration(sct_config, azure_service):
+def test_can_provision_instances_according_to_sct_configuration(sct_config, test_config, azure_service, fake_remoter):
     """Integration test for provisioning sct resources according to SCT configuration."""
+    fake_remoter.result_map = {r"sudo cloud-init status --wait": Result(stdout="..... \n status: done", stderr="nic", exited=0),
+                               r"ls /tmp/cloud-init": Result(stdout="done", exited=0)}
     tags = TestConfig.common_tags()
-    provision_sct_resources(sct_config=sct_config, azure_service=azure_service)
+    provision_sct_resources(sct_config=sct_config, test_config=test_config, azure_service=azure_service)
     provisioner_eastus = provisioner_factory.create_provisioner(
         backend="azure", test_id=sct_config.get("test_id"), region="eastus", azure_service=azure_service)
     eastus_instances = provisioner_eastus.list_instances()
@@ -51,9 +54,11 @@ def test_can_provision_instances_according_to_sct_configuration(sct_config, azur
     assert db_node.pricing_model == PricingModel.SPOT
 
 
-def test_fallback_on_demand_when_spot_fails(fallback_on_demand, sct_config, azure_service):
+def test_fallback_on_demand_when_spot_fails(fallback_on_demand, sct_config, test_config, azure_service, fake_remoter):
     # pylint: disable=unused-argument
-    provision_sct_resources(sct_config=sct_config, azure_service=azure_service)
+    fake_remoter.result_map = {r"sudo cloud-init status --wait": Result(stdout="..... \n status: done", stderr="nic", exited=0),
+                               r"ls /tmp/cloud-init": Result(stdout="done", exited=0)}
+    provision_sct_resources(sct_config=sct_config, test_config=test_config, azure_service=azure_service)
     provisioner_eastus = provisioner_factory.create_provisioner(
         backend="azure", test_id=sct_config.get("test_id"), region="eastus", azure_service=azure_service)
     eastus_instances = provisioner_eastus.list_instances()

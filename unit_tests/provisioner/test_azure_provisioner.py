@@ -18,6 +18,32 @@ from azure.core.exceptions import ResourceNotFoundError
 from sdcm.keystore import KeyStore  # pylint: disable=import-error
 from sdcm.provision.azure.utils import get_scylla_images  # pylint: disable=import-error
 from sdcm.provision.provisioner import InstanceDefinition, provisioner_factory  # pylint: disable=import-error
+from sdcm.provision.user_data import UserDataObject
+
+
+class PrintingTestUserDataObject(UserDataObject):
+
+    @property
+    def script_to_run(self) -> str:
+        return """echo OK
+        echo another command"""
+
+
+class FailingTestUserDataObject(UserDataObject):
+
+    @property
+    def script_to_run(self) -> str:
+        return """echo is ok
+        this_command_does_not_exist
+        echo this should not happen"""
+
+
+class PrintingTwoTestUserDataObject(UserDataObject):
+
+    @property
+    def script_to_run(self) -> str:
+        return """echo something
+        echo something again"""
 
 
 class TestProvisionScyllaInstanceAzureE2E:
@@ -42,7 +68,8 @@ class TestProvisionScyllaInstanceAzureE2E:
             type="Standard_D2s_v3",
             user_name="tester",
             ssh_key=KeyStore().get_ec2_ssh_key_pair(),
-            tags={'test-tag': 'test_value'}
+            tags={'test-tag': 'test_value'},
+            user_data=[PrintingTestUserDataObject(), FailingTestUserDataObject(), PrintingTwoTestUserDataObject()]
         )
 
     @pytest.fixture(scope="session")

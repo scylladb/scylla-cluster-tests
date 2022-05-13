@@ -67,7 +67,9 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
 
     def get_or_create_instance(self, definition: InstanceDefinition,
                                pricing_model: PricingModel = PricingModel.SPOT) -> VmInstance:
-        """Create virtual machine in provided region, specified by InstanceDefinition"""
+        """Create virtual machine in provided region, specified by InstanceDefinition.
+
+        Set definition.user_data to empty string when using specialized image."""
         return self.get_or_create_instances(definitions=[definition], pricing_model=pricing_model)[0]
 
     def get_or_create_instances(self,

@@ -18,7 +18,9 @@ from pathlib import Path
 
 import pytest
 
+from sct import get_test_config
 from sdcm.sct_config import SCTConfiguration
+from sdcm.test_config import TestConfig
 from sdcm.utils.azure_utils import AzureService  # pylint: disable=import-error
 from unit_tests.provisioner.fake_azure_service import FakeAzureService  # pylint: disable=import-error
 
@@ -59,3 +61,10 @@ def sct_config():
     )
     os.environ.update(env_config._asdict())
     return SCTConfiguration()
+
+
+@pytest.fixture
+def test_config(sct_config):  # pylint: disable=unused-argument,redefined-outer-name
+    config = get_test_config()
+    TestConfig.RSYSLOG_ADDRESS = ("localhost", 12345)
+    return config

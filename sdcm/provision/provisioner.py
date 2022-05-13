@@ -17,6 +17,7 @@ from enum import Enum
 from typing import List, Dict
 
 from sdcm.keystore import SSHKey
+from sdcm.provision.user_data import UserDataObject
 
 
 class VmArch(Enum):
@@ -42,6 +43,8 @@ class InstanceDefinition:  # pylint: disable=too-many-instance-attributes
     arch: VmArch = VmArch.X86
     root_disk_size: int | None = None
     data_disks: List[DataDisk] | None = None
+    user_data: List[UserDataObject] | None = field(
+        default_factory=list, repr=False)  # None when no cloud-init use at all
 
 
 class ProvisionError(Exception):
