@@ -16,7 +16,7 @@ from typing import Callable, List, Literal
 
 from sdcm.provision.provisioner import InstanceDefinition
 from sdcm.sct_config import SCTConfiguration
-
+from sdcm.test_config import TestConfig
 
 NodeTypeType = Literal["scylla-db", "loader", "monitor"]
 
@@ -46,9 +46,9 @@ class InstancesRequestBuilder:
         Must be used before calling InstancesRequestBuilder for given backend."""
         self._functions[backend] = builder_function
 
-    def build(self, sct_config: SCTConfiguration) -> List[InstancesRequest]:
+    def build(self, sct_config: SCTConfiguration, test_config: TestConfig) -> List[InstancesRequest]:
         """Creates InstancesRequest for each region based on SCTConfiguration.
 
         Prior use, must register builder for given backend."""
         backend = sct_config.get("cluster_backend")
-        return self._functions[backend](sct_config)
+        return self._functions[backend](sct_config, test_config)

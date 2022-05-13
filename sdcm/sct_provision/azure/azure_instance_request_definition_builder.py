@@ -18,6 +18,7 @@ from sdcm.keystore import KeyStore
 from sdcm.provision.provisioner import InstanceDefinition
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.instances_request_definition_builder import InstancesRequest, NodeTypeType
+from sdcm.sct_provision.user_data import get_user_data_objects
 from sdcm.test_config import TestConfig
 
 
@@ -60,7 +61,7 @@ def get_node_count_for_each_region(sct_config: SCTConfiguration, n_str: str) -> 
     return ([int(v) for v in str(n_str).split()] + [0] * region_count)[:region_count]
 
 
-def generate_instance_definition(sct_config: SCTConfiguration,
+def generate_instance_definition(sct_config: SCTConfiguration, test_config: TestConfig,
                                  node_type: NodeTypeType, region: str,
                                  index: int) -> InstanceDefinition:
     """Generates parameters for InstanceDefinition based on node_type and SCT Configuration."""
@@ -74,16 +75,20 @@ def generate_instance_definition(sct_config: SCTConfiguration,
                           "NodeIndex": str(index)}
     ssh_key = KeyStore().get_gce_ssh_key_pair()
     mapper = mappers[node_type]
+    user_data = get_user_data_objects(sct_config=sct_config, test_config=test_config,
+                                      node_type=node_type, instance_name=name)
     return InstanceDefinition(name=name,
                               image_id=sct_config.get(mapper.image_id),
                               type=sct_config.get(mapper.type),
                               user_name=sct_config.get(mapper.user_name),
                               root_disk_size=sct_config.get(mapper.root_disk_size),
                               tags=tags,
-                              ssh_key=ssh_key)
+                              ssh_key=ssh_key,
+                              user_data=user_data
+                              )
 
 
-def azure_instance_request_builder(sct_config: SCTConfiguration) -> List[InstancesRequest]:
+def azure_instance_request_builder(sct_config: SCTConfiguration, test_config: TestConfig) -> List[InstancesRequest]:
     """Generates all information needed to create instances for given test based on SCT configuration."""
     requests = []
     n_db_nodes = get_node_count_for_each_region(sct_config, str(sct_config.get("n_db_nodes")))
@@ -95,17 +100,23 @@ def azure_instance_request_builder(sct_config: SCTConfiguration) -> List[Instanc
         definitions = []
         for idx in range(db_nodes):
             definitions.append(
-                generate_instance_definition(sct_config=sct_config, node_type="scylla-db", region=region, index=idx+1)
+                generate_instance_definition(
+                    sct_config=sct_config, test_config=test_config, node_type="scylla-db", region=region, index=idx+1
+                )
             )
 
         for idx in range(loader_nodes):
             definitions.append(
-                generate_instance_definition(sct_config=sct_config, node_type="loader", region=region, index=idx+1)
+                generate_instance_definition(
+                    sct_config=sct_config, test_config=test_config, node_type="loader", region=region, index=idx+1
+                )
             )
 
         for idx in range(monitor_nodes):
             definitions.append(
-                generate_instance_definition(sct_config=sct_config, node_type="monitor", region=region, index=idx+1)
+                generate_instance_definition(
+                    sct_config=sct_config, test_config=test_config, node_type="monitor", region=region, index=idx+1
+                )
             )
 
         requests.append(

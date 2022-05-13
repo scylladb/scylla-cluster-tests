@@ -125,6 +125,10 @@ class AzureNode(cluster.BaseNode):
     def _get_private_ip_address(self) -> str | None:
         return self._instance.private_ip_address
 
+    def configure_remote_logging(self) -> None:
+        """Remote logging configured upon vm provisioning using UserDataObject"""
+        return
+
 
 class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-attributes
     def __init__(self, image_id, root_disk_size,  # pylint: disable=too-many-arguments, too-many-locals
@@ -188,7 +192,8 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
         definitions = []
         for node_index in range(self._node_index + 1, self._node_index + count + 1):
             definitions.append(
-                generate_instance_definition(self.params, node_type=self.node_type, region=region, index=node_index)
+                generate_instance_definition(self.params, test_config=self.test_config, node_type=self.node_type, region=region,
+                                             index=node_index)
             )
         return provision_instances_with_fallback(self.provisioners[dc_idx], definitions=definitions, pricing_model=pricing_model,
                                                  fallback_on_demand=self.params.get("instance_provision_fallback_on_demand"))

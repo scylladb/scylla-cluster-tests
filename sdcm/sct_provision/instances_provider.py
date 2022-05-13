@@ -17,9 +17,12 @@ from typing import List, Any
 from tenacity import retry, stop_after_attempt
 
 from sdcm.provision import provisioner_factory
+from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.provision.provisioner import PricingModel, VmInstance, ProvisionError, Provisioner, InstanceDefinition
+from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision import instances_request_builder
+from sdcm.test_config import TestConfig
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,12 +45,20 @@ def provision_instances_with_fallback(provisioner: Provisioner, definitions: Lis
             raise
 
     provisioned_instances = provisioner.get_or_create_instances(definitions=definitions)
+    for v_m in provisioned_instances:
+        ssh_login_info = {'hostname': v_m.public_ip_address,
+                          'user': v_m.user_name,
+                          'key_file': f"~/.ssh/{v_m.ssh_key_name}"}
+        remoter = RemoteCmdRunnerBase.create_remoter(**ssh_login_info)
+        wait_cloud_init_completes(remoter=remoter, instance=v_m)
+        # todo: wait for scylla-machine-image service to complete if instance is scylla-db?
+        # todo: download cloud-init logs
     return provisioned_instances
 
 
-def provision_sct_resources(sct_config: SCTConfiguration, **provisioner_config: Any):
+def provision_sct_resources(sct_config: SCTConfiguration, test_config: TestConfig, **provisioner_config: Any):
     """Provisions instances according to SCT Configuration."""
-    definitions_per_region = instances_request_builder.build(sct_config=sct_config)
+    definitions_per_region = instances_request_builder.build(sct_config=sct_config, test_config=test_config)
     pricing_model = PricingModel(sct_config.get("instance_provision"))
     provision_fallback_on_demand = sct_config.get("instance_provision_fallback_on_demand")
     for request in definitions_per_region:
