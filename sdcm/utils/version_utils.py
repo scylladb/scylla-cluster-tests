@@ -43,6 +43,29 @@ from sdcm.utils.decorators import retrying
 GEMINI_VERSION_RE = re.compile(r'\s(?P<gemini_version>([\d]+\.[\d]+\.[\d]+)?),')
 REPO_VERSIONS_REGEX = re.compile(r'Version: (.*?)\n', re.DOTALL)
 
+# NOTE: following regex is taken from the 'semver' package as is:
+#       https://python-semver.readthedocs.io/en/2.10.0/readme.html
+SEMVER_REGEX = re.compile(
+    r"""
+        ^
+        (?P<major>0|[1-9]\d*)
+        \.
+        (?P<minor>0|[1-9]\d*)
+        \.
+        (?P<patch>0|[1-9]\d*)
+        (?:-(?P<prerelease>
+            (?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)
+            (?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*
+        ))?
+        (?:\+(?P<build>
+            [0-9a-zA-Z-]+
+            (?:\.[0-9a-zA-Z-]+)*
+        ))?
+        $
+    """,
+    re.VERBOSE,
+)
+
 SCYLLA_VERSION_RE = re.compile(r"\d+(\.\d+)?\.[\d\w]+([.~][\d\w]+)?")
 SSTABLE_FORMAT_VERSION_REGEX = re.compile(r'Feature (.*)_SSTABLE_FORMAT is enabled')
 PRIMARY_XML_GZ_REGEX = re.compile(r'="(.*?primary.xml.gz)"')
