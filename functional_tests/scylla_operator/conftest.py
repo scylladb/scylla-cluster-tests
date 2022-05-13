@@ -24,6 +24,7 @@ import pytest
 
 from functional_tests.scylla_operator.libs.auxiliary import ScyllaOperatorFunctionalClusterTester, sct_abs_path
 from sdcm.cluster_k8s import ScyllaPodCluster
+from sdcm.utils import version_utils
 
 
 TESTER: Optional[ScyllaOperatorFunctionalClusterTester] = None
@@ -179,3 +180,12 @@ def fixture_cassandra_rackdc_properties(db_cluster: ScyllaPodCluster):
 @pytest.fixture(name="scylla_yaml")
 def fixture_scylla_yaml(db_cluster: ScyllaPodCluster):
     return db_cluster.remote_scylla_yaml
+
+
+# NOTE: Reason: https://github.com/scylladb/scylla/issues/9543
+@pytest.fixture(autouse=True)
+def skip_if_scylla_not_semver(request, tester: ScyllaOperatorFunctionalClusterTester) -> None:
+    if request.node.get_closest_marker("restart_is_used") and not version_utils.SEMVER_REGEX.match(
+            tester.db_cluster.params.get("scylla_version")):
+        pytest.skip(
+            "test calls 'restart_scylla()' DB method that won't have any effect using non-semver Scylla")
