@@ -172,6 +172,7 @@ def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
 
 
 # NOTE: Scylla manager versions notes:
+#       - '2.6.3' is broken: https://github.com/scylladb/scylla-manager/issues/3156
 #       - '2.5.4' is broken: https://github.com/scylladb/scylla-manager/issues/3147
 #       - '2.5.3' is broken: https://github.com/scylladb/scylla-manager/issues/3150
 #       - '2.5.2' is broken: https://github.com/scylladb/scylla-manager/issues/3150
@@ -184,6 +185,8 @@ def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
     "3.0-dev-0.20220508.3847b8ff7f0",
 ))
 def test_mgmt_repair(db_cluster, manager_version):
+    if manager_version == "2.6.3":
+        raise pytest.skip("Disabled due to the https://github.com/scylladb/scylla-manager/issues/3156")
     reinstall_scylla_manager(db_cluster, manager_version)
 
     # Run manager repair operation
@@ -196,6 +199,7 @@ def test_mgmt_repair(db_cluster, manager_version):
 
 
 # NOTE: Scylla manager versions notes:
+#       - '2.6.3' is broken: https://github.com/scylladb/scylla-manager/issues/3156
 #       - '2.5.4' is broken: https://github.com/scylladb/scylla-manager/issues/3147
 #       - '2.5.3' is broken: https://github.com/scylladb/scylla-manager/issues/3150
 #       - '2.5.2' is broken: https://github.com/scylladb/scylla-manager/issues/3150
@@ -208,6 +212,8 @@ def test_mgmt_repair(db_cluster, manager_version):
     "2.6.3",
 ))
 def test_mgmt_backup(db_cluster, manager_version):
+    if manager_version == "2.6.3":
+        raise pytest.skip("Disabled due to the https://github.com/scylladb/scylla-manager/issues/3156")
     reinstall_scylla_manager(db_cluster, manager_version)
 
     # Run manager backup operation
