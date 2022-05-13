@@ -229,7 +229,7 @@ class OperatorManagerCluster(ManagerCluster):
 
         if name is None:
             name = self._pick_original_name(
-                'Default backup task name', [so_task.name for so_task in self.operator_backup_tasks])
+                'default-backup-task-name', [so_task.name for so_task in self.operator_backup_tasks])
 
         so_backup_task = ScyllaOperatorBackupTask(
             name=name,
