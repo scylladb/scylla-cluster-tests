@@ -72,6 +72,7 @@ def test_single_operator_image_tag_is_everywhere(db_cluster):
         f"Pods: {yaml.safe_dump(pods_with_wrong_image_tags, indent=2)}")
 
 
+@pytest.mark.restart_is_used
 @pytest.mark.skip("Disabled due to the https://github.com/scylladb/scylla-operator/issues/797")
 def test_cassandra_rackdc(db_cluster, cassandra_rackdc_properties):
     """
@@ -120,6 +121,7 @@ def test_cassandra_rackdc(db_cluster, cassandra_rackdc_properties):
         assert config_map_props == props
 
 
+@pytest.mark.restart_is_used
 def test_rolling_restart_cluster(db_cluster):
     old_force_redeployment_reason = db_cluster.get_scylla_cluster_value("/spec/forceRedeploymentReason")
     db_cluster.restart_scylla()
@@ -245,6 +247,7 @@ def test_listen_address(db_cluster):
     assert not all_errors, "Following errors found:\n{'\n'.join(errors)}"
 
 
+@pytest.mark.restart_is_used
 def test_check_operator_operability_when_scylla_crd_is_incorrect(db_cluster):
     """Covers https://github.com/scylladb/scylla-operator/issues/447"""
 
@@ -537,6 +540,7 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
         db_cluster.k8s_cluster.kubectl(f"delete namespace {namespace}")
 
 
+@pytest.mark.restart_is_used
 def test_scylla_yaml_override(db_cluster, scylla_yaml):  # pylint: disable=too-many-branches
     """
     Test of applying scylla.yaml via configmap
