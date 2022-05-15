@@ -26,18 +26,25 @@ LOGGER = logging.getLogger(__name__)
 
 
 class AwsRegion:
-    SCT_VPC_NAME = "SCT-vpc"
-    SCT_VPC_CIDR = ip_network("10.0.0.0/16")
-    SCT_SECURITY_GROUP_NAME = "SCT-sg"
-    SCT_SUBNET_NAME = "SCT-subnet-{availability_zone}"
-    SCT_INTERNET_GATEWAY_NAME = "SCT-igw"
-    SCT_ROUTE_TABLE_NAME = "SCT-rt"
+    SCT_VPC_NAME = "SCT-2-vpc"
+    SCT_VPC_CIDR_TMPL = "10.{}.0.0/16"
+    SCT_SECURITY_GROUP_NAME = "SCT-2-sg"
+    SCT_SUBNET_NAME = "SCT-2-subnet-{availability_zone}"
+    SCT_INTERNET_GATEWAY_NAME = "SCT-2-igw"
+    SCT_ROUTE_TABLE_NAME = "SCT-2-rt"
     SCT_KEY_PAIR_NAME = "scylla-qa-ec2"  # TODO: change legacy name to sct-keypair-aws
 
     def __init__(self, region_name):
         self.region_name = region_name
         self.client: EC2Client = boto3.client("ec2", region_name=region_name)
         self.resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
+
+        # cause import straight from common create cyclic dependency
+        from sdcm.utils.common import all_aws_regions  # pylint: disable=import-outside-toplevel
+
+        region_index = all_aws_regions(cached=True).index(self.region_name)
+        cidr = ip_network(self.SCT_VPC_CIDR_TMPL.format(region_index))
+        self.vpc_ipv4_cidr = cidr
 
     @property
     def sct_vpc(self) -> EC2ServiceResource.Vpc:
@@ -56,7 +63,7 @@ class AwsRegion:
             LOGGER.warning("VPC '%s' already exists!  Id: '%s'.", self.SCT_VPC_NAME, self.sct_vpc.vpc_id)
             return self.sct_vpc.vpc_id
         else:
-            result = self.client.create_vpc(CidrBlock=str(self.SCT_VPC_CIDR), AmazonProvidedIpv6CidrBlock=True)
+            result = self.client.create_vpc(CidrBlock=str(self.vpc_ipv4_cidr), AmazonProvidedIpv6CidrBlock=True)
             vpc_id = result["Vpc"]["VpcId"]
             vpc = self.resource.Vpc(vpc_id)  # pylint: disable=no-member
             vpc.modify_attribute(EnableDnsHostnames={"Value": True})
@@ -115,7 +122,7 @@ class AwsRegion:
 
     def create_sct_subnets(self):
         num_subnets = len(self.availability_zones)
-        ipv4_cidrs = list(self.SCT_VPC_CIDR.subnets(6))[:num_subnets]
+        ipv4_cidrs = list(self.vpc_ipv4_cidr.subnets(6))[:num_subnets]
         ipv6_cidrs = list(self.vpc_ipv6_cidr.subnets(8))[:num_subnets]
         for i, az_name in enumerate(self.availability_zones):
             self.create_sct_subnet(region_az=az_name, ipv4_cidr=ipv4_cidrs[i], ipv6_cidr=ipv6_cidrs[i])

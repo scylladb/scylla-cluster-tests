@@ -159,7 +159,7 @@ class CloudRegion(click.ParamType):
     def convert(self, value, param, ctx):
         cloud_provider = self.cloud_provider or ctx.params["cloud_provider"]
         if cloud_provider == "aws":
-            regions = all_aws_regions()
+            regions = all_aws_regions(cached=True)
         elif cloud_provider == "gce":
             regions = get_all_gce_regions()
         elif cloud_provider == "azure":
