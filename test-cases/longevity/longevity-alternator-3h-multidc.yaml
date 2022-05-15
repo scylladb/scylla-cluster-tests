@@ -46,6 +46,3 @@ space_node_threshold: 64424
 alternator_port: 8080
 dynamodb_primarykey_type: HASH_AND_RANGE
 alternator_use_dns_routing: true
-
-ip_ssh_connections: 'public'
-intra_node_comm_public: true

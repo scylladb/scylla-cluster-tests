@@ -6,7 +6,6 @@ n_monitor_nodes: 1
 monitor_branch: 'branch-2.1'
 user_prefix: manager-regression-DISTRO-VERSION
 space_node_threshold: 6442
-ip_ssh_connections: 'public'
 
 ami_id_db_scylla_desc: VERSION
 

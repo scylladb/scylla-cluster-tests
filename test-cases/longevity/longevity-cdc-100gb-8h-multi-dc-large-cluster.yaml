@@ -22,6 +22,3 @@ round_robin: true
 
 user_prefix: 'longevity-cdc-100gb-3h-multidc-large-cluster'
 space_node_threshold: 64424
-
-ip_ssh_connections: 'public'
-intra_node_comm_public: true

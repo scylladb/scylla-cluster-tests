@@ -21,8 +21,6 @@ nemesis_interval: 15
 server_encrypt: true
 internode_encryption: 'dc'
 
-ip_ssh_connections: 'public'
-
 use_legacy_cluster_init: false
 
 # Temporarily downgrade scylla_bench to a stable version
