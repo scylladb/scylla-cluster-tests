@@ -5,7 +5,6 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 managerPipeline(
     backend: 'aws',
-    ip_ssh_connections: 'public',
     region: '''["us-east-1", "us-west-2"]''',
     test_name: 'mgmt_cli_test.MgmtCliTest.test_manager_sanity',
     test_config: 'test-cases/manager/manager-regression-multiDC-set-distro.yaml',
