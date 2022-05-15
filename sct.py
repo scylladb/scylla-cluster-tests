@@ -482,7 +482,10 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
               type=CloudRegion(cloud_provider="aws"),
               default='eu-west-1',
               help="a region to look for AMIs (default: eu-west-1)")
-@click.option('-a', '--arch', type=click.Choice(['x86_64', 'arm64']))
+@click.option('-a', '--arch',
+              type=click.Choice(AwsArchType.__args__),
+              default='x86_64',
+              help="architecture of the AMI (default: x86_64)")
 def list_ami_versions(region: str, arch: AwsArchType):
     add_file_logger()
 
@@ -498,7 +501,10 @@ def list_ami_versions(region: str, arch: AwsArchType):
               type=CloudRegion(cloud_provider="aws"),
               default='eu-west-1',
               help="a region to look for AMIs (default: eu-west-1)")
-@click.option('-a', '--arch', type=click.Choice(['x86_64', 'arm64']))
+@click.option('-a', '--arch',
+              type=click.Choice(AwsArchType.__args__),
+              default='x86_64',
+              help="architecture of the AMI (default: x86_64)")
 @click.argument('version', type=str, default='branch-3.1:all')
 def list_ami_branch(region: str, arch: AwsArchType, version: str):
     add_file_logger()
