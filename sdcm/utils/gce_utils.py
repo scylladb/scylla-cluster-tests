@@ -34,7 +34,8 @@ def append_zone(region: str) -> str:
     assert region.startswith("us-east1"), "only `us-east1' region is supported"
     if region.count("-") == 1:
         # us-east1 zones: b, c, and d. Details: https://cloud.google.com/compute/docs/regions-zones#locations
-        return f"{region}-{random.choice('bccdd')}"  # choose zones c and d twice as often as zone b
+        # Currently choose only zones c and d as zone b frequently fails allocating resources.
+        return f"{region}-{random.choice('cd')}"
     return region
 
 
