@@ -567,7 +567,7 @@ class IntegrationTests(unittest.TestCase):
                     test_config.set_multi_region(len(conf.get('gce_datacenter').split()) > 1)
 
                 test_config.set_ip_ssh_connections(conf.get(key='ip_ssh_connections'))
-                test_config.set_intra_node_comm_public(conf.get('intra_node_comm_public') or test_config.MULTI_REGION)
+                test_config.set_intra_node_comm_public(conf.get('intra_node_comm_public'))
 
                 cluster = DummyCluster(params=conf)
                 for node_num in range(3):

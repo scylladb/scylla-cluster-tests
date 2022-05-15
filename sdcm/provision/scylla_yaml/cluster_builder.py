@@ -166,7 +166,7 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @property
     def _open_ldap_server_address_port(self) -> str:
-        if self.params.get('ip_ssh_connections') == 'public' or self._multi_region:
+        if self.params.get('ip_ssh_connections') == 'public':
             # When connection goes public we run ssh tunnel on db-nodes side to access openldap server
             # that is why we pass address it in scylla config as '127.0.0.1:{LDAP_SSH_TUNNEL_LOCAL_PORT}'
             return '127.0.0.1:' + str(LDAP_SSH_TUNNEL_LOCAL_PORT)
