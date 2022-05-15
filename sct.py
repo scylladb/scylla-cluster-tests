@@ -82,6 +82,7 @@ from sdcm.monitorstack import (restore_monitoring_stack, get_monitoring_stack_se
 from sdcm.utils.log import setup_stdout_logger
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.gce_region import GceRegion
+from sdcm.utils.aws_peering import AwsVpcPeering
 from sdcm.utils.get_username import get_username
 from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter, \
     send_perf_email
@@ -1344,6 +1345,15 @@ def prepare_region(cloud_provider, region):
     else:
         raise Exception(f'Unsupported Cloud provider: `{cloud_provider}')
     region.configure()
+
+
+@cli.command("configure-aws-peering", help="Configure all required resources for SCT to run in multi-dc")
+@click.option("-r", "--regions", type=CloudRegion(cloud_provider='aws'),
+              default=[], help="Cloud regions", multiple=True)
+def configure_aws_peering(regions):
+    add_file_logger()
+    peering = AwsVpcPeering(regions)
+    peering.configure()
 
 
 @cli.command("create-runner-image",
