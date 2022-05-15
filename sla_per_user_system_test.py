@@ -60,7 +60,7 @@ class SlaPerUserTest(LongevityTest):
         self._es = ES()
 
     def prepare_schema(self):
-        self.prometheus_stats = PrometheusDBStats(host=self.monitors.nodes[0].public_ip_address)
+        self.prometheus_stats = PrometheusDBStats(host=self.monitors.nodes[0].external_address)
         self.connection_cql = self.db_cluster.cql_connection_patient(
             node=self.db_cluster.nodes[0], user=self.DEFAULT_USER, password=self.DEFAULT_USER_PASSWORD)
         session = self.connection_cql.session

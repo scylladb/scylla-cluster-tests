@@ -11,7 +11,7 @@ class AdmissionControlOverloadTest(ClusterTester):
     max_transport_requests = 0
 
     def check_prometheus_metrics(self, start_time, now):
-        prometheus = PrometheusDBStats(self.monitors.nodes[0].public_ip_address)
+        prometheus = PrometheusDBStats(self.monitors.nodes[0].external_address)
         node_procs_blocked = 'scylla_transport_requests_blocked_memory'
         node_procs_res = prometheus.query(node_procs_blocked, start_time, now)
 

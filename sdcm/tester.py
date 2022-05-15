@@ -315,7 +315,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.test_config.BACKTRACE_DECODING:
             self.test_config.set_decoding_queue()
         self.test_config.set_intra_node_comm_public(self.params.get(
-            'intra_node_comm_public') or self.test_config.MULTI_REGION)
+            'intra_node_comm_public'))
 
         # for saving test details in DB
         self.create_stats = self.params.get(key='store_perf_results')
@@ -731,7 +731,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         for monitors in self.monitors_multitenant:
             if monitors and monitors.nodes:
                 self.prometheus_db_multitenant.append(
-                    PrometheusDBStats(host=monitors.nodes[0].public_ip_address))
+                    PrometheusDBStats(host=monitors.nodes[0].external_address))
         self.prometheus_db = (self.prometheus_db_multitenant or [None])[0]
 
         self.start_time = time.time()

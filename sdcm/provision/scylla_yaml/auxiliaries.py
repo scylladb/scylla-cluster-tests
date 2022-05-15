@@ -157,7 +157,7 @@ class ScyllaYamlAttrBuilderBase(AttrBuilder):
         """
         Analog of TestConfig.INTRA_NODE_COMM_PUBLIC
         """
-        return self.params.get('intra_node_comm_public') or self._multi_region
+        return self.params.get('intra_node_comm_public')
 
     @property
     def _authenticator(self) -> Optional[str]:

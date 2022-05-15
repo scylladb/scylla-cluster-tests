@@ -346,7 +346,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.log.debug(self.remoter.ssh_debug_cmd())
 
     def _init_port_mapping(self):
-        if self.test_config.IP_SSH_CONNECTIONS == 'public' or self.test_config.MULTI_REGION:
+        if self.test_config.IP_SSH_CONNECTIONS == 'public':
             if self.test_config.RSYSLOG_ADDRESS:
                 try:
                     ContainerManager.destroy_container(self, "auto_ssh:rsyslog", ignore_keepalive=True)
@@ -1615,9 +1615,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if self.test_config.LDAP_ADDRESS is None:
             return {}
         ldap_server_ip = '127.0.0.1' if self.test_config.IP_SSH_CONNECTIONS == 'public' \
-            or self.test_config.MULTI_REGION else self.test_config.LDAP_ADDRESS[0]
+            else self.test_config.LDAP_ADDRESS[0]
         ldap_port = LDAP_SSH_TUNNEL_LOCAL_PORT if self.test_config.IP_SSH_CONNECTIONS == 'public' \
-            or self.test_config.MULTI_REGION else self.test_config.LDAP_ADDRESS[1]
+            else self.test_config.LDAP_ADDRESS[1]
         return {'role_manager': 'com.scylladb.auth.LDAPRoleManager',
                 'ldap_url_template': f'ldap://{ldap_server_ip}:{ldap_port}/'
                                      f'{LDAP_BASE_OBJECT}?cn?sub?(uniqueMember='
@@ -1642,9 +1642,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         if self.test_config.LDAP_ADDRESS is None:
             return {}
         ldap_server_ip = '127.0.0.1' if self.test_config.IP_SSH_CONNECTIONS == 'public' \
-            or self.test_config.MULTI_REGION else self.test_config.LDAP_ADDRESS[0]
+            else self.test_config.LDAP_ADDRESS[0]
         ldap_port = LDAP_SSH_TUNNEL_LOCAL_PORT if self.test_config.IP_SSH_CONNECTIONS == 'public' \
-            or self.test_config.MULTI_REGION else self.test_config.LDAP_ADDRESS[1]
+            else self.test_config.LDAP_ADDRESS[1]
         return {'ldap_servers': f'ldap://{ldap_server_ip}:{ldap_port}/',
                 'ldap_search_base': f'ou=Person,{LDAP_BASE_OBJECT}',
                 'ldap_bind_dn': f'cn=admin,{LDAP_BASE_OBJECT}',

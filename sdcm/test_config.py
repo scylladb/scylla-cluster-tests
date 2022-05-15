@@ -259,7 +259,7 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
     def get_logging_service_host_port(cls) -> tuple[str, int] | None:
         if not cls.RSYSLOG_ADDRESS:
             return None
-        if cls.IP_SSH_CONNECTIONS == "public" or cls.MULTI_REGION:
+        if cls.IP_SSH_CONNECTIONS == "public":
             rsyslog_host = "127.0.0.1"
             rsyslog_port = cls.RSYSLOG_SSH_TUNNEL_LOCAL_PORT
         else:
