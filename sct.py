@@ -85,7 +85,7 @@ from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesRe
 from sdcm.utils.aws_utils import AwsArchType
 from utils.build_system.create_test_release_jobs import JenkinsPipelines  # pylint: disable=no-name-in-module,import-error
 from utils.get_supported_scylla_base_versions import UpgradeBaseVersion  # pylint: disable=no-name-in-module,import-error
-from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module
+from utils.mocks.aws_mock import AwsMock  # pylint: disable=no-name-in-module,import-error
 
 
 SUPPORTED_CLOUDS = ("aws", "gce", "azure",)
