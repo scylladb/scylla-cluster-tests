@@ -12,6 +12,7 @@
 # Copyright (c) 2020 ScyllaDB
 
 import re
+import os
 import logging
 from enum import Enum, auto
 from string import Template
@@ -265,6 +266,29 @@ def is_enterprise(version):
     :return: True if this version string passed is a scylla enterprise version
     """
     return parse_version(version) > parse_version('2000')
+
+
+def assume_version(params: dict[str], scylla_version: Optional[str] = None) -> tuple[bool, str]:
+    # Try to get the major version from the branch name, it will only be used when scylla_version isn't assigned.
+    # It can be switched to RELEASE_BRANCH from upstream job
+    git_branch = os.environ.get('GIT_BRANCH')  # origin/branch-4.5
+    scylla_repo = params.get('scylla_repo')
+
+    scylla_version_source = scylla_version or scylla_repo or git_branch
+    LOGGER.debug("scylla_version_source: %s", scylla_version_source)
+    if match := re.match(r'[\D\d]*-(\d+\.\d+)', scylla_version_source) or \
+            re.match(r'\D*(\d+\.\d+)', scylla_version_source):
+        version = f"nightly-{match.group(1)}"
+        is_enterprise_version = is_enterprise(match.group(1))
+    elif scylla_version_source and 'enterprise' in scylla_version_source:
+        version = "nightly-enterprise"
+        is_enterprise_version = True
+    elif scylla_version_source and 'master' in scylla_version_source:
+        version = "nightly-master"
+        is_enterprise_version = False
+    else:
+        raise Exception("Scylla version for web install isn't identified")
+    return is_enterprise_version, version
 
 
 def get_gemini_version(output: str):
