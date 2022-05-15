@@ -16,11 +16,11 @@ def call(String backend, String region=null, String datacenter=null, String loca
     }
 
     def gcp_project = params.gce_project?.trim() ?: 'gce-sct'
-    def jenkins_labels = ['aws-eu-west-1': 'aws-sct-builders-eu-west-1-new',
-                          'aws-eu-west-2': 'aws-sct-builders-eu-west-2',
-                          'aws-eu-north-1': 'aws-sct-builders-eu-north-1',
-                          'aws-eu-central-1': 'aws-sct-builders-eu-central-1',
-                          'aws-us-east-1' : 'aws-sct-builders-us-east-1-new',
+    def jenkins_labels = ['aws-eu-west-1': 'aws-sct-builders-eu-west-1-v2',
+                          'aws-eu-west-2': 'aws-sct-builders-eu-west-2-v2',
+                          'aws-eu-north-1': 'aws-sct-builders-eu-north-1-v2',
+                          'aws-eu-central-1': 'aws-sct-builders-eu-central-1-v2',
+                          'aws-us-east-1' : 'aws-sct-builders-us-east-1-v2',
                           'gce-us-east1': "${gcp_project}-builders-us-east1",
                           'gce-us-west1': "${gcp_project}-builders-us-west1",
                           'gce': "${gcp_project}-builders",
