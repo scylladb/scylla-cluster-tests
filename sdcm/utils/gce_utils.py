@@ -32,8 +32,8 @@ GceDriver = get_driver(Provider.GCE)  # pylint: disable=invalid-name
 # The keys are the region name, the value is the available zones, which will be used for random.choice()
 SUPPORTED_REGIONS = {
     # us-east1 zones: b, c, and d. Details: https://cloud.google.com/compute/docs/regions-zones#locations
-    # choose zones c and d twice as often as zone b
-    'us-east1': 'bccdd',
+    # Currently choose only zones c and d as zone b frequently fails allocating resources.
+    'us-east1': 'cd',
     'us-west1': 'abc'}
 
 
