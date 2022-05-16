@@ -1,0 +1,36 @@
+test_duration: 3000
+bench_run: true
+max_partitions_in_test_table: 20000
+partition_range_with_data_validation: 0-1  # Not validating any data.
+
+stress_cmd: ["scylla-bench -workload=timeseries -mode=write -replication-factor=3 -partition-count=400 -clustering-row-count=10000000 -clustering-row-size=200 -concurrency=100 -rows-per-request=100 -start-timestamp=SET_WRITE_TIMESTAMP -connection-count 100 -max-rate 50000 --timeout 120s -duration=2880m"]
+# write-rate with timeseries workload for read mode
+# calculated from timeseries workload for write mode by formula:
+# write-rate = -max-rate / -partition-count = 50000 / 400 = 125
+stress_read_cmd: [
+    "scylla-bench -workload=timeseries -mode=read -partition-count=20000 -concurrency=100 -replication-factor=3 -clustering-row-count=10000000 -clustering-row-size=200  -rows-per-request=100 -start-timestamp=GET_WRITE_TIMESTAMP -write-rate 125 -distribution hnormal --connection-count 100 -duration=2880m",
+    "scylla-bench -workload=timeseries -mode=read -partition-count=20000 -concurrency=100 -replication-factor=3 -clustering-row-count=10000000 -clustering-row-size=200  -rows-per-request=100 -start-timestamp=GET_WRITE_TIMESTAMP -write-rate 125 -distribution uniform --connection-count 100 -duration=2880m"
+    ]
+
+
+n_db_nodes: 4
+n_loaders: 3
+n_monitor_nodes: 1
+
+instance_type_db: 'i3en.2xlarge'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_selector: ['tombstone_gc_advanced_mode']
+nemesis_exclude_disabled: false
+nemesis_seed: '025'
+nemesis_interval: 15
+nemesis_during_prepare: false
+space_node_threshold: 64424
+user_prefix: 'longevity-twcs-tombstone-gc-48h'
+
+post_prepare_cql_cmds: "ALTER TABLE scylla_bench.test with gc_grace_seconds = 300 and default_time_to_live = 21600 and compaction = {'class':'TimeWindowCompactionStrategy', 'compaction_window_size': 60, 'compaction_window_unit': 'MINUTES'};"
+
+# Temporarily downgrade scylla_bench to a stable version
+scylla_bench_version: v0.1.3
+
+round_robin: true

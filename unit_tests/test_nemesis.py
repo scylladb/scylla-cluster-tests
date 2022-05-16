@@ -2,7 +2,7 @@ import inspect
 from collections import namedtuple
 
 import sdcm.utils.cloud_monitor  # pylint: disable=unused-import # import only to avoid cyclic dependency
-from sdcm.nemesis import Nemesis, CategoricalMonkey, SisyphusMonkey, ToggleGcModeMonkey
+from sdcm.nemesis import Nemesis, CategoricalMonkey, SisyphusMonkey, ModifyGcModeMonkey
 from sdcm.cluster_k8s.mini_k8s import LocalMinimalScyllaPodCluster
 from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
 from sdcm.cluster_k8s.eks import EksScyllaPodCluster
@@ -164,7 +164,7 @@ def test_list_topology_changes_monkey():
 
 def test_disabled_monkey():
 
-    ToggleGcModeMonkey.disabled = True
+    ModifyGcModeMonkey.disabled = True
 
     tester = FakeTester()
 
@@ -176,12 +176,12 @@ def test_disabled_monkey():
 
     collected_disrupt_methods_names = {disrupt.__name__ for disrupt in sisyphus.disruptions_list}
     # Note: this test will fail and have to be adjusted once additional 'disabled' nemeses added.
-    assert collected_disrupt_methods_names == all_disrupt_methods - {'disrupt_toggle_table_gc_mode'}
+    assert collected_disrupt_methods_names == all_disrupt_methods - {'disrupt_modify_table_gc_mode'}
 
 
 def test_use_disabled_monkey():
 
-    ToggleGcModeMonkey.disabled = True
+    ModifyGcModeMonkey.disabled = True
 
     tester = FakeTester()
 
@@ -190,4 +190,4 @@ def test_use_disabled_monkey():
 
     collected_disrupt_methods_names = {disrupt.__name__ for disrupt in sisyphus.disruptions_list}
 
-    assert 'disrupt_toggle_table_gc_mode' in collected_disrupt_methods_names
+    assert 'disrupt_modify_table_gc_mode' in collected_disrupt_methods_names
