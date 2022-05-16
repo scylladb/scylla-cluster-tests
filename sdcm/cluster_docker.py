@@ -201,7 +201,9 @@ class DockerCluster(cluster.BaseCluster):  # pylint: disable=abstract-method
 
     @property
     def node_container_context_path(self):
-        return os.path.join(os.path.dirname(__file__), '../docker/scylla-sct', self.params.get("scylla_linux_distro"))
+        # scylla_linux_distro can be: centos or ubuntu-focal, hence we need to split it
+        return os.path.join(os.path.dirname(__file__), '../docker/scylla-sct',
+                            self.params.get("scylla_linux_distro").split('-')[0])
 
     def _create_node(self, node_index, container=None):
         node = DockerNode(parent_cluster=self,
