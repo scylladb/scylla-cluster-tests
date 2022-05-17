@@ -44,9 +44,12 @@ def pytest_runtest_makereport(item, call):  # pylint: disable=unused-argument
     # Populate test result to test function instance
     outcome = yield
     rep = outcome.get_result()
-    if rep.passed:
+    if rep.skipped:
+        item._test_result = ('SKIPPED', rep.longrepr[2])  # pylint: disable=protected-access
+        TESTER.update_test_status(item.nodeid, *item._test_result)  # pylint: disable=protected-access
+    elif rep.passed:
         item._test_result = ('SUCCESS', None)  # pylint: disable=protected-access
-    else:
+    elif not rep.passed:
         item._test_result = ('FAILED', str(rep.longrepr))  # pylint: disable=protected-access
 
 
@@ -64,10 +67,12 @@ def fixture_harvest_test_results(request, tester: ScyllaOperatorFunctionalCluste
 
 @pytest.fixture(autouse=True, scope='package', name="tester")
 def fixture_tester() -> ScyllaOperatorFunctionalClusterTester:
+    global TESTER  # pylint: disable=global-statement
     os.chdir(sct_abs_path())
     tester_inst = ScyllaOperatorFunctionalClusterTester()
     tester_inst.setUpClass()
     tester_inst.setUp()
+    TESTER = tester_inst  # putting tester global, so we can report skipped test (one with mark.skip)
     yield tester_inst
     with contextlib.suppress(Exception):
         tester_inst.tearDown()

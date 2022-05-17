@@ -25,6 +25,8 @@
             <li> {{ test_name }} -
                 {% if test_data[0] == "SUCCESS" %}
                     <span class='green'>{{ test_data[0] }}</span>
+                {% elif test_data[0] == "SKIPPED" %}
+                    <span class='orange'>{{ test_data[0] }}</span> : {{test_data[1]}}
                 {% else %}
                     {{ errors.append((test_name, test_data[1])) or '' }}
                     <span class='red'>{{ test_data[0] }}</span>
