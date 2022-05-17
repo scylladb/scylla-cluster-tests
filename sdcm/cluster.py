@@ -4279,13 +4279,6 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
     def _reuse_cluster_setup(self, node):
         pass
 
-    def get_endpoint_snitch(self, default_multi_region="GossipingPropertyFileSnitch"):
-        endpoint_snitch = self.params.get('endpoint_snitch')
-        if self.test_config.MULTI_REGION:
-            if not endpoint_snitch:
-                endpoint_snitch = default_multi_region
-        return endpoint_snitch
-
     @staticmethod
     def clean_replacement_node_ip(node):
         if node.replacement_node_ip:

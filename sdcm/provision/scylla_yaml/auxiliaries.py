@@ -179,8 +179,12 @@ class ScyllaYamlAttrBuilderBase(AttrBuilder):
 
     @property
     def _default_endpoint_snitch(self) -> Literal[
-        'org.apache.cassandra.locator.Ec2MultiRegionSnitch',
-            'org.apache.cassandra.locator.GossipingPropertyFileSnitch']:
+            'org.apache.cassandra.locator.Ec2MultiRegionSnitch',
+            'org.apache.cassandra.locator.GossipingPropertyFileSnitch',
+            'org.apache.cassandra.locator.Ec2Snitch']:
         if self._cluster_backend == 'aws':
-            return 'org.apache.cassandra.locator.Ec2MultiRegionSnitch'
+            if self.params.get('ip_ssh_connections') == 'public':
+                return 'org.apache.cassandra.locator.Ec2MultiRegionSnitch'
+            else:
+                return 'org.apache.cassandra.locator.Ec2Snitch'
         return 'org.apache.cassandra.locator.GossipingPropertyFileSnitch'
