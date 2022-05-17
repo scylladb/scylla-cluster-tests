@@ -863,9 +863,6 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
     def _reuse_cluster_setup(self, node):
         node.run_startup_script()  # Reconfigure rsyslog.
 
-    def get_endpoint_snitch(self, default_multi_region="Ec2MultiRegionSnitch"):
-        return super().get_endpoint_snitch(default_multi_region,)
-
     def destroy(self):
         self.stop_nemesis()
         super().destroy()
