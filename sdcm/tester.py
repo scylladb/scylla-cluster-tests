@@ -650,18 +650,23 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             else:
                 self.init_nodes(db_cluster=self.db_cluster)
 
-            with temp_authenticator(node=self.db_cluster.nodes[0],
-                                    authenticator="org.apache.cassandra.auth.PasswordAuthenticator"):
-                # running `set_system_auth_rf()` before changing authorization/authentication protocols
-                self.set_system_auth_rf()
-                if self.params.get('use_ldap'):
+            if self.params.get('use_ldap'):
+                with temp_authenticator(self.db_cluster.nodes[0], "org.apache.cassandra.auth.PasswordAuthenticator"):
+                    # running `set_system_auth_rf()` before changing authorization/authentication protocols
+                    self.set_system_auth_rf()
+
                     self._setup_ldap_roles(db_cluster=self.db_cluster)
-                if self.params.get('ldap_server_type') == LdapServerType.MS_AD:
-                    change_default_password(node=self.db_cluster.nodes[0],
-                                            user=self.params.get('authenticator_user'),
-                                            password=self.params.get('authenticator_password'))
-                    self.loaders.added_password_suffix = True
-                    self.monitors.added_password_suffix = True  # FIXME: Replace with strong password generation.
+                    if self.params.get('ldap_server_type') == LdapServerType.MS_AD:
+                        change_default_password(node=self.db_cluster.nodes[0],
+                                                user=self.params.get('authenticator_user'),
+                                                password=self.params.get('authenticator_password'))
+                        # TODO: update proper loader and monitor in multi-tenant case.
+                        #       Now it updates only the first ones all the time.
+                        self.loaders.added_password_suffix = True
+                        # TODO: Replace with strong password generation
+                        self.monitors.added_password_suffix = True
+            else:
+                self.set_system_auth_rf()
 
             db_node_address = self.db_cluster.nodes[0].ip_address
             if self.loaders:
