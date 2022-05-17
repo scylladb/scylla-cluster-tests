@@ -3226,7 +3226,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                     f"replication(strategy=NetworkTopologyStrategy,{datacenters[0]}=3,{datacenters[1]}=1) " \
                     f"compression=LZ4Compressor compaction(strategy=SizeTieredCompactionStrategy)' " \
                     f"-mode cql3 native compression=lz4 -rate threads=5 -pop seq=1..10000 -log interval=5"
-        write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, use_single_loader=True)
+        write_thread = self.tester.run_stress_thread(stress_cmd=write_cmd, round_robin=True, stop_test_on_failure=False)
         self.tester.verify_stress_thread(cs_thread_pool=write_thread)
         self._verify_multi_dc_keyspace_data(consistency_level="ALL")
 
@@ -3234,7 +3234,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         read_cmd = f"cassandra-stress read no-warmup cl={consistency_level} n=10000 -schema 'keyspace=keyspace_new_dc " \
                    f"compression=LZ4Compressor' -mode cql3 native compression=lz4 -rate threads=5 " \
                    f"-pop seq=1..10000 -log interval=5"
-        read_thread = self.tester.run_stress_thread(stress_cmd=read_cmd, use_single_loader=True)
+        read_thread = self.tester.run_stress_thread(stress_cmd=read_cmd, round_robin=True, stop_test_on_failure=False)
         self.tester.verify_stress_thread(cs_thread_pool=read_thread)
 
     def _switch_to_network_replication_strategy(self, keyspaces: List[str]) -> None:
