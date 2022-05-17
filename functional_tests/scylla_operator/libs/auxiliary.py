@@ -43,7 +43,7 @@ class ScyllaOperatorFunctionalClusterTester(ClusterTester):
 
     def get_test_status(self):
         for _, test_data in self.test_data.items():
-            if test_data[0] != 'SUCCESS':
+            if not test_data[0] in ('SUCCESS', 'SKIPPED'):
                 return 'FAILED'
         return 'SUCCESS'
 
