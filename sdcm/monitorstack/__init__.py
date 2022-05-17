@@ -365,7 +365,8 @@ def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_vers
             -s {monitoring_dockers_dir}/config/scylla_servers.yml \
             -n {monitoring_dockers_dir}/config/node_exporter_servers.yml \
             -d {monitoring_stack_data_dir} -v {scylla_version} \
-            -b '-storage.tsdb.retention.time=100y'""".format(**locals()))
+            -b '-storage.tsdb.retention.time=100y' \
+            -c 'GF_USERS_DEFAULT_THEME=dark'""".format(**locals()))
     res = lr.run(cmd)
     if res.ok:
         LOGGER.info("Docker containers for monitoring stack are started")
