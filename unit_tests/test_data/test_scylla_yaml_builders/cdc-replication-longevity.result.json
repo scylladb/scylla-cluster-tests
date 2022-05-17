@@ -1,7 +1,7 @@
 {
   "broadcast_address": "__NODE_PRIVATE_ADDRESS__",
   "listen_address": "0.0.0.0",
-  "endpoint_snitch": "org.apache.cassandra.locator.Ec2MultiRegionSnitch",
+  "endpoint_snitch": "org.apache.cassandra.locator.Ec2Snitch",
   "rpc_address": "0.0.0.0",
   "cluster_name": "dummy_cluster",
   "seed_provider": [

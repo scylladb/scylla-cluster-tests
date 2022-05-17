@@ -124,10 +124,10 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 'authenticator': 'com.scylladb.auth.SaslauthdAuthenticator',
                 'authorizer': 'AllowAllAuthorizer',
                 'enable_ipv6_dns_lookup': False,
-                'endpoint_snitch': 'org.apache.cassandra.locator.Ec2MultiRegionSnitch',
+                'endpoint_snitch': 'org.apache.cassandra.locator.Ec2Snitch',
                 'ldap_attr_role': 'cn',
                 'ldap_bind_dn': 'cn=admin,dc=scylla-qa,dc=com', 'ldap_bind_passwd': 'scylla-0',
-                'ldap_url_template': 'ldap://127.0.0.1:5001/dc=scylla-qa,dc=com?cn?sub?'
+                'ldap_url_template': 'ldap://1.1.1.1:389/dc=scylla-qa,dc=com?cn?sub?'
                                      '(uniqueMember=uid={USER},ou=Person,dc=scylla-qa,dc=com)',
                 'saslauthd_socket_path': '/run/saslauthd/mux'
             },
