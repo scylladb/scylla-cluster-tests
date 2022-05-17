@@ -2088,6 +2088,10 @@ class PodCluster(cluster.BaseCluster):
         )
 
     def generate_namespace(self, namespace_template: str) -> str:
+        # TODO: make it work correctly for case with reusage of multi-tenant cluster
+        if self.k8s_cluster.tenants_number < 2:
+            return namespace_template
+
         # Pick up not used namespace knowing that we may have more than 1 Scylla cluster
         with NAMESPACE_CREATION_LOCK:
             namespaces = self.k8s_cluster.kubectl(
