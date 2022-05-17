@@ -16,6 +16,7 @@ RUN yum -y install \
         iproute \
         sudo \
         collectd \
+        syslog-ng \
         rsync && \
     yum clean all && \
     echo $'[program:collectd]\n\

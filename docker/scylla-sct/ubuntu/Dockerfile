@@ -22,6 +22,7 @@ RUN apt-get update && \
     apt install -y \
         iproute2 \
         collectd \
+        syslog-ng \
         rsync && \
     rm -rf /var/lib/apt/lists/* && \
     echo $'[program:collectd]\n\
