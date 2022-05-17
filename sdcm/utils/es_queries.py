@@ -266,3 +266,9 @@ class CDCQueryFilter(QueryFilter):
 class CDCQueryFilterCS(QueryFilterCS, CDCQueryFilter):
     def cs_params(self):
         return self._PROFILE_PARAMS if 'profiles' in self.test_name else self._PARAMS
+
+
+class LatencyWithNemesisQueryFilter(QueryFilterCS, PerformanceQueryFilter):
+
+    def filter_by_dashboard_query(self):
+        return "latency_during_ops: *"

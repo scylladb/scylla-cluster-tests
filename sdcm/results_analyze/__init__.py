@@ -29,7 +29,7 @@ from sdcm.db_stats import TestStatsMixin
 from sdcm.send_email import Email, BaseEmailReporter
 from sdcm.sct_events import Severity
 from sdcm.utils.es_queries import QueryFilter, PerformanceFilterYCSB, PerformanceFilterScyllaBench, \
-    PerformanceFilterCS, CDCQueryFilterCS
+    PerformanceFilterCS, CDCQueryFilterCS, LatencyWithNemesisQueryFilter
 from test_lib.utils import MagicList, get_data_by_path
 from .test import TestResultClass
 
@@ -218,6 +218,63 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         events_list = [stall for stall in debug_events[Severity.DEBUG.name] if 'type=KERNEL_CALLSTACK' in stall]
         return events_list
 
+    def _get_best_per_nemesis_for_each_version(self, test_doc, is_gce):
+        filter_path = ['hits.hits._id',
+                       'hits.hits._source.results',
+                       'hits.hits._source.versions',
+                       'hits.hits._source.test_dtails',
+                       'hits.hits._source.latency_during_ops']
+        query = LatencyWithNemesisQueryFilter(test_doc, is_gce, use_wide_query=True, lastyear=True)()
+
+        self.log.debug("ES QUERY: %s", query)
+        test_results = self._es.search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
+            index="latency-during-ops-mixed",
+            doc_type='test_stats',
+            q=query,
+            filter_path=filter_path,
+            size=1000)
+        if not test_results:
+            self.log.warning("No results found for query: %s", query)
+            return None
+        results_per_nemesis_by_version = {nemesis: {} for nemesis in test_doc["_source"]["latency_during_ops"].keys()}
+        best_results = {nemesis: {} for nemesis in test_doc["_source"]["latency_during_ops"].keys()}
+        # expected structure:
+        # {'_add_node' : {'5.1.dev': [{latency_during_ops: {....}}, ...],
+        #                 '5.0.dev': [{latency_during_ops: {....}}, ...]}}
+        for doc in test_results["hits"]["hits"]:
+            version = doc["_source"]["versions"]["scylla-server"]["version"]
+            for nemesis in doc["_source"]["latency_during_ops"].keys():
+                if not results_per_nemesis_by_version.get(nemesis):
+                    results_per_nemesis_by_version[nemesis] = {}
+                    best_results[nemesis] = {}
+
+            for nemesis in results_per_nemesis_by_version:
+                if version not in results_per_nemesis_by_version[nemesis]:
+                    results_per_nemesis_by_version[nemesis][version] = []
+
+                stat = doc["_source"]["latency_during_ops"].get(nemesis, None)
+                if stat and doc["_source"]["versions"].get("scylla-server"):
+                    stat.update({"version": self._test_version(doc)})
+                    results_per_nemesis_by_version[nemesis][version].append(stat)
+
+        # choose best result for each nemesis per version
+        # by most less Cycles Average and Relative_to Steady
+        for nemesis in results_per_nemesis_by_version.keys():
+            for version in results_per_nemesis_by_version[nemesis].keys():
+                try:
+                    best_results[nemesis][version] = sorted(
+                        results_per_nemesis_by_version[nemesis][version],
+                        key=lambda obj: (obj.get("Cycles Average", {}).get("c-s P99"),
+                                         obj.get("Relative to Steady", {}).get('c-s P99')))[0]
+                except IndexError:
+                    best_results[nemesis][version] = {}
+
+            best_results[nemesis] = {per_version: best_results[nemesis][per_version] for per_version in sorted(best_results[nemesis].keys(),
+                                                                                                               key=lambda version: version,
+                                                                                                               reverse=True)}
+
+        return best_results
+
     def check_regression(self, test_id, data, is_gce=False):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
         doc = self.get_test_by_id(test_id)
         full_test_name = doc["_source"]["test_details"]["test_name"]
@@ -237,8 +294,14 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         reactor_stall_events_summary = {Severity.DEBUG.name: len(reactor_stall_events)}
         kernel_callstack_events = self.get_kernel_callstack_events()
         kernel_callstack_events_summary = {Severity.DEBUG.name: len(kernel_callstack_events)}
+
+        last_events, events_summary = [], {}
+        reactor_stall_events, reactor_stall_events_summary = [], {}
+        kernel_callstack_events, kernel_callstack_events_summary = [], {}
         subject = f'Performance Regression Compare Results (latency during operations) -' \
                   f' {test_name} - {test_version} - {str(test_start_time)}'
+        best_results_per_nemesis = self._get_best_per_nemesis_for_each_version(doc, is_gce)
+
         results = dict(
             events_summary=events_summary,
             last_events=last_events,
@@ -256,6 +319,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             grafana_snapshots=self._get_grafana_snapshot(doc),
             grafana_screenshots=self._get_grafana_screenshot(doc),
             job_url=doc['_source']['test_details'].get('job_url', ""),
+            best_stat_per_version=best_results_per_nemesis
         )
         attachment_file = [self.save_html_to_file(results,
                                                   file_name='reactor_stall_events_list.html',
