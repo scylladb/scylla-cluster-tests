@@ -414,6 +414,18 @@ def resolve_latest_repo_symlink(url: str) -> str:
     return resolved_url
 
 
+def transform_non_semver_scylla_version_to_semver(scylla_version: str):
+    # NOTE: as of May 2022 all the non-GA versions of Scylla are not semver-like and it is problem
+    #       for the scylla-operator.
+    if SEMVER_REGEX.match(scylla_version):
+        return scylla_version
+    version_parts = scylla_version.split(".")
+    new_scylla_version = f"{version_parts[0]}.{version_parts[1]}.0-{'.'.join(version_parts[2:])}"
+    if SEMVER_REGEX.match(new_scylla_version):
+        return new_scylla_version
+    raise ValueError("Cannot transform '%s' to semver-like string" % scylla_version)
+
+
 def get_git_tag_from_helm_chart_version(chart_version: str) -> str:
     """Utility function used to parse out the git tag from a Helm chart version
 
