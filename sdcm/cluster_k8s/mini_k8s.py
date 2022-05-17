@@ -35,6 +35,7 @@ from sdcm.cluster_k8s import (
 from sdcm.utils.k8s import TokenUpdateThread, HelmValues
 from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import docker_hub_login
+from sdcm.utils import version_utils
 
 
 LOGGER = logging.getLogger(__name__)
@@ -212,6 +213,10 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
         LOGGER.info("Pull `%s' to docker environment", image)
         self.remoter.run(f"docker pull -q {image}")
 
+    def docker_tag(self, src, dst):
+        LOGGER.info("Retag `%s' image as '%s'", src, dst)
+        self.remoter.run(f"docker tag {src} {dst}")
+
     @property
     def remoter(self) -> CommandRunner:
         return self.host_node.remoter
@@ -343,6 +348,7 @@ class LocalMinimalClusterBase(MinimalClusterBase):
 
 class LocalKindCluster(LocalMinimalClusterBase):
     docker_pull: Callable
+    docker_tag: Callable
     host_node: 'BaseNode'
     scylla_image: Optional[str]
     software_version: str
@@ -425,8 +431,19 @@ class LocalKindCluster(LocalMinimalClusterBase):
         self.host_node.remoter.run('/var/tmp/kind delete cluster', ignore_status=True)
 
     def on_deploy_completed(self):
-        images_to_cache = []
+        images_to_cache, images_to_retag, new_scylla_image_tag = [], {}, ""
         if self.scylla_image:
+            scylla_image_repo, scylla_image_tag = self.scylla_image.split(":")
+            if not version_utils.SEMVER_REGEX.match(scylla_image_tag):
+                try:
+                    new_scylla_image_tag = version_utils.transform_non_semver_scylla_version_to_semver(
+                        scylla_image_tag)
+                    images_to_retag[self.scylla_image] = f"{scylla_image_repo}:{new_scylla_image_tag}"
+                except ValueError as exc:
+                    LOGGER.warning(
+                        "Failed to transform non-semver scylla version '%s' to a semver-like one:\n%s",
+                        scylla_image_tag, str(exc))
+
             images_to_cache.append(self.scylla_image)
         if self.params.get("use_mgmt") and self.params.get("mgmt_docker_image"):
             images_to_cache.append(self.params.get("mgmt_docker_image"))
@@ -443,6 +460,12 @@ class LocalKindCluster(LocalMinimalClusterBase):
             self.docker_pull(image)
             self.host_node.remoter.run(
                 f"/var/tmp/kind load docker-image {image}", ignore_status=True)
+        if new_scylla_image_tag:
+            self.params['scylla_version'] = new_scylla_image_tag
+        for src_image, dst_image in images_to_retag.items():
+            self.docker_tag(src_image, dst_image)
+            self.host_node.remoter.run(
+                f"/var/tmp/kind load docker-image {dst_image}", ignore_status=True)
 
 
 class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
