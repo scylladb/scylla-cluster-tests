@@ -43,6 +43,7 @@
                     <h2>{{ operation }}</h2>
                     <table id="results_table">
                         <caption>{{ results['legend'] }}</caption>
+                        <th> Scylla build </th>
                         <th>Latency Type</th>
                         {% for cycle in results['cycles'] %}
                             <th>Cycle #{{ loop.index }}</th>
@@ -50,16 +51,8 @@
                         <th>Cycles Average</th>
                         <th>Steady State</th>
                         <th>Relative to Steady</th>
-                        {% set lat_type_list = [] %}
-                        {% for cycle in results['cycles'] %}
-                            {% for key, value in cycle.items() %}
-                                {% if key not in lat_type_list %}
-                                    {% if key == 'c-s P99' %}
-                                        {% do lat_type_list.append(key) %}
-                                    {% endif %}
-                                {% endif %}
-                            {% endfor %}
-                        {% endfor %}
+                        <th>Commit id, date</th>
+                        {% set lat_type_list = ['c-s P99'] %}
 
                         {% for lat_type in lat_type_list|sort %}
                                 {% if 'color' in results and lat_type in results['color'] and results['color'][lat_type] == 'red' %}
@@ -67,6 +60,7 @@
                                 {% else %}
                                        <tr>
                                 {% endif %}
+                                    <td> current build </td>
                                     <td>{{ lat_type }}</td>
                                     {% for cycle in results['cycles'] %}
                                         <td>{{ cycle[lat_type] }}</td>
@@ -74,8 +68,25 @@
                                     <td>{{ results['Cycles Average'][lat_type] }}</td>
                                     <td>{{ stats['Steady State'][lat_type] }}</td>
                                     <td>{{ results['Relative to Steady'][lat_type] }}</td>
+                                    <td>{{ test_version }}
                                 </tr>
-                        {% endfor %}
+
+                        {% if best_stat_per_version.get(operation) %}
+                            {% for version, best in best_stat_per_version[operation].items() %}
+                            <tr>
+                                <td> {{ version }} </td>
+                                <td> {{ lat_type }} </td>
+                                {% for cycle in results['cycles'] %}
+                                    <td></td>
+                                {% endfor %}
+                                <td>{{ best.get('Cycles Average')['c-s P99'] }}</td>
+                                <td>{{ best_stat_per_version['Steady State'][version]['c-s P99'] }}</td>
+                                <td>{{ best.get('Relative to Steady')['c-s P99'] }}</td>
+                                <td>{{ best.get('version')['commit_id'] }},<br/>{{ best.get('version')['date'] }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% endif %}
+                    {% endfor %}
                     </table>
                     <span STYLE="font-size:12px" class="red">* All latency values are in ms.</span>
                     <div>
