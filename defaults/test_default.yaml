@@ -25,7 +25,7 @@ scylla_linux_distro_loader: 'centos'
 ssh_transport: 'libssh2'
 system_auth_rf: 3
 
-monitor_branch: 'branch-3.11'
+monitor_branch: 'branch-4.0'
 
 space_node_threshold: 0
 
