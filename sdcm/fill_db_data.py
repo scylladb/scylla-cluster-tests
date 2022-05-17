@@ -113,7 +113,7 @@ class FillDatabaseData(ClusterTester):
                             firstname text,
                             lastname text,
                             age int
-                        ) WITH compaction = {'class': 'DateTieredCompactionStrategy'}"""],
+                        ) WITH compaction = {'class': 'TimeWindowCompactionStrategy'}"""],
             'truncates': ['TRUNCATE static_cf_test_batch'],
             'inserts': [
                 "INSERT INTO static_cf_test_batch (userid, firstname, lastname, age) VALUES "
@@ -233,7 +233,7 @@ class FillDatabaseData(ClusterTester):
                                       time bigint,
                                       PRIMARY KEY (userid, ip, port)
                                       ) WITH COMPACT STORAGE
-                                      AND compaction = {'class': 'DateTieredCompactionStrategy'}"""],
+                                      AND compaction = {'class': 'TimeWindowCompactionStrategy'}"""],
             'truncates': ['TRUNCATE dense_cf_test'],
             'inserts': [
                 "INSERT INTO dense_cf_test (userid, ip, port, time) VALUES (550e8400-e29b-41d4-a716-446655440000, '192.168.0.1', 80, 42)",

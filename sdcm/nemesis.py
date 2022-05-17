@@ -1972,7 +1972,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             default: compaction = {'class': 'SizeTieredCompactionStrategy'}
         """
         # TODO: Sub-properties for each of compaction strategies should also be tested
-        strategies = ("SizeTieredCompactionStrategy", "DateTieredCompactionStrategy",
+        strategies = ("SizeTieredCompactionStrategy",
                       "TimeWindowCompactionStrategy", "LeveledCompactionStrategy")
         prop_val = {"class": random.choice(strategies)}
         self._modify_table_property(name="compaction", val=str(prop_val))
