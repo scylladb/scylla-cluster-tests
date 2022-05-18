@@ -1,4 +1,0 @@
-ami_id_monitor: 'ami-0cfac3931b2a799d1'  # Debian stretch image
-ami_monitor_user: 'admin'
-
-manager_scylla_backend_version: '2020'  # Notice: Uses 2020.1, while other (newer deb) use 2021, since we support both
