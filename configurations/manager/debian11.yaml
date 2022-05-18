@@ -1,0 +1,2 @@
+ami_id_monitor: 'ami-09a41e26df464c548'  # Debian Bullseye image - debian-11-amd64-20220503-998
+ami_monitor_user: 'admin'
