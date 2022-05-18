@@ -28,7 +28,7 @@ import pprint
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from functools import partial
-from typing import Optional, List
+from typing import List
 from uuid import UUID
 
 import pytest
@@ -45,18 +45,15 @@ from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_configuration
 from sdcm.sct_provision.instances_provider import provision_sct_resources
 from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_runner, clean_sct_runners
-from sdcm.utils.azure_utils import AzureService
-from sdcm.utils.azure_region import AzureRegion, region_name_to_location
+from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
 from sdcm.utils.common import (
-    all_aws_regions,
     aws_tags_to_dict,
     clean_cloud_resources,
     clean_resources_according_post_behavior,
     format_timestamp,
     gce_meta_to_dict,
-    get_all_gce_regions,
     get_branched_ami,
     get_branched_gce_images,
     get_builder_by_test_id,
@@ -84,6 +81,8 @@ from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.aws_peering import AwsVpcPeering
 from sdcm.utils.get_username import get_username
+from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_config
+from sdcm.utils.aws_builder import configure_jenkins_builders
 from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter, \
     send_perf_email
 from sdcm.parallel_timeline_report.generate_pt_report import ParallelTimelinesReportGenerator
@@ -102,12 +101,6 @@ LOGGER = setup_stdout_logger()
 
 
 click_completion.init()
-
-
-def get_test_config():
-    from sdcm.cluster import TestConfig  # pylint: disable=import-outside-toplevel; avoid import for `--help' option
-
-    return TestConfig()
 
 
 def sct_option(name, sct_name, **kwargs):
@@ -132,14 +125,6 @@ def install_package_from_dir(ctx, _, directories):
     return directories
 
 
-def add_file_logger(level: int = logging.DEBUG) -> None:
-    cmd_path = "-".join(click.get_current_context().command_path.split()[1:])
-    logdir = get_test_config().make_new_logdir(update_latest_symlink=False, postfix=f"-{cmd_path}")
-    handler = logging.FileHandler(os.path.join(logdir, "hydra.log"))
-    handler.setLevel(level)
-    LOGGER.addHandler(handler)
-
-
 cloud_provider_option = click.option(
     "-c", "--cloud-provider",
     required=True,
@@ -148,29 +133,6 @@ cloud_provider_option = click.option(
     is_eager=True,
     help="Cloud provider",
 )
-
-
-class CloudRegion(click.ParamType):
-    name = "cloud_region"
-
-    def __init__(self, cloud_provider: Optional[str] = None):
-        super().__init__()
-        self.cloud_provider = cloud_provider
-
-    def convert(self, value, param, ctx):
-        cloud_provider = self.cloud_provider or ctx.params["cloud_provider"]
-        if cloud_provider == "aws":
-            regions = all_aws_regions(cached=True)
-        elif cloud_provider == "gce":
-            regions = get_all_gce_regions()
-        elif cloud_provider == "azure":
-            regions = AzureService().all_regions
-            value = region_name_to_location(value)
-        else:
-            self.fail(f"unknown cloud provider: {cloud_provider}")
-        if value not in regions:
-            self.fail(f"invalid region: {value}. (choose from {', '.join(regions)})")
-        return value
 
 
 class SctLoader(unittest.TestLoader):
@@ -1485,6 +1447,8 @@ def generate_parallel_timelines_report(logdir: str | None, test_id: str | None) 
     pt_report_generator = ParallelTimelinesReportGenerator(events_file=raw_events_log_path)
     pt_report_generator.generate_full_report()
 
+
+cli.add_command(configure_jenkins_builders)
 
 if __name__ == '__main__':
     cli()
