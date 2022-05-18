@@ -115,6 +115,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                     'internode_encryption': False,
                     'client_encrypt': False,
                     'hinted_handoff': None,
+                    'prepare_saslauthd': True,
                 }
             },
             expected_as_dict={
@@ -149,6 +150,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                     'internode_encryption': False,
                     'client_encrypt': False,
                     'hinted_handoff': None,
+                    'prepare_saslauthd': True,
                 }
             },
             expected_as_dict={
@@ -189,6 +191,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                     'internode_encryption': True,
                     'client_encrypt': True,
                     'hinted_handoff': True,
+                    'prepare_saslauthd': True,
                 }
             },
             expected_as_dict={
@@ -552,6 +555,7 @@ class IntegrationTests(unittest.TestCase):
                 os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
                 os.environ['SCT_REGION_NAME'] = '["eu-west-1", "us-east-1"]'
                 os.environ['SCT_CONFIG_FILES'] = config_path
+                os.environ['SCT_PREPARE_SASLAUTHD'] = "true"
 
                 conf = SCTConfiguration()
                 test_config = TestConfig()
