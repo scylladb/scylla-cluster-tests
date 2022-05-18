@@ -19,7 +19,10 @@ from functools import cached_property
 
 from invoke.exceptions import UnexpectedExit
 
-from sdcm import cluster
+from sdcm import (
+    cluster,
+    sct_abs_path,
+)
 from sdcm.cluster import LocalK8SHostNode
 from sdcm.remote import LOCALRUNNER
 from sdcm.remote.base import CommandRunner
@@ -38,6 +41,8 @@ from sdcm.utils.docker_utils import docker_hub_login
 from sdcm.utils import version_utils
 
 
+CNI_CALICO_CONFIG = sct_abs_path("sdcm/k8s_configs/cni-calico.yaml")
+CNI_CALICO_VERSION = "v3.23.0"
 LOGGER = logging.getLogger(__name__)
 POOL_LABEL_NAME = 'minimal-k8s-nodepool'
 
@@ -393,6 +398,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
         networking:
           podSubnet: 10.244.0.0/16
           serviceSubnet: 10.96.0.0/16
+          disableDefaultCNI: true
         kubeadmConfigPatches:
         - |
           apiVersion: kubelet.config.k8s.io/v1beta1
@@ -456,6 +462,9 @@ class LocalKindCluster(LocalMinimalClusterBase):
         except ValueError as exc:
             LOGGER.warning("scylla-operator image won't be cached. Error: %s", str(exc))
 
+        for image_repo in ('kube-controllers', 'cni', 'node'):
+            images_to_cache.append(f"calico/{image_repo}:{CNI_CALICO_VERSION}")
+
         for image in images_to_cache:
             self.docker_pull(image)
             self.host_node.remoter.run(
@@ -466,6 +475,10 @@ class LocalKindCluster(LocalMinimalClusterBase):
             self.docker_tag(src_image, dst_image)
             self.host_node.remoter.run(
                 f"/var/tmp/kind load docker-image {dst_image}", ignore_status=True)
+
+        self.apply_file(CNI_CALICO_CONFIG, environ={
+            "SCT_K8S_CNI_CALICO_VERSION": CNI_CALICO_VERSION,
+        })
 
 
 class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):
