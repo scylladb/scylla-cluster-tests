@@ -448,9 +448,9 @@ class AwsSctRunner(SctRunner):
                          region_az: str = "",
                          test_duration: Optional[int] = None) -> Any:
         if region_az.startswith(self.SOURCE_IMAGE_REGION):
-            aws_region = self.aws_region_source
+            aws_region: AwsRegion = self.aws_region_source
         else:
-            aws_region = self.aws_region
+            aws_region: AwsRegion = self.aws_region
         subnet = aws_region.sct_subnet(region_az=region_az)
         assert subnet, f"No SCT subnet found in the source region. " \
                        f"Use `hydra prepare-region --cloud-provider aws --region-name {aws_region.region_name}' " \
@@ -467,7 +467,8 @@ class AwsSctRunner(SctRunner):
                 "DeviceIndex": 0,
                 "AssociatePublicIpAddress": True,
                 "SubnetId": subnet.subnet_id,
-                "Groups": [aws_region.sct_security_group.group_id],
+                "Groups": [aws_region.sct_security_group.group_id,
+                           aws_region.sct_builder_security_group.group_id],
                 "DeleteOnTermination": True,
             }],
             TagSpecifications=[{
