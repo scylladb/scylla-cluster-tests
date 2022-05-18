@@ -55,7 +55,7 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
 
     @property
     def saslauthd_socket_path(self) -> Optional[str]:
-        if self._is_authenticator_valid:
+        if self._is_authenticator_valid and self.params.get('prepare_saslauthd'):
             return '/run/saslauthd/mux'
         return None
 
