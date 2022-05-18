@@ -1,0 +1,15 @@
+#! groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+artifactsPipeline(
+    test_config: '''["test-cases/artifacts/ubuntu2204.yaml", "configurations/arm/ubuntu2204.yaml"]''',
+    backend: 'aws',
+    region: 'eu-west-1',
+    provision_type: 'spot_low_price',
+    manager_version: '',  // scylla manager doesn't currently support arm processors
+
+    timeout: [time: 30, unit: 'MINUTES'],
+    post_behavior_db_nodes: 'destroy'
+)
