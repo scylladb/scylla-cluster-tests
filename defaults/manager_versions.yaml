@@ -45,5 +45,6 @@ scylla_backend_repo_by_version:
     centos7: 'http://downloads.scylladb.com/rpm/centos/scylla-2021.1.repo'
     centos8: 'http://downloads.scylladb.com/rpm/centos/scylla-2021.1.repo'
     debian10: 'http://downloads.scylladb.com/deb/ubuntu/scylla-2021.1.list'
+    debian11: 'http://downloads.scylladb.com/deb/ubuntu/scylla-2021.1.list'
     ubuntu18: 'http://downloads.scylladb.com/deb/ubuntu/scylla-2021.1.list'
     ubuntu20: 'http://downloads.scylladb.com/deb/ubuntu/scylla-2021.1.list'
