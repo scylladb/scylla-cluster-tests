@@ -4,9 +4,9 @@ def call(Map params, Integer test_duration, String region) {
     def cloud_provider = getCloudProviderFromBackend(params.backend)
     def instance_type_arg = ""
     if ( params.backend == "k8s-local-kind-aws" ) {
-        instance_type_arg = "--instance-type c5.xlarge"
+        instance_type_arg = "--instance-type c5.2xlarge"
     } else if ( params.backend == "k8s-local-kind-gce" ) {
-        instance_type_arg = "--instance-type e2-standard-4"
+        instance_type_arg = "--instance-type e2-standard-8"
     }
 
     // NOTE: EKS jobs have 'availability_zone' be defined as 'a,b'
