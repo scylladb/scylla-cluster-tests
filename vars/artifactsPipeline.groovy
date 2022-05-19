@@ -79,16 +79,22 @@ def call(Map pipelineParams) {
                             def instance_type = it
                             tasks["${instance_type}"] = {
                                 node(builder.label) {
-                                    // Timeout for the test itself
-                                    timeout(time: pipelineParams.timeout.time, unit: 'MINUTES') {
-                                        withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
-                                                 "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",]) {
-                                            stage("Checkout (${instance_type})") {
-                                                dir('scylla-cluster-tests') {
+                                    withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
+                                             "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",
+                                             "SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
+
+                                        def test_config = groovy.json.JsonOutput.toJson(params.test_config)
+                                        stage("Checkout (${instance_type})") {
+                                            dir('scylla-cluster-tests') {
+                                                timeout(time: 10, unit: 'MINUTES') {
                                                     checkout scm
                                                 }
                                             }
-                                            stage("Run SCT Test (${instance_type})") {
+                                        }
+                                        stage("Run SCT Test (${instance_type})") {
+                                            // Timeout for the test itself
+                                            timeout(time: pipelineParams.timeout.time, unit: 'MINUTES') {
+                                                def cloud_provider = getCloudProviderFromBackend(params.backend)
                                                 sctScript """
                                                     rm -fv ./latest
 
@@ -151,35 +157,39 @@ def call(Map pipelineParams) {
                                                     echo "end test ....."
                                                 """
                                             }
-                                            stage("Collect log data (${instance_type})") {
-                                                catchError(stageResult: 'FAILURE') {
-                                                    wrap([$class: 'BuildUser']) {
-                                                        dir('scylla-cluster-tests') {
-                                                            timeout(time: 30, unit: 'MINUTES') {
-                                                                runCollectLogs(params, builder.region)
-                                                            }
+                                        }
+                                        stage("Collect log data (${instance_type})") {
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        timeout(time: 30, unit: 'MINUTES') {
+                                                            runCollectLogs(params, builder.region)
                                                         }
                                                     }
                                                 }
                                             }
-                                            stage("Clean resources (${instance_type})") {
-                                                catchError(stageResult: 'FAILURE') {
-                                                    wrap([$class: 'BuildUser']) {
-                                                        dir('scylla-cluster-tests') {
-                                                            timeout(time: 10, unit: 'MINUTES') {
-                                                                runCleanupResource(params, builder.region)
-                                                            }
+                                        }
+                                        stage("Clean resources (${instance_type})") {
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        timeout(time: 10, unit: 'MINUTES') {
+                                                            runCleanupResource(params, builder.region)
                                                         }
                                                     }
                                                 }
                                             }
-                                            stage("Send email with result ${instance_type}") {
-                                                def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
-                                                sctScript """
-                                                    echo "Start send email ..."
-                                                    ./docker/env/hydra.sh send-email --logdir "`pwd`" --email-recipients "${email_recipients}"
-                                                    echo "Email sent"
-                                                """
+                                        }
+                                        stage("Send email with result ${instance_type}") {
+                                            def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
+                                            catchError(stageResult: 'FAILURE') {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        timeout(time: 10, unit: 'MINUTES') {
+                                                            runSendEmail(params, currentBuild)
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
