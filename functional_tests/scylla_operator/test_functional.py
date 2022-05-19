@@ -162,6 +162,7 @@ def test_drain_wait_and_replace_node_kubernetes(db_cluster):
 
 
 @pytest.mark.requires_node_termination_support('drain_k8s_node')
+@pytest.mark.skip("Disabled due to the https://github.com/scylladb/scylla-operator/issues/982")
 def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
     target_rack = random.choice([*db_cluster.racks])
     target_node = db_cluster.get_rack_nodes(target_rack)[-1]
