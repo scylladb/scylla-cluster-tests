@@ -43,11 +43,9 @@
             <li>
                 <h4> {{ test_name }} </h4>
                 <ul>
-                    <h5>
-                        {% for line in test_error.split('\n') %}
-                            {{ line }} <br/>
-                        {% endfor %}
-                    </h5>
+                    <h4><pre>
+{% for line in test_error.split('\n') %}{{ line }} <br/>{% endfor %}
+                    </pre></h4>
                 </ul>
             </li>
             {% endfor %}
