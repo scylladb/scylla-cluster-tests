@@ -336,15 +336,21 @@ class ArtifactsTest(ClusterTester):
                 else:
                     is_ntp_service_installed = self.check_service_existence(service_name="ntp")
                     is_chrony_service_installed = self.check_service_existence(service_name="chrony")
-                if is_timesyncd_service_installed:
-                    assert not is_ntp_service_installed, \
-                        "systemd-timesyncd is already installed, yet scylla installed ntp service on top of it"
-                    assert not is_chrony_service_installed, \
-                        "systemd-timesyncd is already installed, yet scylla installed chrony service on top of it"
-                else:
-                    assert is_ntp_service_installed or is_chrony_service_installed, \
-                        "systemd-timesyncd is not installed on the instance, yet Scylla did not install ntp or " \
-                        "chrony services as a replacement"
+                try:
+                    if is_timesyncd_service_installed:
+                        assert not is_ntp_service_installed, \
+                            "systemd-timesyncd is already installed, yet scylla installed ntp service on top of it"
+                        assert not is_chrony_service_installed, \
+                            "systemd-timesyncd is already installed, yet scylla installed chrony service on top of it"
+                    else:
+                        assert is_ntp_service_installed or is_chrony_service_installed, \
+                            "systemd-timesyncd is not installed on the instance, yet Scylla did not install ntp or " \
+                            "chrony services as a replacement"
+                except AssertionError:
+                    full_list = self.node.remoter.run('systemctl list-units --full').stdout.strip()
+                    self.log.warning("Seems that there was an issue with ntp check. Here's the full list of services "
+                                     "active on the node: %s", full_list)
+                    raise
 
             # TODO: implement after the new provision will be added
             # Task: https://trello.com/c/BIdIUwyT/4096-housekeeping-implemented-a-test-that-checks-i-value-when-scylla-
