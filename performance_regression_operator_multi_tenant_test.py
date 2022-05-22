@@ -168,7 +168,7 @@ class PerformanceRegressionOperatorMultiTenantTest(PerformanceRegressionTest):
             [scs, nemesis] for scs in self.scylla_clusters_stats])
         object_set.run(func=_run_mixed_workload, unpack_objects=True, ignore_exceptions=False)
 
-    def run_workload(self, stress_cmd, nemesis=False):
+    def run_workload(self, stress_cmd, nemesis=False, sub_type=None):
         def _run_workload(scylla_cluster_stats, stress_cmd, nemesis):
             scylla_cluster_stats.run_workload(stress_cmd=stress_cmd, nemesis=nemesis)
 
