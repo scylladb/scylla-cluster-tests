@@ -56,6 +56,7 @@ class ClusterBase(BaseModel):
     _INSTANCE_TYPE_PARAM_NAME = None
     _NODE_NUM_PARAM_NAME = None
     _INSTANCE_PARAMS_BUILDER = None
+    _USER_PARAM = None
 
     @property
     def _provisioner(self):
@@ -108,7 +109,7 @@ class ClusterBase(BaseModel):
 
     @property
     def tags(self):
-        return self.common_tags | {"NodeType": str(self._NODE_TYPE)}
+        return self.common_tags | {"NodeType": str(self._NODE_TYPE), "UserName": self.params.get(self._USER_PARAM)}
 
     def _node_tags(self, region_id: int) -> List[TagsType]:
         return [node.tags for node in self.nodes if node.region_id == region_id]
@@ -234,6 +235,7 @@ class DBCluster(ClusterBase):
     _INSTANCE_TYPE_PARAM_NAME = 'instance_type_db'
     _NODE_NUM_PARAM_NAME = 'n_db_nodes'
     _INSTANCE_PARAMS_BUILDER = ScyllaInstanceParamsBuilder
+    _USER_PARAM = 'ami_db_scylla_user'
 
     @property
     def _user_data(self) -> str:
@@ -251,6 +253,7 @@ class OracleDBCluster(ClusterBase):
     _INSTANCE_TYPE_PARAM_NAME = 'instance_type_db'
     _NODE_NUM_PARAM_NAME = 'n_test_oracle_db_nodes'
     _INSTANCE_PARAMS_BUILDER = OracleScyllaInstanceParamsBuilder
+    _USER_PARAM = 'ami_db_scylla_user'
 
     @property
     def _user_data(self) -> str:
@@ -268,6 +271,7 @@ class LoaderCluster(ClusterBase):
     _INSTANCE_TYPE_PARAM_NAME = 'instance_type_loader'
     _NODE_NUM_PARAM_NAME = 'n_loaders'
     _INSTANCE_PARAMS_BUILDER = LoaderInstanceParamsBuilder
+    _USER_PARAM = 'ami_loader_user'
 
     @property
     def _user_data(self) -> str:
@@ -283,6 +287,7 @@ class MonitoringCluster(ClusterBase):
     _INSTANCE_TYPE_PARAM_NAME = 'instance_type_monitor'
     _NODE_NUM_PARAM_NAME = 'n_monitor_nodes'
     _INSTANCE_PARAMS_BUILDER = MonitorInstanceParamsBuilder
+    _USER_PARAM = 'ami_monitor_user'
 
     @property
     def _user_data(self) -> str:

@@ -434,7 +434,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     @cached_property
     def tags(self) -> Dict[str, str]:
         return {**self.parent_cluster.tags,
-                "Name": str(self.name), }
+                "Name": str(self.name), "UserName": str(self.ssh_login_info.get('user'))}
 
     def _set_keep_alive(self):
         ContainerManager.set_all_containers_keep_alive(self)
