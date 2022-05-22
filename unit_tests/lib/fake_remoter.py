@@ -12,9 +12,9 @@
 # Copyright (c) 2022 ScyllaDB
 
 import re
-from typing import Dict, Pattern, Optional, List
+from typing import Dict, Pattern
 
-from invoke import Result, StreamWatcher
+from invoke import Result
 
 from sdcm.remote import RemoteCmdRunnerBase
 
@@ -26,14 +26,14 @@ class FakeRemoter(RemoteCmdRunnerBase):
 
     def run(self,  # pylint: disable=too-many-arguments
             cmd: str,
-            timeout: Optional[float] = None,
-            ignore_status: bool = False,
-            verbose: bool = True,
-            new_session: bool = False,
-            log_file: Optional[str] = None,
-            retry: int = 1,
-            watchers: Optional[List[StreamWatcher]] = None,
-            change_context: bool = False
+            timeout=None,
+            ignore_status=False,
+            verbose=True,
+            new_session=False,
+            log_file=None,
+            retry=1,
+            watchers=None,
+            change_context=False
             ) -> Result:
         for pattern, result in self.result_map.items():
             if re.match(pattern, cmd) is not None:
