@@ -548,6 +548,7 @@ def clean_cloud_resources(tags_dict, dry_run=False):
         return False
     clean_instances_aws(tags_dict, dry_run=dry_run)
     clean_elastic_ips_aws(tags_dict, dry_run=dry_run)
+    clean_test_security_groups(tags_dict, dry_run=dry_run)
     clean_clusters_gke(tags_dict, dry_run=dry_run)
     clean_orphaned_gke_disks(dry_run=dry_run)
     clean_clusters_eks(tags_dict, dry_run=dry_run)
@@ -846,6 +847,72 @@ def clean_elastic_ips_aws(tags_dict, dry_run=False):
             if not dry_run:
                 response = client.release_address(AllocationId=allocation_id)
                 LOGGER.debug("Done. Result: %s\n", response)
+
+
+def list_test_security_groups(tags_dict=None, region_name=None, group_as_region=False, verbose=False):
+    """
+    list all security groups with specific tags AWS
+
+    :param tags_dict: a dict of the tag to select the instances, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :param region_name: name of the region to list
+    :param group_as_region: if True the results would be grouped into regions
+    :param verbose: if True will log progress information
+
+    :return: security groups dict where region is a key
+    """
+    security_groups = {}
+    aws_regions = [region_name] if region_name else all_aws_regions()
+    tags_dict.pop('NodeType', None)
+
+    def get_security_groups_ips(region):
+        if verbose:
+            LOGGER.info('Going to list aws region "%s"', region)
+        time.sleep(random.random())
+        client: EC2Client = boto3.client('ec2', region_name=region)
+        custom_filter = []
+        if tags_dict:
+            custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]} for key, value in tags_dict.items()]
+        response = client.describe_security_groups(Filters=custom_filter)
+        security_groups[region] = response['SecurityGroups']
+        if verbose:
+            LOGGER.info("%s: done [%s/%s]", region, len(list(security_groups.keys())), len(aws_regions))
+
+    ParallelObject(aws_regions, timeout=100).run(get_security_groups_ips, ignore_exceptions=True)
+
+    if not group_as_region:
+        security_groups = list(itertools.chain(*list(security_groups.values())))  # flatten the list of lists
+        total_items = security_groups
+    else:
+        total_items = sum([len(value) for _, value in security_groups.items()])
+    if verbose:
+        LOGGER.info("Found total of %s ips.", total_items)
+    return security_groups
+
+
+def clean_test_security_groups(tags_dict, dry_run=False):
+    """
+    Remove all security groups with specific tags AWS
+
+    :param tags_dict: a dict of the tag to select the groups, e.x. {"TestId": "9bc6879f-b1ef-47e1-99ab-020810aedbcc"}
+    :return: None
+    """
+    assert tags_dict, "tags_dict not provided (can't clean all instances)"
+    aws_instances = list_test_security_groups(tags_dict=tags_dict, group_as_region=True)
+
+    for region, sg_list in aws_instances.items():
+        if not sg_list:
+            LOGGER.info("There are no SGs to remove in AWS region %s", region)
+            continue
+        client: EC2Client = boto3.client('ec2', region_name=region)
+        for security_group in sg_list:
+            group_id = security_group.get('GroupId')
+            LOGGER.info("Going to delete '%s'", group_id)
+            if not dry_run:
+                try:
+                    response = client.delete_security_group(GroupId=group_id)
+                    LOGGER.debug("Done. Result: %s\n", response)
+                except Exception as ex:  # pylint: disable=broad-except
+                    LOGGER.debug("Failed with: %s", str(ex))
 
 
 def get_gce_driver():

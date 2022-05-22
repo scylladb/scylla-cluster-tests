@@ -20,7 +20,7 @@ import botocore
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
 
 from sdcm.keystore import KeyStore
-
+from sdcm.utils.get_username import get_username
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ class AwsRegion:
     SCT_VPC_NAME = "SCT-2-vpc"
     SCT_VPC_CIDR_TMPL = "10.{}.0.0/16"
     SCT_SECURITY_GROUP_NAME = "SCT-2-sg"
+    SCT_TEST_SECURITY_GROUP_NAME_TMPL = "SCT-2-sg-{}"
     SCT_SUBNET_NAME = "SCT-2-subnet-{availability_zone}"
     SCT_INTERNET_GATEWAY_NAME = "SCT-2-igw"
     SCT_ROUTE_TABLE_NAME = "SCT-2-rt"
@@ -239,6 +240,205 @@ class AwsRegion:
                     },
                 ]
             )
+
+    def get_sct_test_security_group(self, test_id) -> EC2ServiceResource.SecurityGroup:
+        name = self.SCT_TEST_SECURITY_GROUP_NAME_TMPL.format(test_id)
+        security_groups = self.client.describe_security_groups(Filters=[{"Name": "tag:Name",
+                                                                         "Values": [name]},
+                                                                        {"Name": "tag:TestId",
+                                                                         "Values": [test_id]
+                                                                         }])
+        LOGGER.debug("Found Security Groups: %s", security_groups)
+        existing_sgs = security_groups.get("SecurityGroups", [])
+        if len(existing_sgs) == 0:
+            return None
+        assert len(existing_sgs) == 1, \
+            f"More than 1 Security group with {name} found " \
+            f"in {self.region_name}: {existing_sgs}!"
+        return self.resource.SecurityGroup(existing_sgs[0]["GroupId"])  # pylint: disable=no-member
+
+    def provide_sct_test_security_group(self, test_id: str):
+        """
+        Create a per test security group, that open all known ports
+        publicly.
+        should be used mainly for debugging, or for cases that must
+        use public communication to/between nodes.
+        """
+        LOGGER.info("Creating Security Group for test %s...", test_id)
+        name = self.SCT_TEST_SECURITY_GROUP_NAME_TMPL.format(test_id)
+        if security_group := self.get_sct_test_security_group(test_id=test_id):
+            LOGGER.warning("Security Group '%s' already exists! Id: '%s'.",
+                           name, self.sct_security_group.group_id)
+        else:
+
+            result = self.client.create_security_group(Description=f'Security group that is used by test {test_id}',
+                                                       GroupName=name,
+                                                       VpcId=self.sct_vpc.vpc_id)
+            sg_id = result["GroupId"]
+            security_group = self.resource.SecurityGroup(sg_id)  # pylint: disable=no-member
+            security_group.create_tags(Tags=[{"Key": "Name",
+                                              "Value": name},
+                                             {"Key": "RunByUser", "Value": get_username()},
+                                             {"Key": "TestId", "Value": test_id}])
+            LOGGER.debug("'%s' with id '%s' created. ", name, self.sct_security_group.group_id)
+            LOGGER.debug("Creating common ingress rules...")
+            security_group.authorize_ingress(
+                IpPermissions=[
+                    {
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [
+                            {'CidrIp': '0.0.0.0/0', 'Description': 'SSH connectivity to the instances'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'SSH connectivity to the instances'}]
+                    },
+                    {
+                        "FromPort": 3000,
+                        "ToPort": 3000,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow Grafana for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow Grafana for ALL'}]
+                    },
+                    {
+                        "FromPort": 9042,
+                        "ToPort": 9042,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow CQL for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow CQL for ALL'}]
+                    },
+                    {
+                        "FromPort": 9142,
+                        "ToPort": 9142,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow SSL CQL for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow SSL CQL for ALL'}]
+                    },
+                    {
+                        "FromPort": 9100,
+                        "ToPort": 9100,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [
+                            {'CidrIp': '0.0.0.0/0', 'Description': 'Allow node_exporter on Db nodes for ALL'}],
+                        "Ipv6Ranges": [
+                            {'CidrIpv6': '::/0', 'Description': 'Allow node_exporter on Db nodes for ALL'}]
+                    },
+                    {
+                        "FromPort": 8080,
+                        "ToPort": 8080,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow Alternator for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow Alternator for ALL'}]
+                    },
+                    {
+                        "FromPort": 9090,
+                        "ToPort": 9090,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow Prometheus for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow  Prometheus for ALL'}]
+                    },
+                    {
+                        "FromPort": 9093,
+                        "ToPort": 9093,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [
+                            {'CidrIp': '0.0.0.0/0', 'Description': 'Allow Prometheus Alert Manager For All'}],
+                        "Ipv6Ranges": [
+                            {'CidrIpv6': '::/0', 'Description': 'Allow Prometheus Alert Manager For All'}]
+                    },
+                    {
+                        "FromPort": 9180,
+                        "ToPort": 9180,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow Prometheus API for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow Prometheus API for ALL'}]
+                    },
+                    {
+                        "FromPort": 7000,
+                        "ToPort": 7000,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
+                                      'Description': 'Allow Inter-node communication (RPC) for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
+                                        'Description': 'Allow Inter-node communication (RPC) for ALL'}]
+                    },
+                    {
+                        "FromPort": 7001,
+                        "ToPort": 7001,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
+                                      'Description': 'Allow SSL inter-node communication (RPC) for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
+                                        'Description': 'Allow SSL inter-node communication (RPC) for ALL'}]
+                    },
+                    {
+                        "FromPort": 7199,
+                        "ToPort": 7199,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0', 'Description': 'Allow JMX management for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0', 'Description': 'Allow JMX management for ALL'}]
+                    },
+                    {
+                        "FromPort": 10001,
+                        "ToPort": 10001,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
+                                      'Description': 'Allow Scylla Manager Agent REST API  for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
+                                        'Description': 'Allow Scylla Manager Agent REST API for ALL'}]
+                    },
+                    {
+                        "FromPort": 56090,
+                        "ToPort": 56090,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
+                                      'Description': 'Allow Scylla Manager Agent version 2.1 Prometheus API for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
+                                        'Description': 'Allow Scylla Manager Agent version 2.1 Prometheus API for ALL'}]
+                    },
+                    {
+                        "IpProtocol": "-1",
+                        "IpRanges": [{'CidrIp': '172.0.0.0/11',
+                                      'Description': 'Allow traffic from Scylla Cloud lab while VPC peering for ALL'}],
+                    },
+                    {
+                        "FromPort": 5080,
+                        "ToPort": 5080,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
+                                      'Description': 'Allow Scylla Manager HTTP API for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
+                                        'Description': 'Allow Scylla Manager HTTP API for ALL'}]
+                    },
+                    {
+                        "FromPort": 5443,
+                        "ToPort": 5443,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
+                                      'Description': 'Allow Scylla Manager HTTPS API for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
+                                        'Description': 'Allow Scylla Manager HTTPS API for ALL'}]
+                    },
+                    {
+                        "FromPort": 5090,
+                        "ToPort": 5090,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
+                                      'Description': 'Allow Scylla Manager Agent Prometheus API for ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
+                                        'Description': 'Allow Scylla Manager Agent Prometheus API for ALL'}]
+                    },
+                    {
+                        "FromPort": 5112,
+                        "ToPort": 5112,
+                        "IpProtocol": "tcp",
+                        "IpRanges": [{'CidrIp': '0.0.0.0/0',
+                                      'Description': 'Allow Scylla Manager pprof Debug For ALL'}],
+                        "Ipv6Ranges": [{'CidrIpv6': '::/0',
+                                        'Description': 'Allow Scylla Manager pprof Debug For ALL'}]
+                    }
+                ]
+            )
+        return security_group
 
     @property
     def sct_builder_security_group(self) -> EC2ServiceResource.SecurityGroup:
