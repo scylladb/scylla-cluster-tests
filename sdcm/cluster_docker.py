@@ -359,11 +359,13 @@ class DockerMonitoringNode(cluster.BaseNode):  # pylint: disable=abstract-method
                  parent_cluster: "MonitorSetDocker",
                  node_prefix: str = "monitor-node",
                  base_logdir: Optional[str] = None,
-                 node_index: int = 1) -> None:
+                 node_index: int = 1,
+                 ssh_login_info: Optional[dict] = None) -> None:
         super().__init__(name=f"{node_prefix}-{node_index}",
                          parent_cluster=parent_cluster,
                          base_logdir=base_logdir,
-                         node_prefix=node_prefix)
+                         node_prefix=node_prefix,
+                         ssh_login_info=ssh_login_info)
         self.node_index = node_index
 
     @staticmethod
@@ -424,7 +426,11 @@ class MonitorSetDocker(cluster.BaseMonitorSet, DockerCluster):  # pylint: disabl
         node = DockerMonitoringNode(parent_cluster=self,
                                     base_logdir=self.logdir,
                                     node_prefix=self.node_prefix,
-                                    node_index=node_index)
+                                    node_index=node_index,
+                                    ssh_login_info=dict(hostname=None,
+                                                        user=self.node_container_user,
+                                                        key_file=self.node_container_key_file)
+                                    )
         node.init()
         return node
 
