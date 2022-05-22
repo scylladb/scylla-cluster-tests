@@ -36,6 +36,7 @@ import click
 import click_completion
 from prettytable import PrettyTable
 
+import sct_ssh
 from sdcm.localhost import LocalHost
 from sdcm.provision import AzureProvisioner
 from sdcm.provision.provisioner import VmInstance
@@ -1470,6 +1471,7 @@ def generate_parallel_timelines_report(logdir: str | None, test_id: str | None) 
 
 
 cli.add_command(configure_jenkins_builders)
+cli.add_command(sct_ssh.ssh)
 
 if __name__ == '__main__':
     cli()
