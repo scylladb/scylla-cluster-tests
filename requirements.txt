@@ -113,9 +113,9 @@ botocore==1.21.55 \
     #   awscli
     #   boto3
     #   s3transfer
-botocore-stubs==1.27.29 \
-    --hash=sha256:2467d08e2d3e67b20cf3e4679935ad09a91b17415d5c038b7a322a7482dc0c37 \
-    --hash=sha256:a0136cac7f5b7c40f84e20685c29530f76256a06efa0a3348b95667c4f0016d7
+botocore-stubs==1.27.31 \
+    --hash=sha256:196f7017b74f1688a149788f5d78fbef4c90a8461d6014117fd08bd00ad75af2 \
+    --hash=sha256:f1e94bcce3e213aced4c76c9f122c4041bc553ba5d3407def3cbe2fe21369414
     # via boto3-stubs
 cachetools==5.2.0 \
     --hash=sha256:6a94c6402995a99c3970cc7e4884bb60b4a8639938157eeed436098bf9831757 \
@@ -260,9 +260,9 @@ dataproperty==0.55.0 \
     #   simplesqlite
     #   tabledata
     #   tcconfig
-distlib==0.3.4 \
-    --hash=sha256:6564fe0a8f51e734df6333d08b8b94d4ea8ee6b99b5ed50613f731fd4089f34b \
-    --hash=sha256:e4b58818180336dc9c529bfb9a0b58728ffc09ad92027a3f30b7cd91e3458579
+distlib==0.3.5 \
+    --hash=sha256:a7f75737c70be3b25e2bee06288cec4e4c221de18455b2dd037fe2a795cab2fe \
+    --hash=sha256:b710088c59f06338ca514800ad795a132da19fda270e3ce4affc74abf955a26c
     # via virtualenv
 docker==4.4.4 \
     --hash=sha256:d3393c878f575d3a9ca3b94471a3c89a6d960b35feb92f033c0de36cc9d934db \
@@ -624,9 +624,9 @@ mypy-boto3-dynamodb==1.24.27 \
     --hash=sha256:63f7d9755fc5cf2e637edf8d33024050152a53013d1a102716ae0d534563ef07 \
     --hash=sha256:c982d24f9b2525a70f408ad40eff69660d56928217597d88860b60436b25efbf
     # via boto3-stubs
-mypy-boto3-ec2==1.24.27 \
-    --hash=sha256:195627d8455177dde33544fb255958776625873343be2721b7688247e00e3420 \
-    --hash=sha256:f382582a4f435717cf777cc152d036087c88e110b973785c6162320054d43a68
+mypy-boto3-ec2==1.24.30 \
+    --hash=sha256:4e8a6b61186fb070253d9465c7320a7dca141640c7e9339c31718ba7eed11cdd \
+    --hash=sha256:755678e863451c3fc77ef944179139908dccc0f4fa69f3ff1a662b27f52aebdf
     # via boto3-stubs
 mypy-boto3-pricing==1.24.21 \
     --hash=sha256:1455324b5175d2189d6a5a31e881f9d809e3acc20774975fb4dea00b3337665d \
@@ -729,6 +729,10 @@ prometheus-client==0.11.0 \
     --hash=sha256:3a8baade6cb80bcfe43297e33e7623f3118d660d41387593758e2fb1ea173a86 \
     --hash=sha256:b014bc76815eb1399da8ce5fc84b7717a3e63652b0c0f8804092c9363acab1b2
     # via -r ../../requirements.in
+prompt-toolkit==3.0.30 \
+    --hash=sha256:859b283c50bde45f5f97829f77a4674d1c1fcd88539364f1b28a37805cfd89c0 \
+    --hash=sha256:d8916d3f62a7b67ab353a952ce4ced6a1d2587dfe9ef8ebc30dd7c386751f289
+    # via questionary
 proto-plus==1.20.6 \
     --hash=sha256:449b4537e83f4776bd69051c4d776db8ffe3f9d0641f1e87b06c116eb94c90e9 \
     --hash=sha256:c6c43c3fcfc360fdab46b47e2e9e805ff56e13169f9f2e45caf88b6b593215ab
@@ -990,6 +994,10 @@ pyzmq==22.3.0 \
     --hash=sha256:f89468059ebc519a7acde1ee50b779019535db8dcf9b8c162ef669257fef7a93 \
     --hash=sha256:f907c7359ce8bf7f7e63c82f75ad0223384105f5126f313400b7e8004d9b33c3
     # via -r ../../requirements.in
+questionary==1.10.0 \
+    --hash=sha256:600d3aefecce26d48d97eee936fdb66e4bc27f934c3ab6dd1e292c4f43946d90 \
+    --hash=sha256:fecfcc8cca110fda9d561cb83f1e97ecbb93c613ff857f655818839dac74ce90
+    # via -r ../../requirements.in
 repodataparser @ https://github.com/fruch/repodataParser/archive/py3.zip ; python_version > "3" \
     --hash=sha256:3424db354bb58a6bd254546f3499510cb0b5c1543835cd92bc7dfe01b7bf828d
     # via -r ../../requirements.in
@@ -1179,6 +1187,10 @@ voluptuous==0.13.1 \
     --hash=sha256:4b838b185f5951f2d6e8752b68fcf18bd7a9c26ded8f143f92d6d28f3921a3e6 \
     --hash=sha256:e8d31c20601d6773cb14d4c0f42aee29c6821bbd1018039aac7ac5605b489723
     # via tcconfig
+wcwidth==0.2.5 \
+    --hash=sha256:beb4802a9cebb9144e99086eff703a642a13d6a0052920003a230f3294bbe784 \
+    --hash=sha256:c4d647b99872929fdb7bdcaa4fbe7f01413ed3d98077df798530e5b04f116c83
+    # via prompt-toolkit
 websocket-client==1.3.3 \
     --hash=sha256:5d55652dc1d0b3c734f044337d929aaf83f4f9138816ec680c1aefefb4dc4877 \
     --hash=sha256:d58c5f284d6a9bf8379dab423259fe8f85b70d5fa5d2916d5791a84594b122b1
