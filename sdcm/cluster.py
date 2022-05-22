@@ -2043,7 +2043,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run(f'sudo apt-get install -y openjdk-11-jre-headless {additional_pkgs}')
         else:
             self.remoter.run(f'sudo apt-get install -y openjdk-8-jre-headless {additional_pkgs}')
-            self.remoter.run('sudo update-java-alternatives --jre-headless -s java-1.8.0-openjdk-amd64')
+            self.remoter.run('sudo update-java-alternatives --jre-headless '
+                             '-s java-1.8.0-openjdk-${dpkg-architecture -q DEB_BUILD_ARCH}')
 
         if nonroot:
             # Make sure env variable (XDG_RUNTIME_DIR) is set, which is necessary for systemd user
