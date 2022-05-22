@@ -64,6 +64,7 @@ from sdcm.utils.common import (
     list_clusters_eks,
     list_clusters_gke,
     list_elastic_ips_aws,
+    list_test_security_groups,
     list_instances_aws,
     list_instances_gce,
     list_logs_by_test_id,
@@ -355,6 +356,26 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
         click.echo(aws_table.get_string(title="EIPs used on AWS"))
     else:
         click.secho("No elastic ips found for selected filters in AWS!", fg="yellow")
+
+    click.secho("Checking AWS Security Groups...", fg='green')
+    security_groups = list_test_security_groups(tags_dict=params, verbose=verbose)
+    if security_groups:
+        aws_table = PrettyTable(["Name", "Id", "TestId", "RunByUser"])
+        aws_table.align = "l"
+        aws_table.sortby = 'Id'
+        for group in security_groups:
+            tags = aws_tags_to_dict(group.get('Tags'))
+            test_id = tags.get("TestId", "N/A")
+            run_by_user = tags.get("RunByUser", "N/A")
+            name = tags.get("Name", "N/A")
+            aws_table.add_row([
+                name,
+                group['GroupId'],
+                test_id,
+                run_by_user])
+        click.echo(aws_table.get_string(title="SGs used on AWS"))
+    else:
+        click.secho("No security groups found for selected filters in AWS!", fg="yellow")
 
     click.secho("Checking GKE...", fg='green')
     gke_clusters = list_clusters_gke(tags_dict=params, verbose=verbose)

@@ -1387,6 +1387,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         ec2_security_group_ids, ec2_subnet_ids = get_ec2_network_configuration(
             regions=regions,
             availability_zones=self.params.get('availability_zone').split(','),
+            params=self.params
         )
 
         services = get_ec2_services(regions)

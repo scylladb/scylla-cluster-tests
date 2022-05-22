@@ -22,7 +22,7 @@ from botocore.exceptions import ClientError
 from sdcm.utils.decorators import retrying
 from sdcm.utils.aws_region import AwsRegion
 from sdcm.wait import wait_for
-
+from sdcm.test_config import TestConfig
 
 LOGGER = logging.getLogger(__name__)
 ARM_ARCH_PREFIXES = ('im4', 'is4', 'a1.', 'inf', 'm6', 'c6', 'r6', 'm7', 'c7', 'r7')
@@ -252,6 +252,7 @@ def get_common_params(params: dict, regions: List, credentials: List, services: 
     ec2_security_group_ids, ec2_subnet_ids = get_ec2_network_configuration(
         regions=regions,
         availability_zones=params.get('availability_zone').split(','),
+        params=params
     )
     return dict(ec2_security_group_ids=ec2_security_group_ids,
                 ec2_subnet_id=ec2_subnet_ids,
@@ -262,7 +263,7 @@ def get_common_params(params: dict, regions: List, credentials: List, services: 
                 )
 
 
-def get_ec2_network_configuration(regions, availability_zones):
+def get_ec2_network_configuration(regions: list[str], availability_zones: list[str], params: dict):
     ec2_security_group_ids = []
     ec2_subnet_ids = []
     for region in regions:
@@ -271,9 +272,21 @@ def get_ec2_network_configuration(regions, availability_zones):
             sct_subnet = aws_region.sct_subnet(region_az=region + availability_zone)
             assert sct_subnet, f"No SCT subnet configured for {region}! Run 'hydra prepare-aws-region'"
             ec2_subnet_ids.append(sct_subnet.subnet_id)
+
+            security_groups = []
             sct_sg = aws_region.sct_security_group
             assert sct_sg, f"No SCT security group configured for {region}! Run 'hydra prepare-aws-region'"
-            ec2_security_group_ids.append([sct_sg.group_id])
+            security_groups.append(sct_sg.group_id)
+
+            if params.get('intra_node_comm_public') or params.get('ip_ssh_connections') == 'public':
+                test_config = TestConfig()
+                test_id = test_config.test_id()
+
+                test_sg = aws_region.provide_sct_test_security_group(test_id)
+                security_groups.append(test_sg.group_id)
+
+            ec2_security_group_ids.append(security_groups)
+
     return ec2_security_group_ids, ec2_subnet_ids
 
 

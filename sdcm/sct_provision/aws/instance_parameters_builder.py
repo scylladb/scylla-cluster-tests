@@ -116,6 +116,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
         return get_ec2_network_configuration(
             regions=self.params.region_names,
             availability_zones=self._availability_zones,
+            params=self.params
         )
 
     @cached_property
