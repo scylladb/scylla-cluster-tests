@@ -5,7 +5,8 @@ set -eo pipefail
 CMD=$@
 DOCKER_ENV_DIR=$(readlink -f "$0")
 DOCKER_ENV_DIR=$(dirname "${DOCKER_ENV_DIR}")
-DOCKER_REPO=docker.io/scylladb/hydra
+DOCKER_REPO=scylladb/hydra
+DOCKER_REGISTRY=docker.io
 SCT_DIR=$(dirname "${DOCKER_ENV_DIR}")
 SCT_DIR=$(dirname "${SCT_DIR}")
 VERSION=v$(cat "${DOCKER_ENV_DIR}/version")
@@ -160,9 +161,9 @@ fi
 
 if [[ ${USER} == "jenkins" || -z "`$tool images ${DOCKER_REPO}:${VERSION} -q`" ]]; then
     echo "Pull version $VERSION from Docker Hub..."
-    $tool pull ${DOCKER_REPO}:${VERSION}
+    $tool pull ${DOCKER_REGISTRY}/${DOCKER_REPO}:${VERSION}
 else
-    echo "There is ${DOCKER_REPO}:${VERSION} in local cache, use it."
+    echo "There is ${DOCKER_REPO}:${VERSION} in local cache, using it."
 fi
 
 # Check for SSH keys
