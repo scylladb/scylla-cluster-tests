@@ -3909,7 +3909,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         # see TestNodetoolStatus test in test_cluster.py
         pattern = re.compile(
             r"(?P<state>\w{2})\s+"
-            r"(?P<ip>[\d.]+)\s+"
+            r"(?P<ip>[\w:.]+)\s+"
             r"(?P<load>[\d.]+ [\w]+|\?)\s+"
             r"(?P<tokens>[\d]+)\s+"
             r"(?P<owns>[\w?]+)\s+"
