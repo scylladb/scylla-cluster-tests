@@ -477,6 +477,28 @@ class TestNodetoolStatus(unittest.TestCase):
                            '10.0.198.153': {'state': 'UN', 'load': '?', 'tokens': '256', 'owns': '?',
                                             'host_id': 'fba174cd-917a-40f6-ab62-cc58efaaf301', 'rack': '1a'}}}
 
+    def test_can_get_nodetool_status_ipv6(self):  # pylint: disable=no-self-use
+        resp = "\n".join(["Datacenter: eu-north",
+                          "====================",
+                          "Status=Up/Down",
+                          "|/ State=Normal/Leaving/Joining/Moving",
+                          "--  Address                                 Load       Tokens       Owns    Host ID                Rack",
+                          "UN  2a05:d016:cf8:de00:e07d:5832:c5c0:36a0  774 KB     256          ?       e2ed6943  1a",
+                          "UN  2a05:d016:cf8:de00:339e:d0d:9446:1980   1.04 MB    256          ?       d67e8502  1a",
+                          ]
+                         )
+        node = NodetoolDummyNode(resp=resp)
+        db_cluster = DummyScyllaCluster([node])
+
+        status = db_cluster.get_nodetool_status()
+
+        assert status == {'eu-north':
+                          {'2a05:d016:cf8:de00:e07d:5832:c5c0:36a0':
+                           {'state': 'UN', 'load': '774KB', 'tokens': '256', 'owns': '?',
+                            'host_id': 'e2ed6943', 'rack': '1a'},
+                           '2a05:d016:cf8:de00:339e:d0d:9446:1980': {'state': 'UN', 'load': '1.04MB', 'tokens': '256', 'owns': '?',
+                                                                     'host_id': 'd67e8502', 'rack': '1a'}}}
+
     def test_can_get_nodetool_status_azure(self):  # pylint: disable=no-self-use
         resp = "\n".join(["Datacenter: eastus",
                          "==================",
