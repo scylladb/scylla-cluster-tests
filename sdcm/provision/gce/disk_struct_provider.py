@@ -1,6 +1,7 @@
 from abc import ABC
 from dataclasses import dataclass, asdict, field, fields
 
+from sdcm.provision.gce.data_disks import GCEDataDisk, PersistentStandardDisk, ScratchDisk
 from sdcm.provision.provisioner import InstanceDefinition
 
 #  pylint: disable=invalid-name, too-many-instance-attributes
@@ -26,11 +27,10 @@ class GCEDiskInterfaces:
 @dataclass
 class DiskStructArgs:
     instance_definition: InstanceDefinition
-    disk_type: str
+    root_disk_type: str
     gce_services_project_name: str
-    location_name: str
-    local_disk_count: int
-    persistent_disks: dict
+    region_az: str
+    data_disks: list[GCEDataDisk]
 
 
 @dataclass
@@ -90,9 +90,10 @@ class GCELocalDiskStruct(GCEDiskStruct):
 @dataclass
 class GCEPersistentDiskStruct(GCEDiskStruct):
     _disk_size: int
+    _index: int
 
     def __post_init__(self):
-        self.deviceName = f"{self._instance_definition.name}-data-{self._disk_type}"
+        self.deviceName = f"{self._instance_definition.name}-data-{self._disk_type}-{self._index}"
         self.initializeParams = {
             "diskType": self._get_disk_url(name=self._gce_services_project_name,
                                            region_name=self._location_name,
@@ -104,42 +105,45 @@ class GCEPersistentDiskStruct(GCEDiskStruct):
 # pylint:disable=too-few-public-methods
 class DiskStructProvider:
     @staticmethod
-    def get_disks_struct(disk_struct_args: DiskStructArgs, params: dict):
+    def get_disks_struct(disk_struct_args: DiskStructArgs, params: "SCTConfiguration"):
         disk_structs = [GCERootDiskStruct(
-            _disk_type=disk_struct_args.disk_type,
+            _disk_type=disk_struct_args.root_disk_type,
             _gce_services_project_name=disk_struct_args.gce_services_project_name,
-            _location_name=disk_struct_args.location_name,
+            _location_name=disk_struct_args.region_az,
             _instance_definition=disk_struct_args.instance_definition,
             type=GCEDiskTypes.PERSISTENT,
             autoDelete=params.get("gce_root_disk_auto_delete", True),
             boot=params.get("gce_root_disk_boot", True)
         ).as_struct()]
 
-        for local_disk_index in range(disk_struct_args.local_disk_count):
-            disk_structs.append(GCELocalDiskStruct(
-                _instance_definition=disk_struct_args.instance_definition,
-                _gce_services_project_name=disk_struct_args.gce_services_project_name,
-                _location_name=disk_struct_args.location_name,
-                _disk_type=GCEInitializeParamsDiskTypes.LOCAL_SSD,
-                _index=local_disk_index,
-                type=GCEDiskTypes.SCRATCH,
-                autoDelete=params.get("gce_local_disk_auto_delete", True),
-                interface=params.get("gce_local_disk_interface", GCEDiskInterfaces.NVME)
-            ).as_struct())
+        if disk_struct_args.data_disks:
+            local_disks = [disk for disk in disk_struct_args.data_disks if isinstance(disk, ScratchDisk)]
 
-        for persistent_disk_type, persistent_disk_size in disk_struct_args.persistent_disks.items():
-            index = 0
-            disk_structs.append(
-                GCEPersistentDiskStruct(
+            for index, disk in enumerate(local_disks):
+                disk_structs.append(GCELocalDiskStruct(
                     _instance_definition=disk_struct_args.instance_definition,
                     _gce_services_project_name=disk_struct_args.gce_services_project_name,
-                    _location_name=disk_struct_args.location_name,
-                    _disk_type=GCEInitializeParamsDiskTypes.PD_SSD,
-                    _disk_size=persistent_disk_size,
-                    type=persistent_disk_type,
-                    autoDelete=params.get("gce_persistent_disk_auto_delete", True)
-                ).as_struct()
-            )
-            index += 1
+                    _location_name=disk_struct_args.region_az,
+                    _disk_type=disk.gce_struct_type,
+                    _index=index,
+                    type=disk.type,
+                    autoDelete=disk.auto_delete,
+                    interface=disk.interface
+                ).as_struct())
 
+            persistent_disks = [disk for disk in disk_struct_args.data_disks if isinstance(disk,
+                                                                                           PersistentStandardDisk)]
+
+            for index, disk in enumerate(persistent_disks):
+                disk_structs.append(
+                    GCEPersistentDiskStruct(
+                        _instance_definition=disk_struct_args.instance_definition,
+                        _gce_services_project_name=disk_struct_args.gce_services_project_name,
+                        _location_name=disk_struct_args.region_az,
+                        _disk_type=disk.gce_struct_type,
+                        type=disk.type,
+                        autoDelete=disk.auto_delete,
+                        _disk_size=disk.size,
+                        _index=index
+                    ).as_struct())
         return disk_structs

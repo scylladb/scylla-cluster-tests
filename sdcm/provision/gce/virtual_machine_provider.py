@@ -88,7 +88,6 @@ class VirtualMachineProvider:
 
         if found_node:
             return found_node[0]
-
         return None
 
     def _get_random_location_in_region(self) -> str:
