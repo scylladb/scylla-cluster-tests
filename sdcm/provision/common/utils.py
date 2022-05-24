@@ -20,28 +20,21 @@ from textwrap import dedent
 def configure_rsyslog_rate_limits_script(interval: int, burst: int) -> str:
     # Configure rsyslog.  Use obsolete legacy format here because it's easier to redefine imjournal parameters.
     return dedent(fr"""
-        if ! grep imjournalRatelimitInterval /etc/rsyslog.conf; then
+    if ! grep imjournalRatelimitInterval /etc/rsyslog.conf; then
         cat <<EOF >> /etc/rsyslog.conf
-
         #
         # The following configuration was added by SCT.
         #
         \$ModLoad imjournal
         \$imjournalRatelimitInterval {interval}
         \$imjournalRatelimitBurst {burst}
-
-        EOF
-        fi
+    EOF
+    fi
     """)
 
 
 def configure_rsyslog_target_script(host: str, port: int) -> str:
-    fwd_action = fr'action(type=\"omfwd\" Target=\"{host}\" Port=\"{port}\" Protocol=\"tcp\")'
-    return dedent(f"""
-        if ! grep "{fwd_action}" /etc/rsyslog.conf ; then
-            echo "{fwd_action}" >> /etc/rsyslog.conf
-        fi
-    """)
+    return f'echo "action(type=\\"omfwd\\" Target=\\"{host}\\" Port=\\"{port}\\" Protocol=\\"tcp\\")" >> /etc/rsyslog.conf\n'
 
 
 def configure_syslogng_target_script(host: str, port: int, throttle_per_second: int, hostname: str = "") -> str:
@@ -173,9 +166,10 @@ def install_syslogng_service():
                 done
 
                 for n in 1 2 3; do # cloud-init is running it with set +o braceexpand
-                    while grep "Could not get lock" <(apt-get install -y syslog-ng 2>&1) ; do
-                        sleep 5
+                    while ! find /proc/*/fd -lname /var/lib/dpkg/lock-frontend -exec false {} + -quit ; do
+                        sleep 1
                     done
+                    apt-get install -y syslog-ng || true
                     if dpkg-query --show syslog-ng ; then
                         SYSLOG_NG_INSTALLED=1
                         break
