@@ -365,6 +365,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
         return [
             ('k8s-app', 'kindnet'),
             ('k8s-app', 'kube-proxy'),
+            ('k8s-app', 'calico-node'),
             ('scylla/cluster', self.k8s_scylla_cluster_name),
         ]
 
