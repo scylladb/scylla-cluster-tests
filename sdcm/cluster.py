@@ -2205,6 +2205,18 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 'sudo apt-get install -y -o Dpkg::Options::="--force-overwrite" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '
                 '--allow-unauthenticated {}'.format(self.scylla_pkg()))
 
+        # THIS IS A WORKAROUND FOR ISSUE https://github.com/scylladb/scylla/issues/10442
+        # the issue is related to JDK version, and the fix was added to later patches of multiple base versions,
+        # hence this is a temporary workaround to make the rolling upgrade tests to pass, until the latest
+        # patch of the supported releases will include the fix.
+        package_manager = 'yum' if self.is_rhel_like() else 'apt'
+        self.remoter.sudo(f'{package_manager} install zip unzip -y')
+        self.remoter.run('curl -s "https://get.sdkman.io" | bash')
+        self.remoter.run(shell_script_cmd("""
+            source "$HOME/.sdkman/bin/sdkman-init.sh"
+            sdk install java 8.0.302-open
+        """))
+
     def offline_install_scylla(self, unified_package, nonroot):
         """
         Offline install scylla by unified package.
