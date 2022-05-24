@@ -322,10 +322,17 @@ class ArtifactsTest(ClusterTester):
                             "systemd-timesyncd is already installed, yet scylla installed ntp service on top of it"
                         assert not is_chrony_service_installed, \
                             "systemd-timesyncd is already installed, yet scylla installed chrony service on top of it"
-                    else:
+                    elif not self.params.get("unified_package"):
                         assert is_ntp_service_installed or is_chrony_service_installed, \
                             "systemd-timesyncd is not installed on the instance, yet Scylla did not install ntp or " \
                             "chrony services as a replacement"
+                    else:
+                        # https://github.com/scylladb/scylla/issues/10608#issuecomment-1135770570
+                        # Scylla doesn't install any time sync service when it's an offline installation,
+                        # so if there's no time sync services active after the scylla installation, it's fine.
+                        # However, in such scenario a warning message should be printed during the scylla installation
+                        self.log.warning("No time sync service was installed. "
+                                         "Passable since it's an offline installation.")
                 except AssertionError:
                     full_list = self.node.remoter.run('systemctl list-units --full').stdout.strip()
                     self.log.warning("Seems that there was an issue with ntp check. Here's the full list of services "
