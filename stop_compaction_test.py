@@ -175,7 +175,7 @@ class StopCompactionTest(ClusterTester):
         finally:
             self.node.running_nemesis = False
 
-    def stop_reshape_compaction(self, reshape_on_boot: bool = True):
+    def stop_reshape_compaction(self, reshape_on_boot: bool = False):
         """
         Test that we can stop a reshape compaction with <nodetool stop RESHAPE>.
         To trigger a reshape compaction, the current CompactionStrategy
@@ -204,8 +204,12 @@ class StopCompactionTest(ClusterTester):
         timeout = 900
 
         def _trigger_reshape(node: BaseNode, tester, keyspace: str = "keyspace1"):
-            twcs = {'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': 1,
-                    'compaction_window_unit': 'MINUTES', 'max_threshold': 1, 'min_threshold': 1}
+
+            if reshape_on_boot is True:
+                compaction_strategy = {'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': 1,
+                                       'compaction_window_unit': 'MINUTES', 'max_threshold': 1, 'min_threshold': 1}
+            else:
+                compaction_strategy = {'class': 'SizeTieredCompactionStrategy'}
             compaction_ops.trigger_flush()
             tester.wait_no_compactions_running()
             LOGGER.info("Copying data files to ./staging and ./upload directories...")
@@ -219,7 +223,7 @@ class StopCompactionTest(ClusterTester):
             node.remoter.sudo(cp_cmd_staging)
             node.remoter.sudo(cp_cmd_upload)
             LOGGER.info("Finished copying data files to ./staging and ./upload directories.")
-            cmd = f"ALTER TABLE standard1 WITH compaction={twcs}"
+            cmd = f"ALTER TABLE standard1 WITH compaction={compaction_strategy}"
             node.run_cqlsh(cmd=cmd, keyspace="keyspace1")
             if reshape_on_boot is True:
                 node.restart_scylla(verify_up_after=True)
