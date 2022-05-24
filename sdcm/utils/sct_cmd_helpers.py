@@ -28,6 +28,17 @@ from sdcm.utils.common import (
 )
 
 
+def get_all_regions(cloud_provider: str) -> list[str] | None:
+    regions = None
+    if cloud_provider == "aws":
+        regions = all_aws_regions(cached=True)
+    elif cloud_provider == "gce":
+        regions = get_all_gce_regions()
+    elif cloud_provider == "azure":
+        regions = AzureService().all_regions
+    return regions
+
+
 class CloudRegion(click.ParamType):
     name = "cloud_region"
 
@@ -37,15 +48,11 @@ class CloudRegion(click.ParamType):
 
     def convert(self, value, param, ctx):
         cloud_provider = self.cloud_provider or ctx.params["cloud_provider"]
-        if cloud_provider == "aws":
-            regions = all_aws_regions(cached=True)
-        elif cloud_provider == "gce":
-            regions = get_all_gce_regions()
-        elif cloud_provider == "azure":
-            regions = AzureService().all_regions
-            value = region_name_to_location(value)
-        else:
+        regions = get_all_regions(cloud_provider)
+        if not regions:
             self.fail(f"unknown cloud provider: {cloud_provider}")
+        if cloud_provider == "azure":
+            value = region_name_to_location(value)
         if value not in regions:
             self.fail(f"invalid region: {value}. (choose from {', '.join(regions)})")
         return value

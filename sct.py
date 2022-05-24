@@ -83,7 +83,7 @@ from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.aws_peering import AwsVpcPeering
 from sdcm.utils.get_username import get_username
-from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_config
+from sdcm.utils.sct_cmd_helpers import add_file_logger, CloudRegion, get_test_config, get_all_regions
 from sdcm.utils.aws_builder import configure_jenkins_builders
 from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter, \
     send_perf_email
@@ -1315,20 +1315,23 @@ def create_test_release_jobs_enterprise(branch, username, password, sct_branch, 
         f'{server.base_sct_dir}/jenkins-pipelines/longevity-in-memory-36gb-1d.jenkinsfile', 'SCT_Enterprise_Features')
 
 
-@cli.command("prepare-region", help="Configure all required resources for SCT runs in selected cloud region")
+@cli.command("prepare-regions", help="Configure all required resources for SCT runs in selected cloud region")
 @cloud_provider_option
-@click.option("-r", "--region", required=True, type=CloudRegion(), help="Cloud region")
-def prepare_region(cloud_provider, region):
+@click.option("-r", "--regions", type=CloudRegion(), help="Cloud region", multiple=True)
+def prepare_regions(cloud_provider, regions):
     add_file_logger()
-    if cloud_provider == "aws":
-        region = AwsRegion(region_name=region)
-    elif cloud_provider == "azure":
-        region = AzureRegion(region_name=region)
-    elif cloud_provider == "gce":
-        region = GceRegion(region_name=region)
-    else:
-        raise Exception(f'Unsupported Cloud provider: `{cloud_provider}')
-    region.configure()
+    regions = regions or get_all_regions(cloud_provider)
+
+    for region in regions:
+        if cloud_provider == "aws":
+            region = AwsRegion(region_name=region)
+        elif cloud_provider == "azure":
+            region = AzureRegion(region_name=region)
+        elif cloud_provider == "gce":
+            region = GceRegion(region_name=region)
+        else:
+            raise Exception(f'Unsupported Cloud provider: `{cloud_provider}')
+        region.configure()
 
 
 @cli.command("configure-aws-peering", help="Configure all required resources for SCT to run in multi-dc")
