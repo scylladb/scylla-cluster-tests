@@ -19,6 +19,7 @@ import click
 from mypy_boto3_ec2 import EC2ServiceResource
 
 from sdcm.utils.aws_region import AwsRegion
+from sdcm.utils.common import all_aws_regions
 from sdcm.sct_runner import AwsSctRunner
 from sdcm.utils.sct_cmd_helpers import CloudRegion, add_file_logger
 from sdcm.keystore import KeyStore
@@ -144,7 +145,7 @@ class AwsBuilder:
 
     @classmethod
     def configure_in_all_region(cls, regions=None):
-        regions = regions or ["us-east-1", "eu-west-1", "eu-west-2", "eu-north-1", "eu-central-1", "us-west-2"]
+        regions = regions or all_aws_regions(cached=True)
         for region_name in regions:
             region = cls(AwsRegion(region_name))
             region.configure()

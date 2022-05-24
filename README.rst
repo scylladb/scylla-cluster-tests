@@ -119,23 +119,6 @@ To run SCT tests locally run following::
     pip install -e git+https://github.com/bentsi/argus#egg=argus
 
 
-Preparing AWS Cloud environment
--------------------------------
-
-To run tests in different regions SCT needs pre-configured environment.
-To configure a region: create VPC and all related environment elements (Subnet, Security Group, etc.) use::
-
-    hydra prepare-aws-region --region <region_name>
-
-SCT can run locally and on remote Runner instance.
-First of all we before creating a Runner instance we need to  create an image using::
-
-    hydra create-runner-image --cloud-provider <cloud_name> --region <region_name>
-
-Then create a Runner instance::
-
-    hydra create-runner-instance --cloud-provider <cloud_name> -r <region_name> -z <az> -t <test-id> -d <run_duration>
-
 
 Run a test
 ----------
@@ -148,6 +131,7 @@ on AWS::
 
 on AWS using SCT Runner::
 
+    hydra create-runner-instance --cloud-provider <cloud_name> -r <region_name> -z <az> -t <test-id> -d <run_duration>
     hydra --execute-on-runner <runner-ip|`cat sct_runner_ip> "run-test longevity_test.LongevityTest.test_custom_time --backend aws --config test-cases/PR-provision-test.yaml"
 
 on GCE::
