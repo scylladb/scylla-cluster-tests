@@ -166,13 +166,11 @@ class CommandLog(BaseLogEntity):  # pylint: disable=too-few-public-methods
         remote_logfile = LogCollector.collect_log_remotely(node=node,
                                                            cmd=self.cmd,
                                                            log_filename=os.path.join(remote_dst, self.name))
-        if archive_logfile := LogCollector.archive_log_remotely(node=node, log_filename=remote_logfile):
-            LogCollector.receive_log(node=node,
-                                     remote_log_path=archive_logfile,
-                                     local_dir=local_dst,
-                                     timeout=self.collect_timeout)
-            return os.path.join(local_dst, os.path.basename(archive_logfile))
-        return None
+        LogCollector.receive_log(node=node,
+                                 remote_log_path=remote_logfile,
+                                 local_dir=local_dst,
+                                 timeout=self.collect_timeout)
+        return os.path.join(local_dst, os.path.basename(remote_logfile))
 
 
 class FileLog(CommandLog):
@@ -231,8 +229,7 @@ class FileLog(CommandLog):
 
     def collect_from_builder(self, builder, local_dst, search_in_dir) -> None:
         if file_path := self.find_on_builder(builder, self.name, search_in_dir):
-            if archive_logfile := LogCollector.archive_log_remotely(builder, file_path):
-                builder.remoter.receive_files(archive_logfile, local_dst, timeout=self.collect_timeout)
+            builder.remoter.receive_files(file_path, local_dst, timeout=self.collect_timeout)
 
 
 class DirLog(FileLog):
