@@ -131,6 +131,14 @@ def test_rolling_restart_cluster(db_cluster):
     assert old_force_redeployment_reason != new_force_redeployment_reason, (
         f"'{old_force_redeployment_reason}' must be different than '{new_force_redeployment_reason}'")
 
+    # check iotune isn't called after restart
+    pods_name_and_status = get_pods_and_statuses(db_cluster, namespace=db_cluster.namespace)
+    for pod_name_and_status in pods_name_and_status:
+        scylla_log = db_cluster.k8s_cluster.kubectl(f"logs {pod_name_and_status['name']} "
+                                                    f"-c scylla", namespace=db_cluster.namespace)
+        assert "scylla_io_setup" not in scylla_log.stdout, \
+            f"iotune was run after reboot on {pod_name_and_status['name']}"
+
 
 @pytest.mark.requires_node_termination_support('drain_k8s_node')
 def test_drain_and_replace_node_kubernetes(db_cluster):
