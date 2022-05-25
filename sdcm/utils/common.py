@@ -1232,6 +1232,40 @@ def get_s3_scylla_repos_mapping(dist_type='centos', dist_version=None):
     return _S3_SCYLLA_REPOS_CACHE[(dist_type, dist_version)]
 
 
+ScyllaProduct = Literal['scylla', 'scylla-enterprise']
+
+
+def get_latest_scylla_ami_release(region: str = 'eu-west-1',
+                                  product: ScyllaProduct = 'scylla') -> str:
+    """
+        Get the latest release, base on the formal AMIs published
+    """
+
+    if product == 'scylla-enterprise':
+        filter_regex = re.compile(r"(rc|dev)", flags=re.IGNORECASE)
+        version_regex = re.compile(r"enterprise\s*(\d*\.\d*\.\d*)", flags=re.IGNORECASE)
+    else:
+        filter_regex = re.compile(r"(enterprise|rc|dev)", flags=re.IGNORECASE)
+        version_regex = re.compile(r"(\d*\.\d*\.\d*)", flags=re.IGNORECASE)
+    versions = []
+    for ami in get_scylla_ami_versions(region_name=region):
+        if not filter_regex.search(ami.name):
+            if version := version_regex.search(ami.name):
+                versions.append(Version(version.group(1)))
+    return str(max(versions))
+
+
+def get_latest_scylla_release(product: Literal['scylla', 'scylla-enterprise']) -> str:
+    """
+    get latest advertised scylla version from the same service scylla_setup is getting it
+    """
+
+    product = product.lstrip('scylla-')
+    url = 'https://repositories.scylladb.com/scylla/check_version?system={}'
+    version = requests.get(url.format(product)).json()
+    return version['version']
+
+
 def pid_exists(pid):
     """
     Return True if a given PID exists.
