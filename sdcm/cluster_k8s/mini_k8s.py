@@ -295,6 +295,15 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
                 f"{minio_config['mcImage']['repository']}:{minio_config['mcImage']['tag']}",
             ]
 
+    @cached_property
+    def cert_manager_images(self):
+        base_repo, tag = "quay.io/jetstack", f"v{self.params.get('k8s_cert_manager_version')}"
+        return [
+            f"{base_repo}/cert-manager-controller:{tag}",
+            f"{base_repo}/cert-manager-cainjector:{tag}",
+            f"{base_repo}/cert-manager-webhook:{tag}",
+        ]
+
     @property
     def scylla_image(self):
         docker_repo = self.params.get('docker_image')
@@ -450,6 +459,8 @@ class LocalKindCluster(LocalMinimalClusterBase):
 
     def on_deploy_completed(self):
         images_to_cache, images_to_retag, new_scylla_image_tag = [], {}, ""
+
+        images_to_cache.extend(self.cert_manager_images)
         if self.scylla_image:
             scylla_image_repo, scylla_image_tag = self.scylla_image.split(":")
             if not version_utils.SEMVER_REGEX.match(scylla_image_tag):
