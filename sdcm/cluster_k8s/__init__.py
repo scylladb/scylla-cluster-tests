@@ -110,6 +110,11 @@ MINIO_NAMESPACE = "minio"
 SCYLLA_CONFIG_NAME = "scylla-config"
 SCYLLA_AGENT_CONFIG_NAME = "scylla-agent-config"
 
+# NOTE: these values are taken from the default values of the "scylla-manager" helm chart.
+#       Needs to be defined separately to be able to reuse for image caching running on local K8S
+SCYLLA_VERSION_IN_SCYLLA_MANAGER = "4.3.0"
+SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER = "2.2.1"
+
 # NOTE: add custom annotations to a ServiceAccount used by a ScyllaCluster
 #       It is needed to make sure that annotations survive operator upgrades
 SCYLLA_CLUSTER_SA_ANNOTATION_KEY_PREFIX = "sct-custom-annotation-key-"
@@ -552,6 +557,8 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             values.set("scylla", {
                 "developerMode": True,
                 "datacenter": "manager-dc",
+                "scyllaImage": {"tag": SCYLLA_VERSION_IN_SCYLLA_MANAGER},
+                "agentImage": {"tag": SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER},
                 "racks": [{
                     "name": "manager-rack",
                     "members": 1,
