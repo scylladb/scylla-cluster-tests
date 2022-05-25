@@ -2213,8 +2213,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.remoter.sudo(f'{package_manager} install zip unzip -y')
         self.remoter.run('curl -s "https://get.sdkman.io" | bash')
         self.remoter.run(shell_script_cmd("""
-            source "$HOME/.sdkman/bin/sdkman-init.sh"
+            source "/home/$USER/.sdkman/bin/sdkman-init.sh"
+            sed -i s/sdkman_auto_answer=false/sdkman_auto_answer=true/  ~/.sdkman/etc/config
+            sed -i s/sdkman_auto_env=false/sdkman_auto_env=true/  ~/.sdkman/etc/config
             sdk install java 8.0.302-open
+            sdk default java 8.0.302-open
         """))
 
     def offline_install_scylla(self, unified_package, nonroot):
