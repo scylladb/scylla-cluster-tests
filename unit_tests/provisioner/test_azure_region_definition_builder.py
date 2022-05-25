@@ -18,12 +18,12 @@ from pathlib import Path
 from sdcm.keystore import KeyStore
 from sdcm.provision.provisioner import InstanceDefinition
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_provision import instances_request_builder
+from sdcm.sct_provision import region_definition_builder
 from sdcm.test_config import TestConfig
 
 
 def test_can_create_basic_scylla_instance_definition_from_sct_config():
-    """Test for azure_instance_request_builder"""
+    """Test for azure_region_definition_builder"""
     EnvConfig = namedtuple('EnvConfig',
                            ["SCT_CLUSTER_BACKEND", "SCT_TEST_ID", "SCT_CONFIG_FILES", "SCT_AZURE_REGION_NAME",
                             "SCT_N_DB_NODES", "SCT_USER_PREFIX",
@@ -46,18 +46,20 @@ def test_can_create_basic_scylla_instance_definition_from_sct_config():
     ssh_key = KeyStore().get_gce_ssh_key_pair()
     prefix = config.get('user_prefix')
     test_config = TestConfig()
-    instance_requests = instances_request_builder.build(sct_config=config, test_config=test_config)
+    builder = region_definition_builder.get_builder(sct_config=config, test_config=test_config)
+    region_definitions = builder.build_all_region_definitions()
 
-    definition = InstanceDefinition(name=f"{prefix}-db-node-eastus-1", image_id=env_config.SCT_AZURE_IMAGE_DB,
-                                    type="Standard_L8s_v2", user_name="scyllaadm", root_disk_size=30,
-                                    tags=tags | {"NodeType": "scylla-db", "keep_action": "", 'NodeIndex': '1'},
-                                    ssh_key=ssh_key)
-    assert len(instance_requests) == 2
-    actual_request = instance_requests[0]
+    instance_definition = InstanceDefinition(name=f"{prefix}-db-node-eastus-1", image_id=env_config.SCT_AZURE_IMAGE_DB,
+                                             type="Standard_L8s_v2", user_name="scyllaadm", root_disk_size=30,
+                                             tags=tags | {"NodeType": "scylla-db", "keep_action": "", 'NodeIndex': '1'},
+                                             ssh_key=ssh_key)
+    assert len(region_definitions) == 2
+    actual_region_definition = region_definitions[0]
 
-    assert actual_request.test_id == env_config.SCT_TEST_ID
-    assert actual_request.backend == "azure"
-    assert actual_request.region == "eastus"
-    actual_request.definitions[0].user_data = definition.user_data  # ignoring user_data in this validation
+    assert actual_region_definition.test_id == env_config.SCT_TEST_ID
+    assert actual_region_definition.backend == "azure"
+    assert actual_region_definition.region == "eastus"
+    # ignoring user_data in this validation
+    actual_region_definition.definitions[0].user_data = instance_definition.user_data
     # ssh_key is not shown, if actual looks the same as expected possibly ssh_key differ
-    assert definition == actual_request.definitions[0]
+    assert instance_definition == actual_region_definition.definitions[0]

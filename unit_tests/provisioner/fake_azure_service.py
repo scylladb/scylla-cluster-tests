@@ -71,6 +71,16 @@ class FakeResourceGroups:
         except FileNotFoundError:
             raise ResourceNotFoundError("Resource group not found") from None
 
+    def list(self) -> List[ResourceGroup]:
+        rgs = []
+        for name in os.listdir(self.path):
+            try:
+                with open(self.path / str(name) / "resource_group.json", "r", encoding="utf-8") as file:
+                    rgs.append(ResourceGroup.deserialize(json.load(file)))
+            except FileNotFoundError:
+                raise ResourceNotFoundError("Resource group not found") from None
+        return rgs
+
     def begin_delete(self, name: str) -> WaitableObject:
         shutil.rmtree(self.path / name)
         return WaitableObject()
