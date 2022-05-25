@@ -16,6 +16,7 @@ import logging
 from typing import Tuple, Optional, List, Callable
 from textwrap import dedent
 from functools import cached_property
+import yaml
 
 from invoke.exceptions import UnexpectedExit
 
@@ -32,6 +33,7 @@ from sdcm.cluster_k8s import (
     BaseScyllaPodContainer,
     ScyllaPodCluster,
     COMMON_CONTAINERS_RESOURCES,
+    LOCAL_MINIO_DIR,
     OPERATOR_CONTAINERS_RESOURCES,
     SCYLLA_MANAGER_AGENT_RESOURCES,
 )
@@ -284,6 +286,15 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
         Hook that is executed just before completing deployment
         """
 
+    @cached_property
+    def minio_images(self):
+        with open(LOCAL_MINIO_DIR + '/values.yaml', mode='r', encoding='utf8') as minio_config_stream:
+            minio_config = yaml.safe_load(minio_config_stream)
+            return [
+                f"{minio_config['image']['repository']}:{minio_config['image']['tag']}",
+                f"{minio_config['mcImage']['repository']}:{minio_config['mcImage']['tag']}",
+            ]
+
     @property
     def scylla_image(self):
         docker_repo = self.params.get('docker_image')
@@ -452,8 +463,10 @@ class LocalKindCluster(LocalMinimalClusterBase):
                         scylla_image_tag, str(exc))
 
             images_to_cache.append(self.scylla_image)
-        if self.params.get("use_mgmt") and self.params.get("mgmt_docker_image"):
-            images_to_cache.append(self.params.get("mgmt_docker_image"))
+        if self.params.get("use_mgmt"):
+            images_to_cache.extend(self.minio_images)
+            if self.params.get("mgmt_docker_image"):
+                images_to_cache.append(self.params.get("mgmt_docker_image"))
         if self.params.get("scylla_mgmt_agent_version"):
             images_to_cache.append(
                 "scylladb/scylla-manager-agent:" + self.params.get("scylla_mgmt_agent_version"))
