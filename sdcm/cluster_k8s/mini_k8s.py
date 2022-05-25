@@ -36,6 +36,8 @@ from sdcm.cluster_k8s import (
     LOCAL_MINIO_DIR,
     OPERATOR_CONTAINERS_RESOURCES,
     SCYLLA_MANAGER_AGENT_RESOURCES,
+    SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER,
+    SCYLLA_VERSION_IN_SCYLLA_MANAGER,
 )
 from sdcm.utils.k8s import TokenUpdateThread, HelmValues
 from sdcm.utils.decorators import retrying
@@ -476,6 +478,9 @@ class LocalKindCluster(LocalMinimalClusterBase):
             images_to_cache.append(self.scylla_image)
         if self.params.get("use_mgmt"):
             images_to_cache.extend(self.minio_images)
+            images_to_cache.append(f"scylladb/scylla:{SCYLLA_VERSION_IN_SCYLLA_MANAGER}")
+            images_to_cache.append(
+                f"scylladb/scylla-manager-agent:{SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER}")
             if self.params.get("mgmt_docker_image"):
                 images_to_cache.append(self.params.get("mgmt_docker_image"))
         if self.params.get("scylla_mgmt_agent_version"):
