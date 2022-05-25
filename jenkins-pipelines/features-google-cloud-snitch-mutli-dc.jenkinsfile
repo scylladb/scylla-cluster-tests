@@ -1,0 +1,10 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+longevityPipeline(
+    backend: 'gce',
+    test_name: 'snitch_test.SnitchTest.test_google_cloud_snitch',
+    test_config: 'test-cases/features/google-cloud-snitch-multi-dc.yaml'
+)
