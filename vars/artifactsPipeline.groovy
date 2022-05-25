@@ -4,11 +4,8 @@ def call(Map pipelineParams) {
     def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
 
     pipeline {
-        agent {
-            label {
-                label builder.label
-            }
-        }
+        agent none
+
         environment {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
