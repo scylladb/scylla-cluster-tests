@@ -21,7 +21,7 @@ from sdcm.provision.helpers.cloud_init import wait_cloud_init_completes
 from sdcm.provision.provisioner import PricingModel, VmInstance, ProvisionError, Provisioner, InstanceDefinition
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_provision import instances_request_builder
+from sdcm.sct_provision import region_definition_builder
 from sdcm.test_config import TestConfig
 
 LOGGER = logging.getLogger(__name__)
@@ -58,7 +58,8 @@ def provision_instances_with_fallback(provisioner: Provisioner, definitions: Lis
 
 def provision_sct_resources(sct_config: SCTConfiguration, test_config: TestConfig, **provisioner_config: Any):
     """Provisions instances according to SCT Configuration."""
-    definitions_per_region = instances_request_builder.build(sct_config=sct_config, test_config=test_config)
+    builder = region_definition_builder.get_builder(sct_config=sct_config, test_config=test_config)
+    definitions_per_region = builder.build_all_region_definitions()
     pricing_model = PricingModel(sct_config.get("instance_provision"))
     provision_fallback_on_demand = sct_config.get("instance_provision_fallback_on_demand")
     for request in definitions_per_region:

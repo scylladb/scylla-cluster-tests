@@ -18,7 +18,7 @@ from typing import Dict, List
 from sdcm import cluster
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.provisioner import PricingModel, VmInstance
-from sdcm.sct_provision.azure.azure_instance_request_definition_builder import generate_instance_definition
+from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.utils.decorators import retrying
 
@@ -144,6 +144,7 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
         self._user_name = user_name
         self._azure_region_names = region_names
         self._node_prefix = node_prefix
+        self._definition_builder = region_definition_builder.get_builder(self.params, test_config=self.test_config)
         super().__init__(cluster_uuid=cluster_uuid,
                          cluster_prefix=cluster_prefix,
                          node_prefix=node_prefix,
@@ -186,14 +187,14 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
             raise CreateAzureNodeError('Failed to create node: %s' % ex) from ex
 
     def _create_instances(self, count, dc_idx=0) -> List[VmInstance]:
-        region = self.params.get('azure_region_name')[dc_idx]
+        region = self._definition_builder.regions[dc_idx]
         assert region, "no region provided, please add `azure_region_name` param"
         pricing_model = PricingModel.SPOT if 'spot' in self.instance_provision else PricingModel.ON_DEMAND
         definitions = []
         for node_index in range(self._node_index + 1, self._node_index + count + 1):
             definitions.append(
-                generate_instance_definition(self.params, test_config=self.test_config, node_type=self.node_type, region=region,
-                                             index=node_index)
+                self._definition_builder.build_instance_definition(
+                    region=region, node_type=self.node_type, index=node_index)
             )
         return provision_instances_with_fallback(self.provisioners[dc_idx], definitions=definitions, pricing_model=pricing_model,
                                                  fallback_on_demand=self.params.get("instance_provision_fallback_on_demand"))

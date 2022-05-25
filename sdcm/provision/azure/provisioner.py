@@ -51,17 +51,19 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
             self._cache[v_m.name] = self._vm_to_instance(v_m)
 
     @classmethod
-    def discover_regions(cls, test_id: str = "") -> List["AzureProvisioner"]:
+    def discover_regions(cls, test_id: str = "", azure_service: AzureService = AzureService(), **kwargs) -> List["AzureProvisioner"]:
+        # pylint: disable=arguments-differ,unused-argument
         """Discovers provisioners for in each region for given test id.
 
         If test_id is not provided, it discovers all related to SCT provisioners."""
-        all_resource_groups = [rg for rg in AzureService().resource.resource_groups.list()
+        all_resource_groups = [rg for rg in azure_service.resource.resource_groups.list()
                                if rg.name.startswith("SCT-")]
         if test_id:
-            provisioner_params = [(test_id, rg.location) for rg in all_resource_groups if test_id in rg.name]
+            provisioner_params = [(test_id, rg.location, azure_service)
+                                  for rg in all_resource_groups if test_id in rg.name]
         else:
             # extract test_id from rg names where rg.name format is: SCT-<test_id>-<region>
-            provisioner_params = [(test_id, rg.location) for rg in all_resource_groups
+            provisioner_params = [(test_id, rg.location, azure_service) for rg in all_resource_groups
                                   if (test_id := "-".join(rg.name.split("-")[1:-1]))]
         return [cls(*params) for params in provisioner_params]
 

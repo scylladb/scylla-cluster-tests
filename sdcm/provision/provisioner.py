@@ -51,6 +51,10 @@ class ProvisionError(Exception):
     pass
 
 
+class ProvisionerError(Exception):
+    pass
+
+
 class PricingModel(Enum):
     ON_DEMAND = 'on_demand'
     SPOT = 'spot'
@@ -75,13 +79,13 @@ class VmInstance:  # pylint: disable=too-many-instance-attributes
     image: str
     _provisioner: "Provisioner"
 
-    def terminate(self, wait=True):
+    def terminate(self, wait: bool = True) -> None:
         """terminates VM instance.
         If wait is set to True, waits until deletion, otherwise, returns when termination
         was triggered."""
         self._provisioner.terminate_instance(self.name, wait=wait)
 
-    def reboot(self, wait=True):
+    def reboot(self, wait: bool = True) -> None:
         """Reboots the instance.
         If wait is set to True, waits until machine is up, otherwise, returns when reboot was triggered."""
         self._provisioner.reboot_instance(self.name, wait)
@@ -96,7 +100,7 @@ class Provisioner(ABC):
     """Abstract class for instance (virtual machines) provisioner, cloud-provider and sct agnostic.
     Limits only to machines related to provided test_id. """
 
-    def __init__(self, test_id, region):
+    def __init__(self, test_id: str, region: str) -> None:
         self._test_id = test_id
         self._region = region
 
@@ -109,7 +113,7 @@ class Provisioner(ABC):
         return self._region
 
     @classmethod
-    def discover_regions(cls, test_id) -> List["Provisioner"]:
+    def discover_regions(cls, test_id: str) -> List["Provisioner"]:
         """Returns provisioner class instance for each region where resources exist."""
         raise NotImplementedError()
 
@@ -162,7 +166,8 @@ class ProvisionerFactory:
         """Creates provisioner for given backend, test_id and region and returns it."""
         provisioner = self._classes.get(backend)
         if not provisioner:
-            raise ValueError(backend)
+            raise ProvisionerError(f"No provisioner found for backend '{backend}'. "
+                                   f"Register it with provisioner_factory.register_provisioner method.")
         return provisioner(test_id, region, **config)
 
     def discover_provisioners(self, backend: str, test_id: str, **config) -> List[Provisioner]:

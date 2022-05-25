@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from sdcm.provision.user_data import UserDataObject
 from sdcm.sct_config import SCTConfiguration
-from sdcm.sct_provision.instances_request_definition_builder import NodeTypeType
+from sdcm.sct_provision.common.types import NodeTypeType
 from sdcm.test_config import TestConfig
 
 

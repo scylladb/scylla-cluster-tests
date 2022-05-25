@@ -21,6 +21,7 @@ import pytest
 from sdcm import wait
 from sdcm.cluster import BaseNode
 from sdcm.prometheus import start_metrics_server
+from sdcm.provision import provisioner_factory
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.utils.docker_remote import RemoteDocker
 
@@ -28,6 +29,7 @@ from sdcm.utils.docker_remote import RemoteDocker
 from unit_tests.dummy_remote import LocalNode, LocalScyllaClusterDummy
 
 from unit_tests.lib.events_utils import EventsUtilsMixin
+from unit_tests.lib.fake_provisioner import FakeProvisioner
 from unit_tests.lib.fake_remoter import FakeRemoter
 
 
@@ -91,3 +93,8 @@ def docker_scylla():
 def fake_remoter():
     RemoteCmdRunnerBase.set_default_remoter_class(FakeRemoter)
     return FakeRemoter
+
+
+@pytest.fixture(scope='session', autouse=True)
+def fake_provisioner():  # pylint: disable=no-self-use
+    provisioner_factory.register_provisioner(backend="fake", provisioner_class=FakeProvisioner)
