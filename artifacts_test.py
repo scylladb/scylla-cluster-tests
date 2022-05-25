@@ -11,15 +11,19 @@
 #
 # Copyright (c) 2020 ScyllaDB
 import datetime
+import pprint
 import re
+import typing
 from functools import cached_property
 
 import yaml
+import requests
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.database import ScyllaHousekeepingServiceEvent
 from sdcm.tester import ClusterTester
 from sdcm.utils.housekeeping import HousekeepingDB
+from sdcm.utils.common import get_latest_scylla_release, ScyllaProduct
 
 STRESS_CMD: str = "/usr/bin/cassandra-stress"
 
@@ -227,6 +231,22 @@ class ArtifactsTest(ClusterTester):
             configured_value = locale_settings.get(setting_key)
             self.assertEqual(configured_value, expected_value)
 
+    def verify_docker_latest_match_release(self) -> None:
+        for product in typing.get_args(ScyllaProduct):
+            latest_version = get_latest_scylla_release(product=product)
+
+            url = 'https://hub.docker.com/v2/repositories/scylladb/{}/tags/{}'
+            docker_latest = requests.get(url.format(product, 'latest')).json()
+            docker_release = requests.get(url.format(product, latest_version)).json()
+            self.log.debug('latest info: %s', pprint.pformat(docker_latest))
+            self.log.debug('%s info: %s ', latest_version, pprint.pformat(docker_release))
+
+            latest_digests = set(image['digest'] for image in docker_latest['images'])
+            release_digests = set(image['digest'] for image in docker_release['images'])
+
+            assert latest_digests == release_digests, \
+                f"latest != {latest_version}, images digest differs [{latest_digests}] != [{release_digests}]"
+
     def verify_nvme_write_cache(self) -> None:
         if self.write_back_cache is None:
             return
@@ -260,7 +280,7 @@ class ArtifactsTest(ClusterTester):
             return False
         return True  # exit_status = 1 means the service doesn't exist
 
-    # pylint: disable=too-many-statements
+    # pylint: disable=too-many-statements,too-many-branches
     def test_scylla_service(self):
         backend = self.params["cluster_backend"]
 
@@ -370,6 +390,10 @@ class ArtifactsTest(ClusterTester):
                                                             expected_status_code=expected_housekeeping_status_code,
                                                             new_row_expected=True,
                                                             backend=backend)
+
+        if backend == 'docker':
+            with self.subTest("Check docker latest tags"):
+                self.verify_docker_latest_match_release()
 
     def get_email_data(self):
         self.log.info("Prepare data for email")
