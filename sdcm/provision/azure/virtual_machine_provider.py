@@ -71,22 +71,22 @@ class VirtualMachineProvider:
                     }],
                 },
             }
-            builder = UserDataBuilder(user_data_objects=definition.user_data)
             if definition.user_data is None:
                 # in case we use specialized image, we don't change things like computer_name, usernames, ssh_keys
                 os_profile = {}
             else:
+                builder = UserDataBuilder(user_data_objects=definition.user_data)
                 custom_data = builder.build_user_data_yaml()
                 os_profile = self._get_os_profile(computer_name=definition.name,
                                                   admin_username=definition.user_name,
                                                   admin_password=binascii.hexlify(os.urandom(20)).decode(),
                                                   ssh_public_key=definition.ssh_key.public_key.decode(),
                                                   custom_data=custom_data)
+                params.update({"user_data": base64.b64encode(
+                    builder.get_scylla_machine_image_json().encode('utf-8')).decode('latin-1')})
             storage_profile = self._get_scylla_storage_profile(image_id=definition.image_id, name=definition.name,
                                                                disk_size=definition.root_disk_size)
             params.update(os_profile)
-            params.update({"user_data": base64.b64encode(
-                builder.get_scylla_machine_image_json().encode('utf-8')).decode('latin-1')})
             params.update(storage_profile)
             params.update(self._get_pricing_params(pricing_model))
             try:
