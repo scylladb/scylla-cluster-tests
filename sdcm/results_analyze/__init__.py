@@ -292,8 +292,9 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
 
         last_error_events, error_events_summary = self.get_events(event_severity=[Severity.ERROR.name])
         last_critical_events, critical_events_summary = self.get_events(event_severity=[Severity.CRITICAL.name])
-        last_events = {Severity.ERROR.name: last_error_events[:100], Severity.CRITICAL.name: last_critical_events[:100]}
-        events_summary = error_events_summary + critical_events_summary
+        last_events = {Severity.ERROR.name: last_error_events[Severity.ERROR.name][:100],
+                       Severity.CRITICAL.name: last_critical_events[Severity.CRITICAL.name][:100]}
+        events_summary = error_events_summary[Severity.ERROR.name] + critical_events_summary[Severity.CRITICAL.name]
         reactor_stall_events = self.get_reactor_stall_events()
         reactor_stall_events_summary = {Severity.DEBUG.name: len(reactor_stall_events)}
         kernel_callstack_events = self.get_kernel_callstack_events()
