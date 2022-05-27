@@ -11,7 +11,9 @@
 #
 # Copyright (c) 2022 ScyllaDB
 import logging
+from pathlib import Path
 
+from sdcm import sct_abs_path
 from sdcm.provision.provisioner import VmInstance
 from sdcm.provision.user_data import CLOUD_INIT_SCRIPTS_PATH
 from sdcm.remote import RemoteCmdRunnerBase
@@ -58,3 +60,7 @@ def log_user_data_scripts_errors(remoter: RemoteCmdRunnerBase) -> bool:
         LOGGER.error("User data scripts were not executed at all.")
         errors_found = True
     return errors_found
+
+
+def get_cloud_init_config():
+    return Path(sct_abs_path("sdcm/provision/aws-cloud-init.txt")).read_text(encoding="utf-8")

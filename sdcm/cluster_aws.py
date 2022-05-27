@@ -13,45 +13,45 @@
 
 # pylint: disable=too-many-lines, too-many-public-methods
 
-import os
-import re
+import base64
 import json
+import logging
+import os
+import random
+import re
+import tempfile
 import time
 import uuid
-import base64
-import random
-import logging
-import tempfile
-from math import floor
-from typing import Dict, Optional, ParamSpec, TypeVar
-from datetime import datetime
-from textwrap import dedent
-from functools import cached_property
-from contextlib import ExitStack
 from collections.abc import Callable
+from contextlib import ExitStack
+from datetime import datetime
+from functools import cached_property
+from math import floor
+from textwrap import dedent
+from typing import Dict, Optional, ParamSpec, TypeVar
 
-import yaml
 import boto3
 import botocore.exceptions
 import tenacity
+import yaml
 from mypy_boto3_ec2 import EC2Client
 from pkg_resources import parse_version
 
 from sdcm import ec2_client, cluster, wait
-from sdcm.wait import exponential_retry
+from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.provision.aws.utils import configure_eth1_script, network_config_ipv6_workaround_script, \
     configure_set_preserve_hostname_script
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
+from sdcm.provision.helpers.cloud_init import get_cloud_init_config
 from sdcm.provision.scylla_yaml import SeedProvider
 from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
-from sdcm.ec2_client import CreateSpotInstancesError
+from sdcm.sct_events.database import DatabaseLogEvent
+from sdcm.sct_events.filters import DbEventsFilter
+from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
 from sdcm.utils.common import list_instances_aws, get_ami_tags, MAX_SPOT_DURATION_TIME
 from sdcm.utils.decorators import retrying
-from sdcm.sct_events.system import SpotTerminationEvent
-from sdcm.sct_events.filters import DbEventsFilter
-from sdcm.sct_events.database import DatabaseLogEvent
-
+from sdcm.wait import exponential_retry
 
 LOGGER = logging.getLogger(__name__)
 
@@ -381,6 +381,10 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                     base64.b64encode(post_boot_script.encode('utf-8')).decode('ascii'))
             else:
                 ec2_user_data = post_boot_script
+
+        #  replace user_data json with cloud-init content if preinstalled scylla is not used
+        if not self.params.get("use_preinstalled_scylla"):
+            ec2_user_data = get_cloud_init_config()
 
         instances = self._create_or_find_instances(count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx)
         added_nodes = [self._create_node(instance, self._ec2_ami_username,
