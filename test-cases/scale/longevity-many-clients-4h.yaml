@@ -13,7 +13,9 @@ n_monitor_nodes: 1
 instance_type_db: 'i3.metal'
 instance_type_loader: 'c5.large'
 instance_type_monitor: 'm5.2xlarge'
-nemesis_class_name: 'ChaosMonkey'
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '031'
+nemesis_multiply_factor: 1
 nemesis_interval: 5
 nemesis_filter_seeds: false
 seeds_num: 3
