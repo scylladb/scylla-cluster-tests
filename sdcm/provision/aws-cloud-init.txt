@@ -1,0 +1,31 @@
+Content-Type: multipart/mixed; boundary="//"
+MIME-Version: 1.0
+
+--//
+Content-Type: text/cloud-config; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename="cloud-config.txt"
+#cloud-config
+
+cloud_final_modules:
+ - [scripts-user, always]
+
+--//
+Content-Type: text/x-shellscript; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename="custom_user_script.txt"
+
+#!/bin/bash
+echo "Running the legacy ssh keys script" > /tmp/User scripts
+systemctl stop sshd || true
+if (( $(ssh -V 2>&1 | tr -d "[:alpha:][:blank:][:punct:]" | cut -c-2) >= 88 )); then
+    sed -i 's/#PubkeyAuthentication \(.*\)$/PubkeyAuthentication yes/' /etc/ssh/sshd_config || true
+    sed -i -e '$aPubkeyAcceptedAlgorithms +ssh-rsa' /etc/ssh/sshd_config || true
+    sed -i -e '$aHostKeyAlgorithms +ssh-rsa' /etc/ssh/sshd_config || true
+fi
+systemctl restart sshd || true
+echo "Finished running the legacy ssh keys script"
+
+--//--
