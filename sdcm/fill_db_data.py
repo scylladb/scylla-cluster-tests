@@ -1085,7 +1085,7 @@ class FillDatabaseData(ClusterTester):
                         "SELECT v1, v2 FROM range_tombstones_test WHERE k = %d" % 2,
                         "SELECT v1, v2 FROM range_tombstones_test WHERE k = %d" % 3,
                         "SELECT v1, v2 FROM range_tombstones_test WHERE k = %d" % 4,
-                        "#REMOTER_SUDO nodetool flush",
+                        "#REMOTER_RUN nodetool flush",
                         "SELECT v1, v2 FROM range_tombstones_test WHERE k = %d" % 0,
                         "SELECT v1, v2 FROM range_tombstones_test WHERE k = %d" % 1,
                         "SELECT v1, v2 FROM range_tombstones_test WHERE k = %d" % 2,
@@ -1128,10 +1128,10 @@ class FillDatabaseData(ClusterTester):
             'truncates': [],
             'inserts': ["INSERT INTO range_tombstones_compaction_test (k, c1, c2, v1) VALUES (0, %d, %d, '%s')" % (
                 c1, c2, '%i%i' % (c1, c2)) for c1 in range(0, 4) for c2 in range(0, 2)],
-            'queries': ["#REMOTER_SUDO nodetool flush",
+            'queries': ["#REMOTER_RUN nodetool flush",
                         "DELETE FROM range_tombstones_compaction_test WHERE k = 0 AND c1 = 1",
-                        "#REMOTER_SUDO nodetool flush",
-                        "#REMOTER_SUDO nodetool compact",
+                        "#REMOTER_RUN nodetool flush",
+                        "#REMOTER_RUN nodetool compact",
                         "SELECT v1 FROM range_tombstones_compaction_test WHERE k = 0"],
             'results': [None,
                         [],
@@ -2519,9 +2519,9 @@ class FillDatabaseData(ClusterTester):
                 "CREATE TABLE collection_flush_test (k int PRIMARY KEY, s set<int>)"],
             'truncates': ["TRUNCATE collection_flush_test"],
             'inserts': ["INSERT INTO collection_flush_test(k, s) VALUES (1, {1})",
-                        "#REMOTER_SUDO nodetool flush",
+                        "#REMOTER_RUN nodetool flush",
                         "INSERT INTO collection_flush_test(k, s) VALUES (1, {2})",
-                        "#REMOTER_SUDO nodetool flush"],
+                        "#REMOTER_RUN nodetool flush"],
             'queries': ["SELECT * FROM collection_flush_test"],
             'results': [[[1, set([2])]]],
             'min_version': '',
@@ -3181,9 +3181,9 @@ class FillDatabaseData(ClusterTester):
                 for insert in item['inserts']:
                     with self._execute_and_log(f'Populated data for test "{test_name}" in {{}} seconds'):
                         try:
-                            if insert.startswith("#REMOTER_SUDO"):
+                            if insert.startswith("#REMOTER_RUN"):
                                 for node in self.db_cluster.nodes:
-                                    node.remoter.sudo(insert.replace('#REMOTER_SUDO', ''))
+                                    node.remoter.run(insert.replace('#REMOTER_RUN', ''))
                             else:
                                 session.execute(insert)
                         except Exception as ex:
@@ -3204,9 +3204,9 @@ class FillDatabaseData(ClusterTester):
                 if item['queries'][i].startswith("#SORTED"):
                     res = session.execute(item['queries'][i].replace('#SORTED', ''))
                     self.assertEqual(sorted([list(row) for row in res]), item['results'][i])
-                elif item['queries'][i].startswith("#REMOTER_SUDO"):
+                elif item['queries'][i].startswith("#REMOTER_RUN"):
                     for node in self.db_cluster.nodes:
-                        node.remoter.sudo(item['queries'][i].replace('#REMOTER_SUDO', ''))
+                        node.remoter.run(item['queries'][i].replace('#REMOTER_RUN', ''))
                 elif item['queries'][i].startswith("#LENGTH"):
                     res = session.execute(item['queries'][i].replace('#LENGTH', ''))
                     self.assertEqual(len([list(row) for row in res]), item['results'][i])
