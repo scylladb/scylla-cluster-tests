@@ -1476,6 +1476,7 @@ def generate_parallel_timelines_report(logdir: str | None, test_id: str | None) 
 cli.add_command(configure_jenkins_builders)
 cli.add_command(sct_ssh.ssh)
 cli.add_command(sct_ssh.tunnel)
+cli.add_command(sct_ssh.copy_cmd)
 
 if __name__ == '__main__':
     cli()

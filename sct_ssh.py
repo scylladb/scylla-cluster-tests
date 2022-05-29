@@ -56,6 +56,24 @@ def guess_username(instance: dict) -> str:
         return 'ubuntu'
 
 
+def get_proxy_command(instance: dict, force_use_public_ip: bool) -> [str, str, str]:
+    aws_region = AwsRegion(get_region(instance))
+
+    if aws_region.sct_vpc.vpc_id == instance["VpcId"] and not force_use_public_ip:
+        # if we are the current VPC setup, proxy via bastion needed
+        bastion = find_bastion_for_instance(instance)
+        bastion_username,  bastion_ip = guess_username(bastion), bastion["PublicIpAddress"]
+        target_ip = instance["PrivateIpAddress"]
+        proxy_command = f'-o ProxyCommand="ssh -i ~/.ssh/scylla-qa-ec2 -W %h:%p {bastion_username}@{bastion_ip}"'
+    else:
+        # all other older machine/builders, we connect via public address
+        target_ip = instance["PublicIpAddress"]
+        proxy_command = ''
+
+    target_username = guess_username(instance)
+    return proxy_command, target_ip, target_username
+
+
 def select_instance(region: str = None, **tags) -> dict | None:
     user = tags.get('user')
     test_id = tags.get('test_id')
@@ -94,6 +112,7 @@ def select_instance(region: str = None, **tags) -> dict | None:
     return question.ask()
 
 
+# pylint: disable=too-many-arguments
 @click.command("ssh", help="Connect to any SCT machine on AWS")
 @click.option("-u", "--user", default=None,
               help="User to search for (RunByUser tag)")
@@ -107,20 +126,7 @@ def ssh(user, test_id, region, force_use_public_ip, node_name):
     connect_vm = select_instance(region=region, test_id=test_id, user=user, node_name=node_name)
 
     if connect_vm:
-        aws_region = AwsRegion(get_region(connect_vm))
-
-        if aws_region.sct_vpc.vpc_id == connect_vm["VpcId"] and not force_use_public_ip:
-            # if we are the current VPC setup, proxy via bastion needed
-            bastion = find_bastion_for_instance(connect_vm)
-            bastion_username,  bastion_ip = guess_username(bastion), bastion["PublicIpAddress"]
-            target_ip = connect_vm["PrivateIpAddress"]
-            proxy_command = f'-o ProxyCommand="ssh -i ~/.ssh/scylla-qa-ec2 -W %h:%p {bastion_username}@{bastion_ip}"'
-        else:
-            # all other older machine/builders, we connect via public address
-            target_ip = connect_vm["PublicIpAddress"]
-            proxy_command = ''
-
-        target_username = guess_username(connect_vm)
+        proxy_command, target_ip, target_username = get_proxy_command(connect_vm, force_use_public_ip)
         click.echo(click.style(f"ssh into: {get_tags(connect_vm).get('Name')}",
                                fg='green', bold=True))
         pty.spawn(shlex.split(f'ssh {proxy_command}'
@@ -134,9 +140,10 @@ def ssh(user, test_id, region, force_use_public_ip, node_name):
 @click.option("-t", "--test-id", default=None, help="test id to search for")
 @click.option("-r", "--region", default=None, help="region to use, default search across all regions")
 @click.option("-p", "--port", default=3000, help="remote port to tunnel")
-def tunnel(user, test_id, region, port):
-    assert user or test_id
-    connect_vm = select_instance(region=region, test_id=test_id, user=user)
+@click.argument("node_name", required=False)
+def tunnel(user, test_id, region, port, node_name):
+    assert user or test_id or node_name
+    connect_vm = select_instance(region=region, test_id=test_id, user=user, node_name=node_name)
 
     if connect_vm:
         aws_region = AwsRegion(get_region(connect_vm))
@@ -159,3 +166,30 @@ def tunnel(user, test_id, region, port):
             click.echo(click.style(
                 f"connect to:\nssh -i ~/.ssh/scylla-qa-ec2 -p {local_port} {target_username}@127.0.0.1", fg='yellow'))
         subprocess.check_output(cmd, shell=True)
+
+
+@click.command("cp", help="copy files")
+@click.option("-u", "--user", default=None,
+              help="User to search for (RunByUser tag)")
+@click.option("-t", "--test-id", default=None, help="test id to search for")
+@click.option("-r", "--region", default=None, help="region to use, default search across all regions")
+@click.option("-P", "--force-use-public-ip", is_flag=True, show_default=True, default=False,
+              help="Force usage of public address")
+@click.argument("src")
+@click.argument("dest")
+def copy_cmd(user, test_id, region, force_use_public_ip, src, dest):
+    assert user or test_id
+    connect_vm = select_instance(region=region, test_id=test_id, user=user)
+
+    if connect_vm:
+        proxy_command, target_ip, target_username = get_proxy_command(connect_vm, force_use_public_ip)
+        target = f'{target_username}@{target_ip}:'
+        if ':' in src:
+            src = target + src.split(':', maxsplit=1)[1]
+        elif ':' in dest:
+            dest = target + dest.split(':', maxsplit=1)[1]
+        else:
+            click.echo(click.style("Not [src] nor [dest] has target host in them", fg='red'))
+        pty.spawn(shlex.split(f'scp {proxy_command}'
+                              f' -i ~/.ssh/scylla-qa-ec2 -o "UserKnownHostsFile=/dev/null" '
+                              f'-o "StrictHostKeyChecking=no" -o ServerAliveInterval=10 -C {src} {dest}'))
