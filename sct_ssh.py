@@ -13,12 +13,13 @@
 
 import pty
 import shlex
+import subprocess
 
 import click
 import questionary
 from questionary import Choice
 
-from sdcm.utils.common import list_instances_aws
+from sdcm.utils.common import list_instances_aws, get_free_port
 from sdcm.utils.aws_region import AwsRegion
 
 
@@ -125,3 +126,36 @@ def ssh(user, test_id, region, force_use_public_ip, node_name):
         pty.spawn(shlex.split(f'ssh {proxy_command}'
                               f' -i ~/.ssh/scylla-qa-ec2 -o "UserKnownHostsFile=/dev/null" '
                               f'-o "StrictHostKeyChecking=no" -o ServerAliveInterval=10 {target_username}@{target_ip}'))
+
+
+@click.command("tunnel", help="Tunnel ports to any SCT machine on AWS")
+@click.option("-u", "--user", default=None,
+              help="User to search for (RunByUser tag)")
+@click.option("-t", "--test-id", default=None, help="test id to search for")
+@click.option("-r", "--region", default=None, help="region to use, default search across all regions")
+@click.option("-p", "--port", default=3000, help="remote port to tunnel")
+def tunnel(user, test_id, region, port):
+    assert user or test_id
+    connect_vm = select_instance(region=region, test_id=test_id, user=user)
+
+    if connect_vm:
+        aws_region = AwsRegion(get_region(connect_vm))
+
+        bastion = find_bastion_for_instance(connect_vm)
+        bastion_username, bastion_ip = guess_username(bastion), bastion["PublicIpAddress"]
+        if aws_region.sct_vpc.vpc_id == connect_vm["VpcId"]:
+            target_ip = connect_vm["PrivateIpAddress"]
+        else:
+            target_ip = connect_vm["PublicIpAddress"]
+        click.echo(click.style(f"tunnel into: {get_tags(connect_vm).get('Name')}", fg='green'))
+        local_port = get_free_port()
+        cmd = f'ssh -i ~/.ssh/scylla-qa-ec2 -N -L {local_port}:{target_ip}:{port} -o "UserKnownHostsFile=/dev/null" ' \
+              f'-o "StrictHostKeyChecking=no" -o ServerAliveInterval=10 {bastion_username}@{bastion_ip}'
+        click.echo(cmd)
+        if port == 3000:
+            click.echo(click.style(f"connect to: http://127.0.0.1:{local_port}", fg='yellow'))
+        if port == 22:
+            target_username = guess_username(connect_vm)
+            click.echo(click.style(
+                f"connect to:\nssh -i ~/.ssh/scylla-qa-ec2 -p {local_port} {target_username}@127.0.0.1", fg='yellow'))
+        subprocess.check_output(cmd, shell=True)
