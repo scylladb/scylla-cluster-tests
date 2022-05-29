@@ -1227,6 +1227,9 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                                                          instance=instance,
                                                          global_ip=instance["publicip"]))
 
+    def get_aws_ip_address(self, instance):
+        return instance['PublicIpAddress'] if self.params.get('ip_ssh_connections') == 'public' else instance['PrivateIpAddress']
+
     def get_aws_instances_by_testid(self):
         instances = list_instances_aws({"TestId": self.test_id}, running=True)
         filtered_instances = filter_aws_instances_by_type(instances)
@@ -1235,22 +1238,22 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                     for tag in instance['Tags'] if tag['Key'] == 'Name']
             self.db_cluster.append(CollectingNode(name=name[0],
                                                   ssh_login_info={
-                                                      "hostname": instance['PublicIpAddress'],
+                                                      "hostname": self.get_aws_ip_address(instance),
                                                       "user": self.params['ami_db_scylla_user'],
                                                       "key_file": self.params['user_credentials_path']},
                                                   instance=instance,
-                                                  global_ip=instance['PublicIpAddress'],
+                                                  global_ip=self.get_aws_ip_address(instance),
                                                   tags={**self.tags, "NodeType": "scylla-db", }))
         for instance in filtered_instances['monitor_nodes']:
             name = [tag['Value']
                     for tag in instance['Tags'] if tag['Key'] == 'Name']
             self.monitor_set.append(CollectingNode(name=name[0],
                                                    ssh_login_info={
-                                                       "hostname": instance['PublicIpAddress'],
+                                                       "hostname": self.get_aws_ip_address(instance),
                                                        "user": self.params['ami_monitor_user'],
                                                        "key_file": self.params['user_credentials_path']},
                                                    instance=instance,
-                                                   global_ip=instance['PublicIpAddress'],
+                                                   global_ip=self.get_aws_ip_address(instance),
                                                    tags={**self.tags, "NodeType": "monitor", }))
         if self.params["use_cloud_manager"]:
             self.find_and_append_cloud_manager_instance_to_collecting_nodes()
@@ -1260,22 +1263,22 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                     for tag in instance['Tags'] if tag['Key'] == 'Name']
             self.loader_set.append(CollectingNode(name=name[0],
                                                   ssh_login_info={
-                                                      "hostname": instance['PublicIpAddress'],
+                                                      "hostname": self.get_aws_ip_address(instance),
                                                       "user": self.params['ami_loader_user'],
                                                       "key_file": self.params['user_credentials_path']},
                                                   instance=instance,
-                                                  global_ip=instance['PublicIpAddress'],
+                                                  global_ip=self.get_aws_ip_address(instance),
                                                   tags={**self.tags, "NodeType": "loader", }))
         for instance in filtered_instances['kubernetes_nodes']:
             name = [tag['Value']
                     for tag in instance['Tags'] if tag['Key'] == 'Name']
             self.kubernetes_set.append(CollectingNode(name=name[0],
                                                       ssh_login_info={
-                "hostname": instance['PublicIpAddress'],
+                "hostname": self.get_aws_ip_address(instance),
                 "user": self.params['ami_loader_user'],
                 "key_file": self.params['user_credentials_path']},
                 instance=instance,
-                global_ip=instance['PublicIpAddress'],
+                global_ip=self.get_aws_ip_address(instance),
                 tags={**self.tags, "NodeType": "loader", }))
 
     def get_gce_instances_by_testid(self):
