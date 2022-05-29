@@ -3140,7 +3140,7 @@ class FillDatabaseData(ClusterTester):
                             self.assertEqual(sorted([list(row) for row in res]), item['results'][i])
                         elif item['queries'][i].startswith("#REMOTER_RUN"):
                             for node in self.db_cluster.nodes:
-                                node.remoter.sudo(item['queries'][i].replace('#REMOTER_RUN', ''))
+                                node.remoter.run(item['queries'][i].replace('#REMOTER_RUN', ''))
                         elif item['queries'][i].startswith("#LENGTH"):
                             res = session.execute(item['queries'][i].replace('#LENGTH', ''))
                             self.assertEqual(len([list(row) for row in res]), item['results'][i])
