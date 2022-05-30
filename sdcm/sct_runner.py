@@ -251,6 +251,7 @@ class SctRunner(ABC):
                          base_image: Any,
                          tags: dict[str, str],
                          instance_name: str,
+                         root_disk_size_gb: int = 0,
                          region_az: str = "",
                          test_duration: Optional[int] = None) -> Any:
         ...
@@ -339,7 +340,8 @@ class SctRunner(ABC):
     def _get_base_image(self, image: Optional[Any] = None) -> Any:
         ...
 
-    def create_instance(self, test_id: str, test_duration: int, instance_type: str = "",  # pylint: disable=too-many-arguments
+    def create_instance(self, test_id: str, test_duration: int,  # pylint: disable=too-many-arguments
+                        instance_type: str = "",  root_disk_size_gb: int = 0,
                         restore_monitor: bool = False, restored_test_id: str = "") -> Any:
         LOGGER.info("Creating SCT Runner instance...")
         image = self.image
@@ -362,6 +364,7 @@ class SctRunner(ABC):
         return self._create_instance(
             instance_type=instance_type or self.instance_type(test_duration=test_duration),
             base_image=self._get_base_image(self.image),
+            root_disk_size_gb=root_disk_size_gb,
             tags=tags,
             instance_name=f"{self.image_name}-{'restored-monitor-' if restore_monitor else ''}instance-{test_id[:8]}",
             region_az=self.region_az(
@@ -441,6 +444,7 @@ class AwsSctRunner(SctRunner):
                          base_image: Any,
                          tags: dict[str, str],
                          instance_name: str,
+                         root_disk_size_gb: int = 0,
                          region_az: str = "",
                          test_duration: Optional[int] = None) -> Any:
         if region_az.startswith(self.SOURCE_IMAGE_REGION):
@@ -474,7 +478,7 @@ class AwsSctRunner(SctRunner):
             BlockDeviceMappings=[{
                 "DeviceName": ec2_ami_get_root_device_name(image_id=base_image, region=aws_region.region_name),
                 "Ebs": {
-                    "VolumeSize": self.instance_root_disk_size(test_duration),
+                    "VolumeSize": root_disk_size_gb or self.instance_root_disk_size(test_duration),
                     "VolumeType": "gp2"
                 }
             }]
@@ -630,6 +634,7 @@ class GceSctRunner(SctRunner):
                          base_image: Any,
                          tags: dict[str, str],
                          instance_name: str,
+                         root_disk_size_gb: int = 0,
                          region_az: str = "",
                          test_duration: Optional[int] = None) -> Any:
         LOGGER.info("Creating instance...")
@@ -649,7 +654,7 @@ class GceSctRunner(SctRunner):
                 "initializeParams": {
                     "diskName": f"{instance_name}-root-pd-ssd",
                     "diskType": f"projects/{self.project_name}/zones/{gce_service.zone.name}/diskTypes/pd-ssd",
-                    "diskSizeGb": self.instance_root_disk_size(test_duration),
+                    "diskSizeGb": root_disk_size_gb or self.instance_root_disk_size(test_duration),
                     "sourceImage": base_image,
                 },
                 "boot": True,
@@ -794,6 +799,7 @@ class AzureSctRunner(SctRunner):
                          base_image: Any,
                          tags: dict[str, str],
                          instance_name: str,
+                         root_disk_size_gb: int = 0,
                          region_az: str = "",
                          test_duration: Optional[int] = None) -> Any:
         if base_image is self.BASE_IMAGE:
@@ -808,7 +814,7 @@ class AzureSctRunner(SctRunner):
                 vm_name=instance_name,
                 vm_size=instance_type,
                 image=base_image,
-                disk_size=self.instance_root_disk_size(test_duration=test_duration),
+                disk_size=root_disk_size_gb or self.instance_root_disk_size(test_duration=test_duration),
                 tags=tags | {"launch_time": get_current_datetime_formatted()},
                 **additional_kwargs,
             )
@@ -822,7 +828,9 @@ class AzureSctRunner(SctRunner):
                                            user_name=None,
                                            ssh_public_key=None,
                                            tags=tags | {"launch_time": get_current_datetime_formatted()},
-                                           root_disk_size=self.instance_root_disk_size(test_duration=test_duration))
+                                           root_disk_size=root_disk_size_gb or self.instance_root_disk_size(
+                                               test_duration=test_duration),
+                                           )
             return provisioner.get_or_create_instance(definition=vm_params,
                                                       pricing_model=PricingModel.ON_DEMAND)
 
