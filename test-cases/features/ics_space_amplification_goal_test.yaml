@@ -16,7 +16,7 @@ n_monitor_nodes: 1
 instance_type_db: 'i3.4xlarge'
 
 nemesis_class_name: 'NoOpMonkey'
-user_prefix: 'ics_space_amplification'
+user_prefix: 'ics-space-amplification'
 server_encrypt: false
 client_encrypt: false
 
