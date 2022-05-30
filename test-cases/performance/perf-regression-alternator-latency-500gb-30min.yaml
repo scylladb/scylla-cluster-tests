@@ -1,4 +1,4 @@
-test_duration: 600
+test_duration: 840
 
 prepare_write_cmd:
   - >-
