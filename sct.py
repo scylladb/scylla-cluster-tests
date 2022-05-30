@@ -1324,14 +1324,15 @@ def create_runner_image(cloud_provider, region, availability_zone):
 @click.option("-r", "--region", required=True, type=CloudRegion(), help="Cloud region")
 @click.option("-z", "--availability-zone", default="", type=str, help="Name of availability zone, ex. 'a'")
 @click.option("-i", "--instance-type", required=False, type=str, default="", help="Instance type")
+@click.option("-i", "--root-disk-size-gb", required=False, type=int, default=0, help="Root disk size in Gb")
 @click.option("-t", "--test-id", required=True, type=str, help="Test ID")
 @click.option("-d", "--duration", required=True, type=int, help="Test duration in MINUTES")
 @click.option("-rm", "--restore-monitor", required=False, type=bool,
               help="Is the runner for restore monitor purpose or not")
 @click.option("-rt", "--restored-test-id", required=False, type=str,
               help="Test ID of the test that the runner is created for restore monitor")
-def create_runner_instance(cloud_provider, region, availability_zone, instance_type, test_id, duration,
-                           restore_monitor=False, restored_test_id=""):
+def create_runner_instance(cloud_provider, region, availability_zone, instance_type, root_disk_size_gb,
+                           test_id, duration, restore_monitor=False, restored_test_id=""):
     if cloud_provider == "aws":
         assert len(availability_zone) == 1, f"Invalid AZ: {availability_zone}, availability-zone is one-letter a-z."
     add_file_logger()
@@ -1340,6 +1341,7 @@ def create_runner_instance(cloud_provider, region, availability_zone, instance_t
     sct_runner = get_sct_runner(cloud_provider=cloud_provider, region_name=region, availability_zone=availability_zone)
     instance = sct_runner.create_instance(
         instance_type=instance_type,
+        root_disk_size_gb=root_disk_size_gb,
         test_id=test_id,
         test_duration=duration,
         restore_monitor=restore_monitor,
