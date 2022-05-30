@@ -3,10 +3,13 @@
 def call(Map params, Integer test_duration, String region) {
     def cloud_provider = getCloudProviderFromBackend(params.backend)
     def instance_type_arg = ""
+    def root_disk_size_gb_arg = ""
     if ( params.backend == "k8s-local-kind-aws" ) {
         instance_type_arg = "--instance-type c5.2xlarge"
+        root_disk_size_gb_arg = "--root-disk-size-gb 120"
     } else if ( params.backend == "k8s-local-kind-gce" ) {
         instance_type_arg = "--instance-type e2-standard-8"
+        root_disk_size_gb_arg = "--root-disk-size-gb 120"
     }
 
     // NOTE: EKS jobs have 'availability_zone' be defined as 'a,b'
@@ -31,6 +34,7 @@ def call(Map params, Integer test_duration, String region) {
             --region ${region} \
             --availability-zone ${availability_zone} \
             $instance_type_arg \
+            $root_disk_size_gb_arg \
             --test-id \${SCT_TEST_ID} \
             --duration ${test_duration}
     else
