@@ -219,7 +219,7 @@ def provision_resources(backend, test_name: str, config: str):
         layout = SCTProvisionLayout(params=params)
         layout.provision()
     elif backend == "azure":
-        provision_sct_resources(sct_config=params, test_config=test_config)
+        provision_sct_resources(params=params, test_config=test_config)
     else:
         raise ValueError(f"backend {backend} is not supported")
 

@@ -57,8 +57,8 @@ class DefinitionBuilder(abc.ABC):
     SCT_PARAM_MAPPER: Dict[NodeTypeType, ConfigParamsMap]
     REGION_MAP: str
 
-    def __init__(self, sct_config: SCTConfiguration, test_config: TestConfig) -> None:
-        self.params = sct_config
+    def __init__(self, params: SCTConfiguration, test_config: TestConfig) -> None:
+        self.params = params
         self.test_config = test_config
         self.test_id = self.params.get("test_id")
 
@@ -138,7 +138,7 @@ class DefinitionBuilder(abc.ABC):
             ScyllaUserDataObject,
         ]
         user_data_objects = [
-            klass(test_config=self.test_config, sct_config=self.params,
+            klass(test_config=self.test_config, params=self.params,
                   instance_name=instance_name, node_type=node_type)
             for klass in user_data_object_classes
         ]
@@ -160,9 +160,9 @@ class RegionDefinitionBuilder:
         Must be used before calling RegionDefinitionBuilder for given backend."""
         self._builder_classes[backend] = builder_class
 
-    def get_builder(self, sct_config: SCTConfiguration, test_config: TestConfig) -> DefinitionBuilder:
+    def get_builder(self, params: SCTConfiguration, test_config: TestConfig) -> DefinitionBuilder:
         """Creates RegionDefinition for each region based on SCTConfiguration.
 
         Prior use, must register builder for given backend."""
-        backend = sct_config.get("cluster_backend")
-        return self._builder_classes[backend](sct_config, test_config)
+        backend = params.get("cluster_backend")
+        return self._builder_classes[backend](params, test_config)

@@ -46,7 +46,7 @@ def test_can_create_basic_scylla_instance_definition_from_sct_config():
     ssh_key = KeyStore().get_gce_ssh_key_pair()
     prefix = config.get('user_prefix')
     test_config = TestConfig()
-    builder = region_definition_builder.get_builder(sct_config=config, test_config=test_config)
+    builder = region_definition_builder.get_builder(params=config, test_config=test_config)
     region_definitions = builder.build_all_region_definitions()
 
     instance_definition = InstanceDefinition(name=f"{prefix}-db-node-eastus-1", image_id=env_config.SCT_AZURE_IMAGE_DB,

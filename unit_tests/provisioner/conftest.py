@@ -44,7 +44,7 @@ def fallback_on_demand():
 
 
 @pytest.fixture
-def sct_config():
+def params():
     EnvConfig = namedtuple('EnvConfig',
                            ["SCT_CLUSTER_BACKEND", "SCT_TEST_ID", "SCT_CONFIG_FILES", "SCT_AZURE_REGION_NAME",
                             "SCT_N_DB_NODES",
@@ -64,7 +64,7 @@ def sct_config():
 
 
 @pytest.fixture
-def test_config(sct_config):  # pylint: disable=unused-argument,redefined-outer-name
+def test_config(params):  # pylint: disable=unused-argument,redefined-outer-name
     config = get_test_config()
     TestConfig.RSYSLOG_ADDRESS = ("localhost", 12345)
     return config

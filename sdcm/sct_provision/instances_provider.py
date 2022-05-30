@@ -56,12 +56,12 @@ def provision_instances_with_fallback(provisioner: Provisioner, definitions: Lis
     return provisioned_instances
 
 
-def provision_sct_resources(sct_config: SCTConfiguration, test_config: TestConfig, **provisioner_config: Any):
+def provision_sct_resources(params: SCTConfiguration, test_config: TestConfig, **provisioner_config: Any):
     """Provisions instances according to SCT Configuration."""
-    builder = region_definition_builder.get_builder(sct_config=sct_config, test_config=test_config)
+    builder = region_definition_builder.get_builder(params=params, test_config=test_config)
     definitions_per_region = builder.build_all_region_definitions()
-    pricing_model = PricingModel(sct_config.get("instance_provision"))
-    provision_fallback_on_demand = sct_config.get("instance_provision_fallback_on_demand")
+    pricing_model = PricingModel(params.get("instance_provision"))
+    provision_fallback_on_demand = params.get("instance_provision_fallback_on_demand")
     for request in definitions_per_region:
         provisioner = provisioner_factory.create_provisioner(backend=request.backend,
                                                              test_id=request.test_id,

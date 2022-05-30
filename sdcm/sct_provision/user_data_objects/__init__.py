@@ -21,6 +21,6 @@ from sdcm.test_config import TestConfig
 @dataclass
 class SctUserDataObject(UserDataObject):
     test_config: TestConfig
-    sct_config: SCTConfiguration
+    params: SCTConfiguration
     instance_name: str
     node_type: NodeTypeType
