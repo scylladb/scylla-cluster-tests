@@ -101,7 +101,7 @@ def call(Map pipelineParams) {
                 }
                 steps {
                     catchError(stageResult: 'FAILURE') {
-                        timeout(time: 1, unit: 'MINUTES') {
+                        timeout(time: 5, unit: 'MINUTES') {
                             script {
                                 wrap([$class: 'BuildUser']) {
                                     dir('scylla-cluster-tests') {
