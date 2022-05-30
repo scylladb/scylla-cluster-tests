@@ -22,7 +22,7 @@ class SyslogNgUserDataObject(SctUserDataObject):
 
     @property
     def is_applicable(self) -> bool:
-        return self.sct_config.get('logs_transport') == 'syslog-ng'
+        return self.params.get('logs_transport') == 'syslog-ng'
 
     @property
     def packages_to_install(self) -> set[str]:
