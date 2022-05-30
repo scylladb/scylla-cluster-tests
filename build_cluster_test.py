@@ -70,13 +70,13 @@ class BuildClusterTest(ClusterTester):
                                "Please check AMI!")
 
         for node in self.db_cluster.nodes:
-            node.remoter.run('sudo sed -i.bak s/{0}/{1}/g /etc/scylla/scylla.yaml'.format(node.private_ip_address,
-                                                                                          addresses.get(
-                                                                                              node.private_ip_address,
-                                                                                              "")))
-            for seed in seeds:
-                node.remoter.run(
-                    'sudo sed -i.bak2 s/{0}/{1}/g /etc/scylla/scylla.yaml'.format(seed, addresses.get(seed, "")))
+            with node.remote_scylla_yaml() as scylla_yml:
+                scylla_yml.listen_address = addresses[node.private_ip_address]
+                scylla_yml.rpc_address = addresses[node.private_ip_address]
+                current_seed_provider = scylla_yml.seed_provider
+                seeds_string = ",".join([addresses.get(seed) for seed in seeds])
+                current_seed_provider[0].parameters = [{"seeds": seeds_string}]
+                scylla_yml.seed_provider = current_seed_provider
 
         for node in self.db_cluster.nodes:
             if node.is_seed:
