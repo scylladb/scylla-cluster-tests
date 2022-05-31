@@ -21,13 +21,17 @@ class TWCSLongevityTest(LongevityTest):
                 ) WITH CLUSTERING ORDER BY (ck ASC)
                     AND default_time_to_live = {ttl}
                     AND compaction = {{'class': 'TimeWindowCompactionStrategy', 'compaction_window_size': '{window_size}',
-                    'compaction_window_unit': 'MINUTES'}}"""
-                            )
+                    'compaction_window_unit': 'MINUTES'}}""")
 
     def run_prepare_write_cmd(self):
         self.create_tables_for_scylla_bench()
-        with ignore_mutation_write_errors():
-            super().run_prepare_write_cmd()
+        if self.params.get("prepare_write_cmd"):
+            # run_prepare_write_cmd executes run_post_prepare_cql_cmds
+            # it doesn't need to call run_post_prepare_cql_cmds twice.
+            with ignore_mutation_write_errors():
+                super().run_prepare_write_cmd()
+        else:
+            self.run_post_prepare_cql_cmds()
 
         # Run nemesis during stress as it was stopped before copy expected data
         if self.params.get('nemesis_during_prepare'):
