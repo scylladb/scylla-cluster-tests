@@ -23,7 +23,7 @@ import fnmatch
 import logging
 from enum import Enum
 from json import JSONEncoder
-from types import new_class
+from types import new_class  # pylint: disable=no-name-in-module
 from typing import \
     Any, Optional, Type, Dict, List, Tuple, Callable, Generic, TypeVar, Protocol, runtime_checkable
 from keyword import iskeyword
