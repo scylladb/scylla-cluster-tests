@@ -159,9 +159,7 @@ class LongevityTest(ClusterTester):
             for stress in verify_queue:
                 self.verify_stress_thread(cs_thread_pool=stress)
 
-        post_prepare_cql_cmds = self.params.get('post_prepare_cql_cmds')
-        if post_prepare_cql_cmds:
-            self._run_cql_commands(post_prepare_cql_cmds)
+        self.run_post_prepare_cql_cmds()
 
         prepare_wait_no_compactions_timeout = self.params.get('prepare_wait_no_compactions_timeout')
         if prepare_wait_no_compactions_timeout:
@@ -169,6 +167,11 @@ class LongevityTest(ClusterTester):
                 node.run_nodetool("compact")
             self.wait_no_compactions_running(n=prepare_wait_no_compactions_timeout)
         self.log.info('Prepare finished')
+
+    def run_post_prepare_cql_cmds(self):
+        if post_prepare_cql_cmds := self.params.get('post_prepare_cql_cmds'):
+            self.log.debug("Execute post prepare queries: %s", post_prepare_cql_cmds)
+            self._run_cql_commands(post_prepare_cql_cmds)
 
     def test_custom_time(self):
         """
