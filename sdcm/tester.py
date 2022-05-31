@@ -1570,14 +1570,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     # pylint: disable=too-many-arguments,too-many-return-statements
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',
                           round_robin=False, stats_aggregate_cmds=True, keyspace_name=None, use_single_loader=False,
-                          stop_test_on_failure=True):
+                          stop_test_on_failure=True, tenant_idx=0):
         # We want to prevent situation when stress command starts on not ready cluster (no all nodes are UP).
         # It may cause to stress failure and as result the test will be stopped and failed
         self.db_cluster.wait_for_nodes_up_and_normal(iterations=0, timeout=MAX_TIME_WAIT_FOR_ALL_NODES_UP)
 
         params = dict(stress_cmd=stress_cmd, duration=duration, stress_num=stress_num, keyspace_num=keyspace_num,
                       keyspace_name=keyspace_name, profile=profile, prefix=prefix, round_robin=round_robin,
-                      stats_aggregate_cmds=stats_aggregate_cmds, use_single_loader=use_single_loader)
+                      stats_aggregate_cmds=stats_aggregate_cmds, use_single_loader=use_single_loader,
+                      tenant_idx=tenant_idx)
 
         if 'cassandra-stress' in stress_cmd:  # cs cmdline might started with JVM_OPTION
             params['stop_test_on_failure'] = stop_test_on_failure
@@ -1602,30 +1603,47 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         else:
             raise ValueError(f'Unsupported stress command: "{stress_cmd[:50]}..."')
 
-    # pylint: disable=too-many-arguments
+    def get_tenants_by_index(self, tenant_index):
+        self.log.info("Tenant index: %s", tenant_index)
+        loader_set = self.loaders_multitenant[tenant_index] if self.loaders_multitenant else self.loaders
+        self.log.info("Loaders set: %s", loader_set)
+        db_cluster = self.db_clusters_multitenant[tenant_index] if self.db_clusters_multitenant else \
+            self.db_cluster
+        self.log.info("DB cluster: %s", db_cluster)
+        monitor_set = self.monitors_multitenant[tenant_index] if self.monitors_multitenant else \
+            self.monitors
+        self.log.info("Monitor set: %s", monitor_set)
+
+        return loader_set, db_cluster, monitor_set
+
+    # pylint: disable=too-many-arguments,too-many-locals
     def run_stress_cassandra_thread(
             self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='', round_robin=False,
-            stats_aggregate_cmds=True, keyspace_name=None, stop_test_on_failure=True, **_):
+            stats_aggregate_cmds=True, keyspace_name=None, stop_test_on_failure=True, tenant_idx=0, **_):
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
         timeout = self.get_duration(duration)
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, prefix, stresser="cassandra-stress",
                                            aggregate=stats_aggregate_cmds)
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
-        cs_thread = CassandraStressThread(loader_set=self.loaders,
+
+        loader_set, db_cluster, _ = self.get_tenants_by_index(tenant_index=tenant_idx)
+
+        cs_thread = CassandraStressThread(loader_set=loader_set or self.loaders,
                                           stress_cmd=stress_cmd,
                                           timeout=timeout,
                                           stress_num=stress_num,
                                           keyspace_num=keyspace_num,
                                           profile=profile,
-                                          node_list=self.db_cluster.nodes,
+                                          node_list=db_cluster.nodes,
                                           round_robin=round_robin,
-                                          client_encrypt=self.db_cluster.nodes[0].is_client_encrypt,
+                                          client_encrypt=db_cluster.nodes[0].is_client_encrypt,
                                           keyspace_name=keyspace_name,
                                           stop_test_on_failure=stop_test_on_failure).run()
         scylla_encryption_options = self.params.get('scylla_encryption_options')
         if scylla_encryption_options and 'write' in stress_cmd:
-            # Configure encryption at-rest for all test tables, sleep a while to wait the workload starts and test tables are created
+            # Configure encryption at-rest for all test tables, sleep a while to wait the workload starts and test
+            # tables are created
             time.sleep(60)
             self.alter_test_tables_encryption(scylla_encryption_options=scylla_encryption_options)
             self.db_cluster.wait_for_schema_agreement()
@@ -1663,7 +1681,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                 # pylint: disable=too-many-arguments,unused-argument
                                 round_robin=False, stats_aggregate_cmds=True, keyspace_name=None,
                                 use_single_loader=False,
-                                stop_test_on_failure=True):  # pylint: disable=too-many-arguments,unused-argument
+                                stop_test_on_failure=True, **_):  # pylint: disable=too-many-arguments,unused-argument
 
         timeout = self.get_duration(duration)
 
@@ -1863,7 +1881,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                          'errors': stats['errors']})
         return stats
 
-    def run_fullscan_thread(self, ks_cf='random', interval=1, duration=None):
+    def run_fullscan_thread(self, ks_cf='random', interval=1, duration=None, tenant_idx=0):
         """Run thread of cql command select *
 
         Calculate test duration and timeout interval between
@@ -1875,15 +1893,16 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             interval {number} -- interval between requests in min (default: {1})
             duration {int} -- duration of running thread in min (default: {None})
         """
+        _, db_cluster, _ = self.get_tenants_by_index(tenant_index=tenant_idx)
         FullScanThread(
-            db_cluster=self.db_cluster,
+            db_cluster=db_cluster,
             ks_cf=ks_cf,
             duration=self.get_duration(duration),
             interval=interval * 60,
-            termination_event=self.db_cluster.nemesis_termination_event,
+            termination_event=db_cluster.nemesis_termination_event,
         ).start()
 
-    def run_full_partition_scan_thread(self, duration=None, interval=1, **kwargs):
+    def run_full_partition_scan_thread(self, duration=None, interval=1, tenant_idx=0, **kwargs):
         """Run thread of cql command select with a clustering key reversed query.
 
         Calculate test duration and timeout interval between
@@ -1894,9 +1913,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             interval {number} -- interval between requests in seconds (default: {1})
             duration {int} -- duration of running thread in min (default: {None})
         """
+        _, db_cluster, _ = self.get_tenants_by_index(tenant_index=tenant_idx)
         FullPartitionScanThread(
             db_cluster=self.db_cluster,
-            termination_event=self.db_cluster.nemesis_termination_event,
+            termination_event=db_cluster.nemesis_termination_event,
             duration=self.get_duration(duration),
             interval=interval,
             **kwargs

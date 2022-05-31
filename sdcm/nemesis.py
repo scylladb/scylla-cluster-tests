@@ -1537,7 +1537,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         if tables_to_skip is None:
             tables_to_skip = {}
         to_be_skipped_default = tables_to_skip.get('*', '').split(',')
-        with self.cluster.cql_connection_patient(self.tester.db_cluster.nodes[0]) as session:
+        with self.cluster.cql_connection_patient(self.cluster.nodes[0]) as session:
             query_result = session.execute('SELECT keyspace_name FROM system_schema.keyspaces;')
             for result_rows in query_result:
                 keyspaces.extend([row.lower() for row in result_rows if not row.lower().startswith("system")])
@@ -3233,7 +3233,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         with new_node.remote_scylla_yaml() as scylla_yml:
             scylla_yml.rpc_address = new_node.ip_address
             scylla_yml.seed_provider = [SeedProvider(class_name='org.apache.cassandra.locator.SimpleSeedProvider',
-                                                     parameters=[{"seeds": self.tester.db_cluster.seed_nodes_ips}])]
+                                                     parameters=[{"seeds": self.cluster.seed_nodes_ips}])]
         new_node.remoter.sudo(shell_script_cmd(
             "echo dc_suffix=_nemesis_dc >> /etc/scylla/cassandra-rackdc.properties"))
         self.cluster.wait_for_init(node_list=[new_node], timeout=900,
@@ -3263,9 +3263,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """Switches replication strategy to NetworkTopology for given keyspaces.
         """
         node = self.cluster.nodes[0]
-        nodes_by_region = self.tester.db_cluster.nodes_by_region()
+        nodes_by_region = self.cluster.nodes_by_region()
         region = list(nodes_by_region.keys())[0]
-        dc_name = self.tester.db_cluster.get_nodetool_info(nodes_by_region[region][0])['Data Center']
+        dc_name = self.cluster.get_nodetool_info(nodes_by_region[region][0])['Data Center']
         for keyspace in keyspaces:
             replication_strategy = ReplicationStrategy.get(node, keyspace)
             if not isinstance(replication_strategy, SimpleReplicationStrategy):
@@ -3288,8 +3288,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._switch_to_network_replication_strategy(self.cluster.get_test_keyspaces() + system_keyspaces)
         with temporary_replication_strategy_setter(node) as replication_strategy_setter:
             new_node = self._add_new_node_in_new_dc()
-            datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
-            status = self.tester.db_cluster.get_nodetool_status()
+            datacenters = list(self.cluster.get_nodetool_status().keys())
+            status = self.cluster.get_nodetool_status()
             new_dc_list = [dc for dc in list(status.keys()) if dc.endswith("_nemesis_dc")]
             assert new_dc_list, "new datacenter was not registered"
             new_dc_name = new_dc_list[0]
@@ -3307,7 +3307,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self._write_read_data_to_multi_dc_keyspace(datacenters)
         self.cluster.decommission(new_node)
         self.monitoring_set.reconfigure_scylla_monitoring()
-        datacenters = list(self.tester.db_cluster.get_nodetool_status().keys())
+        datacenters = list(self.cluster.get_nodetool_status().keys())
         assert not [dc for dc in datacenters if dc.endswith("_nemesis_dc")], "new datacenter was not unregistered"
         self._verify_multi_dc_keyspace_data(consistency_level="QUORUM")
 

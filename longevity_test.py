@@ -35,35 +35,39 @@ class LongevityTest(ClusterTester):
     def _run_all_stress_cmds(self, stress_queue, params):
         stress_cmds = params['stress_cmd']
         if not isinstance(stress_cmds, list):
+            stress_cmds = [[stress_cmds]]
+        # Support k8s multi-tenant test (test runs on few clusters)
+        elif len(self.db_clusters_multitenant) == 1:
             stress_cmds = [stress_cmds]
         # In some cases we want the same stress_cmd to run several times (can be used with round_robin or not).
         stress_multiplier = self.params.get('stress_multiplier')
         if stress_multiplier > 1:
             stress_cmds *= stress_multiplier
 
-        for stress_cmd in stress_cmds:
-            params.update({'stress_cmd': stress_cmd})
-            self._parse_stress_cmd(stress_cmd, params)
+        for tenant_idx, stress_cmds_set in enumerate(stress_cmds):
+            for stress_cmd in stress_cmds_set:
+                params.update({'stress_cmd': stress_cmd, "tenant_idx": tenant_idx})
+                self._parse_stress_cmd(stress_cmd, params)
 
-            # Run all stress commands
-            self.log.debug('stress cmd: {}'.format(stress_cmd))
-            if stress_cmd.startswith('scylla-bench'):
-                stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd,
-                                                           stats_aggregate_cmds=False,
-                                                           round_robin=self.params.get('round_robin')))
-            elif stress_cmd.startswith('cassandra-harry'):
-                stress_queue.append(self.run_stress_thread(**params))
-            else:
-                stress_queue.append(self.run_stress_thread(**params))
+                # Run all stress commands
+                self.log.debug('stress cmd: {}'.format(stress_cmd))
+                if stress_cmd.startswith('scylla-bench'):
+                    stress_queue.append(self.run_stress_thread(stress_cmd=stress_cmd,
+                                                               stats_aggregate_cmds=False,
+                                                               round_robin=self.params.get('round_robin')))
+                elif stress_cmd.startswith('cassandra-harry'):
+                    stress_queue.append(self.run_stress_thread(**params))
+                else:
+                    stress_queue.append(self.run_stress_thread(**params))
 
-            time.sleep(10)
+                time.sleep(10)
 
-            # Remove "user profile" param for the next command
-            if 'profile' in params:
-                del params['profile']
+                # Remove "user profile" param for the next command
+                if 'profile' in params:
+                    del params['profile']
 
-            if 'keyspace_name' in params:
-                del params['keyspace_name']
+                if 'keyspace_name' in params:
+                    del params['keyspace_name']
 
         return stress_queue
 
@@ -135,8 +139,12 @@ class LongevityTest(ClusterTester):
         if self.params.get('nemesis_during_prepare'):
             # Wait for some data (according to the param in the yaml) to be populated, for multi keyspace need to
             # pay attention to the fact it checks only on keyspace1
-            self.db_cluster.wait_total_space_used_per_node(keyspace=None)
-            self.db_cluster.start_nemesis()
+            self.log.info("Clusters: %s", self.db_clusters_multitenant)
+            for cluster in self.db_clusters_multitenant:
+                self.log.info("Cluster for nemesis: %s", ", ".join([node.name for node in
+                                                                    cluster.get_nodes_up_and_normal()]))
+                cluster.wait_total_space_used_per_node(keyspace=None)
+                cluster.start_nemesis()
 
         # Wait on the queue till all threads come back.
         # todo: we need to improve this part for some cases that threads are being killed and we don't catch it.
@@ -179,8 +187,12 @@ class LongevityTest(ClusterTester):
         """
         # pylint: disable=too-many-locals,too-many-branches,too-many-statements
 
-        self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(),
-                                    tester_obj=self)
+        self.log.info("Clusters: %s", self.db_clusters_multitenant)
+        for cluster in self.db_clusters_multitenant:
+            self.log.info("Cluster for nemesis: %s", ", ".join([node.name for node in
+                                                                cluster.get_nodes_up_and_normal()]))
+            cluster.add_nemesis(nemesis=self.get_nemesis_class(),
+                                tester_obj=self)
         stress_queue = []
 
         # prepare write workload
@@ -192,11 +204,16 @@ class LongevityTest(ClusterTester):
         self.run_pre_create_keyspace()
         self.run_pre_create_schema()
 
-        if fullscan_params := self._get_scan_operation_params(scan_operation='run_fullscan'):
-            self.run_fullscan_thread(ks_cf=fullscan_params['ks_cf'], interval=fullscan_params['interval'])
+        for tenant_idx, _ in enumerate(self.db_clusters_multitenant):
+            self.log.info("Cluster for full scan: %s", ", ".join([node.name for node in
+                                                                  self.db_clusters_multitenant[
+                                                                      tenant_idx].get_nodes_up_and_normal()]))
+            if fullscan_params := self._get_scan_operation_params(scan_operation='run_fullscan'):
+                self.run_fullscan_thread(ks_cf=fullscan_params['ks_cf'], interval=fullscan_params['interval'],
+                                         tenant_idx=tenant_idx)
 
-        if full_partition_scan_params := self._get_scan_operation_params(scan_operation='run_full_partition_scan'):
-            self.run_full_partition_scan_thread(**full_partition_scan_params)
+            if full_partition_scan_params := self._get_scan_operation_params(scan_operation='run_full_partition_scan'):
+                self.run_full_partition_scan_thread(tenant_idx=tenant_idx, **full_partition_scan_params)
 
         self.run_prepare_write_cmd()
 
@@ -224,7 +241,8 @@ class LongevityTest(ClusterTester):
 
                     self._run_all_stress_cmds(stress_queue, params)
 
-            # The old method when we run all stress_cmds for all keyspace on the same loader, or in round-robin if defined in test yaml
+            # The old method when we run all stress_cmds for all keyspace on the same loader, or in round-robin if
+            # defined in test yaml
             else:
                 params = {'keyspace_num': keyspace_num, 'stress_cmd': stress_cmd,
                           'round_robin': self.params.get('round_robin')}
@@ -250,8 +268,9 @@ class LongevityTest(ClusterTester):
 
         # Check if we shall wait for total_used_space or if nemesis wasn't started
         if not prepare_write_cmd or not self.params.get('nemesis_during_prepare'):
-            self.db_cluster.wait_total_space_used_per_node(keyspace=None)
-            self.db_cluster.start_nemesis()
+            for cluster in self.db_clusters_multitenant:
+                cluster.wait_total_space_used_per_node(keyspace=None)
+                cluster.start_nemesis()
 
         stress_read_cmd = self.params.get('stress_read_cmd')
         if stress_read_cmd:
