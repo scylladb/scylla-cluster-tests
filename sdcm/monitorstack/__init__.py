@@ -10,6 +10,7 @@ from textwrap import dedent
 from pathlib import Path
 
 import requests
+import yaml
 
 from sdcm.remote import LocalCmdRunner
 from sdcm.utils.common import list_logs_by_test_id, S3Storage, remove_files, get_free_port
@@ -356,6 +357,21 @@ def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_vers
     lr = LocalCmdRunner()  # pylint: disable=invalid-name
     lr.run('cd {monitoring_dockers_dir}; ./kill-all.sh -g {graf_port} -m {alert_port} -p {prom_port}'.format(**locals()),
            ignore_status=True, verbose=False)
+
+    # clear scylla nodes from configuration
+    servers_yaml = Path(monitoring_dockers_dir) / 'config' / 'scylla_servers.yml'
+    servers_yaml.write_text("- targets: []")
+
+    # clear SCT scrape configurations
+    prom_tmpl_file = Path(monitoring_dockers_dir) / 'prometheus' / 'prometheus.yml.template'
+    templ_yaml = yaml.safe_load(prom_tmpl_file.read_text())
+
+    def remove_sct_metrics(metric):
+        return '_metrics' not in metric['job_name']
+
+    templ_yaml["scrape_configs"] = list(filter(remove_sct_metrics, templ_yaml["scrape_configs"]))
+    prom_tmpl_file.write_text(yaml.safe_dump(templ_yaml))
+
     cmd = dedent("""cd {monitoring_dockers_dir};
             echo "" > UA.sh
             ./start-all.sh \
@@ -363,7 +379,6 @@ def start_dockers(monitoring_dockers_dir, monitoring_stack_data_dir, scylla_vers
             $(grep -q -- --no-loki ./start-all.sh && echo "--no-loki")  \
             -g {graf_port} -m {alert_port} -p {prom_port} \
             -s {monitoring_dockers_dir}/config/scylla_servers.yml \
-            -n {monitoring_dockers_dir}/config/node_exporter_servers.yml \
             -d {monitoring_stack_data_dir} -v {scylla_version} \
             -b '-storage.tsdb.retention.time=100y' \
             -c 'GF_USERS_DEFAULT_THEME=dark'""".format(**locals()))
