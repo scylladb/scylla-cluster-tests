@@ -7,7 +7,7 @@ rollingUpgradePipeline(
     params: params,
 
     backend: 'gce',
-    base_versions: ['2019.1', '4.0', '2020.1'],
+    base_versions: ['2020.1'],
     linux_distro: 'centos',
     gce_image_db: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7',
 
