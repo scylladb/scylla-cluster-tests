@@ -32,6 +32,7 @@ from collections.abc import Callable
 
 import yaml
 import boto3
+import botocore.exceptions
 import tenacity
 from mypy_boto3_ec2 import EC2Client
 from pkg_resources import parse_version
@@ -251,7 +252,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                 else:
                     instances = self._create_spot_instances(count, interfaces, ec2_user_data, dc_idx)
                 break
-            except CreateSpotInstancesError as cl_ex:
+            except (CreateSpotInstancesError, botocore.exceptions.ClientError) as cl_ex:
                 if instances_provision_type == instances_provision_fallbacks[-1]:
                     raise
                 if not self.check_spot_error(str(cl_ex), instances_provision_type):
