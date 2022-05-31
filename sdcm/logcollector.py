@@ -29,6 +29,8 @@ import requests
 
 import sdcm.monitorstack.ui as monitoring_ui
 from sdcm.paths import SCYLLA_YAML_PATH
+from sdcm.provision import provisioner_factory
+from sdcm.provision.provisioner import ProvisionerError
 from sdcm.remote import RemoteCmdRunnerBase, LocalCmdRunner
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.utils.common import (
@@ -1233,6 +1235,29 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         if self.params["use_cloud_manager"]:
             self.find_and_append_cloud_manager_instance_to_collecting_nodes()
 
+    def create_collecting_nodes(self):
+        try:
+            provisioners = provisioner_factory.discover_provisioners(backend=self.backend, test_id=self.test_id)
+            instances = sum([provisioner.list_instances() for provisioner in provisioners], [])
+            collecting_nodes = [CollectingNode(name=instance.name,
+                                               ssh_login_info={
+                                                   "hostname": instance.public_ip_address,
+                                                   "user": instance.user_name,
+                                                   "key_file": f"~/.ssh/{instance.ssh_key_name}"},
+                                               instance=instance,
+                                               global_ip=instance.public_ip_address,
+                                               tags=instance.tags) for instance in instances]
+            self.db_cluster = [c_node for c_node in collecting_nodes if c_node.tags.get(
+                "NodeType") in ("scylla-db", "oracle-db")]
+            self.monitor_set = [c_node for c_node in collecting_nodes if c_node.tags.get("NodeType") == "monitor"]
+            self.loader_set = [c_node for c_node in collecting_nodes if c_node.tags.get("NodeType") == "loader"]
+            self.kubernetes_set = [c_node for c_node in collecting_nodes
+                                   if c_node.tags.get("NodeType") == "k8s"]  # why aws and gce uses 'loader'? Bug?
+            if self.params["use_cloud_manager"]:
+                self.find_and_append_cloud_manager_instance_to_collecting_nodes()
+        except ProvisionerError:
+            LOGGER.debug("get_running_cluster_sets: unknown backend type: %s", self.backend)
+
     def get_docker_instances_by_testid(self):
         instances = list_instances_gce({"TestId": self.test_id}, running=True)
         filtered_instances = filter_gce_instances_by_type(instances)
@@ -1267,7 +1292,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         elif backend == 'docker':
             self.get_docker_instances_by_testid()
         else:
-            LOGGER.debug("get_running_cluster_sets: unknown backend type: %s", backend)
+            self.create_collecting_nodes()
 
     def run(self):
         """Run collect logs process as standalone operation

@@ -12,10 +12,11 @@
 # Copyright (c) 2022 ScyllaDB
 import abc
 from dataclasses import dataclass
+from functools import cache
 from typing import List, Dict, Type
 
 from sdcm.cluster import DEFAULT_USER_PREFIX
-from sdcm.keystore import KeyStore
+from sdcm.keystore import KeyStore, SSHKey
 from sdcm.provision.provisioner import InstanceDefinition
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.types import NodeTypeType
@@ -105,7 +106,7 @@ class DefinitionBuilder(abc.ABC):
             )
         return RegionDefinition(backend=self.BACKEND, test_id=self.test_id, region=region, definitions=definitions)
 
-    def build_all_region_definitions(self):
+    def build_all_region_definitions(self) -> List[RegionDefinition]:
         """Builds all instances definitions in all regions based on SCT test configuration."""
         region_definitions = []
         n_db_nodes = self._get_node_count_for_each_region(str(self.params.get("n_db_nodes")))
@@ -119,7 +120,8 @@ class DefinitionBuilder(abc.ABC):
         return region_definitions
 
     @staticmethod
-    def _get_ssh_key():
+    @cache
+    def _get_ssh_key() -> SSHKey:
         return KeyStore().get_gce_ssh_key_pair()
 
     def _get_node_count_for_each_region(self, n_str: str) -> List[int]:
