@@ -110,11 +110,13 @@ pipeline {
     }
     options {
         timestamps()
-        timeout(time: 90, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '10'))
     }
     stages {
         stage("precommit") {
+            options {
+                timeout(time: 15, unit: 'MINUTES')
+            }
             steps {
                 script {
                     try {
@@ -128,6 +130,9 @@ pipeline {
             }
         }
         stage("unittest") {
+            options {
+                timeout(time: 20, unit: 'MINUTES')
+            }
             steps {
                 script {
                     try {
@@ -140,6 +145,9 @@ pipeline {
             }
         }
         stage("lint test-cases") {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
             steps {
                 script {
                     try {
@@ -152,6 +160,9 @@ pipeline {
             }
         }
         stage("run mocked tests") {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
             steps {
                 script {
                     try {
@@ -171,6 +182,9 @@ pipeline {
                 expression {
                     return pullRequestContainsLabels("test-provision,test-provision-aws,test-provision-gce,test-provision-docker") && currentBuild.result == null
                 }
+            }
+            options {
+                timeout(time: 120, unit: 'MINUTES')
             }
             steps {
                 script {
