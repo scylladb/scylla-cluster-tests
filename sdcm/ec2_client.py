@@ -5,9 +5,12 @@ import base64
 
 import boto3
 from mypy_boto3_ec2 import EC2Client, EC2ServiceResource
+from mypy_boto3_ec2.service_resource import Instance
 from botocore.exceptions import ClientError, NoRegionError
 
 from sdcm.utils.decorators import retrying
+from sdcm.utils.aws_utils import tags_as_ec2_tags
+from sdcm.test_config import TestConfig
 
 LOGGER = logging.getLogger(__name__)
 
@@ -228,24 +231,28 @@ class EC2ClientWrapper():
     def _encode_user_data(user_data):
         return base64.b64encode(user_data.encode('utf-8')).decode("ascii")
 
-    def get_instance(self, instance_id):
+    def get_instance(self, instance_id: str) -> Instance:
         """
         Get instance object by id
         :param instance_id: instance id
         :return: EC2.Instance object
         """
-        # TODO: remove no-member when https://github.com/PyCQA/pylint/issues/3134 is fixed
-        instance = self._resource.Instance(id=instance_id)  # pylint: disable=no-member
+        instance = self._resource.Instance(id=instance_id)
         return instance
 
     @retrying(n=5, sleep_time=10, allowed_exceptions=(ClientError,),
               message="Waiting for instance is available")
-    def add_tags(self, instance_id, tags=None):
+    def add_tags(self, instance_ids: list[str] | list[Instance] | str | Instance, tags: dict = None) -> None:
         """
-        Add tags to instance
+        Add tags to instances
         """
-        tags = tags if tags else []
-        self._client.create_tags(Resources=[instance_id], Tags=tags)
+        if not isinstance(instance_ids, list):
+            instance_ids = [instance_ids]
+        instance_ids = [instance_or_id if isinstance(instance_or_id, str) else instance_or_id.instance_id for
+                        instance_or_id in instance_ids]
+        tags = tags_as_ec2_tags(tags) if tags else []
+        tags += tags_as_ec2_tags(TestConfig().common_tags())
+        self._client.create_tags(Resources=instance_ids, Tags=tags)
 
     def create_spot_instances(self, instance_type, image_id, region_name, network_if, key_pair='', user_data='',  # pylint: disable=too-many-arguments
                               count=1, duration=0, block_device_mappings=None, aws_instance_profile=None):
@@ -280,7 +287,7 @@ class EC2ClientWrapper():
 
         LOGGER.info('Spot instances: %s', instance_ids)
         for ind, instance_id in enumerate(instance_ids):
-            self.add_tags(instance_id, [{'Key': 'Name', 'Value': 'spot_{}_{}'.format(instance_id, ind)}])
+            self.add_tags(instance_id, {'Name': 'spot_{}_{}'.format(instance_id, ind)})
 
         self._client.cancel_spot_instance_requests(SpotInstanceRequestIds=request_ids)
 
@@ -317,7 +324,7 @@ class EC2ClientWrapper():
 
         LOGGER.info('Spot instances: %s', instance_ids)
         for ind, instance_id in enumerate(instance_ids):
-            self.add_tags(instance_id, [{'Key': 'Name', 'Value': 'spot_fleet_{}_{}'.format(instance_id, ind)}])
+            self.add_tags(instance_id, {'Name': 'spot_fleet_{}_{}'.format(instance_id, ind)})
 
         self._client.cancel_spot_fleet_requests(SpotFleetRequestIds=[request_id], TerminateInstances=False)
 

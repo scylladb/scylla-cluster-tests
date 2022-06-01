@@ -138,6 +138,10 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         if instance_profile:
             params['IamInstanceProfile'] = {'Name': instance_profile}
         instances = self._ec2_services[dc_idx].create_instances(**params)
+
+        ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx])
+        ec2.add_tags(instances, {'Name': 'on_demand'})
+
         self.log.debug("Created instances: %s." % instances)
         return instances
 
