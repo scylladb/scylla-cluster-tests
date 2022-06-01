@@ -1710,6 +1710,7 @@ class SCTConfiguration(dict):
         self._validate_sct_variable_values()
         backend = self.get('cluster_backend')
         db_type = self.get('db_type')
+        self._check_version_supplied(backend)
         self._check_per_backend_required_values(backend)
         if backend in ['aws', 'gce'] and db_type != 'cloud_scylla':
             self._check_multi_region_params(backend)
@@ -1797,6 +1798,33 @@ class SCTConfiguration(dict):
         opts = [o for o in self.config_options if o['name'] in required_params]
         for _opt in opts:
             assert _opt['name'] in self, "{} missing from config for {}".format(_opt['name'], backend)
+
+    def _check_version_supplied(self, backend: str):
+        one_of_options_must_exist = []
+
+        if not self.get('use_preinstalled_scylla'):
+            one_of_options_must_exist += ['scylla_repo']
+        elif self.get('db_type') == 'cloud_scylla':
+            one_of_options_must_exist += ['cloud_cluster_id']
+        elif backend == 'aws':
+            one_of_options_must_exist += ['ami_id_db_scylla']
+        elif backend == 'gce':
+            one_of_options_must_exist += ['gce_image_db']
+        elif backend == 'azure':
+            one_of_options_must_exist += ['azure_image_db']
+        elif backend == 'docker':
+            one_of_options_must_exist += ['docker_image']
+        elif backend == 'baremetal':
+            one_of_options_must_exist += ['db_nodes_public_ip']
+        elif 'k8s' in backend:
+            one_of_options_must_exist += ['scylla_version']
+
+        if not one_of_options_must_exist:
+            return
+        assert any(self.get(o) for o in one_of_options_must_exist), \
+            "scylla version/repos wasn't configured correctly\n" \
+            f"configure one of the following: {one_of_options_must_exist}\n" \
+            f"or one of those environment variables: {['SCT_' + o.upper() for o in one_of_options_must_exist]}"
 
     def _check_partition_range_with_data_validation_correctness(self):
         partition_range_with_data_validation = self.get('partition_range_with_data_validation')
