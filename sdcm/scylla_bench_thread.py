@@ -183,7 +183,7 @@ class ScyllaBenchThread:  # pylint: disable=too-many-instance-attributes
                                        stress_log_filename=log_file_name,
                                        loader_idx=loader_idx), \
                 ScyllaBenchStressEventsPublisher(node=node, sb_log_filename=log_file_name) as publisher, \
-                ScyllaBenchEvent(node=node, stress_cmd=self.stress_cmd,
+                ScyllaBenchEvent(node=node, stress_cmd=stress_cmd,
                                  log_file_name=log_file_name) as scylla_bench_event:
             publisher.event_id = scylla_bench_event.event_id
             result = None
