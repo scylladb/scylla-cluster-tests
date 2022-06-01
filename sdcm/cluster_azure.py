@@ -144,7 +144,7 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
         self._user_name = user_name
         self._azure_region_names = region_names
         self._node_prefix = node_prefix
-        self._definition_builder = region_definition_builder.get_builder(self.params, test_config=self.test_config)
+        self._definition_builder = region_definition_builder.get_builder(params, test_config=self.test_config)
         super().__init__(cluster_uuid=cluster_uuid,
                          cluster_prefix=cluster_prefix,
                          node_prefix=node_prefix,
