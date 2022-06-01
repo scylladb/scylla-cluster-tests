@@ -7,8 +7,10 @@ instance_type_db: 'i3.large'
 
 user_prefix: 'gemini-with-nemesis-3h-normal'
 
-nemesis_class_name: 'GeminiChaosMonkey'
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_include_filter: ['run_with_gemini']
 nemesis_interval: 5
+nemesis_seed: '032'
 
 # gemini
 # cmd: gemini -d -n [NUM_OF_TEST_ITERATIONS] -c [NUM_OF_THREADS] -p [NUM_OF_PARTITION_KEYS_PER_THREAD] -m mixed -f
