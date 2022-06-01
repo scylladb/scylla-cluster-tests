@@ -41,7 +41,7 @@ def get_gc_mode(node: BaseNode, keyspace: str, table: str) -> str | GcMode:
         table
     """
     table_gc_mode_result = node.run_cqlsh(
-        f'SELECT extensions FROM system_schema.tables where keyspace_name = {keyspace} and table_name = {table}',
+        f"SELECT extensions FROM system_schema.tables where keyspace_name = '{keyspace}' and table_name = '{table}'",
         split=True)
     LOGGER.debug("Query result for %s.%s GC mode is: %s", keyspace, table, table_gc_mode_result)
     gc_mode = 'N/A'
