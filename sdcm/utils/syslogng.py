@@ -53,8 +53,8 @@ class SyslogNGContainerMixin:  # pylint: disable=too-few-public-methods
         os.makedirs(logdir, exist_ok=True)
         LOGGER.debug("syslog-ng will store logs at %s", logdir)
         volumes = {
-            self.syslogng_confpath: {"bind": "/config/syslog-ng.conf", "mode": "ro"},
-            logdir: {"bind": "/var/log"},
+            self.syslogng_confpath: {"bind": "/config/syslog-ng.conf", "mode": "ro,z"},
+            logdir: {"bind": "/var/log", "mode": "z"},
         }
         username = getpass.getuser()
         return {
