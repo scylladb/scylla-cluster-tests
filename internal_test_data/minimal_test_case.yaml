@@ -15,4 +15,3 @@ stress_read_cmd: ["cassandra-stress user profile=/tmp/c-s_profile_4mv_5queries.y
 
 db_type: scylla
 instance_type_db: 'i3.large'
-ami_id_db_scylla: 'ami-06f919eb'
