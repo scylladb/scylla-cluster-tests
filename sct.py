@@ -24,6 +24,7 @@ import time
 import subprocess
 import traceback
 import uuid
+import pprint
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from functools import partial
@@ -166,6 +167,15 @@ class CloudRegion(click.ParamType):
         if value not in regions:
             self.fail(f"invalid region: {value}. (choose from {', '.join(regions)})")
         return value
+
+
+class SctLoader(unittest.TestLoader):
+    def getTestCaseNames(self, testCaseClass):
+        test_cases = super().getTestCaseNames(testCaseClass)
+        num_of_cases = len(test_cases)
+        assert num_of_cases < 2, f"SCT expect only one test case to be selected, found {num_of_cases}:" \
+                                 f"\n{pprint.pformat(test_cases)}"
+        return test_cases
 
 
 @click.group()
@@ -954,7 +964,7 @@ def run_test(argv, backend, config, logdir):
     sys.stderr = OutputLogger(logfile, sys.stderr)
 
     unittest.main(module=None, argv=['python -m unittest', argv],
-                  failfast=False, buffer=False, catchbreak=True)
+                  failfast=False, buffer=False, catchbreak=True, testLoader=SctLoader())
 
 
 @cli.command('run-pytest', help="Run tests using pytest")
