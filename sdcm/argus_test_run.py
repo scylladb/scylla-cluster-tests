@@ -259,7 +259,7 @@ class ArgusTestRun:
         backend = sct_config.get("cluster_backend")
         region_key = cls.REGION_PROPERTY_MAP.get(backend, cls.REGION_PROPERTY_MAP["default"])
         raw_regions = sct_config.get(region_key) or "undefined_region"
-        regions = raw_regions.split()
+        regions = raw_regions.split() if isinstance(raw_regions, str) else raw_regions
         primary_region = regions[0]
 
         sct_runner_info = CloudInstanceDetails(public_ip=get_sct_runner_ip(), provider=backend,
