@@ -1,6 +1,6 @@
 # TODO: need to qualify
 
-test_duration: 20
+test_duration: 80
 
 stress_cmd: "cassandra-stress write no-warmup cl=QUORUM duration=15m -schema 'replication(factor=3)' -port jmx=6868 -mode cql3 native -rate threads=500 -pop seq=1..1000000"
 
