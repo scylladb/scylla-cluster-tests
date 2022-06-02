@@ -1247,12 +1247,14 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
                                                instance=instance,
                                                global_ip=instance.public_ip_address,
                                                tags=instance.tags) for instance in instances]
-            self.db_cluster = [c_node for c_node in collecting_nodes if c_node.tags.get(
-                "NodeType") in ("scylla-db", "oracle-db")]
-            self.monitor_set = [c_node for c_node in collecting_nodes if c_node.tags.get("NodeType") == "monitor"]
-            self.loader_set = [c_node for c_node in collecting_nodes if c_node.tags.get("NodeType") == "loader"]
-            self.kubernetes_set = [c_node for c_node in collecting_nodes
-                                   if c_node.tags.get("NodeType") == "k8s"]  # why aws and gce uses 'loader'? Bug?
+            for c_node in collecting_nodes:
+                match c_node.tags.get("NodeType"):
+                    case "scylla-db" | "oracle-db":
+                        self.db_cluster.append(c_node)
+                    case "monitor":
+                        self.monitor_set.append(c_node)
+                    case "loader":
+                        self.loader_set.append(c_node)
             if self.params["use_cloud_manager"]:
                 self.find_and_append_cloud_manager_instance_to_collecting_nodes()
         except ProvisionerError:
