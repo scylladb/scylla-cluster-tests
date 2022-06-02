@@ -59,6 +59,7 @@ class AwsRegion:
             result = self.client.create_vpc(CidrBlock=str(self.SCT_VPC_CIDR), AmazonProvidedIpv6CidrBlock=True)
             vpc_id = result["Vpc"]["VpcId"]
             vpc = self.resource.Vpc(vpc_id)  # pylint: disable=no-member
+            vpc.modify_attribute(EnableDnsHostnames={"Value": True})
             vpc.create_tags(Tags=[{"Key": "Name", "Value": self.SCT_VPC_NAME}])
             LOGGER.info("'%s' with id '%s' created. Waiting until it becomes available...", self.SCT_VPC_NAME, vpc_id)
             vpc.wait_until_available()
