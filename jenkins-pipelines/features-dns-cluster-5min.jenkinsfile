@@ -8,6 +8,4 @@ longevityPipeline(
     region: 'eu-west-1',
     test_name: 'build_cluster_test.BuildClusterTest.test_use_public_dns_names',
     test_config: 'test-cases/features/dns-cluster-5min.yaml',
-
-    timeout: [time: 60, unit: 'MINUTES']
 )
