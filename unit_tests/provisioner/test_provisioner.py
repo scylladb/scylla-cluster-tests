@@ -16,7 +16,11 @@ import uuid
 import pytest
 
 from sdcm.keystore import KeyStore
-from sdcm.provision.provisioner import InstanceDefinition, provisioner_factory
+from sdcm.provision.provisioner import (
+    InstanceDefinition,
+    provisioner_factory,
+    ProvisionerError,
+)
 from sdcm.provision.user_data import UserDataObject
 
 
@@ -107,6 +111,13 @@ def test_can_discover_regions(test_id, region, backend, provisioner_params):
     provisioner = provisioner_factory.discover_provisioners(backend=backend, **provisioner_params)[0]
     assert provisioner.region == region
     assert provisioner.test_id == test_id
+
+
+def test_discover_provisioners_wrong_backend(provisioner_params):
+    wrong_backend = "absent-name-in-backend-mapping"
+    match_err_msg = "Provisioner class was not registered for the '%s' backend" % wrong_backend
+    with pytest.raises(ProvisionerError, match=match_err_msg):
+        provisioner_factory.discover_provisioners(backend=wrong_backend, **provisioner_params)
 
 
 def test_can_add_tags(provisioner, definition, backend, provisioner_params):
