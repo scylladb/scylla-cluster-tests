@@ -174,6 +174,8 @@ class ProvisionerFactory:
         """Discovers regions where resources for given test_id are created.
         Returning provisioner class instance for each region."""
         provisioner = self._classes.get(backend)
+        if not provisioner:
+            raise ProvisionerError("Provisioner class was not registered for the '%s' backend" % backend)
         return provisioner.discover_regions(test_id, **config)
 
 
