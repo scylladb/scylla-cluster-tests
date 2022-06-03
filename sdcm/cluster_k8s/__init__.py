@@ -891,9 +891,16 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def is_performance_tuning_enabled(self):
         return self.params.get('k8s_enable_performance_tuning') and self.IS_NODE_TUNING_SUPPORTED
 
+    def install_static_local_volume_provisioner(self, node_pool: CloudK8sNodePool) -> None:
+        if self.params.get('reuse_cluster'):
+            return
+        LOGGER.info("Install local volume provisioner")
+        self.helm(f"install local-provisioner {LOCAL_PROVISIONER_DIR}",
+                  values=node_pool.helm_affinity_values)
+
     @log_run_info
     def prepare_k8s_scylla_nodes(self, node_pool: CloudK8sNodePool) -> None:
-        if not self.NODE_PREPARE_FILE:
+        if not self.NODE_PREPARE_FILE or self.params.get('reuse_cluster'):
             return
         LOGGER.info("Install DaemonSets required by scylla nodes")
         scylla_machine_image_args = ['--all']
@@ -913,10 +920,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             self.NODE_PREPARE_FILE,
             modifiers=node_pool.affinity_modifiers + [scylla_machine_image_args_modifier],
             envsubst=False)
-
-        LOGGER.info("Install local volume provisioner")
-        self.helm(f"install local-provisioner {LOCAL_PROVISIONER_DIR}",
-                  values=node_pool.helm_affinity_values)
+        self.install_static_local_volume_provisioner(node_pool=node_pool)
 
         # Tune performance of the Scylla nodes
         if not self.is_performance_tuning_enabled:
