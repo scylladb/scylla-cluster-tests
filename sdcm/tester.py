@@ -1179,6 +1179,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             image_type="fake-image-type",
             instance_type="fake-instance-type")
         self.k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
+        self.k8s_cluster.install_static_local_volume_provisioner(node_pool=scylla_pool)
 
         self.k8s_cluster.deploy_cert_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
         self.k8s_cluster.deploy_scylla_operator(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)

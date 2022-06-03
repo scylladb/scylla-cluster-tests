@@ -34,6 +34,7 @@ from sdcm.cluster_k8s import (
     ScyllaPodCluster,
     COMMON_CONTAINERS_RESOURCES,
     LOCAL_MINIO_DIR,
+    LOCAL_PROVISIONER_DIR,
     OPERATOR_CONTAINERS_RESOURCES,
     SCYLLA_MANAGER_AGENT_RESOURCES,
     SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER,
@@ -186,7 +187,6 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
         values = super().get_scylla_cluster_helm_values(
             cpu_limit=cpu_limit, memory_limit=memory_limit,
             pool_name=pool_name, cluster_name=cluster_name)
-        values.delete('racks.[0].storage.storageClassName')
         values.set('cpuset', False)
         values.set('developerMode', False)
         values.set('hostNetworking', False)
@@ -300,6 +300,13 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
                 f"{minio_config['image']['repository']}:{minio_config['image']['tag']}",
                 f"{minio_config['mcImage']['repository']}:{minio_config['mcImage']['tag']}",
             ]
+
+    @cached_property
+    def static_local_volume_provisioner_image(self):
+        with open(LOCAL_PROVISIONER_DIR + '/values.yaml',
+                  mode='r', encoding='utf8') as provisioner_config_stream:
+            provisioner_config = yaml.safe_load(provisioner_config_stream)
+            return provisioner_config['daemonset']['image']
 
     @cached_property
     def cert_manager_images(self):
@@ -494,6 +501,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
         images_to_cache, images_to_retag, new_scylla_image_tag = [], {}, ""
 
         images_to_cache.extend(self.cert_manager_images)
+        images_to_cache.append(self.static_local_volume_provisioner_image)
         if self.scylla_image:
             scylla_image_repo, scylla_image_tag = self.scylla_image.split(":")
             if not version_utils.SEMVER_REGEX.match(scylla_image_tag):
@@ -540,6 +548,19 @@ class LocalKindCluster(LocalMinimalClusterBase):
         self.apply_file(CNI_CALICO_CONFIG, environ={
             "SCT_K8S_CNI_CALICO_VERSION": CNI_CALICO_VERSION,
         })
+
+    def install_static_local_volume_provisioner(self, node_pool: CloudK8sNodePool) -> None:
+        # NOTE: create static dirs on the KinD Scylla K8S nodes
+        #       which will be used by the static local volume provisioner.
+        node_names = self.kubectl(
+            f"get nodes -l {POOL_LABEL_NAME}={self.SCYLLA_POOL_NAME} "
+            "--no-headers -o custom-columns=:.metadata.name").stdout.split()
+        for node_name in node_names:
+            path = f"/mnt/raid-disks/disk0/pv-on-{node_name}"
+            self.host_node.remoter.run(
+                f"docker exec {node_name} /bin/bash "
+                f" -c \"mkdir -p {path} && mount --bind {path}{{,}}\"")
+        super().install_static_local_volume_provisioner(node_pool=node_pool)
 
     def gather_k8s_logs(self) -> None:
         if self.params.get("k8s_log_api_calls"):
