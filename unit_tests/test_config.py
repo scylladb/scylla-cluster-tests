@@ -551,6 +551,14 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
 
             self.clear_sct_env_variables()
 
+    def test_19_aws_region_with_no_region_data(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_REGION_NAME'] = 'not-exists-2'
+
+        with self.assertRaisesRegex(ValueError, expected_regex="not-exists-2 isn't supported"):
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
+
 
 if __name__ == "__main__":
     unittest.main()
