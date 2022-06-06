@@ -70,9 +70,9 @@ def fixture_tester() -> ScyllaOperatorFunctionalClusterTester:
     global TESTER  # pylint: disable=global-statement
     os.chdir(sct_abs_path())
     tester_inst = ScyllaOperatorFunctionalClusterTester()
+    TESTER = tester_inst  # putting tester global, so we can report skipped test (one with mark.skip)
     tester_inst.setUpClass()
     tester_inst.setUp()
-    TESTER = tester_inst  # putting tester global, so we can report skipped test (one with mark.skip)
     yield tester_inst
     with contextlib.suppress(Exception):
         tester_inst.tearDown()

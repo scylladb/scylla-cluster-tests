@@ -16,6 +16,8 @@ import os
 
 from sdcm.cluster_k8s import ScyllaPodCluster
 from sdcm.tester import ClusterTester
+from sdcm.sct_events import Severity
+from sdcm.sct_events.system import TestFrameworkEvent
 
 
 SCT_ROOT = os.path.realpath(os.path.join(__file__, '..', '..', '..', '..'))
@@ -39,13 +41,24 @@ class ScyllaOperatorFunctionalClusterTester(ClusterTester):
         self.test_data[test_name] = (status, error)
 
     def get_test_failures(self):
-        pass
+        for test_name, test_data in self.test_data.items():
+            status, message = (test_data[0], test_data[1]) if len(test_data) == 2 else ('UNKNOWN', '')
+            if status != 'SUCCESS':
+                TestFrameworkEvent(
+                    source=self.__class__.__name__,
+                    source_method=test_name,
+                    message=message,
+                    severity=Severity.WARNING if status == 'SKIPPED' else Severity.ERROR,
+                ).publish_or_dump()
 
     def get_test_status(self):
         for _, test_data in self.test_data.items():
-            if not test_data[0] in ('SUCCESS', 'SKIPPED'):
+            status = test_data[0] if len(test_data) >= 1 else 'UNKNOWN'
+            if status not in ('SUCCESS', 'SKIPPED'):
                 return 'FAILED'
-        return 'SUCCESS'
+        if all(status == 'SKIPPED' for _, (status, _) in self.test_data.items()):
+            return 'ABORTED'
+        return 'SUCCESS' if self.test_data else 'FAILED'
 
 
 def sct_abs_path(relative_filename=""):
