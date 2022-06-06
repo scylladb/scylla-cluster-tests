@@ -1432,7 +1432,10 @@ class SCTConfiguration(dict):
 
         if cluster_backend in ['aws', 'aws-siren', 'k8s-eks']:
             for region in region_names:
-                for key, value in regions_data[region].items():
+                if region not in regions_data:
+                    raise ValueError(f"{region} isn't supported, use: {list(regions_data.keys())}")
+
+                for key, value in regions_data.get(region, {}).items():
                     if key not in self.keys():
                         self[key] = value
                     elif len(self[key].split()) < len(region_names):
