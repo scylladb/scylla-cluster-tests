@@ -4688,11 +4688,27 @@ class BaseLoaderSet():
         self.kill_docker_loaders()
 
     def kill_cassandra_stress_thread(self):
+        search_cmds = [
+            'pgrep -f .*cassandra.*',
+            'pgrep -f cassandra.stress',
+            'pgrep -f cassandra-stress'
+        ]
+
+        def kill_cs_process(loader, filter_cmd):
+            list_of_processes = loader.remoter.run(cmd=filter_cmd,
+                                                   verbose=True, ignore_status=True)
+            if not list_of_processes.stdout.strip():
+                return True
+            loader.remoter.run(cmd=f'{filter_cmd} | xargs -I{{}}  kill -TERM {{}}',
+                               verbose=True, ignore_status=True)
+            return False
+
         for loader in self.nodes:
             try:
-                loader.remoter.run(cmd='pgrep -f cassandra.stress | xargs -I{}  kill -TERM {}',
-                                   verbose=False, ignore_status=True)
-                self.log.info("Killed cassandra stress on node: %s", loader.name)
+                for search_cmd in search_cmds:
+                    wait.wait_for(kill_cs_process, text="Search and kill c-s processes", timeout=30, throw_exc=False,
+                                  loader=loader, filter_cmd=search_cmd)
+
             except Exception as ex:  # pylint: disable=broad-except
                 self.log.warning("failed to kill stress-command on [%s]: [%s]",
                                  str(loader), str(ex))
