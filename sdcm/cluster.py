@@ -916,7 +916,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         upload_url = base_upload_url % (coredump_id, os.path.basename(coredump))
         self.log.info('Uploading coredump %s to %s' % (coredump, upload_url))
         self.remoter.run("sudo curl --request PUT --upload-file "
-                         "'%s' '%s'" % (coredump, upload_url))
+                         "'%s' 'https://%s'" % (coredump, upload_url))
         download_url = 'https://storage.cloud.google.com/%s' % upload_url
         self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
         download_instructions = 'gsutil cp gs://%s .\ngunzip %s' % (upload_url, coredump)
