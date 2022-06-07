@@ -66,18 +66,24 @@ def fixture_harvest_test_results(request, tester: ScyllaOperatorFunctionalCluste
 
 
 @pytest.fixture(autouse=True, scope='package', name="tester")
-def fixture_tester() -> ScyllaOperatorFunctionalClusterTester:
+def fixture_tester(request: pytest.FixtureRequest) -> ScyllaOperatorFunctionalClusterTester:
     global TESTER  # pylint: disable=global-statement
     os.chdir(sct_abs_path())
     tester_inst = ScyllaOperatorFunctionalClusterTester()
+
+    # adding finalizer so we can cleanup/report also in cases the
+    # setUp is failing
+    def fin():
+        with contextlib.suppress(Exception):
+            tester_inst.tearDown()
+        with contextlib.suppress(Exception):
+            tester_inst.tearDownClass()
+    request.addfinalizer(finalizer=fin)
+
     tester_inst.setUpClass()
     tester_inst.setUp()
     TESTER = tester_inst  # putting tester global, so we can report skipped test (one with mark.skip)
     yield tester_inst
-    with contextlib.suppress(Exception):
-        tester_inst.tearDown()
-    with contextlib.suppress(Exception):
-        tester_inst.tearDownClass()
 
 
 @pytest.fixture(autouse=True, scope="function")

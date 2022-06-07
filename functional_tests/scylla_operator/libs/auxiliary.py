@@ -45,7 +45,7 @@ class ScyllaOperatorFunctionalClusterTester(ClusterTester):
         for _, test_data in self.test_data.items():
             if not test_data[0] in ('SUCCESS', 'SKIPPED'):
                 return 'FAILED'
-        return 'SUCCESS'
+        return 'SUCCESS' if self.test_data else 'FAILED'
 
 
 def sct_abs_path(relative_filename=""):
