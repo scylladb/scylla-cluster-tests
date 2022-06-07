@@ -200,12 +200,11 @@ class CoredumpThreadBase(Thread):
     def _upload_coredump(self, core_info: CoreDumpInfo):
         coredump = core_info.corefile
         coredump = self._pack_coredump(coredump)
-        base_upload_url = 'upload.scylladb.com/%s/%s'
         coredump_id = os.path.basename(coredump)[:-3]
-        upload_url = base_upload_url % (coredump_id, os.path.basename(coredump))
-        self.log.info('Uploading coredump %s to %s' % (coredump, upload_url))
-        self.node.remoter.run("sudo curl --request PUT --upload-file "
-                              "'%s' '%s'" % (coredump, upload_url))
+        upload_url = f'upload.scylladb.com/{coredump_id}/{os.path.basename(coredump)}'
+        self.log.info('Uploading coredump %s to %s', coredump, upload_url)
+        self.node.remoter.run("sudo curl --request PUT --fail --show-error --upload-file "
+                              "'%s' 'https://%s'" % (coredump, upload_url))
         download_url = 'https://storage.cloud.google.com/%s' % upload_url
         self.log.info("You can download it by %s (available for ScyllaDB employee)", download_url)
         download_instructions = 'gsutil cp gs://%s .\ngunzip %s' % (upload_url, coredump)
