@@ -87,8 +87,15 @@ from sdcm.ndbench_thread import NdBenchStressThread
 from sdcm.kcl_thread import KclStressThread, CompareTablesSizesThread
 from sdcm.localhost import LocalHost
 from sdcm.cdclog_reader_thread import CDCLogReaderThread
-from sdcm.logcollector import SCTLogCollector, ScyllaLogCollector, MonitorLogCollector, LoaderLogCollector, \
-    KubernetesLogCollector, SirenManagerLogCollector
+from sdcm.logcollector import (
+    KubernetesAPIServerLogCollector,
+    KubernetesLogCollector,
+    LoaderLogCollector,
+    MonitorLogCollector,
+    SCTLogCollector,
+    ScyllaLogCollector,
+    SirenManagerLogCollector,
+)
 from sdcm.send_email import build_reporter, read_email_data_from_file, get_running_instances_for_email_report, \
     save_email_data_to_file
 from sdcm.utils import alternator
@@ -2957,10 +2964,15 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                      "nodes": self.db_cluster and self.db_cluster.manager_instance,
                      "collector": SirenManagerLogCollector,
                      "logname": "monitoring_log", },
+                    {"name": "k8s_cluster_api",
+                     "nodes": [],
+                     "collector": KubernetesAPIServerLogCollector,
+                     "logname": "k8s_log", },
                     {"name": "k8s_cluster",
                      "nodes": [],
                      "collector": KubernetesLogCollector,
-                     "logname": "k8s_log", },)
+                     "logname": "k8s_log", },
+                    )
 
         for cluster in clusters:
             if not cluster["nodes"]:

@@ -65,6 +65,9 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
     if [[ -n "${pipelineParams.k8s_enable_performance_tuning ? pipelineParams.k8s_enable_performance_tuning : ''}" ]] ; then
         export SCT_K8S_ENABLE_PERFORMANCE_TUNING=${pipelineParams.k8s_enable_performance_tuning}
     fi
+    if [[ -n "${pipelineParams.k8s_log_api_calls ? pipelineParams.k8s_log_api_calls : ''}" ]] ; then
+        export SCT_K8S_LOG_API_CALLS=${pipelineParams.k8s_log_api_calls}
+    fi
 
     if [[ -n "${params.scylla_mgmt_agent_version ? params.scylla_mgmt_agent_version : ''}" ]] ; then
         export SCT_SCYLLA_MGMT_AGENT_VERSION=${params.scylla_mgmt_agent_version}

@@ -13,6 +13,7 @@
 
 #  pylint: disable=too-many-lines
 import os
+import json
 import time
 import shutil
 import fnmatch
@@ -21,6 +22,7 @@ import datetime
 import tarfile
 import tempfile
 import traceback
+from collections import OrderedDict
 from typing import Optional
 from pathlib import Path
 from functools import cached_property
@@ -246,6 +248,7 @@ class DirLog(FileLog):
 
     def collect(self, node, local_dst, remote_dst=None, local_search_path=None):
         os.makedirs(local_dst, exist_ok=True)
+        dst_logfiles = []
         if self.search_locally and local_search_path:
             local_logfiles = self.find_local_files(local_search_path, self.name)
             for logfile in local_logfiles:
@@ -255,7 +258,8 @@ class DirLog(FileLog):
                 current_dst = Path(local_dst) / relative_path
                 os.makedirs(str(current_dst).rsplit("/", 1)[0], exist_ok=True)
                 shutil.copy(src=logfile, dst=current_dst)
-        return local_dst
+                dst_logfiles.append(str(current_dst))
+        return dst_logfiles
 
     def collect_from_builder(self, builder, local_dst, search_in_dir) -> None:
         # TODO: implement it to be able to gather whole dirs on remote nodes
@@ -1002,6 +1006,84 @@ class SCTLogCollector(LogCollector):
         return s3_links
 
 
+class KubernetesAPIServerLogCollector(SCTLogCollector):
+    """Gather K8S API server logs."""
+    log_entities = [
+        DirLog(name='kube-apiserver/*', search_locally=True),
+    ]
+    audit_file_name_prefix = "kube-apiserver-audit"
+    api_call_stats_filename = "api-call-stats.json"
+
+    cluster_log_type = "kubernetes-apiserver"
+    cluster_dir_prefix = "k8s-"
+    collect_timeout = 600
+
+    def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:
+        logfiles, apiserver_logdir = [], ""
+        for ent in self.log_entities:
+            output = ent.collect(None, self.local_dir, None, local_search_path=local_search_path)
+            if isinstance(output, list):
+                logfiles.extend(output)
+            elif isinstance(output, str):
+                logfiles.append(output)
+        for logfile in logfiles:
+            if 'kube-apiserver' in logfile:
+                apiserver_logdir = logfile.rsplit("/", maxsplit=1)[0]
+                break
+        if not apiserver_logdir:
+            LOGGER.warning("No log files found at '%s' related to K8S API server", local_search_path)
+            return []
+        else:
+            LOGGER.info("Found K8S API server logs at '%s'. Calculating API call stats", apiserver_logdir)
+            self.generate_apiserver_call_stats_file(apiserver_logdir)
+            return self.create_single_archive_and_upload()
+
+    def generate_apiserver_call_stats_file(self, apiserver_logdir: str) -> None:  # pylint: disable=no-self-use
+        dst_file_path = f"{apiserver_logdir}/{self.api_call_stats_filename}"
+        results, results_list = {}, []
+
+        if os.path.exists(dst_file_path):
+            LOGGER.warning("Kube API call stats file already exists at '%s'", dst_file_path)
+            return
+        if not os.path.exists(apiserver_logdir):
+            LOGGER.warning(
+                "Kube API server logs dir '%s' doesn't exist. Cannot calculate Kube API call stats",
+                apiserver_logdir)
+            return
+
+        # Parse the K8S API server logs
+        for log_file in os.listdir(apiserver_logdir):
+            if not log_file.startswith(self.audit_file_name_prefix):
+                continue
+            with open(f"{apiserver_logdir}/{log_file}", mode="r", encoding="utf-8") as current_log_file:
+                for line in current_log_file.readlines():
+                    data = json.loads(line)
+                    username = data.get("user", {}).get('username')
+                    if not username:
+                        continue
+                    if username not in results:
+                        results[username] = {"user": username, "total": 0, "verbs": {}}
+                    verb = data.get('verb')
+                    if not verb:
+                        continue
+                    if verb not in results[username]["verbs"]:
+                        results[username]["verbs"][verb] = 1
+                    else:
+                        results[username]["verbs"][verb] += 1
+                    results[username]["total"] += 1
+
+        # Sort the end data
+        for result in results.values():
+            result['verbs'] = OrderedDict(sorted(result['verbs'].items()))
+            results_list.append(result)
+        results_list = sorted(results_list, key=lambda datum: datum['total'], reverse=True)
+
+        # Write the end data to the file
+        with open(dst_file_path, mode='w', encoding="utf-8") as dst_file:
+            dst_file.write(json.dumps(results_list, indent=2, sort_keys=False))
+        LOGGER.info("Created K8S API call stats file at '%s'.", dst_file_path)
+
+
 class KubernetesLogCollector(SCTLogCollector):
     """Gather K8S logs."""
     log_entities = [
@@ -1096,6 +1178,7 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         }
         if self.backend.startswith("k8s"):
             self.cluster_log_collectors[KubernetesLogCollector] = self.kubernetes_set
+            self.cluster_log_collectors[KubernetesAPIServerLogCollector] = self.kubernetes_set
 
     @property
     def test_id(self):
