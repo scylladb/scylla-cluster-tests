@@ -45,6 +45,10 @@ from sdcm.utils.docker_utils import docker_hub_login
 from sdcm.utils import version_utils
 
 
+SRC_APISERVER_AUDIT_POLICY = sct_abs_path("sdcm/k8s_configs/local-kind/audit-policy.yaml")
+DST_APISERVER_AUDIT_POLICY = "/etc/kubernetes/policies/audit-policy.yaml"
+DST_APISERVER_AUDIT_LOG = "/var/log/kubernetes/kube-apiserver-audit.log"
+
 CNI_CALICO_CONFIG = sct_abs_path("sdcm/k8s_configs/cni-calico.yaml")
 CNI_CALICO_VERSION = "v3.23.0"
 LOGGER = logging.getLogger(__name__)
@@ -410,6 +414,9 @@ class LocalKindCluster(LocalMinimalClusterBase):
 
     def start_k8s_software(self) -> None:
         LOGGER.info("Start Kind cluster")
+        audit_log_path_option = ""
+        if self.params.get("k8s_log_api_calls"):
+            audit_log_path_option = f"audit-log-path: {DST_APISERVER_AUDIT_LOG}"
         script_start_part = f"""
         sysctl fs.protected_regular=0
         ip link set docker0 promisc on
@@ -417,7 +424,6 @@ class LocalKindCluster(LocalMinimalClusterBase):
         cat >/tmp/kind.cluster.yaml <<- EndOfSpec
         kind: Cluster
         apiVersion: kind.x-k8s.io/v1alpha4
-        # patch the generated kubeadm config with some extra settings
         networking:
           podSubnet: 10.244.0.0/16
           serviceSubnet: 10.96.0.0/16
@@ -430,6 +436,31 @@ class LocalKindCluster(LocalMinimalClusterBase):
             nodefs.available: 0%
         nodes:
           - role: control-plane
+            kubeadmConfigPatches:
+            - |
+              kind: ClusterConfiguration
+              apiServer:
+                extraArgs:
+                  event-ttl: 24h
+                  {audit_log_path_option}
+                  audit-log-maxsize: "100"
+                  audit-policy-file: {DST_APISERVER_AUDIT_POLICY}
+                extraVolumes:
+                  - name: audit-policies
+                    hostPath: /etc/kubernetes/policies
+                    mountPath: /etc/kubernetes/policies
+                    readOnly: true
+                    pathType: "DirectoryOrCreate"
+                  - name: "audit-logs"
+                    hostPath: "/var/log/kubernetes"
+                    mountPath: "/var/log/kubernetes"
+                    readOnly: false
+                    pathType: DirectoryOrCreate
+            extraMounts:
+            - hostPath: {SRC_APISERVER_AUDIT_POLICY}
+              containerPath: {DST_APISERVER_AUDIT_POLICY}
+              readOnly: true
+
           - role: worker
             labels:
               {POOL_LABEL_NAME}: {self.AUXILIARY_POOL_NAME}
@@ -509,6 +540,23 @@ class LocalKindCluster(LocalMinimalClusterBase):
         self.apply_file(CNI_CALICO_CONFIG, environ={
             "SCT_K8S_CNI_CALICO_VERSION": CNI_CALICO_VERSION,
         })
+
+    def gather_k8s_logs(self) -> None:
+        if self.params.get("k8s_log_api_calls"):
+            # NOTE: export K8S API server log files to the SCT log dir
+            src_container_path, log_prefix = DST_APISERVER_AUDIT_LOG.rsplit('/', maxsplit=1)
+            log_prefix = log_prefix.split(".")[0]
+            dst_subdir = "kube-apiserver"
+            try:
+                self.host_node.remoter.run(
+                    f"docker cp kind-control-plane:{src_container_path} {self.logdir} "
+                    f"&& mkdir -p {self.logdir}/{dst_subdir} "
+                    f"&& mv {self.logdir}/*/{log_prefix}* {self.logdir}/{dst_subdir}")
+            except Exception as exc:  # pylint: disable=broad-except
+                LOGGER.warning(
+                    "Failed to copy K8S apiserver audit logs located at '%s'. Exception: \n%s",
+                    src_container_path, exc)
+        super().gather_k8s_logs()
 
 
 class LocalMinimalScyllaPodContainer(BaseScyllaPodContainer):

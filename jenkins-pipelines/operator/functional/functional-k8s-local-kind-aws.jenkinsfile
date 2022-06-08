@@ -12,4 +12,5 @@ longevityPipeline(
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
     post_behavior_monitor_nodes: 'destroy',
+    k8s_log_api_calls: true,
 )

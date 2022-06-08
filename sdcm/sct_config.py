@@ -814,6 +814,9 @@ class SCTConfiguration(dict):
              help=""),
         dict(name="k8s_minio_storage_size", env="SCT_K8S_MINIO_STORAGE_SIZE", type=str,
              help=""),
+        dict(name="k8s_log_api_calls", env="SCT_K8S_LOG_API_CALLS", type=boolean,
+             help="Defines whether the K8S API server logging must be enabled and "
+                  "it's logs gathered. Be aware that it may be really huge set of data."),
 
         # docker config options
         dict(name="mgmt_docker_image", env="SCT_MGMT_DOCKER_IMAGE", type=str,
