@@ -539,7 +539,7 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
             if 'k8s' in backend:
                 continue
             if 'siren' in backend:
-                os.environ['SCT_DB_TYPE'] = 'cloud_scylla'
+                continue
 
             os.environ['SCT_CLUSTER_BACKEND'] = backend
             os.environ['SCT_CONFIG_FILES'] = 'internal_test_data/minimal_test_case.yaml'
@@ -550,6 +550,23 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
             self.assertIn("scylla version/repos wasn't configured correctly", str(context.exception), )
 
             self.clear_sct_env_variables()
+
+    def test_18_error_if_no_version_repo_ami_selected_siren(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
+        os.environ['SCT_DB_TYPE'] = 'cloud_scylla'
+
+        # 1) check that SCT_CLOUD_CLUSTER_ID is used for the exception
+        conf = sct_config.SCTConfiguration()
+
+        with self.assertRaises(AssertionError, msg="cloud_scylla didn't failed") as context:
+            conf.verify_configuration()
+        self.assertIn("scylla version/repos wasn't configured correctly", str(context.exception))
+        self.assertIn("SCT_CLOUD_CLUSTER_ID", str(context.exception))
+
+        # 2) check that when SCT_CLOUD_CLUSTER_ID is defined, the verification works
+        os.environ['SCT_CLOUD_CLUSTER_ID'] = '1234'
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
 
     def test_19_aws_region_with_no_region_data(self):
         os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
