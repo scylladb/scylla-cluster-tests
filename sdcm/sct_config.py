@@ -1807,7 +1807,8 @@ class SCTConfiguration(dict):
 
         if not self.get('use_preinstalled_scylla'):
             one_of_options_must_exist += ['scylla_repo']
-        elif self.get('db_type') == 'cloud_scylla':
+
+        if self.get('db_type') == 'cloud_scylla':
             one_of_options_must_exist += ['cloud_cluster_id']
         elif backend == 'aws':
             one_of_options_must_exist += ['ami_id_db_scylla']
