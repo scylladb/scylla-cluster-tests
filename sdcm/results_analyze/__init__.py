@@ -210,7 +210,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
     def get_debug_events(self):
         return self.get_events(event_severity=[Severity.DEBUG.name])
 
-    def get_reactor_stall_events(self):
+    def get_reactor_stall_events_list(self):
         debug_events, _ = self.get_debug_events()
         events_list = [stall for stall in debug_events[Severity.DEBUG.name] if 'type=REACTOR_STALLED' in stall]
         return events_list
@@ -292,14 +292,11 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
 
         last_events, events_summary = self.get_events(event_severity=[
             Severity.CRITICAL.name, Severity.ERROR.name])
-        reactor_stall_events = self.get_reactor_stall_events()
-        reactor_stall_events_summary = {Severity.DEBUG.name: len(reactor_stall_events)}
+        reactor_stall_events_list = self.get_reactor_stall_events_list()
+        reactor_stall_events_summary = {Severity.DEBUG.name: len(reactor_stall_events_list)}
         kernel_callstack_events = self.get_kernel_callstack_events()
         kernel_callstack_events_summary = {Severity.DEBUG.name: len(kernel_callstack_events)}
 
-        last_events, events_summary = [], {}
-        reactor_stall_events, reactor_stall_events_summary = [], {}
-        kernel_callstack_events, kernel_callstack_events_summary = [], {}
         subject = f'Performance Regression Compare Results (latency during operations) -' \
                   f' {test_name} - {test_version} - {str(test_start_time)}'
         best_results_per_nemesis = self._get_best_per_nemesis_for_each_version(doc, is_gce)
@@ -308,7 +305,7 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
             events_summary=events_summary,
             last_events=last_events,
             # limiting to 100 entries, avoiding oversize email
-            reactor_stall_events={Severity.DEBUG.name: reactor_stall_events[:100]},
+            reactor_stall_events={Severity.DEBUG.name: reactor_stall_events_list[:100]},
             reactor_stall_events_summary=reactor_stall_events_summary,
             kernel_callstack_events_summary=kernel_callstack_events_summary,
             stats=data,
