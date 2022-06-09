@@ -233,11 +233,11 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
 
         self.log.debug("ES QUERY: %s", query)
         test_results = self._es.search(  # pylint: disable=unexpected-keyword-arg; pylint doesn't understand Elasticsearch code
-            index="latency-during-ops-mixed",
-            doc_type='test_stats',
+            index=self._es_index,
+            doc_type=self._es_doc_type,
             q=query,
             filter_path=filter_path,
-            size=1000)
+            size=self._limit)
         if not test_results:
             self.log.warning("No results found for query: %s", query)
             return None
@@ -252,6 +252,8 @@ class LatencyDuringOperationsPerformanceAnalyzer(BaseResultsAnalyzer):
         # {'_add_node' : {'5.1.dev': [{latency_during_ops: {....}}, ...],
         #                 '5.0.dev': [{latency_during_ops: {....}}, ...]}}
         for doc in test_results["hits"]["hits"]:
+            if doc["_id"] == test_doc["_id"]:
+                continue
             version = doc["_source"]["versions"]["scylla-server"]["version"]
             if not doc["_source"].get("latency_during_ops"):
                 continue
