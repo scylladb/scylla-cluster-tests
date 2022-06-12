@@ -4469,7 +4469,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         :returns: if ebs volumes attached return true
         :rtype: {bool}
         """
-        return self.params.get("data_volume_disk_num") > 0
+        return self.params.get("data_volume_disk_num") > 0 or self.params.get('gce_pd_standard_disk_size_db') > 0
 
     def fstrim_scylla_disks_on_nodes(self):
         # if used ebs volumes with aws backend fstrim is not supported

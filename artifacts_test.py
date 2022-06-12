@@ -228,7 +228,7 @@ class ArtifactsTest(ClusterTester):
             self.assertEqual(configured_value, expected_value)
 
     def verify_nvme_write_cache(self) -> None:
-        if self.write_back_cache is None:
+        if self.write_back_cache is None or self.node.parent_cluster.is_additional_data_volume_used():
             return
         expected_write_cache_value = "write back" if self.write_back_cache else "write through"
 
