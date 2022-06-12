@@ -398,6 +398,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def refresh_ip_address(self):
         # Invalidate ip address cache
         self._private_ip_address_cached = self._public_ip_address_cached = self._ipv6_ip_address_cached = None
+        self.__dict__.pop('cql_ip_address', None)
 
         if self.ssh_login_info["hostname"] == self.external_address:
             return
@@ -851,7 +852,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def _refresh_instance_state(self):
         raise NotImplementedError()
 
-    @property
+    @cached_property
     def cql_ip_address(self):
         if self.is_kubernetes():
             return self.ip_address
