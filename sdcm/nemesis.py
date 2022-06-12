@@ -772,17 +772,19 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise UnsupportedNemesis(
                 'Non-system keyspace and table are not found. CorruptThenRepair nemesis can\'t be run')
 
-        # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
-        self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
-
-        try:
-            tables = []
+        tables = []
+        with self.cluster.cql_connection_patient(self.target_node) as session:
             for table in ks_cfs:
-                has_data = self.cluster.is_table_has_data(db_node=self.target_node, table_name=table)
+                has_data = self.cluster.is_table_has_data(session=session, table_name=table)
                 if has_data:
                     tables.append(table)
                 if len(tables) > 20:
                     break
+
+        # Stop scylla service before deleting sstables to avoid partial deletion of files that are under compaction
+        self.target_node.stop_scylla_server(verify_up=False, verify_down=True)
+
+        try:
 
             # Remove 5 data files
             for _ in range(5):
