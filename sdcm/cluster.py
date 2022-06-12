@@ -3407,17 +3407,15 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
         return list(regular_table_names - materialized_view_table_names)
 
-    def is_table_has_data(self, db_node: BaseNode, table_name: str) -> bool:
+    def is_table_has_data(self, session, table_name: str) -> bool:
         """
         Return True if `table_name` has data in it
         """
-
         current_rows = 0
-        with self.cql_connection_patient(db_node) as session:
-            try:
-                current_rows = session.execute(f"SELECT * FROM {table_name} LIMIT 1").current_rows
-            except Exception as exc:  # pylint: disable=broad-except
-                self.log.warning(f'Failed to get rows from {table_name} table. Error: {exc}')
+        try:
+            current_rows = session.execute(f"SELECT * FROM {table_name} LIMIT 1").current_rows
+        except Exception as exc:  # pylint: disable=broad-except
+            self.log.warning(f'Failed to get rows from {table_name} table. Error: {exc}')
         return bool(current_rows)
 
     def get_all_tables_with_cdc(self, db_node: BaseNode) -> List[str]:
