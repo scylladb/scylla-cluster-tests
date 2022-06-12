@@ -128,9 +128,14 @@ def call(Map pipelineParams) {
                         for (base_version in base_versions_list) {
                             run_params =  readJSON text: groovy.json.JsonOutput.toJson(params)
                             run_params.scylla_version = base_version
-                            tasks["Scylla Operator upgrade from ${base_version} to ${new_version}"] = {
 
-                                stage("${base_version} -> ${new_version} - Running test") {
+                            def phase = "${base_version} -> ${new_version}"
+                            if (run_params.test_name.contains('platform_upgrade')) {
+                                phase = "platform-upgrade"
+                            }
+                            tasks["Scylla Operator upgrade - ${phase}"] = {
+
+                                stage("${phase} - Running test") {
                                     catchError(stageResult: 'FAILURE') {
                                         script {
                                             wrap([$class: 'BuildUser']) {
@@ -144,7 +149,7 @@ def call(Map pipelineParams) {
                                         }
                                     }
                                 }
-                                stage("${base_version} -> ${new_version} - Collect logs") {
+                                stage("${phase} - Collect logs") {
                                     catchError(stageResult: 'FAILURE') {
                                         script {
                                             wrap([$class: 'BuildUser']) {
@@ -157,7 +162,7 @@ def call(Map pipelineParams) {
                                         }
                                     }
                                 }
-                                stage("${base_version} -> ${new_version} - Clean resources") {
+                                stage("${phase} - Clean resources") {
                                     catchError(stageResult: 'FAILURE') {
                                         script {
                                             wrap([$class: 'BuildUser']) {
@@ -170,7 +175,7 @@ def call(Map pipelineParams) {
                                         }
                                     }
                                 }
-                                stage("${base_version} -> ${new_version} - Send email with result") {
+                                stage("${phase} - Send email with result") {
                                     catchError(stageResult: 'FAILURE') {
                                         script {
                                             wrap([$class: 'BuildUser']) {
