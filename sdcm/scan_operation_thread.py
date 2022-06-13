@@ -12,7 +12,7 @@ from cassandra.cluster import ResponseFuture  # pylint: disable=no-name-in-modul
 from cassandra.query import SimpleStatement  # pylint: disable=no-name-in-module
 
 from sdcm import wait
-from sdcm.cluster import BaseNode, BaseScyllaCluster, BaseCluster
+from sdcm.cluster import BaseScyllaCluster, BaseCluster
 from sdcm.remote import LocalCmdRunner
 from sdcm.utils.common import get_partition_keys, get_table_clustering_order
 from sdcm.sct_events import Severity
@@ -73,11 +73,6 @@ class ScanOperationThread:
     def randomly_form_cql_statement(self) -> Optional[str]:
         ...
 
-    def create_session(self, db_node: BaseNode):
-        credentials = self.db_cluster.get_db_auth()
-        username, password = credentials if credentials else (None, None)
-        return self.db_cluster.cql_connection_patient(db_node, user=username, password=password)
-
     def execute_query(self, session, cmd: str):
         self.log.info('Will run command "%s"', cmd)
         return session.execute(SimpleStatement(
@@ -108,7 +103,7 @@ class ScanOperationThread:
             cmd = cmd or self.randomly_form_cql_statement()
             if not cmd:
                 return
-            with self.create_session(db_node) as session:
+            with self.db_cluster.cql_connection_patient(node=db_node, connect_timeout=300) as session:
 
                 if self.termination_event.is_set():
                     return
@@ -200,7 +195,9 @@ class FullPartitionScanThread(ScanOperationThread):
     def get_table_clustering_order(self) -> str:
         for node in self.db_cluster.nodes:
             try:
-                with self.create_session(node) as session:
+                with self.db_cluster.cql_connection_patient(node=node, connect_timeout=300) as session:
+                    # Using CL ONE. No need for a quorum since querying a constant fixed attribute of a table.
+                    session.default_consistency_level = ConsistencyLevel.ONE
                     return get_table_clustering_order(ks_cf=self.ks_cf, ck_name=self.ck_name, session=session)
             except Exception as error:  # pylint: disable=broad-except
                 self.log.info('Failed getting table %s clustering order through node %s : %s', self.ks_cf, node.name,
@@ -218,7 +215,7 @@ class FullPartitionScanThread(ScanOperationThread):
         3) Add a random CK filter with random row values.
         :return: a CQL reversed-query
         """
-        with self.create_session(self.db_node) as session:
+        with self.db_cluster.cql_connection_patient(node=self.db_node, connect_timeout=300) as session:
             ck_name = self.ck_name
             rows_count = self.rows_count
             ck_random_min_value = random.randint(a=1, b=rows_count)
