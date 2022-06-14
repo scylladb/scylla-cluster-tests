@@ -57,7 +57,7 @@ class TestBaseVersion(unittest.TestCase):
         scylla_repo = self.url_base + 'unstable/scylla-enterprise/enterprise/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
         linux_distro = 'centos'
         version_list = general_test(scylla_repo, linux_distro)
-        self.assertEqual(version_list, ['2021.1'])
+        self.assertEqual(version_list, ['2022.1'])
 
     def test_2021_1(self):
         scylla_repo = self.url_base + 'unstable/scylla-enterprise/branch-2021.1/rpm/centos/2021-08-29T00:58:58Z/scylla.repo'
