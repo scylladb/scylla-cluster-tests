@@ -143,7 +143,7 @@ class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-in
         if self.stress_num > 1:
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
-        docker = RemoteDocker(loader, "scylladb/hydra-loaders:scylla-bench-v0.1.8",
+        docker = RemoteDocker(loader, self.params.get('stress_image.scylla-bench'),
                               extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host')
 
         if self.sb_mode == ScyllaBenchModes.WRITE and self.sb_workload == ScyllaBenchWorkloads.TIMESERIES:

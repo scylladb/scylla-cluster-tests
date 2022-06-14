@@ -674,6 +674,36 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         self.assertEqual(tenant_stress_cmds_0['stress_read_cmd'], tenant_stress_cmds_1['stress_read_cmd'])
         self.assertEqual(tenant_stress_cmds_0['prepare_write_cmd'], tenant_stress_cmds_1['prepare_write_cmd'])
 
+    def test_23_nested_values(self):
+        os.environ['SCT_CONFIG_FILES'] = ('["internal_test_data/minimal_test_case.yaml", '
+                                          '"unit_tests/test_data/stress_image_extra_config.yaml"]')
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-1234'
+        os.environ["SCT_STRESS_READ_CMD.0"] = "cassandra_stress"
+        os.environ["SCT_STRESS_READ_CMD.1"] = '["cassandra_stress", "cassandra_stress"]'
+
+        os.environ["SCT_STRESS_IMAGE"] = '{"ycsb": "scylladb/something_else"}'
+        os.environ["SCT_STRESS_IMAGE.cassandra-stress"] = "scylla-bench"
+        os.environ['SCT_STRESS_IMAGE.scylla-bench'] = "scylladb/something"
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        self.assertEqual(conf.get('stress_image'),
+                         {'alternator-dns': 'scylladb/hydra-loaders:alternator-dns-0.1',
+                          'cassandra-stress': 'scylla-bench',
+                          'cdc-stresser': 'scylladb/hydra-loaders:cdc-stresser-A',
+                          'gemini': 'scylladb/hydra-loaders:gemini-1.7.6',
+                          'ndbench': 'scylladb/hydra-loaders:ndbench-jdk8-A',
+                          'nosqlbench': 'scylladb/hydra-loaders:nosqlbench-A',
+                          'scylla-bench': 'scylladb/something',
+                          'ycsb': 'scylladb/something_else',
+                          'kcl': 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC'})
+
+        self.assertEqual(conf.get('stress_image.gemini'), 'scylladb/hydra-loaders:gemini-1.7.6')
+        self.assertEqual(conf.get('stress_image.non-exist'), None)
+
+        self.assertEqual(conf.get('stress_read_cmd'), ['cassandra_stress', ['cassandra_stress', 'cassandra_stress']])
+
 
 if __name__ == "__main__":
     unittest.main()
