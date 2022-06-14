@@ -6,7 +6,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 rollingUpgradePipeline(
     backend: 'aws',
     region: '["eu-west-1", "eu-west-2"]',
-    base_versions: ['4.5'],  // auto mode
+    base_versions: '4.5',  // auto mode
     linux_distro: 'ubuntu-focal',
 
     test_name: 'upgrade_test.UpgradeTest.test_generic_cluster_upgrade',
