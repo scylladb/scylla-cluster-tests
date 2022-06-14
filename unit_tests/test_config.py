@@ -576,6 +576,24 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
             conf = sct_config.SCTConfiguration()
             conf.verify_configuration()
 
+    def test_20_nested_values(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-1234'
+        os.environ["SCT_STRESS_READ_CMD.0"] = "cassandra_stress"
+        os.environ["SCT_STRESS_READ_CMD.1"] = '["cassandra_stress", "cassandra_stress"]'
+
+        os.environ["SCT_STRESS_IMAGE"] = '{"ycsb": "scylladb/something_else"}'
+        os.environ["SCT_STRESS_IMAGE.cassandra-stress"] = "scylla-bench"
+        os.environ['SCT_STRESS_IMAGE.scylla-bench'] = "scylladb/something"
+
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        self.assertEqual(conf.get('stress_image'),
+                         {'cassandra-stress': 'scylla-bench',
+                          'scylla-bench': 'scylladb/something',
+                          'ycsb': 'scylladb/something_else'})
+        self.assertEqual(conf.get('stress_read_cmd'), ['cassandra_stress', ['cassandra_stress', 'cassandra_stress']])
+
 
 if __name__ == "__main__":
     unittest.main()

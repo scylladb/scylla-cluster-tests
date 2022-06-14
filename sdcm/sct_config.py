@@ -61,7 +61,13 @@ def str_or_list(value: Union[str, List[str], List[List[str]]]) -> List[str]:  # 
         return [str(value), ]
 
     if isinstance(value, list):
-        return value
+        ret_values = []
+        for val in value:
+            try:
+                ret_values += [ast.literal_eval(val)]
+            except Exception:  # pylint: disable=broad-except
+                ret_values += [str(val)]
+        return ret_values
 
     raise ValueError(f"{value} isn't a string or a list")
 
@@ -86,6 +92,18 @@ def int_or_list(value):
             pass
 
     raise ValueError("{} isn't int or list".format(value))
+
+
+def dict_or_str(value):
+    if isinstance(value, str):
+        try:
+            return ast.literal_eval(value)
+        except Exception:  # pylint: disable=broad-except
+            pass
+    if isinstance(value, dict):
+        return value
+
+    raise ValueError('"{}" isn\'t a dict'.format(value))
 
 
 def boolean(value):
@@ -1290,6 +1308,9 @@ class SCTConfiguration(dict):
              help="Number of of raid level: 0 - RAID0, 5 - RAID5"),
 
         dict(name="bare_loaders", env="SCT_BARE_LOADERS", type=boolean,
+             help="Don't install anything but collectd to the loaders during cluster setup"),
+
+        dict(name="stress_image", env="SCT_STRESS_IMAGE", type=dict_or_str,
              help="Don't install anything but collectd to the loaders during cluster setup")
     ]
 
@@ -1644,6 +1665,22 @@ class SCTConfiguration(dict):
                 except Exception as ex:  # pylint: disable=broad-except
                     raise ValueError(
                         "failed to parse {} from environment variable".format(opt['env'])) from ex
+            nested_keys = [key for key in os.environ if key.startswith(opt['env'] + '.')]
+            if nested_keys:
+                list_value = []
+                dict_value = {}
+                for key in nested_keys:
+                    nest_key, *_ = key.split('.')[1:]
+                    if nest_key.isdigit():
+                        list_value.insert(int(nest_key), os.environ.get(key))
+                    else:
+                        dict_value[nest_key] = os.environ.get(key)
+                current_value = environment_vars.get(opt['name'])
+                if current_value and isinstance(current_value, dict):
+                    current_value.update(dict_value)
+                else:
+                    environment_vars[opt['name']] = opt['type'](list_value or dict_value)
+
         return environment_vars
 
     def _update_environment_variables(self, replace=False):
@@ -1765,7 +1802,7 @@ class SCTConfiguration(dict):
     def _check_unexpected_sct_variables(self):
         # check if there are SCT_* environment variable which aren't documented
         config_keys = {opt['env'] for opt in self.config_options}
-        env_keys = {o for o in os.environ if o.startswith('SCT_')}
+        env_keys = {o.split('.')[0] for o in os.environ if o.startswith('SCT_')}
         unknown_env_keys = env_keys.difference(config_keys)
         if unknown_env_keys:
             output = ["{}={}".format(key, os.environ.get(key)) for key in unknown_env_keys]
