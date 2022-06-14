@@ -178,6 +178,8 @@ data_volume_disk_num: 0
 data_volume_disk_type: ''
 data_volume_disk_size: 0
 data_volume_disk_iops: 0 # depend on type iops could be 100-16000 for io2|io3 and 3000-16000 for gp3
+gce_pd_standard_disk_size_db: 0
+
 install_mode: 'repo'  # install from scylla_repo
 nosqlbench_image: 'scylladb/hydra-loaders:nosqlbench-4.15.49'
 run_db_node_benchmarks: false
