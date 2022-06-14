@@ -2099,16 +2099,6 @@ class PageFetcher:
         return self.future.has_more_pages
 
 
-def get_docker_stress_image_name(tool_name=None):
-    if not tool_name:
-        return None
-    base_path = os.path.dirname(os.path.dirname((os.path.dirname(__file__))))
-    with open(os.path.join(base_path, "docker", tool_name, "image"), encoding="utf-8") as image_file:
-        result = image_file.read()
-
-    return result.strip()
-
-
 def reach_enospc_on_node(target_node):
     no_space_log_reader = target_node.follow_system_log(patterns=['No space left on device'])
 

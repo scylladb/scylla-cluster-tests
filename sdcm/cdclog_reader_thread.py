@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import List, Dict
 
 from sdcm.sct_events.loaders import CDCReaderStressEvent
-from sdcm.utils.common import get_docker_stress_image_name
 from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
 from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
@@ -26,7 +25,6 @@ from sdcm.utils.cdc.options import CDC_LOGTABLE_SUFFIX
 
 LOGGER = logging.getLogger(__name__)
 
-CDCLOG_READER_IMAGE = get_docker_stress_image_name(tool_name="cdcstressor")
 PP = pprint.PrettyPrinter(indent=2)
 
 
@@ -59,7 +57,7 @@ class CDCLogReaderThread(DockerBasedStressThread):
         self.build_stress_command(worker_id, worker_count)
 
         LOGGER.info(self.stress_cmd)
-        docker = RemoteDocker(loader, CDCLOG_READER_IMAGE,
+        docker = RemoteDocker(loader, self.params.get('stress_image.cdc-stresser'),
                               extra_docker_opts=f'--network=host --label shell_marker={self.shell_marker}')
 
         node_cmd = f'STRESS_TEST_MARKER={self.shell_marker}; {self.stress_cmd}'

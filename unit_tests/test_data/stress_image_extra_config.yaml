@@ -1,0 +1,4 @@
+stress_image:
+  ndbench: 'scylladb/hydra-loaders:ndbench-jdk8-A'
+  nosqlbench: 'scylladb/hydra-loaders:nosqlbench-A'
+  cdc-stresser: 'scylladb/hydra-loaders:cdc-stresser-A'

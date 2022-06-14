@@ -61,7 +61,7 @@ class NoSQLBenchStressThread(DockerBasedStressThread):  # pylint: disable=too-ma
         super().__init__(*args, **kwargs)
         self._per_loader_count = {}
         self._per_loader_count_lock = threading.Semaphore()
-        self._nosqlbench_image = self.loader_set.params.get('nosqlbench_image')
+        self._nosqlbench_image = self.loader_set.params.get('stress_image.nosqlbench')
 
     def build_stress_cmd(self, loader_idx: int):
         if hasattr(self.node_list[0], 'parent_cluster'):

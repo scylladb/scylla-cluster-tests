@@ -220,7 +220,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         dns_options = ""
         cpu_options = ""
         if self.params.get('alternator_use_dns_routing'):
-            dns = RemoteDocker(loader, "scylladb/hydra-loaders:alternator-dns-0.2",
+            dns = RemoteDocker(loader, self.params.get('stress_image.alternator-dns'),
                                command_line=f'python3 /dns_server.py {self.db_node_to_query(loader)} '
                                             f'{self.params.get("alternator_port")}',
                                extra_docker_opts=f'--label shell_marker={self.shell_marker}')
@@ -229,7 +229,7 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
         if self.stress_num > 1:
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
-        docker = RemoteDocker(loader, "scylladb/hydra-loaders:ycsb-jdk8-20211104",
+        docker = RemoteDocker(loader, self.params.get('stress_image.ycdb'),
                               extra_docker_opts=f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker}')
         self.copy_template(docker)
         stress_cmd = self.build_stress_cmd()

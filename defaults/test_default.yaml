@@ -180,7 +180,6 @@ data_volume_disk_type: ''
 data_volume_disk_size: 0
 data_volume_disk_iops: 0 # depend on type iops could be 100-16000 for io2|io3 and 3000-16000 for gp3
 install_mode: 'repo'  # install from scylla_repo
-nosqlbench_image: 'scylladb/hydra-loaders:nosqlbench-4.15.49'
 run_db_node_benchmarks: false
 
 nemesis_multiply_factor: 6
@@ -195,4 +194,12 @@ raid_level: 0
 bare_loaders: false
 
 stress_image:
+  ndbench: 'scylladb/hydra-loaders:ndbench-jdk8-20210720'
   ycsb: 'scylladb/hydra-loaders:ycsb-jdk8-20220915'
+  nosqlbench: 'scylladb/hydra-loaders:nosqlbench-4.15.49'
+  cassandra-stress: '' # default would be same version as scylla under test
+  scylla-bench: 'scylladb/hydra-loaders:scylla-bench-v0.1.8'
+  gemini: 'scylladb/hydra-loaders:gemini-1.7.6'
+  alternator-dns: 'scylladb/hydra-loaders:alternator-dns-0.1'
+  cdc-stresser: 'scylladb/hydra-loaders:cdc-stresser-20210630'
+  kcl: 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC'
