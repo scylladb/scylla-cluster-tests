@@ -243,7 +243,7 @@ class ManagerTask:
         # ╰───────────────┴──────────┴──────────┴──────────┴──────────────┴────────╯
         for task_property in res:
             if task_property[0].startswith("Arguments"):
-                arguments_string = task_property[0].split(':')[1].strip()
+                arguments_string = task_property[0].split(':', maxsplit=1)[1].strip()
                 break
         return arguments_string
 
