@@ -403,7 +403,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         return disrupt_methods_list
 
     def get_list_of_subclasses_by_property_name(self, list_of_properties_to_include):
-        flags = {flag_name: True for flag_name in list_of_properties_to_include}
+        flags = {flag_name.strip('!'): not flag_name.startswith(
+            '!') for flag_name in list_of_properties_to_include}
         subclasses_list = self._get_subclasses(**flags)
         return subclasses_list
 
@@ -411,7 +412,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         disrupt_methods_list = []
         for subclass in subclasses_list:
             method_name = re.search(
-                r'self\.(?P<method_name>disrupt_[A-Za-z_]+?)\(.*\)', inspect.getsource(subclass), flags=re.MULTILINE)
+                r'self\.(?P<method_name>disrupt_[0-9A-Za-z_]+?)\(.*\)', inspect.getsource(subclass), flags=re.MULTILINE)
             if method_name:
                 disrupt_methods_list.append(method_name.group('method_name'))
         self.log.debug("list of matching disrupions: {}".format(disrupt_methods_list))
@@ -450,12 +451,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             for filter_name, filter_value in flags.items():
                 if filter_value is None:
                     continue
-                try:
-                    attr = getattr(nemesis, filter_name)
-                except AttributeError:
-                    LOGGER.warning("The required nemesis flag {} was not found".format(filter_name))
-                    flags[filter_name] = None
-                    continue
+                attr = getattr(nemesis, filter_name, False)
                 if attr != filter_value:
                     matches = False
                     break
