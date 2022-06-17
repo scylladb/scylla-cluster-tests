@@ -190,8 +190,8 @@ def test_drain_terminate_decommission_add_node_kubernetes(db_cluster):
 #       - '2.3.x' and ''2.4.x' are not covered as old ones.
 @pytest.mark.requires_mgmt
 @pytest.mark.parametrize("manager_version", (
+    "3.0.0",
     "2.6.3",
-    "3.0-dev-0.20220508.3847b8ff7f0",
 ))
 def test_mgmt_repair(db_cluster, manager_version):
     if manager_version == "2.6.3":
@@ -217,8 +217,8 @@ def test_mgmt_repair(db_cluster, manager_version):
 #       - '2.3.x' and ''2.4.x' are not covered as old ones.
 @pytest.mark.requires_mgmt
 @pytest.mark.parametrize("manager_version", (
-    "3.0-dev-0.20220508.3847b8ff7f0",
     "2.6.3",
+    "3.0.0",
 ))
 def test_mgmt_backup(db_cluster, manager_version):
     if manager_version == "2.6.3":
