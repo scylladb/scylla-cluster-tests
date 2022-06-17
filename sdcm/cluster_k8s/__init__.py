@@ -46,7 +46,7 @@ from kubernetes.client import V1ConfigMap
 from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance, ResourceList, Subresource
 from invoke.exceptions import CommandTimedOut
 
-from sdcm import sct_abs_path, cluster, cluster_docker
+from sdcm import sct_abs_path, cluster
 from sdcm.cluster import DeadNode, ClusterNodesNotReady
 from sdcm.provision.scylla_yaml.scylla_yaml import ScyllaYaml
 from sdcm.test_config import TestConfig
@@ -1006,6 +1006,16 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         LOGGER.debug("Wait for %d secs before we start to apply changes to the cluster",
                      DEPLOY_SCYLLA_CLUSTER_DELAY)
         self.start_scylla_cluster_events_thread(namespace=namespace)
+
+        # TODO: define 'scyllaArgs' option as part of the Scylla helm chart when following
+        #       operator bug gets fixed: https://github.com/scylladb/scylla-operator/issues/989
+        if self.params.get('append_scylla_args'):
+            data = {"spec": {"scyllaArgs": self.params.get('append_scylla_args')}}
+            self.kubectl(
+                f"patch scyllaclusters {self.k8s_scylla_cluster_name} --type merge "
+                f"-p '{json.dumps(data)}'",
+                namespace=namespace,
+            )
 
     @log_run_info
     def deploy_loaders_cluster(self, config: str,
@@ -2139,7 +2149,10 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                          node_pool=node_pool,
                          add_nodes=add_nodes)
 
-    get_scylla_args = cluster_docker.ScyllaDockerCluster.get_scylla_args
+    def get_scylla_args(self) -> str:
+        # NOTE: scylla args get appended in K8S differently than in the VM case.
+        #       So, we simulate 'empty args' to make the common logic work.
+        return ""
 
     def wait_for_nodes_up_and_normal(self, nodes=None, verification_node=None, iterations=None, sleep_time=None,
                                      timeout=None):  # pylint: disable=too-many-arguments
