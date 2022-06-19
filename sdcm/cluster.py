@@ -3249,7 +3249,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
                 return node
         return None
 
-    def _create_session(self, node, keyspace, user, password, compression,
+    def _create_session(self, node, keyspace, compression,
                         # pylint: disable=too-many-arguments, too-many-locals
                         protocol_version, load_balancing_policy=None,
                         port=None, ssl_opts=None, node_ips=None, connect_timeout=None,
@@ -3292,23 +3292,23 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
         return ScyllaCQLSession(session, cluster_driver, verbose)
 
-    def cql_connection(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
-                       password=None, compression=True, protocol_version=None,
+    def cql_connection(self, node, keyspace=None,  # pylint: disable=too-many-arguments
+                       compression=True, protocol_version=None,
                        port=None, ssl_opts=None, connect_timeout=100, verbose=True):
         node_ips = self.get_node_cql_ips()
         wlrr = WhiteListRoundRobinPolicy(node_ips)
-        return self._create_session(node=node, keyspace=keyspace, user=user, password=password,
+        return self._create_session(node=node, keyspace=keyspace,
                                     compression=compression, protocol_version=protocol_version,
                                     load_balancing_policy=wlrr, port=port, ssl_opts=ssl_opts, node_ips=node_ips,
                                     connect_timeout=connect_timeout, verbose=verbose)
 
-    def cql_connection_exclusive(self, node, keyspace=None, user=None,  # pylint: disable=too-many-arguments
-                                 password=None, compression=True,
+    def cql_connection_exclusive(self, node, keyspace=None,  # pylint: disable=too-many-arguments
+                                 compression=True,
                                  protocol_version=None, port=None,
                                  ssl_opts=None, connect_timeout=100, verbose=True):
         node_ips = [node.cql_ip_address]
         wlrr = WhiteListRoundRobinPolicy(node_ips)
-        return self._create_session(node=node, keyspace=keyspace, user=user, password=password,
+        return self._create_session(node=node, keyspace=keyspace,
                                     compression=compression, protocol_version=protocol_version,
                                     load_balancing_policy=wlrr, port=port, ssl_opts=ssl_opts, node_ips=node_ips,
                                     connect_timeout=connect_timeout, verbose=verbose)
@@ -3316,7 +3316,6 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient(self, node, keyspace=None,
                                # pylint: disable=too-many-arguments,unused-argument
-                               user=None, password=None,
                                compression=True, protocol_version=None,
                                port=None, ssl_opts=None, connect_timeout=100, verbose=True):
         """
@@ -3331,7 +3330,6 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
     @retrying(n=8, sleep_time=15, allowed_exceptions=(NoHostAvailable,))
     def cql_connection_patient_exclusive(self, node, keyspace=None,
                                          # pylint: disable=invalid-name,too-many-arguments,unused-argument
-                                         user=None, password=None,
                                          compression=True,
                                          protocol_version=None,
                                          port=None, ssl_opts=None, connect_timeout=100, verbose=True):
