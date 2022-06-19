@@ -20,15 +20,9 @@ def call(Map params, RunWrapper currentBuild){
     set -xe
     env
     echo "Start send email ..."
-    if [[ "$cloud_provider" == "aws" ]]; then
-        SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
-        if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
-            ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} send-email ${test_status} ${start_time} --email-recipients "${email_recipients}"
-        else
-            echo "SCT runner IP file is empty. Probably SCT Runner was not created."
-            ./docker/env/hydra.sh send-email ${test_status} ${start_time} --logdir "`pwd`" --email-recipients "${email_recipients}"
-            exit 1
-        fi
+    SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
+    if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
+        ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} send-email ${test_status} ${start_time} --email-recipients "${email_recipients}"
     else
         ./docker/env/hydra.sh send-email ${test_status} ${start_time} --logdir "`pwd`" --email-recipients "${email_recipients}"
     fi

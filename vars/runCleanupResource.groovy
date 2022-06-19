@@ -32,14 +32,9 @@ def call(Map params, String region){
     fi
 
     echo "Starting to clean resources ..."
-    if [[ "$cloud_provider" == "aws" ]]; then
-        SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
-        if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
-            ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} clean-resources --post-behavior --test-id \$SCT_TEST_ID
-        else
-            echo "SCT runner IP file is empty. Probably SCT Runner was not created."
-            exit 1
-        fi
+    SCT_RUNNER_IP=\$(cat sct_runner_ip||echo "")
+    if [[ -n "\${SCT_RUNNER_IP}" ]] ; then
+        ./docker/env/hydra.sh --execute-on-runner \${SCT_RUNNER_IP} clean-resources --post-behavior --test-id \$SCT_TEST_ID
     else
         ./docker/env/hydra.sh clean-resources --post-behavior --logdir "`pwd`"
     fi
