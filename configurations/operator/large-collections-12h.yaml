@@ -1,2 +1,2 @@
 user_prefix: 'longevity-operator-large-collections-12h'
-nemesis_include_filter: ['kubernetes']
+nemesis_selector: ['kubernetes']

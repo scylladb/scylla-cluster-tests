@@ -16,7 +16,7 @@ post_behavior_loader_nodes: "destroy"
 post_behavior_monitor_nodes: "destroy"
 
 nemesis_class_name: 'SisyphusMonkey'
-nemesis_include_filter: ['limited']
+nemesis_selector: ['limited']
 nemesis_interval: 30
 nemesis_during_prepare: false
 
