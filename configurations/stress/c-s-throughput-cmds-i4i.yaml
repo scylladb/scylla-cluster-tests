@@ -1,0 +1,5 @@
+# for i4i instances number of thread increased to 250.
+prepare_write_cmd: "cassandra-stress write no-warmup cl=QUORUM n=30000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=250 -pop seq=1..30000000"
+stress_cmd_w: "cassandra-stress write no-warmup cl=QUORUM duration=60m -schema 'replication(factor=3)' -mode cql3 native -rate threads=250 -pop seq=1..30000000"
+stress_cmd_r: "cassandra-stress read no-warmup cl=QUORUM duration=50m -schema 'replication(factor=3)' -mode cql3 native -rate threads=250 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
+stress_cmd_m: "cassandra-stress mixed no-warmup cl=QUORUM duration=50m -schema 'replication(factor=3)' -mode cql3 native -rate threads=250 -pop 'dist=gauss(1..30000000,15000000,1500000)' "
