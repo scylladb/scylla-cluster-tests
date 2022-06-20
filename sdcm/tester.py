@@ -386,6 +386,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception:  # pylint: disable=broad-except
             self.log.error("Unable to collect package versions for Argus - skipping...", exc_info=True)
 
+    def argus_get_scylla_version(self):
+        try:
+            self.log.info("Collection Scylla version for argus...")
+            version_regex = re.compile(r'(([\w.~]+)-(0.)?([0-9]{8,8}).(\w+).)')
+            version_str = self.db_cluster.nodes[0].get_scylla_binary_version()
+            if (match := version_regex.match(version_str)):
+                self.argus_test_run.run_info.details.scylla_version = match.group(2)
+                self.argus_test_run.save()
+        except Exception:  # pylint: disable=broad-except
+            self.log.error("Error getting scylla version for argus", exc_info=True)
+
     def argus_finalize_test_run(self):
         try:
             stat_map = {
@@ -712,6 +723,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             monitors.wait_for_init()
 
         self.argus_collect_packages()
+        self.argus_get_scylla_version()
 
         # cancel reuse cluster - for new nodes added during the test
         self.test_config.reuse_cluster(False)
