@@ -1559,22 +1559,22 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         finally:
             self.metrics_srv.event_stop(disrupt_method_name)
 
-    def build_list_of_disruptions_to_execute(self, nemesis_include_filter=None, nemesis_multiply_factor=1):
+    def build_list_of_disruptions_to_execute(self, nemesis_selector=None, nemesis_multiply_factor=1):
         """
         Builds the list of disruptions that should be excuted during a test.
 
-        nemesis_include_filter: should be retrived from the test yaml by using the "nemesis_include_filter".
+        nemesis_selector: should be retrived from the test yaml by using the "nemesis_selector".
         Here it kept for future usages and unit testing ability.
-        more about nemesis_include_filter behaviour in sct_config.py
+        more about nemesis_selector behaviour in sct_config.py
 
         nemesis_multiply_factor: should be retrived from the test yaml by using the "nemesis_multiply_factor".
         Here it kept for future usages and unit testing ability.
-        more about nemesis_include_filter behaviour in sct_config.py
+        more about nemesis_selector behaviour in sct_config.py
         """
-        nemesis_include_filter = self.cluster.params.get('nemesis_include_filter')
-        if nemesis_include_filter:
+        nemesis_selector = self.cluster.params.get('nemesis_selector')
+        if nemesis_selector:
             subclasses = self.get_list_of_subclasses_by_property_name(
-                list_of_properties_to_include=nemesis_include_filter)
+                list_of_properties_to_include=nemesis_selector)
             if subclasses:
                 disruptions = self.get_list_of_disrupt_methods(subclasses_list=subclasses)
             else:

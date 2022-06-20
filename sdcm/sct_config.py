@@ -1277,9 +1277,9 @@ class SCTConfiguration(dict):
         dict(name="run_db_node_benchmarks", env="SCT_RUN_DB_NODE_BENCHMARKS",
              type=boolean,
              help="Flag for running db node benchmarks before the tests"),
-        dict(name="nemesis_include_filter", env="SCT_NEMESIS_INCLUDE_FILTER",
+        dict(name="nemesis_selector", env="SCT_NEMESIS_SELECTOR",
              type=str_or_list,
-             help="""nemesis_include_filter gets a list of "nemesis properties" and filters IN all the nemesis that has
+             help="""nemesis_selector gets a list of "nemesis properties" and filters IN all the nemesis that has
              ALL the properties in that list which are set to true (the intersection of all properties).
              (In other words filters out all nemesis that doesn't ONE of these properties set to true)
              IMPORTANT: If a property doesn't exist, ALL the nemesis will be included."""),

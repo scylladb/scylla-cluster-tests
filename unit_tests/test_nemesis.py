@@ -143,7 +143,7 @@ def test_list_topology_changes_monkey():
         "disrupt_remove_node_then_add_node",
     ]
     tester = FakeTester()
-    tester.params["nemesis_include_filter"] = ['topology_changes']
+    tester.params["nemesis_selector"] = ['topology_changes']
     sisphus = FakeSisyphusMonkey(FakeTester(), None)
 
     collected_disrupt_methods_names = [disrupt.__name__ for disrupt in sisphus.disruptions_list]
