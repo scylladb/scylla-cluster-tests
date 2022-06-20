@@ -58,36 +58,36 @@ class CompactionOps:
     def trigger_flush(self):
         self.node.run_nodetool(self.NODETOOL_CMD.flush)
 
-    def stop_major_compaction(self):
+    def stop_major_compaction(self) -> Result:
         LOGGER.info("Stopping major compaction with <nodetool stop>")
-        self._stop_compaction(self.NODETOOL_CMD.stop_major_compaction)
+        return self._stop_compaction(self.NODETOOL_CMD.stop_major_compaction)
 
-    def stop_scrub_compaction(self):
-        self._stop_compaction(self.NODETOOL_CMD.stop_scrub_compaction)
+    def stop_scrub_compaction(self) -> Result:
+        return self._stop_compaction(self.NODETOOL_CMD.stop_scrub_compaction)
 
-    def stop_cleanup_compaction(self):
-        self._stop_compaction(self.NODETOOL_CMD.stop_cleanup_compaction)
+    def stop_cleanup_compaction(self) -> Result:
+        return self._stop_compaction(self.NODETOOL_CMD.stop_cleanup_compaction)
 
-    def stop_upgrade_compaction(self):
-        self._stop_compaction(self.NODETOOL_CMD.stop_upgrade_compaction)
+    def stop_upgrade_compaction(self) -> Result:
+        return self._stop_compaction(self.NODETOOL_CMD.stop_upgrade_compaction)
 
-    def stop_reshape_compaction(self):
-        self._stop_compaction(self.NODETOOL_CMD.stop_reshape_compaction)
+    def stop_reshape_compaction(self) -> Result:
+        return self._stop_compaction(self.NODETOOL_CMD.stop_reshape_compaction)
 
-    def stop_validation_compaction(self):
-        self.stop_scrub_compaction()
+    def stop_validation_compaction(self) -> Result:
+        return self.stop_scrub_compaction()
 
     def disable_autocompaction_on_ks_cf(self, node: BaseNode,  keyspace: str = "", cf: Optional[str] = ""):
         node = node if node else self.node
         node.run_nodetool(f'disableautocompaction {keyspace} {cf}')
 
-    def _stop_compaction(self, nodetool_cmd: str):
+    def _stop_compaction(self, nodetool_cmd: str) -> Result:
         LOGGER.info("Stopping compaction with nodetool %s", nodetool_cmd)
-        self.node.run_nodetool(nodetool_cmd)
+        return self.node.run_nodetool(nodetool_cmd)
 
     @staticmethod
     def stop_on_user_compaction_logged(node: BaseNode, watch_for: str, timeout: int,
-                                       stop_func: Callable, mark: Optional[int] = None):
+                                       stop_func: Callable, mark: Optional[int] = None) -> Result:
         LOGGER.info("Starting to watch for user compaction logged...")
         start_time = time.time()
         with open(node.system_log, encoding="utf-8") as log_file:
@@ -98,6 +98,18 @@ class CompactionOps:
                 line = log_file.readline()
 
                 if watch_for in line:
-                    stop_func()
+                    func_return = stop_func()
                     LOGGER.info("Grepped expression found: %s in log line %s", watch_for, line)
-                    break
+                    return func_return
+
+
+class StartStopCompactionArgs(NamedTuple):
+    """
+    NamedTuple for passing around common arguments
+    in the start-stop compaction tests.
+    """
+    keyspace: str
+    columnfamily: str
+    timeout: int
+    target_node: BaseNode
+    compaction_ops: CompactionOps

@@ -13,7 +13,7 @@
 
 # pylint: disable=too-many-lines
 
-from __future__ import absolute_import
+from __future__ import absolute_import, annotations
 
 import atexit
 import itertools
@@ -440,7 +440,7 @@ class ParallelObject:
             raise ParallelObjectException(results=results)
         return results
 
-    def call_objects(self) -> "ParallelObjectResult":
+    def call_objects(self, ignore_exceptions: bool = False) -> list["ParallelObjectResult"]:
         """
         Use the ParallelObject run() method to call a list of
         callables in parallel. Rather than running a single function
@@ -458,7 +458,7 @@ class ParallelObject:
         This can be useful if we need to tightly synchronise the
         execution of multiple functions.
         """
-        return self.run(lambda x: x())
+        return self.run(lambda x: x(), ignore_exceptions=ignore_exceptions)
 
     def clean_up(self, futures):
         # if there are futures that didn't run  we cancel them
@@ -467,6 +467,47 @@ class ParallelObject:
         self._thread_pool.shutdown(wait=False)
         # we need to unregister internal function that waits for all threads to finish when interpreter exits
         atexit.unregister(_python_exit)
+
+    @staticmethod
+    def run_named_tasks_in_parallel(tasks: dict[str, Callable],
+                                    timeout: int,
+                                    ignore_exceptions: bool = False) -> dict[str, ParallelObjectResult]:
+        """
+        Allows calling multiple Callables in parallel using Parallel
+        Object. Returns a dict with the results. Will raise an exception
+        if:
+        - ignore_exceptions is set to False and an exception was raised
+        during execution
+        - timeout is set and timeout was reached
+
+        Example:
+
+        Given:
+        tasks = {
+            "trigger": partial(time.sleep, 10))
+            "interrupt": partial(random.random)
+        }
+
+        Result:
+
+        {
+            "trigger": ParallelObjectResult >>> time.sleep result
+            "interrupt": ParallelObjectResult >>> random.random result
+        }
+        """
+        task_id_map = {str(id(task)): task_name for task_name, task in tasks.items()}
+        results_map = {}
+
+        task_results = ParallelObject(
+            objects=tasks.values(),
+            timeout=timeout if timeout else None
+        ).call_objects(ignore_exceptions=ignore_exceptions)
+
+        for result in task_results:
+            task_name = task_id_map.get(str(id(result.obj)))
+            results_map.update({task_name: result})
+
+        return results_map
 
 
 class ParallelObjectResult:  # pylint: disable=too-few-public-methods
