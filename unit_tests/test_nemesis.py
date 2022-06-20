@@ -1,8 +1,11 @@
 import inspect
-from collections import namedtuple
+from dataclasses import dataclass, field
+
+import pytest
 
 import sdcm.utils.cloud_monitor  # pylint: disable=unused-import # import only to avoid cyclic dependency
 from sdcm.nemesis import Nemesis, CategoricalMonkey, SisyphusMonkey, ToggleGcModeMonkey
+from sdcm.cluster import BaseScyllaCluster
 from sdcm.cluster_k8s.mini_k8s import LocalMinimalScyllaPodCluster
 from sdcm.cluster_k8s.gke import GkeScyllaPodCluster
 from sdcm.cluster_k8s.eks import EksScyllaPodCluster
@@ -11,21 +14,57 @@ from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_docker import ScyllaDockerCluster
 
 
-Cluster = namedtuple("Cluster", ['params'])
+PARAMS = dict(nemesis_interval=1, nemesis_filter_seeds=False)
 
 
-# pylint: disable=too-few-public-methods
+@dataclass
+class Node:
+    running_nemesis = None
+    public_ip_address: str = '127.0.0.1'
+    name: str = 'Node1'
+
+    @property
+    def scylla_shards(self):
+        return 8
+
+
+@dataclass
+class Cluster:
+    nodes: list
+    params: dict = field(default_factory=lambda: PARAMS)
+
+    def check_cluster_health(self):
+        pass
+
+
+@dataclass
 class FakeTester:
+    params: dict = field(default_factory=lambda: PARAMS)
+    loaders: list = field(default_factory=list)
+    db_cluster: Cluster | BaseScyllaCluster = field(default_factory=lambda: Cluster(nodes=[Node(), Node()]))
+    monitors: list = field(default_factory=list)
 
-    def __init__(self):
-        self.params = dict(nemesis_interval=1, nemesis_filter_seeds=False, nemesis_exclude_disabled=True,
-                           nemesis_selector=None)
-        self.loaders, self.monitors = {}, {}
-        self.db_cluster = Cluster(params=self.params)
+    def __post_init__(self):
+        self.db_cluster.params = self.params
+
+    def create_stats(self):
+        pass
+
+    def update(self, *args, **kwargs):
+        pass
+
+    def get_scylla_versions(self):
+        pass
+
+    def get_test_details(self):
+        pass
+
+    def id(self):  # pylint: disable=invalid-name,no-self-use
+        return 0
 
 
 class FakeNemesis(Nemesis):
-    def __new__(cls, tester_obj, termination_event, *args):
+    def __new__(cls, tester_obj, termination_event, *args):  # pylint: disable=unused-argument
         return object.__new__(cls)
 
     def disrupt(self):
@@ -34,11 +73,6 @@ class FakeNemesis(Nemesis):
 
 class ChaosMonkey(FakeNemesis):
     ...
-
-
-class FakeSisyphusMonkey(SisyphusMonkey):
-    def __new__(cls, tester_obj, termination_event, *args):
-        return object.__new__(cls)
 
 
 class FakeCategoricalMonkey(CategoricalMonkey):
@@ -71,6 +105,7 @@ class AddRemoveDCMonkey(FakeNemesis):
         self.disrupt_add_remove_dc()
 
 
+@pytest.mark.usefixtures('events')
 def test_list_nemesis_of_added_disrupt_methods():
     nemesis = ChaosMonkey(FakeTester(), None)
     assert 'disrupt_add_remove_dc' in nemesis.get_list_of_methods_by_flags(disruptive=False)
@@ -103,22 +138,17 @@ def test_is_it_on_kubernetes():
         def __init__(self, params: dict = None):
             self.params = params
 
-    # pylint: disable=redefined-outer-name,protected-access,too-few-public-methods
-    class FakeTester:
-        def __init__(self, db_cluster):
-            self.params = {'nemesis_interval': 10, 'nemesis_filter_seeds': 1}
-            db_cluster.params = self.params
-            self.db_cluster = db_cluster
-            self.loaders = None
-            self.monitors = None
+    params = {'nemesis_interval': 10, 'nemesis_filter_seeds': 1}
 
-    assert FakeNemesis(FakeTester(FakeLocalMinimalScyllaPodCluster()), None)._is_it_on_kubernetes()
-    assert FakeNemesis(FakeTester(FakeGkeScyllaPodCluster()), None)._is_it_on_kubernetes()
-    assert FakeNemesis(FakeTester(FakeEksScyllaPodCluster()), None)._is_it_on_kubernetes()
+    # pylint: disable=protected-access
+    assert FakeNemesis(FakeTester(db_cluster=FakeLocalMinimalScyllaPodCluster(),
+                       params=params), None)._is_it_on_kubernetes()
+    assert FakeNemesis(FakeTester(db_cluster=FakeGkeScyllaPodCluster(), params=params), None)._is_it_on_kubernetes()
+    assert FakeNemesis(FakeTester(db_cluster=FakeEksScyllaPodCluster(), params=params), None)._is_it_on_kubernetes()
 
-    assert not FakeNemesis(FakeTester(FakeScyllaGCECluster()), None)._is_it_on_kubernetes()
-    assert not FakeNemesis(FakeTester(FakeScyllaAWSCluster()), None)._is_it_on_kubernetes()
-    assert not FakeNemesis(FakeTester(FakeScyllaDockerCluster()), None)._is_it_on_kubernetes()
+    assert not FakeNemesis(FakeTester(db_cluster=FakeScyllaGCECluster(), params=params), None)._is_it_on_kubernetes()
+    assert not FakeNemesis(FakeTester(db_cluster=FakeScyllaAWSCluster(), params=params), None)._is_it_on_kubernetes()
+    assert not FakeNemesis(FakeTester(db_cluster=FakeScyllaDockerCluster(), params=params), None)._is_it_on_kubernetes()
 
 
 # pylint: disable=protected-access
@@ -153,7 +183,7 @@ def test_list_topology_changes_monkey():
     ]
     tester = FakeTester()
     tester.params["nemesis_selector"] = ['topology_changes']
-    sisphus = FakeSisyphusMonkey(tester, None)
+    sisphus = SisyphusMonkey(FakeTester(), None)
 
     collected_disrupt_methods_names = [disrupt.__name__ for disrupt in sisphus.disruptions_list]
 
@@ -172,7 +202,8 @@ def test_disabled_monkey():
                            attr[0].startswith('disrupt_') and
                            callable(attr[1])}
     tester.params["nemesis_exclude_disabled"] = True
-    sisyphus = FakeSisyphusMonkey(tester, None)
+    tester.params["nemesis_selector"] = []
+    sisyphus = SisyphusMonkey(tester, None)
 
     collected_disrupt_methods_names = {disrupt.__name__ for disrupt in sisyphus.disruptions_list}
     # Note: this test will fail and have to be adjusted once additional 'disabled' nemeses added.
@@ -186,7 +217,8 @@ def test_use_disabled_monkey():
     tester = FakeTester()
 
     tester.params["nemesis_exclude_disabled"] = False
-    sisyphus = FakeSisyphusMonkey(tester, None)
+    tester.params["nemesis_selector"] = []
+    sisyphus = SisyphusMonkey(tester, None)
 
     collected_disrupt_methods_names = {disrupt.__name__ for disrupt in sisyphus.disruptions_list}
 
