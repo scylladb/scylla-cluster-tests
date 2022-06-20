@@ -7,7 +7,6 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_batch_custom_time',
-    test_config: 'test-cases/longevity/longevity-multi-keyspaces.yaml',
+    test_config: 'test-cases/longevity/longevity-multi-keyspaces.yaml'
 
-    timeout: [time: 3660, unit: 'MINUTES']
 )

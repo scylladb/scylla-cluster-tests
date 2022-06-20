@@ -7,7 +7,6 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_large_partition_test.LargePartitionLongevityTest.test_large_partition_longevity',
-    test_config: '''["test-cases/longevity/longevity-large-partition-8h.yaml","configurations/ebs/ebs-gp3-2v-4tb-16k-iops.yaml"]''',
+    test_config: '''["test-cases/longevity/longevity-large-partition-8h.yaml","configurations/ebs/ebs-gp3-2v-4tb-16k-iops.yaml"]'''
 
-    timeout: [time: 610, unit: 'MINUTES']
 )

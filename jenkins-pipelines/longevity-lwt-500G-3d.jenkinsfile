@@ -7,7 +7,6 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_lwt_test.LWTLongevityTest.test_lwt_longevity',
-    test_config: 'test-cases/longevity/longevity-lwt-500G-3d.yaml',
+    test_config: 'test-cases/longevity/longevity-lwt-500G-3d.yaml'
 
-    timeout: [time: 5000, unit: 'MINUTES']
 )

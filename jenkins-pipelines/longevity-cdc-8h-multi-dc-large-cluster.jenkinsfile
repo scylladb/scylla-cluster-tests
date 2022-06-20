@@ -7,7 +7,6 @@ longevityPipeline(
     backend: 'aws',
     region: '''["eu-west-1", "us-east-1", "eu-west-2"]''',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-cdc-100gb-8h-multi-dc-large-cluster.yaml',
+    test_config: 'test-cases/longevity/longevity-cdc-100gb-8h-multi-dc-large-cluster.yaml'
 
-    timeout: [time: 800, unit: 'MINUTES']
 )

@@ -8,7 +8,5 @@ longevityPipeline(
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: '''["test-cases/longevity/longevity-100gb-4h.yaml", "configurations/arm_instance_types/im4gn_4xlarge.yaml"]''',
-    availability_zone: 'c',
-
-    timeout: [time: 360, unit: 'MINUTES']
+    availability_zone: 'c'
 )

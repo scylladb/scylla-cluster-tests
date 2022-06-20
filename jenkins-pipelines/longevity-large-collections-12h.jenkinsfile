@@ -7,7 +7,6 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-large-collections-12h.yaml',
+    test_config: 'test-cases/longevity/longevity-large-collections-12h.yaml'
 
-    timeout: [time: 870, unit: 'MINUTES']
 )

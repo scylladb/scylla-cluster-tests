@@ -9,6 +9,5 @@ longevityPipeline(
     test_name: 'longevity_test.LongevityTest.test_custom_time',
     test_config: 'test-cases/longevity/longevity-alternator-3h.yaml',
 
-    timeout: [time: 300, unit: 'MINUTES'],
     email_recipients: 'qa@scylladb.com'
 )

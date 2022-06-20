@@ -7,7 +7,6 @@ longevityPipeline(
     backend: 'aws',
     region: '''["eu-west-1", "us-east-1"]''',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: ["test-cases/longevity/longevity-cdc-100gb-8h-multi-dc-topology-changes.yaml", "configurations/raft/enable_raft_experimental.yaml"]''',
+    test_config: '''["test-cases/longevity/longevity-cdc-100gb-8h-multi-dc-topology-changes.yaml", "configurations/raft/enable_raft_experimental.yaml"]'''
 
-    timeout: [time: 560, unit: 'MINUTES']
 )
