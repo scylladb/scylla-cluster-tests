@@ -7,7 +7,6 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: '''["test-cases/longevity/longevity-encryption-at-rest-200GB-6h.yaml", "configurations/hytrust-kmip-ear.yaml"]''',
+    test_config: '''["test-cases/longevity/longevity-encryption-at-rest-200GB-6h.yaml", "configurations/hytrust-kmip-ear.yaml"]'''
 
-    timeout: [time: 550, unit: 'MINUTES']
 )

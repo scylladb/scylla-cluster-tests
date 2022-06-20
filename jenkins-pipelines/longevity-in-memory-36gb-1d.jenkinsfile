@@ -7,7 +7,6 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_in_memory_test.InMemoryLongevityTest.test_in_mem_longevity',
-    test_config: 'test-cases/longevity/longevity-in-memory-36GB-1day.yaml',
+    test_config: 'test-cases/longevity/longevity-in-memory-36GB-1day.yaml'
 
-    timeout: [time: 1560, unit: 'MINUTES']
 )

@@ -9,7 +9,6 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-mini-test-1h.yaml',
+    test_config: 'test-cases/longevity/longevity-mini-test-1h.yaml'
 
-    timeout: [time: 90, unit: 'MINUTES']
 )

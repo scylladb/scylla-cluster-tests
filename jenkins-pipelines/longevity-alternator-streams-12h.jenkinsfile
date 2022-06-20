@@ -7,5 +7,5 @@ longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-alternator-streams-100gb-12h.yaml',
+    test_config: 'test-cases/longevity/longevity-alternator-streams-100gb-12h.yaml'
 )

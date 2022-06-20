@@ -6,5 +6,5 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 longevityPipeline(
     backend: 'gce',
     test_name: 'longevity_test.LongevityTest.test_custom_time',
-    test_config: 'test-cases/longevity/longevity-1TB-5days-authorization-and-tls-ssl.yaml',
+    test_config: 'test-cases/longevity/longevity-1TB-5days-authorization-and-tls-ssl.yaml'
 )
