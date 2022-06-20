@@ -462,6 +462,15 @@ def test_scylla_operator_pods(db_cluster: ScyllaPodCluster):
         [pods_info['name'] for pods_info in scylla_operator_pods if pods_info['status'] != 'Running'])
     assert not not_running_pods, f'There are pods in state other than running: {not_running_pods}'
 
+    # Cover https://github.com/scylladb/scylla-operator/issues/408:
+    # Operator shouldn't run as StatefulSet, should be Deployment
+    pods = db_cluster.k8s_cluster.kubectl(f"get pods {scylla_operator_pods[0]['name']} -o yaml",
+                                          namespace=SCYLLA_OPERATOR_NAMESPACE)
+    for owner_reference in yaml.safe_load(pods.stdout)['metadata'].get('ownerReferences', []):
+        assert owner_reference["kind"] == "ReplicaSet", (
+            f"Expected 'ReplicaSet' kind as owner, but got '{owner_reference['Kind']}'"
+        )
+
 
 @pytest.mark.readonly
 def test_startup_probe_exists_in_scylla_pods(db_cluster: ScyllaPodCluster):
