@@ -65,6 +65,8 @@ def call(Map pipelineParams) {
         }
         options {
             timestamps()
+            // Timeout for the whole test, add 30 MINUTES for waiting the builder
+            timeout([time: pipelineParams.timeout.time + 30, unit: 'MINUTES'])
             buildDiscarder(logRotator(numToKeepStr: "${pipelineParams.get('builds_to_keep', '20')}",))
         }
         stages {
@@ -77,7 +79,7 @@ def call(Map pipelineParams) {
                             tasks["${instance_type}"] = {
                                 node(builder.label) {
                                     // Timeout for the test itself
-                                    timeout(time: pipelineParams.timeout.time, unit: 'MINUTES') {
+                                    timeout(pipelineParams.timeout) {
                                         withEnv(["AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID}",
                                                  "AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY}",]) {
                                             stage("Checkout (${instance_type})") {
@@ -149,26 +151,24 @@ def call(Map pipelineParams) {
                                                 """
                                             }
                                             stage("Collect log data (${instance_type})") {
-                                                catchError(stageResult: 'FAILURE') {
-                                                    wrap([$class: 'BuildUser']) {
-                                                        dir('scylla-cluster-tests') {
-                                                            timeout(time: 30, unit: 'MINUTES') {
-                                                                runCollectLogs(params, builder.region)
-                                                            }
-                                                        }
-                                                    }
-                                                }
+                                                sctScript """
+                                                    export SCT_CONFIG_FILES=${params.test_config}
+
+                                                    echo "start collect logs ..."
+                                                    ./docker/env/hydra.sh collect-logs --backend ${params.backend} --logdir "`pwd`"
+                                                    echo "end collect logs"
+                                                """
                                             }
                                             stage("Clean resources (${instance_type})") {
-                                                catchError(stageResult: 'FAILURE') {
-                                                    wrap([$class: 'BuildUser']) {
-                                                        dir('scylla-cluster-tests') {
-                                                            timeout(time: 10, unit: 'MINUTES') {
-                                                                runCleanupResource(params, builder.region)
-                                                            }
-                                                        }
-                                                    }
-                                                }
+                                                sctScript """
+                                                    export SCT_CONFIG_FILES=${params.test_config}
+                                                    export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
+                                                    export SCT_CLUSTER_BACKEND="${params.backend}"
+
+                                                    echo "start clean resources ..."
+                                                    ./docker/env/hydra.sh clean-resources --post-behavior --logdir "`pwd`"
+                                                    echo "end clean resources"
+                                                """
                                             }
                                             stage("Send email with result ${instance_type}") {
                                                 def email_recipients = groovy.json.JsonOutput.toJson(params.email_recipients)
