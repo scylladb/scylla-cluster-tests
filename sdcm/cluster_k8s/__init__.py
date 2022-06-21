@@ -1016,7 +1016,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         if self.params.get('append_scylla_args'):
             data = {"spec": {"scyllaArgs": self.params.get('append_scylla_args')}}
             self.kubectl(
-                f"patch scyllaclusters {self.k8s_scylla_cluster_name} --type merge "
+                f"patch scyllaclusters {cluster_name} --type merge "
                 f"-p '{json.dumps(data)}'",
                 namespace=namespace,
             )
