@@ -66,7 +66,7 @@ from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.group_common_events import (ignore_alternator_client_errors, ignore_no_space_errors,
-                                                 ignore_scrub_invalid_errors)
+                                                 ignore_scrub_invalid_errors, ignore_view_error_gate_closed_exception)
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
@@ -579,7 +579,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         time.sleep(60)
 
     def disrupt_hard_reboot_node(self):
-        self.target_node.reboot(hard=True)
+        self.reboot_node(target_node=self.target_node, hard=True)
         self.log.info('Waiting scylla services to start after node reboot')
         self.target_node.wait_db_up()
         self.log.info('Waiting JMX services to start after node reboot')
@@ -603,7 +603,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             self.log.debug("Rebooting %s out of %s times", i + 1, num_of_reboots)
             cdc_expected_error = self.target_node.follow_system_log(patterns=cdc_expected_error_patterns)
             cdc_success_msg = self.target_node.follow_system_log(patterns=cdc_success_msg_patterns)
-            self.target_node.reboot(hard=True)
+            self.reboot_node(target_node=self.target_node, hard=True)
             if random.choice([True, False]):
                 self.log.info('Waiting scylla services to start after node reboot')
                 self.target_node.wait_db_up()
@@ -626,7 +626,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             time.sleep(sleep_time)
 
     def disrupt_soft_reboot_node(self):
-        self.target_node.reboot(hard=False)
+        self.reboot_node(target_node=self.target_node, hard=False)
         self.log.info('Waiting scylla services to start after node reboot')
         self.target_node.wait_db_up()
         self.log.info('Waiting JMX services to start after node reboot')
@@ -2577,6 +2577,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.log.debug(f"{name}: failed to execute cleanup command "
                                f"{cmd} on node {node} due to the following error: {str(exc)}")
 
+    @staticmethod
+    def reboot_node(target_node, hard=True, verify_ssh=True):
+        with ignore_view_error_gate_closed_exception():
+            target_node.reboot(hard=hard, verify_ssh=verify_ssh)
+
     def disrupt_network_start_stop_interface(self):  # pylint: disable=invalid-name
         if not self.cluster.extra_network_interface:
             raise UnsupportedNemesis("for this nemesis to work, you need to set `extra_network_interface: True`")
@@ -2670,7 +2675,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR,
                            line="got error in row level repair",
                            node=self.target_node):
-            self.target_node.reboot(hard=True, verify_ssh=True)
+            self.reboot_node(target_node=self.target_node, hard=True, verify_ssh=True)
             streaming_thread.join(60)
 
             if task == 'decommission':
