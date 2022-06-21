@@ -24,6 +24,7 @@ from sdcm.sct_events import Severity
 from sdcm.sct_events.filters import EventsSeverityChangerFilter
 from sdcm.sct_events.loaders import CassandraStressEvent
 
+
 KB = 1024
 
 

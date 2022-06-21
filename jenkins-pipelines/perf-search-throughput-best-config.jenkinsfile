@@ -1,0 +1,14 @@
+#!groovy
+
+// trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
+def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
+
+perfSearchBestConfigParallelPipeline(
+    backend: "aws",
+    region: "us-east-1",
+    test_name: "performance_search_max_throughput_test.MaximumPerformanceSearchTest",
+    test_config: "test-cases/performance/perf-search-best-throughput-config.yaml",
+    sub_tests: ["test_search_best_read_throughput", "test_search_best_write_throughput","test_search_best_mixed_throughput"],
+
+    timeout: [time: 3500, unit: "MINUTES"]
+)

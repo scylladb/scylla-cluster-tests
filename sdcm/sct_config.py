@@ -1382,6 +1382,22 @@ class SCTConfiguration(dict):
         dict(name="cs_populating_distribution", env="SCT_CS_POPULATING_DISTRIBUTION", type=str,
              help="""set c-s parameter '-pop' with gauss/uniform distribution for
              performance gradual throughtput grow tests"""),
+
+        dict(name="num_loaders_step", env="SCT_NUM_LOADERS_STEP", type=int,
+             help="Number of loaders which should be added per step"),
+        dict(name="stress_threads_start_num", env="SCT_STRESS_THREADS_START_NUM", type=int,
+             help="Number of threads for c-s command"),
+        dict(name="num_threads_step", env="SCT_NUM_THREADS_STEP", type=int,
+             help="Number of threads which should be added on per step"),
+        dict(name="stress_step_duration", env="SCT_STRESS_STEP_DURATION", type=str,
+             help="Duration of time for stress round"),
+        dict(name="max_deviation", env="SCT_MAX_DEVIATION", type=float,
+             help="""Max relative difference between best and current throughput,
+             if current throughput larger then best on max_rel_diff, it become new best one"""),
+        dict(name="n_stress_process", env="SCT_N_STRESS_PROCESS", type=int,
+             help="""Number of stress processes per loader"""),
+        dict(name="stress_process_step", env="SCT_STRESS_PROCESS_STEP", type=int,
+             help="""add/remove num of process on each round"""),
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
