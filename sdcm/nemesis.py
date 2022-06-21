@@ -511,6 +511,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                              stop_func=compaction_ops.stop_major_compaction)
         ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
 
+    def clear_snapshots(self) -> None:
+        self.log.info("Clear snapshots if there are some of them")
+        result = self.target_node.run_nodetool("clearsnapshot")
+        self.log.debug(result)
+
     def disrupt_start_stop_scrub_compaction(self):
         self.set_target_node()
         node = self.target_node
@@ -523,6 +528,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                              timeout=timeout,
                              stop_func=compaction_ops.stop_scrub_compaction)
         ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
+
+        self.clear_snapshots()
 
     def disrupt_start_stop_cleanup_compaction(self):
         self.set_target_node()
@@ -2377,8 +2384,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         else:
             raise Exception(f"Snapshot {snapshot_name} wasn't found in: \n{result.stdout}")
 
-        result = self.target_node.run_nodetool('clearsnapshot')
-        self.log.debug(result)
+        self.clear_snapshots()
 
     # NOTE: '2023.1.rc0' is set in advance, not guaranteed to match when appears
     @scylla_versions(("4.6.rc0", None), ("2023.1.rc0", None))
@@ -2960,6 +2966,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         with ignore_scrub_invalid_errors():
             for ks in self.cluster.get_test_keyspaces():
                 self.target_node.run_nodetool("scrub", args=f"--skip-corrupted {ks}")
+
+        self.clear_snapshots()
 
     @latency_calculator_decorator(legend="Adding new node")
     def add_new_node(self, rack=0):
