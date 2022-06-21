@@ -261,7 +261,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     localhost = None
     events_processes_registry = None
     monitors: BaseMonitorSet = None
-    loaders: BaseLoaderSet = None
+    loaders: Union[BaseLoaderSet, LoaderSetAWS, LoaderSetGCE] = None
     db_cluster: BaseScyllaCluster = None
     k8s_cluster: Union[eks.EksCluster, gke.GkeCluster, mini_k8s.LocalKindCluster, None] = None
 

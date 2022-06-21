@@ -1,0 +1,74 @@
+{% extends 'results_base_custom.html' %}
+{% block body %}
+    {% block title %}
+    <h3>Test: {{ test_name }}</h3>
+    {% endblock %}
+    <h3>
+        <span>Test start time: </span>
+        <span class="blue">{{ setup_details.pop('start_time') }}</span>
+        <br>
+        <span>Scylla Server Version: </span>
+        <span class="blue">{{ setup_details.pop('scylla_version') }}</span>
+
+    </h3>
+    <div>
+        <span> Setup Details: </span>
+        <ul>
+        {% for key, val in setup_details.items()|sort %}
+            <li>
+                {{ key }}: <span class="blue"> {{ val }} </span>
+            </li>
+        {% endfor %}
+        </ul>
+    </div>
+
+    <h2> Best throughput with configuration </h2>
+    <table id="results_table">
+        <tr>
+            <th> Number of Loaders </th>
+            <th> Number of Processes </th>
+            <th> Threads per process </th>
+            <th> Total Threads </th>
+            <th> Ops </th>
+            <th> Latency 95th </th>
+            <th> Latency 99th </th>
+        </tr>
+        <tr>
+            <td> {{ test_results['best_stat']['n_loaders']}} </td>
+            <td> {{ test_results['best_stat']['n_process']}} </td>
+            <td> {{ test_results['best_stat']['threads']}} </td>
+            <td> {{ test_results['best_stat']['total_threads']}} </td>
+            <td> {{ test_results['best_stat']['op rate']}} </td>
+            <td> {{ test_results['best_stat']['latency 95th percentile']}} </td>
+            <td> {{ test_results['best_stat']['latency 99th percentile']}} </td>
+        </tr>
+    </table>
+
+    <h2> All throughput results with configuraiton </h2>
+    <table id="results_table">
+        <tr>
+            <th> Number of Loaders </th>
+            <th> Number of Processes </th>
+            <th> Threads per process </th>
+            <th> Total Threads </th>
+            <th> Ops(kOps) </th>
+            <th> Latency 95th </th>
+            <th> Latency 99th </th>
+        </tr>
+        {% for stat in test_results['all_stats'] %}
+            {% if stat == test_results['best_stat'] %}
+                <tr style="background-color: green">
+            {% else %}
+                <tr>
+            {% endif %}
+                    <td> {{ stat['n_loaders']}} </td>
+                    <td> {{ stat['n_process']}} </td>
+                    <td> {{ stat['threads']}} </td>
+                    <td> {{ stat['total_threads']}} </td>
+                    <td> {{ stat['op rate']}} </td>
+                    <td> {{ stat['latency 95th percentile']}} </td>
+                    <td> {{ stat['latency 99th percentile']}} </td>
+                </tr>
+        {% endfor %}
+
+{% endblock %}

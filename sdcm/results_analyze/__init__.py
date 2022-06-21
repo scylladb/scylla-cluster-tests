@@ -1337,3 +1337,27 @@ class ThroughputLatencyGradualGrowPayloadPerformanceAnalyzer(BaseResultsAnalyzer
         self.save_email_data_file(subject, email_data, file_path='email_data.json')
 
         return True
+
+
+class SearchBestThroughputConfigPerformanceAnalyzer(BaseResultsAnalyzer):
+    """
+    Get latency during operations performance analyzer
+    """
+
+    def __init__(self, es_index, es_doc_type, email_recipients=(), logger=None, events=None):   # pylint: disable=too-many-arguments
+        super().__init__(es_index=es_index, es_doc_type=es_doc_type, email_recipients=email_recipients,
+                         email_template_fp="results_search_best_throughput_config.html", logger=logger, events=events)
+
+    def check_regression(self, test_name, setup_details, test_results):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
+        subject = f"Performance Regression Best throughput with configuation - {test_name} - {setup_details['start_time']}"
+        results = {
+            "test_name": test_name,
+            "setup_details": setup_details,
+            "test_results": test_results
+        }
+        email_data = {'email_body': results,
+
+                      'template': self._email_template_fp}
+        self.save_email_data_file(subject, email_data, file_path='email_data.json')
+
+        return True
