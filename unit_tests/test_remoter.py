@@ -412,6 +412,7 @@ class TestRemoteFile(unittest.TestCase):
             sf_data = sf_src = sf_dst = rf_src = rf_dst = None
             hostname = "localhost"
             command_to_run = ""
+            rf_data = 'new'
 
             def run(self, cmd, *_, **__):
                 self.command_to_run = cmd
@@ -431,8 +432,8 @@ class TestRemoteFile(unittest.TestCase):
                 return True
 
             def receive_files(self, src: str, dst: str, *_, **__) -> bool:
-                with open(dst, "w", encoding="utf-8"):
-                    pass
+                with open(dst, "w", encoding="utf-8") as fobj:
+                    fobj.write(self.rf_data)
                 self.rf_src = src
                 self.rf_dst = dst
                 return True
@@ -474,3 +475,16 @@ class TestRemoteFile(unittest.TestCase):
             fobj.write("test data")
             assert remoter.command_to_run == f'stat -c "%a" {some_file}'
         assert f"chmod 644 {some_file}" == remoter.command_to_run
+
+    def test_remote_file_preserve_readonly(self):
+        remoter = self.remoter_cls()
+        some_file = "/some/path/some.file"
+        with remote_file(remoter=remoter, remote_path=some_file,
+                         preserve_ownership=False, preserve_permissions=True) as fobj:
+            fobj.write(remoter.rf_data)
+            assert remoter.command_to_run == f'stat -c "%a" {some_file}'
+
+        self.assertEqual(remoter.rf_src, some_file)
+        self.assertTrue(remoter.rf_dst.startswith("/tmp/sct"))
+        self.assertTrue(remoter.rf_dst.endswith(os.path.basename(some_file)))
+        self.assertEqual(remoter.sf_data, None)

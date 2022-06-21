@@ -49,33 +49,37 @@ def remote_file(remoter, remote_path, serializer=StringIO.getvalue, deserializer
                   dst=local_tempfile)
     with open(local_tempfile, encoding="utf-8") as fobj:
         parsed_data = deserializer(fobj)
-
+        original_content = serializer(parsed_data)
     yield parsed_data
 
     content = serializer(parsed_data)
-    with open(local_tempfile, "w", encoding="utf-8") as fobj:
-        fobj.write(content)
 
-    LOGGER.debug("New content of `%s':\n%s", remote_path, content)
-
-    remote_tempfile = remoter.run("mktemp").stdout.strip()
-    remote_tempfile_move_cmd = f"mv '{remote_tempfile}' '{remote_path}'"
-    wait.wait_for(remoter.send_files,
-                  step=10,
-                  text=f"Waiting for updating of `{remote_path}' on {remoter.hostname}",
-                  timeout=300,
-                  throw_exc=True,
-                  src=local_tempfile,
-                  dst=remote_tempfile)
-    if sudo:
-        remoter.sudo(remote_tempfile_move_cmd)
+    if original_content == content:
+        LOGGER.debug("Content of '%s' wasn't changed", remote_path)
     else:
-        remoter.run(remote_tempfile_move_cmd)
+        with open(local_tempfile, "w", encoding="utf-8") as fobj:
+            fobj.write(content)
 
-    if preserve_ownership:
-        remoter.sudo(f"chown {ownership} {remote_path}")
-    if preserve_permissions:
-        remoter.sudo(f"chmod {permissions} {remote_path}")
+        LOGGER.debug("New content of `%s':\n%s", remote_path, content)
+
+        remote_tempfile = remoter.run("mktemp").stdout.strip()
+        remote_tempfile_move_cmd = f"mv '{remote_tempfile}' '{remote_path}'"
+        wait.wait_for(remoter.send_files,
+                      step=10,
+                      text=f"Waiting for updating of `{remote_path}' on {remoter.hostname}",
+                      timeout=300,
+                      throw_exc=True,
+                      src=local_tempfile,
+                      dst=remote_tempfile)
+        if sudo:
+            remoter.sudo(remote_tempfile_move_cmd)
+        else:
+            remoter.run(remote_tempfile_move_cmd)
+
+        if preserve_ownership:
+            remoter.sudo(f"chown {ownership} {remote_path}")
+        if preserve_permissions:
+            remoter.sudo(f"chmod {permissions} {remote_path}")
 
     os.unlink(local_tempfile)
 
