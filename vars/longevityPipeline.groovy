@@ -119,6 +119,9 @@ def call(Map pipelineParams) {
                    description: 'Scylla Operator docker image',
                    name: 'k8s_scylla_operator_docker_image')
 
+            string(defaultValue: "${pipelineParams.get('docker_image', '')}",
+                   description: 'Scylla docker image repo',
+                   name: 'docker_image')
         }
         options {
             timestamps()
