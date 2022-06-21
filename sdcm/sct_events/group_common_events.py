@@ -174,3 +174,9 @@ def ignore_scrub_invalid_errors():
             line="Skipping invalid partition",
         ))
         yield
+
+
+@contextmanager
+def ignore_view_error_gate_closed_exception():
+    with EventsFilter(event_class=DatabaseLogEvent, regex='.*view - Error applying view update.*gate_closed_exception'):
+        yield
