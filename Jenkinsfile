@@ -3,8 +3,8 @@
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
-def target_backends = ['aws', 'gce', 'docker']
-def sct_runner_backends = ['aws', 'gce']
+def target_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws']
+def sct_runner_backends = ['aws', 'gce', 'k8s-local-kind-aws']
 
 def createRunConfiguration(String backend) {
 
@@ -22,6 +22,11 @@ def createRunConfiguration(String backend) {
         configuration.azure_region_name = 'eastus'
     } else if (backend == 'docker') {
         configuration.test_config = "test-cases/PR-provision-test-docker.yaml"
+    } else if (backend == 'k8s-local-kind-aws') {
+        configuration.test_config = "test-cases/scylla-operator/functional.yaml"
+        configuration.test_name = "functional_tests/scylla_operator"
+        configuration.functional_tests = true
+        configuration.availability_zone = 'a,b'
     }
     return configuration
 }
@@ -134,11 +139,11 @@ pipeline {
         stage("provision test") {
             when {
                 expression {
-                    return pullRequestContainsLabels("test-provision,test-provision-aws,test-provision-gce,test-provision-docker") && currentBuild.result == null
+                    return pullRequestContainsLabels("test-provision,test-provision-aws,test-provision-gce,test-provision-docker,test-provision-k8s-local-kind-aws") && currentBuild.result == null
                 }
             }
             options {
-                timeout(time: 120, unit: 'MINUTES')
+                timeout(time: 180, unit: 'MINUTES')
             }
             steps {
                 script {
