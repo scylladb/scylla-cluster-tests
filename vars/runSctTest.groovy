@@ -69,6 +69,10 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
         export SCT_K8S_LOG_API_CALLS=${pipelineParams.k8s_log_api_calls}
     fi
 
+    if [[ -n "${params.docker_image ? params.docker_image : ''}" ]] ; then
+        export SCT_DOCKER_IMAGE=${params.docker_image}
+    fi
+
     if [[ -n "${params.scylla_mgmt_agent_version ? params.scylla_mgmt_agent_version : ''}" ]] ; then
         export SCT_SCYLLA_MGMT_AGENT_VERSION=${params.scylla_mgmt_agent_version}
     fi
