@@ -1748,12 +1748,18 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
             namespace=self.parent_cluster.namespace,
             timeout=self.pod_terminate_timeout * 60 + 10)
 
+        self.wait_for_pod_readiness()
+        self.refresh_ip_address()
+
     def soft_reboot(self):
         # Kubernetes brings pods back to live right after it is deleted
         self.parent_cluster.k8s_cluster.kubectl(
             f'delete pod {self.name} --grace-period={self.pod_terminate_timeout * 60}',
             namespace=self.parent_cluster.namespace,
             timeout=self.pod_terminate_timeout * 60 + 10)
+
+        self.wait_for_pod_readiness()
+        self.refresh_ip_address()
 
     # On kubernetes there is no stop/start, closest analog of node restart would be soft_restart
     restart = soft_reboot

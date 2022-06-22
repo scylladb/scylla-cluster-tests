@@ -569,6 +569,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE,
                            line="Can't find a column family with UUID", node=self.target_node):
             self.target_node.restart()
+            # pods can change their ip address during the process,
+            # so we update the monitor at this point
+            if self._is_it_on_kubernetes():
+                self.monitoring_set.reconfigure_scylla_monitoring()
 
         self.log.info('Waiting scylla services to start after node restart')
         self.target_node.wait_db_up(timeout=28800)  # 8 hours
@@ -1338,6 +1342,10 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # TODO: This nemesis has to be rewritten to just stop/start scylla server
         self.log.info('StopStart %s', self.target_node)
         self.target_node.restart()
+        # pods can change their ip address during the process,
+        # so we update the monitor at this point
+        if self._is_it_on_kubernetes():
+            self.monitoring_set.reconfigure_scylla_monitoring()
 
     def call_random_disrupt_method(self, disrupt_methods=None, predefined_sequence=False):
         # pylint: disable=too-many-branches
@@ -2776,10 +2784,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.log.debug(f"{name}: failed to execute cleanup command "
                                f"{cmd} on node {node} due to the following error: {str(exc)}")
 
-    @staticmethod
-    def reboot_node(target_node, hard=True, verify_ssh=True):
+    def reboot_node(self, target_node, hard=True, verify_ssh=True):
         with ignore_view_error_gate_closed_exception():
             target_node.reboot(hard=hard, verify_ssh=verify_ssh)
+
+            # pods can change their ip address during the process,
+            # so we update the monitor at this point
+            if self._is_it_on_kubernetes():
+                self.monitoring_set.reconfigure_scylla_monitoring()
 
     def disrupt_network_start_stop_interface(self):  # pylint: disable=invalid-name
         if not self.cluster.extra_network_interface:
