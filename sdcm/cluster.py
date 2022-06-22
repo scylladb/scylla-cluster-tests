@@ -3095,7 +3095,7 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
 
     def find_node_by_ip(self, node_ip):
         for node in self.nodes:
-            if node_ip in node.get_all_ip_addresses():
+            if node_ip in [node.private_ip_address, node.public_ip_address, node.ipv6_ip_address]:
                 return node
 
         return None
