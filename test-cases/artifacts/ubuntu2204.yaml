@@ -16,3 +16,4 @@ scylla_linux_distro: 'ubuntu-jammy'
 test_duration: 60
 user_prefix: 'artifacts-ubuntu2204'
 system_auth_rf: 1
+use_mgmt: false  # TODO: ubuntu2204 is not yet supported for manager - remove this param when it will be supported
