@@ -8,6 +8,7 @@ manager_repos_by_version:
     ubuntu16: 'http://downloads.scylladb.com/manager/deb/unstable/unified-deb/master/latest/scylla-manager.list'
     ubuntu18: 'http://downloads.scylladb.com/manager/deb/unstable/unified-deb/master/latest/scylla-manager.list'
     ubuntu20: 'http://downloads.scylladb.com/manager/deb/unstable/unified-deb/master/latest/scylla-manager.list'
+    ubuntu22: 'http://downloads.scylladb.com/manager/deb/unstable/unified-deb/master/latest/scylla-manager.list'
   "2.6":
     centos7: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.6.repo'
     centos8: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.6.repo'
@@ -17,6 +18,7 @@ manager_repos_by_version:
     ubuntu16: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.6-xenial.list'
     ubuntu18: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.6-bionic.list'
     ubuntu20: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.6-focal.list'
+    ubuntu22: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.6-focal.list'
   "2.5":
     centos7: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.5.repo'
     centos8: 'http://downloads.scylladb.com/rpm/centos/scylladb-manager-2.5.repo'
