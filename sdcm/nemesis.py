@@ -4325,22 +4325,6 @@ class GeminiNonDisruptiveChaosMonkey(Nemesis):
         self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
 
 
-class KubernetesScyllaOperatorMonkey(Nemesis):
-    # All Nemesis that could be run on kubernetes backend
-    disruptive = True
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        ignore_methods = (
-            # NOTE: placeholder for methods which must not run on K8S backends
-        )
-        self.disrupt_methods_list = list(
-            set(self.get_list_of_methods_compatible_with_backend()) - set(ignore_methods))
-
-    def disrupt(self):
-        self.call_random_disrupt_method(disrupt_methods=self.disrupt_methods_list)
-
-
 class ScyllaOperatorBasicOperationsMonkey(Nemesis):
     """
     Selected number of nemesis that is focused on scylla-operator functionality
@@ -4445,7 +4429,7 @@ COMPLEX_NEMESIS = [NoOpMonkey, ChaosMonkey,
                    ScyllaCloudLimitedChaosMonkey,
                    AllMonkey, MdcChaosMonkey,
                    DisruptiveMonkey, NonDisruptiveMonkey, GeminiNonDisruptiveChaosMonkey,
-                   GeminiChaosMonkey, NetworkMonkey, KubernetesScyllaOperatorMonkey, SisyphusMonkey,
+                   GeminiChaosMonkey, NetworkMonkey, SisyphusMonkey,
                    CategoricalMonkey]
 
 
