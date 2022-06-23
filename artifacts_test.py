@@ -260,7 +260,7 @@ class ArtifactsTest(ClusterTester):
             return False
         return True  # exit_status = 1 means the service doesn't exist
 
-    # pylint: disable=too-many-statements
+    # pylint: disable=too-many-statements,too-many-branches
     def test_scylla_service(self):
         backend = self.params["cluster_backend"]
 
