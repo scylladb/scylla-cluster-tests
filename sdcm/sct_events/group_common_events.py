@@ -11,7 +11,9 @@
 #
 # Copyright (c) 2020 ScyllaDB
 
-from contextlib import contextmanager, ExitStack
+from contextlib import contextmanager, ExitStack, ContextDecorator
+from functools import wraps
+from typing import ContextManager, Callable, Sequence
 
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
@@ -192,3 +194,31 @@ def ignore_stream_mutation_fragments_errors():
             extra_time_to_expiration=30
         ))
         yield
+
+
+def decorate_with_context(context_list: list[Callable | ContextManager] | Callable | ContextManager):
+    """
+    helper to decorate a function to run with a list of callables that return context managers
+    """
+    context_list = context_list if isinstance(context_list, Sequence) else [context_list]
+    for context in context_list:
+        assert callable(context) or isinstance(context, ContextManager), \
+            f"{context} - Should be contextmanager or callable that returns one"
+        assert not isinstance(context, ContextDecorator), \
+            f"{context} - ContextDecorator shouldn't be used, since they are usable only one"
+
+    def inner_decorator(func):
+        @wraps(func)
+        def inner_func(*args, **kwargs):
+            with ExitStack() as stack:
+                for context_manager in context_list:
+                    if callable(context_manager):
+                        cmanger = context_manager()
+                        assert isinstance(cmanger, ContextManager)
+                        stack.enter_context(cmanger)
+                    else:
+                        stack.enter_context(context_manager)
+
+                return func(*args, **kwargs)
+        return inner_func
+    return inner_decorator
