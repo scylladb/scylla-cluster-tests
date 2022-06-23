@@ -1,2 +1,4 @@
 user_prefix: 'long-operator-large-partitions-200k-pks-4d'
+nemesis_include_filter: ['kubernetes']
+
 k8s_minio_storage_size: '7168Gi'
