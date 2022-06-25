@@ -65,7 +65,8 @@ from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter
 from sdcm.sct_events.group_common_events import (ignore_alternator_client_errors, ignore_no_space_errors,
-                                                 ignore_scrub_invalid_errors, ignore_view_error_gate_closed_exception)
+                                                 ignore_scrub_invalid_errors, ignore_view_error_gate_closed_exception,
+                                                 ignore_stream_mutation_fragments_errors)
 from sdcm.sct_events.loaders import CassandraStressLogEvent
 from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.system import InfoEvent
@@ -2904,7 +2905,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             raise UnsupportedNemesis(
                 "This nemesis logic is not compatible with K8S approach "
                 "for handling Scylla member's decommissioning.")
-        self.start_and_interrupt_decommission_streaming()
+
+        with ignore_stream_mutation_fragments_errors():
+            self.start_and_interrupt_decommission_streaming()
 
     def disrupt_rebuild_streaming_err(self):
         """
