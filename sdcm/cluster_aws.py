@@ -551,7 +551,12 @@ class AWSNode(cluster.BaseNode):
         return self._instance.network_interfaces[0].ipv6_addresses[0]["Ipv6Address"]
 
     def _refresh_instance_state(self):
-        raise NotImplementedError()
+        self._wait_public_ip()
+        public_ipv4_addresses = [self._instance.public_ip_address]
+        private_ipv4_addresses = [self._instance.private_ip_address]
+        if self._eth1_private_ip_address:
+            private_ipv4_addresses += [self._eth1_private_ip_address]
+        return public_ipv4_addresses, private_ipv4_addresses
 
     def allocate_and_attach_elastic_ip(self, parent_cluster, dc_idx):
         primary_interface = [
