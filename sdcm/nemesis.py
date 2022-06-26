@@ -1076,7 +1076,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             #     ...
             target_pod_stats = {}
             for container in node._pod_status.container_statuses:  # pylint: disable=protected-access
-                if container.image.split(":")[0].endswith("scylla"):
+                if container.name == "scylla":
                     target_pod_stats["started"] = container.started
                     target_pod_stats["restart_count"] = container.restart_count
                     target_pod_stats["ready"] = container.ready
