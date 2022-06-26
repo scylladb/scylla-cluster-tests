@@ -20,6 +20,7 @@ from typing import List, Optional
 from collections import namedtuple
 from urllib.parse import urlparse
 from functools import lru_cache, wraps
+from itertools import count
 
 import boto3
 import requests
@@ -412,6 +413,35 @@ def resolve_latest_repo_symlink(url: str) -> str:
     resolved_url = f"{base}{build}{rest}"
     LOGGER.info("%s resolved to %s", url, resolved_url)
     return resolved_url
+
+
+def get_specific_tag_of_docker_image(docker_repo: str):
+
+    def get_digest(tag_dict):
+        for image in tag_dict['images']:
+            if image['architecture'] == arch:
+                return image['digest']
+        return None
+
+    arch = 'amd64'
+    url = 'https://hub.docker.com/v2/repositories/{}/tags/{}'
+    docker_latest = requests.get(url.format(docker_repo, 'latest')).json()
+    latest_number_of_images = len(docker_latest['images'])
+    latest_digest = get_digest(docker_latest)
+    for page_number in count(start=1):
+        all_tags = requests.get(url=f'https://hub.docker.com/v2/repositories/{docker_repo}/'
+                                    f'tags?page_size=50&page={page_number}').json()
+        if curr_tags := all_tags.get('results', []):
+            for tag in curr_tags:
+                if len(tag['images']) < latest_number_of_images:
+                    continue  # filter out arch specific tags
+                tag_digest = get_digest(tag)
+                if latest_digest == tag_digest and tag['name'] != 'latest':
+                    return tag['name']
+        else:
+            break
+
+    return 'latest'
 
 
 def transform_non_semver_scylla_version_to_semver(scylla_version: str):

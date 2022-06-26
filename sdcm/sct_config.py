@@ -46,6 +46,7 @@ from sdcm.utils.version_utils import (
     get_branch_version_for_multiple_repositories,
     get_scylla_docker_repo_from_version,
     resolve_latest_repo_symlink,
+    get_specific_tag_of_docker_image,
 )
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
 
@@ -1476,6 +1477,7 @@ class SCTConfiguration(dict):
                     "docker", "k8s-eks", "k8s-gke",
                     "k8s-local-kind", "k8s-local-kind-aws", "k8s-local-kind-gce"):
                 self.log.info("Assume that Scylla Docker image has repo file pre-installed.")
+                self._replace_docker_image_latest_tag()
             elif not self.get('ami_id_db_scylla') and self.get('cluster_backend') == 'aws':
                 aws_arch = get_arch_from_instance_type(self.get('instance_type_db'))
                 # ami.name format examples: ScyllaDB 4.4.0 or ScyllaDB Enterprise 2019.1.1
@@ -1759,6 +1761,13 @@ class SCTConfiguration(dict):
             raise ValueError("extra_network_interface isn't supported for multi region use cases")
         self._check_partition_range_with_data_validation_correctness()
         self._verify_scylla_bench_mode_and_workload_parameters()
+
+    def _replace_docker_image_latest_tag(self):
+        docker_repo = self.get('docker_image')
+        scylla_version = self.get('scylla_version')
+
+        if scylla_version == 'latest':
+            self['scylla_version'] = get_specific_tag_of_docker_image(docker_repo=docker_repo)
 
     def _get_target_upgrade_version(self):
         # 10) update target_upgrade_version automatically
