@@ -105,6 +105,8 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
+        assert conf['scylla_version'] != 'latest'
+
     @staticmethod
     def test_06b_docker_development():
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'

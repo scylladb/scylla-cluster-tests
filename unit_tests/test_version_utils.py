@@ -19,6 +19,7 @@ from sdcm.utils.version_utils import (
     scylla_versions,
     assume_version,
     VERSION_NOT_FOUND_ERROR,
+    get_specific_tag_of_docker_image,
 )
 
 BASE_S3_DOWNLOAD_URL = 'https://s3.amazonaws.com/downloads.scylladb.com'
@@ -363,3 +364,11 @@ def test_scylla_versions_decorator_negative_latest_scylla_no_attr():
                 cls_instance.__class__.__name__) in str(exc)
         else:
             assert False, f"Versioned method must have been not found for the '{scylla_version}' scylla version"
+
+
+@pytest.mark.integration
+@pytest.mark.need_network
+@pytest.mark.skip(reason="those are integration tests only")
+@pytest.mark.parametrize('docker_repo', ['scylladb/scylla-nightly', 'scylladb/scylla', 'scylladb/scylla-enterprise'])
+def test_get_specific_tag_of_docker_image(docker_repo):
+    assert get_specific_tag_of_docker_image(docker_repo=docker_repo) != 'latest'
