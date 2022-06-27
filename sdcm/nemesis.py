@@ -166,6 +166,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     kubernetes: bool = False        # flag that signal that nemesis run with k8s cluster
     limited: bool = False           # flag that signal that nemesis are belong to limited set of nemesises
     has_steady_run: bool = False    # flag that signal that nemesis should be run with perf tests with steady run
+    config_changes: bool = False     # flag that signal that the nemesis does a config change to the cluster
+    schema_changes: bool = False     # flag that signal that the nemesis does a schema change
 
     def __new__(cls, tester_obj, termination_event, *args):  # pylint: disable=unused-argument
         for name, member in inspect.getmembers(cls, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
@@ -363,6 +365,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             run_with_gemini: Optional[bool] = None,
             networking: Optional[bool] = None,
             limited: Optional[bool] = None,
+            config_changes: Optional[bool] = None,
+            schema_changes: Optional[bool] = None,
             topology_changes: Optional[bool] = None) -> List[str]:
         return self.get_list_of_methods_by_flags(
             disruptive=disruptive,
@@ -370,7 +374,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             networking=networking,
             kubernetes=self._is_it_on_kubernetes() or None,
             limited=limited,
-            topology_changes=topology_changes,
+            config_changes=config_changes,
+            schema_changes=schema_changes,
+            topology_changes=topology_changes
         )
 
     def _is_it_on_kubernetes(self) -> bool:
@@ -384,6 +390,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             networking: Optional[bool] = None,
             kubernetes: Optional[bool] = None,
             limited: Optional[bool] = None,
+            config_changes: Optional[bool] = None,
+            schema_changes: Optional[bool] = None,
             topology_changes: Optional[bool] = None) -> List[str]:
         subclasses_list = self._get_subclasses(
             disruptive=disruptive,
@@ -391,6 +399,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             networking=networking,
             kubernetes=kubernetes,
             limited=limited,
+            config_changes=config_changes,
+            schema_changes=schema_changes,
             topology_changes=topology_changes
         )
         disrupt_methods_list = []
@@ -3639,6 +3649,7 @@ def disrupt_method_wrapper(method):  # pylint: disable=too-many-statements
 
 class SslHotReloadingNemesis(Nemesis):
     disruptive = False
+    config_changes = True
 
     def disrupt(self):
         self.disrupt_hot_reloading_internode_certificate()
@@ -3655,6 +3666,7 @@ class PauseLdapNemesis(Nemesis):
 class ToggleLdapConfiguration(Nemesis):
     disruptive = True
     limited = True
+    config_change = True
 
     def disrupt(self):
         self.disrupt_disable_enable_ldap_authorization()
@@ -3691,6 +3703,7 @@ class GrowShrinkClusterNemesis(Nemesis):
 class AddRemoveRackNemesis(Nemesis):
     disruptive = True
     kubernetes = True
+    config_changes = True
 
     def disrupt(self):
         self.disrupt_grow_shrink_new_rack()
@@ -4180,6 +4193,7 @@ class ModifyTableMonkey(Nemesis):
     disruptive = False
     kubernetes = True
     limited = True
+    schema_changes = True
 
     def disrupt(self):
         self.disrupt_modify_table()
@@ -4191,6 +4205,7 @@ class AddDropColumnMonkey(Nemesis):
     networking = False
     kubernetes = True
     limited = True
+    schema_changes = True
 
     def disrupt(self):
         self.disrupt_add_drop_column()
@@ -4198,6 +4213,7 @@ class AddDropColumnMonkey(Nemesis):
 
 class ToggleTableIcsMonkey(Nemesis):
     kubernetes = True
+    schema_changes = True
 
     def disrupt(self):
         self.disrupt_toggle_table_ics()
@@ -4206,6 +4222,7 @@ class ToggleTableIcsMonkey(Nemesis):
 class ToggleGcModeMonkey(Nemesis):
     kubernetes = True
     disruptive = False
+    schema_changes = True
 
     def disrupt(self):
         self.disrupt_toggle_table_gc_mode()
@@ -4320,6 +4337,7 @@ class NodeRestartWithResharding(Nemesis):
     disruptive = True
     kubernetes = True
     topology_changes = True
+    config_changes = True
 
     def disrupt(self):
         self.disrupt_restart_with_resharding()
@@ -4336,6 +4354,7 @@ class ClusterRollingRestart(Nemesis):
 class RollingRestartConfigChangeInternodeCompression(Nemesis):
     disruptive = True
     full_cluster_restart = True
+    config_changes = True
 
     def disrupt(self):
         self.disrupt_rolling_config_change_internode_compression()
@@ -4344,6 +4363,7 @@ class RollingRestartConfigChangeInternodeCompression(Nemesis):
 class ClusterRollingRestartRandomOrder(Nemesis):
     disruptive = True
     kubernetes = True
+    config_changes = True
 
     def disrupt(self):
         self.disrupt_rolling_restart_cluster(random_order=True)
@@ -4351,6 +4371,7 @@ class ClusterRollingRestartRandomOrder(Nemesis):
 
 class SwitchBetweenPasswordAuthAndSaslauthdAuth(Nemesis):
     disruptive = True  # the nemesis has rolling restart
+    config_changes = True
 
     def disrupt(self):
         self.disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back()
@@ -4621,6 +4642,7 @@ class MemoryStressMonkey(Nemesis):
 
 class ResetLocalSchemaMonkey(Nemesis):
     disruptive = False
+    schema_changes = True
 
     def disrupt(self):
         self.disrupt_resetlocalschema()
