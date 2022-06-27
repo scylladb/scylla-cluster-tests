@@ -35,6 +35,7 @@ import botocore.exceptions
 import tenacity
 import yaml
 from mypy_boto3_ec2 import EC2Client
+from mypy_boto3_ec2.service_resource import EC2ServiceResource
 from pkg_resources import parse_version
 
 from sdcm import ec2_client, cluster, wait
@@ -429,7 +430,7 @@ class AWSNode(cluster.BaseNode):
                  base_logdir=None, dc_idx=0):
         self.node_index = node_index
         self._instance = ec2_instance
-        self._ec2_service = ec2_service
+        self._ec2_service: EC2ServiceResource = ec2_service
         self._eth1_private_ip_address = None
         self.eip_allocation_id = None
         ssh_login_info = {'hostname': None,
@@ -524,7 +525,10 @@ class AWSNode(cluster.BaseNode):
     def is_data_device_lost_after_reboot(self) -> bool:
         if self.parent_cluster.params.get("data_volume_disk_num") > 0:
             return False
-        return any(ss in self._instance.instance_type for ss in ("i2", "i3", ))
+        result = self._ec2_service.meta.client.describe_instance_types(InstanceTypes=[self._instance.instance_type])
+        if instance_types := result.get('InstanceTypes'):
+            return instance_types[0].get('InstanceStorageSupported', False)
+        return False
 
     @property
     def external_address(self):
