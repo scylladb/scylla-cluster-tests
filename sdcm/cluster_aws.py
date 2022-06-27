@@ -522,7 +522,7 @@ class AWSNode(cluster.BaseNode):
 
     @property
     def is_data_device_lost_after_reboot(self) -> bool:
-        if self.parent_cluster.is_data_volume_on_ebs():
+        if self.parent_cluster.params.get("data_volume_disk_num") > 0:
             return False
         return any(ss in self._instance.instance_type for ss in ("i2", "i3", ))
 
