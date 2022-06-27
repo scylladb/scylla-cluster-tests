@@ -151,3 +151,22 @@ def test_list_topology_changes_monkey():
     for disrupt_method in collected_disrupt_methods_names:
         assert disrupt_method in expected_disrupt_method_names, \
             f"{disrupt_method=} from {collected_disrupt_methods_names=} was not found in {expected_disrupt_method_names=}"
+
+
+def test_list_schema_changes_monkey():
+    expected_disrupt_method_names = [
+        "disrupt_modify_table",
+        "disrupt_add_drop_column",
+        "disrupt_toggle_table_ics",
+        "disrupt_toggle_table_gc_mode",
+        "disrupt_resetlocalschema"
+    ]
+    tester = FakeTester()
+    tester.params["nemesis_include_filter"] = ['schema_changes']
+    sisphus = FakeSisyphusMonkey(FakeTester(), None)
+
+    collected_disrupt_methods_names = [disrupt.__name__ for disrupt in sisphus.disruptions_list]
+
+    for disrupt_method in collected_disrupt_methods_names:
+        assert disrupt_method in expected_disrupt_method_names, \
+            f"{disrupt_method=} from {collected_disrupt_methods_names=} was not found in {expected_disrupt_method_names=}"
