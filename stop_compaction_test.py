@@ -43,8 +43,11 @@ class StopCompactionTest(ClusterTester):
         compaction_ops.disable_autocompaction_on_ks_cf(node=self.node)
 
     def test_stop_compaction(self):
-        with self.subTest("Stop upgrade compaction test"):
-            self.stop_upgrade_compaction()
+
+        # skip due to missing support
+        # to be enabled when https://github.com/scylladb/scylla/issues/10676 is fixed
+        # with self.subTest("Stop upgrade compaction test"):
+        #     self.stop_upgrade_compaction()
 
         with self.subTest("Stop major compaction test"):
             self.stop_major_compaction()
