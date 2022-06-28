@@ -3031,7 +3031,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             return new_node
 
         trigger = partial(
-            self.target_node.run_nodetool, sub_cmd="decommission", warning_event_on_exception=(Exception,)
+            self.target_node.run_nodetool, sub_cmd="decommission", warning_event_on_exception=(Exception,), retry=0,
         )
 
         watcher = partial(
@@ -3056,7 +3056,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         self._destroy_data_and_restart_scylla()
         trigger = partial(
-            self.target_node.run_nodetool, sub_cmd="repair", warning_event_on_exception=(Exception,)
+            self.target_node.run_nodetool, sub_cmd="repair", warning_event_on_exception=(Exception,), retry=0,
         )
 
         watcher = partial(
@@ -3079,7 +3079,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._destroy_data_and_restart_scylla()
 
         trigger = partial(
-            self.target_node.run_nodetool, sub_cmd="rebuild", warning_event_on_exception=(Exception,)
+            self.target_node.run_nodetool, sub_cmd="rebuild", warning_event_on_exception=(Exception,), retry=0,
         )
         timeout = 1800 if self._is_it_on_kubernetes() else 300
 

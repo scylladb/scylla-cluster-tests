@@ -2591,7 +2591,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     # pylint: disable=inconsistent-return-statements
     def run_nodetool(self, sub_cmd, args="", options="", timeout=None,
                      ignore_status=False, verbose=True, coredump_on_timeout=False,
-                     warning_event_on_exception=None, error_message="", publish_event=True):
+                     warning_event_on_exception=None, error_message="", publish_event=True, retry=1):
         """
             Wrapper for nodetool command.
             Command format: nodetool [options] command [args]
@@ -2620,7 +2620,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                            options=options,
                            publish_event=publish_event) as nodetool_event:
             try:
-                result = self.remoter.run(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose)
+                result = \
+                    self.remoter.run(cmd, timeout=timeout, ignore_status=ignore_status, verbose=verbose, retry=retry)
                 self.log.debug("Command '%s' duration -> %s s" % (result.command, result.duration))
 
                 nodetool_event.duration = result.duration
