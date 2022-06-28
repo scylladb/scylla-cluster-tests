@@ -1288,9 +1288,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def get_cfstats(self, keyspace, tcpdump=False):
         def keyspace_available():
-            self.run_nodetool("flush", ignore_status=True, timeout=60)
-            res = self.run_nodetool(sub_cmd='cfstats', args=keyspace, ignore_status=True, timeout=60)
-            return res.exit_status == 0
+            return keyspace in self.run_cqlsh("describe keyspaces").stdout.split()
+
         tcpdump_id = uuid.uuid4()
         if tcpdump:
             self.log.info('START tcpdump thread uuid: %s', tcpdump_id)
