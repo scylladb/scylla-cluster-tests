@@ -3112,7 +3112,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """
         Stop rebuild in middle to trigger some streaming fails, then rebuild the data on the node.
         """
-        self.start_and_interrupt_rebuild_streaming()
+        with ignore_stream_mutation_fragments_errors():
+            self.start_and_interrupt_rebuild_streaming()
 
     def disrupt_repair_streaming_err(self):
         """

@@ -187,7 +187,7 @@ def ignore_stream_mutation_fragments_errors():
     with ExitStack() as stack:
         stack.enter_context(EventsSeverityChangerFilter(
             new_severity=Severity.WARNING,
-            event_class=LogEvent,
+            event_class=DatabaseLogEvent,
             regex=r".*Failed to handle STREAM_MUTATION_FRAGMENTS.*",
             extra_time_to_expiration=30
         ))
