@@ -9,8 +9,8 @@ DataValidatorEvent.DataValidator: ERROR
 DataValidatorEvent.ImmutableRowsValidator: ERROR
 DataValidatorEvent.UpdatedRowsValidator: WARNING
 DataValidatorEvent.DeletedRowsValidator: ERROR
-ScyllaHelpErrorEvent.duplicate: ERROR
-ScyllaHelpErrorEvent.filtered: ERROR
+ScyllaHelpErrorEvent.duplicate: WARNING
+ScyllaHelpErrorEvent.filtered: WARNING
 FullScanEvent: ERROR
 FullPartitionScanReversedOrderEvent: ERROR
 FullPartitionScanEvent: ERROR
