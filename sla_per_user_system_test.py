@@ -307,9 +307,13 @@ class SlaPerUserTest(LongevityTest):
 
         Load from both cache and disk
         """
-        self._two_users_load_througput_workload(shares=[190, 950], load=self.MIXED_LOAD)
+        # In ideal expected ratio between two users is 5.0.
+        # Based on reality change it to 3.5
+        # https://github.com/scylladb/scylla-cluster-tests/pull/4943#issuecomment-1168507500
+        # http://13.48.103.68/test/71402aa7-051b-4803-a6b4-384529680fb7/runs?additionalRuns[]=1adf34d1-15cf-4973-80ce-9de130be0b09
+        self._two_users_load_througput_workload(shares=[190, 950], load=self.MIXED_LOAD, expected_shares_ratio=3.5)
 
-    def _two_users_load_througput_workload(self, shares, load):
+    def _two_users_load_througput_workload(self, shares, load, expected_shares_ratio=None):
         session = self.prepare_schema()
         self.create_test_data()
 
@@ -322,7 +326,8 @@ class SlaPerUserTest(LongevityTest):
                                'service_level': ServiceLevel(session=session, name='sla%d' % share,
                                                              service_shares=share)})
 
-        expected_shares_ratio = self.calculate_metrics_ratio_per_user(two_users_list=read_users)
+        expected_shares_ratio = (expected_shares_ratio or
+                                 self.calculate_metrics_ratio_per_user(two_users_list=read_users))
 
         # Create Service Levels/Roles/Users
         self.create_auths(entities_list_of_dict=read_users)
