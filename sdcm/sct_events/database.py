@@ -186,7 +186,7 @@ class ScyllaHelpErrorEvent(SctEvent, abstract=True):
     filtered: Type[SctEventProtocol]
     message: str
 
-    def __init__(self, message: Optional[str] = None, severity=Severity.ERROR):
+    def __init__(self, message: Optional[str] = None, severity=Severity.WARNING):
         super().__init__(severity=severity)
 
         # Don't include `message' to the state if it's None.
