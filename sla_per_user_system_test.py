@@ -40,11 +40,7 @@ class SlaPerUserTest(LongevityTest):
     DEFAULT_USER_PASSWORD = 'cassandra'
     DEFAULT_USER_SLA = 'sla_cassandra'
     DEFAULT_SHARES = 1000
-    # By deviation percent we decide if the test result is as expected or not.
-    # In ideal expected ratio between two users is 5.0.
-    # It was decided to allow 10% deviation (from 4.1 to 5.0 ratio)
-    # Based on reality change it to 32% (from 3.4 to 5.0 ratio)
-    VALID_DEVIATION_PRC = 32
+    VALID_DEVIATION_PRC = 10
     MIN_CPU_UTILIZATION = 97
     WORKLOAD_LATENCY = 'latency'
     WORKLOAD_THROUGHPUT = 'throughput'
@@ -318,9 +314,13 @@ class SlaPerUserTest(LongevityTest):
 
         Load from both cache and disk
         """
-        self._two_users_load_througput_workload(shares=[190, 950], load=self.MIXED_LOAD)
+        # In ideal expected ratio between two users is 5.0.
+        # Based on reality change it to 3.5
+        # https://github.com/scylladb/scylla-cluster-tests/pull/4943#issuecomment-1168507500
+        # http://13.48.103.68/test/71402aa7-051b-4803-a6b4-384529680fb7/runs?additionalRuns[]=1adf34d1-15cf-4973-80ce-9de130be0b09
+        self._two_users_load_througput_workload(shares=[190, 950], load=self.MIXED_LOAD, expected_shares_ratio=3.5)
 
-    def _two_users_load_througput_workload(self, shares, load):
+    def _two_users_load_througput_workload(self, shares, load, expected_shares_ratio=None):
         session = self.prepare_schema()
         self.create_test_data()
 
@@ -333,7 +333,8 @@ class SlaPerUserTest(LongevityTest):
                                'service_level': ServiceLevel(session=session, name='sla%d' % share,
                                                              shares=share)})
 
-        expected_shares_ratio = self.calculate_metrics_ratio_per_user(two_users_list=read_users)
+        expected_shares_ratio = (expected_shares_ratio or
+                                 self.calculate_metrics_ratio_per_user(two_users_list=read_users))
 
         # Create Service Levels/Roles/Users
         self.create_auths(entities_list_of_dict=read_users)
