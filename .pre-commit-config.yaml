@@ -44,3 +44,4 @@ repos:
   hooks:
       - id: commitlint
         stages: [commit-msg]
+        language_version: 16.15.1
