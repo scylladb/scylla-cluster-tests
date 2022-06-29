@@ -56,13 +56,13 @@ def ignore_operation_errors():
     with ExitStack() as stack:
         stack.enter_context(EventsSeverityChangerFilter(
             new_severity=Severity.WARNING,
-            event_class=LogEvent,
+            event_class=DatabaseLogEvent,
             regex=r".*Operation timed out.*",
             extra_time_to_expiration=30,
         ))
         stack.enter_context(EventsSeverityChangerFilter(
             new_severity=Severity.WARNING,
-            event_class=LogEvent,
+            event_class=DatabaseLogEvent,
             regex=r".*Operation failed for system.paxos.*",
             extra_time_to_expiration=30,
         ))
@@ -144,19 +144,19 @@ def ignore_mutation_write_errors():
     with ExitStack() as stack:
         stack.enter_context(EventsSeverityChangerFilter(
             new_severity=Severity.WARNING,
-            event_class=LogEvent,
-            regex=r".*mutation_write_*",
+            event_class=DatabaseLogEvent,
+            regex=r".*mutation_write_",
             extra_time_to_expiration=30
         ))
         stack.enter_context(EventsSeverityChangerFilter(
             new_severity=Severity.WARNING,
-            event_class=LogEvent,
+            event_class=DatabaseLogEvent,
             regex=r".*Operation timed out for system.paxos.*",
             extra_time_to_expiration=30,
         ))
         stack.enter_context(EventsSeverityChangerFilter(
             new_severity=Severity.WARNING,
-            event_class=LogEvent,
+            event_class=DatabaseLogEvent,
             regex=r".*Operation failed for system.paxos.*",
             extra_time_to_expiration=30,
         ))
