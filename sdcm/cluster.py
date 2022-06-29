@@ -1951,6 +1951,19 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         Download and install scylla on node
         :param scylla_repo: scylla repo file URL
         """
+        def run_scylla_io_setup():
+            """
+            This is a fix, following change described in this comment:
+            https://github.com/scylladb/scylla/issues/9828#issuecomment-1167404616
+            """
+            try:
+                if not os.path.exists('/etc/scylla.d/io.conf') \
+                        and not os.path.exists('/etc/scylla.d/io_properties.yaml'):
+                    self.remoter.sudo('scylla_io_setup')
+            except Exception as exc:  # pylint: disable=broad-except
+                self.log.error("failed with error %s" % exc)
+                raise
+
         self.log.info("Installing Scylla...")
         if self.is_rhel_like():
             # `screen' package is missed in CentOS/RHEL 8. Should be installed from EPEL repository.
@@ -1962,6 +1975,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             # hack cause of broken caused by EPEL
             self.remoter.run('sudo yum install -y python36-PyYAML', ignore_status=True)
             self.remoter.run('sudo yum install -y {}'.format(self.scylla_pkg()))
+            run_scylla_io_setup()
             self.remoter.run('sudo yum install -y scylla-gdb', ignore_status=True)
         elif self.distro.is_sles15:
             self.remoter.sudo('zypper install -y rsync tcpdump screen')
@@ -1975,6 +1989,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.sudo('zypper install -y python2-PyYAML', ignore_status=True)
             self.remoter.sudo('zypper install -y python3-PyYAML', ignore_status=True)
             self.remoter.sudo('zypper install -y {}'.format(self.scylla_pkg()))
+            run_scylla_io_setup()
             self.remoter.sudo('zypper install -y scylla-gdb', ignore_status=True)
         else:
             if self.is_ubuntu14():
@@ -2044,6 +2059,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run(
                 'sudo apt-get install -y '
                 ' {} '.format(self.scylla_pkg()))
+            run_scylla_io_setup()
 
         # THIS IS A WORKAROUND FOR ISSUE https://github.com/scylladb/scylla/issues/10442
         # the issue is related to JDK version, and the fix was added to later patches of multiple base versions,
