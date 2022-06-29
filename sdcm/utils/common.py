@@ -1438,19 +1438,21 @@ def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = 
         {"Name": "tag:branch", "Values": [branch, ], },
         {"Name": "architecture", "Values": [arch, ], },
     ]
-    if build_id not in ("latest", "all",):
-        filters.append({'Name': 'tag:build-id', 'Values': [build_id, ], })
 
     LOGGER.info("Looking for AMIs match [%s]", scylla_version)
     ec2_resource: EC2ServiceResource = boto3.resource("ec2", region_name=region_name)
-    images = sorted(
-        ec2_resource.images.filter(Filters=filters),
-        key=lambda x: x.creation_date,
-        reverse=True,
-    )
+    if build_id not in ("latest", "all",):
+        images = [
+            ec2_resource.images.filter(Filters=filters + [{'Name': 'tag:build-id', 'Values': [build_id, ], }]),
+            ec2_resource.images.filter(Filters=filters + [{'Name': 'tag:build_id', 'Values': [build_id, ], }]),
+        ]
+    else:
+        images = [ec2_resource.images.filter(Filters=filters), ]
+    images = sorted(itertools.chain.from_iterable(images), key=lambda x: x.creation_date, reverse=True)
     images = [image for image in images if not image.name.startswith('debug-image')]
 
     assert images, f"AMIs for {scylla_version=} with {arch} architecture not found in {region_name}"
+
     if build_id == "all":
         return images
     return images[:1]
