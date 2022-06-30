@@ -6,6 +6,6 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 longevityPipeline(
     backend: 'aws',
     region: 'eu-west-1',
-    test_name: 'build_cluster_test.BuildClusterTest.test_use_public_dns_names',
+    test_name: 'cluster_configuration_tests.ClusterConfigurationTests.test_change_seed_address_to_hostname',
     test_config: 'test-cases/features/dns-cluster-5min.yaml',
 )
