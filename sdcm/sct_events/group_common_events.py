@@ -16,7 +16,6 @@ from functools import wraps
 from typing import ContextManager, Callable, Sequence
 
 from sdcm.sct_events import Severity
-from sdcm.sct_events.base import LogEvent
 from sdcm.sct_events.filters import DbEventsFilter, EventsSeverityChangerFilter, EventsFilter
 from sdcm.sct_events.loaders import YcsbStressEvent
 from sdcm.sct_events.database import DatabaseLogEvent
