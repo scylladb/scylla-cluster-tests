@@ -2846,7 +2846,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             disrupt_func_kwargs={"target_node": self.target_node, "hard": True, "verify_ssh": True},
             delay=0
         )
-        ParallelObject(objects=[trigger, watcher], timeout=600).call_objects()
+        ParallelObject(objects=[trigger, watcher], timeout=1200).call_objects()
         if new_node := decommission_post_action():
             new_node.run_nodetool("rebuild")
         else:
