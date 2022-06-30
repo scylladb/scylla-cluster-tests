@@ -4,54 +4,26 @@
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 def target_backends = ['aws', 'gce', 'docker']
+def sct_runner_backends = ['aws', 'gce']
 
-def runSctProvisionTest(String backend){
-    if (currentBuild.result != null) {
-        return
-    }
-    echo "Going to Provision test on ${backend} for Pull Request ID: ${env.CHANGE_ID}"
-    checkout scm
-    def distro_cmd = ""
-    def sct_config_files = "test-cases/PR-provision-test.yaml"
+def createRunConfiguration(String backend) {
+
+    def configuration = [
+        backend: backend,
+        test_name: 'longevity_test.LongevityTest.test_custom_time',
+        test_config: 'test-cases/PR-provision-test.yaml',
+        availability_zone: 'a',
+        scylla_version: '4.6.3',
+        region: 'eu-west-1',
+    ]
     if (backend == 'gce') {
-        distro_cmd = "export SCT_SCYLLA_LINUX_DISTRO='centos'"
+        configuration.gce_datacenter = "us-east1"
+    } else if (backend == 'azure') {
+        configuration.azure_region_name = 'eastus'
     } else if (backend == 'docker') {
-        sct_config_files = "test-cases/PR-provision-test-docker.yaml"
+        configuration.test_config = "test-cases/PR-provision-test-docker.yaml"
     }
-    sh """
-    #!/bin/bash
-    set -xe
-    env
-    export SCT_CLUSTER_BACKEND="${backend}"
-    export SCT_COLLECT_LOGS=false
-    export SCT_CONFIG_FILES="${sct_config_files}"
-    export BUILD_USER_ID="\${CHANGE_AUTHOR}"
-    $distro_cmd
-    echo "start test ......."
-    ./docker/env/hydra.sh run-test longevity_test.LongevityTest.test_custom_time --backend $backend --logdir "`pwd`"
-    echo "end test ....."
-    """
-}
-
-def runCollectLogs(String backend){
-    def sct_config_files = "test-cases/PR-provision-test.yaml"
-    if (backend == 'docker') {
-        sct_config_files = "test-cases/PR-provision-test-docker.yaml"
-    }
-    sh """
-    #!/bin/bash
-
-    set -xe
-    env
-
-    export SCT_CLUSTER_BACKEND="${backend}"
-    export SCT_REGION_NAME="eu-west-1"
-    export SCT_CONFIG_FILES="${sct_config_files}"
-
-    echo "start collect logs ..."
-    ./docker/env/hydra.sh collect-logs --backend ${backend} --logdir "`pwd`"
-    echo "end collect logs"
-    """
+    return configuration
 }
 
 def runSendEmail(){
@@ -68,23 +40,6 @@ def runSendEmail(){
     """
 }
 
-def runCleanupResource(String backend){
-    sh """
-    #!/bin/bash
-
-    set -xe
-    env
-
-    export SCT_CONFIG_FILES="test-cases/PR-provision-test.yaml"
-    export SCT_CLUSTER_BACKEND="${backend}"
-    export SCT_REGION_NAME="eu-west-1"
-
-    echo "start clean resources ..."
-    ./docker/env/hydra.sh clean-resources --post-behavior --logdir "`pwd`"
-    echo "end clean resources"
-    """
-}
-
 def runRestoreMonitoringStack(){
     sh """
     #!/bin/bash
@@ -92,9 +47,8 @@ def runRestoreMonitoringStack(){
     set -xe
     env
 
-    export MONITOR_STACK_TEST_ID=`cat latest/test_id`
-    echo "Restoring Monitor stack for test-id \$MONITOR_STACK_TEST_ID"
-    ./docker/env/hydra.sh investigate show-monitor \$MONITOR_STACK_TEST_ID --kill true
+    echo "Restoring Monitor stack for test-id \$SCT_TEST_ID"
+    ./docker/env/hydra.sh investigate show-monitor \$SCT_TEST_ID --kill true
     """
 }
 
@@ -191,56 +145,80 @@ pipeline {
                     def sctParallelTests = [:]
                     target_backends.each {
                         def backend = it
-                        def region = 'eu-west-1'
                         if (pullRequestContainsLabels("test-provision,test-provision-${backend}")) {
                             sctParallelTests["provision test on ${backend}"] = {
-                                def builder = getJenkinsLabels("${backend}", "${region}")
+                                def curr_params = createRunConfiguration(backend)
+                                def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name)
                                 node(builder.label) {
-                                    script {
-                                        def result = null
-                                        try {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir('scylla-cluster-tests') {
-                                                    runSctProvisionTest(backend)
-                                                    result = 'SUCCESS'
-                                                    pullRequestSetResult('success', "jenkins/provision_${backend}", 'All test cases are passed')
+                                    withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
+                                        script {
+                                            def result = null
+
+                                            dir('scylla-cluster-tests') {
+                                                checkout scm
+                                            }
+                                            if (sct_runner_backends.contains(backend)){
+                                                try {
+                                                    wrap([$class: 'BuildUser']) {
+                                                        dir('scylla-cluster-tests') {
+                                                            echo "calling createSctRunner"
+                                                            createSctRunner(curr_params, 90 , builder.region)
+                                                        }
+                                                    }
+                                                } catch(Exception err) {
+                                                    echo "${err}"
+                                                    result = 'FAILURE'
+                                                    pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed')
                                                 }
                                             }
-                                        } catch(Exception err) {
-                                            result = 'FAILURE'
-                                            pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed')
-                                        }
-                                        try {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir('scylla-cluster-tests') {
-                                                    runCollectLogs(backend)
+                                            try {
+                                                wrap([$class: 'BuildUser']) {
+                                                    env.BUILD_USER_ID=env.CHANGE_AUTHOR
+                                                    dir('scylla-cluster-tests') {
+                                                        runSctTest(curr_params, builder.region, curr_params.get('functional_tests', false))
+                                                        result = 'SUCCESS'
+                                                        pullRequestSetResult('success', "jenkins/provision_${backend}", 'All test cases are passed')
+                                                    }
+                                                }
+                                            } catch(Exception err) {
+                                                echo "${err}"
+                                                result = 'FAILURE'
+                                                pullRequestSetResult('failure', "jenkins/provision_${backend}", 'Some test cases are failed')
+                                            }
+                                            try {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        runCollectLogs(curr_params, builder.region)
+                                                    }
+                                                }
+                                            } catch(Exception err) {
+                                                echo "${err}"
+                                            }
+                                            try {
+                                                wrap([$class: 'BuildUser']) {
+                                                    dir('scylla-cluster-tests') {
+                                                        runCleanupResource(curr_params, builder.region)
+                                                    }
+                                                }
+                                            } catch(Exception err) {
+                                                echo "${err}"
+                                            }
+                                            if (backend != 'k8s-local-kind-aws') {
+                                                try {
+                                                    wrap([$class: 'BuildUser']) {
+                                                        dir('scylla-cluster-tests') {
+                                                            runRestoreMonitoringStack()
+                                                        }
+                                                    }
+                                                } catch(Exception err) {
+                                                    echo "${err}"
+                                                    currentBuild.result = 'FAILURE'
                                                 }
                                             }
-                                        } catch(Exception err) {
-                                            echo "${err}"
-                                        }
-                                        try {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir('scylla-cluster-tests') {
-                                                    runCleanupResource(backend)
-                                                }
+                                            if (result == 'FAILURE'){
+                                                currentBuild.result = 'FAILURE'
+                                                sh "exit 1"
                                             }
-                                        } catch(Exception err) {
-                                            echo "${err}"
-                                        }
-                                        try {
-                                            wrap([$class: 'BuildUser']) {
-                                                dir('scylla-cluster-tests') {
-                                                    runRestoreMonitoringStack()
-                                                }
-                                            }
-                                        } catch(Exception err) {
-                                            echo "${err}"
-                                            currentBuild.result = 'FAILURE'
-                                        }
-                                        if (result == 'FAILURE'){
-                                            currentBuild.result = 'FAILURE'
-                                            sh "exit 1"
                                         }
                                     }
                                 }
