@@ -794,6 +794,9 @@ class SCTConfiguration(dict):
 
         dict(name="k8s_scylla_cluster_name", env="SCT_K8S_SCYLLA_CLUSTER_NAME", type=str,
              help=""),
+        dict(name="k8s_n_scylla_pods_per_cluster", env="K8S_N_SCYLLA_PODS_PER_CLUSTER",
+             type=int_or_list,
+             help="Number of loader pods per loader cluster."),
 
         dict(name="k8s_scylla_disk_gi", env="SCT_K8S_SCYLLA_DISK_GI", type=int,
              help=""),

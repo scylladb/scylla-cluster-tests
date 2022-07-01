@@ -1187,7 +1187,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         scylla_pool = mini_k8s.MinimalK8SNodePool(
             k8s_cluster=self.k8s_cluster,
             name=self.k8s_cluster.SCYLLA_POOL_NAME,
-            num_nodes=int(self.params.get("n_db_nodes")) + 1,
+            num_nodes=self.params.get("n_db_nodes"),
             image_type="fake-image-type",
             instance_type="fake-instance-type")
         self.k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
@@ -1202,7 +1202,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             k8s_cluster=self.k8s_cluster,
             scylla_cluster_name=self.params.get("k8s_scylla_cluster_name"),
             user_prefix=self.params.get("user_prefix"),
-            n_nodes=self.params.get("n_db_nodes"),
+            n_nodes=self.params.get("k8s_n_scylla_pods_per_cluster") or self.params.get("n_db_nodes"),
             params=self.params,
             node_pool=scylla_pool,
         )
@@ -1239,7 +1239,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             elif cluster.node_type == 'monitor':
                 count = 1
             else:
-                count = cluster.params.get("n_db_nodes")
+                count = cluster.params.get("k8s_n_scylla_pods_per_cluster") or cluster.params.get("n_db_nodes")
             cluster.add_nodes(count=count, enable_auto_bootstrap=cluster.auto_bootstrap)
 
         add_nodes_in_parallel = ParallelObject(
@@ -1307,7 +1307,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             disk_size=self.params.get("gce_root_disk_size_db"),
             disk_type=self.params.get("gce_root_disk_type_db"),
             instance_type=self.params.get("gce_instance_type_db"),
-            num_nodes=int(self.params.get("n_db_nodes")) + 1,
+            num_nodes=self.params.get("n_db_nodes"),
             k8s_cluster=self.k8s_cluster)
         self.k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
 
@@ -1319,7 +1319,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 k8s_cluster=self.k8s_cluster,
                 scylla_cluster_name=self.params.get("k8s_scylla_cluster_name") + (f"-{i + 1}" if i else ""),
                 user_prefix=self.params.get("user_prefix"),
-                n_nodes=self.params.get("n_db_nodes"),
+                n_nodes=self.params.get("k8s_n_scylla_pods_per_cluster") or self.params.get("n_db_nodes"),
                 params=self.params,
                 node_pool=scylla_pool,
                 add_nodes=False,
@@ -1433,7 +1433,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         scylla_pool = eks.EksNodePool(
             name=self.k8s_cluster.SCYLLA_POOL_NAME,
-            num_nodes=self.params.get("n_db_nodes") + 1,
+            num_nodes=self.params.get("n_db_nodes"),
             instance_type=self.params.get('instance_type_db'),
             role_arn=self.params.get('eks_nodegroup_role_arn'),
             disk_size=self.params.get('aws_root_disk_size_db'),
@@ -1476,7 +1476,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 k8s_cluster=self.k8s_cluster,
                 scylla_cluster_name=self.params.get("k8s_scylla_cluster_name") + (f"-{i + 1}" if i else ""),
                 user_prefix=(f"{i + 1}-" if i else "") + self.params.get("user_prefix"),
-                n_nodes=self.params.get("n_db_nodes"),
+                n_nodes=self.params.get("k8s_n_scylla_pods_per_cluster") or self.params.get("n_db_nodes"),
                 params=self.params,
                 node_pool=scylla_pool,
                 add_nodes=False,

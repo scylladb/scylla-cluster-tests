@@ -170,6 +170,7 @@
 | **<a href="#user-content-k8s_scylla_datacenter" name="k8s_scylla_datacenter">k8s_scylla_datacenter</a>**  |  | N/A | SCT_K8S_SCYLLA_DATACENTER
 | **<a href="#user-content-k8s_scylla_rack" name="k8s_scylla_rack">k8s_scylla_rack</a>**  |  | N/A | SCT_K8S_SCYLLA_RACK
 | **<a href="#user-content-k8s_scylla_cluster_name" name="k8s_scylla_cluster_name">k8s_scylla_cluster_name</a>**  |  | N/A | SCT_K8S_SCYLLA_CLUSTER_NAME
+| **<a href="#user-content-k8s_n_scylla_pods_per_cluster" name="k8s_n_scylla_pods_per_cluster">k8s_n_scylla_pods_per_cluster</a>**  |  | N/A | SCT_K8S_N_SCYLLA_PODS_PER_CLUSTER
 | **<a href="#user-content-k8s_scylla_disk_gi" name="k8s_scylla_disk_gi">k8s_scylla_disk_gi</a>**  |  | N/A | SCT_K8S_SCYLLA_DISK_GI
 | **<a href="#user-content-k8s_loader_cluster_name" name="k8s_loader_cluster_name">k8s_loader_cluster_name</a>**  |  | N/A | SCT_K8S_LOADER_CLUSTER_NAME
 | **<a href="#user-content-k8s_n_loader_pods_per_cluster" name="k8s_n_loader_pods_per_cluster">k8s_n_loader_pods_per_cluster</a>**  |  | N/A | SCT_K8S_N_LOADER_PODS_PER_CLUSTER
