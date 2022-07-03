@@ -59,6 +59,7 @@ from sdcm.mgmt import AnyManagerCluster
 from sdcm.sct_events.health import ClusterHealthValidatorEvent
 from sdcm.sct_events.system import TestFrameworkEvent
 from sdcm.utils import properties
+import sdcm.utils.sstable.load_inventory as datasets
 from sdcm.utils.common import download_from_github, shorten_cluster_name, walk_thru_data
 from sdcm.utils.k8s import (
     add_pool_node_affinity,
@@ -80,6 +81,7 @@ from sdcm.utils.decorators import log_run_info, retrying
 from sdcm.utils.decorators import timeout as timeout_wrapper
 from sdcm.utils.remote_logger import get_system_logging_thread, CertManagerLogger, ScyllaOperatorLogger, \
     KubectlClusterEventsLogger, ScyllaManagerLogger, KubernetesWrongSchedulingLogger
+from sdcm.utils.sstable.load_utils import SstableLoadUtils
 from sdcm.wait import wait_for
 from sdcm.cluster_k8s.operator_monitoring import ScyllaOperatorLogMonitoring
 
@@ -2491,6 +2493,37 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
                 namespace=self.namespace,
                 timeout=readiness_timeout * 60 + 10)
         self.scylla_restart_required = False
+
+    def prefill_cluster(self, dataset_name: str):
+        test_data = getattr(datasets, dataset_name, None)
+        if not test_data:
+            raise ValueError(f"Dataset unexpected value: '{dataset_name}'. "
+                             "Dataset with this name is not defined in the sdcm.utils.sstable.load_inventory."
+                             "Expected values: BIG_SSTABLE_MULTI_COLUMNS_DATA, MULTI_COLUMNS_DATA")
+
+        test_keyspace_name = 'keyspace1'
+
+        node = self.nodes[0]
+        test_keyspaces = self.get_test_keyspaces()
+        # If 'keyspace1' does not exist, create a schema and load a data.
+        create_schema = not (test_keyspace_name in test_keyspaces)  # pylint: disable=superfluous-parens
+
+        for node in self.nodes:
+            with self.cql_connection_exclusive(node) as session:
+                kwarg = {"replication_factor": 3,
+                         "session": session}
+
+                SstableLoadUtils.upload_sstables(node=node,
+                                                 test_data=test_data[0],
+                                                 create_schema=create_schema,
+                                                 **kwarg)
+
+            SstableLoadUtils.run_refresh(node, test_data=test_data[0])
+            if create_schema:
+                create_schema = False
+
+        result = SstableLoadUtils.validate_data_count_after_upload(node=node)
+        assert int(result) == test_data[0].keys_num, "Data was not inserted"
 
 
 class ManagerPodCluser(PodCluster):  # pylint: disable=abstract-method

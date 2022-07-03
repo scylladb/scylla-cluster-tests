@@ -23,3 +23,4 @@ k8s_scylla_operator_chart_version: 'v1.7.2'
 # then the one from helm chart will be used.
 k8s_scylla_operator_docker_image: ''
 k8s_deploy_monitoring: false
+k8s_functional_test_dataset: MULTI_COLUMNS_DATA
