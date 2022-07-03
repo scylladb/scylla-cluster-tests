@@ -2270,6 +2270,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def disrupt_mgmt_backup(self):
         self._mgmt_backup(backup_specific_tables=False)
 
+    def _delete_existing_backups(self, mgr_cluster):
+        deleted_tasks = []
+        existing_backup_tasks = mgr_cluster.backup_task_list
+        for backup_task in existing_backup_tasks:
+            if backup_task.status in [TaskStatus.NEW, TaskStatus.RUNNING, TaskStatus.STARTING]:
+                deleted_tasks.append(backup_task.id)
+                mgr_cluster.delete_task(backup_task.id)
+        if deleted_tasks:
+            self.log.warning("Deleted the following backup tasks before the nemesis starts: %s",
+                             ", ".join(deleted_tasks))
+
     def _mgmt_backup(self, backup_specific_tables):
         if not self.cluster.params.get('use_mgmt') and not self.cluster.params.get('use_cloud_manager'):
             raise UnsupportedNemesis('Scylla-manager configuration is not defined!')
@@ -2289,6 +2300,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             backup_bucket_backend = self.cluster.params.get("backup_bucket_backend")
             backup_bucket_location = self.cluster.params.get("backup_bucket_location")
             location = f"{backup_bucket_backend}:{backup_bucket_location.split()[0]}"
+        self._delete_existing_backups(mgr_cluster)
         if backup_specific_tables:
             non_test_keyspaces = self.cluster.get_test_keyspaces()
             mgr_task = mgr_cluster.create_backup_task(location_list=[location, ], keyspace_list=non_test_keyspaces)
