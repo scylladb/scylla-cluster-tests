@@ -1956,10 +1956,14 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             This is a fix, following change described in this comment:
             https://github.com/scylladb/scylla/issues/9828#issuecomment-1167404616
             """
+            io_conf = '/etc/scylla.d/io.conf'
+            io_properties = '/etc/scylla.d/io_properties.yaml'
             try:
-                if not os.path.exists('/etc/scylla.d/io.conf') \
-                        and not os.path.exists('/etc/scylla.d/io_properties.yaml'):
-                    self.remoter.sudo('scylla_io_setup')
+                if os.path.exists('/etc/scylla.d/io.conf'):
+                    os.remove(io_conf)
+                if os.path.exists(io_properties):
+                    os.remove(io_properties)
+                self.remoter.sudo('scylla_io_setup')
             except Exception as exc:  # pylint: disable=broad-except
                 self.log.error("failed with error %s" % exc)
                 raise
