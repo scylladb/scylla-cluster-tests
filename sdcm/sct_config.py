@@ -777,6 +777,11 @@ class SCTConfiguration(dict):
              env="SCT_K8S_SCYLLA_OPERATOR_UPGRADE_CHART_VERSION",
              type=str,
              help="Version of 'scylla-operator' Helm chart to use for upgrade."),
+        dict(name="k8s_functional_test_dataset",
+             env="SCT_K8S_FUNCTIONAL_TEST_DATASET", type=str,
+             help="Defines whether dataset uses for pre-fill cluster in functional test. "
+                  "Defined in sdcm.utils.sstable.load_inventory. "
+                  "Expected values: BIG_SSTABLE_MULTI_COLUMNS_DATA, MULTI_COLUMNS_DATA"),
 
         dict(name="k8s_scylla_datacenter", env="SCT_K8S_SCYLLA_DATACENTER", type=str,
              help=""),

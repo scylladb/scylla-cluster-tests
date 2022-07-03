@@ -2559,3 +2559,17 @@ def get_table_clustering_order(ks_cf: str, ck_name: str, session) -> str:
     clustering_order = cql_result.current_rows[0].clustering_order
     LOGGER.info('Retrieved a clustering-order of: %s for table %s', clustering_order, ks_cf)
     return clustering_order
+
+
+class RemoteTemporaryFolder:
+    def __init__(self, node):
+        self.node = node
+        self.folder_name = ""
+
+    def __enter__(self):
+        result = self.node.remoter.sudo('mktemp -d')
+        self.folder_name = result.stdout.strip()
+        return self
+
+    def __exit__(self, exit_type, value, traceback):
+        self.node.remoter.sudo(f'rm -rf {self.folder_name}')

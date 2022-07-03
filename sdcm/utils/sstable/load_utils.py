@@ -4,7 +4,7 @@ from collections import namedtuple
 from typing import Any, List, Iterable
 
 from sdcm.keystore import KeyStore
-from sdcm.utils.common import remote_get_file, LOGGER
+from sdcm.utils.common import remote_get_file, LOGGER, RemoteTemporaryFolder
 from sdcm.utils.decorators import timeout as timeout_decor
 from sdcm.utils.sstable.load_inventory import (TestDataInventory, BIG_SSTABLE_COLUMN_1_DATA, COLUMN_1_DATA,
                                                MULTI_NODE_DATA, BIG_SSTABLE_MULTI_COLUMNS_DATA, MULTI_COLUMNS_DATA)
@@ -51,26 +51,39 @@ class SstableLoadUtils:
         return map_files_to_node
 
     @staticmethod
-    def upload_sstables(node, test_data: TestDataInventory, keyspace_name: str = 'keyspace1'):
+    def upload_sstables(node, test_data: TestDataInventory, keyspace_name: str = 'keyspace1',
+                        create_schema: bool = False, **kwargs):
         key_store = KeyStore()
         creds = key_store.get_scylladb_upload_credentials()
         # Download the sstable files from S3
         remote_get_file(node.remoter, test_data.sstable_url, test_data.sstable_file,
                         hash_expected=test_data.sstable_md5, retries=2,
                         user_agent=creds['user_agent'])
-        result = node.remoter.sudo(f"ls -t /var/lib/scylla/data/{keyspace_name}/")
-        upload_dir = result.stdout.split()[0]
-        if node.is_docker():
-            node.remoter.run(f'tar xvfz {test_data.sstable_file} -C /'
-                             f'var/lib/scylla/data/{keyspace_name}/{upload_dir}/upload/')
-        else:
-            node.remoter.sudo(
-                f'tar xvfz {test_data.sstable_file} -C /var/lib/scylla/data/{keyspace_name}/{upload_dir}/upload/',
-                user='scylla')
 
-        # Scylla Enterprise 2019.1 doesn't support to load schema.cql and manifest.json, let's remove them
-        node.remoter.sudo(f'rm -f /var/lib/scylla/data/{keyspace_name}/{upload_dir}/upload/schema.cql')
-        node.remoter.sudo(f'rm -f /var/lib/scylla/data/{keyspace_name}/{upload_dir}/upload/manifest.json')
+        with RemoteTemporaryFolder(node=node) as tmp_folder:
+
+            if node.is_docker():
+                node.remoter.run(f'tar xvfz {test_data.sstable_file} -C {tmp_folder.folder_name}/')
+            else:
+                node.remoter.sudo(f'tar xvfz {test_data.sstable_file} -C {tmp_folder.folder_name}/', user='scylla')
+
+            if create_schema:
+                SstableLoadUtils.create_keyspace(node=node,
+                                                 replication_factor=kwargs["replication_factor"])
+
+                SstableLoadUtils.create_table_for_load(node=node,
+                                                       schema_file_and_path=f"{tmp_folder.folder_name}/schema.cql",
+                                                       session=kwargs["session"])
+
+            result = node.remoter.sudo(f"ls -t /var/lib/scylla/data/{keyspace_name}/")
+            upload_dir = result.stdout.split()[0]
+
+            # Scylla Enterprise 2019.1 doesn't support to load schema.cql and manifest.json, let's remove them
+            node.remoter.sudo(f'rm -f {tmp_folder.folder_name}/schema.cql')
+            node.remoter.sudo(f'rm -f {tmp_folder.folder_name}/manifest.json')
+
+            node.remoter.sudo(
+                f'mv {tmp_folder.folder_name}/* /var/lib/scylla/data/{keyspace_name}/{upload_dir}/upload/')
 
     @classmethod
     def run_load_and_stream(cls, node, keyspace_name: str = 'keyspace1', table_name: str = 'standard1'):
@@ -228,3 +241,40 @@ class SstableLoadUtils:
             return MULTI_COLUMNS_DATA
 
         return []
+
+    @classmethod
+    def create_keyspace(cls, node, keyspace_name: str = "keyspace1", strategy: str = 'SimpleStrategy',
+                        replication_factor: int = 1):
+        node.run_cqlsh("""
+                CREATE KEYSPACE %s WITH replication = {'class': '%s',
+                'replication_factor': %s}
+                """ % (keyspace_name, strategy, replication_factor))
+
+    @classmethod
+    def create_table_for_load(cls, node, schema_file_and_path: str, session):
+        schema = node.remoter.run(f"cat {schema_file_and_path}").stdout
+        session.execute(schema.replace("\n", ""))
+
+    @classmethod
+    def validate_data_count_after_upload(cls, node, keyspace_name: str = "keyspace1", table_name: str = 'standard1'):
+        result = node.run_cqlsh(f"consistency QUORUM;SELECT COUNT(*) FROM {keyspace_name}.{table_name}")
+
+        next_line_is_result = False
+        # Stdout expected example:
+        #   'Consistency level set to QUORUM.
+        #
+        #  count
+        # -------
+        #      0
+        #
+        # (1 rows)
+        # '
+        for line in result.stdout.split("\n"):
+            if next_line_is_result:
+                LOGGER.debug("Rows amount in the %s.%s table is: %s", keyspace_name, table_name, line.strip())
+                return line.strip()
+
+            if "----" in line:
+                next_line_is_result = True
+
+        raise ValueError(f"Failed to receive rows count. Stdout: {result.stdout}. Stderr: {result.stderr}")

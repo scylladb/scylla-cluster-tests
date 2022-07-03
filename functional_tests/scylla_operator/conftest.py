@@ -113,6 +113,8 @@ def fixture_db_cluster(tester: ScyllaOperatorFunctionalClusterTester):
         original_scylla_config_map = scylla_config_map
     original_scylla_cluster_spec = tester.db_cluster.get_scylla_cluster_plain_value('/spec')
 
+    if dataset_name := tester.db_cluster.params.get("k8s_functional_test_dataset"):
+        tester.db_cluster.prefill_cluster(dataset_name)
     yield tester.db_cluster
 
     if tester.healthy_flag:
