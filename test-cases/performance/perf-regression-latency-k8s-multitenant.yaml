@@ -1,0 +1,30 @@
+# NOTE: need to define following config options in the 'configurations' files:
+# - prepare_write_cmd
+# - stress_cmd_w
+# - stress_cmd_m
+# - stress_cmd_r
+# - n_loaders
+# - k8s_n_loader_pods_per_cluster
+
+test_duration: 480
+user_prefix: 'k8s-perf-regression-latency'
+
+# NOTE: we disable second type of monitoring - K8S based one. It is redundant while we use standalone ones.
+k8s_deploy_monitoring: false
+
+n_db_nodes: 3
+n_monitor_nodes: 1
+
+instance_type_loader: 'c4.2xlarge'
+instance_type_monitor: 't3.small'
+instance_type_db: 'i3.4xlarge'
+
+space_node_threshold: 644245094
+backtrace_decoding: false
+
+round_robin: true
+
+store_perf_results: true
+use_mgmt: false
+send_email: true
+email_recipients: ['scylla-perf-results@scylladb.com']
