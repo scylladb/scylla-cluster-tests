@@ -1570,7 +1570,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         Here it kept for future usages and unit testing ability.
         more about nemesis_selector behaviour in sct_config.py
         """
-        nemesis_selector = self.cluster.params.get('nemesis_selector')
+        nemesis_selector = self.nemesis_selector_list
         if nemesis_selector:
             subclasses = self.get_list_of_subclasses_by_property_name(
                 list_of_properties_to_include=nemesis_selector)
@@ -1589,6 +1589,13 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.disruptions_list.extend(disruptions)
         self.log.debug("This is the list of callable disruptions {}".format(self.disruptions_list))
         return self.disruptions_list
+
+    @property
+    def nemesis_selector_list(self) -> list:
+        nemesis_selector = self.cluster.params.get('nemesis_selector') or []
+        if self.cluster.params.get('nemesis_exclude_disabled'):
+            nemesis_selector.append('!disabled')
+        return nemesis_selector
 
     @property
     def _disruption_list_names(self):
