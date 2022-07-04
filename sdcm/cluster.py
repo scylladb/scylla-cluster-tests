@@ -411,6 +411,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         self._system_log_errors_index = []
         self._system_error_events = [
+            DatabaseLogEvent(type="WARNING", regex="!WARNING ", severity=Severity.WARNING),
             DatabaseLogEvent(type='NO_SPACE_ERROR', regex='No space left on device'),
             DatabaseLogEvent(type='UNKNOWN_VERB', regex='unknown verb exception', severity=Severity.WARNING),
             DatabaseLogEvent(type='CLIENT_DISCONNECT', severity=Severity.WARNING,
