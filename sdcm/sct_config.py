@@ -1283,6 +1283,12 @@ class SCTConfiguration(dict):
              ALL the properties in that list which are set to true (the intersection of all properties).
              (In other words filters out all nemesis that doesn't ONE of these properties set to true)
              IMPORTANT: If a property doesn't exist, ALL the nemesis will be included."""),
+        dict(name="nemesis_exclude_disabled", env="SCT_NEMESIS_EXCLUDE_DISABLED",
+             type=boolean,
+             help="""nemesis_exclude_disabled determines whether 'disabled' nemeses are filtered out from list
+             or are allowed to be used. This allows to easily disable too 'risky' or 'extreme' nemeses by default,
+             for all longevities. For example: it is unwanted to run the ToggleGcModeMonkey in standard longevities
+             that runs a stress with data validation."""),
 
         dict(name="nemesis_multiply_factor", env="SCT_NEMESIS_MULTIPLY_FACTOR",
              type=int,

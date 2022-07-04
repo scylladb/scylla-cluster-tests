@@ -11,10 +11,17 @@ from sdcm.cluster_aws import ScyllaAWSCluster
 from sdcm.cluster_docker import ScyllaDockerCluster
 
 
-PARAMS = dict(nemesis_interval=1, nemesis_filter_seeds=False)
 Cluster = namedtuple("Cluster", ['params'])
-FakeTester = namedtuple("FakeTester", ['params', 'loaders', 'monitors', 'db_cluster'],
-                        defaults=[PARAMS, {}, {}, Cluster(params=PARAMS)])
+
+
+# pylint: disable=too-few-public-methods
+class FakeTester:
+
+    def __init__(self):
+        self.params = dict(nemesis_interval=1, nemesis_filter_seeds=False, nemesis_exclude_disabled=True,
+                           nemesis_selector=None)
+        self.loaders, self.monitors = {}, {}
+        self.db_cluster = Cluster(params=self.params)
 
 
 class FakeNemesis(Nemesis):
@@ -146,7 +153,7 @@ def test_list_topology_changes_monkey():
     ]
     tester = FakeTester()
     tester.params["nemesis_selector"] = ['topology_changes']
-    sisphus = FakeSisyphusMonkey(FakeTester(), None)
+    sisphus = FakeSisyphusMonkey(tester, None)
 
     collected_disrupt_methods_names = [disrupt.__name__ for disrupt in sisphus.disruptions_list]
 
@@ -164,9 +171,23 @@ def test_disabled_monkey():
     all_disrupt_methods = {attr[1].__name__ for attr in inspect.getmembers(Nemesis) if
                            attr[0].startswith('disrupt_') and
                            callable(attr[1])}
+    tester.params["nemesis_exclude_disabled"] = True
+    sisyphus = FakeSisyphusMonkey(tester, None)
 
-    tester.params["nemesis_selector"] = ['!disabled']
-    sisphus = FakeSisyphusMonkey(tester, None)
-
-    collected_disrupt_methods_names = {disrupt.__name__ for disrupt in sisphus.disruptions_list}
+    collected_disrupt_methods_names = {disrupt.__name__ for disrupt in sisyphus.disruptions_list}
+    # Note: this test will fail and have to be adjusted once additional 'disabled' nemeses added.
     assert collected_disrupt_methods_names == all_disrupt_methods - {'disrupt_toggle_table_gc_mode'}
+
+
+def test_use_disabled_monkey():
+
+    ToggleGcModeMonkey.disabled = True
+
+    tester = FakeTester()
+
+    tester.params["nemesis_exclude_disabled"] = False
+    sisyphus = FakeSisyphusMonkey(tester, None)
+
+    collected_disrupt_methods_names = {disrupt.__name__ for disrupt in sisyphus.disruptions_list}
+
+    assert 'disrupt_toggle_table_gc_mode' in collected_disrupt_methods_names
