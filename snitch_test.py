@@ -21,7 +21,7 @@ class SnitchTest(ClusterTester):
     Endpoint Snitch Test
     """
 
-    def test_google_cloud_snitch(self):
+    def test_cloud_snitch(self):
         """
         Verify the snitch setup, and check if system.peers is empty.
         """
@@ -31,15 +31,26 @@ class SnitchTest(ClusterTester):
         with self.db_cluster.cql_connection_patient_exclusive(self.db_cluster.nodes[0]) as session:
             # pylint: disable=no-member
             result = list(session.execute('select * from system.peers'))
-            self.log.debug(result)
-            assert result, 'ERROR: system.peers should be not empty.'
 
+        self.log.debug(result)
+        assert result, 'ERROR: system.peers should be not empty.'
         self.log.info("PASS: system.peers isn't empty as expected")
 
-        result = self.db_cluster.nodes[0].check_node_health()
-        assert 'Datacenter: us-east1scylla_node_east' in result.stdout
-        assert 'Datacenter: us-west1scylla_node_west' in result.stdout
+        backend = self.params.get("cluster_backend")
+        if backend == "gce":
+            self.check_nodetool_status_output_gce()
+        elif backend == "aws":
+            self.check_nodetool_status_output_aws()
 
         stress_cmd = self.params.get('stress_cmd')
         cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd)
         self.verify_stress_thread(cs_thread_pool=cs_thread_pool)
+
+    def check_nodetool_status_output_gce(self):
+        result = self.db_cluster.nodes[0].get_nodes_status()
+        all_datacenters = {result[node]["dc"] for node in result.keys()}
+        assert 'us-east1scylla_node_east' in all_datacenters
+        assert 'us-west1scylla_node_west' in all_datacenters
+
+    def check_nodetool_status_output_aws(self):
+        pass  # TODO: Add aws snitch test option
