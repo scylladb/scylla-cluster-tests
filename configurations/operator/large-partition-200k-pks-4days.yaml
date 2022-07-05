@@ -2,3 +2,6 @@ user_prefix: 'long-operator-large-partitions-200k-pks-4d'
 nemesis_selector: ['kubernetes']
 
 k8s_minio_storage_size: '7168Gi'
+
+n_db_nodes: 6
+k8s_n_scylla_pods_per_cluster: 5
