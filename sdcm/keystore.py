@@ -25,7 +25,7 @@ KEYSTORE_S3_BUCKET = "scylla-qa-keystore"
 SSHKey = namedtuple("SSHKey", ["name", "public_key", "private_key"])
 
 
-class KeyStore:
+class KeyStore:  # pylint: disable=too-many-public-methods
     def __init__(self):
         self.s3: S3ServiceResource = boto3.resource("s3")
 
@@ -52,6 +52,9 @@ class KeyStore:
 
     def get_dbaaslab_gcp_credentials(self):
         return self.get_json("gcp-scylladbaaslab.json")
+
+    def get_logging_gcp_credentials(self):
+        return self.get_json("skilled-adapter-452-4b259a7c0bae.json")
 
     def get_gcp_service_accounts(self):
         return self.get_json("gcp_service_accounts.json")
