@@ -621,7 +621,7 @@ class SCTConfiguration(dict):
 
         # GCE config options
 
-        dict(name="gce_datacenter", env="SCT_GCE_DATACENTER", type=str,
+        dict(name="gce_datacenter", env="SCT_GCE_DATACENTER", type=str_or_list,
              help="Supported: us-east1 - means that the zone will be selected automatically or "
                   "you can mention the zone explicitly, for example: us-east1-b"),
 
@@ -1364,9 +1364,10 @@ class SCTConfiguration(dict):
         "k8s-eks": [sct_abs_path('defaults/aws_config.yaml'), sct_abs_path('defaults/k8s_eks_config.yaml')],
     }
 
-    multi_region_params = [
-        'region_name', 'n_db_nodes', 'ami_id_db_scylla', 'ami_id_loader'
-    ]
+    per_provider_multi_region_params = {
+        "aws": ['region_name', 'n_db_nodes', 'ami_id_db_scylla', 'ami_id_loader'],
+        "gce": ['gce_datacenter', 'n_db_nodes']
+    }
 
     stress_cmd_params = [
         # this list is used for variouse checks against stress commands, such as:
@@ -1397,6 +1398,7 @@ class SCTConfiguration(dict):
         backend_config_files = [sct_abs_path('defaults/test_default.yaml')]
         if backend:
             backend_config_files += self.defaults_config_files[str(backend)]
+        self.multi_region_params = self.per_provider_multi_region_params.get(str(backend), [])
 
         # 1) load the default backend config files
         files = anyconfig.load(list(backend_config_files))
@@ -1712,8 +1714,8 @@ class SCTConfiguration(dict):
         backend = self.get('cluster_backend')
         db_type = self.get('db_type')
         self._check_per_backend_required_values(backend)
-        if backend in ['aws'] and db_type != 'cloud_scylla':
-            self._check_aws_multi_region_params()
+        if backend in ['aws', 'gce'] and db_type != 'cloud_scylla':
+            self._check_multi_region_params(backend)
 
         self._verify_data_volume_configuration(backend)
 
@@ -1755,7 +1757,9 @@ class SCTConfiguration(dict):
             if opt['name'] in self:
                 self._validate_value(opt)
 
-    def _check_aws_multi_region_params(self):
+    def _check_multi_region_params(self, backend):
+        region_param_names = {"aws": "region_name", "gce": "gce_datacenter"}
+        current_region_param_name = region_param_names[backend]
         region_count = {}
         for opt in self.multi_region_params:
             val = self.get(opt)
@@ -1765,7 +1769,7 @@ class SCTConfiguration(dict):
                 region_count[opt] = len(val)
             else:
                 region_count[opt] = 1
-        if not all(region_count['region_name'] == x for x in region_count.values()):
+        if not all(region_count[current_region_param_name] == x for x in region_count.values()):
             raise ValueError("not all multi region values are equal: \n\t{}".format(region_count))
 
     def _validate_seeds_number(self):

@@ -9,6 +9,13 @@ def call(String backend, String region=null, String datacenter=null, String loca
 
     }
 
+    try {
+        datacenterList = new JsonSlurper().parseText(datacenter)
+        datacenter = datacenterList[0]
+    } catch(Exception) {
+
+    }
+
     def jenkins_labels = ['aws-eu-west-1': 'aws-sct-builders-eu-west-1-new',
                           'aws-eu-west-2': 'aws-sct-builders-eu-west-2',
                           'aws-eu-north-1': 'aws-sct-builders-eu-north-1',
