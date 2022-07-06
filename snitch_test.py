@@ -54,3 +54,9 @@ class SnitchTest(ClusterTester):
 
     def check_nodetool_status_output_aws(self):
         pass  # TODO: Add aws snitch test option
+
+    def get_email_data(self):
+        self.log.info("Prepare data for email")
+        email_data = self._get_common_email_data()
+
+        return email_data

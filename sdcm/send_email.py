@@ -531,10 +531,18 @@ class JepsenEmailReporter(BaseEmailReporter):
         return (attachments_data["jepsen_report"], )
 
 
+class ClusterConfigurationTestsReporter(BaseEmailReporter):
+    pass
+
+
+class SnitchEmailReporter(BaseEmailReporter):
+    pass
+
+
 def build_reporter(name: str,
                    email_recipients: Sequence[str] = (),
                    logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
-    #  pylint: disable=too-many-return-statements
+    # pylint: disable=too-many-return-statements,too-many-branches
     if "Gemini" in name:
         return GeminiEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Longevity" in name or 'SlaPerUser' in name:
@@ -555,6 +563,10 @@ def build_reporter(name: str,
         return JepsenEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "Functional" in name:
         return FunctionalEmailReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "ClusterConfigurationTests" in name:
+        return ClusterConfigurationTestsReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "Snitch" in name:
+        return SnitchEmailReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
 
