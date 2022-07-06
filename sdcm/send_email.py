@@ -547,6 +547,10 @@ class ClusterConfigurationTestsReporter(BaseEmailReporter):
     pass
 
 
+class SnitchEmailReporter(BaseEmailReporter):
+    pass
+
+
 def build_reporter(name: str,
                    email_recipients: Sequence[str] = (),
                    logdir: Optional[str] = None) -> Optional[BaseEmailReporter]:
@@ -575,6 +579,8 @@ def build_reporter(name: str,
         return FunctionalEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "ClusterConfigurationTests" in name:
         return ClusterConfigurationTestsReporter(email_recipients=email_recipients, logdir=logdir)
+    elif "Snitch" in name:
+        return SnitchEmailReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
 
