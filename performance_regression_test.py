@@ -158,9 +158,9 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
         with open(email_data_path, 'w', encoding="utf-8"):
             pass
 
-    def _stop_load_after_one_nemesis_cycle(self):
-        time.sleep(300)  # wait 5 minutes to be sure nemesis has started
-        self.db_cluster.stop_nemesis(timeout=None)  # wait for Nemesis to end and don't start another cycle
+    def _stop_load_when_nemesis_threads_end(self):
+        for nemesis_thread in self.db_cluster.nemesis_threads:
+            nemesis_thread.join()
         with EventsSeverityChangerFilter(new_severity=Severity.NORMAL,  # killing stress creates Critical error
                                          event_class=CassandraStressEvent,
                                          extra_time_to_expiration=60):
@@ -259,8 +259,8 @@ class PerformanceRegressionTest(ClusterTester):  # pylint: disable=too-many-publ
             interval = self.params.get('nemesis_interval')
             time.sleep(interval * 60)  # Sleeping one interval (in minutes) before starting the nemesis
             self.db_cluster.add_nemesis(nemesis=self.get_nemesis_class(), tester_obj=self)
-            self.db_cluster.start_nemesis(interval=interval)
-            self._stop_load_after_one_nemesis_cycle()
+            self.db_cluster.start_nemesis(interval=interval, cycles_count=1)
+            self._stop_load_when_nemesis_threads_end()
         results = self.get_stress_results(queue=stress_queue)
         self.update_test_details(scrap_metrics_step=60)
         self.display_results(results, test_name='test_latency' if not nemesis else 'test_latency_with_nemesis')

@@ -324,12 +324,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                       self.target_node, self.target_node.running_nemesis)
 
     @raise_event_on_failure
-    def run(self, interval=None):
+    def run(self, interval=None, cycles_count: int = -1):
         self.es_publisher.create_es_connection()
         if interval:
             self.interval = interval * 60
         self.log.info('Interval: %s s', self.interval)
         while not self.termination_event.is_set():
+            if cycles_count == 0:
+                self.log.info("Defined number of Nemesis cycles completed. Stopping Nemesis thread.")
+                break
+            cycles_count -= 1
             cur_interval = self.interval
             try:
                 self.disrupt()
