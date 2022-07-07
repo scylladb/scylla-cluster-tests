@@ -271,6 +271,7 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
 
     if not post_behavior and user and not test_id and not logdir:
         click.echo(f"Clean all resources belong to user `{user}'")
+        user_param["CreatedBy"] = "SCT"
         params = (user_param, )
     else:
         if not logdir and (post_behavior or not test_id):
