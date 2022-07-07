@@ -1164,7 +1164,7 @@ class SCTConfiguration(dict):
          """,
              choices=("keep", "keep-on-failure", "destroy")),
 
-        dict(name="workaround_kernel_bug_for_iotune", env="SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE", type=bool,
+        dict(name="workaround_kernel_bug_for_iotune", env="SCT_WORKAROUND_KERNEL_BUG_FOR_IOTUNE", type=boolean,
              help="Workaround a known kernel bug which causes iotune to fail in scylla_io_setup, "
                   "only effect GCE backend"),
         dict(name="internode_compression", env="SCT_INTERNODE_COMPRESSION", type=str,

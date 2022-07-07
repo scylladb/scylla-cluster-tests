@@ -97,6 +97,7 @@ from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_g
 from sdcm.utils.decorators import NoValue, retrying, log_run_info, optional_cached_property
 from sdcm.utils.remotewebbrowser import WebDriverContainerMixin
 from sdcm.test_config import TestConfig
+from sdcm.utils.scylla_install_utils import recover_config_files
 from sdcm.utils.version_utils import SCYLLA_VERSION_RE, get_gemini_version, get_systemd_version, assume_version
 from sdcm.sct_events import Severity
 from sdcm.sct_events.base import LogEvent
@@ -1905,6 +1906,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         else:
             self.remoter.sudo('rm -f /etc/apt/sources.list.d/scylla.list')
             self.remoter.sudo('apt-get remove -y scylla\\*', ignore_status=True)
+        recover_config_files(self)
         self.update_repo_cache()
         self.clean_scylla_data()
 

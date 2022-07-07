@@ -29,6 +29,7 @@ from sdcm import wait
 from sdcm.cluster import BaseNode
 from sdcm.fill_db_data import FillDatabaseData
 from sdcm.stress_thread import CassandraStressThread
+from sdcm.utils.scylla_install_utils import recover_config_files
 from sdcm.utils.version_utils import is_enterprise, get_node_supported_sstable_versions
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.database import IndexSpecialColumnErrorEvent
@@ -216,6 +217,7 @@ class UpgradeTest(FillDatabaseData):
                         r'sudo apt-get install {}{} -y '
                         r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '.format(scylla_pkg, ver_suffix))
                 recover_conf(node)
+                recover_config_files(node)
                 node.remoter.run('sudo systemctl daemon-reload')
             else:
                 if node.is_rhel_like():
@@ -283,6 +285,7 @@ class UpgradeTest(FillDatabaseData):
                     r'sudo apt-get install %s\* -y '
                     r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" ' % node.scylla_pkg())
             recover_conf(node)
+            recover_config_files(node)
             node.remoter.run('sudo systemctl daemon-reload')
 
         elif self.upgrade_rollback_mode == 'minor_release':
