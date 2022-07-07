@@ -171,7 +171,8 @@ class TestConfig(metaclass=Singleton):  # pylint: disable=too-many-public-method
         tags = dict(RunByUser=get_username(),
                     TestName=str(cls.test_name()),
                     TestId=str(cls.test_id()),
-                    version=job_name.split('/', 1)[0] if job_name else "unknown")
+                    version=job_name.split('/', 1)[0] if job_name else "unknown",
+                    CreatedBy="SCT")
 
         build_tag = os.environ.get('BUILD_TAG')
         if build_tag:
