@@ -4084,11 +4084,12 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         self.nemesis = []
 
     @log_run_info("Start nemesis threads on cluster")
-    def start_nemesis(self, interval=None):
+    def start_nemesis(self, interval=None, cycles_count: int = -1):
         self.log.info('Clear _nemesis_termination_event')
         self.nemesis_termination_event.clear()
         for nemesis in self.nemesis:
-            nemesis_thread = threading.Thread(target=nemesis.run, name='NemesisThread', args=(interval,), daemon=True)
+            nemesis_thread = threading.Thread(target=nemesis.run, name='NemesisThread',
+                                              args=(interval, cycles_count), daemon=True)
             nemesis_thread.start()
             self.nemesis_threads.append(nemesis_thread)
 
