@@ -50,7 +50,6 @@ from sdcm.cluster_aws import LoaderSetAWS
 from sdcm.cluster_aws import MonitorSetAWS
 from sdcm.cluster_k8s import mini_k8s, gke, eks, LOADER_CLUSTER_CONFIG
 from sdcm.cluster_k8s.eks import MonitorSetEKS
-from sdcm.gce_log_monitor import log_gce_errors_as_events, GceLoggingClient
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.provisioner import provisioner_factory
 from sdcm.scan_operation_thread import FullScanThread, FullPartitionScanThread
@@ -2453,9 +2452,6 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.info('TearDown is starting...')
         self.stop_timeout_thread()
         self.stop_event_analyzer()
-        if self.params.get('cluster_backend') == "gce":
-            log_gce_errors_as_events(test_id=self.test_id, test_start_time=self.start_time,
-                                     logging_client=GceLoggingClient())
         self.stop_resources()
         self.get_test_failures()
 

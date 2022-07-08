@@ -25,6 +25,9 @@ from libcloud.common.google import GoogleBaseError, ResourceNotFoundError, Inval
 
 from sdcm import cluster
 from sdcm.provision.helpers.cloud_init import get_cloud_init_config
+from sdcm.sct_events import Severity
+from sdcm.sct_events.gce_events import GceInstanceEvent
+from sdcm.utils.gce_utils import GceLoggingClient
 from sdcm.wait import exponential_retry
 from sdcm.keystore import pub_key_from_private_key_file
 from sdcm.sct_events.system import SpotTerminationEvent
@@ -32,8 +35,7 @@ from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.decorators import retrying
 
 
-SPOT_TERMINATION_CHECK_DELAY = 1
-SPOT_TERMINATION_METADATA_CHECK_TIMEOUT = 15
+SPOT_TERMINATION_CHECK_DELAY = 5 * 60
 
 LOGGER = logging.getLogger(__name__)
 
@@ -60,12 +62,12 @@ class GCENode(cluster.BaseNode):
         self.node_index = node_index
         self._instance = gce_instance
         self._gce_service = gce_service
-
+        self._gce_logging_client = GceLoggingClient(name, self._instance.extra["zone"].name)
+        self._last_logs_fetch_time = 0.0
         ssh_login_info = {'hostname': None,
                           'user': gce_image_username,
                           'key_file': credentials.key_file,
                           'extra_ssh_options': '-tt'}
-        self._preempted_last_state = False
         super().__init__(name=name,
                          parent_cluster=parent_cluster,
                          ssh_login_info=ssh_login_info,
@@ -128,22 +130,24 @@ class GCENode(cluster.BaseNode):
 
             https://cloud.google.com/compute/docs/instances/create-start-preemptible-instance#detecting_if_an_instance_was_preempted
 
-        but we use internal metadata because the getting of zone operations is not implemented in Apache Libcloud yet.
+        We moved from internal metadata because sometimes it was missing the spot. Moved to GCE logging along with providing more
+        important notifications about node state.
         """
+        since = self._last_logs_fetch_time
+        self._last_logs_fetch_time = time.time()
         try:
-            result = self.remoter.run(
-                'curl "http://metadata.google.internal/computeMetadata/v1/instance/preempted'
-                '?wait_for_change=true&timeout_sec=%d" -H "Metadata-Flavor: Google"'
-                % SPOT_TERMINATION_METADATA_CHECK_TIMEOUT, verbose=False)
-            status = result.stdout.strip()
+            for entry in self._gce_logging_client.get_system_events(from_=since, until=self._last_logs_fetch_time):
+                match entry['protoPayload']['methodName']:
+                    case "compute.instances.preempted":
+                        self.log.warning('Got spot termination notification from GCE')
+                        SpotTerminationEvent(node=self, message='Instance was preempted.').publish()
+                    case "compute.instances.automaticRestart" | "compute.instances.hostError":
+                        GceInstanceEvent(entry).publish()
+                    case _:
+                        GceInstanceEvent(entry, severity=Severity.WARNING).publish()
         except Exception as details:  # pylint: disable=broad-except
             self.log.warning('Error during getting spot termination notification %s', details)
             return 0
-        preempted = status.lower() == 'true'
-        if preempted and not self._preempted_last_state:
-            self.log.warning('Got spot termination notification from GCE')
-            SpotTerminationEvent(node=self, message='Instance was preempted.').publish()
-        self._preempted_last_state = preempted
         return SPOT_TERMINATION_CHECK_DELAY
 
     def restart(self):

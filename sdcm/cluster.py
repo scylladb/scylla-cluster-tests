@@ -917,16 +917,10 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     def spot_monitoring_thread(self):
         while True:
-            if self.termination_event.is_set():
-                break
-            try:
-                self.wait_ssh_up(verbose=False)
-            except Exception as ex:  # pylint: disable=broad-except
-                self.log.warning("Unable to connect to '%s'. Probably the node was terminated or is still booting. "
-                                 "Error details: '%s'", self.name, ex)
-                continue
             next_check_delay = self.check_spot_termination() or SPOT_TERMINATION_CHECK_DELAY
-            time.sleep(next_check_delay)
+            if self.termination_event.wait(next_check_delay):
+                self.check_spot_termination()
+                break
 
     def start_spot_monitoring_thread(self):
         self._spot_monitoring_thread = threading.Thread(
@@ -1074,7 +1068,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     @log_run_info
     def start_task_threads(self):
         self.start_journal_thread()
-        if self.is_spot:
+        if self.is_spot or self.is_gce():
             self.start_spot_monitoring_thread()
         if self.node_type == 'db':
             self.start_coredump_thread()
