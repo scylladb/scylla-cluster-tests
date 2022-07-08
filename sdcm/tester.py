@@ -1508,9 +1508,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.db_clusters_multitenant + self.loaders_multitenant)
 
         if monitor_info['n_nodes']:
+            base_user_prefix = common_params["user_prefix"]
             for i in range(self.k8s_cluster.tenants_number):
                 self.log.debug("Create monitor for the DB cluster №%s", i + 1)
-                common_params["user_prefix"] = (f"{i + 1}-" if i else "") + common_params["user_prefix"]
+                common_params["user_prefix"] = (f"{i + 1}-" if i else "") + base_user_prefix
                 self.monitors_multitenant.append(MonitorSetEKS(
                     ec2_ami_id=self.params.get('ami_id_monitor').split(),
                     ec2_ami_username=self.params.get('ami_monitor_user'),
