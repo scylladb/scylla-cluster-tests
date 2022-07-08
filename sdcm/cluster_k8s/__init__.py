@@ -140,7 +140,7 @@ COMMON_CONTAINERS_RESOURCES = {
 }
 
 SCYLLA_MANAGER_AGENT_RESOURCES = {
-    'cpu': 0.2,
+    'cpu': 0.04,
     'memory': 0.489,  # 0.489 will give 500Mb as a result
 }
 
