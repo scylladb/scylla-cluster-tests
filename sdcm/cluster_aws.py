@@ -502,6 +502,7 @@ class AWSNode(cluster.BaseNode):
 
     def check_spot_termination(self):
         try:
+            self.wait_ssh_up(verbose=False)
             result = self.remoter.run(
                 'curl http://169.254.169.254/latest/meta-data/spot/instance-action', verbose=False)
             status = result.stdout.strip()

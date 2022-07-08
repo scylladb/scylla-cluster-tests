@@ -15,7 +15,10 @@ import os
 import json
 import random
 import logging
+import time
 
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 from libcloud.compute.providers import Provider, get_driver
 
 from sdcm.keystore import KeyStore
@@ -169,3 +172,39 @@ class GcloudContainerMixin:
     @property
     def gcloud(self) -> GcloudContextManager:
         return GcloudContextManager(self, 'gcloud')
+
+
+class GceLoggingClient:  # pylint: disable=too-few-public-methods
+
+    def __init__(self, instance_name: str, zone: str):
+        raw_credentials = KeyStore().get_logging_gcp_credentials()
+        self.credentials = service_account.Credentials.from_service_account_info(raw_credentials)
+        self.project_id = raw_credentials['project_id']
+        self.instance_name = instance_name
+        self.zone = zone
+
+    def get_system_events(self, from_: float, until: float):
+        """Gets system events logs entries from GCE between time (since -> to).
+
+        Returns list of entries in a form of dictionaries. See example output in unit tests."""
+        from_ = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(from_))
+        until = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(until))
+        query = {
+            "resourceNames": [
+                f"projects/{self.project_id}"
+            ],
+            "filter": f'protoPayload.resourceName="projects/{self.project_id}/zones/{self.zone}/instances/{self.instance_name}"'
+                      f' logName : projects/{self.project_id}/logs/cloudaudit.googleapis.com%2Fsystem_event'
+                      f' timestamp > "{from_}" timestamp < "{until}"'
+        }
+        with build('logging', 'v2', credentials=self.credentials, cache_discovery=False) as service:
+            return self._get_log_entries(service, query)
+
+    def _get_log_entries(self, service, query, page_token=None):
+        if page_token:
+            query.update({"page_token": page_token})
+        ret = service.entries().list(body=query).execute()
+        entries = ret.get('entries', [])
+        if page_token := ret.get("nextPageToken"):
+            entries.extend(self._get_log_entries(service, query, page_token))
+        return entries
