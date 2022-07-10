@@ -30,7 +30,7 @@ ami_id_db_oracle: ''
 
 use_preinstalled_scylla: true
 
-backup_bucket_backend: 's3'
+backup_bucket_backend: 'azure'
 backup_bucket_location: 'manager-backup-tests-us-east-1'
 backup_bucket_region: 'us-east-1'
 
