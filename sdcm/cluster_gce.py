@@ -16,7 +16,7 @@ import time
 import logging
 from textwrap import dedent
 from typing import Dict, Any
-from functools import cached_property
+from functools import cached_property, cache
 import json
 
 from libcloud.common.google import GoogleBaseError, ResourceNotFoundError, InvalidRequestError
@@ -189,6 +189,7 @@ class GCENode(cluster.BaseNode):
         self.log.warning('Method is not implemented for GCENode')
         return b''
 
+    @cache
     def _get_ipv6_ip_address(self):
         self.log.warning('On GCE, VPC networks only support IPv4 unicast traffic. '
                          'They do not support IPv6 traffic within the network.')
