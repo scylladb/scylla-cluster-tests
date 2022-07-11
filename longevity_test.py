@@ -576,13 +576,14 @@ class LongevityTest(ClusterTester):
         try:
             email_data = self._get_common_email_data()
         except Exception as error:  # pylint: disable=broad-except
-            self.log.error("Error in gathering common email data: Error:\n%s", error)
+            self.log.exception("Error in gathering common email data: Error:\n%s", error, exc_info=error)
 
         try:
             grafana_dataset = self.monitors.get_grafana_screenshot_and_snapshot(
                 self.start_time) if self.monitors else {}
         except Exception as error:  # pylint: disable=broad-except
-            self.log.error("Error in gathering Grafana screenshots and snapshots. Error:\n%s", error)
+            self.log.exception("Error in gathering Grafana screenshots and snapshots. Error:\n%s",
+                               error, exc_info=error)
 
         benchmarks_results = self.db_cluster.get_node_benchmarks_results() if self.db_cluster else {}
         # If cluster was not created, not need to collect nemesis stats - they do not exist
