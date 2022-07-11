@@ -49,6 +49,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from concurrent.futures.thread import _python_exit
 import hashlib
 from pathlib import Path
+
 import requests
 
 import boto3
@@ -63,6 +64,7 @@ from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 import yaml
 from packaging.version import Version
+from prettytable import PrettyTable
 
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.utils.aws_utils import EksClusterCleanupMixin, AwsArchType
@@ -1248,8 +1250,12 @@ def clean_clusters_eks(tags_dict: dict, dry_run: bool = False) -> None:
 _SCYLLA_AMI_CACHE: dict[str, list[EC2Image]] = defaultdict(list)
 
 
-def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64') -> list[EC2Image]:
+def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', version: str = None) -> list[EC2Image]:
     """Get the list of all the formal scylla ami from specific region."""
+    name_filter = "ScyllaDB *"
+
+    if version and version != "all":
+        name_filter = f"ScyllaDB {version.replace('enterprise', 'Enterprise').replace('-', ' ')}*"
 
     if _SCYLLA_AMI_CACHE[region_name]:
         return _SCYLLA_AMI_CACHE[region_name]
@@ -1259,7 +1265,7 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64') -> l
         ec2_resource.images.filter(
             Owners=[SCYLLA_AMI_OWNER_ID, ],
             Filters=[
-                {'Name': 'name', 'Values': ['ScyllaDB *']},
+                {'Name': 'name', 'Values': [name_filter]},
                 {'Name': 'architecture', 'Values': [arch]},
             ],
         ),
@@ -1272,7 +1278,7 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64') -> l
 _SCYLLA_GCE_IMAGE_CACHE: list[GCEImage] = []
 
 
-def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT) -> list[GCEImage]:
+def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, version: str = None) -> list[GCEImage]:
     if not _SCYLLA_GCE_IMAGE_CACHE:
         # Server-side resource filtering described in Google SDK reference docs:
         #   API reference: https://cloud.google.com/compute/docs/reference/rest/v1/images/list
@@ -1280,6 +1286,10 @@ def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT) -> 
         # or you can see brief explanation here:
         #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
         filters = "(family eq 'scylla(-enterprise)?')(name ne .+-build-.+)"
+
+        if version and version != "all":
+            filters += f"(name eq .*scylla-{version.replace('.', '-')}.*)"
+
         compute_engine = get_gce_driver()
         _SCYLLA_GCE_IMAGE_CACHE.extend(sorted(
             itertools.chain.from_iterable(
@@ -1570,7 +1580,7 @@ def get_branched_repo(scylla_version: str,
     return None
 
 
-def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = 'x86_64') -> list[EC2Image]:
+def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = None) -> list[EC2Image]:
     """
     Get a list of AMIs, based on version match
 
@@ -1604,7 +1614,75 @@ def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = 
     return images[:1]
 
 
-def get_branched_gce_images(scylla_version: str, project: str = SCYLLA_GCE_IMAGES_PROJECT) -> list[GCEImage]:
+def get_ami_images(branch: str, region: str, arch: AwsArchType) -> list:
+    """
+    Retrieve the AMI images data.
+    The data points retrieved are: ["Backend", "Name", "ImageId", "CreationDate", "BuildId", "Arch", "ScyllaVersion"]
+    """
+    rows = []
+
+    try:
+        amis = get_branched_ami(scylla_version=branch, region_name=region, arch=arch)
+    except AssertionError:
+        return rows
+
+    for ami in amis:
+        tags = {i['Key']: i['Value'] for i in ami.tags}
+        rows.append(["AWS", ami.name, ami.image_id, ami.creation_date, tags.get(
+            'build-id', tags.get("build_id"))[:6], tags.get('arch'), tags.get('ScyllaVersion')])
+
+    return rows
+
+
+def get_ami_images_versioned(region_name: str, arch: AwsArchType, version: str) -> list[list[str]]:
+    return [["AWS", ami.name, ami.image_id, ami.creation_date]
+            for ami in get_scylla_ami_versions(region_name=region_name, arch=arch, version=version)]
+
+
+def get_gce_images_versioned(version: str = None) -> list[list[str]]:
+    return [["GCE", image.name, image.extra["selfLink"], image.extra["creationTimestamp"]]
+            for image in get_scylla_gce_images_versions(version=version)]
+
+
+def get_gce_images(branch: str, arch: AwsArchType) -> list:
+    """
+    Retrieve the GCE images data.
+    The data points retrieved are: ["Backend", "Name", "ImageId", "CreationDate", "BuildId", "Arch", "ScyllaVersion"]
+    """
+    rows = []
+
+    try:
+        gce_images = get_branched_gce_images(scylla_version=branch, arch=arch)
+    except AssertionError:
+        return rows
+
+    for image in gce_images:
+        rows.append([
+            "GCE",
+            image.name,
+            image.extra["selfLink"],
+            image.extra["creationTimestamp"],
+            image.extra["labels"].get("build-id") or image.name.rsplit("-build-", maxsplit=1)[-1],
+            image.extra["labels"].get("arch"),
+            image.extra["labels"].get("scylla_version")
+        ])
+
+    return rows
+
+
+def create_pretty_table(rows: list[str] | list[list[str]], field_names: list[str]) -> PrettyTable:
+    tbl = PrettyTable(field_names=field_names, align="l")
+
+    for row in rows:
+        tbl.add_row(row)
+
+    return tbl
+
+
+def get_branched_gce_images(
+        scylla_version: str,
+        project: str = SCYLLA_GCE_IMAGES_PROJECT,
+        arch: AwsArchType = None) -> list[GCEImage]:
     branch, build_id = scylla_version.split(":", 1)
 
     # Server-side resource filtering described in Google SDK reference docs:
@@ -1617,6 +1695,9 @@ def get_branched_gce_images(scylla_version: str, project: str = SCYLLA_GCE_IMAGE
     if build_id not in ("latest", "all",):
         # filters += f"(labels.build-id eq {build_id})"  # asked releng to add `build-id' label too, but
         filters += f"(name eq .+-build-{build_id})"  # use BUILD_ID from an image name for now
+
+    if arch:
+        filters += f"(labels.arch eq {arch.replace('_', '-')})"
 
     LOGGER.info("Looking for GCE images match [%s]", scylla_version)
     compute_engine = get_gce_driver()
@@ -1632,6 +1713,7 @@ def get_branched_gce_images(scylla_version: str, project: str = SCYLLA_GCE_IMAGE
     )
 
     assert images, f"GCE images for {scylla_version=} not found"
+
     if build_id == "all":
         return images
     return images[:1]

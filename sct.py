@@ -51,16 +51,17 @@ from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
 from sdcm.utils.common import (
     aws_tags_to_dict,
+    create_pretty_table,
     clean_cloud_resources,
     clean_resources_according_post_behavior,
     format_timestamp,
+    get_ami_images,
+    get_ami_images_versioned,
+    get_gce_images,
+    get_gce_images_versioned,
     gce_meta_to_dict,
-    get_branched_ami,
-    get_branched_gce_images,
     get_builder_by_test_id,
     get_s3_scylla_repos_mapping,
-    get_scylla_ami_versions,
-    get_scylla_gce_images_versions,
     get_testrun_dir,
     list_clusters_eks,
     list_clusters_gke,
@@ -70,8 +71,8 @@ from sdcm.utils.common import (
     list_instances_gce,
     list_logs_by_test_id,
     list_resources_docker,
-    search_test_id_in_latest,
-    list_parallel_timelines_report_urls
+    list_parallel_timelines_report_urls,
+    search_test_id_in_latest
 )
 from sdcm.utils.net import get_sct_runner_ip
 from sdcm.utils.jepsen import JepsenResults
@@ -128,14 +129,20 @@ def install_package_from_dir(ctx, _, directories):
     return directories
 
 
-cloud_provider_option = click.option(
-    "-c", "--cloud-provider",
-    required=True,
-    type=click.Choice(choices=SUPPORTED_CLOUDS, case_sensitive=False),
-    default=DEFAULT_CLOUD,
-    is_eager=True,
-    help="Cloud provider",
-)
+def cloud_provider_option(function=None, default: str | None = DEFAULT_CLOUD,
+                          required: bool = True, help: str = "Cloud provider"):  # pylint:disable=redefined-builtin
+    def actual_decorator(func):
+        return click.option(
+            "-c", "--cloud-provider",
+            required=required,
+            type=click.Choice(choices=SUPPORTED_CLOUDS, case_sensitive=False),
+            default=default,
+            is_eager=True,
+            help=help
+        )(func)
+    if function:
+        return actual_decorator(function)
+    return actual_decorator
 
 
 class SctLoader(unittest.TestLoader):
@@ -507,85 +514,78 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
         click.secho("Nothing found for selected filters in Azure!", fg="yellow")
 
 
-@cli.command('list-ami-versions', help='list Amazon Scylla formal AMI versions')
+@cli.command('list-images', help="List machine images")
+@cloud_provider_option(default="aws", required=False, help="Cloud provided to query. Defaults to aws.")
+@click.option('-br', '--branch',
+              type=str,
+              help="Branch to query images for. Defaults to 'master:latest' Mutually exclusive with --version.")
+@click.option('-v', '--version',
+              type=str,
+              help="List images by version. Use '-v all' for all versions. "
+                   "OSS format: <4.3> Enterprise format: <enterprise-2021.1>. Mutually exclusive with --branch.")
 @click.option('-r', '--region',
-              type=CloudRegion(cloud_provider="aws"),
-              default='eu-west-1',
-              help="a region to look for AMIs (default: eu-west-1)")
+              type=CloudRegion(),
+              help="Cloud region to query images in. Defaults to eu-west-1",
+              default="eu-west-1")
 @click.option('-a', '--arch',
               type=click.Choice(AwsArchType.__args__),
               default='x86_64',
               help="architecture of the AMI (default: x86_64)")
-def list_ami_versions(region: str, arch: AwsArchType):
+def list_images(cloud_provider: str, branch: str, version: str, region: str, arch: AwsArchType):
     add_file_logger()
+    branch_fields = ["Backend", "Name", "ImageId", "CreationDate", "BuildId", "Arch", "ScyllaVersion"]
+    #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
+    version_fields = ["Backend", "Name", "ImageId", "CreationDate"]
 
-    tbl = PrettyTable(field_names=["Name", "ImageId", "CreationDate"], align="l")
-    for ami in get_scylla_ami_versions(region_name=region, arch=arch):
-        tbl.add_row([ami.name, ami.image_id, ami.creation_date])
-    click.echo(tbl.get_string(title="Scylla AMI versions"))
+    if version and branch:
+        click.echo("Use --version or --branch, not both.")
+        return
 
+    branch = branch or "master:latest"
 
-@cli.command('list-ami-branch', help="""list Amazon Scylla branched AMI versions
-    \n\n[VERSION] is a branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:all'""")
-@click.option('-r', '--region',
-              type=CloudRegion(cloud_provider="aws"),
-              default='eu-west-1',
-              help="a region to look for AMIs (default: eu-west-1)")
-@click.option('-a', '--arch',
-              type=click.Choice(AwsArchType.__args__),
-              default='x86_64',
-              help="architecture of the AMI (default: x86_64)")
-@click.argument('version', type=str, default='branch-3.1:all')
-def list_ami_branch(region: str, arch: AwsArchType, version: str):
-    add_file_logger()
+    if version is not None:
+        match cloud_provider:
+            case "aws":
+                rows = get_ami_images_versioned(region_name=region, arch=arch, version=version)
+                click.echo(
+                    create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                        title=f"AWS Machine Images by Version in region {region}")
+                )
+            case "gce":
+                if arch:
+                    #  TODO: align branch and version fields once scylla-pkg#2995 is resolved
+                    click.echo("WARNING:--arch option not implemented currently for GCE machine images.")
+                rows = get_gce_images_versioned(version=version)
 
-    def get_tags(ami):
-        return {i['Key']: i['Value'] for i in ami.tags}
+                click.echo(
+                    create_pretty_table(rows=rows, field_names=version_fields).get_string(
+                        title="GCE Machine Images by version")
+                )
+            case "azure":
+                click.echo("Azure image listing not implemented yet.")
 
-    if ":" not in version:
-        version += ":all"
+    elif branch:
+        if ":" not in branch:
+            branch += ":all"
 
-    tbl = PrettyTable(field_names=["Name", "ImageId", "CreationDate", "BuildId", "Test Status"], align="l")
-    for ami in get_branched_ami(scylla_version=version, region_name=region, arch=arch):
-        tags = get_tags(ami)
-        test_status = [(k, v) for k, v in tags.items() if k.startswith('JOB:')]
-        test_status = [click.style(k, fg='green') for k, v in test_status if v == 'PASSED'] + \
-                      [click.style(k, fg='red') for k, v in test_status if not v == 'PASSED']
-        test_status = ", ".join(test_status) if test_status else click.style('Unknown', fg='yellow')
-        tbl.add_row([ami.name, ami.image_id, ami.creation_date,
-                     tags.get('build-id', tags.get('build_id')), test_status])
-    click.echo(tbl.get_string(title="Scylla AMI branch versions"))
-
-
-@cli.command("list-gce-images-versions", help="list Scylla formal GCE images versions")
-def list_gce_images_versions():
-    add_file_logger()
-
-    tbl = PrettyTable(field_names=["Name", "ImageId", "CreationDate"], align="l")
-    for image in get_scylla_gce_images_versions():
-        tbl.add_row([image.name, image.extra["selfLink"], image.extra["creationTimestamp"]])
-    click.echo(tbl.get_string(title="Scylla GCE images versions"))
-
-
-@cli.command("list-gce-images-branch", help="""list Scylla branched GCE images versions
-    \n\n[VERSION] is a branch version to look for, ex. 'branch-2019.1:latest', 'branch-3.1:all'""")
-@click.argument("version", type=str, default="branch-3.1:all")
-def list_gce_images_branch(version):
-    add_file_logger()
-
-    if ":" not in version:
-        version += ":all"
-
-    tbl = PrettyTable(field_names=["Name", "ImageId", "CreationDate", "BuildId", "Test Status"], align="l")
-    for image in get_branched_gce_images(scylla_version=version):
-        tbl.add_row([
-            image.name,
-            image.extra["selfLink"],
-            image.extra["creationTimestamp"],
-            image.extra["labels"].get("build-id") or image.name.rsplit("-build-", maxsplit=1)[-1],
-            click.style("Unknown", fg="yellow"),
-        ])
-    click.echo(tbl.get_string(title="Scylla GCE images branch versions"))
+        match cloud_provider:
+            case "aws":
+                region = region or "eu-west-1"
+                ami_images = get_ami_images(branch=branch, region=region, arch=arch)
+                click.echo(
+                    create_pretty_table(rows=ami_images, field_names=branch_fields).get_string(
+                        title=f"AMI Machine Images for {branch} in region {region}"
+                    )
+                )
+            case "gce":
+                gce_images = get_gce_images(branch=branch, arch=arch)
+                click.echo(
+                    create_pretty_table(rows=gce_images, field_names=branch_fields).get_string(
+                        title=f"GCE Machine Images for {branch}"
+                    )
+                )
+            case "azure":
+                click.echo("Azure image listing not implemented yet.")
 
 
 @cli.command('list-repos', help='List repos url of Scylla formal versions')
