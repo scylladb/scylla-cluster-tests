@@ -17,7 +17,7 @@ import time
 import logging
 from typing import Dict, Any, ParamSpec, TypeVar
 from textwrap import dedent
-from functools import cached_property
+from functools import cached_property, cache
 from collections.abc import Callable
 
 import tenacity
@@ -177,6 +177,7 @@ class GCENode(cluster.BaseNode):
         self.log.warning('Method is not implemented for GCENode')
         return b''
 
+    @cache
     def _get_ipv6_ip_address(self):
         self.log.warning('On GCE, VPC networks only support IPv4 unicast traffic. '
                          'They do not support IPv6 traffic within the network.')
