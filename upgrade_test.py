@@ -89,13 +89,13 @@ def recover_conf(node):
         node.remoter.run(
             r'for conf in $( rpm -qc $(rpm -qa | grep scylla) | grep -v contains ) '
             r'/etc/systemd/system/{var-lib-scylla,var-lib-systemd-coredump}.mount; '
-            r'do test -e $conf.autobackup || sudo cp -v $conf.autobackup $conf; done')
+            r'do test -e $conf.autobackup && sudo cp -v $conf.autobackup $conf; done')
     else:
         node.remoter.run(
             r'for conf in $(cat /var/lib/dpkg/info/scylla-*server.conffiles '
             r'/var/lib/dpkg/info/scylla-*conf.conffiles '
             r'/var/lib/dpkg/info/scylla-*jmx.conffiles | grep -v init ); do '
-            r'sudo cp -v $conf.backup $conf; done')
+            r'test -e $conf.backup && sudo cp -v $conf.backup $conf; done')
 
 
 class UpgradeTest(FillDatabaseData):
