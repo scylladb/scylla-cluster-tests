@@ -2302,16 +2302,16 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
 
             self.log.info("Take few tables snapshot")
             # Prefer to take snapshot of test table. Try to find it
-            ks_cf = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node)
+            ks_cf = self.cluster.get_non_system_ks_cf_list(db_node=self.target_node, filter_out_mv=True)
 
             if not ks_cf or len(ks_cf) == 1:
                 # If test table wasn't found - take system table snapshot
-                ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node)
+                ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node, filter_out_mv=True)
 
             ks_with_few_tables = get_ks_with_few_tables(ks_cf)
             if not ks_with_few_tables:
                 # If non-system keyspace with few tables wasn't found - take system table snapshot
-                ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node)
+                ks_cf = self.cluster.get_any_ks_cf_list(db_node=self.target_node, filter_out_mv=True)
                 ks_with_few_tables = get_ks_with_few_tables(ks_cf)
 
             if not ks_with_few_tables:
