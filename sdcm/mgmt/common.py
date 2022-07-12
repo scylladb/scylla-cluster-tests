@@ -150,6 +150,7 @@ class TaskStatus:  # pylint: disable=too-few-public-methods
     WAITING = "WAITING"
     STARTING = "STARTING"
     ABORTED = "ABORTED"
+    SKIPPED = "SKIPPED"
 
     @classmethod
     def from_str(cls, output_str) -> str:
