@@ -799,6 +799,13 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             SCYLLA_MANAGER_AGENT_RESOURCES['memory'])
         if not cluster_name:
             cluster_name = self.params.get('k8s_scylla_cluster_name')
+        placement = add_pool_node_affinity({}, self.POOL_LABEL_NAME, pool_name) if pool_name else {}
+        placement["podAntiAffinity"] = {"requiredDuringSchedulingIgnoredDuringExecution": [{
+            "topologyKey": "kubernetes.io/hostname",
+            "labelSelector": {"matchExpressions": [{
+                "key": "scylla/cluster", "operator": "In", "values": [cluster_name],
+            }]}
+        }]}
         return HelmValues({
             'nameOverride': '',
             'fullnameOverride': cluster_name,
@@ -862,7 +869,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                             'memory': mgmt_agent_memory_limit,
                         },
                     },
-                    'placement': add_pool_node_affinity({}, self.POOL_LABEL_NAME, pool_name) if pool_name else {}
+                    'placement': placement,
                 }
             ]
         })
