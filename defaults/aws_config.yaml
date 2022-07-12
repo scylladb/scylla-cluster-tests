@@ -27,7 +27,7 @@ regions_data:
     ami_id_loader: 'ami-0cc124517d1f5710e' # Loader dedicated AMI v18
     ami_id_monitor: 'ami-04cf43aca3e6f3de3' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
 
-availability_zone: 'a'
+availability_zone: 'a,b,c'
 aws_root_disk_size_monitor: 50  # GB, remove this field if default disk size should be used
 aws_root_disk_size_db: 30  # GB, increase root disk for larger swap (maximum: 16G)
 aws_root_disk_size_loader: 30  # GB, Increase loader disk in order to have extra space for a larger swap

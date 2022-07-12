@@ -25,7 +25,7 @@ import uuid
 from collections.abc import Callable
 from contextlib import ExitStack
 from datetime import datetime
-from functools import cached_property
+from functools import cached_property, cache
 from math import floor
 from textwrap import dedent
 from typing import Dict, Optional, ParamSpec, TypeVar
@@ -150,7 +150,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         # pylint: disable=too-many-locals
         ec2 = ec2_client.EC2ClientWrapper(region_name=self.region_names[dc_idx],
                                           spot_max_price_percentage=self.params.get('spot_max_price'))
-        subnet_info = ec2.get_subnet_info(self._ec2_subnet_id[dc_idx])
+        subnet_info = ec2.get_subnet_info(self.subnet_id(dc_idx))
         spot_params = dict(instance_type=self._ec2_instance_type,
                            image_id=self._ec2_ami_id[dc_idx],
                            region_name=subnet_info['AvailabilityZone'],
@@ -186,6 +186,10 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
         return instances
 
+    @cache
+    def subnet_id(self, dc_idx):
+        return random.choice(self._ec2_subnet_id[dc_idx])
+
     def _create_instances(self, count, ec2_user_data='', dc_idx=0):
         if not count:  # EC2 API fails if we request zero instances.
             return []
@@ -194,15 +198,15 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             ec2_user_data = self._ec2_user_data
         self.log.debug("Passing user_data '%s' to create_instances", ec2_user_data)
         interfaces = [{'DeviceIndex': 0,
-                       'SubnetId': self._ec2_subnet_id[dc_idx],
+                       'SubnetId': self.subnet_id(dc_idx),
                        'AssociatePublicIpAddress': True,
                        'Groups': self._ec2_security_group_ids[dc_idx]}]
         if self.extra_network_interface:
             interfaces = [{'DeviceIndex': 0,
-                           'SubnetId': self._ec2_subnet_id[dc_idx],
+                           'SubnetId':  self.subnet_id(dc_idx),
                            'Groups': self._ec2_security_group_ids[dc_idx]},
                           {'DeviceIndex': 1,
-                           'SubnetId': self._ec2_subnet_id[dc_idx],
+                           'SubnetId': self.subnet_id(dc_idx),
                            'Groups': self._ec2_security_group_ids[dc_idx]}]
 
         self.log.info(f"Create {self.instance_provision} instance(s)")

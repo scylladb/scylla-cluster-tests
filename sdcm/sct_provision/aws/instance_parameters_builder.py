@@ -129,7 +129,7 @@ class AWSInstanceParamsBuilder(AWSInstanceParamsBuilderBase, metaclass=abc.ABCMe
     @property
     def _network_interface_params(self):
         return {
-            'SubnetId': self._ec2_subnet_ids[self.region_id],  # pylint: disable=invalid-sequence-index
+            'SubnetId': self._ec2_subnet_ids[self.region_id][0],  # pylint: disable=invalid-sequence-index
             'Groups': self._ec2_security_group_ids[self.region_id],  # pylint: disable=invalid-sequence-index
         }
 

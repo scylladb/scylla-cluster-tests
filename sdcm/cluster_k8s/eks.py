@@ -123,7 +123,7 @@ class EksNodePool(CloudK8sNodePool):
             BlockDeviceMappings=block_devices,
             NetworkInterfaces=[{
                 "DeviceIndex": 0,
-                "SubnetId": self.ec2_subnet_ids[0],
+                "SubnetId": self.ec2_subnet_ids[0][0],
             }],
         )
         if self.user_data:
@@ -151,7 +151,7 @@ class EksNodePool(CloudK8sNodePool):
             },
             # subnets controls AZ placement, if you specify subnets from multiple AZ
             # nodes will be spread across these AZ evenly, which can lead to failures and/or slowdowns
-            'subnets': [self.ec2_subnet_ids[0]],
+            'subnets': [self.ec2_subnet_ids[0][0]],
             'instanceTypes': [self.instance_type],
             'amiType': self.image_type,
             'nodeRole': self.role_arn,
@@ -274,7 +274,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
             roleArn=self.ec2_role_arn,
             resourcesVpcConfig={
                 'securityGroupIds': self.ec2_security_group_ids[0],
-                'subnetIds': self.ec2_subnet_ids,
+                'subnetIds': self.ec2_subnet_ids[0],
                 'endpointPublicAccess': True,
                 'endpointPrivateAccess': True,
                 'publicAccessCidrs': [
