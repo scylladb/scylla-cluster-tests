@@ -480,7 +480,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
             labels:
               {POOL_LABEL_NAME}: {self.SCYLLA_POOL_NAME}
         """
-        for _ in range(self.params.get("n_db_nodes") + 1):
+        for _ in range(self.params.get("n_db_nodes")):
             script_start_part += scylla_node_definition
         script_end_part = """
         EndOfSpec
