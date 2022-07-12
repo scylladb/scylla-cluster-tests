@@ -44,6 +44,7 @@ import kubernetes as k8s
 from kubernetes.client import exceptions as k8s_exceptions
 from kubernetes.client import V1ConfigMap
 from kubernetes.dynamic.resource import Resource, ResourceField, ResourceInstance, ResourceList, Subresource
+import invoke
 from invoke.exceptions import CommandTimedOut
 
 from sdcm import sct_abs_path, cluster
@@ -1967,6 +1968,9 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
 
         self._init_port_mapping()
 
+    @retrying(n=60, sleep_time=10,
+              allowed_exceptions=(k8s_exceptions.ApiException, invoke.exceptions.UnexpectedExit),
+              message="Failed to run fstrim command...")
     def fstrim_scylla_disks(self):
         # NOTE: to be able to run 'fstrim' command in a pod, it must have direct device mount and
         # appropriate priviledges.
