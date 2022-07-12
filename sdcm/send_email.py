@@ -543,7 +543,7 @@ class SlaPerUserEmailReporter(LongevityEmailReporter):
     email_template_file = "results_sl_workloads.html"
 
 
-class ClusterConfigurationTests(BaseEmailReporter):
+class ClusterConfigurationTestsReporter(BaseEmailReporter):
     pass
 
 
@@ -574,7 +574,7 @@ def build_reporter(name: str,
     elif "Functional" in name:
         return FunctionalEmailReporter(email_recipients=email_recipients, logdir=logdir)
     elif "ClusterConfigurationTests" in name:
-        return ClusterConfigurationTests(email_recipients=email_recipients, logdir=logdir)
+        return ClusterConfigurationTestsReporter(email_recipients=email_recipients, logdir=logdir)
     else:
         return None
 
