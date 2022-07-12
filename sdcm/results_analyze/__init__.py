@@ -710,7 +710,10 @@ class PerformanceResultsAnalyzer(BaseResultsAnalyzer):
         }
         self.log.debug('Regression analysis:')
         self.log.debug(PP.pformat(results))
-        test_name = full_test_name.split('.', 1)[1]  # Example: longevity_test.LongevityTest.test_custom_time
+        try:
+            test_name = full_test_name.split('.', 1)[1]  # Example: longevity_test.LongevityTest.test_custom_time
+        except IndexError:
+            test_name = full_test_name
         subject = f'Performance Regression Compare Results - {test_name} - {test_version} - {str(test_start_time)}'
         if ycsb:
             if ycsb_engine := ycsb.get('raw_cmd', "").split():
