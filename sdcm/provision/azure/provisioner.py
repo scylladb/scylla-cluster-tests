@@ -38,7 +38,7 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         super().__init__(test_id, region)
         self._azure_service: AzureService = azure_service
         self._cache: Dict[str, VmInstance] = {}
-        LOGGER.info("getting resources for %s...", self._resource_group_name)
+        LOGGER.debug("getting resources for %s...", self._resource_group_name)
         self._rg_provider = ResourceGroupProvider(self._resource_group_name, self._region, self._azure_service)
         self._network_sec_group_provider = NetworkSecurityGroupProvider(self._resource_group_name, self._region,
                                                                         self._azure_service)

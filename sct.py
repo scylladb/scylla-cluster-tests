@@ -37,6 +37,7 @@ import click_completion
 from prettytable import PrettyTable
 
 from sdcm.localhost import LocalHost
+from sdcm.provision import AzureProvisioner
 from sdcm.remote import LOCALRUNNER
 from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
@@ -321,7 +322,7 @@ def clean_resources(ctx, post_behavior, user, test_id, logdir, dry_run, backend)
         click.echo(f"Resources for {param} have cleaned")
 
 
-@cli.command('list-resources', help='list tagged instances in both clouds (AWS/GCE)')
+@cli.command('list-resources', help='list tagged instances in cloud (AWS/GCE/Azure)')
 @click.option('--user', type=str, help='user name to filter instances by')
 @click.option('--get-all', is_flag=True, default=False, help='All resources')
 @click.option('--get-all-running', is_flag=True, default=False, help='All running resources')
@@ -486,6 +487,31 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
             click.echo(docker_table.get_string(title="Images used on Docker"))
     else:
         click.secho("Nothing found for selected filters in Docker!", fg="yellow")
+
+    click.secho("Checking Azure instances...", fg='green')
+    instances = []
+    for provisioner in AzureProvisioner.discover_regions(params.get("TestId", "")):
+        instances += provisioner.list_instances()
+    if user:
+        instances = [inst for inst in instances if inst.tags.get("RunByUser") == user]
+    if instances:
+        azure_table = PrettyTable(["Name", "Region-AZ", "PublicIP", "TestId", "RunByUser", "LaunchTime"])
+        azure_table.align = "l"
+        azure_table.sortby = 'RunByUser'
+        for instance in instances:
+            tags = instance.tags
+            test_id = tags.get("TestId", "N/A")
+            run_by_user = tags.get("RunByUser", "N/A")
+            azure_table.add_row([
+                instance.name,
+                instance.region,
+                instance.public_ip_address,
+                test_id,
+                run_by_user,
+                "N/A"])
+        click.echo(azure_table.get_string(title="Instances used on Azure"))
+    else:
+        click.secho("Nothing found for selected filters in Azure!", fg="yellow")
 
 
 @cli.command('list-ami-versions', help='list Amazon Scylla formal AMI versions')
