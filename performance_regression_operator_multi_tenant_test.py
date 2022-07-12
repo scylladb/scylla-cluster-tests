@@ -138,7 +138,9 @@ class PerformanceRegressionOperatorMultiTenantTest(PerformanceRegressionTest):
         self.log.info("Running preload operation in parallel on all the DB clusters")
         object_set = ParallelObject(
             timeout=self.load_iteration_timeout_sec,
-            objects=[[scs] for scs in self.scylla_clusters_stats])
+            objects=[[scs] for scs in self.scylla_clusters_stats],
+            num_workers=len(self.scylla_clusters_stats),
+        )
         object_set.run(func=_preload_data, unpack_objects=True, ignore_exceptions=False)
 
     def run_read_workload(self, nemesis=False):
@@ -146,8 +148,11 @@ class PerformanceRegressionOperatorMultiTenantTest(PerformanceRegressionTest):
             scylla_cluster_stats.run_read_workload(nemesis=nemesis)
 
         self.log.info("Running 'read' workload operation in parallel")
-        object_set = ParallelObject(timeout=self.load_iteration_timeout_sec, objects=[
-            [scs, nemesis] for scs in self.scylla_clusters_stats])
+        object_set = ParallelObject(
+            timeout=self.load_iteration_timeout_sec,
+            objects=[[scs, nemesis] for scs in self.scylla_clusters_stats],
+            num_workers=len(self.scylla_clusters_stats),
+        )
         object_set.run(func=_run_read_workload, unpack_objects=True, ignore_exceptions=False)
 
     def run_write_workload(self, nemesis=False):
@@ -155,8 +160,11 @@ class PerformanceRegressionOperatorMultiTenantTest(PerformanceRegressionTest):
             scylla_cluster_stats.run_write_workload(nemesis=nemesis)
 
         self.log.info("Running 'write' workload operation in parallel")
-        object_set = ParallelObject(timeout=self.load_iteration_timeout_sec, objects=[
-            [scs, nemesis] for scs in self.scylla_clusters_stats])
+        object_set = ParallelObject(
+            timeout=self.load_iteration_timeout_sec,
+            objects=[[scs, nemesis] for scs in self.scylla_clusters_stats],
+            num_workers=len(self.scylla_clusters_stats),
+        )
         object_set.run(func=_run_write_workload, unpack_objects=True, ignore_exceptions=False)
 
     def run_mixed_workload(self, nemesis: bool = False):
@@ -164,8 +172,11 @@ class PerformanceRegressionOperatorMultiTenantTest(PerformanceRegressionTest):
             scylla_cluster_stats.run_mixed_workload(nemesis=nemesis)
 
         self.log.info("Running 'mixed' workload operation in parallel")
-        object_set = ParallelObject(timeout=self.load_iteration_timeout_sec, objects=[
-            [scs, nemesis] for scs in self.scylla_clusters_stats])
+        object_set = ParallelObject(
+            timeout=self.load_iteration_timeout_sec,
+            objects=[[scs, nemesis] for scs in self.scylla_clusters_stats],
+            num_workers=len(self.scylla_clusters_stats),
+        )
         object_set.run(func=_run_mixed_workload, unpack_objects=True, ignore_exceptions=False)
 
     def run_workload(self, stress_cmd, nemesis=False, sub_type=None):
@@ -173,8 +184,11 @@ class PerformanceRegressionOperatorMultiTenantTest(PerformanceRegressionTest):
             scylla_cluster_stats.run_workload(stress_cmd=stress_cmd, nemesis=nemesis)
 
         self.log.info("Running workload in parallel with following command:\n%s", stress_cmd)
-        object_set = ParallelObject(timeout=self.load_iteration_timeout_sec, objects=[
-            [scs, stress_cmd, nemesis] for scs in self.scylla_clusters_stats])
+        object_set = ParallelObject(
+            timeout=self.load_iteration_timeout_sec,
+            objects=[[scs, stress_cmd, nemesis] for scs in self.scylla_clusters_stats],
+            num_workers=len(self.scylla_clusters_stats),
+        )
         object_set.run(func=_run_workload, unpack_objects=True, ignore_exceptions=False)
 
     def test_write(self):
