@@ -1204,7 +1204,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         # NOTE: reuse data where possible to minimize spent time due to API limiter restrictions
         LOGGER.info("K8S-LOGS: starting logs gathering")
         logdir = Path(self.logdir)
-        self.kubectl(f"version > {logdir / 'kubectl.version'} 2>&1")
+        self.kubectl(f"version > {logdir / 'kubectl.version'} 2>&1", ignore_status=True)
 
         # Gather cluster-scoped resources info
         LOGGER.info("K8S-LOGS: gathering cluster scoped resources")
@@ -1214,8 +1214,9 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
                 "api-resources --namespaced=false --verbs=list -o name").stdout.split():
             for output_format in ("yaml", "wide"):
                 logfile = logdir / cluster_scope_dir / f"{resource_type}.{output_format}"
-                self.kubectl(f"get {resource_type} -o {output_format} > {logfile}")
-        self.kubectl(f"describe nodes > {logdir / cluster_scope_dir / 'nodes.desc'}")
+                self.kubectl(f"get {resource_type} -o {output_format} > {logfile}", ignore_status=True)
+        self.kubectl(f"describe nodes > {logdir / cluster_scope_dir / 'nodes.desc'}",
+                     timeout=600, ignore_status=True)
 
         # Read all the namespaces from already saved file
         with open(logdir / cluster_scope_dir / "namespaces.wide", mode="r", encoding="utf-8") as namespaces_file:
@@ -1231,7 +1232,7 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             LOGGER.info("K8S-LOGS: gathering '%s' resources", resource_type)
             logfile = logdir / "namespaces" / f"{resource_type}.{output_format}"
             resources_wide = self.kubectl(
-                f"get {resource_type} -A -o wide 2>&1 | tee {logfile}").stdout
+                f"get {resource_type} -A -o wide 2>&1 | tee {logfile}", ignore_status=True).stdout
             if resource_type.startswith("events"):
                 # NOTE: skip both kinds on 'events' available in k8s
                 continue
