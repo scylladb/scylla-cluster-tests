@@ -17,6 +17,9 @@ def call(Map params, String region){
     if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
         export SCT_GCE_DATACENTER=${params.gce_datacenter}
     fi
+    if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
+        export SCT_AZURE_REGION_NAME=${params.azure_region_name}
+    fi
     export SCT_CONFIG_FILES=${test_config}
 
     echo "start collect logs ..."

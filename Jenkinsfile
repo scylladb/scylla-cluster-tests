@@ -3,8 +3,8 @@
 // trick from https://github.com/jenkinsci/workflow-cps-global-lib-plugin/pull/43
 def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
-def target_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws']
-def sct_runner_backends = ['aws', 'gce', 'k8s-local-kind-aws']
+def target_backends = ['aws', 'gce', 'docker', 'k8s-local-kind-aws', 'azure']
+def sct_runner_backends = ['aws', 'gce', 'k8s-local-kind-aws', 'azure']
 
 def createRunConfiguration(String backend) {
 
@@ -139,7 +139,7 @@ pipeline {
         stage("provision test") {
             when {
                 expression {
-                    return pullRequestContainsLabels("test-provision,test-provision-aws,test-provision-gce,test-provision-docker,test-provision-k8s-local-kind-aws") && currentBuild.result == null
+                    return pullRequestContainsLabels("test-provision,test-provision-aws,test-provision-gce,test-provision-docker,test-provision-k8s-local-kind-aws,test-provision-azure") && currentBuild.result == null
                 }
             }
             options {

@@ -20,7 +20,9 @@ def call(Map params, String region){
     if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
         export SCT_GCE_DATACENTER=${params.gce_datacenter}
     fi
-
+    if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
+        export SCT_AZURE_REGION_NAME=${params.azure_region_name}
+    fi
     if [[ -n "${params.post_behavior_db_nodes ? params.post_behavior_db_nodes : ''}" ]] ; then
         export SCT_POST_BEHAVIOR_DB_NODES="${params.post_behavior_db_nodes}"
     fi
