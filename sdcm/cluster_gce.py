@@ -147,7 +147,7 @@ class GCENode(cluster.BaseNode):
                         GceInstanceEvent(entry, severity=Severity.WARNING).publish()
         except Exception as details:  # pylint: disable=broad-except
             self.log.warning('Error during getting spot termination notification %s', details)
-            return 0
+            self._last_logs_fetch_time = since
         return SPOT_TERMINATION_CHECK_DELAY
 
     def restart(self):
