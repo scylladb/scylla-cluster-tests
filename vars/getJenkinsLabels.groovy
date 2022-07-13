@@ -36,7 +36,7 @@ def call(String backend, String region=null, String datacenter=null, String loca
         }
 
         println("Finding builder for region: " + region)
-        if (region == "random" || datacenter == "random") {
+        if (region == "random" || datacenter == "random" || location == "random") {
             Collections.shuffle(supported_regions)
             region = supported_regions[0]
         }
