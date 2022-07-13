@@ -19,7 +19,6 @@ import boto3
 import paramiko
 from mypy_boto3_s3.service_resource import S3ServiceResource
 
-
 KEYSTORE_S3_BUCKET = "scylla-qa-keystore"
 
 SSHKey = namedtuple("SSHKey", ["name", "public_key", "private_key"])
@@ -48,7 +47,8 @@ class KeyStore:  # pylint: disable=too-many-public-methods
         return self.get_json("es.json")
 
     def get_gcp_credentials(self):
-        return self.get_json("gcp.json")
+        project = os.environ.get('SCT_GCE_PROJECT') or 'gcp'
+        return self.get_json(f"{project}.json")
 
     def get_dbaaslab_gcp_credentials(self):
         return self.get_json("gcp-scylladbaaslab.json")
@@ -57,7 +57,8 @@ class KeyStore:  # pylint: disable=too-many-public-methods
         return self.get_json("skilled-adapter-452-4b259a7c0bae.json")
 
     def get_gcp_service_accounts(self):
-        return self.get_json("gcp_service_accounts.json")
+        project = os.environ.get('SCT_GCE_PROJECT') or 'gcp'
+        return self.get_json(f"{project}_service_accounts.json")
 
     def get_scylladb_upload_credentials(self):
         return self.get_json("scylladb_upload.json")

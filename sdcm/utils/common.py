@@ -854,7 +854,7 @@ def get_gce_driver():
     gcp_credentials = KeyStore().get_gcp_credentials()
     gce_driver = get_driver(Provider.GCE)
 
-    return gce_driver(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
+    return gce_driver(gcp_credentials["client_email"],
                       gcp_credentials["private_key"], project=gcp_credentials["project_id"])
 
 
@@ -1720,7 +1720,7 @@ def gce_download_dir(bucket, path, target):
     gcp_credentials = KeyStore().get_gcp_credentials()
     gce_driver = libcloud.storage.providers.get_driver(libcloud.storage.types.Provider.GOOGLE_STORAGE)
 
-    driver = gce_driver(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
+    driver = gce_driver(gcp_credentials["client_email"],
                         gcp_credentials["private_key"],
                         project=gcp_credentials["project_id"])
 

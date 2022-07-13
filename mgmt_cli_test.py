@@ -585,7 +585,7 @@ class MgmtCliTest(BackupFunctionsMixIn, ClusterTester):
         file_set = set()
         gcp_credentials = KeyStore().get_gcp_credentials()
         gce_driver = libcloud.storage.providers.get_driver(libcloud.storage.types.Provider.GOOGLE_STORAGE)
-        driver = gce_driver(gcp_credentials["project_id"] + "@appspot.gserviceaccount.com",
+        driver = gce_driver(gcp_credentials["client_email"],
                             gcp_credentials["private_key"],
                             project=gcp_credentials["project_id"])
         container = driver.get_container(container_name=bucket_name)
