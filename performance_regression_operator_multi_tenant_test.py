@@ -47,7 +47,7 @@ class ScyllaClusterStats(PerformanceRegressionTest):
         return f"k8s-perf-{self.db_cluster.k8s_cluster.tenants_number}-tenants"
 
     def id(self):  # pylint: disable=invalid-name
-        return self.test_config.test_id() + f"-{self._test_index}"
+        return self._test_index
 
     def __str__(self) -> str:
         return self._test_index + f"--{self.cluster_index}"
