@@ -620,6 +620,8 @@ class SCTConfiguration(dict):
              help="If True, would tag the ami with the test final result"),
 
         # GCE config options
+        dict(name="gce_project", env="SCT_GCE_PROJECT", type=str,
+             help="gcp project name to use"),
 
         dict(name="gce_datacenter", env="SCT_GCE_DATACENTER", type=str_or_list,
              help="Supported: us-east1 - means that the zone will be selected automatically or "

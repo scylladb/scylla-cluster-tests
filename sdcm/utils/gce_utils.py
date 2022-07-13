@@ -54,7 +54,7 @@ def append_zone(region: str) -> str:
 
 
 def _get_gce_service(credentials: dict, datacenter: str) -> GceDriver:
-    return GceDriver(user_id=credentials["project_id"] + "@appspot.gserviceaccount.com",
+    return GceDriver(user_id=credentials["client_email"],
                      key=credentials["private_key"],
                      datacenter=datacenter,
                      project=credentials["project_id"])
@@ -155,7 +155,7 @@ class GcloudContainerMixin:
         """
         container = ContainerManager.run_container(self, "gcloud")
         credentials = KeyStore().get_gcp_credentials()
-        credentials["client_email"] = f"{credentials['project_id']}@appspot.gserviceaccount.com"
+        credentials["client_email"] = f"{credentials['client_email']}"
         shell_command = f"umask 077 && echo '{json.dumps(credentials)}' > /tmp/gcloud_svc_account.json"
         shell_command += " && echo 'kubeletConfig:\n  cpuManagerPolicy: static' > /tmp/system_config.yaml"
         # NOTE: use 'bash' in case of non-alpine sdk image and 'sh' when it is 'alpine' one.
