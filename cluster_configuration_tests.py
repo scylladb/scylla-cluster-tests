@@ -17,12 +17,17 @@
 from sdcm.tester import ClusterTester
 
 
-class BuildClusterTest(ClusterTester):
+class ClusterConfigurationTests(ClusterTester):
     """
     Build a Scylla cluster with the appropriate parameters.
     """
 
     default_params = {'timeout': 650000}
+
+    def get_email_data(self):
+        self.log.info("Prepare data for email")
+        email_data = self._get_common_email_data()
+        return email_data
 
     def test_build(self):
         """
@@ -43,11 +48,11 @@ class BuildClusterTest(ClusterTester):
             self.log.info('Grafana Web UI: http://%s:3000',
                           self.monitors.nodes[0].public_ip_address)
 
-    def test_use_public_dns_names(self):
+    def test_change_seed_address_to_hostname(self):
         """
         Build a Scylla cluster with params defined in data_dir/scylla.yaml
         Stop cluster.
-        Replace IPs for seeds, listen_address & broadcast_rpc_address on public dns names
+        Replace IPs for seeds, listen_address & broadcast_rpc_address to public dns names
         The cluster works properly.
         """
         if self.params.get('cluster_backend') != 'aws':
