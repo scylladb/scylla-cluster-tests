@@ -45,7 +45,8 @@ from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
 from sdcm.sct_provision.common.layout import SCTProvisionLayout, create_sct_configuration
 from sdcm.sct_provision.instances_provider import provision_sct_resources
-from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_runner, clean_sct_runners
+from sdcm.sct_runner import AwsSctRunner, GceSctRunner, AzureSctRunner, get_sct_runner, clean_sct_runners, \
+    update_sct_runner_tags
 from sdcm.utils.azure_region import AzureRegion
 from sdcm.utils.cloud_monitor import cloud_report, cloud_qa_report
 from sdcm.utils.cloud_monitor.cloud_monitor import cloud_non_qa_report
@@ -1070,6 +1071,7 @@ def collect_logs(test_id=None, logdir=None, backend=None, config_file=None):
             table.add_row([current_cluster_type, link])
 
     click.echo(table.get_string(title="Collected logs by test-id: {}".format(collector.test_id)))
+    update_sct_runner_tags(test_id=collector.test_id, tags={"logs_collected": True})
 
     if collector.test_id:
         store_logs_in_argus(test_id=UUID(collector.test_id), logs=collected_logs)
@@ -1406,13 +1408,23 @@ def create_runner_instance(cloud_provider, region, availability_zone, instance_t
         sys.exit(1)
 
 
-@cli.command("clean-runner-instances", help="Clean all unused SCT runner instances")
-@click.option("-ts", "--test-status", required=False, type=str, default="FAILED")
-@click.option("-ip", "--runner-ip", required=False, type=str, default="")
-@click.option('--dry-run', is_flag=True, default=False, help='dry run')
-def clean_runner_instances(test_status, runner_ip, dry_run):
+@cli.command("set-runner-tags")
+@click.argument("runner-ip", type=str)
+@click.option("-t", "--tags", type=(str, str),
+              help="Space separated key value pair to add as a new tag to the runner",
+              multiple=True)
+def set_runner_tags(runner_ip, tags):
     add_file_logger()
-    clean_sct_runners(test_status=test_status, test_runner_ip=runner_ip, dry_run=dry_run)
+    update_sct_runner_tags(test_runner_ip=runner_ip, tags=dict(tags))
+
+
+@cli.command("clean-runner-instances", help="Clean all unused SCT runner instances")
+@click.option("-ip", "--runner-ip", required=False, type=str, default="")
+@click.option("-ts", "--test-status", type=str, help="The result of the test run")
+@click.option('--dry-run', is_flag=True, default=False, help='dry run')
+def clean_runner_instances(runner_ip, test_status, dry_run):
+    add_file_logger()
+    clean_sct_runners(test_runner_ip=runner_ip, test_status=test_status, dry_run=dry_run)
 
 
 @cli.command("run-aws-mock", help="Start AWS Mock server Docker container")
@@ -1481,6 +1493,7 @@ cli.add_command(sct_ssh.ssh)
 cli.add_command(sct_ssh.tunnel)
 cli.add_command(sct_ssh.copy_cmd)
 cli.add_command(sct_ssh.attach_test_sg_cmd)
+cli.add_command(sct_ssh.ssh_cmd)
 
 if __name__ == '__main__':
     cli()
