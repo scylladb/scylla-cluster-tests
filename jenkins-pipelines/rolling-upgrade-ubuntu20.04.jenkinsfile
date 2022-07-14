@@ -7,8 +7,7 @@ rollingUpgradePipeline(
     backend: 'gce',
     base_versions: '',  // auto mode
     linux_distro: 'ubuntu-focal',
-    gce_image_db: 'https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/family/ubuntu-2004-lts',
-
+    use_preinstalled_scylla: true,
     test_name: 'upgrade_test.UpgradeTest.test_rolling_upgrade',
     test_config: 'test-cases/upgrades/rolling-upgrade.yaml',
     workaround_kernel_bug_for_iotune: false,
