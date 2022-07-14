@@ -11,7 +11,6 @@ managerPipeline(
     test_name: 'mgmt_cli_test.MgmtCliTest.test_repair_control',
     test_config: 'test-cases/manager/manager-repair-control.yaml',
 
-    timeout: [time: 1260, unit: 'MINUTES'],
     post_behavior_db_nodes: 'destroy',
     post_behavior_loader_nodes: 'destroy',
     post_behavior_monitor_nodes: 'destroy'
