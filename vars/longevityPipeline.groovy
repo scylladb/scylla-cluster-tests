@@ -18,6 +18,7 @@ def call(Map pipelineParams) {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
             SCT_TEST_ID = UUID.randomUUID().toString()
+            SCT_GCE_PROJECT = "${params.gce_project}"
         }
         parameters {
             string(defaultValue: "${pipelineParams.get('backend', 'aws')}",
@@ -122,6 +123,10 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('docker_image', '')}",
                    description: 'Scylla docker image repo',
                    name: 'docker_image')
+
+            string(defaultValue: "${pipelineParams.get('gce_project', '')}",
+               description: 'Gce project to use',
+               name: 'gce_project')
         }
         options {
             timestamps()
