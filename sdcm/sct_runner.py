@@ -696,22 +696,13 @@ class GceSctRunner(SctRunner):
     def _get_image_id(self, image: Any) -> Any:
         return image.id
 
-    def _get_image_url(self, image_id) -> str:
-        return f"https://www.googleapis.com/compute/alpha/projects/{self.project_name}/global/images/{image_id}"
-
     def _copy_source_image_to_region(self) -> None:
-        image = self.gce_service.ex_copy_image(
-            self.image_name,
-            self._get_image_url(self.source_image.id),
-            description=self.IMAGE_DESCRIPTION,
-            family=self.FAMILY,
-        )
-        LOGGER.info("Image copied, id: `%s'.", image.id)
+        LOGGER.debug("gce images are global, not need to copy")
 
     def _get_base_image(self, image: Optional[Any] = None) -> Any:
         if image is None:
             image = self.image
-        return self._get_image_url(image.id)
+        return image.extra['selfLink']
 
     @classmethod
     def list_sct_runners(cls) -> list[SctRunnerInfo]:
