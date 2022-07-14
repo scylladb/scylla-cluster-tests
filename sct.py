@@ -77,6 +77,7 @@ from sdcm.monitorstack import (restore_monitoring_stack, get_monitoring_stack_se
                                kill_running_monitoring_stack_services)
 from sdcm.utils.log import setup_stdout_logger
 from sdcm.utils.aws_region import AwsRegion
+from sdcm.utils.gce_region import GceRegion
 from sdcm.utils.get_username import get_username
 from sdcm.send_email import get_running_instances_for_email_report, read_email_data_from_file, build_reporter, \
     send_perf_email
@@ -1276,6 +1277,8 @@ def prepare_region(cloud_provider, region):
         region = AwsRegion(region_name=region)
     elif cloud_provider == "azure":
         region = AzureRegion(region_name=region)
+    elif cloud_provider == "gce":
+        region = GceRegion(region_name=region)
     else:
         raise Exception(f'Unsupported Cloud provider: `{cloud_provider}')
     region.configure()
