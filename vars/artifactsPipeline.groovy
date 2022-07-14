@@ -9,6 +9,7 @@ def call(Map pipelineParams) {
         environment {
             AWS_ACCESS_KEY_ID     = credentials('qa-aws-secret-key-id')
             AWS_SECRET_ACCESS_KEY = credentials('qa-aws-secret-access-key')
+            SCT_GCE_PROJECT = "${params.gce_project}"
         }
         parameters {
             string(defaultValue: "${pipelineParams.get('backend', 'gce')}",
@@ -77,7 +78,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
                description: 'Availability zone',
                name: 'availability_zone')
-
+            string(defaultValue: "${pipelineParams.get('gce_project', '')}",
+               description: 'Gce project to use',
+               name: 'gce_project')
         }
         options {
             timestamps()
