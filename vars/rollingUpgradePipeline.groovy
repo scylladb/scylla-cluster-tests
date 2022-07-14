@@ -192,10 +192,13 @@ def call(Map pipelineParams) {
                                                             if [[ -n "${params.post_behavior_k8s_cluster ? params.post_behavior_k8s_cluster : ''}" ]] ; then
                                                                 export SCT_POST_BEHAVIOR_K8S_CLUSTER="${params.post_behavior_k8s_cluster}"
                                                             fi
+
+                                                            if [[ -n "${params.use_preinstalled_scylla ? params.use_preinstalled_scylla : false}" ]] ; then
+                                                                export SCT_USE_PREINSTALLED_SCYLLA="${params.use_preinstalled_scylla}"
+                                                            fi
                                                             export SCT_INSTANCE_PROVISION="${params.provision_type}"
                                                             export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$GIT_BRANCH | sed -E 's+(origin/|origin/branch-)++')
                                                             export SCT_AMI_ID_DB_SCYLLA_DESC=\$(echo \$SCT_AMI_ID_DB_SCYLLA_DESC | tr ._ - | cut -c1-8 )
-
                                                             export SCT_GCE_IMAGE_DB=${pipelineParams.gce_image_db}
                                                             export SCT_SCYLLA_LINUX_DISTRO=${pipelineParams.linux_distro}
                                                             export SCT_AMI_ID_DB_SCYLLA_DESC="\$SCT_AMI_ID_DB_SCYLLA_DESC-\$SCT_SCYLLA_LINUX_DISTRO"
