@@ -20,9 +20,10 @@ from pathlib import Path
 import random
 import time
 import re
-from functools import wraps
+from functools import wraps, cache
 from typing import List
 
+from argus.db.db_types import PackageVersion
 from pkg_resources import parse_version
 
 from sdcm import wait
@@ -239,9 +240,9 @@ class UpgradeTest(FillDatabaseData):
         node.start_scylla_server(verify_up_timeout=500)
         result = node.remoter.run('scylla --version')
         new_ver = result.stdout
-        assert self.orig_ver != self.new_ver, "scylla-server version isn't changed"
+        assert self.orig_ver != new_ver, "scylla-server version isn't changed"
         self.new_ver = new_ver
-
+        self._update_argus_upgraded_version(node, new_ver)
         if upgrade_sstables:
             self.upgradesstables_if_command_available(node)
 
@@ -1104,8 +1105,26 @@ class UpgradeTest(FillDatabaseData):
             "grafana_screenshots": grafana_dataset.get("screenshots", []),
             "grafana_snapshots": grafana_dataset.get("snapshots", []),
             "new_scylla_repo": self.params.get("new_scylla_repo"),
-            "new_version": self.params.get("new_version"),
+            "new_version": self.new_ver,
             "scylla_ami_id": self.params.get("ami_id_db_scylla") or "-",
         })
 
         return email_data
+
+    @cache
+    def _update_argus_upgraded_version(self, node, new_version):
+        try:
+            ver = re.search(r"(?P<version>[\w.~]+)-0\.?(?P<date>[0-9]{8,8})\.(?P<commit_id>\w+)", new_version)
+            if ver:
+                package = PackageVersion(name="scylla-server-upgraded", date=ver.group("date"),
+                                         version=ver.group("version"),
+                                         revision_id=ver.group("commit_id"),
+                                         build_id=node.get_scylla_build_id() or "#NO_BUILDID")
+                self.argus_test_run.run_info.details.packages.append(package)
+                self.argus_test_run.run_info.details.scylla_version = ver.group("version")
+                self.log.info("Saving upgraded Scylla version...")
+                self.argus_test_run.save()
+            else:
+                self.log.warning("Couldn't extract version from %s", new_version)
+        except Exception as exc:  # pylint: disable=broad-except
+            self.log.exception("Failed to save upgraded Scylla version in Argus", exc_info=exc)
