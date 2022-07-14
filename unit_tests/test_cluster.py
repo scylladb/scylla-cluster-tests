@@ -80,8 +80,17 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             log_lines=False
         )
 
-    def _read_and_publish_events(self):
-        self._db_log_reader._read_and_publish_events()  # pylint: disable=protected-access
+    def _read_and_publish_events(self, log_text=None):
+        if log_text:
+            with tempfile.NamedTemporaryFile(mode='wt') as temp_log:
+                self.node.system_log = temp_log.name
+
+                for line in log_text.splitlines(keepends=True):
+                    temp_log.write(line)
+                    temp_log.flush()
+                    self._db_log_reader._read_and_publish_events()  # pylint: disable=protected-access
+        else:
+            self._db_log_reader._read_and_publish_events()  # pylint: disable=protected-access
 
     @classmethod
     def tearDownClass(cls):
@@ -222,6 +231,25 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             assert event_backtrace1["line_number"] == 0
             assert event_backtrace2["type"] == "COMPACTION_STOPPED"
             assert event_backtrace2["line_number"] == 1
+
+    def test_appending_to_log(self):
+        logs = """
+INFO  2022-07-14 09:28:34,095 [shard 1] database - Flushing non-system tables
+Reactor stalled for 32 ms on shard 1. Backtrace: 0x4e0d6e2 0x4e0c340 0x4e0d5f0 0x7f230af20a1f 0x14de339 0x14dc3b0 0x14d680c 0x14d5ff6 0x14e4d52 0x14d0238 0x1aec3c6 0x508c7e1
+kernel callstack:
+INFO  2022-07-14 09:28:35,102 [shard 1] database - Flushed non-system tables
+        """
+
+        self._read_and_publish_events(logs)
+
+        with self.get_raw_events_log().open() as events_file:
+            events = [json.loads(line) for line in events_file]
+            reactor_stalls = [event for event in events if event["type"] == "REACTOR_STALLED"]
+            assert len(reactor_stalls) == 1
+            event = reactor_stalls[0]
+            assert event["type"] == "REACTOR_STALLED"
+            assert event["line_number"] == 2
+            assert 'Reactor stalled for 32 ms on shard 1' in event['line']
 
 
 class VersionDummyRemote:

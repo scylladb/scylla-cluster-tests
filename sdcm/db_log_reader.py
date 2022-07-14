@@ -157,7 +157,7 @@ class DbLogReader(Process):
 
             if index:
                 self._last_line_no = index
-                self._last_log_position = db_file.tell() + 1
+                self._last_log_position = db_file.tell()
 
         traces_count = 0
         for backtrace in backtraces:
