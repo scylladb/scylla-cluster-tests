@@ -1104,6 +1104,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         raise UnsupportedNemesis(f"Backend {self.cluster.params.get('cluster_backend')} "
                                  f"does not support node termination")
 
+    @decorate_with_context(ignore_ycsb_connection_refused)
     def _terminate_cluster_node(self, node):
         self.cluster.terminate_node(node)
         self.monitoring_set.reconfigure_scylla_monitoring()
