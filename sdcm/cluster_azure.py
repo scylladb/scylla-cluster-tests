@@ -10,7 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
-
+import json
 import logging
 from functools import cached_property
 from typing import Dict, List
@@ -18,11 +18,13 @@ from typing import Dict, List
 from sdcm import cluster
 from sdcm.provision.azure.provisioner import AzureProvisioner
 from sdcm.provision.provisioner import PricingModel, VmInstance
+from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.sct_provision import region_definition_builder
 from sdcm.sct_provision.instances_provider import provision_instances_with_fallback
 from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)
+SPOT_TERMINATION_CHECK_DELAY = 15
 
 
 class CreateAzureNodeError(Exception):
@@ -45,6 +47,7 @@ class AzureNode(cluster.BaseNode):
         name = f"{node_prefix}-{region}-{node_index}".lower()
         self.node_index = node_index
         self._instance = azure_instance
+        self.last_event_document_incarnation = -1
         ssh_login_info = {'hostname': None,
                           'user': azure_instance.user_name,
                           'key_file': credentials.key_file,
@@ -83,9 +86,29 @@ class AzureNode(cluster.BaseNode):
 
     def check_spot_termination(self):
         """Check if a spot instance termination was initiated by the cloud.
+
+        Returns number of seconds to wait before next check.
         """
-        # todo: fix it
-        return False
+        try:
+            self.wait_ssh_up(verbose=False)
+            result = self.remoter.run(
+                'curl http://169.254.169.254/metadata/scheduledevents?api-version=2020-07-01 -H "Metadata: true"', verbose=False)
+            status = json.loads(result.stdout.strip())
+            if status["DocumentIncarnation"] == self.last_event_document_incarnation:
+                # each change in status["Events"] increments "DocumentIncarnation", return if there was no change.
+                return SPOT_TERMINATION_CHECK_DELAY
+            for event in status["Events"]:
+                self.last_event_document_incarnation = status["DocumentIncarnation"]
+                if event["EventType"] == "Preempt":
+                    message = f"Got spot termination event for node: {event['Resources']}. VM eviction time is {event['NotBefore']}."
+                    SpotTerminationEvent(node=self, message=message).publish()
+                else:
+                    # other EventType's that can be triggered by Azure's maintenance: "Reboot" | "Redeploy" | "Freeze" | "Terminate"
+                    self.log.warning(f"Unhandled Azure scheduled event: {event}")
+        except Exception as details:  # pylint: disable=broad-except
+            self.log.warning('Error during getting Azure scheduled events: %s', details)
+            return 0
+        return SPOT_TERMINATION_CHECK_DELAY
 
     def restart(self):
         # When using NVMe disks in Azure, there is no option to Stop and Start an instance.
