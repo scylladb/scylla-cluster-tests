@@ -28,9 +28,9 @@ regions_data:
     ami_id_monitor: 'ami-04cf43aca3e6f3de3' # Official CentOS Linux 7 x86_64 HVM EBS ENA 1901_01
 
 availability_zone: 'a'
-aws_root_disk_size_monitor: 50  # GB, remove this field if default disk size should be used
-aws_root_disk_size_db: 30  # GB, increase root disk for larger swap (maximum: 16G)
-aws_root_disk_size_loader: 30  # GB, Increase loader disk in order to have extra space for a larger swap
+root_disk_size_monitor: 50  # GB, remove this field if default disk size should be used
+root_disk_size_db: 30  # GB, increase root disk for larger swap (maximum: 16G)
+root_disk_size_loader: 30  # GB, Increase loader disk in order to have extra space for a larger swap
 loader_swap_size: 10240  #10GB SWAP space
 ami_db_scylla_user: 'scyllaadm'
 # used prepared centos7 AMI for loader

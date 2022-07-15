@@ -58,7 +58,7 @@ config_option = [
 # those can be added to a json scheme to validate / or write the validation code for it to be a bit clearer output
 aws_required_params = ["instance_type_loader", "instance_type_monitor", "instance_type_db", "instance_type_db",
                        "region_name", "security_group_ids", "subnet_id", "ami_id_db_scylla", "ami_id_loader",
-                       "ami_id_monitor", "aws_root_disk_size_monitor", "ami_db_scylla_user", "ami_monitor_user"]
+                       "ami_id_monitor", "root_disk_size_monitor", "ami_db_scylla_user", "ami_monitor_user"]
 
 ````
 

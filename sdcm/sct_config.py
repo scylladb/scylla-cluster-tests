@@ -577,13 +577,13 @@ class SCTConfiguration(dict):
         dict(name="ami_id_db_oracle", env="SCT_AMI_ID_DB_ORACLE", type=str,
              help="AMS AMI id to use for oracle node"),
 
-        dict(name="aws_root_disk_size_db", env="SCT_AWS_ROOT_DISK_SIZE_DB", type=int,
+        dict(name="root_disk_size_db", env="SCT_ROOT_DISK_SIZE_DB", type=int,
              help=""),
 
-        dict(name="aws_root_disk_size_monitor", env="SCT_AWS_ROOT_DISK_SIZE_MONITOR", type=int,
+        dict(name="root_disk_size_monitor", env="SCT_ROOT_DISK_SIZE_MONITOR", type=int,
              help=""),
 
-        dict(name="aws_root_disk_size_loader", env="SCT_AWS_ROOT_DISK_SIZE_LOADER", type=int,
+        dict(name="root_disk_size_loader", env="SCT_ROOT_DISK_SIZE_LOADER", type=int,
              help=""),
 
         dict(name="ami_db_scylla_user", env="SCT_AMI_DB_SCYLLA_USER", type=str,
@@ -660,9 +660,6 @@ class SCTConfiguration(dict):
         dict(name="gce_root_disk_type_monitor", env="SCT_GCE_ROOT_DISK_TYPE_MONITOR", type=str,
              help=""),
 
-        dict(name="gce_root_disk_size_monitor", env="SCT_GCE_ROOT_DISK_SIZE_MONITOR", type=int,
-             help=""),
-
         dict(name="gce_n_local_ssd_disk_monitor", env="SCT_GCE_N_LOCAL_SSD_DISK_MONITOR", type=int,
              help=""),
 
@@ -670,9 +667,6 @@ class SCTConfiguration(dict):
              help=""),
 
         dict(name="gce_root_disk_type_db", env="SCT_GCE_ROOT_DISK_TYPE_DB", type=str,
-             help=""),
-
-        dict(name="gce_root_disk_size_db", env="SCT_GCE_ROOT_DISK_SIZE_DB", type=int,
              help=""),
 
         dict(name="gce_n_local_ssd_disk_db", env="SCT_GCE_N_LOCAL_SSD_DISK_DB", type=int,
@@ -716,15 +710,6 @@ class SCTConfiguration(dict):
              help=""),
 
         dict(name="azure_image_username", env="SCT_AZURE_IMAGE_USERNAME", type=str,
-             help=""),
-
-        dict(name="azure_root_disk_size_monitor", env="SCT_AZURE_ROOT_DISK_SIZE_MONITOR", type=int,
-             help=""),
-
-        dict(name="azure_root_disk_size_db", env="SCT_AZURE_ROOT_DISK_SIZE_DB", type=int,
-             help=""),
-
-        dict(name="azure_root_disk_size_loader", env="SCT_AZURE_ROOT_DISK_SIZE_LOADER", type=int,
              help=""),
 
         # k8s-eks options
@@ -1308,26 +1293,25 @@ class SCTConfiguration(dict):
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
-                       'user_credentials_path']
+                       'user_credentials_path', 'root_disk_size_db', "root_disk_size_monitor", 'root_disk_size_loader']
 
     # those can be added to a json scheme to validate / or write the validation code for it to be a bit clearer output
     backend_required_params = {
         'aws': ['user_prefix', "instance_type_loader", "instance_type_monitor", "instance_type_db",
                 "region_name", "ami_id_db_scylla", "ami_id_loader",
-                "ami_id_monitor", "aws_root_disk_size_monitor", "aws_root_disk_name_monitor", "ami_db_scylla_user",
+                "ami_id_monitor", "aws_root_disk_name_monitor", "ami_db_scylla_user",
                 "ami_monitor_user"],
 
         'gce': ['user_prefix', 'gce_network', 'gce_image_db', 'gce_image_username', 'gce_instance_type_db',
-                'gce_root_disk_type_db', 'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db',
+                'gce_root_disk_type_db',  'gce_n_local_ssd_disk_db',
                 'gce_instance_type_loader', 'gce_root_disk_type_loader', 'gce_n_local_ssd_disk_loader',
-                'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'gce_root_disk_size_monitor',
+                'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
                 'gce_n_local_ssd_disk_monitor', 'gce_datacenter'],
 
         'azure': ['user_prefix', 'azure_image_db', 'azure_image_username', 'azure_instance_type_db',
                   'azure_root_disk_type_db', 'azure_n_local_ssd_disk_db',
                   'azure_instance_type_loader', 'azure_root_disk_type_loader', 'azure_n_local_ssd_disk_loader',
-                  'azure_instance_type_monitor', 'azure_n_local_ssd_disk_monitor', 'azure_region_name',
-                  'azure_root_disk_size_monitor', 'azure_root_disk_size_db', 'azure_root_disk_size_loader'],
+                  'azure_instance_type_monitor', 'azure_n_local_ssd_disk_monitor', 'azure_region_name'],
 
         'docker': ['user_credentials_path', 'scylla_version'],
 
@@ -1337,9 +1321,9 @@ class SCTConfiguration(dict):
                       "nemesis_filter_seeds"],
 
         'gce-siren': ['user_prefix', 'gce_network', 'gce_image_username', 'gce_instance_type_db',
-                      'gce_root_disk_type_db', 'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db',
+                      'gce_root_disk_type_db', 'gce_n_local_ssd_disk_db',
                       'gce_instance_type_loader', 'gce_root_disk_type_loader', 'gce_n_local_ssd_disk_loader',
-                      'gce_instance_type_monitor', 'gce_root_disk_type_monitor', 'gce_root_disk_size_monitor',
+                      'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
                       'gce_n_local_ssd_disk_monitor', 'gce_datacenter'],
 
         'k8s-local-kind': ['user_credentials_path', 'scylla_version', 'scylla_mgmt_agent_version',
@@ -1358,15 +1342,15 @@ class SCTConfiguration(dict):
                                'mgmt_docker_image'],
 
         'k8s-gke': ['gke_cluster_version', 'gce_instance_type_db', 'gce_root_disk_type_db',
-                    'gce_root_disk_size_db', 'gce_n_local_ssd_disk_db', 'user_credentials_path', 'scylla_version',
+                    'gce_n_local_ssd_disk_db', 'user_credentials_path', 'scylla_version',
                     'scylla_mgmt_agent_version', 'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter',
                     'k8s_scylla_rack', 'k8s_scylla_cluster_name',
                     'k8s_loader_cluster_name', 'gce_instance_type_loader',
                     'gce_image_monitor', 'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
-                    'gce_root_disk_size_monitor', 'gce_n_local_ssd_disk_monitor', 'mgmt_docker_image'],
+                    'gce_n_local_ssd_disk_monitor', 'mgmt_docker_image'],
 
         'k8s-eks': ['instance_type_loader', 'instance_type_monitor', 'instance_type_db', 'region_name',
-                    'ami_id_db_scylla', 'ami_id_monitor', 'aws_root_disk_size_monitor',
+                    'ami_id_db_scylla', 'ami_id_monitor',
                     'aws_root_disk_name_monitor', 'ami_db_scylla_user', 'ami_monitor_user', 'user_credentials_path',
                     'scylla_version', 'scylla_mgmt_agent_version', 'k8s_scylla_operator_docker_image',
                     'k8s_scylla_datacenter', 'k8s_scylla_rack', 'k8s_scylla_cluster_name',

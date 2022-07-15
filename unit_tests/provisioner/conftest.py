@@ -66,5 +66,6 @@ def params():
 @pytest.fixture
 def test_config(params):  # pylint: disable=unused-argument,redefined-outer-name
     config = get_test_config()
+    config.set_test_id("12345678-87654321")
     TestConfig.RSYSLOG_ADDRESS = ("localhost", 12345)
     return config

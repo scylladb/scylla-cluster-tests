@@ -19,11 +19,11 @@ from sdcm.test_config import TestConfig
 def prepare_fake_region(test_id: str, region: str, n_db_nodes: int = 3, n_loaders: int = 2, n_monitor_nodes: int = 1):
     params = {"test_id": test_id,
               "fake_image_db": "test:image:db:2", "fake_instance_type_db": "test-inst-type", "fake_image_user_name": "scyllaadm",
-              "fake_root_disk_size_db": 15,
+              "root_disk_size_db": 15,
               "fake_image_loader": "test:image:loader:2", "fake_instance_type_loader": "test-inst-type", "ami_loader_user": "centos",
               "fake_rood_tisk_size_loader": 15,
               "fake_image_monitor": "test:image:monitor:2", "fake_instance_type_monitor": "test-inst-type", "ami_monitor_user": "centos",
-              "fake_root_disk_size_monitor": 15,
+              "root_disk_size_monitor": 15,
               "fake_region_name": ["eastus"], "cluster_backend": "fake"}
     builder = region_definition_builder.get_builder(params=params, test_config=TestConfig())
     region_definition = builder.build_region_definition(region, n_db_nodes, n_loaders, n_monitor_nodes)

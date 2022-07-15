@@ -1,6 +1,6 @@
 ami_db_scylla_user: 'clckwrk'
 ami_id_db_scylla: 'ami-0d6a24fe35fdf5dc4'
-aws_root_disk_size_db: 50
+root_disk_size_db: 50
 backtrace_decoding: false
 cluster_backend: 'aws'
 instance_type_db: 'i3.large'
