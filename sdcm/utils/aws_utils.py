@@ -183,7 +183,7 @@ def init_monitoring_info_from_params(monitor_info: dict, params: dict, regions: 
     if monitor_info['type'] is None:
         monitor_info['type'] = params.get('instance_type_monitor')
     if monitor_info['disk_size'] is None:
-        monitor_info['disk_size'] = params.get('aws_root_disk_size_monitor')
+        monitor_info['disk_size'] = params.get('root_disk_size_monitor')
     if monitor_info['device_mappings'] is None:
         if monitor_info['disk_size']:
             monitor_info['device_mappings'] = [{
@@ -211,7 +211,7 @@ def init_db_info_from_params(db_info: dict, params: dict, regions: List, root_de
     if db_info['type'] is None:
         db_info['type'] = params.get('instance_type_db')
     if db_info['disk_size'] is None:
-        db_info['disk_size'] = params.get('aws_root_disk_size_db')
+        db_info['disk_size'] = params.get('root_disk_size_db')
     if db_info['device_mappings'] is None and (root_device or params.get('ami_id_db_scylla')):
         if db_info['disk_size']:
             root_device = root_device if root_device else ec2_ami_get_root_device_name(

@@ -8,7 +8,7 @@ gke_k8s_release_channel: ''
 
 gce_instance_type_db: 'n1-standard-8'
 gce_root_disk_type_db: 'pd-ssd'
-gce_root_disk_size_db: 50
+root_disk_size_db: 50
 gce_n_local_ssd_disk_db: 3
 
 n_db_nodes: 4
@@ -47,7 +47,7 @@ k8s_n_loader_pods_per_cluster: 1
 gce_image_monitor: 'https://www.googleapis.com/compute/v1/projects/centos-cloud/global/images/family/centos-7'
 gce_instance_type_monitor: 'e2-medium'
 gce_root_disk_type_monitor: 'pd-standard'
-gce_root_disk_size_monitor: 50
+root_disk_size_monitor: 50
 gce_n_local_ssd_disk_monitor: 0
 
 n_monitor_nodes: 1

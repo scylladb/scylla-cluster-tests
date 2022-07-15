@@ -22,7 +22,7 @@ n_monitor_nodes: 1
 
 instance_type_db: 'i3.8xlarge'
 instance_type_loader: 'c5.4xlarge'
-aws_root_disk_size_monitor: 100
+root_disk_size_monitor: 100
 
 user_prefix: 'longevity-1000-keyspaces'
 

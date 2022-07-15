@@ -1,5 +1,5 @@
 ami_id_db_scylla: 'ami-067787e9ea5433c78'
-aws_root_disk_size_db: 50
+root_disk_size_db: 50
 backtrace_decoding: false
 cluster_backend: 'aws'
 instance_type_db: 'i3.large'
