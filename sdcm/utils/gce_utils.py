@@ -177,9 +177,9 @@ class GcloudContainerMixin:
 class GceLoggingClient:  # pylint: disable=too-few-public-methods
 
     def __init__(self, instance_name: str, zone: str):
-        raw_credentials = KeyStore().get_logging_gcp_credentials()
-        self.credentials = service_account.Credentials.from_service_account_info(raw_credentials)
-        self.project_id = raw_credentials['project_id']
+        credentials = KeyStore().get_gcp_credentials()
+        self.credentials = service_account.Credentials.from_service_account_info(credentials)
+        self.project_id = credentials['project_id']
         self.instance_name = instance_name
         self.zone = zone
 
