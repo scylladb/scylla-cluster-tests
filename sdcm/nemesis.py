@@ -3230,7 +3230,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         cur_num_nodes_in_dc = len([n for n in self.cluster.nodes if n.dc_idx == self.target_node.dc_idx])
         initial_db_size = self.tester.params.get("n_db_nodes")
         if self._is_it_on_kubernetes():
-            initial_db_size = self.tester.params.get("k8s_n_scylla_pods_per_cluster", initial_db_size)
+            initial_db_size = self.tester.params.get("k8s_n_scylla_pods_per_cluster") or initial_db_size
 
         if isinstance(initial_db_size, int):
             decommission_nodes_number = min(cur_num_nodes_in_dc - initial_db_size, add_nodes_number)
