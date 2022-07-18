@@ -1991,7 +1991,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # hence this is a temporary workaround to make the rolling upgrade tests to pass, until the latest
         # patch of the supported releases will include the fix.
         package_manager = 'yum' if self.is_rhel_like() else 'apt'
-        self.remoter.run(f'sudo {package_manager} install zip unzip -y')
+        self.remoter.run('sudo {} install zip unzip -y'.format(package_manager))
         self.remoter.run('curl -s "https://get.sdkman.io" | bash')
         self.remoter.run(dedent("""
             source "/home/$USER/.sdkman/bin/sdkman-init.sh"
