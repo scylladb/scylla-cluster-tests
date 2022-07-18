@@ -4074,15 +4074,13 @@ class BaseLoaderSet():
 
         node.wait_cs_installed(verbose=verbose)
 
-        self.install_scylla_bench(node)
-
         # install docker
         docker_install = dedent("""
-            curl -fsSL get.docker.com -o get-docker.sh
-            sh get-docker.sh
-            systemctl enable docker
-            systemctl start docker
-        """)
+                    curl -fsSL get.docker.com -o get-docker.sh
+                    sh get-docker.sh
+                    systemctl enable docker
+                    systemctl start docker
+                """)
         node.remoter.run('sudo bash -cxe "%s"' % docker_install)
 
         node.remoter.run('sudo usermod -aG docker $USER', change_context=True)
