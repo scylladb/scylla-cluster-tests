@@ -138,7 +138,7 @@ class AwsBuilder:
                                              InstanceId=self.instance.instance_id)
 
     def configure(self):
-        self.region.create_sct_builders_security_group()
+        self.region.create_sct_ssh_security_group()
         self.create_elastic_ip()
         self.associate_elastic_ip()
         self.add_to_jenkins()

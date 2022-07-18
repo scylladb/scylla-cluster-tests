@@ -469,7 +469,7 @@ class AwsSctRunner(SctRunner):
                 "AssociatePublicIpAddress": True,
                 "SubnetId": subnet.subnet_id,
                 "Groups": [aws_region.sct_security_group.group_id,
-                           aws_region.sct_builder_security_group.group_id],
+                           aws_region.sct_ssh_security_group.group_id],
                 "DeleteOnTermination": True,
             }],
             TagSpecifications=[{
