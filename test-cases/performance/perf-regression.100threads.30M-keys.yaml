@@ -17,6 +17,7 @@ user_prefix: 'perf-regression'
 space_node_threshold: 644245094
 
 backtrace_decoding: false
+print_kernel_callstack: true
 
 store_perf_results: true
 send_email: true
