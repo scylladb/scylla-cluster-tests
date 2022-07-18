@@ -125,6 +125,7 @@ class TestBaseNode(unittest.TestCase, EventsUtilsMixin):
             assert event_b["line_number"] == 3
 
     def test_search_kernel_callstack(self):
+        self.node.parent_cluster = {'params': {'print_kernel_callstack': True}}
         self.node.system_log = os.path.join(os.path.dirname(__file__), 'test_data', 'kernel_callstack.log')
         self.node._read_system_log_and_publish_events(start_from_beginning=True)
         with self.get_raw_events_log().open() as events_file:
