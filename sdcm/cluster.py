@@ -3701,15 +3701,6 @@ class BaseLoaderSet():
 
         node.wait_cs_installed(verbose=verbose)
 
-        # scylla-bench
-        node.remoter.run('sudo yum install git -y')
-        node.remoter.run('curl -LO https://storage.googleapis.com/golang/go1.13.linux-amd64.tar.gz')
-        node.remoter.run('sudo tar -C /usr/local -xvzf go1.13.linux-amd64.tar.gz')
-        node.remoter.run("echo 'export GOPATH=$HOME/go' >> $HOME/.bashrc")
-        node.remoter.run("echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bashrc")
-        node.remoter.run("source $HOME/.bashrc")
-        node.remoter.run("go get github.com/scylladb/scylla-bench")
-
         # install ycsb
         ycsb_install = dedent("""
             cd ~/
