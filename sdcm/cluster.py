@@ -412,6 +412,30 @@ class BaseNode():  # pylint: disable=too-many-instance-attributes,too-many-publi
         self.lock = threading.Lock()
         self._init_port_mapping()
 
+        if self.node_type == "db" and self.parent_cluster.params.get("print_kernel_callstack"):
+            try:
+                cmd = dedent("""\
+                echo 'kernel.perf_event_paranoid = 0' >> /etc/sysctl.conf
+                sysctl -p
+                """)
+                self.remoter.run('sudo bash -cxe "%s"' % cmd)
+            except Exception:  # pylint: disable=broad-except
+                LOGGER.error("Encountered an unhadled exception while changing 'perf_event_paranoid' value",
+                             exc_info=True)
+
+    @cached_property
+    def node_type(self) -> 'str':
+        if 'db-node' in self.name:
+            self.log.info('node_type = db')
+            return 'db'
+        if 'monitor' in self.name:
+            self.log.info('node_type = monitor')
+            return 'monitor'
+        if 'loader' in self.name:
+            self.log.info('node_type = loader')
+            return 'loader'
+        return 'unknown'
+
     def _init_remoter(self, ssh_login_info):
         self.remoter = RemoteCmdRunner(**ssh_login_info)
         self.log.debug(self.remoter.ssh_debug_cmd())

@@ -242,6 +242,10 @@ class SCTConfiguration(dict):
         dict(name="backtrace_decoding", env="SCT_BACKTRACE_DECODING", type=boolean,
              help="""If True, all backtraces found in db nodes would be decoded automatically"""),
 
+        dict(name="print_kernel_callstack", env="SCT_PRINT_KERNEL_CALLSTACK", type=boolean,
+             help="""Scylla will print kernel callstack to logs if True, otherwise, it will try and may print a message
+             that it failed to."""),
+
         dict(name="instance_provision", env="SCT_INSTANCE_PROVISION", type=str,
              help="instance_provision: on_demand|spot_fleet|spot_low_price|spot_duration"),
 

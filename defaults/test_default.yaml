@@ -46,6 +46,7 @@ post_behavior_monitor_nodes: "keep-on-failure"
 cloud_credentials_path: '~/.ssh/support'
 
 backtrace_decoding: true
+print_kernel_callstack: false
 
 logs_transport: "rsyslog"
 
