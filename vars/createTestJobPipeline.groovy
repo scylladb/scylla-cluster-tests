@@ -33,6 +33,15 @@ def call() {
             disableConcurrentBuilds()
             buildDiscarder(logRotator(numToKeepStr: '20'))
         }
+        triggers {
+            parameterizedCron (
+                '''
+                    H 01 * * 0 %branch="scylla-master/releng-testing"
+                    H 01 * * 0 %branch="enterprise"
+                    H 01 * * 0 %branch="scylla-master"
+                '''
+            )
+        }
         stages {
             stage('Checkout sct') {
                 steps {
