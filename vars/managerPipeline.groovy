@@ -300,6 +300,9 @@ def call(Map pipelineParams) {
                 }
             }
             stage('Running Downstream Jobs') {  // Specifically placed after test stage, since downstream jobs should still be triggered when stages like collect logs fail.
+                options {
+                    timeout(time: 5, unit: 'MINUTES')
+                }
                 steps {
                     script {
                         if (currentBuild.currentResult == 'SUCCESS') {
