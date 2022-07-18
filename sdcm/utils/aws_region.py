@@ -35,7 +35,7 @@ class AwsRegion:
     SCT_INTERNET_GATEWAY_NAME = "SCT-2-igw"
     SCT_ROUTE_TABLE_NAME = "SCT-2-rt"
     SCT_KEY_PAIR_NAME = "scylla-qa-ec2"  # TODO: change legacy name to sct-keypair-aws
-    SCT_BUILDR_SSH_GROUP_NAME = 'SCT-builder-ssh-sg'
+    SCT_SSH_GROUP_NAME = 'SCT-ssh-sg'
 
     def __init__(self, region_name):
         self.region_name = region_name
@@ -441,18 +441,18 @@ class AwsRegion:
         return security_group
 
     @property
-    def sct_builder_security_group(self) -> EC2ServiceResource.SecurityGroup:
+    def sct_ssh_security_group(self) -> EC2ServiceResource.SecurityGroup:
         security_groups = self.client.describe_security_groups(Filters=[{"Name": "tag:Name",
-                                                                         "Values": [self.SCT_BUILDR_SSH_GROUP_NAME]}])
+                                                                         "Values": [self.SCT_SSH_GROUP_NAME]}])
         existing_sgs = security_groups.get("SecurityGroups", [])
         if len(existing_sgs) == 0:
             return None
         assert len(existing_sgs) == 1, \
-            f"More than 1 Security group with {self.SCT_BUILDR_SSH_GROUP_NAME} found " \
+            f"More than 1 Security group with {self.SCT_SSH_GROUP_NAME} found " \
             f"in {self.region_name}: {existing_sgs}!"
         return self.resource.SecurityGroup(existing_sgs[0]["GroupId"])  # pylint: disable=no-member
 
-    def create_sct_builders_security_group(self):
+    def create_sct_ssh_security_group(self):
         """
 
         Custom TCP	TCP	9093	0.0.0.0/0	Allow alert manager for all
@@ -460,19 +460,19 @@ class AwsRegion:
 
         """
         LOGGER.info("Creating Security Group...")
-        if self.sct_builder_security_group:
+        if self.sct_ssh_security_group:
             LOGGER.warning("Security Group '%s' already exists! Id: '%s'.",
-                           self.SCT_BUILDR_SSH_GROUP_NAME, self.sct_builder_security_group.group_id)
+                           self.SCT_SSH_GROUP_NAME, self.sct_ssh_security_group.group_id)
         else:
             result = self.client.create_security_group(Description='Security group for builders '
                                                        'that is used by SCT',
-                                                       GroupName=self.SCT_BUILDR_SSH_GROUP_NAME,
+                                                       GroupName=self.SCT_SSH_GROUP_NAME,
                                                        VpcId=self.sct_vpc.vpc_id)
             sg_id = result["GroupId"]
             security_group = self.resource.SecurityGroup(sg_id)  # pylint: disable=no-member
-            security_group.create_tags(Tags=[{"Key": "Name", "Value": self.SCT_BUILDR_SSH_GROUP_NAME}])
-            LOGGER.info("'%s' with id '%s' created. ", self.SCT_BUILDR_SSH_GROUP_NAME,
-                        self.sct_builder_security_group.group_id)
+            security_group.create_tags(Tags=[{"Key": "Name", "Value": self.SCT_SSH_GROUP_NAME}])
+            LOGGER.info("'%s' with id '%s' created. ", self.SCT_SSH_GROUP_NAME,
+                        self.sct_ssh_security_group.group_id)
             LOGGER.info("Creating common ingress rules...")
             security_group.authorize_ingress(
                 IpPermissions=[
@@ -518,6 +518,6 @@ class AwsRegion:
         self.create_sct_internet_gateway()
         self.configure_sct_route_table()
         self.create_sct_security_group()
-        self.create_sct_builders_security_group()
+        self.create_sct_ssh_security_group()
         self.create_sct_key_pair()
         LOGGER.info("Region configured successfully.")
