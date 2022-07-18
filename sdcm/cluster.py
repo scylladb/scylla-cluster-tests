@@ -1905,10 +1905,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def update_repo_cache(self):
         try:
             if self.is_rhel_like():
-                # try to avoid ERROR 404 of yum, reference https://wiki.centos.org/yum-errors
+                # The yum makecache command was removed from here since not needed and recommended.
+                # In the past it also caused ERROR 404 of yum, reference https://wiki.centos.org/yum-errors
+                # This fixes https://github.com/scylladb/scylla-cluster-tests/issues/4977
                 self.remoter.sudo('yum clean all')
                 self.remoter.sudo('rm -rf /var/cache/yum/')
-                self.remoter.sudo('yum makecache', retry=3)
             elif self.distro.is_sles:
                 self.remoter.sudo('zypper clean all')
                 self.remoter.sudo('rm -rf /var/cache/zypp/')
