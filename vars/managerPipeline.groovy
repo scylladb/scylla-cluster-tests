@@ -397,20 +397,6 @@ def call(Map pipelineParams) {
         post {
             always {
                 script {
-                    // jenkins artifacts are not available anymore - so we need to copy them
-                    try {
-
-                        dir('scylla-cluster-tests') {
-                            sh "rm -rf logs"
-                            copyLogsFromSctRunner('logs')
-                            archiveArtifacts artifacts: 'logs/**'
-                            sh "rm -rf logs"
-                        }
-                    } catch (Exception err) {
-                        echo err.getMessage()
-                        echo "Error detected during archiveArtifacts, but we will continue."
-                    }
-
                     def collect_logs = completed_stages['collect_logs']
                     def clean_resources = completed_stages['clean_resources']
                     def send_email = completed_stages['send_email']
