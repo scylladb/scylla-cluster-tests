@@ -31,3 +31,4 @@ append_scylla_yaml: |
 send_email: true
 email_recipients: ['scylla-perf-results@scylladb.com', 'cdc@scylladb.com']
 backtrace_decoding: false
+print_kernel_callstack: true
