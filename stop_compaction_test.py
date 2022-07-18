@@ -34,12 +34,13 @@ LOGGER = logging.getLogger(__name__)
 def record_sub_test_result(func: Callable):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
+        test_name = getattr(kwargs["compaction_func"], "__name__", "") or kwargs["compaction_func"].__class__.__name__
         try:
             func(*args, **kwargs)
-            return {kwargs["compaction_func"].__name__: ["SUCCESS"]}
+            return {test_name: ["SUCCESS", []]}
         except Exception as exc:  # pylint:disable=broad-except
             LOGGER.error(exc)
-            return {kwargs["compaction_func"].__name__: ["FAILURE"]}
+            return {test_name: ["FAILURE", [exc]]}
     return wrapper
 
 
@@ -89,26 +90,32 @@ class StopCompactionTest(ClusterTester):
         with ignore_compaction_stopped_exceptions():
             with self.subTest("Stop SCRUB compaction on c-s keyspace and cf"):
                 compaction_ops = CompactionOps(cluster=self.db_cluster, node=self.node)
-                self._stop_compaction_on_ks_cf_base_scenario(
-                    compaction_func=compaction_ops.trigger_scrub_compaction,
-                    watcher_expression="Scrubbing in abort mode",
-                    compaction_type=COMPACTION_TYPES.SCRUB
+                self.test_statuses.update(
+                    self._stop_compaction_on_ks_cf_base_scenario(
+                        compaction_func=compaction_ops.trigger_scrub_compaction,
+                        watcher_expression="Scrubbing in abort mode",
+                        compaction_type=COMPACTION_TYPES.SCRUB
+                    )
                 )
 
             with self.subTest("Stop CLEANUP compaction on c-s keyspace and cf"):
                 compaction_ops = CompactionOps(cluster=self.db_cluster, node=self.node)
-                self._stop_compaction_on_ks_cf_base_scenario(
-                    compaction_func=compaction_ops.trigger_cleanup_compaction,
-                    watcher_expression="Cleaning",
-                    compaction_type=COMPACTION_TYPES.CLEANUP
+                self.test_statuses.update(
+                    self._stop_compaction_on_ks_cf_base_scenario(
+                        compaction_func=compaction_ops.trigger_cleanup_compaction,
+                        watcher_expression="Cleaning",
+                        compaction_type=COMPACTION_TYPES.CLEANUP
+                    )
                 )
 
             with self.subTest("Stop VALIDATE compaction on c-s keyspace and cf"):
                 compaction_ops = CompactionOps(cluster=self.db_cluster, node=self.node)
-                self._stop_compaction_on_ks_cf_base_scenario(
-                    compaction_func=compaction_ops.trigger_validation_compaction,
-                    watcher_expression="Scrubbing in validate mode",
-                    compaction_type=COMPACTION_TYPES.SCRUB
+                self.test_statuses.update(
+                    self._stop_compaction_on_ks_cf_base_scenario(
+                        compaction_func=compaction_ops.trigger_validation_compaction,
+                        watcher_expression="Scrubbing in validate mode",
+                        compaction_type=COMPACTION_TYPES.SCRUB
+                    )
                 )
 
     def stop_major_compaction(self):
@@ -121,10 +128,14 @@ class StopCompactionTest(ClusterTester):
         stopped due to a user request.
         3. Assert that we found the line we were grepping for.
         """
-        self._stop_compaction_base_test_scenario(
-            compaction_func=StartStopMajorCompaction(
-                tester_obj=self,
-                termination_event=self.db_cluster.nemesis_termination_event))
+        self.test_statuses.update(
+            self._stop_compaction_base_test_scenario(
+                compaction_func=StartStopMajorCompaction(
+                    tester_obj=self,
+                    termination_event=self.db_cluster.nemesis_termination_event
+                )
+            )
+        )
 
     def stop_scrub_compaction(self):
         """
@@ -136,10 +147,14 @@ class StopCompactionTest(ClusterTester):
         stopped due to a user request.
         3. Assert that we found the line we were grepping for.
         """
-        self._stop_compaction_base_test_scenario(
-            compaction_func=StartStopScrubCompaction(
-                tester_obj=self,
-                termination_event=self.db_cluster.nemesis_termination_event))
+        self.test_statuses.update(
+            self._stop_compaction_base_test_scenario(
+                compaction_func=StartStopScrubCompaction(
+                    tester_obj=self,
+                    termination_event=self.db_cluster.nemesis_termination_event
+                )
+            )
+        )
 
     def stop_cleanup_compaction(self):
         """
@@ -151,10 +166,14 @@ class StopCompactionTest(ClusterTester):
         stopped due to a user request.
         3. Assert that we found the line we were grepping for.
         """
-        self._stop_compaction_base_test_scenario(
-            compaction_func=StartStopCleanupCompaction(
-                tester_obj=self,
-                termination_event=self.db_cluster.nemesis_termination_event))
+        self.test_statuses.update(
+            self._stop_compaction_base_test_scenario(
+                compaction_func=StartStopCleanupCompaction(
+                    tester_obj=self,
+                    termination_event=self.db_cluster.nemesis_termination_event
+                )
+            )
+        )
 
     def stop_validation_compaction(self):
         """
@@ -167,10 +186,14 @@ class StopCompactionTest(ClusterTester):
         compaction being stopped due to a user request.
         3. Assert that we found the line we were grepping for.
         """
-        self._stop_compaction_base_test_scenario(
-            compaction_func=StartStopValidationCompaction(
-                tester_obj=self,
-                termination_event=self.db_cluster.nemesis_termination_event))
+        self.test_statuses.update(
+            self._stop_compaction_base_test_scenario(
+                compaction_func=StartStopValidationCompaction(
+                    tester_obj=self,
+                    termination_event=self.db_cluster.nemesis_termination_event
+                )
+            )
+        )
 
     def stop_upgrade_compaction(self):
         """
@@ -219,6 +242,10 @@ class StopCompactionTest(ClusterTester):
             self.wait_no_compactions_running()
             ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
             self._grep_log_and_assert(self.node)
+            self.test_statuses.update({"StartStopUpgradeCompaction": ["SUCCESS", []]})
+        except self.failureException as exc:  # pylint:disable=broad-except
+            self.test_statuses.update({"StartStopUpgradeCompaction": ["FAILURE", [exc]]})
+            raise exc
         finally:
             self.node.running_nemesis = False
 
@@ -288,6 +315,10 @@ class StopCompactionTest(ClusterTester):
                              stop_func=stop_reshape_func)
         try:
             ParallelObject(objects=[trigger_func, watch_func], timeout=timeout).call_objects()
+            self.test_statuses.update({"StartStopReshapeCompaction": ["SUCCESS", []]})
+        except self.failureException as exc:  # pylint:disable=broad-except
+            self.test_statuses.update({"StartStopReshapeCompaction": ["FAILURE", [exc]]})
+            raise exc
         finally:
             self._grep_log_and_assert(node)
 
