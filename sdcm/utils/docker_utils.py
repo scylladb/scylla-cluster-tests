@@ -16,7 +16,7 @@ import re
 import logging
 import warnings
 from pprint import pformat
-from types import SimpleNamespace
+from types import SimpleNamespace  # pylint: disable=no-name-in-module
 from typing import List, Optional, Union, Any, Tuple
 from functools import cache
 
