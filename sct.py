@@ -1477,6 +1477,7 @@ cli.add_command(configure_jenkins_builders)
 cli.add_command(sct_ssh.ssh)
 cli.add_command(sct_ssh.tunnel)
 cli.add_command(sct_ssh.copy_cmd)
+cli.add_command(sct_ssh.attach_test_sg_cmd)
 
 if __name__ == '__main__':
     cli()
