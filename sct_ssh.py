@@ -112,6 +112,45 @@ def select_instance(region: str = None, **tags) -> dict | None:
     return question.ask()
 
 
+def select_instance_group(region: str = None, **tags) -> dict | None:
+    user = tags.get('user')
+    test_id = tags.get('test_id')
+    node_name = tags.get('node_name')
+    tags = {}
+    if user:
+        tags.update({"RunByUser": user})
+    if test_id:
+        tags.update({"TestId": test_id})
+    if node_name:
+        tags.update({'Name': node_name})
+    vms = list_instances_aws(tags, running=True, region_name=region)
+
+    if len(vms) == 1:
+        return vms[0]
+
+    if not vms:
+        click.echo(click.style("Found no matching instances", fg='red'))
+        return {}
+
+    choices = [
+        Choice(f"{get_tags(vm).get('Name')} - {vm['PublicIpAddress']} {vm['PrivateIpAddress']} - {get_region(vm)}",
+               value=vm, checked=True) for vm in vms
+    ]
+    # create the question object
+    question = questionary.checkbox(
+        "Select machine: ",
+        choices=choices,
+    )
+
+    @question.application.key_bindings.add('x', eager=True)
+    @question.application.key_bindings.add('q', eager=True)
+    def other(event):
+        event.app.exit(exception=KeyboardInterrupt, style="class:aborting")
+
+    # prompt the user for an answer
+    return question.ask()
+
+
 # pylint: disable=too-many-arguments
 @click.command("ssh", help="Connect to any SCT machine on AWS")
 @click.option("-u", "--user", default=None,
@@ -193,3 +232,25 @@ def copy_cmd(user, test_id, region, force_use_public_ip, src, dest):
         pty.spawn(shlex.split(f'scp {proxy_command}'
                               f' -i ~/.ssh/scylla-qa-ec2 -o "UserKnownHostsFile=/dev/null" '
                               f'-o "StrictHostKeyChecking=no" -o ServerAliveInterval=10 -C {src} {dest}'))
+
+
+@click.command("attach-test-sg", help="Attach test default security group to a group of instances")
+@click.option("-u", "--user", default=None,
+              help="User to search for (RunByUser tag)")
+@click.option("-t", "--test-id", default=None, help="test id to search for")
+@click.option("-r", "--region", default=None, help="region to use, default search across all regions")
+@click.option("-g", "--group-id", default=None, help="GroupId to use, default to create one base on TestId")
+def attach_test_sg_cmd(user, test_id, region, group_id):
+    assert user or test_id
+    instances = select_instance_group(region=region, test_id=test_id, user=user)
+
+    for i in instances:
+        aws_region: AwsRegion = AwsRegion(get_region(i))
+        instance = aws_region.resource.Instance(i['InstanceId'])
+        click.echo(click.style(f"attaching test SG to {get_tags(i).get('Name', 'N/A')}", fg='green'))
+        if group_id:
+            group_id_to_add = group_id
+        else:
+            group_id_to_add = aws_region.provide_sct_test_security_group(get_tags(i).get('TestId', 'N/A')).group_id
+        all_sg_ids = list(set([sg['GroupId'] for sg in instance.security_groups] + [group_id_to_add]))
+        instance.modify_attribute(Groups=all_sg_ids)
