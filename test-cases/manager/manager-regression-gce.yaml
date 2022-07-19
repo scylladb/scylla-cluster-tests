@@ -14,5 +14,5 @@ use_preinstalled_scylla: true
 user_prefix: manager-regression
 space_node_threshold: 6442
 
-gce_datacenter: 'us-east1'
+region_name: 'us-east1'
 backup_bucket_location: 'manager-backup-tests-us-east1'

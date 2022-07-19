@@ -5,7 +5,7 @@ def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCl
 
 def call(Map pipelineParams) {
 
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name)
+    def builder = getJenkinsLabels(params.backend, params.region)
     def functional_test = pipelineParams.functional_test
 
     pipeline {
@@ -26,14 +26,11 @@ def call(Map pipelineParams) {
                name: 'backend')
 
             string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
-               description: 'Supported: us-east-1|eu-west-1|eu-west-2|eu-north-1|random (randomly select region)',
+               description: 'AWS: us-east-1|eu-west-1|eu-west-2|eu-north-1|random (randomly select region),
+               GCE: us-east1|us-west1|random,
+               Azure: eastus|random',
                name: 'region')
-            string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
-                   description: 'GCE datacenter',
-                   name: 'gce_datacenter')
-            string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
-                   description: 'Azure location',
-                   name: 'azure_region_name')
+
             string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
                description: 'Availability zone',
                name: 'availability_zone')

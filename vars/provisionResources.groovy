@@ -23,14 +23,6 @@ def call(Map params, String region){
         export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
     fi
 
-    if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
-        export SCT_GCE_DATACENTER=${params.gce_datacenter}
-    fi
-
-    if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
-        export SCT_AZURE_REGION_NAME=${params.azure_region_name}
-    fi
-
     if [[ -n "${params.new_version ? params.new_version : ''}" ]] ; then
         export SCT_NEW_VERSION="${params.new_version}"
     fi

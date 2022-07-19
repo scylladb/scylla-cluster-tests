@@ -4,7 +4,7 @@ import groovy.json.JsonSlurper
 def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCleanupTimeout) = [0,0,0,0,0]
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
+    def builder = getJenkinsLabels(params.backend, params.region)
 
     pipeline {
         agent none
@@ -19,16 +19,13 @@ def call(Map pipelineParams) {
                name: 'backend')
 
             string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
-               description: 'us-east-1|eu-west-1',
+               description: 'AWS: us-east-1|eu-west-1
+               GCE: us-east1',
                name: 'region')
 
             string(defaultValue: "${pipelineParams.get('availability_zone', 'a')}",
                 description: 'Availability zone',
                 name: 'availability_zone')
-
-            string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
-                   description: 'GCE datacenter',
-                   name: 'gce_datacenter')
 
             string(defaultValue: '', description: '', name: 'scylla_ami_id')
             string(defaultValue: '', description: '', name: 'scylla_version')
@@ -186,10 +183,6 @@ def call(Map pipelineParams) {
                                                         export SCT_CONFIG_FILES=${test_config}
 
                                                         export SCT_AVAILABILITY_ZONE="${params.availability_zone}"
-
-                                                        if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
-                                                            export SCT_GCE_DATACENTER=${params.gce_datacenter}
-                                                        fi
 
                                                         export SCT_EMAIL_RECIPIENTS="${email_recipients}"
                                                         if [[ ! -z "${params.scylla_ami_id}" ]] ; then

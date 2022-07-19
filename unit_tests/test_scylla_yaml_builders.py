@@ -140,7 +140,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 'cluster_name': 'test-cluster',
                 'params': {
                     'cluster_backend': 'gce',
-                    'gce_datacenter': 'eu-west-1',
+                    'region_name': 'eu-west-1',
                     'intra_node_comm_public': False,
                     'authenticator': 'com.scylladb.auth.SaslauthdAuthenticator',
                     'authorizer': 'CassandraAuthorizer',
@@ -181,7 +181,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 },
                 'params': {
                     'cluster_backend': 'gce',
-                    'gce_datacenter': 'eu-west-1 eu-west-2',
+                    'region_name': 'eu-west-1 eu-west-2',
                     'intra_node_comm_public': False,
                     'authenticator': 'com.scylladb.auth.SaslauthdAuthenticator',
                     'authorizer': 'CassandraAuthorizer',
@@ -560,11 +560,7 @@ class IntegrationTests(unittest.TestCase):
                 conf = SCTConfiguration()
                 test_config = TestConfig()
 
-                cluster_backend = conf.get('cluster_backend')
-                if cluster_backend == 'aws':
-                    test_config.set_multi_region(len(conf.get('region_name').split()) > 1)
-                elif cluster_backend == 'gce':
-                    test_config.set_multi_region(len(conf.get('gce_datacenter').split()) > 1)
+                test_config.set_multi_region(len(conf.region_names) > 1)
 
                 test_config.set_ip_ssh_connections(conf.get(key='ip_ssh_connections'))
                 test_config.set_intra_node_comm_public(conf.get('intra_node_comm_public'))

@@ -46,14 +46,14 @@ def fallback_on_demand():
 @pytest.fixture
 def params():
     EnvConfig = namedtuple('EnvConfig',
-                           ["SCT_CLUSTER_BACKEND", "SCT_TEST_ID", "SCT_CONFIG_FILES", "SCT_AZURE_REGION_NAME",
+                           ["SCT_CLUSTER_BACKEND", "SCT_TEST_ID", "SCT_CONFIG_FILES", "SCT_REGION_NAME",
                             "SCT_N_DB_NODES",
                             "SCT_AZURE_IMAGE_DB", "SCT_N_LOADERS", "SCT_N_MONITORS_NODES"])
     env_config = EnvConfig(
         SCT_CLUSTER_BACKEND="azure",
         SCT_TEST_ID=f"unit-test-{str(uuid.uuid4())}",
         SCT_CONFIG_FILES=f'["{Path(__file__).parent.absolute()}/azure_default_config.yaml"]',
-        SCT_AZURE_REGION_NAME="['eastus', 'easteu']",
+        SCT_REGION_NAME="['eastus', 'easteu']",
         SCT_N_DB_NODES="3 1",
         SCT_AZURE_IMAGE_DB="/subscriptions/some_image_id",
         SCT_N_LOADERS="2 0",

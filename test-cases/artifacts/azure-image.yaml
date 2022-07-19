@@ -1,5 +1,5 @@
 cluster_backend: 'azure'
-azure_region_name: "eastus"
+region_name: "eastus"
 use_preinstalled_scylla: true
 backtrace_decoding: false
 azure_image_db: ''

@@ -1,7 +1,7 @@
 #!groovy
 
 def call(Map pipelineParams) {
-    def builder = getJenkinsLabels(pipelineParams.backend, pipelineParams.region)
+    def builder = getJenkinsLabels(pipelineParams.backend)
     pipeline {
         agent {
             label {

@@ -17,9 +17,9 @@ def createRunConfiguration(String backend) {
         region: 'eu-west-1',
     ]
     if (backend == 'gce') {
-        configuration.gce_datacenter = "us-east1"
+        configuration.region = 'us-east1'
     } else if (backend == 'azure') {
-        configuration.azure_region_name = 'eastus'
+        configuration.region = 'eastus'
     } else if (backend == 'docker') {
         configuration.test_config = "test-cases/PR-provision-test-docker.yaml"
     } else if (backend == 'k8s-local-kind-aws') {
@@ -153,7 +153,7 @@ pipeline {
                         if (pullRequestContainsLabels("test-provision,test-provision-${backend}")) {
                             sctParallelTests["provision test on ${backend}"] = {
                                 def curr_params = createRunConfiguration(backend)
-                                def builder = getJenkinsLabels(curr_params.backend, curr_params.region, curr_params.gce_datacenter, curr_params.azure_region_name)
+                                def builder = getJenkinsLabels(curr_params.backend, curr_params.region)
                                 node(builder.label) {
                                     withEnv(["SCT_TEST_ID=${UUID.randomUUID().toString()}",]) {
                                         script {

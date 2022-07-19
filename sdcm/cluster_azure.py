@@ -43,7 +43,7 @@ class AzureNode(cluster.BaseNode):
                  credentials, parent_cluster,
                  node_prefix='node', node_index=1,
                  base_logdir=None, dc_idx=0):
-        region = parent_cluster.params.get('azure_region_name')[dc_idx]
+        region = parent_cluster.params.region_names[dc_idx]
         name = f"{node_prefix}-{region}-{node_index}".lower()
         self.node_index = node_index
         self._instance = azure_instance
@@ -165,7 +165,7 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
         self._credentials = credentials
         self._instance_type = instance_type
         self._user_name = user_name
-        self._azure_region_names = region_names
+        self._region_names = region_names
         self._node_prefix = node_prefix
         self._definition_builder = region_definition_builder.get_builder(params, test_config=self.test_config)
         super().__init__(cluster_uuid=cluster_uuid,
@@ -211,7 +211,7 @@ class AzureCluster(cluster.BaseCluster):   # pylint: disable=too-many-instance-a
 
     def _create_instances(self, count, dc_idx=0) -> List[VmInstance]:
         region = self._definition_builder.regions[dc_idx]
-        assert region, "no region provided, please add `azure_region_name` param"
+        assert region, "no region provided, please add `region_name` param"
         pricing_model = PricingModel.SPOT if 'spot' in self.instance_provision else PricingModel.ON_DEMAND
         definitions = []
         for node_index in range(self._node_index + 1, self._node_index + count + 1):

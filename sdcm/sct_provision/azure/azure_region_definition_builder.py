@@ -38,4 +38,3 @@ mapper: Dict[NodeTypeType, ConfigParamsMap] = {"scylla-db": db_map,
 class AzureDefinitionBuilder(DefinitionBuilder):
     BACKEND = "azure"
     SCT_PARAM_MAPPER = mapper
-    REGION_MAP = "azure_region_name"

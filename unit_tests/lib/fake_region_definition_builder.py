@@ -39,7 +39,6 @@ mapper: Dict[NodeTypeType, ConfigParamsMap] = {"scylla-db": db_map,
 class FakeDefinitionBuilder(DefinitionBuilder):
     BACKEND = "fake"
     SCT_PARAM_MAPPER = mapper
-    REGION_MAP = "fake_region_name"
 
     @staticmethod
     def _get_ssh_key() -> SSHKey:

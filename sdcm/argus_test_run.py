@@ -207,16 +207,6 @@ class ArgusTestRun:
         "unknown": _prepare_unknown_resource_setup,
     }
 
-    REGION_PROPERTY_MAP = {
-        "aws": "region_name",
-        "aws-siren": "region_name",
-        "k8s-eks": "region_name",
-        "gce": "gce_datacenter",
-        "gce-siren": "gce_datacenter",
-        "k8s-gke": "gce_datacenter",
-        "azure": "azure_region_name",
-        "default": "region_name",
-    }
     _config: ArgusConfig = None
 
     def __init__(self):
@@ -257,9 +247,7 @@ class ArgusTestRun:
 
         LOGGER.info("Preparing Resource Setup...")
         backend = sct_config.get("cluster_backend")
-        region_key = cls.REGION_PROPERTY_MAP.get(backend, cls.REGION_PROPERTY_MAP["default"])
-        raw_regions = sct_config.get(region_key) or "undefined_region"
-        regions = raw_regions.split() if isinstance(raw_regions, str) else raw_regions
+        regions = sct_config.region_names
         primary_region = regions[0]
 
         sct_runner_info = CloudInstanceDetails(public_ip=get_sct_runner_ip(), provider=backend,

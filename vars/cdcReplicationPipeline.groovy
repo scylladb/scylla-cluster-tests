@@ -16,9 +16,6 @@ def runSctTest(Map params, String region){
 
     export SCT_CLUSTER_BACKEND="${params.backend}"
     export SCT_REGION_NAME=${current_region}
-    if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
-        export SCT_GCE_DATACENTER=${params.gce_datacenter}
-    fi
     export SCT_CONFIG_FILES=${test_config}
     export SCT_COLLECT_LOGS=false
 
@@ -71,7 +68,7 @@ def runSctTest(Map params, String region){
 
 def call(Map pipelineParams) {
 
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
+    def builder = getJenkinsLabels(params.backend, params.region)
 
     pipeline {
         agent {
@@ -90,11 +87,9 @@ def call(Map pipelineParams) {
                name: 'backend')
 
             string(defaultValue: "${pipelineParams.get('region', 'eu-west-1')}",
-               description: 'Supported: us-east-1|eu-west-1|eu-west-2|eu-north-1|random (randomly select region)',
+               description: 'AWS: us-east-1|eu-west-1|eu-west-2|eu-north-1|random (randomly select region),
+               GCE: us-east1',
                name: 'region')
-            string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
-                   description: 'GCE datacenter',
-                   name: 'gce_datacenter')
             string(defaultValue: "a",
                description: 'Availability zone',
                name: 'availability_zone')

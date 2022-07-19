@@ -56,7 +56,6 @@ class DefinitionBuilder(abc.ABC):
     """
     BACKEND: str
     SCT_PARAM_MAPPER: Dict[NodeTypeType, ConfigParamsMap]
-    REGION_MAP: str
 
     def __init__(self, params: SCTConfiguration, test_config: TestConfig) -> None:
         self.params = params
@@ -65,7 +64,7 @@ class DefinitionBuilder(abc.ABC):
 
     @property
     def regions(self) -> List[str]:
-        return self.params.get(self.REGION_MAP)
+        return self.params.region_names
 
     def build_instance_definition(self, region: str, node_type: NodeTypeType, index: int) -> InstanceDefinition:
         """Builds one instance definition of given type and index for given region"""
@@ -129,8 +128,7 @@ class DefinitionBuilder(abc.ABC):
         When parameter string has less regions defined than regions, fills with zero for each missing region.
 
         E.g. regions: 'eastus westus centralus' and n_db_nodes: '2 1' - will generate [2, 1, 0] list"""
-        regions = self.params.get(self.REGION_MAP)
-        region_count = len(regions)
+        region_count = len(self.regions)
         return ([int(v) for v in str(n_str).split()] + [0] * region_count)[:region_count]
 
     def _get_user_data_objects(self, instance_name: str, node_type: NodeTypeType) -> List[SctUserDataObject]:

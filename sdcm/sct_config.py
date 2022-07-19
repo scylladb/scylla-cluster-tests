@@ -559,7 +559,7 @@ class SCTConfiguration(dict):
              help="AWS image type of the oracle node"),
 
         dict(name="region_name", env="SCT_REGION_NAME", type=str_or_list,
-             help="AWS regions to use"),
+             help="AWS/GCE/Azure regions/datacenters/locations to use"),
 
         dict(name="security_group_ids", env="SCT_SECURITY_GROUP_IDS", type=str_or_list,
              help="AWS security groups ids to use"),
@@ -628,10 +628,6 @@ class SCTConfiguration(dict):
         dict(name="gce_project", env="SCT_GCE_PROJECT", type=str,
              help="gcp project name to use"),
 
-        dict(name="gce_datacenter", env="SCT_GCE_DATACENTER", type=str_or_list,
-             help="Supported: us-east1 - means that the zone will be selected automatically or "
-                  "you can mention the zone explicitly, for example: us-east1-b"),
-
         dict(name="gce_network", env="SCT_GCE_NETWORK", type=str,
              help=""),
 
@@ -690,9 +686,6 @@ class SCTConfiguration(dict):
              help=""),
 
         # azure options
-        dict(name="azure_region_name", env="SCT_AZURE_REGION_NAME", type=str_or_list,
-             help="Supported: eastus "),
-
         dict(name="azure_instance_type_loader", env="SCT_AZURE_INSTANCE_TYPE_LOADER", type=str,
              help=""),
 
@@ -1303,12 +1296,12 @@ class SCTConfiguration(dict):
     ]
 
     required_params = ['cluster_backend', 'test_duration', 'n_db_nodes', 'n_loaders', 'use_preinstalled_scylla',
-                       'user_credentials_path', 'root_disk_size_db', "root_disk_size_monitor", 'root_disk_size_loader']
+                       'user_credentials_path', 'root_disk_size_db', "root_disk_size_monitor", 'root_disk_size_loader', 'region_name']
 
     # those can be added to a json scheme to validate / or write the validation code for it to be a bit clearer output
     backend_required_params = {
         'aws': ['user_prefix', "instance_type_loader", "instance_type_monitor", "instance_type_db",
-                "region_name", "ami_id_db_scylla", "ami_id_loader",
+                "ami_id_db_scylla", "ami_id_loader",
                 "ami_id_monitor", "aws_root_disk_name_monitor", "ami_db_scylla_user",
                 "ami_monitor_user"],
 
@@ -1316,12 +1309,12 @@ class SCTConfiguration(dict):
                 'gce_root_disk_type_db',  'gce_n_local_ssd_disk_db',
                 'gce_instance_type_loader', 'gce_root_disk_type_loader', 'gce_n_local_ssd_disk_loader',
                 'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
-                'gce_n_local_ssd_disk_monitor', 'gce_datacenter'],
+                'gce_n_local_ssd_disk_monitor'],
 
         'azure': ['user_prefix', 'azure_image_db', 'azure_image_username', 'azure_instance_type_db',
                   'azure_root_disk_type_db', 'azure_n_local_ssd_disk_db',
                   'azure_instance_type_loader', 'azure_root_disk_type_loader', 'azure_n_local_ssd_disk_loader',
-                  'azure_instance_type_monitor', 'azure_n_local_ssd_disk_monitor', 'azure_region_name'],
+                  'azure_instance_type_monitor', 'azure_n_local_ssd_disk_monitor'],
 
         'docker': ['user_credentials_path', 'scylla_version'],
 
@@ -1334,7 +1327,7 @@ class SCTConfiguration(dict):
                       'gce_root_disk_type_db', 'gce_n_local_ssd_disk_db',
                       'gce_instance_type_loader', 'gce_root_disk_type_loader', 'gce_n_local_ssd_disk_loader',
                       'gce_instance_type_monitor', 'gce_root_disk_type_monitor',
-                      'gce_n_local_ssd_disk_monitor', 'gce_datacenter'],
+                      'gce_n_local_ssd_disk_monitor'],
 
         'k8s-local-kind': ['user_credentials_path', 'scylla_version', 'scylla_mgmt_agent_version',
                            'k8s_scylla_operator_helm_repo', 'k8s_scylla_datacenter', 'k8s_scylla_rack',
@@ -1387,7 +1380,7 @@ class SCTConfiguration(dict):
 
     per_provider_multi_region_params = {
         "aws": ['region_name', 'n_db_nodes', 'ami_id_db_scylla', 'ami_id_loader'],
-        "gce": ['gce_datacenter', 'n_db_nodes']
+        "gce": ['region_name', 'n_db_nodes']
     }
 
     stress_cmd_params = [
@@ -1515,7 +1508,7 @@ class SCTConfiguration(dict):
                 self["gce_image_db"] = gce_image.extra["selfLink"]
             elif not self.get("azure_image_db") and self.get("cluster_backend") == "azure":
                 scylla_azure_images = []
-                for region in self.get('azure_region_name'):
+                for region in region_names:
                     azure_image = get_scylla_images(scylla_version, region)[0]
                     self.log.debug("Found AMI %s for scylla_version='%s' in %s",
                                    azure_image.name, scylla_version, region)
@@ -1755,7 +1748,7 @@ class SCTConfiguration(dict):
         self._check_version_supplied(backend)
         self._check_per_backend_required_values(backend)
         if backend in ['aws', 'gce'] and db_type != 'cloud_scylla':
-            self._check_multi_region_params(backend)
+            self._check_multi_region_params()
 
         self._verify_data_volume_configuration(backend)
 
@@ -1804,9 +1797,7 @@ class SCTConfiguration(dict):
             if opt['name'] in self:
                 self._validate_value(opt)
 
-    def _check_multi_region_params(self, backend):
-        region_param_names = {"aws": "region_name", "gce": "gce_datacenter"}
-        current_region_param_name = region_param_names[backend]
+    def _check_multi_region_params(self):
         region_count = {}
         for opt in self.multi_region_params:
             val = self.get(opt)
@@ -1816,7 +1807,7 @@ class SCTConfiguration(dict):
                 region_count[opt] = len(val)
             else:
                 region_count[opt] = 1
-        if not all(region_count[current_region_param_name] == x for x in region_count.values()):
+        if not all(region_count["region_name"] == x for x in region_count.values()):
             raise ValueError("not all multi region values are equal: \n\t{}".format(region_count))
 
     def _validate_seeds_number(self):

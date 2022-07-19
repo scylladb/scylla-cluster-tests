@@ -128,14 +128,7 @@ class ScyllaYamlAttrBuilderBase(AttrBuilder):
 
     @property
     def _regions(self) -> List[str]:
-        if self._cloud_provider == 'aws':
-            regions = self.params.get('region_name')
-        elif self._cloud_provider == 'gce':
-            regions = self.params.get('gce_datacenter')
-        elif self._cloud_provider == 'azure':
-            regions = self.params.get('region_name')
-        else:
-            regions = []
+        regions = self.params.get('region_name')
         if isinstance(regions, list):
             return regions
         if isinstance(regions, str):

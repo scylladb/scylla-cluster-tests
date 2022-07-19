@@ -1,7 +1,7 @@
 #!groovy
 import groovy.json.JsonSlurper
 
-def call(String backend, String region=null, String datacenter=null, String location=null) {
+def call(String backend, String region=null) {
     try {
         regionList = new JsonSlurper().parseText(region)
         region = regionList[0]
@@ -28,22 +28,19 @@ def call(String backend, String region=null, String datacenter=null, String loca
                           'azure-eastus': 'azure-sct-builders']
 
     def cloud_provider = getCloudProviderFromBackend(backend)
-
-    if ((cloud_provider == 'aws' && region) || (cloud_provider == 'gce' && datacenter) || (cloud_provider == 'azure' && location)) {
+    if (cloud_provider in ['aws', 'gce', 'azure'] && region) {
         def supported_regions = []
 
         if (cloud_provider == 'aws') {
             supported_regions = ["eu-west-2", "eu-north-1", "eu-central-1"]
         } else if (cloud_provider == 'gce') {
             supported_regions = ["us-east1", "us-west1"]
-            region = datacenter
         } else {
             supported_regions = ["eastus"]
-            region = location
         }
 
         println("Finding builder for region: " + region)
-        if (region == "random" || datacenter == "random" || location == "random") {
+        if (region == "random") {
             Collections.shuffle(supported_regions)
             region = supported_regions[0]
         }

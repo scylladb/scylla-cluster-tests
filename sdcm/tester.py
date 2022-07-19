@@ -302,12 +302,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.log.debug('Post behavior for loader nodes %s', post_behavior_loader_nodes)
         self.test_config.keep_cluster(node_type='loader_nodes', val=post_behavior_loader_nodes)
         self.test_config.set_duration(self._duration)
-        cluster_backend = self.params.get('cluster_backend')
-        if cluster_backend == 'aws':
-            self.test_config.set_multi_region(len(self.params.get('region_name').split()) > 1)
-        elif cluster_backend == 'gce':
-            self.test_config.set_multi_region(len(self.params.get('gce_datacenter').split()) > 1)
-
+        self.test_config.set_multi_region(len(self.params.region_names) > 1)
         if self.params.get("backup_bucket_backend") == "azure":
             self.test_config.set_backup_azure_blob_credentials()
 
@@ -849,7 +844,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         user_prefix = self.params.get('user_prefix')
 
-        services = get_gce_services(self.params.get('gce_datacenter').split())
+        services = get_gce_services(self.params.region_names)
         assert len(services) in (1, len(db_info['n_nodes']),)
         gce_datacenter, services = list(services.keys()), list(services.values())
         TEST_LOG.info("Using GCE AZs: %s", gce_datacenter)
@@ -929,7 +924,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def get_cluster_azure(self, loader_info, db_info, monitor_info):
         # pylint: disable=too-many-branches,too-many-statements,too-many-locals
-        regions = self.params.get('azure_region_name')
+        regions = self.params.region_names
         test_id = str(TestConfig().test_id())
         provisioners: List[AzureProvisioner] = []
         for region in regions:
@@ -997,7 +992,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     def get_cluster_aws(self, loader_info, db_info, monitor_info):
         # pylint: disable=too-many-locals,too-many-statements,too-many-branches
-        regions = self.params.get('region_name').split()
+        regions = self.params.region_names
 
         if loader_info['n_nodes'] is None:
             n_loader_nodes = self.params.get('n_loaders')
@@ -1030,7 +1025,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         user_credentials = self.params.get('user_credentials_path')
 
-        regions = self.params.get('region_name').split()
+        regions = self.params.region_names
         services = get_ec2_services(regions)
 
         for _ in regions:
@@ -1251,7 +1246,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def get_cluster_k8s_gke(self):
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
 
-        services = get_gce_services(self.params.get('gce_datacenter').split())
+        services = get_gce_services(self.params.region_names)
         assert len(services) == 1, "Doesn't support multi DC setup for `k8s-gke' backend"
 
         services, gce_datacenter = list(services.values()), list(services.keys())
@@ -3233,7 +3228,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         config_file_name = ";".join(os.path.splitext(os.path.basename(cfg))[0] for cfg in self.params["config_files"])
         test_status = self.get_test_status()
         backend = self.params.get("cluster_backend")
-        region_name = self.params.get('region_name') or self.params.get('gce_datacenter')
+        region_name = self.params.region_names
         build_id = f'#{os.environ.get("BUILD_NUMBER")}' if os.environ.get('BUILD_NUMBER', '') else ''
         scylla_version = alive_node.scylla_version_detailed if alive_node else "N/A"
         kernel_version = alive_node.kernel_version if alive_node else "N/A"
