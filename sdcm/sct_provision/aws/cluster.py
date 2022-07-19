@@ -242,7 +242,7 @@ class DBCluster(ClusterBase):
         return ScyllaUserDataBuilder(
             params=self.params,
             cluster_name=self.cluster_name,
-            old_format=False,
+            user_data_format_version=self.params.get('user_data_format_version'),
             syslog_host_port=self._test_config.get_logging_service_host_port(),
         ).to_string()
 
@@ -260,7 +260,7 @@ class OracleDBCluster(ClusterBase):
         return ScyllaUserDataBuilder(
             params=self.params,
             cluster_name=self.cluster_name,
-            old_format=False,
+            user_data_format_version=self.params.get('oracle_user_data_format_version'),
             syslog_host_port=self._test_config.get_logging_service_host_port(),
         ).to_string()
 
