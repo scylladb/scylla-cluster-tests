@@ -1942,6 +1942,22 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         # update repo cache after upgrade
         self.update_repo_cache()
 
+    def install_sdkman_workaround(self):
+        # THIS IS A WORKAROUND FOR ISSUE https://github.com/scylladb/scylla/issues/10442
+        # the issue is related to JDK version, and the fix was added to later patches of multiple base versions,
+        # hence this is a temporary workaround to make the rolling upgrade tests to pass, until the latest
+        # patch of the supported releases will include the fix.
+        package_manager = 'yum' if self.is_rhel_like() else 'apt'
+        self.remoter.sudo(f'{package_manager} install zip unzip -y')
+        self.remoter.run('curl -s "https://get.sdkman.io" | bash')
+        self.remoter.run(shell_script_cmd("""
+                    source "/home/$USER/.sdkman/bin/sdkman-init.sh"
+                    sed -i s/sdkman_auto_answer=false/sdkman_auto_answer=true/  ~/.sdkman/etc/config
+                    sed -i s/sdkman_auto_env=false/sdkman_auto_env=true/  ~/.sdkman/etc/config
+                    sdk install java 8.0.302-open
+                    sdk default java 8.0.302-open
+                """))
+
     def install_scylla(self, scylla_repo):
         """
         Download and install scylla on node
@@ -2041,20 +2057,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
                 'sudo apt-get install -y '
                 ' {} '.format(self.scylla_pkg()))
 
-        # THIS IS A WORKAROUND FOR ISSUE https://github.com/scylladb/scylla/issues/10442
-        # the issue is related to JDK version, and the fix was added to later patches of multiple base versions,
-        # hence this is a temporary workaround to make the rolling upgrade tests to pass, until the latest
-        # patch of the supported releases will include the fix.
-        package_manager = 'yum' if self.is_rhel_like() else 'apt'
-        self.remoter.sudo(f'{package_manager} install zip unzip -y')
-        self.remoter.run('curl -s "https://get.sdkman.io" | bash')
-        self.remoter.run(shell_script_cmd("""
-            source "/home/$USER/.sdkman/bin/sdkman-init.sh"
-            sed -i s/sdkman_auto_answer=false/sdkman_auto_answer=true/  ~/.sdkman/etc/config
-            sed -i s/sdkman_auto_env=false/sdkman_auto_env=true/  ~/.sdkman/etc/config
-            sdk install java 8.0.302-open
-            sdk default java 8.0.302-open
-        """))
+        self.install_sdkman_workaround()
 
     def offline_install_scylla(self, unified_package, nonroot):
         """

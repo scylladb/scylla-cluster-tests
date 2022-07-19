@@ -506,6 +506,11 @@ class UpgradeTest(FillDatabaseData):
                 not is_enterprise(target_upgrade_version):
             self.truncate_entries_flag = True
 
+        if self.params.get('use_preinstalled_scylla'):
+            InfoEvent(message='WORKAROUND to issue #10442 - installing SDKMAN to every node')
+            for node in self.db_cluster.nodes:
+                node.install_sdkman_workaround()
+
         InfoEvent(message='pre-test - prepare test keyspaces and tables').publish()
         # prepare test keyspaces and tables before upgrade to avoid schema change during mixed cluster.
         self.prepare_keyspaces_and_tables()
