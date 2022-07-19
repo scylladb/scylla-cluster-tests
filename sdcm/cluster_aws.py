@@ -13,7 +13,6 @@
 
 # pylint: disable=too-many-lines, too-many-public-methods
 
-import base64
 import json
 import logging
 import os
@@ -36,21 +35,21 @@ import tenacity
 import yaml
 from mypy_boto3_ec2 import EC2Client
 from mypy_boto3_ec2.service_resource import EC2ServiceResource
-from pkg_resources import parse_version
 
 from sdcm import ec2_client, cluster, wait
 from sdcm.ec2_client import CreateSpotInstancesError
-from sdcm.provision.aws.utils import configure_eth1_script, network_config_ipv6_workaround_script, \
-    configure_set_preserve_hostname_script
+from sdcm.provision.aws.utils import configure_set_preserve_hostname_script
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
 from sdcm.provision.helpers.cloud_init import get_cloud_init_config
 from sdcm.provision.scylla_yaml import SeedProvider
+from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
+
 from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
 from sdcm.sct_events.database import DatabaseLogEvent
 from sdcm.sct_events.filters import DbEventsFilter
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.aws_utils import tags_as_ec2_tags, ec2_instance_wait_public_ip
-from sdcm.utils.common import list_instances_aws, get_ami_tags, MAX_SPOT_DURATION_TIME
+from sdcm.utils.common import list_instances_aws, MAX_SPOT_DURATION_TIME
 from sdcm.utils.decorators import retrying
 from sdcm.wait import exponential_retry
 
@@ -369,23 +368,12 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
     # pylint: disable=too-many-arguments
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
-        post_boot_script = self.test_config.get_startup_script()
-        if self.extra_network_interface:
-            post_boot_script += configure_eth1_script()
 
-        if self.params.get('ip_ssh_connections') == 'ipv6':
-            post_boot_script += network_config_ipv6_workaround_script()
-
-        if isinstance(ec2_user_data, dict):
-            ec2_user_data['post_configuration_script'] = base64.b64encode(
-                post_boot_script.encode('utf-8')).decode('ascii')
-            ec2_user_data = json.dumps(ec2_user_data)
-        else:
-            if 'clustername' in ec2_user_data:
-                ec2_user_data += " --base64postscript={0}".format(
-                    base64.b64encode(post_boot_script.encode('utf-8')).decode('ascii'))
-            else:
-                ec2_user_data = post_boot_script
+        user_data_format_version = self.params.get('user_data_format_version') or '3'
+        user_data_builder = ScyllaUserDataBuilder(cluster_name=self.name,
+                                                  user_data_format_version=user_data_format_version, params=self.params,
+                                                  syslog_host_port=self.test_config.get_logging_service_host_port())
+        ec2_user_data = user_data_builder.to_string()
 
         #  replace user_data json with cloud-init content if preinstalled scylla is not used
         if not self.params.get("use_preinstalled_scylla"):
@@ -782,34 +770,12 @@ class ScyllaAWSCluster(cluster.BaseScyllaCluster, AWSCluster):
         cluster_prefix = cluster.prepend_user_prefix(user_prefix, 'db-cluster')
         node_prefix = cluster.prepend_user_prefix(user_prefix, 'db-node')
 
-        shortid = str(cluster_uuid)[:8]
-        name = '%s-%s' % (cluster_prefix, shortid)
-
-        ami_tags = get_ami_tags(ec2_ami_id[0], region_name=params.get('region_name').split()[0])
-        # TODO: remove once all other related code is merged in scylla-pkg and scylla-machine-image
-        user_data_format_version = ami_tags.get('sci_version', '2')
-        user_data_format_version = ami_tags.get('user_data_format_version', user_data_format_version)
-
-        data_device_type = EBS_VOLUME if params.get("data_volume_disk_num") > 0 else INSTANCE_STORE
-        raid_level = params.get("raid_level")
-
-        if parse_version(user_data_format_version) >= parse_version('2'):
-            user_data = dict(scylla_yaml=dict(cluster_name=name),
-                             start_scylla_on_first_boot=False,
-                             data_device=data_device_type,
-                             raid_level=raid_level)
-        else:
-            user_data = ('--clustername %s '
-                         '--totalnodes %s' % (name, sum(n_nodes)))
-            user_data += ' --stop-services'
-
         super().__init__(
             ec2_ami_id=ec2_ami_id,
             ec2_subnet_id=ec2_subnet_id,
             ec2_security_group_ids=ec2_security_group_ids,
             ec2_instance_type=ec2_instance_type,
             ec2_ami_username=ec2_ami_username,
-            ec2_user_data=user_data,
             ec2_block_device_mappings=ec2_block_device_mappings,
             cluster_uuid=cluster_uuid,
             services=services,

@@ -1,6 +1,8 @@
 import base64
 import json
 from typing import Union
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
 
 from pydantic import Field
 
@@ -14,7 +16,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
     params: Union[SCTConfiguration, dict] = Field(as_dict=False)
     cluster_name: str
     bootstrap: bool = Field(default=None, as_dict=False)
-    old_format: bool = Field(default=False, as_dict=False)
+    user_data_format_version: str = Field(default='2', as_dict=False)
     scylla_yaml_raw: ScyllaYaml = Field(default=None, as_dict=False)
     syslog_host_port: tuple[str, int] = Field(default=False, as_dict=False)
 
@@ -59,12 +61,44 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
         return base64.b64encode(post_boot_script.encode('utf-8')).decode('ascii')
 
     def to_string(self) -> str:
-        return self.return_in_old_format() if self.old_format else self.return_in_new_format()
+        match self.user_data_format_version:
+            case '1':
+                return self.return_in_format_v1()
+            case '2':
+                return self.return_in_format_v2()
+            case '3':
+                return self.return_in_format_v3()
 
-    def return_in_new_format(self) -> str:
-        return json.dumps(self.dict(exclude_defaults=True, exclude_unset=True, exclude_none=True))
+    def return_in_format_v3(self) -> str:
+        msg = MIMEMultipart()
+        scylla_image_configuration = self.dict()
+        scylla_image_configuration.pop('post_configuration_script', False)
+        part = MIMEBase('x-scylla', 'json')
+        part.set_payload(json.dumps(scylla_image_configuration, indent=4, sort_keys=True))
+        part.add_header('Content-Disposition', 'attachment; filename="scylla_machine_image.json"')
+        msg.attach(part)
 
-    def return_in_old_format(self) -> str:
+        cloud_config = """
+        #cloud-config
+        cloud_final_modules:
+        - [scripts-user, always]
+        """
+        part = MIMEBase('text', 'cloud-config')
+        part.set_payload(cloud_config)
+        part.add_header('Content-Disposition', 'attachment; filename="cloud-config.txt"')
+        msg.attach(part)
+
+        part = MIMEBase('text', 'x-shellscript')
+        part.set_payload(base64.b64decode(self.post_configuration_script))
+        part.add_header('Content-Disposition', 'attachment; filename="user-script.txt"')
+        msg.attach(part)
+
+        return str(msg)
+
+    def return_in_format_v2(self) -> str:
+        return json.dumps(self.dict(exclude_defaults=True, exclude_unset=True, exclude_none=True), indent=4, sort_keys=True)
+
+    def return_in_format_v1(self) -> str:
         output = f'--clustername {self.cluster_name} --totalnodes 1 --stop-services'
         if self.bootstrap is not None:
             output += ' --bootstrap true' if self.bootstrap else ' --bootstrap false'
