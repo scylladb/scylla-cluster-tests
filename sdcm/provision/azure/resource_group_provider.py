@@ -13,6 +13,7 @@
 
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Optional
 
 from azure.core.exceptions import ResourceNotFoundError
@@ -49,7 +50,8 @@ class ResourceGroupProvider:
         resource_group = self._azure_service.resource.resource_groups.create_or_update(
             resource_group_name=self._name,
             parameters={
-                "location": self._region
+                "location": self._region,
+                "tags": {"creation_time": datetime.now().isoformat(sep=" ", timespec="seconds")}
             },
         )
         LOGGER.info("Provisioned resource group %s in the %s region", resource_group.name, resource_group.location)

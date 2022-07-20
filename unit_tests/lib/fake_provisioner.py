@@ -10,7 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
-
+import datetime
 from typing import List, Dict
 
 from sdcm.provision.provisioner import Provisioner, VmInstance, InstanceDefinition, PricingModel
@@ -44,6 +44,7 @@ class FakeProvisioner(Provisioner):
                          private_ip_address='10.10.10.10', tags=definition.tags,
                          pricing_model=pricing_model,
                          image=definition.image_id,
+                         creation_time=datetime.datetime.now(),
                          _provisioner=self)
         self._instances[definition.name] = v_m
         return v_m

@@ -28,7 +28,7 @@ import pprint
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from functools import partial
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 import pytest
@@ -38,6 +38,7 @@ from prettytable import PrettyTable
 
 from sdcm.localhost import LocalHost
 from sdcm.provision import AzureProvisioner
+from sdcm.provision.provisioner import VmInstance
 from sdcm.remote import LOCALRUNNER
 from sdcm.results_analyze import PerformanceResultsAnalyzer, BaseResultsAnalyzer
 from sdcm.sct_config import SCTConfiguration
@@ -490,7 +491,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
         click.secho("Nothing found for selected filters in Docker!", fg="yellow")
 
     click.secho("Checking Azure instances...", fg='green')
-    instances = []
+    instances: List[VmInstance] = []
     for provisioner in AzureProvisioner.discover_regions(params.get("TestId", "")):
         instances += provisioner.list_instances()
     if user:
@@ -499,7 +500,10 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
         azure_table = PrettyTable(["Name", "Region-AZ", "PublicIP", "TestId", "RunByUser", "LaunchTime"])
         azure_table.align = "l"
         azure_table.sortby = 'RunByUser'
+
         for instance in instances:
+            creation_time = instance.creation_time.isoformat(
+                sep=" ", timespec="seconds") if instance.creation_time else "N/A"
             tags = instance.tags
             test_id = tags.get("TestId", "N/A")
             run_by_user = tags.get("RunByUser", "N/A")
@@ -509,7 +513,7 @@ def list_resources(ctx, user, test_id, get_all, get_all_running, verbose):
                 instance.public_ip_address,
                 test_id,
                 run_by_user,
-                "N/A"])
+                creation_time])
         click.echo(azure_table.get_string(title="Instances used on Azure"))
     else:
         click.secho("Nothing found for selected filters in Azure!", fg="yellow")

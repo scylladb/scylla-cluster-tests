@@ -12,6 +12,7 @@
 # Copyright (c) 2022 ScyllaDB
 
 import logging
+from datetime import datetime
 from typing import Dict, List
 
 from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
@@ -157,12 +158,13 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         tags = v_m.tags.copy()
         ssh_user = tags.pop("ssh_user")
         ssh_key = tags.pop("ssh_key")
+        creation_time = datetime.fromisoformat(tags.pop("creation_time")) if 'creation_time' in tags else None
         image = str(v_m.storage_profile.image_reference)
         pricing_model = self._get_pricing_model(v_m)
 
         return VmInstance(name=v_m.name, region=v_m.location, user_name=ssh_user, ssh_key_name=ssh_key, public_ip_address=pub_address,
                           private_ip_address=priv_address, tags=tags, pricing_model=pricing_model,
-                          image=image, _provisioner=self)
+                          image=image, creation_time=creation_time, _provisioner=self)
 
     @staticmethod
     def _get_pricing_model(v_m: VirtualMachine) -> PricingModel:
