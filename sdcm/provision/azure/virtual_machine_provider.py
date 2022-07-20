@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2022 ScyllaDB
 import base64
+from datetime import datetime
 import logging
 import os
 from dataclasses import dataclass, field
@@ -60,7 +61,8 @@ class VirtualMachineProvider:
             LOGGER.info("Instance params: %s", definition)
             params = {
                 "location": self._region,
-                "tags": definition.tags | {"ssh_user": definition.user_name, "ssh_key": definition.ssh_key.name},
+                "tags": definition.tags | {"ssh_user": definition.user_name, "ssh_key": definition.ssh_key.name,
+                                           "creation_time": datetime.now().isoformat(sep=" ", timespec="seconds")},
                 "hardware_profile": {
                     "vm_size": definition.type,
                 },

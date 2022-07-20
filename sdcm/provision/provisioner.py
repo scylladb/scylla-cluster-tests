@@ -13,6 +13,7 @@
 
 from abc import ABC
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from typing import List, Dict
 
@@ -77,6 +78,7 @@ class VmInstance:  # pylint: disable=too-many-instance-attributes
     tags: Dict[str, str]
     pricing_model: PricingModel
     image: str
+    creation_time: datetime | None
     _provisioner: "Provisioner"
 
     def terminate(self, wait: bool = True) -> None:
