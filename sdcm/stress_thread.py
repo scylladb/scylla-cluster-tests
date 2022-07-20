@@ -91,7 +91,7 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
         #  This marker is used to mark shell commands, in order to be able to kill them later
         self.max_workers = 0
 
-    def create_stress_cmd(self, node, loader_idx, keyspace_idx):
+    def create_stress_cmd(self, node, keyspace_idx):
         stress_cmd = self.stress_cmd
         if node.cassandra_stress_version == "unknown":  # Prior to 3.11, cassandra-stress didn't have version argument
             stress_cmd = stress_cmd.replace("throttle", "limit")  # after 3.11 limit was renamed to throttle
@@ -119,10 +119,8 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
                 ' -transport "truststore=/etc/scylla/ssl_conf/client/cacerts.jks truststore-password=cassandra"'
 
         if self.node_list and '-node' not in stress_cmd:
-            first_node = [n for n in self.node_list if n.dc_idx == loader_idx %
-                          3]  # make sure each loader is targeting on datacenter/region
-            first_node = first_node[0] if first_node else self.node_list[0]
-            stress_cmd += " -node {}".format(first_node.cql_ip_address)
+            node_ip_list = [n.cql_ip_address for n in self.node_list]
+            stress_cmd += " -node {}".format(",".join(node_ip_list))
         if 'skip-unsupported-columns' in self._get_available_suboptions(node, '-errors'):
             stress_cmd = self._add_errors_option(stress_cmd, ['skip-unsupported-columns'])
         return stress_cmd
@@ -154,7 +152,7 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
         return re.findall(r' *\[([\w-]+?)[=?]*] *', result)
 
     def _run_stress(self, node, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals
-        stress_cmd = self.create_stress_cmd(node, loader_idx, keyspace_idx)
+        stress_cmd = self.create_stress_cmd(node, keyspace_idx)
 
         if self.profile:
             with open(self.profile, encoding="utf-8") as profile_file:
