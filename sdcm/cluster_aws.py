@@ -40,7 +40,6 @@ from sdcm import ec2_client, cluster, wait
 from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.provision.aws.utils import configure_set_preserve_hostname_script
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
-from sdcm.provision.helpers.cloud_init import get_cloud_init_config
 from sdcm.provision.scylla_yaml import SeedProvider
 from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
 
@@ -374,10 +373,6 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                                   user_data_format_version=user_data_format_version, params=self.params,
                                                   syslog_host_port=self.test_config.get_logging_service_host_port())
         ec2_user_data = user_data_builder.to_string()
-
-        #  replace user_data json with cloud-init content if preinstalled scylla is not used
-        if not self.params.get("use_preinstalled_scylla"):
-            ec2_user_data = get_cloud_init_config()
 
         instances = self._create_or_find_instances(count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx)
         added_nodes = [self._create_node(instance, self._ec2_ami_username,
