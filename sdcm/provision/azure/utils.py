@@ -11,6 +11,7 @@
 #
 # Copyright (c) 2022 ScyllaDB
 import logging
+import re
 from contextlib import suppress
 
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
@@ -85,3 +86,13 @@ def get_scylla_images(  # pylint: disable=too-many-branches,too-many-locals
     if only_latest:
         return output[-1:]
     return output
+
+
+IMAGE_URL_REGEX = re.compile(
+    r'.*/resourceGroups/(?P<resource_group_name>.*)/providers/Microsoft.Compute/images/(?P<image_name>.*)')
+
+
+def get_image_tags(link: str) -> dict:
+    params = IMAGE_URL_REGEX.search(link).groupdict()
+    azure_image: GalleryImageVersion = AzureService().compute.images.get(**params)
+    return azure_image.tags

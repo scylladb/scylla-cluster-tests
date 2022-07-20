@@ -28,7 +28,7 @@ from distutils.util import strtobool
 import anyconfig
 
 from sdcm import sct_abs_path
-from sdcm.provision.azure.utils import get_scylla_images
+import sdcm.provision.azure.utils as azure_utils
 from sdcm.utils import alternator
 from sdcm.utils.aws_utils import get_arch_from_instance_type
 from sdcm.utils.common import (
@@ -49,6 +49,7 @@ from sdcm.utils.version_utils import (
     get_specific_tag_of_docker_image,
 )
 from sdcm.sct_events.base import add_severity_limit_rules, print_critical_events
+from sdcm.utils.gce_utils import get_gce_image_tags
 
 
 def str_or_list(value: Union[str, List[str], List[List[str]]]) -> List[str]:  # pylint: disable=unsubscriptable-object
@@ -202,6 +203,16 @@ class SCTConfiguration(dict):
              help="""Version of scylla to install, ex. '2.3.1'
                      Automatically lookup AMIs and repo links for formal versions.
                      WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla'"""),
+
+        dict(name="user_data_format_version", env="SCT_USER_DATA_FORMAT_VERSION",
+             type=str,
+             help="""Format version of the user-data to use for scylla images,
+                     default to what tagged on the image used"""),
+
+        dict(name="oracle_user_data_format_version", env="SCT_ORACLE_USER_DATA_FORMAT_VERSION",
+             type=str,
+             help="""Format version of the user-data to use for scylla images,
+                 default to what tagged on the image used"""),
 
         dict(name="oracle_scylla_version", env="SCT_ORACLE_SCYLLA_VERSION",
              type=str,
@@ -1516,7 +1527,7 @@ class SCTConfiguration(dict):
             elif not self.get("azure_image_db") and self.get("cluster_backend") == "azure":
                 scylla_azure_images = []
                 for region in self.get('azure_region_name'):
-                    azure_image = get_scylla_images(scylla_version, region)[0]
+                    azure_image = azure_utils.get_scylla_images(scylla_version, region)[0]
                     self.log.debug("Found AMI %s for scylla_version='%s' in %s",
                                    azure_image.name, scylla_version, region)
                     scylla_azure_images.append(azure_image)
@@ -1894,7 +1905,7 @@ class SCTConfiguration(dict):
             if int(partition_range_splitted[1]) < int(partition_range_splitted[0]):
                 raise ValueError(error_message_template.format('<max PK value> should be bigger then <min PK value>. '))
 
-    def verify_configuration_urls_validity(self):
+    def verify_configuration_urls_validity(self):  # pylint: disable=too-many-branches
         """
         Check if ami_id and repo urls are valid
         """
@@ -1909,9 +1920,10 @@ class SCTConfiguration(dict):
             ami_id_db_scylla = self.get('ami_id_db_scylla').split()
             region_names = self.region_names
             ami_id_db_oracle = self.get('ami_id_db_oracle').split()
-
-            for ami_list in [ami_id_db_scylla, ami_id_db_oracle]:
+            for key_to_update, ami_list in [('user_data_format_version', ami_id_db_scylla),
+                                            ('oracle_user_data_format_version', ami_id_db_oracle)]:
                 if ami_list:
+                    user_data_format_versions = set()
                     for ami_id, region_name in zip(ami_list, region_names):
                         if not ami_built_by_scylla(ami_id, region_name):
                             continue
@@ -1919,6 +1931,30 @@ class SCTConfiguration(dict):
                         assert 'user_data_format_version' in tags.keys(), \
                             f"\n\t'user_data_format_version' tag missing from [{ami_id}] on {region_name}\n\texisting " \
                             f"tags: {tags}"
+                        user_data_format_versions.add(tags['user_data_format_version'])
+                    assert len(
+                        user_data_format_versions) <= 1, f"shouldn't have mixed versions {user_data_format_versions}"
+                    if user_data_format_versions:
+                        self[key_to_update] = list(user_data_format_versions)[0]
+
+        if backend == 'gce':
+            gce_image_db = self.get('gce_image_db').split()
+            for image in gce_image_db:
+                tags = get_gce_image_tags(image)
+                if 'user_data_format_version' not in tags.keys():
+                    # since older release aren't tagged, we default to 2 which was the version on the first gce images
+                    logging.warning("'user_data_format_version' tag missing from [%s]: existing tags: %s", image, tags)
+                self['user_data_format_version'] = tags.get('user_data_format_version', '2')
+
+        if backend == 'azure':
+            azure_image_db = self.get('azure_image_db').split()
+            for image in azure_image_db:
+                tags = azure_utils.get_image_tags(image)
+                if 'user_data_format_version' not in tags.keys():
+                    # since older release aren't tagged, we default to 2 which was the version on the first gce images
+                    logging.warning("'user_data_format_version' tag missing from [%s]: existing tags: %s", image, tags)
+                self['user_data_format_version'] = tags.get('user_data_format_version', '2')
+
         # For each Scylla repo file we will check that there is at least one valid URL through which to download a
         # version of SCYLLA, otherwise we will get an error.
         repos_to_validate = ['scylla_repo_loader']

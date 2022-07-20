@@ -578,6 +578,62 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
             conf = sct_config.SCTConfiguration()
             conf.verify_configuration()
 
+    def test_20_user_data_format_version_aws(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_SCYLLA_VERSION'] = 'master:latest'
+        os.environ['SCT_ORACLE_SCYLLA_VERSION'] = '4.6.0'
+        os.environ['SCT_DB_TYPE'] = 'mixed_scylla'
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        conf.verify_configuration_urls_validity()
+        self.assertEqual(conf['user_data_format_version'], '3')
+        self.assertEqual(conf['oracle_user_data_format_version'], '2')
+
+    def test_20_user_data_format_version_aws_2(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-07d54ca4e98347364'  # run image which isn't scylla
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        conf.verify_configuration_urls_validity()
+        self.assertNotIn('user_data_format_version', conf)
+
+    def test_20_user_data_format_version_gce_1(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
+        os.environ['SCT_SCYLLA_VERSION'] = 'master:latest'
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        conf.verify_configuration_urls_validity()
+        self.assertEqual(conf['user_data_format_version'], '3')
+
+    def test_20_user_data_format_version_gce_2(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
+        os.environ['SCT_GCE_IMAGE_DB'] = 'https://www.googleapis.com/compute/v1/projects/scylla-images/global/images/scylla-4-6-4'
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        conf.verify_configuration_urls_validity()
+        self.assertEqual(conf['user_data_format_version'], '2')
+
+    def test_20_user_data_format_version_gce_3(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'gce'
+        os.environ['SCT_GCE_IMAGE_DB'] = ('https://www.googleapis.com/compute/v1/projects/'
+                                          'ubuntu-os-cloud/global/images/family/ubuntu-2004-lts')
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        conf.verify_configuration_urls_validity()
+        self.assertEqual(conf['user_data_format_version'], '2')
+
+    def test_20_user_data_format_version_azure(self):
+        os.environ['SCT_CLUSTER_BACKEND'] = 'azure'
+        os.environ['SCT_AZURE_REGION_NAME'] = 'eastus'
+        os.environ['SCT_SCYLLA_VERSION'] = 'master:latest'
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+        conf.verify_configuration_urls_validity()
+        # since azure image listing is still buggy, can be sure which version we'll get
+        # I would expect master:latest to be version 3 now, but azure.utils.get_scylla_images
+        # returns something from 5 months ago.
+        self.assertIn('user_data_format_version', conf)
+
 
 if __name__ == "__main__":
     unittest.main()

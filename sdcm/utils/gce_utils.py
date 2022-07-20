@@ -12,12 +12,15 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
+import re
 import json
 import random
 import logging
 import time
 
 from google.oauth2 import service_account
+from google.cloud import compute_v1
+from google.cloud.compute_v1 import Image
 from googleapiclient.discovery import build
 from libcloud.compute.providers import Provider, get_driver
 
@@ -68,6 +71,25 @@ def get_gce_services(regions: list) -> dict:
 def get_gce_service(region: str) -> GceDriver:
     credentials = KeyStore().get_gcp_credentials()
     return _get_gce_service(credentials, append_zone(region))
+
+
+GCE_IMAGE_URL_REGEX = re.compile(
+    r'https://www.googleapis.com/compute/v1/projects/(?P<project>.*)/global/images/(?P<image>.*)')
+
+
+def get_gce_image_tags(link: str) -> dict:
+    info = KeyStore().get_gcp_credentials()
+    credentials = service_account.Credentials.from_service_account_info(info)
+    images_client = compute_v1.ImagesClient(credentials=credentials)
+
+    image_params = GCE_IMAGE_URL_REGEX.search(link).groupdict()
+
+    if image_params.get('image').startswith('family'):
+        family = image_params.get('image').split('/')[-1]
+        image: Image = images_client.get_from_family(family=family, project=image_params.get('project'))
+    else:
+        image: Image = images_client.get(**image_params)
+    return image.labels
 
 
 class GcloudContextManager:
