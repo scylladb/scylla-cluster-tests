@@ -295,14 +295,15 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self.log.debug(gce_disk_struct)
         return gce_disk_struct
 
-    def _prepare_user_data(self):
+    def _prepare_user_data(self, enable_auto_bootstrap=False):
         user_data_format_version = self.params.get('user_data_format_version') or '3'
         user_data_builder = ScyllaUserDataBuilder(cluster_name=self.name,
+                                                  bootstrap=enable_auto_bootstrap,
                                                   user_data_format_version=user_data_format_version, params=self.params,
                                                   syslog_host_port=self.test_config.get_logging_service_host_port())
         return user_data_builder.to_string()
 
-    def _create_instance(self, node_index, dc_idx, spot=False):
+    def _create_instance(self, node_index, dc_idx, spot=False, enable_auto_bootstrap=False):
         def set_tags_as_labels(_instance):
             self.log.debug(f"Expected tags are {self.tags}")
             lower_tags = dict((k.lower(), v.lower().replace('.', '-')) for k, v in self.tags.items())
@@ -342,7 +343,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                                "Name": name,
                                                "NodeIndex": node_index,
                                                "startup-script": startup_script,
-                                               "user-data": self._prepare_user_data(),
+                                               "user-data": self._prepare_user_data(enable_auto_bootstrap),
                                                "block-project-ssh-keys": "true",
                                                "ssh-keys": f"{username}:ssh-rsa {public_key}", },
                                   ex_service_accounts=self._service_accounts,
@@ -392,11 +393,11 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
             raise gbe
 
-    def _create_instances(self, count, dc_idx=0):
+    def _create_instances(self, count, dc_idx=0, enable_auto_bootstrap=False):
         spot = 'spot' in self.instance_provision
         instances = []
         for node_index in range(self._node_index + 1, self._node_index + count + 1):
-            instances.append(self._create_instance(node_index, dc_idx, spot))
+            instances.append(self._create_instance(node_index, dc_idx, spot, enable_auto_bootstrap))
         return instances
 
     def _destroy_instance(self, name: str, dc_idx: int) -> bool:
@@ -463,7 +464,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             if not instances:
                 raise RuntimeError("No nodes found for testId %s " % (self.test_config.test_id(),))
         else:
-            instances = self._create_instances(count, dc_idx)
+            instances = self._create_instances(count, dc_idx, enable_auto_bootstrap)
 
         self.log.debug('instances: %s', instances)
         if instances:
