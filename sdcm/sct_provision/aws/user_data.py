@@ -18,7 +18,7 @@ class ScyllaUserDataBuilder(ScyllaUserDataBuilderBase):
     bootstrap: bool = Field(default=None, as_dict=False)
     user_data_format_version: str = Field(default='2', as_dict=False)
     scylla_yaml_raw: ScyllaYaml = Field(default=None, as_dict=False)
-    syslog_host_port: tuple[str, int] = Field(default=False, as_dict=False)
+    syslog_host_port: tuple[str, int] = Field(default=None, as_dict=False)
 
     @property
     def scylla_yaml(self) -> dict:
