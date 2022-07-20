@@ -5,6 +5,7 @@ def lib = library identifier: 'sct@snapshot', retriever: legacySCM(scm)
 
 longevityPipeline(
     backend: 'gce',
+    gce_datacenter: '''["us-east1", "us-west1"]''',
     test_name: 'snitch_test.SnitchTest.test_cloud_snitch',
     test_config: 'test-cases/features/google-cloud-snitch-multi-dc.yaml'
 )
