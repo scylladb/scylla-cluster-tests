@@ -12,7 +12,6 @@
 # Copyright (c) 2020 ScyllaDB
 
 import os
-import json
 import time
 import logging
 from typing import Dict, Any, ParamSpec, TypeVar
@@ -24,7 +23,6 @@ import tenacity
 from libcloud.common.google import GoogleBaseError, ResourceNotFoundError, InvalidRequestError
 
 from sdcm import cluster
-from sdcm.provision.helpers.cloud_init import get_cloud_init_config
 from sdcm.sct_events import Severity
 from sdcm.sct_events.gce_events import GceInstanceEvent
 from sdcm.utils.gce_utils import GceLoggingClient
@@ -33,6 +31,7 @@ from sdcm.keystore import pub_key_from_private_key_file
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.decorators import retrying
+from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
 
 
 SPOT_TERMINATION_CHECK_DELAY = 5 * 60
@@ -297,12 +296,11 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         return gce_disk_struct
 
     def _prepare_user_data(self):
-        if not self.params.get("use_preinstalled_scylla"):
-            return get_cloud_init_config()
-        else:
-            return json.dumps(dict(scylla_yaml=dict(cluster_name=self.name),
-                                   start_scylla_on_first_boot=False,
-                                   raid_level=self.params.get("raid_level")))
+        user_data_format_version = self.params.get('user_data_format_version') or '3'
+        user_data_builder = ScyllaUserDataBuilder(cluster_name=self.name,
+                                                  user_data_format_version=user_data_format_version, params=self.params,
+                                                  syslog_host_port=self.test_config.get_logging_service_host_port())
+        return user_data_builder.to_string()
 
     def _create_instance(self, node_index, dc_idx, spot=False):
         def set_tags_as_labels(_instance):
@@ -325,7 +323,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         # Name must start with a lowercase letter followed by up to 63
         # lowercase letters, numbers, or hyphens, and cannot end with a hyphen
         assert len(name) <= 63, "Max length of instance name is 63"
-        startup_script = self.test_config.get_startup_script()
+        startup_script = ""
 
         if self.params.get("scylla_linux_distro") in ("ubuntu-bionic", "ubuntu-xenial", "ubuntu-focal",):
             # we need to disable sshguard to prevent blocking connections from the builder
