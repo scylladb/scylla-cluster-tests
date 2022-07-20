@@ -797,7 +797,7 @@ class ScyllaLogCollector(LogCollector):
                     CommandLog(name='io-properties.yaml',
                                command='cat /etc/scylla.d/io_properties.yaml'),
                     CommandLog(name='dmesg.log',
-                               command='dmesg -P'),
+                               command='sudo dmesg -P'),
                     CommandLog(name='kallsyms',
                                command='sudo cat /proc/kallsyms'),
                     CommandLog(name='systemctl.status',
