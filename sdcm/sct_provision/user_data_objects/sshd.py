@@ -12,7 +12,7 @@
 # Copyright (c) 2022 ScyllaDB
 from dataclasses import dataclass
 
-from sdcm.provision.common.utils import configure_sshd_script, restart_sshd_service
+from sdcm.provision.common.utils import configure_sshd_script, restart_sshd_service, configure_ssh_accept_rsa
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 
 
@@ -26,5 +26,6 @@ class SshdUserDataObject(SctUserDataObject):
     @property
     def script_to_run(self) -> str:
         script = configure_sshd_script()
+        script = configure_ssh_accept_rsa()
         script += restart_sshd_service()
         return script
