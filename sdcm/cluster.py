@@ -4164,6 +4164,10 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
             node.remoter.sudo('systemctl disable iptables', ignore_status=True)
             node.remoter.sudo('systemctl stop firewalld', ignore_status=True)
             node.remoter.sudo('systemctl disable firewalld', ignore_status=True)
+
+        if self.params.get('logs_transport') == 'ssh':
+            node.install_package('python3')
+
         node.update_repo_cache()
 
         install_scylla = True
