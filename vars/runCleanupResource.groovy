@@ -39,6 +39,7 @@ def call(Map params, String region){
     if [[ -n "${params.post_behavior_k8s_cluster ? params.post_behavior_k8s_cluster : ''}" ]] ; then
         export SCT_POST_BEHAVIOR_K8S_CLUSTER="${params.post_behavior_k8s_cluster}"
     fi
+    ${params.config_customization_script ? params.config_customization_script: ''}
 
     echo "Starting to clean resources ..."
     RUNNER_IP=\$(cat sct_runner_ip||echo "")

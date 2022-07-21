@@ -127,6 +127,11 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_project', '')}",
                description: 'Gce project to use',
                name: 'gce_project')
+
+            string(defaultValue: "${pipelineParams.get('config_customization_script', '')}",
+               description: """Script that will be executed before running each phase. Used to modify sct configuration. E.g:
+               export SCT_INSTANCE_TYPE_DB=i3.4xlarge""",
+               name: 'config_customization_script')
         }
         options {
             timestamps()

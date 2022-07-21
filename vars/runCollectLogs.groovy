@@ -25,6 +25,7 @@ def call(Map params, String region){
         export SCT_AZURE_REGION_NAME=${params.azure_region_name}
     fi
     export SCT_CONFIG_FILES=${test_config}
+    ${params.config_customization_script ? params.config_customization_script: ''}
 
     echo "start collect logs ..."
     RUNNER_IP=\$(cat sct_runner_ip||echo "")

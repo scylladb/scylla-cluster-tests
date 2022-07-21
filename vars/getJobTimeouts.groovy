@@ -7,6 +7,7 @@ List<Integer> call(Map params, String region){
     #!/bin/bash
     export SCT_CLUSTER_BACKEND="${params.backend}"
     export SCT_CONFIG_FILES=${test_config}
+    ${params.config_customization_script ? params.config_customization_script: ''}
     ./docker/env/hydra.sh output-conf -b "${params.backend}"
     """
     def testData = sh(script: cmd, returnStdout: true).trim()

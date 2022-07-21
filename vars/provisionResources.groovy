@@ -132,7 +132,7 @@ def call(Map params, String region){
     if [[ -n "${params.pytest_addopts ? params.pytest_addopts : ''}" ]] ; then
         export PYTEST_ADDOPTS="${params.pytest_addopts}"
     fi
-
+    ${params.config_customization_script ? params.config_customization_script: ''}
     echo "Starting to resource provision ..."
     RUNNER_IP=\$(cat sct_runner_ip||echo "")
     if [[ -n "\${RUNNER_IP}" ]] ; then

@@ -155,6 +155,7 @@ def call(Map params, String region, functional_test = false, Map pipelineParams 
     if [[ -n "${params.pytest_addopts ? params.pytest_addopts : ''}" ]] ; then
         export PYTEST_ADDOPTS="${params.pytest_addopts}"
     fi
+    ${params.config_customization_script ? params.config_customization_script: ''}
 
     echo "start test ......."
     RUNNER_IP=\$(cat sct_runner_ip||echo "")
