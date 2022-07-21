@@ -25,6 +25,7 @@ from sdcm import wait
 from sdcm.remote import RemoteCmdRunnerBase
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.k8s import KubernetesOps
+from sdcm.utils.decorators import retrying
 
 
 class LoggerBase(metaclass=ABCMeta):
@@ -117,6 +118,15 @@ class SSHLoggerBase(NodeLoggerBase):
 
 
 class SSHScyllaSystemdLogger(SSHLoggerBase):
+
+    def _wait_ssh_up(self, *args, **kwargs):
+        super()._wait_ssh_up(*args, **kwargs)
+        self.wait_for_python_to_available()
+
+    @retrying(n=30, sleep_time=15)
+    def wait_for_python_to_available(self):
+        assert self.node.remoter.sudo("which python3", ignore_status=True).ok
+
     @staticmethod
     def reformat_output_command(cmd):
         """
