@@ -21,9 +21,7 @@ from typing import List, Any, Dict
 from azure.core.exceptions import ResourceNotFoundError, AzureError
 from azure.mgmt.network.models import (NetworkSecurityGroup, Subnet, PublicIPAddress, NetworkInterface, VirtualNetwork)
 from azure.mgmt.resource.resources.models import ResourceGroup
-from azure.mgmt.compute.models import VirtualMachine
-
-from sdcm.utils.azure_utils import AzureService    # pylint: disable=import-error
+from azure.mgmt.compute.models import VirtualMachine, Image
 
 
 def snake_case_to_camel_case(string):
@@ -569,11 +567,21 @@ class FakeVirtualMachines:
         return WaitableObject()
 
 
+class FakeImages:  # pylint: disable=too-few-public-methods
+    def __init__(self, path: Path) -> None:
+        self.path = path
+
+    def list_by_resource_group(self, resource_group_name) -> List[Image]:
+        with open(self.path / resource_group_name / "azure_images_list.json", encoding="utf-8") as file:
+            return [Image.deserialize(image) for image in json.load(file)]
+
+
 class Compute:  # pylint: disable=too-few-public-methods
 
     def __init__(self, path) -> None:
         self.path: Path = path
         self.virtual_machines = FakeVirtualMachines(self.path)
+        self.images = FakeImages(self.path)
 
 
 class FakeResourceManagementClient:  # pylint: disable=too-few-public-methods
@@ -586,7 +594,7 @@ class FakeResourceManagementClient:  # pylint: disable=too-few-public-methods
         return FakeResourceGroups(self.path)
 
 
-class FakeAzureService(AzureService):
+class FakeAzureService:
 
     def __init__(self, path: Path) -> None:
         self.path = path
