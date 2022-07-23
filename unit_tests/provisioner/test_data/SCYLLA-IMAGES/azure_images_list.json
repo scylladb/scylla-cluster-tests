@@ -1,0 +1,306 @@
+[
+  {
+    "location": "eastus",
+    "tags": {
+      "ScyllaJMXVersion": "2022.1~rc9-0.20220721.9c95c3a8c-1",
+      "ScyllaMachineImageVersion": "2022.1~rc9-20220721.6898190db82-1",
+      "ScyllaPython3Version": "2022.1~rc9-0.20220721.9c95c3a8c-1",
+      "ScyllaToolsVersion": "2022.1~rc9-0.20220721.9c95c3a8c-1",
+      "ScyllaVersion": "2022.1.rc9-0.20220721.9c95c3a8c-1",
+      "arch": "x86_64",
+      "branch": "master",
+      "build_id": "11",
+      "build_tag": "",
+      "operating_system": "ubuntu20.04",
+      "scylla_build_sha_id": "",
+      "user_data_format_version": "2"
+    },
+    "properties": {
+      "sourceVirtualMachine": {
+        "id": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/pkr-Resource-Group-sbovs864k6/providers/Microsoft.Compute/virtualMachines/pkrvmsbovs864k6"
+      },
+      "storageProfile": {
+        "osDisk": {
+          "managedDisk": {
+            "id": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/pkr-Resource-Group-sbovs864k6/providers/Microsoft.Compute/disks/pkrossbovs864k6"
+          },
+          "caching": "ReadWrite",
+          "diskSizeGB": 30,
+          "storageAccountType": "Standard_LRS",
+          "osType": "Linux",
+          "osState": "Generalized"
+        },
+        "dataDisks": [],
+        "zoneResilient": false
+      },
+      "hyperVGeneration": "V2"
+    },
+    "name": "ScyllaDB-2022.1.rc9-0.20220721.9c95c3a8c-1-build-11"
+  },
+  {
+    "location": "eastus",
+    "tags": {
+      "ScyllaJMXVersion": "4.6.4-0.20220718.b60f14601-1",
+      "ScyllaMachineImageVersion": "4.6.4-20220718.e7fe58c3aca-1",
+      "ScyllaPython3Version": "4.6.4-0.20220718.b60f14601-1",
+      "ScyllaToolsVersion": "4.6.4-0.20220718.b60f14601-1",
+      "ScyllaVersion": "4.6.4-0.20220718.b60f14601-1",
+      "arch": "x86_64",
+      "branch": "master",
+      "build_id": "28",
+      "build_tag": "",
+      "operating_system": "ubuntu20.04",
+      "scylla_build_sha_id": "",
+      "user_data_format_version": "2"
+    },
+    "properties": {
+      "sourceVirtualMachine": {
+        "id": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/pkr-Resource-Group-ej97l1yry3/providers/Microsoft.Compute/virtualMachines/pkrvmej97l1yry3"
+      },
+      "storageProfile": {
+        "osDisk": {
+          "managedDisk": {
+            "id": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/pkr-Resource-Group-ej97l1yry3/providers/Microsoft.Compute/disks/pkrosej97l1yry3"
+          },
+          "caching": "ReadWrite",
+          "diskSizeGB": 30,
+          "storageAccountType": "Standard_LRS",
+          "osType": "Linux",
+          "osState": "Generalized"
+        },
+        "dataDisks": [],
+        "zoneResilient": false
+      },
+      "hyperVGeneration": "V2"
+    },
+    "name": "ScyllaDB-4.6.4-0.20220718.b60f14601-1-build-28"
+  },
+  {
+    "location": "eastus",
+    "tags": {
+      "ScyllaJMXVersion": "4.6.5-0.20220719.2ec293ab0-1",
+      "ScyllaMachineImageVersion": "4.6.5-20220720.88bfd85ee19-1",
+      "ScyllaPython3Version": "4.6.5-0.20220719.2ec293ab0-1",
+      "ScyllaToolsVersion": "4.6.5-0.20220719.2ec293ab0-1",
+      "ScyllaVersion": "4.6.5-0.20220719.2ec293ab0-1",
+      "arch": "x86_64",
+      "branch": "master",
+      "build_id": "30",
+      "build_tag": "",
+      "operating_system": "ubuntu20.04",
+      "scylla_build_sha_id": "",
+      "user_data_format_version": "2"
+    },
+    "properties": {
+      "sourceVirtualMachine": {
+        "id": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/pkr-Resource-Group-oru0no79m4/providers/Microsoft.Compute/virtualMachines/pkrvmoru0no79m4"
+      },
+      "storageProfile": {
+        "osDisk": {
+          "managedDisk": {
+            "id": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/pkr-Resource-Group-oru0no79m4/providers/Microsoft.Compute/disks/pkrosoru0no79m4"
+          },
+          "caching": "ReadWrite",
+          "diskSizeGB": 30,
+          "storageAccountType": "Standard_LRS",
+          "osType": "Linux",
+          "osState": "Generalized"
+        },
+        "dataDisks": [],
+        "zoneResilient": false
+      },
+      "hyperVGeneration": "V2"
+    },
+    "name": "ScyllaDB-4.6.5-0.20220719.2ec293ab0-1-build-30"
+  },
+  {
+    "location": "eastus",
+    "tags": {
+      "ScyllaJMXVersion": "2022.2.dev-0.20220328.eef4cbb20a51-1",
+      "ScyllaMachineImageVersion": "2021.2.dev-20220329.61e74fd-1",
+      "ScyllaPython3Version": "2022.2.dev-0.20220328.eef4cbb20a51-1",
+      "ScyllaToolsVersion": "2022.2.dev-0.20220328.eef4cbb20a51-1",
+      "ScyllaVersion": "2022.2.dev-0.20220328.eef4cbb20a51-1",
+      "arch": "x86_64",
+      "branch": "master",
+      "build_id": "2",
+      "build_tag": "",
+      "operating_system": "ubuntu20.04",
+      "scylla_build_sha_id": "",
+      "user_data_format_version": "2"
+    },
+    "properties": {
+      "sourceVirtualMachine": {
+        "id": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/pkr-Resource-Group-ppnpyr0zf3/providers/Microsoft.Compute/virtualMachines/pkrvmppnpyr0zf3"
+      },
+      "storageProfile": {
+        "osDisk": {
+          "managedDisk": {
+            "id": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/pkr-Resource-Group-ppnpyr0zf3/providers/Microsoft.Compute/disks/pkrosppnpyr0zf3"
+          },
+          "caching": "ReadWrite",
+          "diskSizeGB": 30,
+          "storageAccountType": "Standard_LRS",
+          "osType": "Linux",
+          "osState": "Generalized"
+        },
+        "dataDisks": [],
+        "zoneResilient": false
+      },
+      "hyperVGeneration": "V2"
+    },
+    "name": "ScyllaDB-2022.2.dev-0.20220328.eef4cbb20a51-1-build-2"
+  },
+  {
+    "location": "eastus",
+    "tags": {
+      "ScyllaJMXVersion": "4.6.4-0.20220516.11f008e8f-1",
+      "ScyllaMachineImageVersion": "4.6.4-20220517.e7fe58c-1",
+      "ScyllaPython3Version": "4.6.4-0.20220516.11f008e8f-1",
+      "ScyllaToolsVersion": "4.6.4-0.20220516.11f008e8f-1",
+      "ScyllaVersion": "4.6.4-0.20220516.11f008e8f-1",
+      "arch": "x86_64",
+      "branch": "master",
+      "build_id": "27",
+      "build_tag": "",
+      "operating_system": "ubuntu20.04",
+      "scylla_build_sha_id": "",
+      "user_data_format_version": "2"
+    },
+    "properties": {
+      "sourceVirtualMachine": {
+        "id": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/pkr-Resource-Group-rkmyrhd79q/providers/Microsoft.Compute/virtualMachines/pkrvmrkmyrhd79q"
+      },
+      "storageProfile": {
+        "osDisk": {
+          "managedDisk": {
+            "id": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/pkr-Resource-Group-rkmyrhd79q/providers/Microsoft.Compute/disks/pkrosrkmyrhd79q"
+          },
+          "caching": "ReadWrite",
+          "diskSizeGB": 30,
+          "storageAccountType": "Standard_LRS",
+          "osType": "Linux",
+          "osState": "Generalized"
+        },
+        "dataDisks": [],
+        "zoneResilient": false
+      },
+      "hyperVGeneration": "V2"
+    },
+    "name": "ScyllaDB-4.6.4-0.20220516.11f008e8f-1-build-27"
+  },
+  {
+    "location": "eastus",
+    "tags": {
+      "ScyllaJMXVersion": "5.1.dev-0.20220531.e85bd37c6e5c-1",
+      "ScyllaMachineImageVersion": "5.1.dev-20220531.90340275b80-1",
+      "ScyllaPython3Version": "5.1.dev-0.20220531.e85bd37c6e5c-1",
+      "ScyllaToolsVersion": "5.1.dev-0.20220531.e85bd37c6e5c-1",
+      "ScyllaVersion": "5.1.dev-0.20220531.e85bd37c6e5c-1",
+      "arch": "x86_64",
+      "branch": "",
+      "build_id": "154",
+      "build_tag": "",
+      "operating_system": "ubuntu20.04",
+      "scylla_build_sha_id": "",
+      "user_data_format_version": "2"
+    },
+    "properties": {
+      "sourceVirtualMachine": {
+        "id": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/pkr-Resource-Group-41k5855hg9/providers/Microsoft.Compute/virtualMachines/pkrvm41k5855hg9"
+      },
+      "storageProfile": {
+        "osDisk": {
+          "managedDisk": {
+            "id": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/pkr-Resource-Group-41k5855hg9/providers/Microsoft.Compute/disks/pkros41k5855hg9"
+          },
+          "caching": "ReadWrite",
+          "diskSizeGB": 30,
+          "storageAccountType": "Standard_LRS",
+          "osType": "Linux",
+          "osState": "Generalized"
+        },
+        "dataDisks": [],
+        "zoneResilient": false
+      },
+      "hyperVGeneration": "V2"
+    },
+    "name": "ScyllaDB-5.1.dev-0.20220531.e85bd37c6e5c-1-build-154"
+  },
+  {
+    "location": "eastus",
+    "tags": {
+      "ScyllaJMXVersion": "5.1.dev-0.20220601.adda43edc75b-1",
+      "ScyllaMachineImageVersion": "5.1.dev-20220601.90340275b80-1",
+      "ScyllaPython3Version": "5.1.dev-0.20220601.adda43edc75b-1",
+      "ScyllaToolsVersion": "5.1.dev-0.20220601.adda43edc75b-1",
+      "ScyllaVersion": "5.1.dev-0.20220601.adda43edc75b-1",
+      "arch": "x86_64",
+      "branch": "",
+      "build_id": "155",
+      "build_tag": "",
+      "operating_system": "ubuntu20.04",
+      "scylla_build_sha_id": "",
+      "user_data_format_version": "2"
+    },
+    "properties": {
+      "sourceVirtualMachine": {
+        "id": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/pkr-Resource-Group-992pburkvj/providers/Microsoft.Compute/virtualMachines/pkrvm992pburkvj"
+      },
+      "storageProfile": {
+        "osDisk": {
+          "managedDisk": {
+            "id": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/pkr-Resource-Group-992pburkvj/providers/Microsoft.Compute/disks/pkros992pburkvj"
+          },
+          "caching": "ReadWrite",
+          "diskSizeGB": 30,
+          "storageAccountType": "Standard_LRS",
+          "osType": "Linux",
+          "osState": "Generalized"
+        },
+        "dataDisks": [],
+        "zoneResilient": false
+      },
+      "hyperVGeneration": "V2"
+    },
+    "name": "ScyllaDB-5.1.dev-0.20220601.adda43edc75b-1-build-155"
+  },
+   {
+    "location": "eastus",
+    "tags": {
+      "ScyllaJMXVersion": "ScyllaDB-5.1.dev0",
+      "ScyllaMachineImageVersion": "ScyllaDB-5.1.dev0",
+      "ScyllaPython3Version": "ScyllaDB-5.1.dev0",
+      "ScyllaToolsVersion": "ScyllaDB-5.1.dev0",
+      "ScyllaVersion": "ScyllaDB-5.1.dev0",
+      "arch": "x86_64",
+      "branch": "unparsable",
+      "build_id": "155",
+      "build_tag": "",
+      "operating_system": "ubuntu20.04",
+      "scylla_build_sha_id": "",
+      "user_data_format_version": "2"
+    },
+    "properties": {
+      "sourceVirtualMachine": {
+        "id": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/pkr-Resource-Group-992pburkvj/providers/Microsoft.Compute/virtualMachines/pkrvm992pburkvj"
+      },
+      "storageProfile": {
+        "osDisk": {
+          "managedDisk": {
+            "id": "/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/pkr-Resource-Group-992pburkvj/providers/Microsoft.Compute/disks/pkros992pburkvj"
+          },
+          "caching": "ReadWrite",
+          "diskSizeGB": 30,
+          "storageAccountType": "Standard_LRS",
+          "osType": "Linux",
+          "osState": "Generalized"
+        },
+        "dataDisks": [],
+        "zoneResilient": false
+      },
+      "hyperVGeneration": "V2"
+    },
+    "name": "ScyllaDB-5.-98ad.1.dev_0"
+  }
+]
