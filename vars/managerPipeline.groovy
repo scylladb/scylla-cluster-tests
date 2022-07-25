@@ -37,7 +37,7 @@ def (testDuration, testRunTimeout, runnerTimeout, collectLogsTimeout, resourceCl
 
 def call(Map pipelineParams) {
 
-    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter)
+    def builder = getJenkinsLabels(params.backend, params.region, params.gce_datacenter, params.azure_region_name)
 
     pipeline {
         agent {
@@ -63,6 +63,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_datacenter', 'us-east1')}",
                    description: 'GCE datacenter',
                    name: 'gce_datacenter')
+            string(defaultValue: "${pipelineParams.get('azure_region_name', 'eastus')}",
+                   description: 'Azure location',
+                   name: 'azure_region_name')
             string(defaultValue: "a",
                description: 'Availability zone',
                name: 'availability_zone')
@@ -75,6 +78,9 @@ def call(Map pipelineParams) {
             string(defaultValue: "${pipelineParams.get('gce_image_db', '')}",
                    description: "gce image of scylla (since scylla_version doesn't work with gce)",
                    name: 'gce_image_db')  // TODO: remove setting once hydra is able to discover scylla images in gce from scylla_version
+            string(defaultValue: "${pipelineParams.get('azure_image_db', '')}",
+                   description: '',
+                   name: 'azure_image_db')
             string(defaultValue: "${pipelineParams.get('provision_type', 'spot')}",
                    description: 'spot|on_demand|spot_fleet',
                    name: 'provision_type')
@@ -225,6 +231,9 @@ def call(Map pipelineParams) {
                                         if [[ -n "${params.gce_datacenter ? params.gce_datacenter : ''}" ]] ; then
                                             export SCT_GCE_DATACENTER=${params.gce_datacenter}
                                         fi
+                                        if [[ -n "${params.azure_region_name ? params.azure_region_name : ''}" ]] ; then
+                                            export SCT_AZURE_REGION_NAME=${params.azure_region_name}
+                                        fi
                                         export SCT_CONFIG_FILES=${test_config}
                                         export SCT_COLLECT_LOGS=false
 
@@ -238,10 +247,12 @@ def call(Map pipelineParams) {
                                             export SCT_SCYLLA_VERSION="${params.scylla_version}"
                                         elif [[ ! -z "${params.gce_image_db}" ]] ; then
                                             export SCT_GCE_IMAGE_DB="${params.gce_image_db}"  #TODO: remove it once scylla_version supports gce image detection
+                                        elif [[ ! -z "${params.azure_image_db}" ]] ; then
+                                            export SCT_AZURE_IMAGE_DB="${params.azure_image_db}"  #TODO: remove it once scylla_version supports azure image detection
                                         elif [[ ! -z "${params.scylla_repo}" ]] ; then
                                             export SCT_SCYLLA_REPO="${params.scylla_repo}"
                                         else
-                                            echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_GCE_IMAGE_DB | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO"
+                                            echo "need to choose one of SCT_AMI_ID_DB_SCYLLA | SCT_GCE_IMAGE_DB | SCT_SCYLLA_VERSION | SCT_SCYLLA_REPO | SCT_AZURE_IMAGE_DB"
                                             exit 1
                                         fi
 
