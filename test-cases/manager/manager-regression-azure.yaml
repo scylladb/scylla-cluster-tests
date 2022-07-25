@@ -1,0 +1,17 @@
+test_duration: 360
+
+stress_cmd: "cassandra-stress write cl=QUORUM n=4000000 -schema 'replication(factor=3)' -mode cql3 native -rate threads=200 -pop seq=400000000..600000000"
+
+n_db_nodes: 3
+n_loaders: 1
+n_monitor_nodes: 1
+
+post_behavior_db_nodes: "destroy"
+post_behavior_loader_nodes: "destroy"
+post_behavior_monitor_nodes: "destroy"
+use_preinstalled_scylla: true
+
+user_prefix: manager-regression
+space_node_threshold: 6442
+
+backup_bucket_location: 'manager-backup-tests-us-east1'
