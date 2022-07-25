@@ -61,10 +61,16 @@
                         {% endfor %}
 
                         {% for lat_type in lat_type_list|sort %}
-                                {% if 'color' in results and lat_type in results['color'] and results['color'][lat_type] == 'red' %}
-                                    <tr style ="background-color: red">
+                                {% if 'color' in results and lat_type in results['color'] %}
+                                    {% if results['color'][lat_type] == 'red' %}
+                                        <tr style ="background-color: red">
+                                    {% elif results['color'][lat_type] == 'yellow' %}
+                                        <tr style ="background-color: yellow">
+                                    {% else %}
+                                        <tr>
+                                    {% endif %}
                                 {% else %}
-                                       <tr>
+                                    <tr>
                                 {% endif %}
                                     <td>{{ lat_type }}</td>
                                     {% for cycle in results['cycles'] %}

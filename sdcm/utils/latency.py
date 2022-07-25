@@ -113,8 +113,10 @@ def calculate_latency(latency_results):
                         float(format((average - steady_val), '.2f'))
                 if 'color' not in result_dict[key]:
                     result_dict[key]['color'] = {}
-                if average >= 3 * steady_val:  # right now it is only a 10% difference, to test if it works
+                if average - steady_val >= 10:
                     result_dict[key]['color'][temp_key] = 'red'
+                elif average - steady_val >= 5:
+                    result_dict[key]['color'][temp_key] = 'yellow'
                 else:
                     result_dict[key]['color'][temp_key] = 'blue'
 
