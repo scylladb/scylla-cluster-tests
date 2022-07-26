@@ -410,7 +410,10 @@ class LongevityTest(ClusterTester):
         for batch in range(0, num_of_batches):
             for i in range(1 + batch * batch_size, (batch + 1) * batch_size + 1):
                 keyspace_name = self._get_keyspace_name(i)
-                self._run_all_stress_cmds(stress_queue, params={'stress_cmd': stress_cmd + self.all_node_ips_for_stress_command,
+                if not isinstance(stress_cmd, list):
+                    stress_cmd = [stress_cmd]
+                stress_cmds_with_all_ips = [cmd + self.all_node_ips_for_stress_command for cmd in stress_cmd]
+                self._run_all_stress_cmds(stress_queue, params={'stress_cmd': stress_cmds_with_all_ips,
                                                                 'keyspace_name': keyspace_name, 'round_robin': True})
             for stress in stress_queue:
                 self.verify_stress_thread(cs_thread_pool=stress)
