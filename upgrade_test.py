@@ -203,24 +203,28 @@ class UpgradeTest(FillDatabaseData):
                 new_is_enterprise = 'scylla-enterprise' in result.stdout
 
             scylla_pkg = 'scylla-enterprise' if new_is_enterprise else 'scylla'
+            ver_suffix = r'\*{}'.format(new_version) if new_version else ''
+            scylla_pkg_ver = f"{scylla_pkg}{ver_suffix}"
             if orig_is_enterprise != new_is_enterprise:
                 self.upgrade_rollback_mode = 'reinstall'
-            ver_suffix = r'\*{}'.format(new_version) if new_version else ''
+                if self.params.get('use_preinstalled_scylla'):
+                    scylla_pkg_ver += f" {scylla_pkg}-machine-image{ver_suffix}"
+
             if self.upgrade_rollback_mode == 'reinstall':
                 if node.is_rhel_like():
                     node.remoter.run(r'sudo yum remove scylla\* -y')
-                    node.remoter.run('sudo yum install {}{} -y'.format(scylla_pkg, ver_suffix))
+                    node.remoter.run('sudo yum install {} -y'.format(scylla_pkg_ver))
                 else:
                     node.remoter.run(r'sudo apt-get remove scylla\* -y')
                     # fixme: add publick key
                     node.remoter.run(
-                        r'sudo apt-get install {}{} -y '
-                        r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '.format(scylla_pkg, ver_suffix))
+                        r'sudo apt-get install {} -y '
+                        r'-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" '.format(scylla_pkg_ver))
                 recover_conf(node)
                 node.remoter.run('sudo systemctl daemon-reload')
             else:
                 if node.is_rhel_like():
-                    node.remoter.run(r'sudo yum update {}{}\* -y'.format(scylla_pkg, ver_suffix))
+                    node.remoter.run(r'sudo yum update {}\* -y'.format(scylla_pkg_ver))
                 else:
                     node.remoter.run('sudo apt-get update')
                     node.remoter.run(
