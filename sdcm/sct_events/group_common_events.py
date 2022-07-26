@@ -164,6 +164,12 @@ def ignore_ycsb_connection_refused():
 
 
 @contextmanager
+def ignore_abort_requested_errors():
+    with DbEventsFilter(db_event=DatabaseLogEvent.RUNTIME_ERROR, line="abort requested"):
+        yield
+
+
+@contextmanager
 def ignore_scrub_invalid_errors():
     with ExitStack() as stack:
         stack.enter_context(DbEventsFilter(

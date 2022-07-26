@@ -33,7 +33,8 @@ from sdcm.stress_thread import CassandraStressThread
 from sdcm.utils.version_utils import is_enterprise, get_node_supported_sstable_versions
 from sdcm.sct_events.system import InfoEvent
 from sdcm.sct_events.database import IndexSpecialColumnErrorEvent
-from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused
+from sdcm.sct_events.group_common_events import ignore_upgrade_schema_errors, ignore_ycsb_connection_refused, \
+    ignore_abort_requested_errors, decorate_with_context
 
 
 def truncate_entries(func):
@@ -148,6 +149,8 @@ class UpgradeTest(FillDatabaseData):
                                 msg='Expected truncated entry in the system.local table, but it\'s not found')
 
     @truncate_entries
+    @decorate_with_context(ignore_abort_requested_errors)
+    # https://github.com/scylladb/scylla/issues/10447#issuecomment-1194155163
     def upgrade_node(self, node, upgrade_sstables=True):
         # pylint: disable=too-many-branches,too-many-statements
         new_scylla_repo = self.params.get('new_scylla_repo')
@@ -247,6 +250,8 @@ class UpgradeTest(FillDatabaseData):
             self.upgradesstables_if_command_available(node)
 
     @truncate_entries
+    @decorate_with_context(ignore_abort_requested_errors)
+    # https://github.com/scylladb/scylla/issues/10447#issuecomment-1194155163
     def rollback_node(self, node, upgrade_sstables=True):
         # pylint: disable=too-many-branches,too-many-statements
 
