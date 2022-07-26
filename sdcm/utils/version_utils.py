@@ -420,9 +420,10 @@ def transform_non_semver_scylla_version_to_semver(scylla_version: str):
     if SEMVER_REGEX.match(scylla_version):
         return scylla_version
     version_parts = scylla_version.split(".")
-    new_scylla_version = f"{version_parts[0]}.{version_parts[1]}.0-{'.'.join(version_parts[2:])}"
-    if SEMVER_REGEX.match(new_scylla_version):
-        return new_scylla_version
+    if len(version_parts) > 2:
+        new_scylla_version = f"{version_parts[0]}.{version_parts[1]}.0-{'.'.join(version_parts[2:])}"
+        if SEMVER_REGEX.match(new_scylla_version):
+            return new_scylla_version
     raise ValueError("Cannot transform '%s' to semver-like string" % scylla_version)
 
 
