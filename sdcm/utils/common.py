@@ -1524,7 +1524,7 @@ def get_branched_ami(scylla_version: str, region_name: str, arch: AwsArchType = 
     else:
         images = [ec2_resource.images.filter(Filters=filters), ]
     images = sorted(itertools.chain.from_iterable(images), key=lambda x: x.creation_date, reverse=True)
-    images = [image for image in images if not image.name.startswith('debug-image')]
+    images = [image for image in images if not image.name.startswith('debug-')]
 
     assert images, f"AMIs for {scylla_version=} with {arch} architecture not found in {region_name}"
 
@@ -1541,7 +1541,7 @@ def get_branched_gce_images(scylla_version: str, project: str = SCYLLA_GCE_IMAGE
     #   RE2 syntax: https://github.com/google/re2/blob/master/doc/syntax.txt
     # or you can see brief explanation here:
     #   https://github.com/apache/libcloud/blob/trunk/libcloud/compute/drivers/gce.py#L274
-    filters = f"(family eq scylla)(labels.branch eq {branch})(name ne debug-image-.*)"
+    filters = f"(family eq scylla)(labels.branch eq {branch})(name ne debug-.*)"
 
     if build_id not in ("latest", "all",):
         # filters += f"(labels.build-id eq {build_id})"  # asked releng to add `build-id' label too, but
