@@ -13,6 +13,7 @@
 
 import re
 import os
+import json
 import logging
 from enum import Enum, auto
 from string import Template
@@ -34,7 +35,7 @@ from repodataParser.RepoParser import Parser
 from sdcm.utils.common import ParallelObject, DEFAULT_AWS_REGION
 from sdcm.sct_events.system import ScyllaRepoEvent
 from sdcm.utils.decorators import retrying
-
+from sdcm.remote.local_cmd_runner import LocalCmdRunner
 
 # Examples of ScyllaDB version strings:
 #   - 666.development-0.20200205.2816404f575
@@ -416,6 +417,8 @@ def resolve_latest_repo_symlink(url: str) -> str:
 
 
 def get_specific_tag_of_docker_image(docker_repo: str):
+    runner = LocalCmdRunner()
+    inspect_command = 'docker buildx imagetools inspect --raw'
 
     def get_digest(tag_dict):
         for image in tag_dict['images']:
@@ -423,11 +426,21 @@ def get_specific_tag_of_docker_image(docker_repo: str):
                 return image['digest']
         return None
 
+    def get_digest_from_manifest(image):
+        inspect_data = json.loads(runner.run(f"{inspect_command} {image}", ignore_status=True).stdout)
+        for manifest in inspect_data.get('manifests', []):
+            if manifest.get('platform', {}).get('architecture') == arch:
+                return manifest.get('digest')
+        return None
+
     arch = 'amd64'
     url = 'https://hub.docker.com/v2/repositories/{}/tags/{}'
     docker_latest = requests.get(url.format(docker_repo, 'latest')).json()
     latest_number_of_images = len(docker_latest['images'])
-    latest_digest = get_digest(docker_latest)
+    if latest_number_of_images == 0:
+        latest_digest = get_digest_from_manifest(f"{docker_repo}:latest")
+    else:
+        latest_digest = get_digest(docker_latest)
     for page_number in count(start=1):
         all_tags = requests.get(url=f'https://hub.docker.com/v2/repositories/{docker_repo}/'
                                     f'tags?page_size=50&page={page_number}').json()
@@ -436,6 +449,8 @@ def get_specific_tag_of_docker_image(docker_repo: str):
                 if len(tag['images']) < latest_number_of_images:
                     continue  # filter out arch specific tags
                 tag_digest = get_digest(tag)
+                if not tag_digest:
+                    tag_digest = get_digest_from_manifest(f"{docker_repo}:{tag['name']}")
                 if latest_digest == tag_digest and tag['name'] != 'latest':
                     return tag['name']
         else:
