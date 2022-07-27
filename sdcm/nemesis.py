@@ -633,18 +633,24 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 self.target_node.wait_jmx_up()
             self.cluster.wait_for_nodes_up_and_normal(nodes=[self.target_node])
             found_cdc_error = list(cdc_expected_error)
-            found_success_info = list(cdc_success_msg)
-            if found_cdc_error and not found_success_info:
+            if found_cdc_error:
                 # if cdc error message "cdc - Could not update CDC description..."
                 # was found in log during reboot, but after that success messages:
                 # "streams description updated" or "CDC desc table updated" were not
                 # found in logs, raise the exception to fail the nemesis.
-                raise CdcStreamsWasNotUpdated(
-                    f"After '{found_cdc_error[0]}', messages '{' or '.join(cdc_success_msg)}' were not found")
+                self._check_for_cdc_success_messages(found_cdc_error, cdc_success_msg)
 
             sleep_time = random.randint(0, 100)
             self.log.info("Sleep %s seconds after hard reboot and service-up for node %s", sleep_time, self.target_node)
             time.sleep(sleep_time)
+
+    @staticmethod
+    @retrying(n=5, sleep_time=25, allowed_exceptions=(CdcStreamsWasNotUpdated,))
+    def _check_for_cdc_success_messages(found_cdc_error, cdc_success_msg):
+        found_success_info = list(cdc_success_msg)
+        if not found_success_info:
+            raise CdcStreamsWasNotUpdated(
+                f"After '{found_cdc_error[0]}', messages '{' or '.join(cdc_success_msg)}' were not found")
 
     def disrupt_soft_reboot_node(self):
         self.reboot_node(target_node=self.target_node, hard=False)
