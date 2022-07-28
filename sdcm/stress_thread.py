@@ -370,3 +370,27 @@ class DockerBasedStressThread:
             LOGGER.debug("Selected '%s' to query for local nodes", node_to_query)
             return node_to_query.cql_ip_address
         return self.node_list[0].cql_ip_address
+
+
+duration_pattern = re.compile(r'(?P<hours>[\d]*)h|(?P<minutes>[\d]*)m|(?P<seconds>[\d]*)s')
+stress_cmd_get_duration_pattern = re.compile(r' [-]{0,2}duration[\s=]+([\d]+[hms]+)')
+stress_cmd_get_warmup_pattern = re.compile(r' [-]{0,2}warmup[\s=]+([\d]+[hms]+)')
+
+
+def time_period_str_to_seconds(time_str: str) -> int:
+    """Transforms duration string into seconds int. e.g. 1h -> 3600, 1h22m->4920 or 10m->600"""
+    return sum([int(g[0] or 0) * 3600 + int(g[1] or 0) * 60 + int(g[2] or 0) for g in duration_pattern.findall(time_str)])
+
+
+def get_timeout_from_stress_cmd(stress_cmd: str) -> int | None:
+    """Gets timeout in seconds based on duration and warmup arguments from stress command."""
+    timeout = 0
+    if duration_match := stress_cmd_get_duration_pattern.search(stress_cmd):
+        timeout += time_period_str_to_seconds(duration_match.group(0))
+    if warmup_match := stress_cmd_get_warmup_pattern.search(stress_cmd):
+        timeout += time_period_str_to_seconds(warmup_match.group(0))
+    if timeout == 0:
+        return None
+    else:
+        # adding 10 minutes to timeout for general all others delays
+        return timeout + 600
