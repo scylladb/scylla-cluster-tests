@@ -5186,6 +5186,7 @@ class ToggleGcModeMonkey(Nemesis):
     disruptive = False
     schema_changes = True
     free_tier_set = True
+    run_with_gemini = False
 
     def disrupt(self):
         self.disrupt_toggle_table_gc_mode()
