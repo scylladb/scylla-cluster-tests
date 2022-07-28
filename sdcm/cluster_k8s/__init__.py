@@ -981,12 +981,11 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
             - COMMON_CONTAINERS_RESOURCES['cpu']
             - SCYLLA_MANAGER_AGENT_RESOURCES['cpu'] * self.tenants_number
         )
-        if self.is_performance_tuning_enabled:
-            # NOTE: we should use at max 7 from each 8 cores.
-            #       i.e 28/32 , 21/24 , 14/16 and 7/8
-            new_cpu_limit = math.ceil(cpu_limit / 8) * 7
-            if new_cpu_limit < cpu_limit:
-                cpu_limit = new_cpu_limit
+        # NOTE: we should use at max 7 from each 8 cores.
+        #       i.e 28/32 , 21/24 , 14/16 and 7/8
+        new_cpu_limit = math.ceil(cpu_limit / 8) * 7
+        if new_cpu_limit < cpu_limit:
+            cpu_limit = new_cpu_limit
         cpu_limit = cpu_limit // self.tenants_number or 1
         memory_limit = (
             memory_limit
