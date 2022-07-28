@@ -110,7 +110,7 @@ def start_rsyslog(docker_name, log_dir, port="514"):
     atexit.register(stop_rsyslog)
 
     res = local_runner.run('docker port {0} 514'.format(RSYSLOG_DOCKER_ID))
-    listening_port = res.stdout.strip().split(':')[1]
+    listening_port = res.stdout.strip().split(':')[1].strip()
 
     return listening_port
 
