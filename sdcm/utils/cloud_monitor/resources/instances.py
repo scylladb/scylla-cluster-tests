@@ -1,3 +1,5 @@
+import os
+
 from logging import getLogger
 from datetime import datetime
 from boto3 import client as boto3_client
@@ -73,6 +75,7 @@ class GCEInstance(CloudInstance):
             owner=tags.get("RunByUser", NA) if tags else NA,
             create_time=datetime.fromisoformat(instance.extra['creationTimestamp']),
             keep=self.get_keep_alive_gce_instance(instance),
+            project=instance.driver.project
         )
 
     @property
@@ -101,8 +104,12 @@ class CloudInstances(CloudResources):
         self.all.extend(self["aws"])
 
     def get_gce_instances(self):
-        gce_instances = list_instances_gce(verbose=True)
-        self["gce"] = [GCEInstance(instance) for instance in gce_instances]
+        projects = ['', 'gcp-sct-project-1']
+        self["gce"] = []
+        for project in projects:
+            os.environ['SCT_GCE_PROJECT'] = project
+            gce_instances = list_instances_gce(verbose=True)
+            self["gce"] += [GCEInstance(instance) for instance in gce_instances]
         self.all.extend(self["gce"])
 
     def get_all(self):
