@@ -8,6 +8,7 @@
                     <table id="results_table">
                         <tr>
                             <th>Cloud</th>
+                            <th>Project</th>
                             <th>Region-AZ</th>
                             <th>Name</th>
                             <th>State</th>
@@ -16,6 +17,7 @@
                         {% for instance in instances|sort(attribute="create_time") %}
                         <tr>
                             <td>{{ instance.cloud }}</td>
+                            <td>{{ instance.project }}</td>
                             <td>{{ instance.region_az }}</td>
                             <td>{{ instance.name }}</td>
                             <td>{{ instance.state }}</td>
