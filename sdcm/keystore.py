@@ -47,14 +47,14 @@ class KeyStore:  # pylint: disable=too-many-public-methods
         return self.get_json("es.json")
 
     def get_gcp_credentials(self):
-        project = os.environ.get('SCT_GCE_PROJECT') or 'gcp'
+        project = os.environ.get('SCT_GCE_PROJECT') or 'gcp-sct-project-1'
         return self.get_json(f"{project}.json")
 
     def get_dbaaslab_gcp_credentials(self):
         return self.get_json("gcp-scylladbaaslab.json")
 
     def get_gcp_service_accounts(self):
-        project = os.environ.get('SCT_GCE_PROJECT') or 'gcp'
+        project = os.environ.get('SCT_GCE_PROJECT') or 'gcp-sct-project-1'
         return self.get_json(f"{project}_service_accounts.json")
 
     def get_scylladb_upload_credentials(self):
