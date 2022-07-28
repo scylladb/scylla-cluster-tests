@@ -75,7 +75,7 @@ from sdcm.sct_events.setup import start_events_device, stop_events_device
 from sdcm.sct_events.system import InfoEvent, TestFrameworkEvent, TestResultEvent, TestTimeoutEvent
 from sdcm.sct_events.file_logger import get_events_grouped_by_category, get_logger_event_summary
 from sdcm.sct_events.events_analyzer import stop_events_analyzer
-from sdcm.stress_thread import CassandraStressThread
+from sdcm.stress_thread import CassandraStressThread, get_timeout_from_stress_cmd
 from sdcm.gemini_thread import GeminiStressThread
 from sdcm.utils.log_time_consistency import DbLogTimeConsistencyAnalyzer
 from sdcm.utils.threads_and_processes_alive import gather_live_processes_and_dump_to_file, \
@@ -1519,7 +1519,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='', round_robin=False,
             stats_aggregate_cmds=True, keyspace_name=None, stop_test_on_failure=True, **_):
         # stress_cmd = self._cs_add_node_flag(stress_cmd)
-        timeout = self.get_duration(duration)
+        if duration:
+            timeout = self.get_duration(duration)
+        else:
+            timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(duration)
+
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, prefix, stresser="cassandra-stress",
                                            aggregate=stats_aggregate_cmds)
@@ -1547,7 +1551,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def run_stress_thread_bench(self, stress_cmd, duration=None, round_robin=False, stats_aggregate_cmds=True,
                                 use_single_loader=False, stop_test_on_failure=True, **_):
 
-        timeout = self.get_duration(duration)
+        if duration:
+            timeout = self.get_duration(duration)
+        else:
+            timeout = get_timeout_from_stress_cmd(stress_cmd) or self.get_duration(duration)
         stop_test_on_failure = False if not self.params.get("stop_test_on_stress_failure") else stop_test_on_failure
 
         if self.params.get("client_encrypt") and ' -tls' not in stress_cmd:
@@ -1696,8 +1703,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                   round_robin=round_robin, params=self.params).run()
 
     def run_gemini(self, cmd, duration=None):
-
-        timeout = self.get_duration(duration)
+        if duration:
+            timeout = self.get_duration(duration)
+        else:
+            timeout = get_timeout_from_stress_cmd(cmd) or self.get_duration(duration)
         if self.create_stats:
             self.update_stress_cmd_details(cmd, stresser="gemini", aggregate=False)
         return GeminiStressThread(test_cluster=self.db_cluster,
