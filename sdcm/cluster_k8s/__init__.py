@@ -492,7 +492,15 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
         all_versions = yaml.safe_load(self.helm(
             f"search repo {local_chart_path} --devel --versions -o yaml"))
         assert isinstance(all_versions, list), f"Expected list of data, got: {type(all_versions)}"
-        return str(max((version.LegacyVersion(chart_data["version"]) for chart_data in all_versions)))
+        # NOTE: make sure that we do not compare '1.3.0' and 'v1.4.0' versions as well as
+        #       'v1.8.0-alpha.0' and 'v1.8.0-alpha.0-9-g5e138fa'.
+        #       In first case always add 'v' to make versions be of the same type.
+        #       In second one do not pick up versions which are the oldest in the family like 'v1.8.0-alpha.0'
+        #       but considered 'the newest' by version parser.
+        return str(max((
+            version.LegacyVersion(("v" if v["version"][0] != 'v' else "") + v["version"])
+            for v in all_versions if v["version"].count('-') in (0, 3)
+        )))
 
     @cached_property
     def _scylla_operator_chart_version(self):
