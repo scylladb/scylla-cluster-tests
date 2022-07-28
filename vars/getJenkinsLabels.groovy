@@ -14,7 +14,10 @@ def call(String backend, String region=null, String datacenter=null, String loca
     } catch(Exception) {
 
     }
-    def gcp_project = params.gce_project?.trim() ?: 'gce-sct'
+
+    def gcp_project = params.gce_project?.trim() ?: 'gcp-sct-project-1'
+    gcp_project = gcp_project == 'gcp' ? 'gce-sct' : gcp_project
+
     def jenkins_labels = ['aws-eu-west-1': 'aws-sct-builders-eu-west-1-new',
                           'aws-eu-west-2': 'aws-sct-builders-eu-west-2',
                           'aws-eu-north-1': 'aws-sct-builders-eu-north-1',
