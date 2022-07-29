@@ -1184,41 +1184,47 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # Wait for the start of the resharding.
         # In K8S it starts from the last node of a rack and then goes to previous ones.
         # One resharding with 100Gb+ may take about 3-4 minutes. So, set 5 minutes timeout per node.
-        for node, liveness_probe_failures, resharding_start, resharding_finish in nodes_data:
-            assert wait.wait_for(
-                func=lambda: list(resharding_start),  # pylint: disable=cell-var-from-loop
-                step=1, timeout=300, throw_exc=False,
-                text=f"Waiting for the start of resharding on the '{node.name}' node.",
-            ), f"Start of resharding hasn't been detected on the '{node.name}' node."
-            resharding_started = time.time()
-            self.log.debug("Resharding has been started on the '%s' node.", node.name)
+        try:
+            for node, liveness_probe_failures, resharding_start, resharding_finish in nodes_data:
+                assert wait.wait_for(
+                    func=lambda: list(resharding_start),  # pylint: disable=cell-var-from-loop
+                    step=1, timeout=300, throw_exc=False,
+                    text=f"Waiting for the start of resharding on the '{node.name}' node.",
+                ), f"Start of resharding hasn't been detected on the '{node.name}' node."
+                resharding_started = time.time()
+                self.log.debug("Resharding has been started on the '%s' node.", node.name)
 
-            # Wait for the end of resharding
-            assert wait.wait_for(
-                func=lambda: list(resharding_finish),  # pylint: disable=cell-var-from-loop
-                step=3, timeout=600, throw_exc=False,
-                text=f"Waiting for the finish of resharding on the '{node.name}' node.",
-            ), f"Finish of the resharding hasn't been detected on the '{node.name}' node."
-            self.log.debug("Resharding has been finished successfully on the '%s' node.", node.name)
+                # Wait for the end of resharding
+                assert wait.wait_for(
+                    func=lambda: list(resharding_finish),  # pylint: disable=cell-var-from-loop
+                    step=3, timeout=600, throw_exc=False,
+                    text=f"Waiting for the finish of resharding on the '{node.name}' node.",
+                ), f"Finish of the resharding hasn't been detected on the '{node.name}' node."
+                self.log.debug("Resharding has been finished successfully on the '%s' node.", node.name)
 
-            # Calculate the time spent for resharding. We need to have it be bigger than 2minutes
-            # because it is the timeout of the liveness probe for Scylla pods.
-            resharding_time = time.time() - resharding_started
-            if resharding_time < 120:
-                self.log.warning(
-                    "Resharding was too fast - '%s's (<120s) on the '%s' node. "
-                    "So, nemesis didn't cover the case.",
-                    resharding_time, node.name)
-            else:
-                self.log.info(
-                    "Resharding took '%s's on the '%s' node. It is enough to cover the case.",
-                    resharding_time, node.name)
+                # Calculate the time spent for resharding. We need to have it be bigger than 2minutes
+                # because it is the timeout of the liveness probe for Scylla pods.
+                resharding_time = time.time() - resharding_started
+                if resharding_time < 120:
+                    self.log.warning(
+                        "Resharding was too fast - '%s's (<120s) on the '%s' node. "
+                        "So, nemesis didn't cover the case.",
+                        resharding_time, node.name)
+                else:
+                    self.log.info(
+                        "Resharding took '%s's on the '%s' node. It is enough to cover the case.",
+                        resharding_time, node.name)
 
-            # Check that liveness probe didn't report any errors
-            # https://github.com/scylladb/scylla-operator/issues/894
-            liveness_probe_failures = list(liveness_probe_failures)
-            assert not liveness_probe_failures, (
-                f"There are liveness probe failures: {liveness_probe_failures}")
+                # Check that liveness probe didn't report any errors
+                # https://github.com/scylladb/scylla-operator/issues/894
+                liveness_probe_failures = list(liveness_probe_failures)
+                assert not liveness_probe_failures, (
+                    f"There are liveness probe failures: {liveness_probe_failures}")
+        finally:
+            # NOTE: refresh scylla pods IP addresses because it may get changed here
+            for node in nodes_data:
+                node[0].refresh_ip_address()
+
         self.log.info("Resharding has successfully ended on whole Scylla cluster.")
 
     def disrupt_nodetool_flush_and_reshard_on_kubernetes(self):
