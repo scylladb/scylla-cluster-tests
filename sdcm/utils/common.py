@@ -2634,9 +2634,10 @@ class RemoteTemporaryFolder:
         self.folder_name = ""
 
     def __enter__(self):
-        result = self.node.remoter.sudo('mktemp -d')
+        result = self.node.remoter.run('mktemp -d')
         self.folder_name = result.stdout.strip()
         return self
 
     def __exit__(self, exit_type, value, traceback):
+        # remove the temporary folder as `sudo` to cover the case when the folder owner was changed during test
         self.node.remoter.sudo(f'rm -rf {self.folder_name}')
