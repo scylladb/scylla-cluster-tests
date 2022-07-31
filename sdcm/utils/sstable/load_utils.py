@@ -62,10 +62,7 @@ class SstableLoadUtils:
 
         with RemoteTemporaryFolder(node=node) as tmp_folder:
 
-            if node.is_docker():
-                node.remoter.run(f'tar xvfz {test_data.sstable_file} -C {tmp_folder.folder_name}/')
-            else:
-                node.remoter.sudo(f'tar xvfz {test_data.sstable_file} -C {tmp_folder.folder_name}/', user='scylla')
+            node.remoter.run(f'tar xvfz {test_data.sstable_file} -C {tmp_folder.folder_name}/')
 
             if create_schema:
                 SstableLoadUtils.create_keyspace(node=node,
@@ -81,9 +78,9 @@ class SstableLoadUtils:
             # Scylla Enterprise 2019.1 doesn't support to load schema.cql and manifest.json, let's remove them
             node.remoter.sudo(f'rm -f {tmp_folder.folder_name}/schema.cql')
             node.remoter.sudo(f'rm -f {tmp_folder.folder_name}/manifest.json')
-
+            params = {} if node.is_docker() else {'user': 'scylla'}
             node.remoter.sudo(
-                f'mv {tmp_folder.folder_name}/* /var/lib/scylla/data/{keyspace_name}/{upload_dir}/upload/')
+                f'mv {tmp_folder.folder_name}/* /var/lib/scylla/data/{keyspace_name}/{upload_dir}/upload/', **params)
 
     @classmethod
     def run_load_and_stream(cls, node, keyspace_name: str = 'keyspace1', table_name: str = 'standard1'):
