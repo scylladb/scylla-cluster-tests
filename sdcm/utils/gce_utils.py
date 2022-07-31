@@ -40,6 +40,9 @@ SUPPORTED_REGIONS = {
     'us-west1': 'abc'}
 
 
+SUPPORTED_PROJECTS = {'gcp', 'gcp-sct-project-1'} | {os.environ.get('SCT_GCE_PROJECT', 'gcp-sct-project-1')}
+
+
 def append_zone(region: str) -> str:
     dash_count = region.count("-")
     if dash_count == 2:

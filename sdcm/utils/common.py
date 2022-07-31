@@ -75,6 +75,8 @@ from sdcm.utils.docker_utils import ContainerManager
 from sdcm.utils.gce_utils import GcloudContainerMixin
 from sdcm.remote import LocalCmdRunner
 from sdcm.remote import RemoteCmdRunnerBase
+from sdcm.utils.gce_utils import SUPPORTED_PROJECTS
+
 
 LOGGER = logging.getLogger('utils')
 DEFAULT_AWS_REGION = "eu-west-1"
@@ -552,7 +554,9 @@ def clean_cloud_resources(tags_dict, dry_run=False):
     clean_clusters_gke(tags_dict, dry_run=dry_run)
     clean_orphaned_gke_disks(dry_run=dry_run)
     clean_clusters_eks(tags_dict, dry_run=dry_run)
-    clean_instances_gce(tags_dict, dry_run=dry_run)
+    for project in SUPPORTED_PROJECTS:
+        os.environ['SCT_GCE_PROJECT'] = project
+        clean_instances_gce(tags_dict, dry_run=dry_run)
     clean_instances_azure(tags_dict, dry_run=dry_run)
     clean_resources_docker(tags_dict, dry_run=dry_run)
     return True
