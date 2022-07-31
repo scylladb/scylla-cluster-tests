@@ -60,14 +60,10 @@ class SstableLoadUtils:
                         hash_expected=test_data.sstable_md5, retries=2,
                         user_agent=creds['user_agent'])
 
-        with RemoteTemporaryFolder(node=node) as tmp_folder:
-
-            if node.is_docker():
+        if create_schema:
+            with RemoteTemporaryFolder(node=node) as tmp_folder:
+                # Extract tarball to temporary folder when test keyspace and table do not exist and need to be created
                 node.remoter.run(f'tar xvfz {test_data.sstable_file} -C {tmp_folder.folder_name}/')
-            else:
-                node.remoter.sudo(f'tar xvfz {test_data.sstable_file} -C {tmp_folder.folder_name}/', user='scylla')
-
-            if create_schema:
                 SstableLoadUtils.create_keyspace(node=node,
                                                  replication_factor=kwargs["replication_factor"])
 
@@ -75,15 +71,22 @@ class SstableLoadUtils:
                                                        schema_file_and_path=f"{tmp_folder.folder_name}/schema.cql",
                                                        session=kwargs["session"])
 
-            result = node.remoter.sudo(f"ls -t /var/lib/scylla/data/{keyspace_name}/")
-            upload_dir = result.stdout.split()[0]
+        result = node.remoter.sudo(f"ls -t /var/lib/scylla/data/{keyspace_name}/")
+        upload_dir = result.stdout.split()[0]
 
-            # Scylla Enterprise 2019.1 doesn't support to load schema.cql and manifest.json, let's remove them
-            node.remoter.sudo(f'rm -f {tmp_folder.folder_name}/schema.cql')
-            node.remoter.sudo(f'rm -f {tmp_folder.folder_name}/manifest.json')
-
+        # Extract tarball again (in case create_schema=True) directly to Scylla table upload folder to simplify the code
+        # and prevent changes of permissions and increasing possibility of failures with "Permission denied" error
+        if node.is_docker():
+            node.remoter.run(f'tar xvfz {test_data.sstable_file} -C /'
+                             f'var/lib/scylla/data/{keyspace_name}/{upload_dir}/upload/')
+        else:
             node.remoter.sudo(
-                f'mv {tmp_folder.folder_name}/* /var/lib/scylla/data/{keyspace_name}/{upload_dir}/upload/')
+                f'tar xvfz {test_data.sstable_file} -C /var/lib/scylla/data/{keyspace_name}/{upload_dir}/upload/',
+                user='scylla')
+
+        # Scylla Enterprise 2019.1 doesn't support to load schema.cql and manifest.json, let's remove them
+        node.remoter.sudo(f'rm -f /var/lib/scylla/data/{keyspace_name}/{upload_dir}/upload/schema.cql')
+        node.remoter.sudo(f'rm -f /var/lib/scylla/data/{keyspace_name}/{upload_dir}/upload/manifest.json')
 
     @classmethod
     def run_load_and_stream(cls, node, keyspace_name: str = 'keyspace1', table_name: str = 'standard1'):
