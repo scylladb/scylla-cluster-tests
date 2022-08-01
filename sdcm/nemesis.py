@@ -168,11 +168,14 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     limited: bool = False           # flag that signal that nemesis are belong to limited set of nemesises
     has_steady_run: bool = False    # flag that signal that nemesis should be run with perf tests with steady run
 
+    wrapped_disruptive_methods = []
+
     def __new__(cls, tester_obj, termination_event, *args):  # pylint: disable=unused-argument
         for name, member in inspect.getmembers(cls, lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
-            if name.startswith(cls.DISRUPT_NAME_PREF):
+            if name.startswith(cls.DISRUPT_NAME_PREF) and name not in cls.wrapped_disruptive_methods:
                 # add "disrupt_method_wrapper" decorator to all methods are started with "disrupt_"
                 setattr(cls, name, disrupt_method_wrapper(member))
+                cls.wrapped_disruptive_methods.append(name)
         return object.__new__(cls)
 
     def __init__(self, tester_obj, termination_event, *args):  # pylint: disable=unused-argument
