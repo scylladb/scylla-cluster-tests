@@ -7,7 +7,7 @@ from sdcm.utils.cloud_monitor.common import InstanceLifecycle, NA
 from sdcm.utils.cloud_monitor.resources import CloudInstance, CloudResources
 from sdcm.utils.common import aws_tags_to_dict, gce_meta_to_dict, list_instances_aws, list_instances_gce
 from sdcm.utils.pricing import AWSPricing, GCEPricing
-
+from sdcm.utils.gce_utils import SUPPORTED_PROJECTS
 
 LOGGER = getLogger(__name__)
 
@@ -104,9 +104,8 @@ class CloudInstances(CloudResources):
         self.all.extend(self["aws"])
 
     def get_gce_instances(self):
-        projects = ['', 'gcp-sct-project-1']
         self["gce"] = []
-        for project in projects:
+        for project in SUPPORTED_PROJECTS:
             os.environ['SCT_GCE_PROJECT'] = project
             gce_instances = list_instances_gce(verbose=True)
             self["gce"] += [GCEInstance(instance) for instance in gce_instances]
