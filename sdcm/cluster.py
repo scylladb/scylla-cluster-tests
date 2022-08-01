@@ -1610,33 +1610,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     def remote_manager_agent_yaml(self):
         return self._remote_yaml(path=SCYLLA_MANAGER_AGENT_YAML_PATH)
 
-    def get_openldap_config(self):
-        if self.test_config.LDAP_ADDRESS is None:
-            return {}
-        ldap_server_ip = '127.0.0.1' if self.test_config.IP_SSH_CONNECTIONS == 'public' \
-            else self.test_config.LDAP_ADDRESS[0]
-        ldap_port = LDAP_SSH_TUNNEL_LOCAL_PORT if self.test_config.IP_SSH_CONNECTIONS == 'public' \
-            else self.test_config.LDAP_ADDRESS[1]
-        return {'role_manager': 'com.scylladb.auth.LDAPRoleManager',
-                'ldap_url_template': f'ldap://{ldap_server_ip}:{ldap_port}/'
-                                     f'{LDAP_BASE_OBJECT}?cn?sub?(uniqueMember='
-                                     f'uid={{USER}},ou=Person,{LDAP_BASE_OBJECT})',
-                'ldap_attr_role': 'cn',
-                'ldap_bind_dn': f'cn=admin,{LDAP_BASE_OBJECT}',
-                'ldap_bind_passwd': LDAP_PASSWORD}
-
-    def get_ldap_ms_ad_config(self):
-        if self.test_config.LDAP_ADDRESS is None:
-            return {}
-        ldap_ms_ad_credentials = KeyStore().get_ldap_ms_ad_credentials()
-        return {'ldap_attr_role': 'cn',
-                'ldap_bind_dn': ldap_ms_ad_credentials['ldap_bind_dn'],
-                'ldap_bind_passwd': ldap_ms_ad_credentials['admin_password'],
-                'ldap_url_template':
-                    f'ldap://{ldap_ms_ad_credentials["server_address"]}:{LDAP_PORT}/{LDAP_BASE_OBJECT}?cn?sub?'
-                    f'(member=CN={{USER}},DC=scylla-qa,DC=com)',
-                'role_manager': 'com.scylladb.auth.LDAPRoleManager'}
-
     def get_saslauthd_config(self):
         if self.test_config.LDAP_ADDRESS is None:
             return {}
