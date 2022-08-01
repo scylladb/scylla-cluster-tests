@@ -129,6 +129,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 'ldap_bind_dn': 'cn=admin,dc=scylla-qa,dc=com', 'ldap_bind_passwd': 'scylla-0',
                 'ldap_url_template': 'ldap://1.1.1.1:389/dc=scylla-qa,dc=com?cn?sub?'
                                      '(uniqueMember=uid={USER},ou=Person,dc=scylla-qa,dc=com)',
+                'role_manager': 'com.scylladb.auth.LDAPRoleManager',
                 'saslauthd_socket_path': '/run/saslauthd/mux'
             },
         )
@@ -165,6 +166,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 'ldap_bind_passwd': 'scylla-0',
                 'ldap_url_template': 'ldap://1.1.1.1:389/dc=scylla-qa,dc=com?cn?sub?'
                                      '(uniqueMember=uid={USER},ou=Person,dc=scylla-qa,dc=com)',
+                'role_manager': 'com.scylladb.auth.LDAPRoleManager',
                 'saslauthd_socket_path': '/run/saslauthd/mux'
             }
         )
@@ -205,6 +207,7 @@ class ScyllaYamlClusterAttrBuilderTest(ScyllaYamlClusterAttrBuilderBase):
                 'hinted_handoff_enabled': 'enabled',
                 'ldap_attr_role': 'cn', 'ldap_bind_dn': 'SOMEDN', 'ldap_bind_passwd': 'PASSWORD',
                 'ldap_url_template': 'ldap://3.3.3.3:389/dc=scylla-qa,dc=com?cn?sub?(member=CN={USER},dc=scylla-qa,dc=com)',
+                'role_manager': 'com.scylladb.auth.LDAPRoleManager',
                 'saslauthd_socket_path': '/run/saslauthd/mux',
             }
         )

@@ -105,6 +105,10 @@ class ScyllaYamlClusterAttrBuilder(ScyllaYamlAttrBuilderBase):
         return None
 
     @property
+    def role_manager(self) -> Optional[str]:
+        return 'com.scylladb.auth.LDAPRoleManager' if self._is_ldap_authorization else None
+
+    @property
     def ldap_bind_passwd(self) -> Optional[str]:
         if self._is_msldap_authorization:
             return self._ms_ldap_bind_passwd
