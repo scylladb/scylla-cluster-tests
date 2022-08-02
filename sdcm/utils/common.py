@@ -1483,6 +1483,26 @@ def remove_files(path):
         LOGGER.info("Remove temporary data manually: \"%s\"", path)
 
 
+def create_remote_storage_dir(node, path='') -> Optional[str]:
+    node_remote_dir = '/tmp'
+    if not path:
+        path = node.name
+    try:
+        remote_dir = os.path.join(node_remote_dir, path)
+        result = node.remoter.run(f'mkdir -p {remote_dir}', ignore_status=True)
+
+        if result.exited > 0:
+            LOGGER.error(
+                'Remote storing folder not created.\n %s', result)
+            remote_dir = node_remote_dir
+
+    except Exception as details:  # pylint: disable=broad-except
+        LOGGER.error("Error during creating remote directory %s", details)
+        return None
+
+    return remote_dir
+
+
 def format_timestamp(timestamp):
     return datetime.datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
 

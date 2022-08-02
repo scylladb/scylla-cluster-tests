@@ -103,9 +103,10 @@ from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.monitorstack.ui import AlternatorDashboard
-from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3
 from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LDAP_BASE_OBJECT, LDAP_PASSWORD, LDAP_USERS, LDAP_ROLE, \
     LDAP_PORT, DEFAULT_PWD_SUFFIX, SASLAUTHD_AUTHENTICATOR
+from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3, \
+    save_kallsyms_map
 from sdcm.utils.remote_logger import get_system_logging_thread
 from sdcm.utils.scylla_args import ScyllaArgParser
 from sdcm.utils.file import File
@@ -1028,6 +1029,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         if verify_ssh:
             self.wait_ssh_up()
+
+        if self.parent_cluster.params.get('print_kernel_callstack'):
+            save_kallsyms_map(node=self)
 
     @cached_property
     def node_type(self) -> 'str':
@@ -4232,6 +4236,8 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 self.log.info("Done waiting for preinstalled Scylla")
                 if self.params.get('workaround_kernel_bug_for_iotune'):
                     self.copy_preconfigured_iotune_files(node)
+            if self.params.get('print_kernel_callstack'):
+                save_kallsyms_map(node=node)
             if node.is_nonroot_install:
                 self.scylla_configure_non_root_installation(node=node, devname=nic_devname,
                                                             verbose=verbose, timeout=timeout)
