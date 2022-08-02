@@ -54,6 +54,7 @@ from sdcm.cluster_k8s import PodCluster, ScyllaPodCluster
 from sdcm.cluster_k8s.mini_k8s import LocalKindCluster
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.log import SDCMAdapter
+from sdcm.logcollector import save_kallsyms_map
 from sdcm.mgmt import TaskStatus
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
 from sdcm.paths import SCYLLA_YAML_PATH
@@ -3006,7 +3007,8 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def reboot_node(self, target_node, hard=True, verify_ssh=True):
         with ignore_view_error_gate_closed_exception():
             target_node.reboot(hard=hard, verify_ssh=verify_ssh)
-
+            if self.tester.params.get('print_kernel_callstack'):
+                save_kallsyms_map(node=target_node)
             # pods can change their ip address during the process,
             # so we update the monitor at this point
             if self._is_it_on_kubernetes():

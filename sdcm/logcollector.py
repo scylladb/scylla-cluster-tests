@@ -47,7 +47,7 @@ from sdcm.utils.common import (
     filter_aws_instances_by_type,
     filter_gce_instances_by_type,
     get_sct_root_path,
-    normalize_ipv6_url,
+    normalize_ipv6_url, create_remote_storage_dir,
 )
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.decorators import retrying
@@ -781,6 +781,8 @@ class ScyllaLogCollector(LogCollector):
                                     "-u scylla-image-setup.service -u scylla-io-setup.service -u scylla-server.service "
                                     "-u scylla-jmx.service -u scylla-housekeeping-restart.service "
                                     "-u scylla-housekeeping-daily.service", search_locally=True),
+                    FileLog(name='kallsyms_*',
+                            search_locally=True),
                     CommandLog(name='cpu_info',
                                command='cat /proc/cpuinfo'),
                     CommandLog(name='mem_info',
@@ -798,8 +800,6 @@ class ScyllaLogCollector(LogCollector):
                                command='cat /etc/scylla.d/io_properties.yaml'),
                     CommandLog(name='dmesg.log',
                                command='sudo dmesg -P'),
-                    CommandLog(name='kallsyms',
-                               command='sudo cat /proc/kallsyms'),
                     CommandLog(name='systemctl.status',
                                command='sudo systemctl status --all --full --no-pager'),
                     CommandLog(name='cassandra-rackdc.properties',
@@ -812,6 +812,27 @@ class ScyllaLogCollector(LogCollector):
     def collect_logs(self, local_search_path=None) -> list[str]:
         self.collect_logs_for_inactive_nodes(local_search_path)
         return super().collect_logs(local_search_path)
+
+
+def save_kallsyms_map(node):
+
+    LOGGER.info('Saving kallsyms map from host: %s', node.name)
+    if remote_node_dir := create_remote_storage_dir(node):
+        uptime = datetime.datetime.strptime(node.remoter.run('uptime -s', ignore_status=True).stdout.strip(),
+                                            '%Y-%m-%d %H:%M:%S').strftime("%Y%m%d_%H%M%S")
+        kallsyms_name = f'kallsyms_{uptime}'
+        kallsyms_file_path = os.path.join(node.logdir, kallsyms_name)
+        if os.path.exists(kallsyms_file_path):
+            LOGGER.debug("The kallsyms file '%s' already exists and not changed. Not collecting it's map",
+                         kallsyms_file_path)
+            return
+        log_entity = CommandLog(name=kallsyms_name,
+                                command='sudo cat /proc/kallsyms')
+
+        try:
+            log_entity.collect(node, node.logdir, remote_node_dir)
+        except Exception as details:  # pylint: disable=broad-except
+            LOGGER.error("Error occurred during collecting kallsyms on host: %s\n%s", node.name, details)
 
 
 class LoaderLogCollector(LogCollector):
