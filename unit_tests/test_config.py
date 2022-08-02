@@ -247,7 +247,6 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CLUSTER_BACKEND'] = 'k8s-local-kind'
         os.environ['SCT_SCYLLA_LINUX_DISTRO'] = 'ubuntu-xenial'
         os.environ['SCT_SCYLLA_LINUX_DISTRO_LOADER'] = 'centos'
-        os.environ['SCT_SCYLLA_VERSION'] = 'latest'
         conf = sct_config.SCTConfiguration()
         conf.verify_configuration()
 
