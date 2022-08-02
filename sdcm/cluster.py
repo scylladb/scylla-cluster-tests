@@ -84,7 +84,7 @@ from sdcm.utils.common import (
     normalize_ipv6_url,
     download_dir_from_cloud,
     generate_random_string,
-    prepare_and_start_saslauthd_service,
+    prepare_and_start_saslauthd_service, ParallelObject,
 )
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.distro import Distro
@@ -108,7 +108,8 @@ from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events.decorators import raise_event_on_failure
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.monitorstack.ui import AlternatorDashboard
-from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3
+from sdcm.logcollector import GrafanaSnapshot, GrafanaScreenShot, PrometheusSnapshots, upload_archive_to_s3, \
+    collect_kallsyms_map
 from sdcm.utils.ldap import LDAP_SSH_TUNNEL_LOCAL_PORT, LDAP_BASE_OBJECT, LDAP_PASSWORD, LDAP_USERS, \
     LDAP_PORT, DEFAULT_PWD_SUFFIX
 from sdcm.utils.remote_logger import get_system_logging_thread
@@ -1077,6 +1078,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         # wait until the reboot is executed
         wait.wait_for(func=uptime_changed, step=10, timeout=60*45, throw_exc=True)
+
+        collect_kallsyms_map(node=self)
 
         if verify_ssh:
             self.wait_ssh_up()
@@ -3050,11 +3053,12 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         # NOTE: following is needed in case of K8S where we init multiple DB clusters first
         #       and only then we add nodes to it calling code in parallel.
         if add_nodes:
+            run_add_nodes = self.add_db_nodes if 'db' in self.node_type else self.add_nodes
             if isinstance(n_nodes, list):
                 for dc_idx, num in enumerate(n_nodes):
-                    self.add_nodes(num, dc_idx=dc_idx, enable_auto_bootstrap=self.auto_bootstrap)
+                    run_add_nodes(num, dc_idx=dc_idx, enable_auto_bootstrap=self.auto_bootstrap)
             elif isinstance(n_nodes, int):  # legacy type
-                self.add_nodes(n_nodes, enable_auto_bootstrap=self.auto_bootstrap)
+                run_add_nodes(n_nodes, enable_auto_bootstrap=self.auto_bootstrap)
             else:
                 raise ValueError('Unsupported type: {}'.format(type(n_nodes)))
             self.run_node_benchmarks()
@@ -3155,6 +3159,16 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         :return: list of Nodes
         """
         raise NotImplementedError("Derived class must implement 'add_nodes' method!")
+
+    def add_db_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
+        new_nodes = self.add_nodes(count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx, rack=rack,
+                                   enable_auto_bootstrap=enable_auto_bootstrap)
+        collect_kallsyms_in_parallel = ParallelObject(
+            timeout=180, objects=new_nodes, num_workers=len(new_nodes))
+        collect_kallsyms_in_parallel.run(
+            func=collect_kallsyms_map,
+            unpack_objects=True, ignore_exceptions=False)
+
 
     def get_node_private_ips(self):
         return [node.private_ip_address for node in self.nodes]

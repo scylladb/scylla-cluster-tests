@@ -54,6 +54,7 @@ from sdcm.cluster_k8s import PodCluster, ScyllaPodCluster
 from sdcm.cluster_k8s.mini_k8s import LocalKindCluster
 from sdcm.db_stats import PrometheusDBStats
 from sdcm.log import SDCMAdapter
+from sdcm.logcollector import collect_kallsyms_map
 from sdcm.mgmt import TaskStatus
 from sdcm.nemesis_publisher import NemesisElasticSearchPublisher
 from sdcm.paths import SCYLLA_YAML_PATH
@@ -1087,7 +1088,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         #       as 'NotReady' and will fail the pod waiter function.
         self.log.info("Adding new node to cluster...")
         InfoEvent(message='StartEvent - Adding new node to cluster').publish()
-        new_node = self.cluster.add_nodes(
+        new_node = self.cluster.add_db_nodes(
             count=1, dc_idx=self.target_node.dc_idx, enable_auto_bootstrap=True, rack=rack)[0]
         self.monitoring_set.reconfigure_scylla_monitoring()
         self.set_current_running_nemesis(node=new_node)  # prevent to run nemesis on new node when running in parallel
@@ -2978,7 +2979,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def reboot_node(self, target_node, hard=True, verify_ssh=True):
         with ignore_view_error_gate_closed_exception():
             target_node.reboot(hard=hard, verify_ssh=verify_ssh)
-
+            collect_kallsyms_map(node=target_node)
             # pods can change their ip address during the process,
             # so we update the monitor at this point
             if self._is_it_on_kubernetes():
@@ -3455,7 +3456,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 f"CDC extension settings are differs. Current: {actual_cdc_settings} expected: {cdc_settings}"
 
     def _add_new_node_in_new_dc(self) -> BaseNode:
-        new_node = self.cluster.add_nodes(1, dc_idx=0, enable_auto_bootstrap=True)[0]  # add node
+        new_node = self.cluster.add_db_nodes(1, dc_idx=0, enable_auto_bootstrap=True)[0]  # add node
         with new_node.remote_scylla_yaml() as scylla_yml:
             scylla_yml.rpc_address = new_node.ip_address
             scylla_yml.seed_provider = [SeedProvider(class_name='org.apache.cassandra.locator.SimpleSeedProvider',

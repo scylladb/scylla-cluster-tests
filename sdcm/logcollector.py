@@ -47,7 +47,7 @@ from sdcm.utils.common import (
     filter_aws_instances_by_type,
     filter_gce_instances_by_type,
     get_sct_root_path,
-    normalize_ipv6_url,
+    normalize_ipv6_url, create_remote_storage_dir,
 )
 from sdcm.utils.auto_ssh import AutoSshContainerMixin
 from sdcm.utils.decorators import retrying
@@ -56,7 +56,7 @@ from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import RemoteBrowser, WebDriverContainerMixin
 
 LOGGER = logging.getLogger(__name__)
-
+KALLSYMS_DIR_NAME = 'kallsyms'
 
 class CollectingNode(AutoSshContainerMixin, WebDriverContainerMixin):
     # pylint: disable=too-few-public-methods,too-many-instance-attributes
@@ -798,8 +798,7 @@ class ScyllaLogCollector(LogCollector):
                                command='cat /etc/scylla.d/io_properties.yaml'),
                     CommandLog(name='dmesg.log',
                                command='sudo dmesg -P'),
-                    CommandLog(name='kallsyms',
-                               command='sudo cat /proc/kallsyms'),
+                    DirLog(name=f'{KALLSYMS_DIR_NAME}/*', search_locally=True),
                     CommandLog(name='systemctl.status',
                                command='sudo systemctl status --all --full --no-pager'),
                     CommandLog(name='cassandra-rackdc.properties',
@@ -812,6 +811,28 @@ class ScyllaLogCollector(LogCollector):
     def collect_logs(self, local_search_path=None) -> list[str]:
         self.collect_logs_for_inactive_nodes(local_search_path)
         return super().collect_logs(local_search_path)
+
+
+def collect_kallsyms_map(node):
+
+    LOGGER.info('Collecting kallsyms map on host: %s', node.name)
+    if remote_node_dir := create_remote_storage_dir(node):
+        kallsyms_dir = os.path.join(node.logdir, KALLSYMS_DIR_NAME)
+        os.makedirs(kallsyms_dir, exist_ok=True)
+        # name = f'kallsyms_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}'  # TODO: remove if not needed.
+        kallsyms_name = f'kallsyms_{node.uptime}'
+        kallsyms_file_path = os.path.join(kallsyms_dir, kallsyms_name)
+        if os.path.exists(kallsyms_file_path):
+            LOGGER.debug("The kallsyms file '%s' already exists and not changed. Not collecting it's map",
+                         kallsyms_file_path)
+            return
+        log_entity = CommandLog(name=kallsyms_name,
+                                command='sudo cat /proc/kallsyms')
+
+        try:
+            log_entity.collect(node, kallsyms_dir, remote_node_dir)
+        except Exception as details:  # pylint: disable=broad-except
+            LOGGER.error("Error occurred during collecting kallsyms on host: %s\n%s", node.name, details)
 
 
 class LoaderLogCollector(LogCollector):

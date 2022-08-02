@@ -1238,8 +1238,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                 count = cluster.params.get("k8s_n_loader_pods_per_cluster") or cluster.params.get("n_loaders")
             elif cluster.node_type == 'monitor':
                 count = 1
-            else:
+            else:  # It's a db-node
                 count = cluster.params.get("k8s_n_scylla_pods_per_cluster") or cluster.params.get("n_db_nodes")
+                cluster.add_db_nodes(count=count, enable_auto_bootstrap=cluster.auto_bootstrap)
+                return
             cluster.add_nodes(count=count, enable_auto_bootstrap=cluster.auto_bootstrap)
 
         add_nodes_in_parallel = ParallelObject(
