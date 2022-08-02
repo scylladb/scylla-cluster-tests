@@ -76,7 +76,7 @@ class TestBaseVersion(unittest.TestCase):
             'unstable/scylla-enterprise/enterprise-2022.1/deb/unified/2022-06-03T00:22:55Z/scylladb-2022.1/scylla.list'
         linux_distro = 'centos-8'
         version_list = general_test(scylla_repo, linux_distro)
-        self.assertEqual(['4.6', '2021.1'], version_list)
+        self.assertEqual(['5.0', '2021.1', '2022.1'], version_list)
 
 
 if __name__ == "__main__":
