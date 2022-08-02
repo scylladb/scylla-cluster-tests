@@ -22,8 +22,8 @@ k8s_scylla_disk_gi: 5
 k8s_scylla_disk_class: 'local-raid-disks'
 k8s_minio_storage_size: '20Gi'
 
+# NOTE: if we do not specify 'k8s_n_loader_pods_per_cluster' then value of the 'n_loaders' is used
 n_loaders: 1
-k8s_n_loader_pods_per_cluster: 1
 n_monitor_nodes: 1
 
 user_credentials_path: '~/.ssh/scylla-test'
