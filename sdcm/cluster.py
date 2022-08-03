@@ -1735,8 +1735,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.sudo('curl -o %s -L %s' % (repo_path, scylla_repo))
             result = self.remoter.run('cat %s' % repo_path, verbose=True)
             verify_scylla_repo_file(result.stdout, is_rhel_like=False)
+            self.remoter.sudo("mkdir -p /etc/apt/keyrings")
             for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
                 self.remoter.sudo(f"apt-key adv --keyserver keyserver.ubuntu.com --recv-keys {apt_key}", retry=3)
+                self.remoter.sudo(f"gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg "
+                                  f"--keyserver hkp://keyserver.ubuntu.com:80 --recv-keys {apt_key}", retry=3)
         self.update_repo_cache()
 
     def download_scylla_manager_repo(self, scylla_repo: str) -> None:
@@ -1753,8 +1756,11 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.sudo(f"chmod 644 {repo_path}")
 
         if self.distro.is_debian_like:
+            self.remoter.sudo("mkdir -p /etc/apt/keyrings")
             for apt_key in self.parent_cluster.params.get("scylla_apt_keys"):
                 self.remoter.sudo(f"apt-key adv --keyserver keyserver.ubuntu.com --recv-keys {apt_key}", retry=3)
+                self.remoter.sudo(f"gpg --homedir /tmp --no-default-keyring --keyring /etc/apt/keyrings/scylladb.gpg "
+                                  f"--keyserver hkp://keyserver.ubuntu.com:80 --recv-keys {apt_key}", retry=3)
             self.remoter.sudo("apt-get update", ignore_status=True)
 
     @retrying(n=30, sleep_time=15, allowed_exceptions=UnexpectedExit)
