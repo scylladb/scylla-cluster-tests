@@ -38,6 +38,7 @@ import botocore.exceptions
 import yaml
 import tenacity
 from mypy_boto3_ec2 import EC2Client
+from sdcm.ec2_client import CreateSpotInstancesError
 from pkg_resources import parse_version
 
 from sdcm import ec2_client, cluster, wait
