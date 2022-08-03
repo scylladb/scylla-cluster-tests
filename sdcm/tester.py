@@ -262,7 +262,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     db_cluster: BaseScyllaCluster = None
     k8s_cluster: Union[eks.EksCluster, gke.GkeCluster, mini_k8s.LocalKindCluster, None] = None
 
-    def __init__(self, *args):  # pylint: disable=too-many-statements,too-many-locals,too-many-branches
+    def __init__(self, *args, **kwargs):  # pylint: disable=too-many-statements,too-many-locals,too-many-branches
         super().__init__(*args)
         self.result = None
         self._results = []
@@ -345,7 +345,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.params.get("use_ldap"):
             self._init_ldap()
 
-        start_events_device(log_dir=self.logdir, _registry=self.events_processes_registry)
+        # Cover multi-tenant configuration. Prevent event device double initiate
+        start_events_device(log_dir=self.logdir,
+                            _registry=getattr(self, "_registry", None) or self.events_processes_registry)
+
         time.sleep(0.5)
         InfoEvent(message=f"TEST_START test_id={self.test_config.test_id()}").publish()
 

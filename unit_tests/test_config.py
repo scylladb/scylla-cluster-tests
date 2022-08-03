@@ -18,6 +18,7 @@ import unittest
 from collections import namedtuple
 
 from sdcm import sct_config
+from sdcm.utils.operator.miltitenant_common import set_stress_command_to_tenant
 
 RPM_URL = 'https://s3.amazonaws.com/downloads.scylladb.com/enterprise/rpm/unstable/centos/' \
           '9f724fedb93b4734fcfaec1156806921ff46e956-2bdfa9f7ef592edaf15e028faf3b7f695f39ebc1' \
@@ -636,6 +637,42 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         # I would expect master:latest to be version 3 now, but azure.utils.get_scylla_images
         # returns something from 5 months ago.
         self.assertIn('user_data_format_version', conf)
+
+    def test_21_verify_unique_stress_cmds_per_tenant(self):
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_data/test_config/multitenant/unique_stress_cmd_per_tenant.yaml'
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+        tenant_stress_cmds = set_stress_command_to_tenant(conf, 0)
+        self.assertEqual(tenant_stress_cmds['stress_cmd'], ['threads=50', 'threads=30'])
+        self.assertEqual(tenant_stress_cmds['stress_read_cmd'], ['threads=70'])
+        self.assertEqual(tenant_stress_cmds['prepare_write_cmd'], ['threads=90'])
+
+        tenant_stress_cmds = set_stress_command_to_tenant(conf, 1)
+        self.assertEqual(tenant_stress_cmds['stress_cmd'], ['threads=60', 'threads=20'])
+        self.assertEqual(tenant_stress_cmds['stress_read_cmd'], ['threads=10'])
+        self.assertEqual(tenant_stress_cmds['prepare_write_cmd'], ['threads=70'])
+
+    def test_22_verify_same_stress_cmds_for_all_tenants(self):
+        os.environ['SCT_CONFIG_FILES'] = 'unit_tests/test_data/test_config/multitenant/same_stress_cmd_for_all_tenants.yaml'
+        os.environ['SCT_CLUSTER_BACKEND'] = 'aws'
+        os.environ['SCT_AMI_ID_DB_SCYLLA'] = 'ami-06f919eb'
+        os.environ['SCT_INSTANCE_TYPE_DB'] = 'i3.large'
+        conf = sct_config.SCTConfiguration()
+        conf.verify_configuration()
+
+        tenant_stress_cmds_0 = set_stress_command_to_tenant(conf, 0)
+        self.assertEqual(tenant_stress_cmds_0['stress_cmd'], ["threads=50", "threads=30"])
+        self.assertEqual(tenant_stress_cmds_0['stress_read_cmd'], ["threads=70", "threads=10"])
+        self.assertEqual(tenant_stress_cmds_0['prepare_write_cmd'], ["threads=90", "threads=70"])
+
+        tenant_stress_cmds_1 = set_stress_command_to_tenant(conf, 1)
+        self.assertEqual(tenant_stress_cmds_0['stress_cmd'], tenant_stress_cmds_1['stress_cmd'])
+        self.assertEqual(tenant_stress_cmds_0['stress_read_cmd'], tenant_stress_cmds_1['stress_read_cmd'])
+        self.assertEqual(tenant_stress_cmds_0['prepare_write_cmd'], tenant_stress_cmds_1['prepare_write_cmd'])
 
 
 if __name__ == "__main__":
