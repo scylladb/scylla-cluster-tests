@@ -10,7 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
-
+import os
 import pty
 import shlex
 import subprocess
@@ -168,9 +168,14 @@ def ssh(user, test_id, region, force_use_public_ip, node_name):
         proxy_command, target_ip, target_username = get_proxy_command(connect_vm, force_use_public_ip)
         click.echo(click.style(f"ssh into: {get_tags(connect_vm).get('Name')}",
                                fg='green', bold=True))
-        pty.spawn(shlex.split(f'ssh {proxy_command}'
-                              f' -i ~/.ssh/scylla-qa-ec2 -o "UserKnownHostsFile=/dev/null" '
-                              f'-o "StrictHostKeyChecking=no" -o ServerAliveInterval=10 {target_username}@{target_ip}'))
+        rows = os.environ.get("LINES") or subprocess.check_output(['tput', 'lines'], text=True).strip()
+        cols = os.environ.get("COLUMNS") or subprocess.check_output(['tput', 'cols'], text=True).strip()
+        tty_options = f'stty rows {rows} cols {cols}'
+        cmd = (f'bash -c \'{tty_options}; ssh -tt {proxy_command}'
+               f' -i ~/.ssh/scylla-qa-ec2 -o "UserKnownHostsFile=/dev/null" '
+               f'-o "StrictHostKeyChecking=no" -o ServerAliveInterval=10 {target_username}@{target_ip} \'')
+        click.echo(cmd)
+        pty.spawn(shlex.split(cmd))
 
 
 @click.command("tunnel", help="Tunnel ports to any SCT machine on AWS")
