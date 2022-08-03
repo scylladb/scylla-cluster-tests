@@ -268,6 +268,7 @@ function run_in_docker () {
         ${AWS_OPTIONS} \
         --env GIT_BRANCH \
         --env CHANGE_TARGET \
+        --env TERM \
         --net=host \
         --name="${SCT_TEST_ID}_$(date +%s)" \
         ${DOCKER_REPO}:${VERSION} \
