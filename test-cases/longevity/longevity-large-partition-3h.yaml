@@ -1,4 +1,4 @@
-test_duration: 210
+test_duration: 410
 
 bench_run: true
 max_partitions_in_test_table: 400
@@ -26,22 +26,19 @@ stress_cmd: ["scylla-bench -workload=sequential -mode=write -replication-factor=
             ]
 
 
-n_db_nodes: 5
-n_loaders: 4
-n_monitor_nodes: 1
+n_db_nodes: 3
+n_loaders: 2
+n_monitor_nodes: 0
 
 round_robin: true
 
-instance_type_db: 'i3.2xlarge'
+instance_type_db: 'i3.xlarge'
 
 nemesis_class_name: 'SisyphusMonkey'
 nemesis_seed: '013'
-nemesis_interval: 15
+nemesis_interval: 3
 
-user_prefix: 'longevity-large-partitions-3h'
+user_prefix: 'longevity-kallsyms'
 
-space_node_threshold: 644245094
-
-run_fullscan: '{"ks_cf": "scylla_bench.test", "interval": 10}' # 'ks.cf|random, interval(min)'
-
-run_full_partition_scan: '{"ks_cf": "scylla_bench.test", "interval": 300, "pk_name":"pk", "rows_count": 5000, "validate_data": "true", "include_data_column": "true"}' # 'ks.cf, interval(sec), partition-key name, number-of-rows-per-partition, validate reversed query output, include data-column or only validate pk + ck'
+space_node_threshold: 64424509
+nemesis_during_prepare: true
