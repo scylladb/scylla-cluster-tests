@@ -37,6 +37,7 @@ import uuid
 import zipfile
 import io
 import tempfile
+import traceback
 from typing import Iterable, List, Callable, Optional, Dict, Union, Literal, Any
 from urllib.parse import urlparse
 from unittest.mock import Mock
@@ -536,7 +537,7 @@ class ParallelObjectException(Exception):
         ex_str = ""
         for res in self.results:
             if res.exc:
-                ex_str += f"{res.obj}: {res.exc}"
+                ex_str += f"{res.obj}:\n {''.join(traceback.format_exception(type(res.exc), res.exc, res.exc.__traceback__))}"
         return ex_str
 
 
@@ -2724,6 +2725,6 @@ class RemoteTemporaryFolder:
         self.folder_name = result.stdout.strip()
         return self
 
-    def __exit__(self, exit_type, value, traceback):
+    def __exit__(self, exit_type, value, _traceback):
         # remove the temporary folder as `sudo` to cover the case when the folder owner was changed during test
         self.node.remoter.sudo(f'rm -rf {self.folder_name}')
