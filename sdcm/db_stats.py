@@ -39,6 +39,15 @@ from sdcm.utils.ci_tools import get_job_name, get_job_url
 
 LOGGER = logging.getLogger(__name__)
 
+FS_SIZE_METRIC = 'node_filesystem_size_bytes'
+FS_SIZE_METRIC_OLD = 'node_filesystem_size'
+AVAIL_SIZE_METRIC = 'node_filesystem_avail_bytes'
+AVAIL_SIZE_METRIC_OLD = 'node_filesystem_avail'
+KB_SIZE = 2 ** 10
+MB_SIZE = KB_SIZE * 1024
+GB_SIZE = MB_SIZE * 1024
+SCYLLA_DIR = "/var/lib/scylla"
+
 
 class CassandraStressCmdParseError(Exception):
     def __init__(self, cmd, ex):
@@ -191,7 +200,7 @@ def get_cdcreader_cmd_params(cmd):
     return get_raw_cmd_params(cmd)
 
 
-class PrometheusDBStats():
+class PrometheusDBStats:
     def __init__(self, host, port=9090, alternator=None):
         self.host = host
         self.port = port
@@ -366,6 +375,63 @@ class PrometheusDBStats():
         result = self.request(url, True)
         LOGGER.debug('Request result: {}'.format(result))
         return result
+
+    @staticmethod
+    def generate_node_capacity_query_postfix(node):
+        return f'{{mountpoint="{SCYLLA_DIR}", instance=~".*?{node.private_ip_address}.*?"}}'
+
+    def get_used_capacity_gb(self, node):  # pylint: disable=too-many-locals
+        #  example: node_filesystem_size_bytes{mountpoint="/var/lib/scylla",
+        #  instance=~".*?10.0.79.46.*?"}-node_filesystem_avail_bytes{mountpoint="/var/lib/scylla",
+        #  instance=~".*?10.0.79.46.*?"}
+        node_capacity_query_postfix = self.generate_node_capacity_query_postfix(node)
+        filesystem_capacity_query = f'{FS_SIZE_METRIC}{node_capacity_query_postfix}'
+        used_capacity_query = f'{filesystem_capacity_query}-{AVAIL_SIZE_METRIC}{node_capacity_query_postfix}'
+        LOGGER.debug("filesystem_capacity_query: %s", filesystem_capacity_query)
+
+        fs_size_res = self.query(query=filesystem_capacity_query, start=int(time.time()) - 5,
+                                 end=int(time.time()))
+        if not fs_size_res:
+            LOGGER.warning("No results from Prometheus query: %s", filesystem_capacity_query)
+            return 0
+            # assert fs_size_res, "No results from Prometheus"
+        if not fs_size_res[0]:  # if no returned values - try the old metric names.
+            filesystem_capacity_query = f'{FS_SIZE_METRIC_OLD}{node_capacity_query_postfix}'
+            used_capacity_query = f'{filesystem_capacity_query}-{AVAIL_SIZE_METRIC_OLD}{node_capacity_query_postfix}'
+            LOGGER.debug("filesystem_capacity_query: %s", filesystem_capacity_query)
+            fs_size_res = self.query(query=filesystem_capacity_query, start=int(time.time()) - 5,
+                                     end=int(time.time()))
+
+        assert fs_size_res[0], "Could not resolve capacity query result."
+        LOGGER.debug("used_capacity_query: %s", used_capacity_query)
+        used_cap_res = self.query(query=used_capacity_query, start=int(time.time()) - 5,
+                                  end=int(time.time()))
+        assert used_cap_res, "No results from Prometheus"
+        used_size_mb = float(used_cap_res[0]["values"][0][1]) / float(MB_SIZE)
+        used_size_gb = round(float(used_size_mb / 1024), 2)
+        LOGGER.debug("The used filesystem capacity on node %s is: %s MB/ %s GB",
+                     node.public_ip_address, used_size_mb, used_size_gb)
+        return used_size_gb
+
+    def get_filesystem_total_size_gb(self, node) -> float:
+        """
+        :param node:
+        :return: FS size in GB
+        """
+        node_capacity_query_postfix = self.generate_node_capacity_query_postfix(node)
+        filesystem_capacity_query = f'{FS_SIZE_METRIC}{node_capacity_query_postfix}'
+        fs_size_res = self.query(query=filesystem_capacity_query, start=int(time.time()) - 5,
+                                 end=int(time.time()))
+        assert fs_size_res, "No results from Prometheus"
+        if not fs_size_res[0]:  # if no returned values - try the old metric names.
+            filesystem_capacity_query = f'{FS_SIZE_METRIC_OLD}{node_capacity_query_postfix}'
+            LOGGER.debug("filesystem_capacity_query: %s", filesystem_capacity_query)
+            fs_size_res = self.query(query=filesystem_capacity_query, start=int(time.time()) - 5,
+                                     end=int(time.time()))
+        assert fs_size_res[0], "Could not resolve capacity query result."
+        LOGGER.debug("fs_size_res: %s", fs_size_res)
+        fs_size_gb = float(fs_size_res[0]["values"][0][1]) / float(GB_SIZE)
+        return fs_size_gb
 
 
 class Stats:
