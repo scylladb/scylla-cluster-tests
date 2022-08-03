@@ -3332,6 +3332,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         InfoEvent(message='Starting grow_shrink disruption').publish()
         self.disrupt_grow_shrink_cluster()
         InfoEvent(message="Finished grow_shrink disruption").publish()
+        time.sleep(sleep_time_between_ops)  # to be sure latency spikes are related to end of test and not to nemesis
 
     def disrupt_memory_stress(self):
         """
