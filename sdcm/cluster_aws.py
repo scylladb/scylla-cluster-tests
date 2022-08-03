@@ -367,8 +367,13 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
     # pylint: disable=too-many-arguments
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
+        user_data_format_version = '3'
 
-        user_data_format_version = self.params.get('user_data_format_version') or '3'
+        if self.node_type == 'scylla-db':
+            user_data_format_version = self.params.get('user_data_format_version') or user_data_format_version
+        elif self.node_type == 'oracle-db':
+            user_data_format_version = self.params.get('oracle_user_data_format_version') or user_data_format_version
+
         user_data_builder = ScyllaUserDataBuilder(cluster_name=self.name,
                                                   bootstrap=enable_auto_bootstrap,
                                                   user_data_format_version=user_data_format_version, params=self.params,
