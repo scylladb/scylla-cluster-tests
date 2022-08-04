@@ -1224,6 +1224,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # NOTE: refresh scylla pods IP addresses because it may get changed here
             for node in nodes_data:
                 node[0].refresh_ip_address()
+            self.monitoring_set.reconfigure_scylla_monitoring()
 
         self.log.info("Resharding has successfully ended on whole Scylla cluster.")
 
