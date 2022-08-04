@@ -19,9 +19,7 @@ scylla_version: '4.5.3'
 scylla_mgmt_agent_version: '3.0.0'
 k8s_cert_manager_version: '1.2.0'
 
-# Currently k8s monitoring does not work properly
-# https://trello.com/c/8Hwc0nUB/3061-eks-k8s-monitoring-stack-health-monitoring-fails
-k8s_deploy_monitoring: true
+k8s_deploy_monitoring: false
 
 k8s_loader_cluster_name: 'sct-loaders'
 
