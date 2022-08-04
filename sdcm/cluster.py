@@ -883,8 +883,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
     @cached_property
     def cql_ip_address(self):
-        if self.is_kubernetes():
-            return self.ip_address
         with self.remote_scylla_yaml() as scylla_yaml:
             return scylla_yaml.broadcast_rpc_address if scylla_yaml.broadcast_rpc_address else self.ip_address
 

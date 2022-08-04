@@ -1673,6 +1673,10 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
             return next((x for x in pod_status.container_statuses if x.name == self.parent_cluster.container), None)
         return None
 
+    @property
+    def cql_ip_address(self):
+        return self.ip_address
+
     def _refresh_instance_state(self):
         public_ips = []
         private_ips = []
