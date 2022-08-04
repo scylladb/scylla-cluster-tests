@@ -882,6 +882,11 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             node.restart_scylla_server()
 
     def disrupt_restart_with_resharding(self):
+        if self._is_it_on_kubernetes():
+            raise UnsupportedNemesis(
+                "Not supported on K8S. "
+                "Run 'disrupt_nodetool_flush_and_reshard_on_kubernetes' instead")
+
         murmur3_partitioner_ignore_msb_bits = 15  # pylint: disable=invalid-name
         self.log.info(f'Restart node with resharding. New murmur3_partitioner_ignore_msb_bits value: '
                       f'{murmur3_partitioner_ignore_msb_bits}')
