@@ -47,7 +47,7 @@
         },
         {
           "datasource": "-- Grafana --",
-          "enable": true,
+          "enable": false,
           "hide": false,
           "iconColor": "#badff4",
           "limit": 100,
@@ -69,7 +69,7 @@
         },
         {
           "datasource": "-- Grafana --",
-          "enable": true,
+          "enable": false,
           "hide": false,
           "iconColor": "#eab839",
           "limit": 100,
