@@ -375,7 +375,6 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
             user_data_format_version = self.params.get('oracle_user_data_format_version') or user_data_format_version
 
         user_data_builder = ScyllaUserDataBuilder(cluster_name=self.name,
-                                                  bootstrap=enable_auto_bootstrap,
                                                   user_data_format_version=user_data_format_version, params=self.params,
                                                   syslog_host_port=self.test_config.get_logging_service_host_port())
         ec2_user_data = user_data_builder.to_string()
