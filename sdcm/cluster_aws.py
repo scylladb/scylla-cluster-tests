@@ -41,7 +41,6 @@ from sdcm.ec2_client import CreateSpotInstancesError
 from sdcm.provision.aws.utils import configure_set_preserve_hostname_script
 from sdcm.provision.common.utils import configure_hosts_set_hostname_script
 from sdcm.provision.scylla_yaml import SeedProvider
-from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
 
 from sdcm.remote import LocalCmdRunner, shell_script_cmd, NETWORK_EXCEPTIONS
 from sdcm.sct_events.database import DatabaseLogEvent
@@ -367,18 +366,7 @@ class AWSCluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
 
     # pylint: disable=too-many-arguments
     def add_nodes(self, count, ec2_user_data='', dc_idx=0, rack=0, enable_auto_bootstrap=False):
-        user_data_format_version = '3'
-
-        if self.node_type == 'scylla-db':
-            user_data_format_version = self.params.get('user_data_format_version') or user_data_format_version
-        elif self.node_type == 'oracle-db':
-            user_data_format_version = self.params.get('oracle_user_data_format_version') or user_data_format_version
-
-        user_data_builder = ScyllaUserDataBuilder(cluster_name=self.name,
-                                                  bootstrap=enable_auto_bootstrap,
-                                                  user_data_format_version=user_data_format_version, params=self.params,
-                                                  syslog_host_port=self.test_config.get_logging_service_host_port())
-        ec2_user_data = user_data_builder.to_string()
+        ec2_user_data = self.prepare_user_data(enable_auto_bootstrap=enable_auto_bootstrap)
 
         instances = self._create_or_find_instances(count=count, ec2_user_data=ec2_user_data, dc_idx=dc_idx)
         added_nodes = [self._create_node(instance, self._ec2_ami_username,

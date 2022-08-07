@@ -31,7 +31,6 @@ from sdcm.keystore import pub_key_from_private_key_file
 from sdcm.sct_events.system import SpotTerminationEvent
 from sdcm.utils.common import list_instances_gce, gce_meta_to_dict
 from sdcm.utils.decorators import retrying
-from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
 
 
 SPOT_TERMINATION_CHECK_DELAY = 5 * 60
@@ -295,14 +294,6 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
         self.log.debug(gce_disk_struct)
         return gce_disk_struct
 
-    def _prepare_user_data(self, enable_auto_bootstrap=False):
-        user_data_format_version = self.params.get('user_data_format_version') or '3'
-        user_data_builder = ScyllaUserDataBuilder(cluster_name=self.name,
-                                                  bootstrap=enable_auto_bootstrap,
-                                                  user_data_format_version=user_data_format_version, params=self.params,
-                                                  syslog_host_port=self.test_config.get_logging_service_host_port())
-        return user_data_builder.to_string()
-
     def _create_instance(self, node_index, dc_idx, spot=False, enable_auto_bootstrap=False):
         def set_tags_as_labels(_instance):
             self.log.debug(f"Expected tags are {self.tags}")
@@ -343,7 +334,7 @@ class GCECluster(cluster.BaseCluster):  # pylint: disable=too-many-instance-attr
                                                "Name": name,
                                                "NodeIndex": node_index,
                                                "startup-script": startup_script,
-                                               "user-data": self._prepare_user_data(enable_auto_bootstrap),
+                                               "user-data": self.prepare_user_data(enable_auto_bootstrap),
                                                "block-project-ssh-keys": "true",
                                                "ssh-keys": f"{username}:ssh-rsa {public_key}", },
                                   ex_service_accounts=self._service_accounts,
