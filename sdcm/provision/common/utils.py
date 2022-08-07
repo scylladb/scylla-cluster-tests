@@ -125,8 +125,8 @@ def configure_ssh_accept_rsa():
     if (( $(ssh -V 2>&1 | tr -d "[:alpha:][:blank:][:punct:]" | cut -c-2) >= 88 )); then
         systemctl stop sshd || true
         sed -i "s/#PubkeyAuthentication \(.*\)$/PubkeyAuthentication yes/" /etc/ssh/sshd_config || true
-        sed -i -e "$aPubkeyAcceptedAlgorithms +ssh-rsa" /etc/ssh/sshd_config || true
-        sed -i -e "$aHostKeyAlgorithms +ssh-rsa" /etc/ssh/sshd_config || true
+        sed -i -e "\\$aPubkeyAcceptedAlgorithms +ssh-rsa" /etc/ssh/sshd_config || true
+        sed -i -e "\\$aHostKeyAlgorithms +ssh-rsa" /etc/ssh/sshd_config || true
         systemctl restart sshd || true
     fi
     """)
