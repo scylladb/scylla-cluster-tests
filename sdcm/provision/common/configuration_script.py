@@ -63,8 +63,6 @@ class ConfigurationScriptBuilder(AttrBuilder, metaclass=abc.ABCMeta):
         # 3. scylla image is running it in such mode that "echo -e" is not working
         # 4. There is race condition between sct and boot script, disable ssh to mitigate it
         # 5. Make sure that whenever you use "cat <<EOF >>/file", make sure that EOF has no spaces in front of it
-        if not self.syslog_host_port:
-            return ''
         script = ''
         if self.logs_transport == 'syslog-ng':
             script += install_syslogng_service()
