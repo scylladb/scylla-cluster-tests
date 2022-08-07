@@ -125,6 +125,7 @@ from sdcm.paths import (
     SCYLLA_MANAGER_TLS_CERT_FILE,
     SCYLLA_MANAGER_TLS_KEY_FILE,
 )
+from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
 
 
 DEFAULT_USER_PREFIX = getpass.getuser()
@@ -3159,6 +3160,23 @@ class BaseCluster:  # pylint: disable=too-many-instance-attributes,too-many-publ
         :return: list of Nodes
         """
         raise NotImplementedError("Derived class must implement 'add_nodes' method!")
+
+    def prepare_user_data(self, enable_auto_bootstrap=False):
+        user_data_format_version = '3'
+
+        # Using pre-built images, hence read the format version from configuration
+        if self.params.get('use_preinstalled_scylla'):
+            if self.node_type == 'scylla-db':
+                user_data_format_version = self.params.get('user_data_format_version') or user_data_format_version
+            elif self.node_type == 'oracle-db':
+                user_data_format_version = self.params.get(
+                    'oracle_user_data_format_version') or user_data_format_version
+
+        user_data_builder = ScyllaUserDataBuilder(cluster_name=self.name,
+                                                  bootstrap=enable_auto_bootstrap,
+                                                  user_data_format_version=user_data_format_version, params=self.params,
+                                                  syslog_host_port=self.test_config.get_logging_service_host_port())
+        return user_data_builder.to_string()
 
     def get_node_private_ips(self):
         return [node.private_ip_address for node in self.nodes]
