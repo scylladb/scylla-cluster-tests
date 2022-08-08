@@ -729,15 +729,17 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             DbEventsFilter(db_event=DatabaseLogEvent.BACKTRACE,
                            line="Can't find a column family with UUID", node=self.target_node):
             self.target_node.restart()
-            # pods can change their ip address during the process,
-            # so we update the monitor at this point
-            if self._is_it_on_kubernetes():
-                self.monitoring_set.reconfigure_scylla_monitoring()
+
+        # pods can change their ip address during the process,
+        # so we update the monitor at this point
+        if self._is_it_on_kubernetes():
+            self.refresh_nodes_ip_and_reconfigure_monitor(nodes=[self.target_node])
 
         self.log.info('Waiting scylla services to start after node restart')
         self.target_node.wait_db_up(timeout=28800)  # 8 hours
         self.log.info('Waiting JMX services to start after node restart')
         self.target_node.wait_jmx_up()
+
         self.repair_nodetool_repair()
 
     def disrupt_resetlocalschema(self):  # pylint: disable=invalid-name
@@ -824,6 +826,9 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     @decorate_with_context(ignore_ycsb_connection_refused)
     def disrupt_rolling_restart_cluster(self, random_order=False):
         self.cluster.restart_scylla(random_order=random_order)
+
+        if self._is_it_on_kubernetes():
+            self.refresh_nodes_ip_and_reconfigure_monitor()
 
     def disrupt_switch_between_password_authenticator_and_saslauthd_authenticator_and_back(self):
         """
@@ -1356,8 +1361,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info('Wait till %s is ready', node)
         node.wait_for_pod_readiness()
         self.log.info(f'{node} is ready, updating ip address and monitoring')
-        node.refresh_ip_address()
-        self.monitoring_set.reconfigure_scylla_monitoring()
+        self.refresh_nodes_ip_and_reconfigure_monitor(nodes=[node])
 
     def disrupt_terminate_and_replace_node(self):  # pylint: disable=invalid-name
 
@@ -1518,6 +1522,21 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 finally:
                     clean_enospc_on_node(target_node=node, sleep_time=sleep_time)
 
+        if self._is_it_on_kubernetes():
+            self.refresh_nodes_ip_and_reconfigure_monitor(nodes=nodes)
+
+    def refresh_nodes_ip_and_reconfigure_monitor(self, nodes: list = None):
+        # relevant for kubernetes
+        # pods can change their ip address during the process,
+        # so we update the monitor at this point and get updated IPs
+        if not nodes:
+            nodes = self.cluster.nodes
+
+        for node in nodes:
+            node.refresh_ip_address()
+
+        self.monitoring_set.reconfigure_scylla_monitoring()
+
     def _deprecated_disrupt_stop_start(self):
         # TODO: We don't support fully stopping the AMI instance anymore
         # TODO: This nemesis has to be rewritten to just stop/start scylla server
@@ -1526,7 +1545,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         # pods can change their ip address during the process,
         # so we update the monitor at this point
         if self._is_it_on_kubernetes():
-            self.monitoring_set.reconfigure_scylla_monitoring()
+            self.refresh_nodes_ip_and_reconfigure_monitor(nodes=[self.target_node])
 
     def call_random_disrupt_method(self, disrupt_methods=None, predefined_sequence=False):
         # pylint: disable=too-many-branches
@@ -2991,7 +3010,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             # pods can change their ip address during the process,
             # so we update the monitor at this point
             if self._is_it_on_kubernetes():
-                self.monitoring_set.reconfigure_scylla_monitoring()
+                self.refresh_nodes_ip_and_reconfigure_monitor(nodes=[target_node])
 
     def disrupt_network_start_stop_interface(self):  # pylint: disable=invalid-name
         if not self.cluster.extra_network_interface:
