@@ -2518,6 +2518,10 @@ class ScyllaPodCluster(cluster.BaseScyllaCluster, PodCluster):  # pylint: disabl
         test_keyspaces = self.get_test_keyspaces()
         # If 'keyspace1' does not exist, create a schema and load a data.
         create_schema = not (test_keyspace_name in test_keyspaces)  # pylint: disable=superfluous-parens
+        if not create_schema:
+            # NOTE: if keyspace exists and has data then just exit
+            if int(SstableLoadUtils.validate_data_count_after_upload(node=node)) > 0:
+                return
 
         for node in self.nodes:
             with self.cql_connection_exclusive(node) as session:
