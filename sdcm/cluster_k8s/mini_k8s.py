@@ -386,7 +386,8 @@ class LocalMinimalClusterBase(MinimalClusterBase):
     def _target_user(self) -> str:
         return getpass.getuser()
 
-    def upgrade_kubernetes_platform(self):
+    def upgrade_kubernetes_platform(self, pod_objects: list[cluster.BaseNode],
+                                    use_additional_scylla_nodepool: bool) -> (str, CloudK8sNodePool):
         return ""
 
 
