@@ -1496,8 +1496,46 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def deploy_node_pool(self, pool: CloudK8sNodePool, wait_till_ready=True) -> None:
         pass
 
-    def upgrade_kubernetes_platform(self):
+    def upgrade_kubernetes_platform(self, pod_objects: list[cluster.BaseNode],
+                                    use_additional_scylla_nodepool: bool) -> (str, CloudK8sNodePool):
         raise NotImplementedError("Kubernetes upgrade is not implemented on this backend")
+
+    def move_pods_to_new_node_pool(self, pod_objects: list[cluster.BaseNode],
+                                   node_pool_name: str, cluster_name: str = "",
+                                   cluster_namespace: str = SCYLLA_NAMESPACE,
+                                   pod_readiness_timeout_minutes: int = 20):
+        cluster_name = cluster_name or self.params.get('k8s_scylla_cluster_name')
+
+        # Update the node affinity rules to match the new nodes
+        scylla_cluster_info = yaml.safe_load(self.kubectl(
+            f"get scyllaclusters.scylla.scylladb.com {cluster_name} -o yaml",
+            namespace=cluster_namespace).stdout)
+        racks_info = scylla_cluster_info["spec"]["datacenter"]["racks"]
+        total_pods = 0
+        for i, rack in enumerate(racks_info):
+            rack["placement"]["nodeAffinity"][
+                "requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"][0][
+                    "matchExpressions"][0]["values"] = [node_pool_name]
+            racks_info[i] = rack
+            total_pods += int(rack["members"])
+        data = {"spec": {"datacenter": {"racks": racks_info}}}
+        self.kubectl(
+            f"patch scyllaclusters.scylla.scylladb.com {cluster_name} --type merge "
+            f"-p '{json.dumps(data)}'",
+            namespace=cluster_namespace,
+        )
+
+        # Label Scylla pods for replacement to make it be moved to new nodes
+        for pod_object in sorted(pod_objects, key=lambda x: x.name, reverse=True):
+            old_uid = pod_object.k8s_pod_uid
+            pod_object.wait_for_svc()
+            pod_object.mark_to_be_replaced()
+            pod_object.wait_till_k8s_pod_get_uid(ignore_uid=old_uid)
+            LOGGER.info("Wait for the '%s' pod to be ready", pod_object.name)
+            pod_object.wait_for_pod_readiness(
+                pod_readiness_timeout_minutes=pod_readiness_timeout_minutes)
+            LOGGER.info("The '%s' pod is ready, refresh IP addresses", pod_object.name)
+            pod_object.refresh_ip_address()
 
     @contextlib.contextmanager
     def scylla_config_map(self, namespace: str = SCYLLA_NAMESPACE) -> dict:
@@ -1757,21 +1795,22 @@ class BasePodContainer(cluster.BaseNode):  # pylint: disable=too-many-public-met
             raise RuntimeError('Pod is not there')
         return True
 
-    def wait_for_pod_readiness(self):
-        # To make it more informative in worst case scenario it repeat waiting text 5 times
-        wait_for(self._wait_for_pod_readiness,
-                 text=f"Wait for {self.name} pod to be ready...",
-                 timeout=self.pod_readiness_timeout * 60,
-                 throw_exc=True)
+    def wait_for_pod_readiness(self, pod_readiness_timeout_minutes: int = None):
+        timeout = pod_readiness_timeout_minutes or self.pod_readiness_timeout
 
-    def _wait_for_pod_readiness(self):
-        result = self.parent_cluster.k8s_cluster.kubectl(
-            f"wait --timeout={self.pod_readiness_timeout // 3}m --for=condition=Ready pod {self.name}",
-            namespace=self.parent_cluster.namespace,
-            timeout=self.pod_readiness_timeout // 3 * 60 + 10)
-        if result.stdout.count('condition met') != 1:
-            raise RuntimeError('Pod is not ready')
-        return True
+        def _wait_for_pod_readiness():
+            result = self.parent_cluster.k8s_cluster.kubectl(
+                f"wait --timeout={timeout // 3}m --for=condition=Ready pod {self.name}",
+                namespace=self.parent_cluster.namespace,
+                timeout=timeout // 3 * 60 + 10)
+            if result.stdout.count('condition met') != 1:
+                raise RuntimeError(f"'{self.name}' pod is not ready")
+            return True
+
+        wait_for(_wait_for_pod_readiness,
+                 text=f"Wait for {self.name} pod to be ready...",
+                 timeout=timeout * 60,
+                 throw_exc=True)
 
     @property
     def image(self) -> str:

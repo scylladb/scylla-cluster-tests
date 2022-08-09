@@ -116,7 +116,9 @@ class GkeNodePool(CloudK8sNodePool):
         self.wait_for_nodes_readiness()
 
     def undeploy(self):
-        pass
+        self.k8s_cluster.gcloud.run(
+            f"beta container --project {self.gce_project} node-pools delete {self.name} "
+            f"--cluster {self.k8s_cluster.short_cluster_name} --zone {self.gce_zone} --quiet")
 
     @property
     def instance_group_name(self) -> str:
@@ -313,8 +315,8 @@ class GkeCluster(KubernetesCluster):
         self.deploy_minio_s3_backend()
         super().deploy_scylla_manager(pool_name=pool_name)
 
-    # NOTE: blocked by https://github.com/scylladb/scylla-operator/issues/760
-    def upgrade_kubernetes_platform(self) -> str:
+    def upgrade_kubernetes_platform(self, pod_objects: list[cluster.BaseNode],
+                                    use_additional_scylla_nodepool: bool) -> (str, CloudK8sNodePool):
         # NOTE: 'self.gke_cluster_version' can be like 1.21.3-gke.N or 1.21
         upgrade_version = f"1.{int(self.gke_cluster_version.split('.')[1]) + 1}"
 
@@ -324,16 +326,50 @@ class GkeCluster(KubernetesCluster):
             gcloud.run(f"container clusters upgrade {self.short_cluster_name} "
                        f"--master --quiet --project {self.gce_project} --zone {self.gce_zone} "
                        f"--cluster-version {upgrade_version}")
+            self.gke_cluster_version = upgrade_version
 
             # Upgrade scylla-related node pools
-            for node_pool in (self.AUXILIARY_POOL_NAME, self.SCYLLA_POOL_NAME):
+            for node_pool, need_upgrade in (
+                    (self.AUXILIARY_POOL_NAME, True),
+                    (self.SCYLLA_POOL_NAME, not use_additional_scylla_nodepool)):
+                if not need_upgrade:
+                    continue
                 LOGGER.info("Upgrading '%s' node pool to the '%s' version",
                             node_pool, upgrade_version)
                 # NOTE: one node upgrade takes about 10 minutes
                 gcloud.run(f"container clusters upgrade {self.short_cluster_name} "
                            f"--quiet --project {self.gce_project} --zone {self.gce_zone} "
                            f"--node-pool={node_pool}")
-        return upgrade_version
+
+        if use_additional_scylla_nodepool:
+            # Create new node pool
+            new_scylla_pool_name = f"{self.SCYLLA_POOL_NAME}-new"
+            new_scylla_pool = GkeNodePool(
+                name=new_scylla_pool_name,
+                local_ssd_count=self.params.get("gce_n_local_ssd_disk_db"),
+                disk_size=self.params.get("root_disk_size_db"),
+                disk_type=self.params.get("gce_root_disk_type_db"),
+                instance_type=self.params.get("gce_instance_type_db"),
+                num_nodes=self.params.get("n_db_nodes"),
+                k8s_cluster=self)
+            self.deploy_node_pool(new_scylla_pool, wait_till_ready=True)
+
+            # Prepare new nodes for Scylla pods hosting
+            self.prepare_k8s_scylla_nodes(
+                node_pools=[self.pools[self.SCYLLA_POOL_NAME], new_scylla_pool])
+
+            # Move Scylla pods to the new nodes
+            self.move_pods_to_new_node_pool(
+                pod_objects=pod_objects,
+                node_pool_name=new_scylla_pool_name,
+                pod_readiness_timeout_minutes=120)
+
+            # Delete old node pool
+            self.pools[self.SCYLLA_POOL_NAME].undeploy()
+
+            return upgrade_version, new_scylla_pool
+        else:
+            return upgrade_version, self.pools[self.SCYLLA_POOL_NAME]
 
 
 class GkeScyllaPodContainer(BaseScyllaPodContainer):

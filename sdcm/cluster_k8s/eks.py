@@ -434,7 +434,8 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
         self.set_security_groups_on_all_instances()
         self.set_tags_on_all_instances()
 
-    def upgrade_kubernetes_platform(self) -> str:
+    def upgrade_kubernetes_platform(self, pod_objects: list[cluster.BaseNode],
+                                    use_additional_scylla_nodepool: bool) -> (str, CloudK8sNodePool):
         upgrade_version = f"1.{int(self.eks_cluster_version.split('.')[1]) + 1}"
 
         # Upgrade control plane (API, scheduler, manager and so on ...)
@@ -453,9 +454,14 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
             name=self.short_cluster_name,
             WaiterConfig={'Delay': 30, 'MaxAttempts': 120},
         )
+        self.eks_cluster_version = upgrade_version
 
         # Upgrade scylla-related node pools
-        for node_pool in (self.AUXILIARY_POOL_NAME, self.SCYLLA_POOL_NAME):
+        for node_pool, need_upgrade in (
+                (self.AUXILIARY_POOL_NAME, True),
+                (self.SCYLLA_POOL_NAME, not use_additional_scylla_nodepool)):
+            if not need_upgrade:
+                continue
             LOGGER.info("Upgrading '%s' node pool to the '%s' version", node_pool, upgrade_version)
             self.eks_client.update_nodegroup_version(
                 clusterName=self.short_cluster_name,
@@ -474,7 +480,36 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
                     'MaxAttempts': self.params.get("n_db_nodes") * 30,
                 },
             )
-        return upgrade_version
+
+        if use_additional_scylla_nodepool:
+            # Create new node pool
+            new_scylla_pool_name = f"{self.SCYLLA_POOL_NAME}-new"
+            new_scylla_pool = EksNodePool(
+                name=new_scylla_pool_name,
+                num_nodes=self.params.get("n_db_nodes"),
+                instance_type=self.params.get('instance_type_db'),
+                role_arn=self.params.get('eks_nodegroup_role_arn'),
+                disk_size=self.params.get('root_disk_size_db'),
+                k8s_cluster=self)
+            self.deploy_node_pool(new_scylla_pool, wait_till_ready=True)
+            self.set_security_groups_on_all_instances()
+            self.set_tags_on_all_instances()
+
+            # Prepare new nodes for Scylla pods hosting
+            self.prepare_k8s_scylla_nodes(
+                node_pools=[self.pools[self.SCYLLA_POOL_NAME], new_scylla_pool])
+
+            # Move Scylla pods to the new nodes
+            self.move_pods_to_new_node_pool(
+                pod_objects=pod_objects, node_pool_name=new_scylla_pool_name,
+                pod_readiness_timeout_minutes=120)
+
+            # Delete old node pool
+            self.pools[self.SCYLLA_POOL_NAME].undeploy()
+
+            return upgrade_version, new_scylla_pool
+        else:
+            return upgrade_version, self.pools[self.SCYLLA_POOL_NAME]
 
 
 class EksScyllaPodContainer(BaseScyllaPodContainer):

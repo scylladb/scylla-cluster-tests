@@ -22,9 +22,9 @@ import time
 import re
 from functools import wraps, cache
 from typing import List
+from pkg_resources import parse_version
 
 from argus.db.db_types import PackageVersion
-from pkg_resources import parse_version
 
 from sdcm import wait
 from sdcm.cluster import BaseNode
@@ -1018,12 +1018,15 @@ class UpgradeTest(FillDatabaseData):
             stress_cmd=self._cs_add_node_flag(self.params.get('stress_cmd_r'))))
 
         InfoEvent(message='Step4 - Upgrade kubernetes platform').publish()
-        upgrade_version = self.k8s_cluster.upgrade_kubernetes_platform()
+        upgrade_version, scylla_pool = self.k8s_cluster.upgrade_kubernetes_platform(
+            pod_objects=self.db_cluster.nodes,
+            use_additional_scylla_nodepool=True)
+        self.monitors.reconfigure_scylla_monitoring()
 
         InfoEvent(message='Step5 - Validate versions after kubernetes platform upgrade').publish()
         data_plane_versions = self.k8s_cluster.kubectl(
             f"get nodes --no-headers -l '{self.k8s_cluster.POOL_LABEL_NAME} "
-            f"in ({self.k8s_cluster.AUXILIARY_POOL_NAME},{self.k8s_cluster.SCYLLA_POOL_NAME})' "
+            f"in ({self.k8s_cluster.AUXILIARY_POOL_NAME},{scylla_pool.name})' "
             "-o custom-columns=:.status.nodeInfo.kubeletVersion").stdout.strip().split()
         # Output example:
         #   GKE                EKS
