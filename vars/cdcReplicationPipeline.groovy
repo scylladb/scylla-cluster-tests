@@ -132,7 +132,7 @@ def call(Map pipelineParams) {
                    name: 'scylla_mgmt_address')
 
             string(defaultValue: '',
-                   description: 'master_latest|2.6|2.5|2.4|2.3',
+                   description: 'master_latest|3.0|2.6',
                    name: 'manager_version')
 
             string(defaultValue: "${pipelineParams.get('email_recipients', 'qa@scylladb.com')}",
