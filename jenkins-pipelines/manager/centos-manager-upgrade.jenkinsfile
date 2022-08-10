@@ -10,7 +10,7 @@ managerPipeline(
 
     target_manager_version: 'master_latest',
 
-    manager_version: '2.6',
+    manager_version: '3.0',
 
     test_name: 'mgmt_upgrade_test.ManagerUpgradeTest.test_upgrade',
     test_config: 'test-cases/upgrades/manager-upgrade.yaml',
