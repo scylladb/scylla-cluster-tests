@@ -47,6 +47,8 @@
                         <th>Latency Type</th>
                         {% for cycle in results['cycles'] %}
                             <th>Cycle #{{ loop.index }}</th>
+                            <th>STDEV #{{ loop.index }}</th>
+                            <th>Points Above Threshold #{{ loop.index }}</th>
                         {% endfor %}
                         <th>Cycles Average</th>
                         <th>Steady State</th>
@@ -55,27 +57,37 @@
                         {% set lat_type_list = ['c-s P99'] %}
 
                         {% for lat_type in lat_type_list|sort %}
-                                {% if 'color' in results and lat_type in results['color'] %}
-                                    {% if results['color'][lat_type] == 'red' %}
-                                        <tr style ="background-color: red">
-                                    {% elif results['color'][lat_type] == 'yellow' %}
-                                        <tr style ="background-color: yellow">
-                                    {% else %}
-                                        <tr>
-                                    {% endif %}
+                            {% if 'color' in results and lat_type in results['color'] %}
+                                {% if results['color'][lat_type] == 'red' %}
+                                    <tr style ="background-color: red">
+                                {% elif results['color'][lat_type] == 'yellow' %}
+                                    <tr style ="background-color: yellow">
                                 {% else %}
                                     <tr>
                                 {% endif %}
-                                    <td> current build </td>
-                                    <td>{{ lat_type }}</td>
-                                    {% for cycle in results['cycles'] %}
-                                        <td>{{ cycle[lat_type] }}</td>
-                                    {% endfor %}
-                                    <td>{{ results['Cycles Average'][lat_type] }}</td>
-                                    <td>{{ stats['Steady State'][lat_type] }}</td>
-                                    <td>{{ results['Relative to Steady'][lat_type] }}</td>
-                                    <td>{{ test_version }}
-                                </tr>
+                            {% else %}
+                                <tr>
+                            {% endif %}
+                            <td> current build </td>
+                            <td>{{ lat_type }}</td>
+                            {% for cycle in results['cycles'] %}
+                                <td>{{ cycle[lat_type] }}</td>
+                                {% if lat_type ~ "_stdev" in cycle %}
+                                    <td>{{ cycle[lat_type ~ "_stdev"] }}</td>
+                                {% else %}
+                                    <td>-</td>
+                                {% endif %}
+                                {% if lat_type ~ "_points_above_threshold" in cycle %}
+                                    <td>{{ cycle[lat_type ~ "_points_above_threshold"] }}</td>
+                                {% else %}
+                                    <td>-</td>
+                                {% endif %}
+                        {% endfor %}
+                        <td>{{ results['Cycles Average'][lat_type] }}</td>
+                        <td>{{ stats['Steady State'][lat_type] }}</td>
+                        <td>{{ results['Relative to Steady'][lat_type] }}</td>
+                        <td>{{ test_version }}
+                        </tr>
 
                         {% if best_stat_per_version.get(operation) %}
                             {% for version, best in best_stat_per_version[operation].items() %}
