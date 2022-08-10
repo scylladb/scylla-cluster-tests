@@ -101,9 +101,13 @@ class ConfigurationTests(unittest.TestCase):  # pylint: disable=too-many-public-
         os.environ['SCT_CLUSTER_BACKEND'] = 'docker'
         os.environ['SCT_SCYLLA_VERSION'] = 'latest'
         os.environ['SCT_N_LOADERS'] = "0"
+        docker_tag_after_processing = "fake_specific_docker_tag"
 
-        conf = sct_config.SCTConfiguration()
-        conf.verify_configuration()
+        with unittest.mock.patch.object(
+                sct_config, 'get_specific_tag_of_docker_image',
+                return_value=docker_tag_after_processing):
+            conf = sct_config.SCTConfiguration()
+            conf.verify_configuration()
 
         assert conf['scylla_version'] != 'latest'
 
