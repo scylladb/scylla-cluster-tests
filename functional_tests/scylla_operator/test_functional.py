@@ -42,8 +42,6 @@ from functional_tests.scylla_operator.libs.helpers import (
 
 log = logging.getLogger()
 
-# TODO: add test which covers idea of the 'disrupt_rolling_config_change_internode_compression' nemesis
-
 
 @pytest.mark.readonly
 def test_single_operator_image_tag_is_everywhere(db_cluster):
@@ -562,6 +560,27 @@ def test_deploy_helm_with_default_values(db_cluster: ScyllaPodCluster):
     finally:
         db_cluster.k8s_cluster.helm(f"uninstall {target_chart_name} --timeout 120s", namespace=namespace)
         db_cluster.k8s_cluster.kubectl(f"delete namespace {namespace}")
+
+
+@pytest.mark.restart_is_used
+def test_rolling_config_change_internode_compression(db_cluster, scylla_yaml):
+    """
+    Cover logic of disrupt_rolling_config_change_internode_compression nemesis
+    """
+    internode_compression_option_name = "internode_compression"
+
+    with db_cluster.nodes[0].actual_scylla_yaml() as props:
+        original_compression = dict(props).get(internode_compression_option_name)
+
+    log.debug("Current compression is %s", original_compression)
+    values = ['dc', 'all', 'none']
+    values_to_toggle = list(filter(lambda value: value != original_compression, values))
+    new_compression = random.choice(values_to_toggle)
+
+    with scylla_yaml() as props:
+        props[internode_compression_option_name] = new_compression
+
+    db_cluster.restart_scylla()
 
 
 @pytest.mark.restart_is_used
