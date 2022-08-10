@@ -39,10 +39,6 @@ manager_repos_by_version:
     ubuntu18: 'http://downloads.scylladb.com/deb/ubuntu/scylladb-manager-2.3-bionic.list'
 
 scylla_backend_repo_by_version:
-  "2020":
-    centos7: 'http://downloads.scylladb.com/rpm/centos/scylla-2020.1.repo'
-    centos8: 'http://downloads.scylladb.com/rpm/centos/scylla-2020.1.repo'
-    ubuntu18: 'http://downloads.scylladb.com/deb/ubuntu/scylla-2020.1-bionic.list'
   "2021":
     centos7: 'http://downloads.scylladb.com/rpm/centos/scylla-2021.1.repo'
     centos8: 'http://downloads.scylladb.com/rpm/centos/scylla-2021.1.repo'
@@ -50,3 +46,11 @@ scylla_backend_repo_by_version:
     debian11: 'http://downloads.scylladb.com/deb/ubuntu/scylla-2021.1.list'
     ubuntu18: 'http://downloads.scylladb.com/deb/ubuntu/scylla-2021.1.list'
     ubuntu20: 'http://downloads.scylladb.com/deb/ubuntu/scylla-2021.1.list'
+  "2022":
+    centos7: 'http://downloads.scylladb.com/rpm/centos/scylla-2022.1.repo'
+    centos8: 'http://downloads.scylladb.com/rpm/centos/scylla-2022.1.repo'
+    debian10: 'http://downloads.scylladb.com/deb/ubuntu/scylla-2022.1.list'
+    debian11: 'http://downloads.scylladb.com/deb/ubuntu/scylla-2022.1.list'
+    ubuntu18: 'http://downloads.scylladb.com/deb/ubuntu/scylla-2022.1.list'
+    ubuntu20: 'http://downloads.scylladb.com/deb/ubuntu/scylla-2022.1.list'
+    ubuntu22: 'http://downloads.scylladb.com/deb/ubuntu/scylla-2022.1.list'
