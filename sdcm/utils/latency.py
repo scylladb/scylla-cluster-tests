@@ -10,6 +10,7 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+import statistics
 
 from sdcm.db_stats import PrometheusDBStats
 
@@ -25,6 +26,7 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
     duration = int(end - start)
     cassandra_stress_precision = ['99', '95']  # in the future should include also 'max'
     scylla_precision = ['99']  # in the future should include also '95', '5'
+    threshold = 10  # ms
 
     for precision in cassandra_stress_precision:
         metric = f'c-s {precision}' if precision == 'max' else f'c-s P{precision}'
@@ -45,6 +47,8 @@ def collect_latency(monitor_node, start, end, load_type, cluster, nodes_list):
 
         if latency_values_lst:
             res[metric] = float(format(avg(latency_values_lst), '.2f'))
+            res[f'{metric}_stdev'] = float(format(statistics.stdev(latency_values_lst), '.2f'))
+            res[f'{metric}_points_above_threshold'] = len([v for v in latency_values_lst if v > threshold])
         if max_latency_values_lst:
             res[f'{metric} max'] = float(format(max(max_latency_values_lst), '.2f'))
 
@@ -96,7 +100,7 @@ def calculate_latency(latency_results):
         temp_dict = {}
         for cycle in latency_results[key]['cycles']:
             for metric, value in cycle.items():
-                if metric == "screenshots":
+                if metric == "screenshots" or 'stdev' in metric or 'threshold' in metric:
                     continue
                 if metric not in temp_dict:
                     temp_dict[metric] = []
