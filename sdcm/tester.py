@@ -368,6 +368,24 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         except Exception:  # pylint: disable=broad-except
             self.log.error("Error saving test status to Argus", exc_info=True)
 
+    def generate_scylla_server_package(self) -> PackageVersion:
+        """
+            Used for offline tests for tracking scylla versions in Argus.
+        """
+        scylla_version = self.db_cluster.nodes[0].scylla_version_detailed
+        # pylint: disable=line-too-long
+        expr = re.compile(
+            r'(?P<version>(?P<main>[\w.~]+)-(0.)?(?P<date>[0-9]{8,8}).(?P<commit>\w+).) with build-id (?P<build_id>[\dabcdef]+)')
+        version_dict = expr.match(scylla_version).groupdict()
+
+        return PackageVersion(
+            name="scylla-server",
+            version=version_dict.get("main", "#NO_VERSION").replace("~", "."),
+            revision_id=version_dict.get("commit", "#NO_COMMIT"),
+            build_id=version_dict.get("build_id", "#NO_BUILDID"),
+            date=version_dict.get("date", "#NO_DATE"),
+        )
+
     def argus_collect_packages(self):
         try:
             self.log.info("Collecting packages for Argus...")
@@ -382,6 +400,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
                                          build_id=package_info.get("build_id", "#NO_BUILDID"))
                 self.argus_test_run.run_info.details.packages.append(package)
             self.log.info("Saving collected packages...")
+            if len(versions) == 0:
+                self.argus_test_run.run_info.details.packages.append(self.generate_scylla_server_package())
             self.argus_test_run.save()
         except Exception:  # pylint: disable=broad-except
             self.log.error("Unable to collect package versions for Argus - skipping...", exc_info=True)
