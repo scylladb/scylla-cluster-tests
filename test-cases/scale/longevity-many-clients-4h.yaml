@@ -24,4 +24,3 @@ keyspace_num: 50
 
 user_prefix: 'longevity-many-clients-4h'
 space_node_threshold: 64424
-manager_version: '2.5'
