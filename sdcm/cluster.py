@@ -2581,7 +2581,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         credentials = self.parent_cluster.get_db_auth()
         if credentials:
             options += "-u {} -pw '{}' ".format(*credentials)
-        return f"{self.add_install_prefix('/usr/bin/nodetool')} {options} {sub_cmd} {args}"
+        return f"source ~/.sdkman/bin/sdkman-init.sh && " \
+               f"{self.add_install_prefix('/usr/bin/nodetool')} {options} {sub_cmd} {args}"
 
     # pylint: disable=inconsistent-return-statements
     def run_nodetool(self, sub_cmd, args="", options="", timeout=None,
