@@ -52,6 +52,7 @@ class DatabaseLogEvent(LogEvent, abstract=True):
     KERNEL_CALLSTACK: Type[LogEventProtocol]
     ABORTING_ON_SHARD: Type[LogEventProtocol]
     SEGMENTATION: Type[LogEventProtocol]
+    CORRUPTED_SSTABLE: Type[LogEventProtocol]
     INTEGRITY_CHECK: Type[LogEventProtocol]
     SUPPRESSED_MESSAGES: Type[LogEventProtocol]
     stream_exception: Type[LogEventProtocol]
@@ -127,6 +128,8 @@ DatabaseLogEvent.add_subevent_type("ABORTING_ON_SHARD", severity=Severity.ERROR,
                                    regex="Aborting on shard")
 DatabaseLogEvent.add_subevent_type("SEGMENTATION", severity=Severity.ERROR,
                                    regex="segmentation")
+DatabaseLogEvent.add_subevent_type("CORRUPTED_SSTABLE", severity=Severity.CRITICAL,
+                                   regex="sstables::malformed_sstable_exception|invalid_mutation_fragment_stream")
 DatabaseLogEvent.add_subevent_type("INTEGRITY_CHECK", severity=Severity.ERROR,
                                    regex="integrity check failed")
 DatabaseLogEvent.add_subevent_type("SUPPRESSED_MESSAGES", severity=Severity.WARNING,
@@ -164,6 +167,7 @@ SYSTEM_ERROR_EVENTS = (
 
     DatabaseLogEvent.ABORTING_ON_SHARD(),
     DatabaseLogEvent.SEGMENTATION(),
+    DatabaseLogEvent.CORRUPTED_SSTABLE(),
     DatabaseLogEvent.INTEGRITY_CHECK(),
     DatabaseLogEvent.SUPPRESSED_MESSAGES(),
     DatabaseLogEvent.stream_exception(),
