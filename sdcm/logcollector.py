@@ -14,6 +14,7 @@
 #  pylint: disable=too-many-lines
 import os
 import json
+import re
 import time
 import shutil
 import fnmatch
@@ -23,7 +24,7 @@ import tarfile
 import tempfile
 import traceback
 from collections import OrderedDict
-from typing import Optional
+from typing import Optional, Tuple
 from pathlib import Path
 from functools import cached_property
 
@@ -35,6 +36,7 @@ from sdcm.provision import provisioner_factory
 from sdcm.provision.provisioner import ProvisionerError
 from sdcm.remote import RemoteCmdRunnerBase, LocalCmdRunner
 from sdcm.db_stats import PrometheusDBStats
+from sdcm.sct_events.events_device import EVENTS_LOG_DIR, RAW_EVENTS_LOG
 from sdcm.utils.common import (
     S3Storage,
     ParallelObject,
@@ -54,6 +56,7 @@ from sdcm.utils.decorators import retrying
 from sdcm.utils.docker_utils import get_docker_bridge_gateway
 from sdcm.utils.get_username import get_username
 from sdcm.utils.remotewebbrowser import RemoteBrowser, WebDriverContainerMixin
+from sdcm.utils.s3_remote_uploader import upload_remote_files_directly_to_s3
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1155,6 +1158,65 @@ class ParallelTimelinesReportCollector(SCTLogCollector):
         return True
 
 
+class SSTablesCollector(SCTLogCollector):
+    """
+    Collect corrupted sstables from db node.
+    """
+    cluster_log_type = "corrupted-sstables"
+    cluster_dir_prefix = "corrupted-sstables"
+    sstable_path_regexp = re.compile(r'[./\w\-]+\.db')
+
+    def get_sstable_details(self, error_msg: str) -> Tuple[str, str, str, str]:
+        sstable_path = self.sstable_path_regexp.findall(error_msg)[0]
+        data_path, keyspace, table_dir, sstable_name = sstable_path.rsplit("/", 3)
+        return f"{data_path}/{keyspace}/{table_dir}", keyspace, table_dir.split("-")[0], sstable_name
+
+    def collect_logs(self, local_search_path: Optional[str] = None) -> list[str]:  # pylint: disable=too-many-locals
+        try:
+            raw_events_file_path = Path(self.local_dir).parent.parent.parent / EVENTS_LOG_DIR / RAW_EVENTS_LOG
+            with open(raw_events_file_path, "r", encoding="utf-8") as events_file:
+                for raw_line in events_file.readlines():
+                    event = json.loads(raw_line)
+                    if event.get("type") == "CORRUPTED_SSTABLE":
+                        try:
+                            sstable_dir, keyspace, table_name, sstable_name = self.get_sstable_details(
+                                event.get("line"))
+                            node_name = event.get("node")
+                            break
+                        except IndexError:
+                            LOGGER.warning("Couldn't get sstable details from event line.")
+                else:
+                    LOGGER.info("CORRUPTED_SSTABLE error event not found. Skipping sstables collection.")
+                    return []
+            node: CollectingNode = [node for node in self.nodes if node.name == node_name][0]
+            LOGGER.info("Collecting sstables for node %s...", node.name)
+            result = node.remoter.run(f"nodetool snapshot {keyspace} -cf {table_name}")
+            try:
+                snapshot_dir = result.stdout.split("Snapshot directory: ")[1].strip()
+            except IndexError:
+                LOGGER.error("Cannot extract snapshot directory from stdout: %s", result.stdout)
+                return []
+            snapshot_path = f"{sstable_dir}/snapshots/{snapshot_dir}"
+            s3_link = upload_remote_files_directly_to_s3(
+                node.ssh_login_info, [snapshot_path], s3_bucket=S3Storage.bucket_name,
+                s3_key=f"{self.test_id}/{self.current_run}/corrupted-sstables-{keyspace}-{table_name}.tar.gz",
+                max_size_gb=400, public_read_acl=True)
+            if not s3_link:
+                # upload malformed sstable along with several others and schema file
+                malformed_files = node.remoter.run(
+                    f"ls {snapshot_path}/{sstable_name.rsplit('-', 1)[0]}*", ignore_status=True).stdout.split()
+                recent_sstables = node.remoter.run(f"ls -t {snapshot_path}/m?-* | head -n900").stdout.split()
+                s3_link = upload_remote_files_directly_to_s3(
+                    node.ssh_login_info, malformed_files + recent_sstables + [f"{snapshot_path}/schema.cql"],
+                    s3_bucket=S3Storage.bucket_name,
+                    s3_key=f"{self.test_id}/{self.current_run}/corrupted-sstables-{keyspace}-{table_name}.tar.gz",
+                    max_size_gb=400, public_read_acl=True)
+        except Exception as error:  # pylint: disable=broad-except
+            LOGGER.exception("failed collecting malformed sstables:\n%s", error, exc_info=error)
+            return []
+        return [s3_link]
+
+
 class Collector:  # pylint: disable=too-many-instance-attributes,
     """Collector instance
 
@@ -1189,13 +1251,14 @@ class Collector:  # pylint: disable=too-many-instance-attributes,
         self.sct_set = []
         self.pt_report_set = []
         self.cluster_log_collectors = {
+            SSTablesCollector: self.db_cluster,
             ScyllaLogCollector: self.db_cluster,
             MonitorLogCollector: self.monitor_set,
             SirenManagerLogCollector: self.siren_manager_set,
             LoaderLogCollector: self.loader_set,
             SCTLogCollector: self.sct_set,
             JepsenLogCollector: self.loader_set,
-            ParallelTimelinesReportCollector: self.pt_report_set,
+            ParallelTimelinesReportCollector: self.pt_report_set
         }
         if self.backend.startswith("k8s"):
             self.cluster_log_collectors[KubernetesLogCollector] = self.kubernetes_set
