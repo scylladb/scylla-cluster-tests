@@ -6,9 +6,12 @@ from typing import Generator
 
 import pytest
 
+from sdcm.sct_events import Severity
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, ContinuousEventRegistryException
-from sdcm.sct_events.database import get_pattern_to_event_to_func_mapping, CompactionEvent
+from sdcm.sct_events.database import get_pattern_to_event_to_func_mapping, CompactionEvent, \
+    IndexSpecialColumnErrorEvent, ScyllaServerStatusEvent
 from sdcm.sct_events.loaders import GeminiStressEvent
+from sdcm.sct_events.nemesis import DisruptionEvent
 from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events.system import InfoEvent
 
@@ -21,6 +24,10 @@ class TestContinuousEventsRegistry:
     @pytest.fixture(scope="function")
     def nodetool_event(self) -> Generator[NodetoolEvent, None, None]:
         yield NodetoolEvent(nodetool_command="mock_cmd", publish_event=False)
+
+    @pytest.fixture(scope="function")
+    def disruption_event(self) -> Generator[DisruptionEvent, None, None]:
+        yield DisruptionEvent(nemesis_name="test", node="mock_node", publish_event=False)
 
     @pytest.fixture(scope="function")
     def gemini_stress_event(self) -> Generator[GeminiStressEvent, None, None]:
@@ -51,8 +58,54 @@ class TestContinuousEventsRegistry:
         number_of_insertions = 10
         for _ in range(number_of_insertions):
             GeminiStressEvent(node=uuid.uuid1(), cmd="gemini hello", publish_event=False).begin_event()
-
         assert pre_insertion_item_count + number_of_insertions == len(list(registry.continuous_events))
+
+    def test_add_nemesis_sub_context_to_continuous_event(self):
+        event = ScyllaServerStatusEvent(node=str(uuid.uuid1()), publish_event=False).begin_event(publish=False)
+        # event not during nemesis
+        assert event.subcontext == []
+
+        nemesis1 = DisruptionEvent(node=uuid.uuid1(), nemesis_name="test1", publish_event=False).begin_event()
+        GeminiStressEvent(node=uuid.uuid1(), cmd="gemini hello", publish_event=False).begin_event()
+        DisruptionEvent(node=uuid.uuid1(), nemesis_name="test2", publish_event=False).begin_event()
+        NodetoolEvent(node=uuid.uuid1(), nodetool_command="mock cmd", publish_event=False).begin_event()
+        GeminiStressEvent(node=uuid.uuid1(), cmd="gemini hello", publish_event=False).begin_event()
+
+        event = ScyllaServerStatusEvent(node=str(uuid.uuid1()), severity=Severity.ERROR).begin_event(publish=False)
+        # begin event - 2 running nemeses
+
+        assert event.msgfmt == ('({0.base} {0.severity}) period_type={0.period_type} event_id={0.event_id} '
+                                'during_nemesis=test1,test2 node={0.node}')
+
+        # first nemesis finished
+        nemesis1.end_event(publish=False)
+        # stress events finishes during second nemesis
+        event.end_event(publish=False)
+
+        # end event - 1 running nemesis
+        assert event.msgfmt == ('({0.base} {0.severity}) period_type={0.period_type} event_id={0.event_id} '
+                                'during_nemesis=test2 duration={0.duration_formatted} node={0.node}')
+
+        # Validate that the event subcontext is serialized
+        assert event.to_json()
+
+    def test_add_nemesis_sub_context_to_information_event(self):
+        event = IndexSpecialColumnErrorEvent(message="This is a mock Event")
+        # event not during nemesis
+        assert event.subcontext == []
+
+        number_of_insertions = 2
+        for i in range(number_of_insertions):
+            DisruptionEvent(node=uuid.uuid1(), nemesis_name=f"test{i}", publish_event=False).begin_event()
+            GeminiStressEvent(node=uuid.uuid1(), cmd="gemini hello", publish_event=False).begin_event()
+
+        event = IndexSpecialColumnErrorEvent(message="This is a mock Event")
+
+        assert event.msgfmt == ('({0.base} {0.severity}) period_type={0.period_type} event_id={0.event_id} '
+                                'during_nemesis=test0,test1: message={0.message}')
+
+        # Validate that the event subcontext is serialized
+        assert event.to_json()
 
     def test_adding_a_non_continuous_event_raises_error(self,
                                                         registry: ContinuousEventsRegistry,

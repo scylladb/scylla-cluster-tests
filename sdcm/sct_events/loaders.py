@@ -21,7 +21,7 @@ import dateutil.parser
 from invoke.runners import Result
 
 from sdcm.sct_events import Severity, SctEventProtocol
-from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_event
+from sdcm.sct_events.base import LogEvent, LogEventProtocol, T_log_event
 from sdcm.sct_events.stress_events import BaseStressEvent, StressEvent, StressEventProtocol
 
 LOGGER = logging.getLogger(__name__)
@@ -260,7 +260,7 @@ class GeminiStressLogEvent(LogEvent[T_log_event], abstract=True):  # pylint: dis
 
     @property
     def msgfmt(self) -> str:
-        fmt = SctEvent.msgfmt + ":"
+        fmt = super(LogEvent, self).msgfmt + ":"
         if self.type:
             fmt += " type={0.type}"
         fmt += " line_number={0.line_number} node={0.node}"

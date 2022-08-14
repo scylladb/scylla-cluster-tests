@@ -67,6 +67,11 @@ class ContinuousEventsRegistry(metaclass=Singleton):
     def find_continuous_events_by_hash(self, continuous_hash: int) -> list[ContinuousEvent]:
         return self.hashed_continuous_events.get(continuous_hash, []).copy()
 
+    def find_running_disruption_events(self):
+        running_nemesis_events = [event[0] for event in self.hashed_continuous_events.values()
+                                  if event and event[0].base == "DisruptionEvent"]
+        return running_nemesis_events
+
 
 # pylint: disable=too-many-instance-attributes
 class ContinuousEvent(SctEvent, abstract=True):
@@ -176,6 +181,7 @@ class ContinuousEvent(SctEvent, abstract=True):
         self.begin_timestamp = self.event_timestamp = time.time()
         self.period_type = EventPeriod.BEGIN.value
         ContinuousEventsRegistry().add_event(self)
+        self.add_subcontext()
         if publish and self.publish_event:
             self._ready_to_publish = True
             self.publish()
@@ -186,6 +192,10 @@ class ContinuousEvent(SctEvent, abstract=True):
         self.end_timestamp = self.event_timestamp = time.time()
         self.period_type = EventPeriod.END.value
         ContinuousEventsRegistry().del_event(self)
+        # clean all subcontext (it's subcontext of "begin" event)
+        self.subcontext = []
+
+        self.add_subcontext()
         if publish and self.publish_event:
             self._ready_to_publish = True
             self.publish()

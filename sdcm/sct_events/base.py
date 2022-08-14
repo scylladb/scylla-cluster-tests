@@ -29,7 +29,7 @@ from typing import \
 from keyword import iskeyword
 from weakref import proxy as weakproxy
 from datetime import datetime, timezone
-from functools import partialmethod
+from functools import partialmethod, cached_property
 
 import yaml
 import dateutil.parser
@@ -85,11 +85,11 @@ class SctEvent:
     base: str = "SctEvent"  # this attribute set by __init_subclass__()
     type: Optional[str] = None  # this attribute set by add_subevent_type()
     subtype: Optional[str] = None  # this attribute set by add_subevent_type()
+    subcontext: Optional[List[dict]] = None  # this attribute keeps context of event
 
     period_type: str = EventPeriod.NOT_DEFINED.value  # attribute possible values are from EventTypes enum
 
     formatter: Callable[[str, SctEvent], str] = staticmethod(str.format)
-    msgfmt: str = "({0.base} {0.severity}) period_type={0.period_type} event_id={0.event_id}"
 
     event_timestamp: Optional[float] = None  # actual value should be set using __init__()
     source_timestamp: Optional[float] = None
@@ -120,6 +120,7 @@ class SctEvent:
         self._ready_to_publish = True
         self.event_id = str(uuid.uuid4())
         self.log_level = LOG_LEVEL_MAPPING.get(severity, logging.ERROR)
+        self.subcontext = []
 
     @classmethod
     def is_abstract(cls) -> bool:
@@ -190,6 +191,44 @@ class SctEvent:
         """
         return self.source_timestamp or self.event_timestamp
 
+    @cached_property
+    def subcontext_fmt(self):
+        return {}
+
+    def concatenate_subcontext_for_message(self, context_name):
+        concatenated_context = []
+        for event_context in self.subcontext or []:
+            if isinstance(event_context, dict) and context_name in event_context:
+                concatenated_context.append(event_context[context_name])
+            elif isinstance(event_context, SctEvent) and context_name in event_context.subcontext_fmt:
+                concatenated_context.append(event_context.subcontext_fmt[context_name])
+        return ','.join(concatenated_context)
+
+    @property
+    def msgfmt(self):
+        fmt = "({0.base} {0.severity}) period_type={0.period_type} event_id={0.event_id}"
+
+        if during_nemesis := self.concatenate_subcontext_for_message(context_name='nemesis_name'):
+            fmt += f" during_nemesis={during_nemesis}"
+
+        return fmt
+
+    def add_subcontext(self):
+        # pylint: disable=import-outside-toplevel; to avoid cyclic imports
+        from sdcm.sct_events.continuous_event import ContinuousEventsRegistry
+        # Add subcontext for event with ERROR and CRITICAL severity only
+        if self.severity.value < 3:
+            return
+
+        # Add nemesis info if event happened during nemesis
+        if self.base != "DisruptionEvent":
+            running_disruption_events = ContinuousEventsRegistry().find_running_disruption_events()
+            if not running_disruption_events:
+                return
+
+            for nemesis in running_disruption_events:
+                self.subcontext.append(nemesis)
+
     def publish(self, warn_not_ready: bool = True) -> None:
         # pylint: disable=import-outside-toplevel; to avoid cyclic imports
         from sdcm.sct_events.events_device import get_events_main_device
@@ -231,17 +270,31 @@ class SctEvent:
     def ready_to_publish(self):
         self._ready_to_publish = True
 
+    @cached_property
+    def subcontext_fields(self) -> list:
+        """
+        List of event fields that will be saved in raw_event.log for subcontext event
+        """
+        return []
+
     def to_json(self, encoder: Type[JSONEncoder] = JSONEncoder) -> str:
         return json.dumps({
-            "base": self.base,
-            "type": self.type,
-            "subtype": self.subtype,
+            **self.attribute_with_value_for_json(attributes_list=["base", "type", "subtype"]),
             **self.__getstate__(),
         }, cls=encoder)
 
+    def attribute_with_value_for_json(self, attributes_list: list, event: SctEvent = None) -> dict:
+        return dict(zip(attributes_list, [getattr(event or self, field) for field in attributes_list]))
+
     def __getstate__(self):
         # Remove everything from the __dict__ that starts with "_".
-        return {attr: value for attr, value in self.__dict__.items() if not attr.startswith("_")}
+        attr_list = [attr for attr in self.__dict__ if not attr.startswith("_") and "subcontext" not in attr]
+        attrs = self.attribute_with_value_for_json(attributes_list=attr_list)
+
+        if subcontext := getattr(self, "subcontext"):
+            attrs["subcontext"] = [self.attribute_with_value_for_json(attributes_list=event.subcontext_fields,
+                                                                      event=event) for event in subcontext]
+        return attrs
 
     def __str__(self):
         return self.formatter(self.msgfmt, self)
@@ -264,6 +317,7 @@ class InformationalEvent(SctEvent, abstract=True):
     def __init__(self, severity: Severity = Severity.UNKNOWN):
         super().__init__(severity=severity)
         self.period_type = EventPeriod.INFORMATIONAL.value
+        self.add_subcontext()
 
 
 def add_severity_limit_rules(rules: List[str]) -> None:

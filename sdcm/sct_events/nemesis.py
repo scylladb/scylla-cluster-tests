@@ -10,6 +10,8 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2020 ScyllaDB
+from functools import cached_property
+
 from sdcm.sct_events import Severity
 from sdcm.sct_events.continuous_event import ContinuousEvent
 
@@ -25,6 +27,14 @@ class DisruptionEvent(ContinuousEvent):
         self.duration = None
         self.full_traceback = ""
         super().__init__(severity=severity, publish_event=publish_event)
+
+    @cached_property
+    def subcontext_fields(self) -> list:
+        return ['event_id', 'base', 'nemesis_name', 'node', 'timestamp']
+
+    @cached_property
+    def subcontext_fmt(self):
+        return {'nemesis_name': self.nemesis_name}
 
     @property
     def msgfmt(self) -> str:
