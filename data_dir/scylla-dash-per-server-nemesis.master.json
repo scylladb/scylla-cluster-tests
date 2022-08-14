@@ -1062,6 +1062,487 @@
         }
       },
       {
+      "datasource": "prometheus",
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "id": 88,
+      "links": [],
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "hidden",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "8.2.7",
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "collectd_cassandra_stress_write_gauge{type=\"lat_perc_99\"}",
+          "format": "time_series",
+          "hide": false,
+          "interval": "15s",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "refId": "B"
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Stress tools write latency 99%",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "prometheus",
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "id": 89,
+      "links": [],
+      "options": {
+        "bucketOffset": 0,
+        "bucketSize": 2,
+        "legend": {
+          "calcs": [],
+          "displayMode": "hidden",
+          "placement": "bottom"
+        }
+      },
+      "pluginVersion": "8.2.7",
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "collectd_cassandra_stress_write_gauge{type=\"lat_perc_99\"}",
+          "format": "time_series",
+          "hide": false,
+          "interval": "15s",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "refId": "B"
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Stress tools write latency 99%",
+      "type": "histogram"
+    },
+    {
+      "datasource": "prometheus",
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 47
+      },
+      "id": 90,
+      "links": [],
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "hidden",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "8.2.7",
+      "targets": [
+        {
+          "expr": "collectd_cassandra_stress_mixed_gauge{type=\"lat_perc_99\"}",
+          "format": "time_series",
+          "hide": false,
+          "interval": "15s",
+          "intervalFactor": 1,
+          "refId": "A"
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Stress tools mixed latency 99%",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "prometheus",
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 0
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 47
+      },
+      "id": 91,
+      "links": [],
+      "options": {
+        "bucketOffset": 0,
+        "bucketSize": 2,
+        "legend": {
+          "calcs": [],
+          "displayMode": "hidden",
+          "placement": "bottom"
+        }
+      },
+      "pluginVersion": "8.2.7",
+      "targets": [
+        {
+          "expr": "collectd_cassandra_stress_mixed_gauge{type=\"lat_perc_99\"}",
+          "format": "time_series",
+          "hide": false,
+          "interval": "15s",
+          "intervalFactor": 1,
+          "refId": "A"
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Stress tools mixed latency 99%",
+      "type": "histogram"
+    },
+    {
+      "datasource": "prometheus",
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 54
+      },
+      "id": 92,
+      "links": [],
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "hidden",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "8.2.7",
+      "targets": [
+        {
+          "expr": "collectd_cassandra_stress_read_gauge{type=\"lat_perc_99\"}",
+          "format": "time_series",
+          "hide": false,
+          "interval": "15s",
+          "intervalFactor": 1,
+          "refId": "C"
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Stress tools read latency 99%",
+      "type": "timeseries"
+    },
+      {
+      "datasource": "prometheus",
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 54
+      },
+      "id": 93,
+      "links": [],
+      "options": {
+        "bucketOffset": 0,
+        "bucketSize": 2,
+        "legend": {
+          "calcs": [],
+          "displayMode": "hidden",
+          "placement": "bottom"
+        }
+      },
+      "pluginVersion": "8.2.7",
+      "targets": [
+        {
+          "expr": "collectd_cassandra_stress_read_gauge{type=\"lat_perc_99\"}",
+          "format": "time_series",
+          "hide": false,
+          "interval": "15s",
+          "intervalFactor": 1,
+          "refId": "C"
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Stress tools read latency 99%",
+      "type": "histogram"
+    },
+      {
         "class": "text_header_panel",
         "datasource": null,
         "editable": true,
@@ -1070,7 +1551,7 @@
           "h": 3,
           "w": 12,
           "x": 0,
-          "y": 40
+          "y": 61
         },
         "height": "30",
         "id": 8,
@@ -1093,7 +1574,7 @@
           "h": 3,
           "w": 12,
           "x": 12,
-          "y": 40
+          "y": 61
         },
         "id": 9,
         "links": [],
@@ -1122,7 +1603,7 @@
           "h": 6,
           "w": 6,
           "x": 0,
-          "y": 43
+          "y": 64
         },
         "hiddenSeries": false,
         "id": 10,
@@ -1216,7 +1697,7 @@
           "h": 6,
           "w": 6,
           "x": 6,
-          "y": 43
+          "y": 64
         },
         "hiddenSeries": false,
         "id": 11,
@@ -1311,7 +1792,7 @@
           "h": 6,
           "w": 6,
           "x": 12,
-          "y": 43
+          "y": 64
         },
         "hiddenSeries": false,
         "id": 12,
@@ -1405,7 +1886,7 @@
           "h": 6,
           "w": 6,
           "x": 18,
-          "y": 43
+          "y": 64
         },
         "hiddenSeries": false,
         "id": 13,
@@ -1498,7 +1979,7 @@
           "h": 6,
           "w": 6,
           "x": 0,
-          "y": 49
+          "y": 70
         },
         "id": 14,
         "legend": {
@@ -1582,7 +2063,7 @@
           "h": 6,
           "w": 6,
           "x": 6,
-          "y": 49
+          "y": 70
         },
         "id": 15,
         "legend": {
@@ -1666,7 +2147,7 @@
           "h": 6,
           "w": 6,
           "x": 12,
-          "y": 49
+          "y": 70
         },
         "id": 16,
         "legend": {
@@ -1750,7 +2231,7 @@
           "h": 6,
           "w": 6,
           "x": 18,
-          "y": 49
+          "y": 70
         },
         "id": 17,
         "legend": {
@@ -1829,7 +2310,7 @@
           "h": 3,
           "w": 24,
           "x": 0,
-          "y": 55
+          "y": 76
         },
         "height": "30",
         "id": 18,
@@ -1858,7 +2339,7 @@
           "h": 7,
           "w": 12,
           "x": 0,
-          "y": 58
+          "y": 79
         },
         "id": 19,
         "legend": {
@@ -1942,7 +2423,7 @@
           "h": 7,
           "w": 12,
           "x": 12,
-          "y": 58
+          "y": 79
         },
         "id": 20,
         "legend": {
@@ -2027,7 +2508,7 @@
           "h": 7,
           "w": 6,
           "x": 0,
-          "y": 65
+          "y": 86
         },
         "id": 21,
         "legend": {
@@ -2111,7 +2592,7 @@
           "h": 7,
           "w": 6,
           "x": 6,
-          "y": 65
+          "y": 86
         },
         "id": 22,
         "legend": {
@@ -2195,7 +2676,7 @@
           "h": 7,
           "w": 6,
           "x": 12,
-          "y": 65
+          "y": 86
         },
         "id": 23,
         "legend": {
@@ -2279,7 +2760,7 @@
           "h": 7,
           "w": 6,
           "x": 18,
-          "y": 65
+          "y": 86
         },
         "id": 24,
         "legend": {
@@ -2357,7 +2838,7 @@
           "h": 7,
           "w": 6,
           "x": 0,
-          "y": 72
+          "y": 93
         },
         "id": 25,
         "links": [],
@@ -2384,7 +2865,7 @@
           "h": 7,
           "w": 6,
           "x": 6,
-          "y": 72
+          "y": 93
         },
         "id": 26,
         "legend": {
@@ -2468,7 +2949,7 @@
           "h": 7,
           "w": 6,
           "x": 12,
-          "y": 72
+          "y": 93
         },
         "id": 27,
         "legend": {
@@ -2552,7 +3033,7 @@
           "h": 7,
           "w": 6,
           "x": 18,
-          "y": 72
+          "y": 93
         },
         "id": 28,
         "legend": {
@@ -2630,7 +3111,7 @@
           "h": 7,
           "w": 6,
           "x": 0,
-          "y": 79
+          "y": 100
         },
         "id": 29,
         "links": [],
@@ -2657,7 +3138,7 @@
           "h": 7,
           "w": 6,
           "x": 12,
-          "y": 79
+          "y": 100
         },
         "id": 31,
         "legend": {
@@ -2741,7 +3222,7 @@
           "h": 7,
           "w": 6,
           "x": 18,
-          "y": 79
+          "y": 100
         },
         "id": 32,
         "legend": {
@@ -2819,7 +3300,7 @@
           "h": 3,
           "w": 24,
           "x": 0,
-          "y": 86
+          "y": 107
         },
         "id": 74,
         "links": [],
@@ -2847,7 +3328,7 @@
           "h": 7,
           "w": 12,
           "x": 0,
-          "y": 89
+          "y": 110
         },
         "id": 75,
         "legend": {
@@ -2934,7 +3415,7 @@
           "h": 7,
           "w": 12,
           "x": 12,
-          "y": 89
+          "y": 110
         },
         "id": 76,
         "legend": {
@@ -3028,7 +3509,7 @@
           "h": 3,
           "w": 24,
           "x": 0,
-          "y": 96
+          "y": 117
         },
         "id": 33,
         "links": [],
@@ -3056,7 +3537,7 @@
           "h": 7,
           "w": 12,
           "x": 0,
-          "y": 99
+          "y": 120
         },
         "id": 34,
         "legend": {
@@ -3140,7 +3621,7 @@
           "h": 7,
           "w": 12,
           "x": 12,
-          "y": 99
+          "y": 120
         },
         "id": 35,
         "legend": {
@@ -3224,7 +3705,7 @@
           "h": 7,
           "w": 6,
           "x": 0,
-          "y": 106
+          "y": 127
         },
         "id": 36,
         "legend": {
@@ -3308,7 +3789,7 @@
           "h": 7,
           "w": 6,
           "x": 6,
-          "y": 106
+          "y": 127
         },
         "id": 37,
         "legend": {
@@ -3392,7 +3873,7 @@
           "h": 7,
           "w": 6,
           "x": 12,
-          "y": 106
+          "y": 127
         },
         "id": 38,
         "legend": {
@@ -3476,7 +3957,7 @@
           "h": 7,
           "w": 6,
           "x": 18,
-          "y": 106
+          "y": 127
         },
         "id": 39,
         "legend": {
@@ -3560,7 +4041,7 @@
           "h": 7,
           "w": 6,
           "x": 0,
-          "y": 113
+          "y": 134
         },
         "id": 40,
         "legend": {
@@ -3644,7 +4125,7 @@
           "h": 7,
           "w": 6,
           "x": 6,
-          "y": 113
+          "y": 134
         },
         "id": 41,
         "legend": {
@@ -3728,7 +4209,7 @@
           "h": 7,
           "w": 6,
           "x": 12,
-          "y": 113
+          "y": 134
         },
         "id": 42,
         "legend": {
@@ -3814,7 +4295,7 @@
           "h": 7,
           "w": 6,
           "x": 18,
-          "y": 113
+          "y": 134
         },
         "id": 43,
         "legend": {
@@ -3900,7 +4381,7 @@
           "h": 7,
           "w": 6,
           "x": 0,
-          "y": 120
+          "y": 141
         },
         "id": 44,
         "legend": {
@@ -3986,7 +4467,7 @@
           "h": 7,
           "w": 6,
           "x": 6,
-          "y": 120
+          "y": 141
         },
         "id": 45,
         "legend": {
@@ -4072,7 +4553,7 @@
           "h": 7,
           "w": 6,
           "x": 12,
-          "y": 120
+          "y": 141
         },
         "id": 46,
         "legend": {
@@ -4158,7 +4639,7 @@
           "h": 7,
           "w": 6,
           "x": 18,
-          "y": 120
+          "y": 141
         },
         "id": 47,
         "legend": {
@@ -4244,7 +4725,7 @@
           "h": 7,
           "w": 6,
           "x": 0,
-          "y": 127
+          "y": 148
         },
         "id": 48,
         "legend": {
@@ -4328,7 +4809,7 @@
           "h": 7,
           "w": 6,
           "x": 6,
-          "y": 127
+          "y": 148
         },
         "id": 49,
         "legend": {
@@ -4412,7 +4893,7 @@
           "h": 7,
           "w": 6,
           "x": 12,
-          "y": 127
+          "y": 148
         },
         "id": 50,
         "legend": {
@@ -4496,7 +4977,7 @@
           "h": 7,
           "w": 6,
           "x": 18,
-          "y": 127
+          "y": 148
         },
         "id": 51,
         "legend": {
@@ -4574,7 +5055,7 @@
           "h": 3,
           "w": 12,
           "x": 0,
-          "y": 134
+          "y": 155
         },
         "id": 52,
         "links": [],
@@ -4602,7 +5083,7 @@
           "h": 7,
           "w": 12,
           "x": 12,
-          "y": 134
+          "y": 155
         },
         "id": 54,
         "legend": {
@@ -4686,7 +5167,7 @@
           "h": 7,
           "w": 12,
           "x": 0,
-          "y": 137
+          "y": 158
         },
         "id": 53,
         "legend": {
@@ -4764,7 +5245,7 @@
           "h": 3,
           "w": 24,
           "x": 0,
-          "y": 144
+          "y": 165
         },
         "id": 55,
         "links": [],
@@ -4792,7 +5273,7 @@
           "h": 7,
           "w": 24,
           "x": 0,
-          "y": 147
+          "y": 168
         },
         "id": 56,
         "legend": {
@@ -4871,7 +5352,7 @@
           "h": 3,
           "w": 24,
           "x": 0,
-          "y": 154
+          "y": 175
         },
         "id": 57,
         "links": [],
@@ -4899,7 +5380,7 @@
           "h": 7,
           "w": 6,
           "x": 0,
-          "y": 157
+          "y": 178
         },
         "id": 58,
         "legend": {
@@ -4986,7 +5467,7 @@
           "h": 7,
           "w": 6,
           "x": 6,
-          "y": 157
+          "y": 178
         },
         "id": 59,
         "legend": {
@@ -5073,7 +5554,7 @@
           "h": 7,
           "w": 6,
           "x": 12,
-          "y": 157
+          "y": 178
         },
         "id": 60,
         "legend": {
@@ -5160,7 +5641,7 @@
           "h": 7,
           "w": 6,
           "x": 18,
-          "y": 157
+          "y": 178
         },
         "id": 61,
         "legend": {
@@ -5248,7 +5729,7 @@
           "h": 7,
           "w": 6,
           "x": 0,
-          "y": 164
+          "y": 185
         },
         "id": 62,
         "legend": {
@@ -5327,7 +5808,7 @@
           "h": 3,
           "w": 24,
           "x": 0,
-          "y": 171
+          "y": 192
         },
         "id": 69,
         "links": [],
@@ -5356,7 +5837,7 @@
           "h": 7,
           "w": 12,
           "x": 0,
-          "y": 174
+          "y": 195
         },
         "id": 70,
         "legend": {
@@ -5433,7 +5914,7 @@
           "h": 3,
           "w": 24,
           "x": 0,
-          "y": 181
+          "y": 202
         },
         "id": 71,
         "links": [],
@@ -5462,7 +5943,7 @@
           "h": 7,
           "w": 12,
           "x": 0,
-          "y": 184
+          "y": 205
         },
         "id": 72,
         "legend": {
@@ -5568,7 +6049,7 @@
           "h": 3,
           "w": 24,
           "x": 0,
-          "y": 191
+          "y": 212
         },
         "id": 73,
         "links": [],
@@ -5598,7 +6079,7 @@
           "h": 7,
           "w": 8,
           "x": 0,
-          "y": 194
+          "y": 215
         },
         "hiddenSeries": false,
         "id": 77,
@@ -5698,7 +6179,7 @@
           "h": 7,
           "w": 8,
           "x": 8,
-          "y": 194
+          "y": 215
         },
         "hiddenSeries": false,
         "id": 78,
@@ -5806,7 +6287,7 @@
           "h": 7,
           "w": 8,
           "x": 16,
-          "y": 194
+          "y": 215
         },
         "hiddenSeries": false,
         "id": 83,
@@ -5904,7 +6385,7 @@
           "h": 7,
           "w": 8,
           "x": 0,
-          "y": 201
+          "y": 222
         },
         "hiddenSeries": false,
         "id": 85,
@@ -6012,7 +6493,7 @@
           "h": 7,
           "w": 8,
           "x": 8,
-          "y": 201
+          "y": 222
         },
         "hiddenSeries": false,
         "id": 86,
@@ -6120,7 +6601,7 @@
           "h": 7,
           "w": 8,
           "x": 16,
-          "y": 201
+          "y": 222
         },
         "hiddenSeries": false,
         "id": 84,
@@ -6228,7 +6709,7 @@
           "h": 7,
           "w": 8,
           "x": 0,
-          "y": 208
+          "y": 229
         },
         "hiddenSeries": false,
         "id": 79,
@@ -6328,7 +6809,7 @@
           "h": 7,
           "w": 8,
           "x": 8,
-          "y": 208
+          "y": 229
         },
         "hiddenSeries": false,
         "id": 81,
@@ -6428,7 +6909,7 @@
           "h": 7,
           "w": 8,
           "x": 16,
-          "y": 208
+          "y": 229
         },
         "hiddenSeries": false,
         "id": 82,
