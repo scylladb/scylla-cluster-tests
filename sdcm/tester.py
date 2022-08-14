@@ -29,6 +29,7 @@ import signal
 import sys
 import json
 
+import botocore
 import yaml
 from invoke.exceptions import UnexpectedExit, Failure
 
@@ -56,6 +57,7 @@ from sdcm.scan_operation_thread import FullScanThread, FullPartitionScanThread
 from sdcm.nosql_thread import NoSQLBenchStressThread
 from sdcm.scylla_bench_thread import ScyllaBenchThread
 from sdcm.cassandra_harry_thread import CassandraHarryThread
+from sdcm.utils.aws_region import AwsRegion
 from sdcm.utils.aws_utils import init_monitoring_info_from_params, get_ec2_network_configuration, get_ec2_services, \
     get_common_params, init_db_info_from_params, ec2_ami_get_root_device_name
 from sdcm.utils.common import format_timestamp, wait_ami_available, tag_ami, update_certificates, \
@@ -1063,17 +1065,50 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         for idx, ami_id in enumerate(ami_ids):
             wait_ami_available(services[idx].meta.client, ami_id)
 
+        def _get_all_zones_common_params() -> list[dict]:
+            all_zones_common_params = []
+            aws_region = AwsRegion(region_name=regions[0])
+            availability_zones = [zone[-1] for zone in aws_region.availability_zones]
+            for zone in availability_zones:
+                all_zones_common_params.append(
+                    get_common_params(params=self.params, regions=regions, credentials=self.credentials,
+                                      services=services, availability_zone=zone))
+            return all_zones_common_params
+
         common_params = get_common_params(params=self.params, regions=regions, credentials=self.credentials,
                                           services=services)
 
-        def create_cluster(db_type='scylla'):
-            cl_params = dict(
+        def _create_auto_zone_scylla_aws_cluster():
+            capacity_errors = []
+            for cl_zone_params in _get_all_zones_common_params():
+                cl_zone_params.update(_get_instance_params())
+                try:
+                    return ScyllaAWSCluster(
+                        ec2_ami_id=self.params.get('ami_id_db_scylla').split(),
+                        ec2_ami_username=self.params.get('ami_db_scylla_user'),
+                        **cl_zone_params)
+                except botocore.exceptions.ClientError as error:
+                    capacity_error_keywards = ['Unsupported', 'InsufficientInstanceCapacity']
+                    if any(capacity_error in str(error) for capacity_error in capacity_error_keywards):
+                        self.log.warning("Failed creating a Scylla AWS cluster: %s", error)
+                        capacity_errors.append(error)
+                    else:
+                        raise
+            raise CriticalTestFailure(f"Failed creating a Scylla AWS cluster: {capacity_errors}")
+
+        def _get_instance_params() -> dict:
+            return dict(
                 ec2_instance_type=db_info['type'],
                 ec2_block_device_mappings=db_info['device_mappings'],
                 n_nodes=db_info['n_nodes']
             )
+
+        def create_cluster(db_type='scylla'):
+            cl_params = _get_instance_params()
             cl_params.update(common_params)
             if db_type == 'scylla':
+                if self.params.get('aws_fallback_to_next_availability_zone'):
+                    return _create_auto_zone_scylla_aws_cluster()
                 return ScyllaAWSCluster(
                     ec2_ami_id=self.params.get('ami_id_db_scylla').split(),
                     ec2_ami_username=self.params.get('ami_db_scylla_user'),
