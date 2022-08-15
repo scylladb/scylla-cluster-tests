@@ -667,6 +667,11 @@ class GceSctRunner(SctRunner):
                 "block-project-ssh-keys": "true",
                 "ssh-keys": f"{self.LOGIN_USER}:{self.key_pair.public_key.decode()}",
             },
+            # NOTE: following is needed for the possibility to use the K8S/GKE APIs
+            ex_service_accounts=[{
+                'email': KeyStore().get_gcp_credentials()['client_email'],
+                'scopes': ['cloud-platform'],
+            }],
         )
         time.sleep(30)  # wait until the public IPs are available.
 
