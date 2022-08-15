@@ -451,6 +451,7 @@ class MonitorSetGKE(MonitorSetGCE):
         self.json_file_params_for_replace = {
             "$test_name": f"{get_test_name()}--{self.targets['db_cluster'].scylla_cluster_name}",
         }
+        self.tags["monitorid"] = self.monitor_id
 
     def install_scylla_manager(self, node):
         pass
@@ -478,10 +479,3 @@ class MonitorSetGKE(MonitorSetGCE):
 
         instances = sorted(instances, key=sort_by_index)
         return instances
-
-    # pylint: disable=protected-access
-    def _create_node(self, instance, node_index, dc_idx):
-        node = super()._create_node(instance=instance, node_index=node_index, dc_idx=dc_idx)
-        node._instance_wait_safe(
-            node._gce_service.ex_set_node_labels, node._instance, {"monitorid": self.monitor_id})
-        return node
