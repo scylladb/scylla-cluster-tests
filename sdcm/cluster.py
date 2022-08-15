@@ -3519,10 +3519,14 @@ def wait_for_init_wrap(method):  # pylint: disable=too-many-statements
             exception_details = None
             try:
                 cl_inst.node_setup(_node, **setup_kwargs)
-                _node.argus_resource_set_shards()
-                ArgusTestRun.get().save()
             except Exception as ex:  # pylint: disable=broad-except
                 exception_details = (str(ex), traceback.format_exc())
+            try:
+                _node.argus_resource_set_shards()
+                ArgusTestRun.get().save()
+            except Exception:  # pylint: disable=broad-except
+                LOGGER.warning("Failure settings shards for node %s in Argus.", _node)
+                LOGGER.debug("Exception details:\n", exc_info=True)
             _queue.put((_node, exception_details))
             _queue.task_done()
 
