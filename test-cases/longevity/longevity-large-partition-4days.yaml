@@ -12,9 +12,9 @@ prepare_write_cmd:  ["scylla-bench -workload=sequential -mode=write -replication
                      "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=7 -clustering-row-count=10000000 -partition-offset=47 -clustering-row-size=2048 -concurrency=250 -rows-per-request=2000 -timeout=180s -connection-count 150",
                      "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=6 -clustering-row-count=10000000 -partition-offset=54 -clustering-row-size=2048 -concurrency=250 -rows-per-request=2000 -timeout=180s -connection-count 150"
 ]
-stress_cmd: ["scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=60 -clustering-row-count=10000000 -clustering-row-size=2048 -rows-per-request=2000 -timeout=180s -concurrency=700 -max-rate=64000  -duration=5760m -connection-count 500",
-             "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=60 -clustering-row-count=10000000 -clustering-row-size=2048 -rows-per-request=2000 -timeout=180s -concurrency=700 -max-rate=64000  -duration=5760m -connection-count 500",
-             "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=60 -clustering-row-count=10000000 -clustering-row-size=2048 -rows-per-request=2000 -timeout=180s -concurrency=700 -max-rate=64000  -duration=5760m -connection-count 500"
+stress_cmd: ["scylla-bench -workload=uniform -mode=read -select-order-by=asc -replication-factor=3 -partition-count=60 -clustering-row-count=10000000 -clustering-row-size=2048 -rows-per-request=10 -timeout=180s -retry-number=10 -concurrency=400 -max-rate=64000  -duration=5760m -connection-count 400",
+             "scylla-bench -workload=uniform -mode=read -select-order-by=desc -replication-factor=3 -partition-count=60 -clustering-row-count=10000000  -clustering-row-size=2048 -rows-per-request=10 -timeout=240s -retry-number=10 -concurrency=400 -max-rate=64000  -duration=5760m -connection-count 400",
+             "scylla-bench -workload=uniform -mode=read -select-order-by=desc,asc,none -replication-factor=3 -partition-count=60 -clustering-row-count=10000000 -clustering-row-size=2048 -rows-per-request=2000 -timeout=240s -retry-number=10 -concurrency=400 -max-rate=64000  -duration=5760m -connection-count 400"
 ]
 
 n_db_nodes: 4
@@ -23,7 +23,7 @@ n_monitor_nodes: 1
 
 instance_type_db: 'i3en.3xlarge'
 
-nemesis_class_name: 'SisyphusMonkey'
+nemesis_class_name: 'NoOpMonkey'
 nemesis_seed: '014'
 instance_type_loader: 'c5n.2xlarge'
 round_robin: true
@@ -40,6 +40,4 @@ validate_partitions: true
 table_name: "scylla_bench.test"
 primary_key_column: "pk"
 
-# Temporarily downgrade scylla_bench to a stable version
-scylla_bench_version: v0.1.3
-run_full_partition_scan: '{"ks_cf": "scylla_bench.test", "interval": 300, "pk_name":"pk", "rows_count": 10000000, "validate_data": "true"}' # 'ks.cf, interval(sec), partition-key name, number-of-rows-per-partition, validate reversed query output, include data-column or only validate pk + ck'
+run_full_partition_scan: '{"ks_cf": "scylla_bench.test", "interval": 3600, "pk_name":"pk", "rows_count": 10000000, "validate_data": "true"}' # 'ks.cf, interval(sec), partition-key name, number-of-rows-per-partition, validate reversed query output, include data-column or only validate pk + ck'
