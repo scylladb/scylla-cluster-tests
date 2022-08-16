@@ -109,7 +109,7 @@ spec:
                 exit 1
             fi
 
-            TOKEN_PATH=$(find /mnt/hostfs -name token | grep node-setup-daemonset -m1)
+            TOKEN_PATH=$(find /run/secrets/kubernetes.io -name token | grep token -m1)
             TOKEN=$(cat $TOKEN_PATH)
             CA_CRT=$TOKEN_PATH/../ca.crt
             kubectl config set-cluster scylla --server=https://kubernetes.default --certificate-authority=$CA_CRT
@@ -225,7 +225,7 @@ spec:
                 exit 1
             fi
 
-            TOKEN_PATH=$(find /mnt/hostfs -name token | grep node-setup-daemonset -m1)
+            TOKEN_PATH=$(find /run/secrets/kubernetes.io -name token | grep token -m1)
             TOKEN=$(cat $TOKEN_PATH)
             CA_CRT=$TOKEN_PATH/../ca.crt
             kubectl config set-cluster scylla --server=https://kubernetes.default --certificate-authority=$CA_CRT
