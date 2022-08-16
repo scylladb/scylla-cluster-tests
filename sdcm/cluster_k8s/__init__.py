@@ -93,7 +93,7 @@ NAMESPACE_CREATION_LOCK = Lock()
 
 CERT_MANAGER_TEST_CONFIG = sct_abs_path("sdcm/k8s_configs/cert-manager-test.yaml")
 LOADER_CLUSTER_CONFIG = sct_abs_path("sdcm/k8s_configs/loaders.yaml")
-LOCAL_PROVISIONER_DIR = sct_abs_path("sdcm/k8s_configs/provisioner")
+LOCAL_PROVISIONER_FILE = sct_abs_path("sdcm/k8s_configs/static-local-volume-provisioner.yaml")
 LOCAL_MINIO_DIR = sct_abs_path("sdcm/k8s_configs/minio")
 
 SCYLLA_MANAGER_SERVICE_MONITOR_CONFIG_PATH = sct_abs_path(
@@ -914,9 +914,14 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def install_static_local_volume_provisioner(self, node_pool: CloudK8sNodePool) -> None:
         if self.params.get('reuse_cluster'):
             return
-        LOGGER.info("Install local volume provisioner")
-        self.helm(f"install local-provisioner {LOCAL_PROVISIONER_DIR}",
-                  values=node_pool.helm_affinity_values)
+
+        LOGGER.info("Install static local volume provisioner")
+        self.apply_file(
+            LOCAL_PROVISIONER_FILE,
+            modifiers=[affinity_modifier
+                       for current_pool in [node_pool]
+                       for affinity_modifier in current_pool.affinity_modifiers],
+            envsubst=False)
 
     @log_run_info
     def prepare_k8s_scylla_nodes(self, node_pool: CloudK8sNodePool) -> None:
@@ -1988,12 +1993,12 @@ class BaseScyllaPodContainer(BasePodContainer):  # pylint: disable=abstract-meth
     def fstrim_scylla_disks(self):
         # NOTE: to be able to run 'fstrim' command in a pod, it must have direct device mount and
         # appropriate priviledges.
-        # Both requirements are satisfied by 'local-volume-provisioner' pods which provide disks
-        # for scylla pods.
-        # So, we run this command not on 'scylla' pods but on 'local-volume-provisioner'
+        # Both requirements are satisfied by 'static-local-volume-provisioner' pods
+        # which provide disks for scylla pods.
+        # So, we run this command not on 'scylla' pods but on 'static-local-volume-provisioner'
         # ones on each K8S node dedicated for scylla pods.
         podname_path_list = self.parent_cluster.k8s_cluster.kubectl(
-            "get pod -l app=local-volume-provisioner "
+            "get pod -l app=static-local-volume-provisioner "
             f"--field-selector spec.nodeName={self.node_name} "
             "-o jsonpath='{range .items[*]}{.metadata.name} {.spec.volumes[?(@.name==\""
             f"{self.parent_cluster.params.get('k8s_scylla_disk_class')}"

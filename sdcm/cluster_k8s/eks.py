@@ -253,7 +253,7 @@ class EksCluster(KubernetesCluster, EksClusterCleanupMixin):
             ('name', 'node-setup'),
             ('name', 'cpu-policy'),
             ('k8s-app', 'aws-node'),
-            ('app', 'local-volume-provisioner'),
+            ('app', 'static-local-volume-provisioner'),
             ('k8s-app', 'kube-proxy'),
         ]
         if self.tenants_number > 1:

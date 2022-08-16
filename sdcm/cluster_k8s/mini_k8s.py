@@ -34,7 +34,7 @@ from sdcm.cluster_k8s import (
     ScyllaPodCluster,
     COMMON_CONTAINERS_RESOURCES,
     LOCAL_MINIO_DIR,
-    LOCAL_PROVISIONER_DIR,
+    LOCAL_PROVISIONER_FILE,
     OPERATOR_CONTAINERS_RESOURCES,
     SCYLLA_MANAGER_AGENT_RESOURCES,
     SCYLLA_MANAGER_AGENT_VERSION_IN_SCYLLA_MANAGER,
@@ -303,10 +303,16 @@ class MinimalClusterBase(KubernetesCluster, metaclass=abc.ABCMeta):  # pylint: d
 
     @cached_property
     def static_local_volume_provisioner_image(self):
-        with open(LOCAL_PROVISIONER_DIR + '/values.yaml',
-                  mode='r', encoding='utf8') as provisioner_config_stream:
-            provisioner_config = yaml.safe_load(provisioner_config_stream)
-            return provisioner_config['daemonset']['image']
+        with open(LOCAL_PROVISIONER_FILE, mode='r', encoding='utf8') as provisioner_config_stream:
+            for doc in yaml.safe_load_all(provisioner_config_stream):
+                if doc["kind"] != "DaemonSet":
+                    continue
+                try:
+                    return doc["spec"]["template"]["spec"]["containers"][0]["image"]
+                except Exception as exc:  # pylint: disable=broad-except
+                    LOGGER.warning(
+                        "Could not read the static local volume provisioner image: %s", exc)
+        return ""
 
     @cached_property
     def cert_manager_images(self):
@@ -399,6 +405,7 @@ class LocalKindCluster(LocalMinimalClusterBase):
             ('k8s-app', 'kindnet'),
             ('k8s-app', 'kube-proxy'),
             ('k8s-app', 'calico-node'),
+            ('app', 'static-local-volume-provisioner'),
             ('scylla/cluster', self.k8s_scylla_cluster_name),
         ]
 
@@ -501,7 +508,8 @@ class LocalKindCluster(LocalMinimalClusterBase):
         images_to_cache, images_to_retag, new_scylla_image_tag = [], {}, ""
 
         images_to_cache.extend(self.cert_manager_images)
-        images_to_cache.append(self.static_local_volume_provisioner_image)
+        if provisioner_image := self.static_local_volume_provisioner_image:
+            images_to_cache.append(provisioner_image)
         if self.scylla_image:
             scylla_image_repo, scylla_image_tag = self.scylla_image.split(":")
             if not version_utils.SEMVER_REGEX.match(scylla_image_tag):
