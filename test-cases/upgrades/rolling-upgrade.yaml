@@ -13,6 +13,8 @@ stress_cmd_complex_prepare: cassandra-stress user no-warmup profile=/tmp/complex
 stress_cmd_complex_verify_read: cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml  ops'(read1=1,read3=1)' cl=ONE n=5000000 -mode cql3 native -rate threads=1000 -pop seq=1..5000000
 stress_cmd_complex_verify_more: cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml  ops'(read1=1,read2=1,read3=1,update_static=1,update_ttl=1,update_diff1_ts=1,update_diff2_ts=1,update_same1_ts=1,update_same2_ts=1)' cl=ALL n=5000000 -mode cql3 native -rate threads=200 -pop seq=1..5000000
 stress_cmd_complex_verify_delete: cassandra-stress user no-warmup profile=/tmp/complex_schema.yaml  ops'(delete_row=1)' cl=ALL n=500000 -mode cql3 native -rate threads=200 -pop seq=1..500000
+stress_before_upgrade: scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=800 -clustering-row-count=5555 -clustering-row-size=uniform:100..1024 -concurrency=5 -connection-count=5 -consistency-level=quorum -rows-per-request=10 -timeout=30s -validate-data
+stress_after_cluster_upgrade: scylla-bench -workload=sequential -mode=read -replication-factor=3 -partition-count=800 -clustering-row-count=5555 -clustering-row-size=uniform:100..1024 -concurrency=20 -connection-count=20 -consistency-level=one -rows-per-request=100 -timeout=30s -validate-data
 
 n_db_nodes: 4
 n_loaders: 1
