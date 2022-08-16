@@ -393,9 +393,8 @@ class CDCReplicationTest(ClusterTester):
             test_cluster=self.db_cluster,
             oracle_cluster=None,
             loaders=self.loaders,
-            gemini_cmd=self.params.get('gemini_cmd'),
+            stress_cmd=self.params.get('gemini_cmd'),
             timeout=self.get_duration(None),
-            outputdir=self.loaders.logdir,
             params=params).run()
 
     def setup_tools(self, loader_node) -> None:

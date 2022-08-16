@@ -1,4 +1,6 @@
 import logging
+import shlex
+
 from sdcm.cluster import BaseNode
 
 LOGGER = logging.getLogger(__name__)
@@ -53,18 +55,24 @@ class RemoteDocker(BaseNode):
         return self.node.remoter.run(f"docker logs {self.docker_id}").stdout.strip()
 
     def run(self, cmd, *args, **kwargs):
-        return self.node.remoter.run(f'docker exec {self.docker_id} /bin/bash -c "{cmd}"', *args, **kwargs)
+        return self.node.remoter.run(f'docker exec {self.docker_id} /bin/sh -c {shlex.quote(cmd)}', *args, **kwargs)
 
     def kill(self):
         return self.node.remoter.run(f"docker rm -f {self.docker_id}", verbose=False, ignore_status=True)
 
     def send_files(self, src, dst, **kwargs):
-        self.node.remoter.send_files(src, src, **kwargs)
-        self.node.remoter.run(f"docker cp {src} {self.docker_id}:{dst}", verbose=False, ignore_status=True)
+        result = self.node.remoter.send_files(src, src, **kwargs)
+        result &= self.node.remoter.run(f"docker cp {src} {self.docker_id}:{dst}",
+                                        verbose=kwargs.get('verbose'), ignore_status=True).ok
+        return result
 
     def receive_files(self, src, dst, **kwargs):  # pylint: disable=unused-argument
-        self.node.remoter.run(f"docker cp {self.docker_id}:{src} {dst}", verbose=False, ignore_status=True)
-        self.node.remoter.receive_files(dst, dst, **kwargs)
+        remote_tempfile = self.node.remoter.run("mktemp").stdout.strip()
+
+        result = self.node.remoter.run(f"docker cp {self.docker_id}:{src} {remote_tempfile}",
+                                       verbose=kwargs.get('verbose'), ignore_status=True).ok
+        result &= self.node.remoter.receive_files(remote_tempfile, dst, **kwargs)
+        return result
 
     def is_port_used(self, port: int, service_name: str) -> bool:
         try:
