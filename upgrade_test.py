@@ -602,7 +602,11 @@ class UpgradeTest(FillDatabaseData):
             stress_cmd_read_10m = self.params.get('stress_cmd_read_10m')
             read_10m_cs_thread_pool = self.run_stress_thread(stress_cmd=stress_cmd_read_10m)
 
-            InfoEvent(message='Sleeping for 60s to let cassandra-stress start before the upgrade...').publish()
+            InfoEvent(message='Running s-b large partitions workload before and during upgrade').publish()
+            large_partition_stress_during_upgrade = self.params.get('stress_before_upgrade')
+            self.run_stress_thread(stress_cmd=large_partition_stress_during_upgrade)
+
+            InfoEvent(message='Sleeping for 60s to let cassandra-stress and s-b start before the upgrade...').publish()
             time.sleep(60)
 
             step = 'Step2 - Upgrade Second Node '
@@ -684,7 +688,9 @@ class UpgradeTest(FillDatabaseData):
             'exit 1; done', verbose=True)
 
         InfoEvent(message='Step8 - Run stress and verify after upgrading entire cluster').publish()
-        InfoEvent(message='Starting verify_stress_after_cluster_upgrade').publish()
+        InfoEvent(message='Starting verification stresses after cluster upgrade').publish()
+        stress_after_cluster_upgrade = self.params.get('stress_after_cluster_upgrade')
+        self.run_stress_thread(stress_cmd=stress_after_cluster_upgrade)
         verify_stress_after_cluster_upgrade = self.params.get(  # pylint: disable=invalid-name
             'verify_stress_after_cluster_upgrade')
         verify_stress_cs_thread_pool = self.run_stress_thread(stress_cmd=verify_stress_after_cluster_upgrade)

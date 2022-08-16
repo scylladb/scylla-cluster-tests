@@ -1035,7 +1035,7 @@ class SCTConfiguration(dict):
 
         dict(name="stress_cmd_1", env="SCT_STRESS_CMD_1", type=str_or_list,
              help="""cassandra-stress commands.
-                You can specify everything but the -node parameter, which is going to
+                You can specify a stress tool command like cassandra-stress or scylla-bench, which is going to
                 be provided by the test suite infrastructure.
                 multiple commands can passed as a list"""),
 
