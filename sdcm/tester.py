@@ -1847,9 +1847,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         return GeminiStressThread(test_cluster=self.db_cluster,
                                   oracle_cluster=self.cs_db_cluster,
                                   loaders=self.loaders,
-                                  gemini_cmd=cmd,
+                                  stress_cmd=cmd,
                                   timeout=timeout,
-                                  outputdir=self.loaders.logdir,
                                   params=self.params).run()
 
     def kill_stress_thread(self):
