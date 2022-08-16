@@ -557,18 +557,23 @@ class LocalKindCluster(LocalMinimalClusterBase):
             "SCT_K8S_CNI_CALICO_VERSION": CNI_CALICO_VERSION,
         })
 
-    def install_static_local_volume_provisioner(self, node_pool: CloudK8sNodePool) -> None:
+    def install_static_local_volume_provisioner(
+            self, node_pools: list[CloudK8sNodePool] | CloudK8sNodePool) -> None:
+        if not isinstance(node_pools, list):
+            node_pools = [node_pools]
+        pool_names = ",".join([current_pool.name for current_pool in node_pools])
+
         # NOTE: create static dirs on the KinD Scylla K8S nodes
         #       which will be used by the static local volume provisioner.
         node_names = self.kubectl(
-            f"get nodes -l {POOL_LABEL_NAME}={self.SCYLLA_POOL_NAME} "
+            f"get nodes -l '{POOL_LABEL_NAME} in ({pool_names})' "
             "--no-headers -o custom-columns=:.metadata.name").stdout.split()
         for node_name in node_names:
             path = f"/mnt/raid-disks/disk0/pv-on-{node_name}"
             self.host_node.remoter.run(
                 f"docker exec {node_name} /bin/bash "
                 f" -c \"mkdir -p {path} && mount --bind {path}{{,}}\"")
-        super().install_static_local_volume_provisioner(node_pool=node_pool)
+        super().install_static_local_volume_provisioner(node_pools=node_pools)
 
     def gather_k8s_logs(self) -> None:
         if self.params.get("k8s_log_api_calls"):

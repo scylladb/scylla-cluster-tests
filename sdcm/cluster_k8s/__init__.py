@@ -911,22 +911,29 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
     def is_performance_tuning_enabled(self):
         return self.params.get('k8s_enable_performance_tuning') and self.IS_NODE_TUNING_SUPPORTED
 
-    def install_static_local_volume_provisioner(self, node_pool: CloudK8sNodePool) -> None:
+    def install_static_local_volume_provisioner(
+            self, node_pools: list[CloudK8sNodePool] | CloudK8sNodePool) -> None:
         if self.params.get('reuse_cluster'):
             return
+        if not isinstance(node_pools, list):
+            node_pools = [node_pools]
 
         LOGGER.info("Install static local volume provisioner")
         self.apply_file(
             LOCAL_PROVISIONER_FILE,
             modifiers=[affinity_modifier
-                       for current_pool in [node_pool]
+                       for current_pool in node_pools
                        for affinity_modifier in current_pool.affinity_modifiers],
             envsubst=False)
 
     @log_run_info
-    def prepare_k8s_scylla_nodes(self, node_pool: CloudK8sNodePool) -> None:
+    def prepare_k8s_scylla_nodes(
+            self, node_pools: list[CloudK8sNodePool] | CloudK8sNodePool) -> None:
         if not self.NODE_PREPARE_FILE or self.params.get('reuse_cluster'):
             return
+        if not isinstance(node_pools, list):
+            node_pools = [node_pools]
+
         LOGGER.info("Install DaemonSets required by scylla nodes")
         scylla_machine_image_args = ['--all']
         if version.LegacyVersion(self._scylla_operator_chart_version) > version.LegacyVersion("v1.5.0"):
@@ -943,9 +950,12 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
         self.apply_file(
             self.NODE_PREPARE_FILE,
-            modifiers=node_pool.affinity_modifiers + [scylla_machine_image_args_modifier],
+            modifiers=[affinity_modifier
+                       for current_pool in node_pools
+                       for affinity_modifier in current_pool.affinity_modifiers
+                       ] + [scylla_machine_image_args_modifier],
             envsubst=False)
-        self.install_static_local_volume_provisioner(node_pool=node_pool)
+        self.install_static_local_volume_provisioner(node_pools=node_pools)
 
         # Tune performance of the Scylla nodes
         if not self.is_performance_tuning_enabled:
@@ -963,7 +973,10 @@ class KubernetesCluster(metaclass=abc.ABCMeta):  # pylint: disable=too-many-publ
 
         self.apply_file(
             "sdcm/k8s_configs/node-config-crd.yaml",
-            modifiers=node_pool.affinity_modifiers, envsubst=False)
+            modifiers=[affinity_modifier
+                       for current_pool in node_pools
+                       for affinity_modifier in current_pool.affinity_modifiers],
+            envsubst=False)
         # NOTE: no need to wait explicitly for the new objects readiness.
         #       Scylla pods will get in sync automatically.
         #       Just sleep for some time to avoid races.

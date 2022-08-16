@@ -1211,7 +1211,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             image_type="fake-image-type",
             instance_type="fake-instance-type")
         self.k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
-        self.k8s_cluster.install_static_local_volume_provisioner(node_pool=scylla_pool)
+        self.k8s_cluster.install_static_local_volume_provisioner(
+            node_pools=scylla_pool)
 
         self.k8s_cluster.deploy_cert_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
         self.k8s_cluster.deploy_scylla_operator(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
@@ -1332,7 +1333,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         self.k8s_cluster.deploy_node_pool(scylla_pool, wait_till_ready=False)
 
         self.k8s_cluster.wait_all_node_pools_to_be_ready()
-        self.k8s_cluster.prepare_k8s_scylla_nodes(node_pool=scylla_pool)
+        self.k8s_cluster.prepare_k8s_scylla_nodes(node_pools=scylla_pool)
 
         for i in range(self.k8s_cluster.tenants_number):
             self.db_clusters_multitenant.append(gke.GkeScyllaPodCluster(
@@ -1488,7 +1489,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
         self.k8s_cluster.deploy_cert_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
         self.k8s_cluster.deploy_scylla_operator()
-        self.k8s_cluster.prepare_k8s_scylla_nodes(node_pool=scylla_pool)
+        self.k8s_cluster.prepare_k8s_scylla_nodes(node_pools=scylla_pool)
         if self.params.get('use_mgmt'):
             self.k8s_cluster.deploy_scylla_manager(pool_name=self.k8s_cluster.AUXILIARY_POOL_NAME)
 
