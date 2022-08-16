@@ -87,7 +87,7 @@ from sdcm.utils.k8s import (
     convert_cpu_units_to_k8s_value,
     convert_cpu_value_from_k8s_to_units,
 )
-from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR
+from sdcm.utils.ldap import SASLAUTHD_AUTHENTICATOR, LDAP_USERS, LDAP_PASSWORD
 from sdcm.utils.replication_strategy_utils import temporary_replication_strategy_setter, \
     NetworkTopologyReplicationStrategy, ReplicationStrategy, SimpleReplicationStrategy
 from sdcm.utils.sstable.load_utils import SstableLoadUtils
@@ -1039,6 +1039,31 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self.log.info('Will now resume the LDAP container')
         ContainerManager.unpause_container(self.tester.localhost, 'ldap')
         self.log.info('finished with nemesis')
+
+    def disrupt_ldap_grant_revoke_permission(self):
+        if not self.cluster.params.get('use_ldap_authorization'):
+            raise UnsupportedNemesis('Cluster is not configured to run with LDAP authorization, hence skipping')
+        if not self.target_node.is_enterprise:
+            raise UnsupportedNemesis('Cluster is not enterprise. LDAP is supported only for enterprise. Skipping')
+        # TODO: see if only tested in open Ldap
+        node = self.cluster.nodes[0]
+        ldap_ks = 'ldap_ks'
+        ldap_cf = 'standard1'
+        self.log.debug("Create a new keyspace and table for Ldap test")
+        with self.cluster.cql_connection_patient(node=node, user=LDAP_USERS[0], password=LDAP_PASSWORD) as session:
+            session.execute(
+                f'CREATE KEYSPACE IF NOT EXISTS {ldap_ks} WITH replication={self.tester.reliable_replication_factor}')
+            self._prepare_test_table(ks=ldap_ks, table=ldap_cf)
+            self.log.debug("Grant a 'select' permission to an LDAP Role")
+            session.execute(f'GRANT SELECT on KEYSPACE {ldap_ks} to \'{LDAP_USERS[1]}\'')
+
+        with self.cluster.cql_connection_patient(node=node, user=LDAP_USERS[1], password=LDAP_PASSWORD) as session:
+            result = session.execute(f"SELECT * FROM {ldap_ks}.{ldap_cf} LIMIT 1")
+            self.log.debug("Ldap user % query result: %s", LDAP_USERS[1], result)
+
+        self.log.debug("Revoke a 'select' permission to an LDAP Role")
+        with self.cluster.cql_connection_patient(node=node, user=LDAP_USERS[0], password=LDAP_PASSWORD) as session:
+            session.execute(f'REVOKE SELECT on KEYSPACE {ldap_ks} to \'{LDAP_USERS[1]}\'')
 
     def disrupt_disable_enable_ldap_authorization(self):
         if not self.cluster.params.get('use_ldap_authorization'):
@@ -3724,6 +3749,14 @@ class ToggleLdapConfiguration(Nemesis):
 
     def disrupt(self):
         self.disrupt_disable_enable_ldap_authorization()
+
+
+class ModifyLdapPermission(Nemesis):
+    disruptive = False
+    limited = True
+
+    def disrupt(self):
+        self.disrupt_ldap_grant_revoke_permission()
 
 
 class NoOpMonkey(Nemesis):
