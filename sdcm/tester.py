@@ -1715,11 +1715,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.alter_test_tables_encryption(scylla_encryption_options=scylla_encryption_options)
         return bench_thread
 
-    def run_stress_thread_harry(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',
+    def run_stress_thread_harry(self, stress_cmd, duration=None,
                                 # pylint: disable=too-many-arguments,unused-argument
-                                round_robin=False, stats_aggregate_cmds=True, keyspace_name=None,
-                                use_single_loader=False,
-                                stop_test_on_failure=True):  # pylint: disable=too-many-arguments,unused-argument
+                                round_robin=False, stats_aggregate_cmds=True,
+                                stop_test_on_failure=True, **_):  # pylint: disable=too-many-arguments,unused-argument
 
         timeout = self.get_duration(duration)
 
@@ -1729,12 +1728,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         if self.create_stats:
             self.update_stress_cmd_details(stress_cmd, stresser="cassandra-harry", aggregate=stats_aggregate_cmds)
         harry_thread = CassandraHarryThread(
-            stress_cmd,
             loader_set=self.loaders,
+            stress_cmd=stress_cmd,
             timeout=timeout,
             node_list=self.db_cluster.nodes,
             round_robin=round_robin,
-            use_single_loader=use_single_loader,
             stop_test_on_failure=stop_test_on_failure,
             credentials=self.db_cluster.get_db_auth()
         )
