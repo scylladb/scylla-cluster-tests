@@ -638,20 +638,30 @@ def convert_cpu_value_from_k8s_to_units(cpu: str) -> float:
 
 
 def add_pool_node_affinity(value, pool_label_name, pool_name):
-    target_selector_term = {'matchExpressions': [{'operator': 'In', 'values': [pool_name], 'key': pool_label_name}]}
     value['nodeAffinity'] = node_affinity = value.get('nodeAffinity', {})
-    node_affinity['requiredDuringSchedulingIgnoredDuringExecution'] = required_during = \
-        node_affinity.get('requiredDuringSchedulingIgnoredDuringExecution', {})
-    required_during['nodeSelectorTerms'] = node_selectors = required_during.get('nodeSelectorTerms', [])
+    node_affinity['requiredDuringSchedulingIgnoredDuringExecution'] = required_during = (
+        node_affinity.get('requiredDuringSchedulingIgnoredDuringExecution', {}))
+    required_during['nodeSelectorTerms'] = node_selectors = required_during.get(
+        'nodeSelectorTerms', [])
 
-    exists = False
     for node_selector in node_selectors:
-        if node_selector == target_selector_term:
-            exists = True
+        if 'matchExpressions' not in node_selector:
+            continue
+        for match_expression in node_selector['matchExpressions']:
+            if match_expression['key'] != pool_label_name:
+                continue
+            if pool_name not in match_expression['values']:
+                match_expression['values'].append(pool_name)
             break
-
-    if not exists:
-        node_selectors.append(target_selector_term)
+        else:
+            continue
+        break
+    else:
+        node_selectors.append({'matchExpressions': [{
+            'operator': 'In',
+            'key': pool_label_name,
+            'values': [pool_name],
+        }]})
 
     return value
 
