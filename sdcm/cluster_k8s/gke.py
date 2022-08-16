@@ -236,7 +236,7 @@ class GkeCluster(KubernetesCluster):
                        f" --image-type UBUNTU"
                        f" --disk-type {self.gce_disk_type}"
                        f" --disk-size {self.gce_disk_size}"
-                       f" --enable-stackdriver-kubernetes"
+                       f" --logging=SYSTEM,WORKLOAD --monitoring=SYSTEM"
                        f"{'' if self.gke_k8s_release_channel else ' --no-enable-autoupgrade'}"
                        f"{'' if self.gke_k8s_release_channel else ' --no-enable-autorepair'}"
                        f" --metadata {tags}")
