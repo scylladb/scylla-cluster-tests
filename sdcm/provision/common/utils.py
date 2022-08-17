@@ -60,7 +60,7 @@ def configure_syslogng_target_script(host: str, port: int, throttle_per_second: 
         if ! grep "destination remote_sct" /etc/syslog-ng/syslog-ng.conf; then
             cat <<EOF >>/etc/syslog-ng/syslog-ng.conf
         destination remote_sct {{
-            syslog(
+            network(
                 "{host}"
                 transport("tcp")
                 port({port})

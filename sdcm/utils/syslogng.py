@@ -91,9 +91,10 @@ options {{
 }};
 
 source s_network_tcp {{
-  syslog(
+  network(
     transport("tcp")
     port({port})
+    flags(syslog-protocol)
     max-connections(1000)
   );
 }};
