@@ -1271,7 +1271,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def get_cluster_k8s_gke(self):
         self.credentials.append(UserRemoteCredentials(key_file=self.params.get('user_credentials_path')))
 
-        services = get_gce_services(self.params.get('gce_datacenter').split())
+        gce_datacenters = self.params.get('gce_datacenter')
+        if isinstance(gce_datacenters, str):
+            gce_datacenters = gce_datacenters.split()
+        services = get_gce_services(gce_datacenters)
         assert len(services) == 1, "Doesn't support multi DC setup for `k8s-gke' backend"
 
         services, gce_datacenter = list(services.values()), list(services.keys())
