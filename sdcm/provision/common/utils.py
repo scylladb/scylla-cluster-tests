@@ -34,7 +34,8 @@ def configure_rsyslog_rate_limits_script(interval: int, burst: int) -> str:
 
 
 def configure_rsyslog_target_script(host: str, port: int) -> str:
-    return f'echo "action(type=\\"omfwd\\" Target=\\"{host}\\" Port=\\"{port}\\" Protocol=\\"tcp\\")" >> /etc/rsyslog.conf\n'
+    return f'echo "action(type=\\"omfwd\\" Target=\\"{host}\\" Port=\\"{port}\\" Protocol=\\"tcp\\" ' \
+           f'TCP_Framing=\\"octet-counted\\" Template=\\"RSYSLOG_SyslogProtocol23Format\\")" >> /etc/rsyslog.conf\n'
 
 
 def configure_syslogng_target_script(host: str, port: int, throttle_per_second: int, hostname: str = "") -> str:
