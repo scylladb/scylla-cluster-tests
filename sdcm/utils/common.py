@@ -254,16 +254,6 @@ class S3Storage():
             return ""
 
 
-def get_latest_gemini_version():
-    bucket_name = 'downloads.scylladb.com'
-
-    results = S3Storage(bucket_name).search_by_path(path='gemini')
-    versions = {Version(result_file.split('/')[1]) for result_file in results}
-    latest_version = max(versions)
-
-    return latest_version.public
-
-
 def list_logs_by_test_id(test_id):
     log_types = ['db-cluster', 'monitor-set', 'loader-set', 'sct', 'jepsen-data', 'siren-manager-set',
                  'prometheus', 'grafana', 'kubernetes', 'job', 'monitoring_data_stack', 'event', 'output', 'error',

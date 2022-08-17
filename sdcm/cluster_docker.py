@@ -342,7 +342,6 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
                                params=params)
 
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):
-        self.install_gemini(node=node)
 
         if 'scylla-bench' in self.params.list_of_stress_tools:
             if not node.is_scylla_bench_installed:

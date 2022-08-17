@@ -78,7 +78,6 @@ from sdcm.utils.common import (
     deprecation,
     get_data_dir_path,
     verify_scylla_repo_file,
-    get_latest_gemini_version,
     normalize_ipv6_url,
     download_dir_from_cloud,
     generate_random_string,
@@ -4452,30 +4451,6 @@ class BaseLoaderSet():
             self._gemini_base_path = result.stdout.strip()
         return self._gemini_base_path
 
-    def install_gemini(self, node):
-        gemini_version = self.params.get('gemini_version')
-        if gemini_version.lower() == 'latest':
-            gemini_version = get_latest_gemini_version()
-
-        gemini_url = 'http://downloads.scylladb.com/gemini/{0}/gemini_{0}_Linux_x86_64.tar.gz'.format(gemini_version)
-        # TODO: currently schema is not used by gemini tool need to store the schema
-        #       in data_dir for each test
-        gemini_schema_url = self.params.get('gemini_schema_url')
-        if not gemini_url or not gemini_schema_url:
-            self.log.warning('Gemini URLs should be defined to run the gemini tool')
-        else:
-            gemini_tar = os.path.basename(gemini_url)  # pylint: disable=unused-variable
-            install_gemini_script = dedent(f"""
-                cd {self.gemini_base_path}
-                rm -rf gemini*
-                curl -LO {gemini_url}
-                tar -xvf {gemini_tar}
-                chmod a+x gemini
-                curl -LO  {gemini_schema_url}
-            """)
-            node.remoter.run("bash -cxe '%s'" % install_gemini_script)
-            self.log.debug('Gemini version {}'.format(self.gemini_version))
-
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):  # pylint: disable=unused-argument
         # pylint: disable=too-many-statements,too-many-branches
 
@@ -4502,7 +4477,6 @@ class BaseLoaderSet():
             self.log.info("Don't install anything because bare loaders requested")
             return
 
-        self.install_gemini(node=node)
         if self.params.get('client_encrypt'):
             node.config_client_encrypt()
 
