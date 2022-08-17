@@ -19,7 +19,7 @@ import threading
 
 from sdcm.cluster import BaseNode
 from sdcm.sct_events import Severity
-from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
+from sdcm.stress.base import format_stress_cmd_error, DockerBasedStressThread
 from sdcm.sct_events.loaders import NoSQLBenchStressEvent, NOSQLBENCH_EVENT_PATTERNS
 from sdcm.utils.common import FileFollowerThread
 

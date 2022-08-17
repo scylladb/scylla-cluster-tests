@@ -15,9 +15,8 @@ import os
 import re
 import time
 import uuid
-import random
 import logging
-import concurrent.futures
+import contextlib
 from typing import Any
 from itertools import chain
 
@@ -25,19 +24,13 @@ from sdcm.loader import CassandraStressExporter
 from sdcm.cluster import BaseLoaderSet
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import Severity
-from sdcm.utils.common import FileFollowerThread, generate_random_string, get_profile_content
+from sdcm.utils.common import FileFollowerThread, get_profile_content
 from sdcm.sct_events.loaders import CassandraStressEvent, CS_ERROR_EVENTS_PATTERNS, CS_NORMAL_EVENTS_PATTERNS
+from sdcm.stress.base import DockerBasedStressThread, format_stress_cmd_error
 from sdcm.utils.docker_remote import RemoteDocker
+from sdcm.utils.version_utils import get_docker_image_by_version
 
 LOGGER = logging.getLogger(__name__)
-
-
-def format_stress_cmd_error(exc: Exception) -> str:
-    """Format nicely the exception from a stress command failure."""
-
-    if hasattr(exc, "result") and exc.result.failed:
-        return f"Stress command completed with bad status {exc.result.exited}: {exc.result.stderr:.100}"
-    return f"Stress command execution failed with: {exc}"
 
 
 class CassandraStressEventsPublisher(FileFollowerThread):
@@ -68,34 +61,28 @@ class CassandraStressEventsPublisher(FileFollowerThread):
                         break  # Stop iterating patterns to avoid creating two events for one line of the log
 
 
-class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
+class CassandraStressThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
+    DOCKER_IMAGE_PARAM_NAME = 'stress_image.cassandra-stress'
+
     def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, keyspace_num=1, keyspace_name='', compaction_strategy='',  # pylint: disable=too-many-arguments
-                 profile=None, node_list=None, round_robin=False, client_encrypt=False, stop_test_on_failure=True):
-        if not node_list:
-            node_list = []
-        self.loader_set = loader_set
-        self.stress_cmd = stress_cmd
-        self.timeout = timeout
-        self.stress_num = stress_num
+                 profile=None, node_list=None, round_robin=False, client_encrypt=False, stop_test_on_failure=True,
+                 params=None, ssl_dir=None):
+        super().__init__(loader_set=loader_set, stress_cmd=stress_cmd, timeout=timeout,
+                         stress_num=stress_num, node_list=node_list,  # pylint: disable=too-many-arguments
+                         round_robin=round_robin, stop_test_on_failure=stop_test_on_failure, params=params)
         self.keyspace_num = keyspace_num
         self.keyspace_name = keyspace_name
         self.profile = profile
-        self.node_list = node_list
-        self.round_robin = round_robin
         self.client_encrypt = client_encrypt
         self.stop_test_on_failure = stop_test_on_failure
         self.compaction_strategy = compaction_strategy
 
-        self.executor = None
-        self.results_futures = []
-        self.shell_marker = generate_random_string(20)
-        #  This marker is used to mark shell commands, in order to be able to kill them later
-        self.max_workers = 0
+        # option used for integration tests only when the mount point
+        # can't be hardcoded as default
+        self.ssl_dir = ssl_dir or '/etc/scylla/ssl_conf'
 
-    def create_stress_cmd(self, node, keyspace_idx):
+    def create_stress_cmd(self, cmd_runner, keyspace_idx):
         stress_cmd = self.stress_cmd
-        if node.cassandra_stress_version == "unknown":  # Prior to 3.11, cassandra-stress didn't have version argument
-            stress_cmd = stress_cmd.replace("throttle", "limit")  # after 3.11 limit was renamed to throttle
 
         # When using cassandra-stress with "user profile" the profile yaml should be provided
         if 'profile' in stress_cmd and not self.profile:
@@ -120,12 +107,12 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
             stress_cmd = re.sub(r'(-mode.*?)-', r'\1 user={} password={} -'.format(*credentials), stress_cmd)
         if self.client_encrypt and 'transport' not in stress_cmd:
             stress_cmd += \
-                ' -transport "truststore=/etc/scylla/ssl_conf/client/cacerts.jks truststore-password=cassandra"'
+                " -transport 'truststore=/etc/scylla/ssl_conf/client/cacerts.jks truststore-password=cassandra'"
 
         if self.node_list and '-node' not in stress_cmd:
             node_ip_list = [n.cql_ip_address for n in self.node_list]
             stress_cmd += " -node {}".format(",".join(node_ip_list))
-        if 'skip-unsupported-columns' in self._get_available_suboptions(node, '-errors'):
+        if 'skip-unsupported-columns' in self._get_available_suboptions(cmd_runner, '-errors'):
             stress_cmd = self._add_errors_option(stress_cmd, ['skip-unsupported-columns'])
         return stress_cmd
 
@@ -145,33 +132,64 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
             return stress_cmd
         return stress_cmd.replace(current_error_option, 'errors ' + ' '.join(new_error_suboptions))
 
-    def _get_available_suboptions(self, node, option, _cache={}):  # pylint: disable=dangerous-default-value
-        if cached_value := _cache.get(node.name):
+    def _get_available_suboptions(self, loader, option, _cache={}):  # pylint: disable=dangerous-default-value
+        if cached_value := _cache.get(option):
             return cached_value
         try:
-            result = node.remoter.run(
+            result = loader.run(
                 cmd=f'cassandra-stress help {option} | grep "^Usage:"',
                 timeout=self.timeout,
                 ignore_status=True).stdout
         except Exception:  # pylint: disable=broad-except
             return []
         findings = re.findall(r' *\[([\w-]+?)[=?]*] *', result)
-        _cache[node.name] = findings
+        _cache[option] = findings
         return findings
 
     @staticmethod
-    def _disable_logging_for_cs(node, _cache={}):  # pylint: disable=dangerous-default-value
+    def _disable_logging_for_cs(node, cmd_runner, _cache={}):  # pylint: disable=dangerous-default-value
         if not (node.is_kubernetes() or node.name in _cache):
-            node.remoter.run("cp /etc/scylla/cassandra/logback-tools.xml .", ignore_status=True)
+            cmd_runner.run("cp /etc/scylla/cassandra/logback-tools.xml .", ignore_status=True)
             _cache[node.name] = 'done'
 
-    def _run_stress(self, node, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals
-        stress_cmd = self.create_stress_cmd(node, keyspace_idx)
+    def _run_stress(self, loader, loader_idx, cpu_idx):
+        pass
+
+    def _run_cs_stress(self, loader, loader_idx, cpu_idx, keyspace_idx):  # pylint: disable=too-many-locals
+        cleanup_context = contextlib.nullcontext()
+
+        if "k8s" in self.params.get("cluster_backend"):
+            cmd_runner = loader.remoter
+            if self.params.get("k8s_loader_run_type") == 'dynamic':
+                cmd_runner_name = loader.remoter.pod_name
+            else:
+                cmd_runner_name = loader.ip_address
+        elif self.params.get("cluster_backend") == "aws" and self.params.get("aws_use_prepared_loaders"):
+            cmd_runner = loader.remoter
+            cmd_runner_name = loader.ip_address
+        else:
+            cassandra_stress = self.params.get(self.DOCKER_IMAGE_PARAM_NAME)
+            cmd_runner_name = loader.ip_address
+            if not cassandra_stress:
+                cassandra_stress = get_docker_image_by_version(self.node_list[0].get_scylla_binary_version())
+
+            cpu_options = ""
+            if self.stress_num > 1:
+                cpu_options = f'--cpuset-cpus="{cpu_idx}"'
+
+            cmd_runner = cleanup_context = RemoteDocker(loader, cassandra_stress,
+                                                        command_line="-c 'tail -f /dev/null'",
+                                                        extra_docker_opts=f'{cpu_options} '
+                                                                          f'-v {self.ssl_dir}:/etc/scylla/ssl_conf '
+                                                                          f'--label shell_marker={self.shell_marker}'
+                                                                          f' --entrypoint /bin/bash')
+
+        stress_cmd = self.create_stress_cmd(cmd_runner, keyspace_idx)
 
         if self.profile:
             with open(self.profile, encoding="utf-8") as profile_file:
                 LOGGER.info('Profile content:\n%s', profile_file.read())
-            node.remoter.send_files(self.profile, os.path.join('/tmp', os.path.basename(self.profile)), delete_dst=True)
+            cmd_runner.send_files(self.profile, os.path.join('/tmp', os.path.basename(self.profile)), delete_dst=True)
 
         # Get next word after `cassandra-stress' in stress_cmd.
         # Do it this way because stress_cmd can contain env variables before `cassandra-stress'.
@@ -179,9 +197,9 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
 
         LOGGER.info('Stress command:\n%s', stress_cmd)
 
-        os.makedirs(node.logdir, exist_ok=True)
+        os.makedirs(loader.logdir, exist_ok=True)
         log_file_name = \
-            os.path.join(node.logdir, f'cassandra-stress-l{loader_idx}-c{cpu_idx}-k{keyspace_idx}-{uuid.uuid4()}.log')
+            os.path.join(loader.logdir, f'cassandra-stress-l{loader_idx}-c{cpu_idx}-k{keyspace_idx}-{uuid.uuid4()}.log')
 
         LOGGER.debug('cassandra-stress local log: %s', log_file_name)
 
@@ -196,43 +214,32 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
         node_cmd = f'echo {tag}; {node_cmd}'
 
         result = None
-        self._disable_logging_for_cs(node)
+        self._disable_logging_for_cs(loader, cmd_runner)
 
-        with CassandraStressExporter(instance_name=node.cql_ip_address,
-                                     metrics=nemesis_metrics_obj(),
-                                     stress_operation=stress_cmd_opt,
-                                     stress_log_filename=log_file_name,
-                                     loader_idx=loader_idx, cpu_idx=cpu_idx), \
-                CassandraStressEventsPublisher(node=node, cs_log_filename=log_file_name) as publisher, \
-                CassandraStressEvent(node=node, stress_cmd=self.stress_cmd,
+        with cleanup_context, \
+                CassandraStressExporter(instance_name=cmd_runner_name,
+                                        metrics=nemesis_metrics_obj(),
+                                        stress_operation=stress_cmd_opt,
+                                        stress_log_filename=log_file_name,
+                                        loader_idx=loader_idx, cpu_idx=cpu_idx), \
+                CassandraStressEventsPublisher(node=loader, cs_log_filename=log_file_name) as publisher, \
+                CassandraStressEvent(node=loader, stress_cmd=self.stress_cmd,
                                      log_file_name=log_file_name) as cs_stress_event:
             publisher.event_id = cs_stress_event.event_id
             try:
-                result = node.remoter.run(cmd=node_cmd, timeout=self.timeout, log_file=log_file_name)
+                result = cmd_runner.run(cmd=node_cmd, timeout=self.timeout, log_file=log_file_name)
             except Exception as exc:  # pylint: disable=broad-except
                 cs_stress_event.severity = Severity.CRITICAL if self.stop_test_on_failure else Severity.ERROR
                 cs_stress_event.add_error(errors=[format_stress_cmd_error(exc)])
 
-        return node, result, cs_stress_event
+        return loader, result, cs_stress_event
 
     def run(self):
-        if self.round_robin:
-            # cancel stress_num
-            self.stress_num = 1
-            loaders = [self.loader_set.get_loader()]
-            LOGGER.debug("Round-Robin through loaders, Selected loader is {} ".format(loaders))
-        else:
-            loaders = self.loader_set.nodes
-
-        self.max_workers = len(loaders) * self.stress_num
-        LOGGER.debug("Starting %d c-s Worker threads", self.max_workers)
-        self.executor = concurrent.futures.ThreadPoolExecutor(  # pylint: disable=consider-using-with
-            max_workers=self.max_workers)
-
-        for loader_idx, loader in enumerate(loaders):
+        self.configure_executer()
+        for loader_idx, loader in enumerate(self.loaders):
             for cpu_idx in range(self.stress_num):
                 for ks_idx in range(1, self.keyspace_num + 1):
-                    self.results_futures += [self.executor.submit(self._run_stress,
+                    self.results_futures += [self.executor.submit(self._run_cs_stress,
                                                                   *(loader, loader_idx, cpu_idx, ks_idx))]
                     if loader_idx == 0 and cpu_idx == 0 and self.max_workers > 1:
                         # Wait for first stress thread to create the schema, before spawning new stress threads
@@ -240,24 +247,9 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
 
         return self
 
-    def kill(self):
-        if self.round_robin:
-            self.stress_num = 1
-            loaders = [self.loader_set.get_loader()]
-        else:
-            loaders = self.loader_set.nodes
-        for loader in loaders:
-            loader.remoter.run(cmd=f"pkill -9 -f {self.shell_marker}",
-                               timeout=self.timeout,
-                               ignore_status=True)
-
     def get_results(self) -> list[dict | None]:
         ret = []
-        results = []
-
-        LOGGER.debug('Wait for %s stress threads results', self.max_workers)
-        for future in concurrent.futures.as_completed(self.results_futures, timeout=self.timeout):
-            results.append(future.result())
+        results = super().get_results()
 
         for _, result, event in results:
             if not result:
@@ -276,14 +268,11 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
 
         return ret
 
-    def verify_results(self):
-        results = []
+    def verify_results(self) -> (list[dict | None], list[str | None]):
         cs_summary = []
         errors = []
 
-        LOGGER.debug('Wait for %s stress threads to verify', self.max_workers)
-        for future in concurrent.futures.as_completed(self.results_futures, timeout=self.timeout):
-            results.append(future.result())
+        results = super().get_results()
 
         for node, result, _ in results:
             if not result:
@@ -299,93 +288,6 @@ class CassandraStressThread:  # pylint: disable=too-many-instance-attributes
                     errors += ['%s: %s' % (node, line.strip())]
 
         return cs_summary, errors
-
-
-class DockerBasedStressThread:
-    # pylint: disable=too-many-instance-attributes
-    DOCKER_IMAGE_PARAM_NAME = ""  # test yaml param that stores image
-
-    def __init__(self, loader_set, stress_cmd, timeout, stress_num=1, node_list=None,  # pylint: disable=too-many-arguments
-                 round_robin=False, params=None, stop_test_on_failure=True):
-        self.loader_set: BaseLoaderSet = loader_set
-        self.stress_cmd = stress_cmd
-        self.timeout = timeout
-        self.stress_num = stress_num
-        self.node_list = node_list or []
-        self.round_robin = round_robin
-        self.params = params or {}
-        self.loaders = []
-
-        self.executor = None
-        self.results_futures = []
-        self.max_workers = 0
-        self.shell_marker = generate_random_string(20)
-        self.shutdown_timeout = 180  # extra 3 minutes
-        self.stop_test_on_failure = stop_test_on_failure
-        self.docker_image_name = self.params.get(self.DOCKER_IMAGE_PARAM_NAME)
-        if "k8s" not in self.params.get("cluster_backend"):
-            for loader in self.loader_set.nodes:
-                RemoteDocker.pull_image(loader, self.docker_image_name)
-
-    def run(self):
-        if self.round_robin:
-            self.stress_num = 1
-            loaders = [self.loader_set.get_loader()]
-            LOGGER.debug("Round-Robin through loaders, Selected loader is {} ".format(loaders))
-        else:
-            loaders = self.loader_set.nodes
-        self.loaders = loaders
-
-        self.max_workers = len(loaders) * self.stress_num
-        LOGGER.debug("Starting %d %s Worker threads", self.max_workers, self.__class__.__name__)
-        self.executor = concurrent.futures.ThreadPoolExecutor(  # pylint: disable=consider-using-with
-            max_workers=self.max_workers)
-
-        for loader_idx, loader in enumerate(loaders):
-            for cpu_idx in range(self.stress_num):
-                self.results_futures += [self.executor.submit(self._run_stress, *(loader, loader_idx, cpu_idx))]
-
-        return self
-
-    def _run_stress(self, loader, loader_idx, cpu_idx):
-        raise NotImplementedError()
-
-    def get_results(self):
-        results = []
-        timeout = self.timeout + 120
-        LOGGER.debug('Wait for %s stress threads results', self.max_workers)
-        for future in concurrent.futures.as_completed(self.results_futures, timeout=timeout):
-            results.append(future.result())
-
-        return results
-
-    def verify_results(self):
-        results = []
-        errors = []
-        timeout = self.timeout + 120
-        LOGGER.debug('Wait for %s stress threads to verify', self.max_workers)
-        for future in concurrent.futures.as_completed(self.results_futures, timeout=timeout):
-            results.append(future.result())
-
-        return results, errors
-
-    def kill(self):
-        for loader in self.loaders:
-            loader.remoter.run(cmd=f"docker rm -f `docker ps -a -q --filter label=shell_marker={self.shell_marker}`",
-                               timeout=60,
-                               ignore_status=True)
-
-    def db_node_to_query(self, loader):
-        """Select DB node in the same region as loader node to query"""
-        if self.params.get("region_aware_loader"):
-            nodes_in_region = self.loader_set.nodes_by_region(self.node_list).get(loader.region)
-            assert nodes_in_region, f"No DB nodes found in {loader.region}"
-            db_nodes = [db_node for db_node in nodes_in_region if not db_node.running_nemesis]
-            assert db_nodes, "No node to query, nemesis runs on all DB nodes!"
-            node_to_query = random.choice(db_nodes)
-            LOGGER.debug("Selected '%s' to query for local nodes", node_to_query)
-            return node_to_query.cql_ip_address
-        return self.node_list[0].cql_ip_address
 
 
 duration_pattern = re.compile(r'(?P<hours>[\d]*)h|(?P<minutes>[\d]*)m|(?P<seconds>[\d]*)s')
