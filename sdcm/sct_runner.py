@@ -1060,7 +1060,9 @@ def update_sct_runner_tags(test_runner_ip: str = None, test_id: str = None, tags
         runner_to_update = [runner for runner in listed_runners if runner.test_id == test_id]
 
     if not runner_to_update:
-        raise RuntimeError(f"Could not find SCT runner with IP: {test_runner_ip} to update tags for.")
+        LOGGER.warning("Could not find SCT runner with IP: %s, test_id: %s to update tags for.",
+                       test_runner_ip, test_id)
+        return
 
     try:
         runner_to_update = runner_to_update[0]
