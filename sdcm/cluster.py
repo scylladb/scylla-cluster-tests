@@ -29,7 +29,6 @@ import uuid
 import itertools
 import json
 import ipaddress
-from pathlib import Path
 from typing import List, Optional, Dict, Union, Set, Iterable, ContextManager
 from datetime import datetime
 from textwrap import dedent
@@ -88,7 +87,6 @@ from sdcm.utils.common import (
 )
 from sdcm.utils.ci_tools import get_test_name
 from sdcm.utils.distro import Distro
-from sdcm.utils.git import clone_repo
 from sdcm.utils.install import InstallMode
 from sdcm.utils.docker_utils import ContainerManager, NotFound, docker_hub_login
 from sdcm.utils.health_checker import check_nodes_status, check_node_status_in_gossip_and_nodetool_status, \
@@ -235,7 +233,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
 
         self.remoter: Optional[RemoteCmdRunnerBase] = None
         self.is_scylla_bench_installed = False
-        self.is_cassandra_harry_installed = False
 
         self._spot_monitoring_thread = None
         self._journal_thread = None
@@ -502,33 +499,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             GO111MODULE=on go install .
         """))
         self.is_scylla_bench_installed = True
-
-    @retrying(n=3)
-    def install_cassandra_harry(self):
-        # The SCT code runs from another machine, and the current code runs from the loader machine.
-        # Therefore, one needs to execute the "pwd" command to get the user path.
-        cassandra_harry_folder_path = Path(self.remoter.sudo("pwd", ignore_status=True).stdout.strip())
-        cassandra_harry_path = cassandra_harry_folder_path / "cassandra-harry"
-        if self.distro.is_rhel_like:
-            self.remoter.sudo("yum install -y git make maven")
-        else:
-            self.remoter.sudo(shell_script_cmd("""\
-                apt-get update
-                apt-get install -y git make maven
-            """))
-        self.remoter.run(shell_script_cmd(f"""rm -rf {cassandra_harry_path}"""))
-        clone_repo(remoter=self.remoter, repo_url="https://github.com/apache/cassandra-harry.git",
-                   destination_dir_name=str(cassandra_harry_path), clone_as_root=False)
-        self.remoter.run(shell_script_cmd(f"""\
-            cd {cassandra_harry_path}
-            make standalone
-        """))
-        cassandra_harry_tool_path = cassandra_harry_path / "scripts" / "cassandra-harry"
-        # Edit the "cassandra-harry' file and set the correct HARRY_HOME value (the value should be repo's path)
-        self.remoter.run(rf"sed -i '2s;^;HARRY_HOME={cassandra_harry_path}\n;' {cassandra_harry_tool_path}")
-        self.remoter.run(f"sed -i 's/external-.*-SNAPSHOT.jar/external-*-SNAPSHOT.jar/' {cassandra_harry_tool_path}")
-        self.remoter.sudo(f"ln -svf {cassandra_harry_tool_path} /usr/bin/cassandra-harry", ignore_status=True)
-        self.is_cassandra_harry_installed = True
 
     @property
     def cassandra_stress_version(self):
@@ -4571,9 +4541,6 @@ class BaseLoaderSet():
             # Update existing scylla-bench to latest
             if not node.is_scylla_bench_installed:
                 node.install_scylla_bench()
-        if 'cassandra-harry' in self.params.list_of_stress_tools:
-            if not node.is_cassandra_harry_installed:
-                node.install_cassandra_harry()
 
         result = node.remoter.run('test -e ~/PREPARED-LOADER', ignore_status=True)
         node.remoter.sudo("bash -cxe \"echo '*\t\thard\tcore\t\tunlimited\n*\t\tsoft\tcore\t\tunlimited' "
@@ -4633,9 +4600,6 @@ class BaseLoaderSet():
         if 'scylla-bench' in self.params.list_of_stress_tools:
             if not node.is_scylla_bench_installed:
                 node.install_scylla_bench()
-        if 'cassandra-harry' in self.params.list_of_stress_tools:
-            if not node.is_cassandra_harry_installed:
-                node.install_cassandra_harry()
 
         # install docker
         docker_install = dedent("""
