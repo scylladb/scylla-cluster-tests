@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from functools import cache
 from typing import List, Dict, Type
 
-from sdcm.cluster import DEFAULT_USER_PREFIX
 from sdcm.keystore import KeyStore, SSHKey
 from sdcm.provision.provisioner import InstanceDefinition
 from sdcm.sct_config import SCTConfiguration
@@ -69,7 +68,7 @@ class DefinitionBuilder(abc.ABC):
 
     def build_instance_definition(self, region: str, node_type: NodeTypeType, index: int) -> InstanceDefinition:
         """Builds one instance definition of given type and index for given region"""
-        user_prefix = self.params.get('user_prefix') or DEFAULT_USER_PREFIX
+        user_prefix = self.params.get('user_prefix')
         common_tags = TestConfig.common_tags()
         node_type_short = "db" if "db" in node_type else node_type
         name = f"{user_prefix}-{node_type_short}-node-{region}-{index}".lower()

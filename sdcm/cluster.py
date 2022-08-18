@@ -14,7 +14,6 @@
 # pylint: disable=too-many-lines
 import contextlib
 import queue
-import getpass
 import logging
 import os
 import shutil
@@ -128,7 +127,6 @@ from sdcm.paths import (
 from sdcm.sct_provision.aws.user_data import ScyllaUserDataBuilder
 
 
-DEFAULT_USER_PREFIX = getpass.getuser()
 # Test duration (min). Parameter used to keep instances produced by tests that
 # are supposed to run longer than 24 hours from being killed
 SCYLLA_DIR = "/var/lib/scylla"
@@ -178,9 +176,7 @@ class NodeStayInClusterAfterDecommission(Exception):
     """ raise after decommission finished but node stay in cluster"""
 
 
-def prepend_user_prefix(user_prefix, base_name):
-    if not user_prefix:
-        user_prefix = DEFAULT_USER_PREFIX
+def prepend_user_prefix(user_prefix: str, base_name: str):
     return '%s-%s' % (user_prefix, base_name)
 
 
