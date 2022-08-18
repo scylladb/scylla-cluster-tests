@@ -1,7 +1,11 @@
 #! /bin/bash
 
 OUT=0
-SCT_SCYLLA_VERSION=4.4.1 ./sct.py lint-yamls -i '.yaml' -e 'multi-dc,multiDC,multidc,multiple-dc,rolling,docker,artifacts,private-repo,ics/long,scylla-operator,gce,jepsen,repair-based-operations'
+SCT_SCYLLA_VERSION=4.4.1 ./sct.py lint-yamls -i '.yaml' -e 'azure,multi-dc,multiDC,multidc,multiple-dc,rolling,docker,artifacts,private-repo,ics/long,scylla-operator,gce,jepsen,repair-based-operations'
+OUT=$(($OUT + $?))
+
+OUT=0
+SCT_SCYLLA_VERSION=5.0.1 SCT_AZURE_REGION_NAME="eastus" ./sct.py lint-yamls --backend azure -i azure
 OUT=$(($OUT + $?))
 
 SCT_GCE_IMAGE_DB=image SCT_SCYLLA_REPO='http://downloads.scylladb.com.s3.amazonaws.com/rpm/centos/scylla-2021.1.repo' ./sct.py lint-yamls -b gce -i 'rolling,artifacts,private-repo,gce,jepsen' -e 'multi-dc,docker,azure'
