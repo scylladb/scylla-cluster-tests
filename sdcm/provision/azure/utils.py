@@ -14,6 +14,7 @@ import logging
 import re
 from contextlib import suppress
 
+import dateutil.parser
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
 from azure.mgmt.compute.models import GalleryImageVersion
 
@@ -23,6 +24,14 @@ from sdcm.utils.version_utils import SCYLLA_VERSION_GROUPED_RE
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def date_or_int_str_to_int(build_id) -> int:
+    """Converts int string or date string to int (timestamp for date) for comparison."""
+    try:
+        return int(build_id)
+    except ValueError:
+        return int(dateutil.parser.parse(build_id, ignoretz=True).timestamp())
 
 
 def get_scylla_images(  # pylint: disable=too-many-branches,too-many-locals
@@ -79,7 +88,7 @@ def get_scylla_images(  # pylint: disable=too-many-branches,too-many-locals
                     unparsable_scylla_versions.append(image.name)
     if unparsable_scylla_versions:
         LOGGER.warning("Couldn't parse scylla version from images: %s", str(unparsable_scylla_versions))
-    output.sort(key=lambda img: int(img.tags.get('build_id', "0")))
+    output.sort(key=lambda img: date_or_int_str_to_int(img.tags.get('build_id', "0")))
     output.sort(key=lambda img: int(SCYLLA_VERSION_GROUPED_RE.match(
         img.name.split("ScyllaDB-", 1)[-1]).group("date")))
 
