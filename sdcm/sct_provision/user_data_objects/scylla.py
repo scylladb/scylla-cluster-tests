@@ -13,7 +13,6 @@
 import json
 from dataclasses import dataclass
 
-from sdcm.cluster import DEFAULT_USER_PREFIX
 from sdcm.provision.scylla_yaml import ScyllaYaml
 from sdcm.sct_provision.user_data_objects import SctUserDataObject
 
@@ -33,7 +32,7 @@ class ScyllaUserDataObject(SctUserDataObject):
         else:
             data_device = 'instance_store'
         scylla_yaml = ScyllaYaml()
-        scylla_yaml.cluster_name = f"{self.params.get('user_prefix') or DEFAULT_USER_PREFIX}-{self.test_config.test_id()[:8]}"
+        scylla_yaml.cluster_name = f"{self.params.get('user_prefix')}-{self.test_config.test_id()[:8]}"
         smi_payload = {
             "start_scylla_on_first_boot": False,
             "data_device": data_device,

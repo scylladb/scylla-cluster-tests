@@ -1593,13 +1593,12 @@ class SCTConfiguration(dict):
                 self[repo_key] = resolve_latest_repo_symlink(self[repo_key])
 
         # 9) append username or ami_id_db_scylla_desc to the user_prefix
-        version_tag = self.get('ami_id_db_scylla_desc')
-        user_prefix = self.get('user_prefix')
-        if user_prefix:
-            if not version_tag:
-                version_tag = getpass.getuser()
-
+        version_tag = self.get('ami_id_db_scylla_desc') or getpass.getuser()
+        user_prefix = self.get('user_prefix') or getpass.getuser()
+        if version_tag != user_prefix:
             self['user_prefix'] = "{}-{}".format(user_prefix, version_tag)[:35]
+        else:
+            self['user_prefix'] = user_prefix[:35]
 
         # 11) validate that supported instance_provision selected
         if self.get('instance_provision') not in ['spot', 'on_demand', 'spot_fleet', 'spot_low_price', 'spot_duration']:
