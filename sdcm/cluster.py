@@ -263,6 +263,8 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self._cassandra_stress_version = None
         self._uuid = None
 
+        self._sdkman_installed = False
+
     def init(self) -> None:
         if self.logdir:
             os.makedirs(self.logdir, exist_ok=True)
@@ -1947,6 +1949,7 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             EOF
             chmod +x /usr/local/bin/nodetool
         """, quote="'"))
+        self._sdkman_installed = True
 
     def install_scylla(self, scylla_repo):
         """
@@ -2045,8 +2048,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.remoter.run(
                 'sudo apt-get install -y '
                 ' {} '.format(self.scylla_pkg()))
-
-        self.install_sdkman_workaround()
 
     def offline_install_scylla(self, unified_package, nonroot):
         """
@@ -2592,7 +2593,9 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         credentials = self.parent_cluster.get_db_auth()
         if credentials:
             options += "-u {} -pw '{}' ".format(*credentials)
-        return f"/usr/local/bin/nodetool {options} {sub_cmd} {args}"
+        nodetool_bin = \
+            "/usr/local/bin/nodetool" if self._sdkman_installed else self.add_install_prefix("/usr/bin/nodetool")
+        return f"{nodetool_bin} {options} {sub_cmd} {args}"
 
     # pylint: disable=inconsistent-return-statements
     def run_nodetool(self, sub_cmd, args="", options="", timeout=None,
@@ -4171,6 +4174,9 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
                 self.scylla_configure_non_root_installation(node=node, devname=nic_devname,
                                                             verbose=verbose, timeout=timeout)
                 return
+
+            if node.scylla_version.startswith("4.5."):
+                node.install_sdkman_workaround()
 
             if self.test_config.BACKTRACE_DECODING:
                 node.install_scylla_debuginfo()
