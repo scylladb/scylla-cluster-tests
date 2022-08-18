@@ -373,10 +373,19 @@ class JMXServiceEvent(ScyllaDatabaseContinuousEvent):
         super().__init__(node=node, severity=severity)
 
 
+class ScyllaSysconfigSetupEvent(ScyllaDatabaseContinuousEvent):
+    begin_pattern = r'Move current config files before running scylla_sysconfig setup'
+    end_pattern = r'Finished running scylla_sysconfig_setup'
+
+    def __init__(self, node: str, severity=Severity.NORMAL, **__):
+        super().__init__(node=node, severity=severity, publish_event=True)
+
+
 SCYLLA_DATABASE_CONTINUOUS_EVENTS = [
     ScyllaServerStatusEvent,
     BootstrapEvent,
     JMXServiceEvent,
+    ScyllaSysconfigSetupEvent
 ]
 
 

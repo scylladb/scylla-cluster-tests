@@ -2887,6 +2887,65 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         result = self.remoter.run('/sbin/ip -o link show |grep ether |awk -F": " \'{print $2}\'', verbose=True)
         return result.stdout.strip().split()
 
+    def run_scylla_sysconfig_setup(self) -> bool:
+        """
+        Run the scylla_sysconfig_setup script that
+        sets the values in /etc/scylla.d for:
+        - cpuset.conf
+        - perftune.yaml
+        These values are used by Scylla to decide
+        on how to balance rx queues with the logical
+        core number.
+
+        Returns a bool indicating if a restart is
+        required if the previous values
+        of cpuset.conf are different from the
+        new ones. Note: restarting might trigger a
+        resharding in Scylla.
+
+        Created to implement the procedure described in:
+        https://github.com/scylladb/scylla-docs/issues/4126
+        """
+        # backup old config if it exists
+        self.log.info("Move current config files before running scylla_sysconfig setup...")
+        self.remoter.sudo("mv /etc/scylla.d/cpuset.conf /etc/scylla.d/cpuset.conf.old", ignore_status=True)
+        self.remoter.sudo("mv /etc/scylla.d/perftune.yaml /etc/scylla.d/perftune.yaml.old", ignore_status=True)
+
+        # run as sudo scylla_sysconfig_setup
+        self.log.info("Running scylla_sysconfig_setup as sudo...")
+        nic_name = self.get_nic_devices()[0]
+        syscofnig_result = self.remoter.sudo(f"scylla_sysconfig_setup --nic {nic_name} "
+                                             f"--homedir /var/lib/scylla --confdir /etc/scylla")
+        self.log.debug("Sysconfig command result:\nstdout: %s\nstderr: %s",
+                       syscofnig_result.stdout, syscofnig_result.stderr)
+
+        # compare old output witn new in scylla.d, use diff -q so we'll only get output if there is a difference
+        self.log.info("Comparing old config files vs new ones after running scylla_sysconfig_setup...")
+        cpuset_diff = self.remoter.run(
+            "diff -q /etc/scylla.d/cpuset.conf /etc/scylla.d/cpuset.conf.old", ignore_status=True)
+
+        self.log.info("Comparison result:\nstdout: %s\nstderr: %s", cpuset_diff.stdout, cpuset_diff.stderr)
+
+        # if the diff command failed, we don't have all the needed config files, so revert the backup
+        if cpuset_diff.return_code != 0:
+            self.remoter.sudo("mv /etc/scylla.d/cpuset.conf.old /etc/scylla.d/cpuset.conf", ignore_status=True)
+            self.remoter.sudo("mv /etc/scylla.d/perftune.yaml.old /etc/scylla.d/perftune.yaml", ignore_status=True)
+            self.log.info("Finished running scylla_sysconfig_setup")
+            return False
+
+        # restart is needed if the config files differ
+        restart_needed = bool(cpuset_diff.stdout)
+
+        self.log.info("Finished running scylla_sysconfig_setup")
+        return restart_needed
+
+    def get_perftune_yaml(self) -> str:
+        cmd = self.remoter.run("sudo cat /etc/scylla.d/perftune.yaml", ignore_status=True)
+        if cmd.return_code == 0:
+            return cmd.stdout
+        else:
+            return cmd.stderr
+
 
 class FlakyRetryPolicy(RetryPolicy):
 
@@ -4412,6 +4471,20 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
 
         for node in self.nodes:
             node.fstrim_scylla_disks()
+
+    def get_db_nodes_cpu_mode(self):
+        results = {}
+
+        for node in self.nodes:
+            perftune_config = node.get_perftune_yaml()
+            pattern = re.compile(r"(?!mode: )\wq")
+            if "mode" in perftune_config:
+                results.update({node.name: pattern.search(perftune_config).group()})
+            else:
+                results.update({node.name: perftune_config})
+
+        self.log.info("DB nodes CPU modes: %s", results)
+        return results
 
 
 class BaseLoaderSet():
