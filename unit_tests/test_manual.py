@@ -47,7 +47,6 @@ class Node:  # pylint: disable=no-init,too-few-public-methods
 
         self.remoter = RemoteCmdRunnerBase.create_remoter(**self.ssh_login_info)
         self.ip_address = '34.253.205.91'
-        self.cassandra_stress_version = '3.11'
 
 
 class DbNode:  # pylint: disable=no-init,too-few-public-methods
