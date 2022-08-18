@@ -869,16 +869,14 @@ def list_test_security_groups(tags_dict=None, region_name=None, group_as_region=
     """
     security_groups = {}
     aws_regions = [region_name] if region_name else all_aws_regions()
-    tags_dict.pop('NodeType', None)
 
     def get_security_groups_ips(region):
         if verbose:
             LOGGER.info('Going to list aws region "%s"', region)
         time.sleep(random.random())
         client: EC2Client = boto3.client('ec2', region_name=region)
-        custom_filter = []
-        if tags_dict:
-            custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]} for key, value in tags_dict.items()]
+        custom_filter = [{'Name': 'tag:{}'.format(key), 'Values': [value]}
+                         for key, value in tags_dict.items() if key != 'NodeType']
         response = client.describe_security_groups(Filters=custom_filter)
         security_groups[region] = response['SecurityGroups']
         if verbose:
