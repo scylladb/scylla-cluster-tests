@@ -457,6 +457,8 @@ def get_specific_tag_of_docker_image(docker_repo: str):
         else:
             break
 
+    LOGGER.warning(
+        "Could not to find a specific Scylla docker tag for the digest of the 'latest' one.")
     return 'latest'
 
 
