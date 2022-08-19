@@ -1782,7 +1782,12 @@ class SCTConfiguration(dict):
         scylla_version = self.get('scylla_version')
 
         if scylla_version == 'latest':
-            self['scylla_version'] = get_specific_tag_of_docker_image(docker_repo=docker_repo)
+            result = get_specific_tag_of_docker_image(docker_repo=docker_repo)
+            if result == 'latest':
+                raise ValueError(
+                    "scylla-operator expects semver-like tags for Scylla docker images. "
+                    "'latest' should not be used.")
+            self['scylla_version'] = result
 
     def _get_target_upgrade_version(self):
         # 10) update target_upgrade_version automatically
