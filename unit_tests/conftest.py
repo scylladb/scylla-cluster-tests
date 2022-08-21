@@ -58,7 +58,7 @@ def docker_scylla():
     entryfile_path = entryfile_path.joinpath('./docker/scylla-sct/entry.sh')
 
     alternator_flags = "--alternator-port 8000 --alternator-write-isolation=always"
-    docker_version = "scylladb/scylla-nightly:666.development-0.20201015.8068272b466"
+    docker_version = "scylladb/scylla-nightly:5.2.0-dev-0.20220820.516089beb0b8"
     cluster = LocalScyllaClusterDummy()
     scylla = RemoteDocker(LocalNode("scylla", cluster), image_name=docker_version,
                           command_line=f"--smp 1 --experimental 1 {alternator_flags}",

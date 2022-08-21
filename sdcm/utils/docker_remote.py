@@ -85,27 +85,6 @@ class RemoteDocker(BaseNode):
         result &= self.node.remoter.receive_files(remote_tempfile, dst, **kwargs)
         return result
 
-    def is_port_used(self, port: int, service_name: str) -> bool:
-        try:
-            # Path to `ss' is /usr/sbin/ss for RHEL-like distros and /bin/ss for Debian-based.  Unfortunately,
-            # /usr/sbin is not always in $PATH, so need to set it explicitly.
-            #
-            # Output of `ss -ln' command in case of used port:
-            #   $ ss -ln '( sport = :8000 )'
-            #   Netid State      Recv-Q Send-Q     Local Address:Port                    Peer Address:Port
-            #   tcp   LISTEN     0      5                      *:8000                               *:*
-            #
-            # And if there are no processes listening on the port:
-            #   $ ss -ln '( sport = :8001 )'
-            #   Netid State      Recv-Q Send-Q     Local Address:Port                    Peer Address:Port
-            #
-            # Can't avoid the header by using `-H' option because of ss' core on Ubuntu 18.04.
-            cmd = f"PATH=/bin:/usr/sbin ss -ln '( sport = :{port} )'"
-            return len(self.remoter.run(cmd, verbose=False).stdout.splitlines()) > 1
-        except Exception as details:  # pylint: disable=broad-except
-            self.log.error("Error checking for '%s' on port %s: %s", service_name, port, details)
-            return False
-
     def _get_ipv6_ip_address(self):
         pass
 
