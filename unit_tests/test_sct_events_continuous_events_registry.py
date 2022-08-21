@@ -6,8 +6,10 @@ from typing import Generator
 
 import pytest
 
+from sdcm.sct_events import Severity
+from sdcm.sct_events.base import EventPeriod
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, ContinuousEventRegistryException
-from sdcm.sct_events.database import get_pattern_to_event_to_func_mapping, CompactionEvent
+from sdcm.sct_events.database import get_pattern_to_event_to_func_mapping, CompactionEvent, ScyllaServerStatusEvent
 from sdcm.sct_events.loaders import GeminiStressEvent
 from sdcm.sct_events.nodetool import NodetoolEvent
 from sdcm.sct_events.system import InfoEvent
@@ -60,7 +62,8 @@ class TestContinuousEventsRegistry:
         with pytest.raises(ContinuousEventRegistryException):
             registry.add_event(info_event)
 
-    def _read_events_from_file(self, file_name: str):
+    @staticmethod
+    def _read_events_from_file(file_name: str):
         with Path(__file__).parent.joinpath(file_name).open(encoding="utf-8") as sct_log:
             for line in sct_log.readlines():
                 db_event_pattern_func_map = get_pattern_to_event_to_func_mapping(node='node1')
@@ -74,6 +77,55 @@ class TestContinuousEventsRegistry:
                         # Ignore the fact that the event is not published. It still will be created
                         if 'You should create default EventsProcessRegistry first' not in str(rex):
                             raise
+
+    @staticmethod
+    def assert_scylla_service_status_event(registry_events, severity, period_type):
+        assert registry_events
+        last_event = registry_events[-1]
+        assert last_event
+        assert isinstance(last_event, ScyllaServerStatusEvent)
+        assert last_event.node == 'node1'
+        assert last_event.severity == severity
+        assert last_event.period_type == period_type
+
+    def test_scylla_service_status_events_succeeded(self,
+                                                    populated_registry: ContinuousEventsRegistry):
+        self._read_events_from_file("test_data/scylla_service_status_event_start.log")
+
+        continues_hash = ScyllaServerStatusEvent.get_continuous_hash_from_dict({
+            'node': 'node1',
+        })
+        found_events = populated_registry.find_continuous_events_by_hash(continues_hash)
+
+        self.assert_scylla_service_status_event(registry_events=found_events, severity=Severity.NORMAL,
+                                                period_type=EventPeriod.BEGIN.value)
+
+        self._read_events_from_file("test_data/scylla_service_status_event_end.log")
+
+        assert not populated_registry.find_continuous_events_by_hash(continues_hash), \
+            "Event was not removed from registry"
+        self.assert_scylla_service_status_event(registry_events=found_events, severity=Severity.NORMAL,
+                                                period_type=EventPeriod.END.value)
+
+    def test_scylla_service_status_events_failure(self,
+                                                  populated_registry: ContinuousEventsRegistry):
+
+        self._read_events_from_file("test_data/scylla_service_status_event_start.log")
+
+        continues_hash = ScyllaServerStatusEvent.get_continuous_hash_from_dict({
+            'node': 'node1',
+        })
+        found_events = populated_registry.find_continuous_events_by_hash(continues_hash)
+
+        self.assert_scylla_service_status_event(registry_events=found_events, severity=Severity.NORMAL,
+                                                period_type=EventPeriod.BEGIN.value)
+
+        self._read_events_from_file("test_data/scylla_service_status_event_failure.log")
+
+        assert not populated_registry.find_continuous_events_by_hash(continues_hash), \
+            "Event was not removed from registry"
+        self.assert_scylla_service_status_event(registry_events=found_events, severity=Severity.ERROR,
+                                                period_type=EventPeriod.END.value)
 
     @pytest.mark.skip(reason="https://trello.com/c/Mu3lGc7C/4828-disable-compaction-and-repair-continuous-events")
     def test_get_compact_events_by_continues_hash_from_log(self, populated_registry: ContinuousEventsRegistry):

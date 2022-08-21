@@ -241,6 +241,7 @@ class ScyllaServerEventPatternFuncs(NamedTuple):
 class ScyllaDatabaseContinuousEvent(ContinuousEvent, abstract=True):
     begin_pattern: str = NotImplemented
     end_pattern: str = NotImplemented
+    failure_string: str = NotImplemented
     continuous_hash_fields = ('node', 'shard')
 
     def __init__(self, node: str, shard: int = None, severity=Severity.UNKNOWN, publish_event=True):
@@ -259,7 +260,8 @@ class ScyllaDatabaseContinuousEvent(ContinuousEvent, abstract=True):
 
 class ScyllaServerStatusEvent(ScyllaDatabaseContinuousEvent):
     begin_pattern = r'Starting Scylla Server'
-    end_pattern = r'Stopping Scylla Server|Failed to start Scylla Server'
+    end_pattern = r'Stopping Scylla Server'
+    failure_string = r'Failed to start Scylla Server'
 
     def __init__(self, node: str, severity=Severity.NORMAL, **__):
         super().__init__(node=node, severity=severity)
@@ -267,6 +269,7 @@ class ScyllaServerStatusEvent(ScyllaDatabaseContinuousEvent):
 
 class BootstrapEvent(ScyllaDatabaseContinuousEvent):
     begin_pattern = r'Starting to bootstrap'
+    # TODO: find failure substring (as it performed in ScyllaServerStatusEvent)
     end_pattern = r'Bootstrap succeeded'
 
     def __init__(self, node: str, severity=Severity.NORMAL, **__):
@@ -356,6 +359,7 @@ class CompactionEvent(ScyllaDatabaseContinuousEvent):
 
 class JMXServiceEvent(ScyllaDatabaseContinuousEvent):
     begin_pattern = r'Starting the JMX server'
+    # TODO: find failure substring (as it performed in ScyllaServerStatusEvent)
     end_pattern = r'Stopped Scylla JMX'
 
     def __init__(self, node: str, severity=Severity.NORMAL, **__):
@@ -380,17 +384,19 @@ def get_pattern_to_event_to_func_mapping(node: str) \
     mapping = []
     event_registry = ContinuousEventsRegistry()
 
-    def _add_event(event_type: Type[ScyllaDatabaseContinuousEvent], match: Match):
+    def _add_event(event_type: Type[ScyllaDatabaseContinuousEvent], match: Match, publish: bool = True):
         kwargs = match.groupdict()
         if "shard" in kwargs:
             kwargs["shard"] = int(kwargs["shard"])
-        event_type(node=node, **kwargs).begin_event()
+        event_type(node=node, **kwargs).begin_event(publish=publish)
 
-    def _end_event(event_type: Type[ScyllaDatabaseContinuousEvent], match: Match):
+    def _end_event(event_type: Type[ScyllaDatabaseContinuousEvent], match: Match, publish: bool = True):
         kwargs = match.groupdict()
         continuous_hash = event_type.get_continuous_hash_from_dict({'node': node, **kwargs})
         if begin_event := event_registry.find_continuous_events_by_hash(continuous_hash):
-            begin_event[-1].end_event()
+            if match.group() == event_type.failure_string:
+                begin_event[-1].severity = Severity.ERROR
+            begin_event[-1].end_event(publish=publish)
             return
         TestFrameworkEvent(
             source=event_type.__name__,
@@ -403,7 +409,8 @@ def get_pattern_to_event_to_func_mapping(node: str) \
         mapping.append(ScyllaServerEventPatternFuncs(pattern=re.compile(event.begin_pattern),
                                                      event_class=event,
                                                      period_func=partial(_add_event, event_type=event)))
-        mapping.append(ScyllaServerEventPatternFuncs(pattern=re.compile(event.end_pattern), event_class=event,
+        mapping.append(ScyllaServerEventPatternFuncs(pattern=re.compile(f"{event.end_pattern}|{event.failure_string}"),
+                                                     event_class=event,
                                                      period_func=partial(_end_event, event_type=event)))
 
     return mapping

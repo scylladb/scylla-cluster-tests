@@ -1,0 +1,1 @@
+< t:2021-10-12 07:27:34,535 f:cluster.py      l:1399 c:sdcm.cluster         p:DEBUG > 2021-10-11T07:33:10+00:00  longevity-10gb-3h-compacti-db-node-231c83c0-1 !INFO    | scylla[8723]: Stopping Scylla Server

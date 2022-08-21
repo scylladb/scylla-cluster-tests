@@ -104,10 +104,10 @@ NodetoolEvent: ERROR
 ScyllaBenchEvent: CRITICAL
 CassandraStressEvent: CRITICAL
 GeminiStressEvent: CRITICAL
-ScyllaServerStatusEvent: NORMAL
-BootstrapEvent: NORMAL
+ScyllaServerStatusEvent: ERROR
+BootstrapEvent: ERROR
 RepairEvent: NORMAL
-JMXServiceEvent: NORMAL
+JMXServiceEvent: ERROR
 InstanceStatusEvent.STARTUP: WARNING
 InstanceStatusEvent.REBOOT: WARNING
 InstanceStatusEvent.POWER_OFF: WARNING
