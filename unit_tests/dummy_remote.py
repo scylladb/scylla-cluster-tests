@@ -80,6 +80,10 @@ class LocalLoaderSetDummy:
     def get_db_auth():
         return None
 
+    @staticmethod
+    def is_kubernetes():
+        return False
+
 
 class LocalScyllaClusterDummy(BaseScyllaCluster):
     # pylint: disable=super-init-not-called
