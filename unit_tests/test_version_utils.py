@@ -370,7 +370,7 @@ def test_scylla_versions_decorator_negative_latest_scylla_no_attr():
 @pytest.mark.integration
 @pytest.mark.need_network
 @pytest.mark.skip(reason="those are integration tests only")
-@pytest.mark.parametrize('docker_repo', ['scylladb/scylla-nightly', 'scylladb/scylla', 'scylladb/scylla-enterprise'])
+@pytest.mark.parametrize('docker_repo', ['scylladb/scylla-nightly', 'scylladb/scylla-enterprise-nightly'])
 def test_get_specific_tag_of_docker_image(docker_repo):
     assert get_specific_tag_of_docker_image(docker_repo=docker_repo) != 'latest'
 
