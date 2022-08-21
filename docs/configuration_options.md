@@ -23,6 +23,8 @@
 | **<a href="#user-content-nonroot_offline_install" name="nonroot_offline_install">nonroot_offline_install</a>**  | Install Scylla without required root priviledge | N/A | SCT_NONROOT_OFFLINE_INSTALL
 | **<a href="#user-content-install_mode" name="install_mode">install_mode</a>**  | Scylla install mode, repo/offline/web | repo | SCT_INSTALL_MODE
 | **<a href="#user-content-scylla_version" name="scylla_version">scylla_version</a>**  | Version of scylla to install, ex. '2.3.1'<br>Automatically lookup AMIs and repo links for formal versions.<br>WARNING: can't be used together with 'scylla_repo' or 'ami_id_db_scylla' | N/A | SCT_SCYLLA_VERSION
+| **<a href="#user-content-user_data_format_version" name="user_data_format_version">user_data_format_version</a>**  | Format version of the user-data to use for scylla images,<br>default to what tagged on the image used | N/A | SCT_USER_DATA_FORMAT_VERSION
+| **<a href="#user-content-oracle_user_data_format_version" name="oracle_user_data_format_version">oracle_user_data_format_version</a>**  | Format version of the user-data to use for scylla images,<br>default to what tagged on the image used | N/A | SCT_ORACLE_USER_DATA_FORMAT_VERSION
 | **<a href="#user-content-oracle_scylla_version" name="oracle_scylla_version">oracle_scylla_version</a>**  | Version of scylla to use as oracle cluster with gemini tests, ex. '3.0.11'<br>Automatically lookup AMIs for formal versions.<br>WARNING: can't be used together with 'ami_id_db_oracle' | 4.4.7 | SCT_ORACLE_SCYLLA_VERSION
 | **<a href="#user-content-scylla_linux_distro" name="scylla_linux_distro">scylla_linux_distro</a>**  | The distro name and family name to use [centos/ubuntu-xenial/debian-jessie] | ubuntu-focal | SCT_SCYLLA_LINUX_DISTRO
 | **<a href="#user-content-scylla_linux_distro_loader" name="scylla_linux_distro_loader">scylla_linux_distro_loader</a>**  | The distro name and family name to use [centos/ubuntu-xenial/debian-jessie] | centos | SCT_SCYLLA_LINUX_DISTRO_LOADER
@@ -32,7 +34,7 @@
 | **<a href="#user-content-scylla_mgmt_agent_address" name="scylla_mgmt_agent_address">scylla_mgmt_agent_address</a>**  | Url to the repo of scylla manager agent version to install for management tests | N/A | SCT_SCYLLA_MGMT_AGENT_ADDRESS
 | **<a href="#user-content-manager_version" name="manager_version">manager_version</a>**  | Branch of scylla manager server and agent to install. Options in defaults/manager_versions.yaml | 3.0 | SCT_MANAGER_VERSION
 | **<a href="#user-content-target_manager_version" name="target_manager_version">target_manager_version</a>**  | Branch of scylla manager server and agent to upgrade to. Options in defaults/manager_versions.yaml | N/A | SCT_TARGET_MANAGER_VERSION
-| **<a href="#user-content-manager_scylla_backend_version" name="manager_scylla_backend_version">manager_scylla_backend_version</a>**  | Branch of scylla db enterprise to install. Options in defaults/manager_versions.yaml | 2021 | SCT_MANAGER_SCYLLA_BACKEND_VERSION
+| **<a href="#user-content-manager_scylla_backend_version" name="manager_scylla_backend_version">manager_scylla_backend_version</a>**  | Branch of scylla db enterprise to install. Options in defaults/manager_versions.yaml | 2022 | SCT_MANAGER_SCYLLA_BACKEND_VERSION
 | **<a href="#user-content-scylla_mgmt_agent_version" name="scylla_mgmt_agent_version">scylla_mgmt_agent_version</a>**  |  | N/A | SCT_SCYLLA_MGMT_AGENT_VERSION
 | **<a href="#user-content-scylla_mgmt_pkg" name="scylla_mgmt_pkg">scylla_mgmt_pkg</a>**  | Url to the scylla manager packages to install for management tests | N/A | SCT_SCYLLA_MGMT_PKG
 | **<a href="#user-content-stress_cmd_lwt_i" name="stress_cmd_lwt_i">stress_cmd_lwt_i</a>**  | Stress command for LWT performance test for INSERT baseline | N/A | SCT_STRESS_CMD_LWT_I
@@ -63,6 +65,7 @@
 | **<a href="#user-content-sct_public_ip" name="sct_public_ip">sct_public_ip</a>**  | Override the default hostname address of the sct test runner,<br>for the monitoring of the Nemesis.<br>can only work out of the box in AWS | N/A | SCT_SCT_PUBLIC_IP
 | **<a href="#user-content-sct_ngrok_name" name="sct_ngrok_name">sct_ngrok_name</a>**  | Override the default hostname address of the sct test runner,<br>using ngrok server, see readme for more instructions | N/A | SCT_NGROK_NAME
 | **<a href="#user-content-backtrace_decoding" name="backtrace_decoding">backtrace_decoding</a>**  | If True, all backtraces found in db nodes would be decoded automatically | True | SCT_BACKTRACE_DECODING
+| **<a href="#user-content-print_kernel_callstack" name="print_kernel_callstack">print_kernel_callstack</a>**  | Scylla will print kernel callstack to logs if True, otherwise, it will try and may print a message<br>that it failed to. | N/A | SCT_PRINT_KERNEL_CALLSTACK
 | **<a href="#user-content-instance_provision" name="instance_provision">instance_provision</a>**  | instance_provision: spot|on_demand|spot_fleet | spot | SCT_INSTANCE_PROVISION
 | **<a href="#user-content-instance_provision_fallback_on_demand" name="instance_provision_fallback_on_demand">instance_provision_fallback_on_demand</a>**  | instance_provision_fallback_on_demand: create instance on_demand provision type if instance with selected 'instance_provision' type creation failed. Expected values: true|false (default - false | N/A | SCT_INSTANCE_PROVISION_FALLBACK_ON_DEMAND
 | **<a href="#user-content-reuse_cluster" name="reuse_cluster">reuse_cluster</a>**  | If reuse_cluster is set it should hold test_id of the cluster that will be reused.<br>`reuse_cluster: 7dc6db84-eb01-4b61-a946-b5c72e0f6d71` | N/A | SCT_REUSE_CLUSTER
@@ -80,7 +83,6 @@
 | **<a href="#user-content-experimental" name="experimental">experimental</a>**  | when enabled scylla will use it's experimental features | True | SCT_EXPERIMENTAL
 | **<a href="#user-content-server_encrypt" name="server_encrypt">server_encrypt</a>**  | when enable scylla will use encryption on the server side | N/A | SCT_SERVER_ENCRYPT
 | **<a href="#user-content-scylla_bench_version" name="scylla_bench_version">scylla_bench_version</a>**  | A valid tag under the scylla bench repo: https://github.com/scylladb/scylla-bench | v0.1.8 | SCT_SCYLLA_BENCH_VERSION
-| **<a href="#user-content-nosqlbench_image" name="nosqlbench_image">nosqlbench_image</a>**  | A docker image of NoSQLBench | scylladb/hydra-loaders:nosqlbench-4.15.49 | SCT_NOSQLBENCH_IMAGE
 | **<a href="#user-content-client_encrypt" name="client_encrypt">client_encrypt</a>**  | when enable scylla will use encryption on the client side | N/A | SCT_CLIENT_ENCRYPT
 | **<a href="#user-content-hinted_handoff" name="hinted_handoff">hinted_handoff</a>**  | when enable or disable scylla hinted handoff (enabled/disabled) | enabled | SCT_HINTED_HANDOFF
 | **<a href="#user-content-authenticator" name="authenticator">authenticator</a>**  | which authenticator scylla will use AllowAllAuthenticator/PasswordAuthenticator | N/A | SCT_AUTHENTICATOR
@@ -96,7 +98,7 @@
 | **<a href="#user-content-alternator_access_key_id" name="alternator_access_key_id">alternator_access_key_id</a>**  | the aws_access_key_id that would be used for alternator | N/A | SCT_ALTERNATOR_ACCESS_KEY_ID
 | **<a href="#user-content-alternator_secret_access_key" name="alternator_secret_access_key">alternator_secret_access_key</a>**  | the aws_secret_access_key that would be used for alternator | N/A | SCT_ALTERNATOR_SECRET_ACCESS_KEY
 | **<a href="#user-content-region_aware_loader" name="region_aware_loader">region_aware_loader</a>**  | When in multi region mode, run stress on loader that is located in the same region as db node | N/A | SCT_REGION_AWARE_LOADER
-| **<a href="#user-content-append_scylla_args" name="append_scylla_args">append_scylla_args</a>**  | More arguments to append to scylla command line | --blocked-reactor-notify-ms 100 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstable-key-validation 1 | SCT_APPEND_SCYLLA_ARGS
+| **<a href="#user-content-append_scylla_args" name="append_scylla_args">append_scylla_args</a>**  | More arguments to append to scylla command line | --blocked-reactor-notify-ms 25 --abort-on-lsa-bad-alloc 1 --abort-on-seastar-bad-alloc --abort-on-internal-error 1 --abort-on-ebadf 1 --enable-sstable-key-validation 1 | SCT_APPEND_SCYLLA_ARGS
 | **<a href="#user-content-append_scylla_args_oracle" name="append_scylla_args_oracle">append_scylla_args_oracle</a>**  | More arguments to append to oracle command line | --enable-cache false | SCT_APPEND_SCYLLA_ARGS_ORACLE
 | **<a href="#user-content-append_scylla_yaml" name="append_scylla_yaml">append_scylla_yaml</a>**  | More configuration to append to /etc/scylla/scylla.yaml | N/A | SCT_APPEND_SCYLLA_YAML
 | **<a href="#user-content-nemesis_class_name" name="nemesis_class_name">nemesis_class_name</a>**  | Nemesis class to use (possible types in sdcm.nemesis).<br>Next syntax supporting:<br>- nemesis_class_name: "NemesisName"  Run one nemesis in single thread<br>- nemesis_class_name: "<NemesisName>:<num>" Run <NemesisName> in <num><br>parallel threads on different nodes. Ex.: "ChaosMonkey:2"<br>- nemesis_class_name: "<NemesisName1>:<num1> <NemesisName2>:<num2>" Run<br><NemesisName1> in <num1> parallel threads and <NemesisName2> in <num2><br>parallel threads. Ex.: "DisruptiveMonkey:1 NonDisruptiveMonkey:2" | NoOpMonkey | SCT_NEMESIS_CLASS_NAME
@@ -127,9 +129,9 @@
 | **<a href="#user-content-ami_id_monitor" name="ami_id_monitor">ami_id_monitor</a>**  | AMS AMI id to use for monitor node | N/A | SCT_AMI_ID_MONITOR
 | **<a href="#user-content-ami_id_db_cassandra" name="ami_id_db_cassandra">ami_id_db_cassandra</a>**  | AMS AMI id to use for cassandra node | N/A | SCT_AMI_ID_DB_CASSANDRA
 | **<a href="#user-content-ami_id_db_oracle" name="ami_id_db_oracle">ami_id_db_oracle</a>**  | AMS AMI id to use for oracle node | N/A | SCT_AMI_ID_DB_ORACLE
-| **<a href="#user-content-aws_root_disk_size_db" name="aws_root_disk_size_db">aws_root_disk_size_db</a>**  |  | N/A | SCT_AWS_ROOT_DISK_SIZE_DB
-| **<a href="#user-content-aws_root_disk_size_monitor" name="aws_root_disk_size_monitor">aws_root_disk_size_monitor</a>**  |  | N/A | SCT_AWS_ROOT_DISK_SIZE_MONITOR
-| **<a href="#user-content-aws_root_disk_size_loader" name="aws_root_disk_size_loader">aws_root_disk_size_loader</a>**  |  | N/A | SCT_AWS_ROOT_DISK_SIZE_LOADER
+| **<a href="#user-content-root_disk_size_db" name="root_disk_size_db">root_disk_size_db</a>**  |  | N/A | SCT_ROOT_DISK_SIZE_DB
+| **<a href="#user-content-root_disk_size_monitor" name="root_disk_size_monitor">root_disk_size_monitor</a>**  |  | N/A | SCT_ROOT_DISK_SIZE_MONITOR
+| **<a href="#user-content-root_disk_size_loader" name="root_disk_size_loader">root_disk_size_loader</a>**  |  | N/A | SCT_ROOT_DISK_SIZE_LOADER
 | **<a href="#user-content-ami_db_scylla_user" name="ami_db_scylla_user">ami_db_scylla_user</a>**  |  | N/A | SCT_AMI_DB_SCYLLA_USER
 | **<a href="#user-content-ami_monitor_user" name="ami_monitor_user">ami_monitor_user</a>**  |  | N/A | SCT_AMI_MONITOR_USER
 | **<a href="#user-content-ami_loader_user" name="ami_loader_user">ami_loader_user</a>**  |  | N/A | SCT_AMI_LOADER_USER
@@ -141,6 +143,7 @@
 | **<a href="#user-content-backup_bucket_location" name="backup_bucket_location">backup_bucket_location</a>**  | the bucket name to be used for backup (e.g., 'manager-backup-tests') | N/A | SCT_BACKUP_BUCKET_LOCATION
 | **<a href="#user-content-backup_bucket_region" name="backup_bucket_region">backup_bucket_region</a>**  | the AWS region of a bucket to be used for backup (e.g., 'eu-west-1') | N/A | SCT_BACKUP_BUCKET_REGION
 | **<a href="#user-content-tag_ami_with_result" name="tag_ami_with_result">tag_ami_with_result</a>**  | If True, would tag the ami with the test final result | N/A | SCT_TAG_AMI_WITH_RESULT
+| **<a href="#user-content-gce_project" name="gce_project">gce_project</a>**  | gcp project name to use | N/A | SCT_GCE_PROJECT
 | **<a href="#user-content-gce_datacenter" name="gce_datacenter">gce_datacenter</a>**  | Supported: us-east1 - means that the zone will be selected automatically or you can mention the zone explicitly, for example: us-east1-b | N/A | SCT_GCE_DATACENTER
 | **<a href="#user-content-gce_network" name="gce_network">gce_network</a>**  |  | N/A | SCT_GCE_NETWORK
 | **<a href="#user-content-gce_image" name="gce_image">gce_image</a>**  | GCE image to use for all node types: db, loader and monitor | N/A | SCT_GCE_IMAGE
@@ -153,11 +156,9 @@
 | **<a href="#user-content-gce_n_local_ssd_disk_loader" name="gce_n_local_ssd_disk_loader">gce_n_local_ssd_disk_loader</a>**  |  | N/A | SCT_GCE_N_LOCAL_SSD_DISK_LOADER
 | **<a href="#user-content-gce_instance_type_monitor" name="gce_instance_type_monitor">gce_instance_type_monitor</a>**  |  | N/A | SCT_GCE_INSTANCE_TYPE_MONITOR
 | **<a href="#user-content-gce_root_disk_type_monitor" name="gce_root_disk_type_monitor">gce_root_disk_type_monitor</a>**  |  | N/A | SCT_GCE_ROOT_DISK_TYPE_MONITOR
-| **<a href="#user-content-gce_root_disk_size_monitor" name="gce_root_disk_size_monitor">gce_root_disk_size_monitor</a>**  |  | N/A | SCT_GCE_ROOT_DISK_SIZE_MONITOR
 | **<a href="#user-content-gce_n_local_ssd_disk_monitor" name="gce_n_local_ssd_disk_monitor">gce_n_local_ssd_disk_monitor</a>**  |  | N/A | SCT_GCE_N_LOCAL_SSD_DISK_MONITOR
 | **<a href="#user-content-gce_instance_type_db" name="gce_instance_type_db">gce_instance_type_db</a>**  |  | N/A | SCT_GCE_INSTANCE_TYPE_DB
 | **<a href="#user-content-gce_root_disk_type_db" name="gce_root_disk_type_db">gce_root_disk_type_db</a>**  |  | N/A | SCT_GCE_ROOT_DISK_TYPE_DB
-| **<a href="#user-content-gce_root_disk_size_db" name="gce_root_disk_size_db">gce_root_disk_size_db</a>**  |  | N/A | SCT_GCE_ROOT_DISK_SIZE_DB
 | **<a href="#user-content-gce_n_local_ssd_disk_db" name="gce_n_local_ssd_disk_db">gce_n_local_ssd_disk_db</a>**  |  | N/A | SCT_GCE_N_LOCAL_SSD_DISK_DB
 | **<a href="#user-content-gce_pd_standard_disk_size_db" name="gce_pd_standard_disk_size_db">gce_pd_standard_disk_size_db</a>**  |  | N/A | SCT_GCE_PD_STANDARD_DISK_SIZE_DB
 | **<a href="#user-content-gce_pd_ssd_disk_size_db" name="gce_pd_ssd_disk_size_db">gce_pd_ssd_disk_size_db</a>**  |  | N/A | SCT_GCE_PD_SSD_DISK_SIZE_DB
@@ -172,9 +173,6 @@
 | **<a href="#user-content-azure_image_monitor" name="azure_image_monitor">azure_image_monitor</a>**  |  | N/A | SCT_AZURE_IMAGE_MONITOR
 | **<a href="#user-content-azure_image_loader" name="azure_image_loader">azure_image_loader</a>**  |  | N/A | SCT_AZURE_IMAGE_LOADER
 | **<a href="#user-content-azure_image_username" name="azure_image_username">azure_image_username</a>**  |  | N/A | SCT_AZURE_IMAGE_USERNAME
-| **<a href="#user-content-azure_root_disk_size_monitor" name="azure_root_disk_size_monitor">azure_root_disk_size_monitor</a>**  |  | N/A | SCT_AZURE_ROOT_DISK_SIZE_MONITOR
-| **<a href="#user-content-azure_root_disk_size_db" name="azure_root_disk_size_db">azure_root_disk_size_db</a>**  |  | N/A | SCT_AZURE_ROOT_DISK_SIZE_DB
-| **<a href="#user-content-azure_root_disk_size_loader" name="azure_root_disk_size_loader">azure_root_disk_size_loader</a>**  |  | N/A | SCT_AZURE_ROOT_DISK_SIZE_LOADER
 | **<a href="#user-content-eks_service_ipv4_cidr" name="eks_service_ipv4_cidr">eks_service_ipv4_cidr</a>**  |  | N/A | SCT_EKS_SERVICE_IPV4_CIDR
 | **<a href="#user-content-eks_vpc_cni_version" name="eks_vpc_cni_version">eks_vpc_cni_version</a>**  |  | N/A | SCT_EKS_VPC_CNI_VERSION
 | **<a href="#user-content-eks_role_arn" name="eks_role_arn">eks_role_arn</a>**  |  | N/A | SCT_EKS_ROLE_ARN
@@ -191,7 +189,7 @@
 | **<a href="#user-content-k8s_scylla_operator_upgrade_helm_repo" name="k8s_scylla_operator_upgrade_helm_repo">k8s_scylla_operator_upgrade_helm_repo</a>**  | Link to the Helm repository where to get 'scylla-operator' charts for upgrade. | N/A | SCT_K8S_SCYLLA_OPERATOR_UPGRADE_HELM_REPO
 | **<a href="#user-content-k8s_scylla_operator_chart_version" name="k8s_scylla_operator_chart_version">k8s_scylla_operator_chart_version</a>**  | Version of 'scylla-operator' Helm chart to use. If not set then latest one will be used. | N/A | SCT_K8S_SCYLLA_OPERATOR_CHART_VERSION
 | **<a href="#user-content-k8s_scylla_operator_upgrade_chart_version" name="k8s_scylla_operator_upgrade_chart_version">k8s_scylla_operator_upgrade_chart_version</a>**  | Version of 'scylla-operator' Helm chart to use for upgrade. | N/A | SCT_K8S_SCYLLA_OPERATOR_UPGRADE_CHART_VERSION
-| **<a href="#user-content-k8s_functional_test_dataset" name="k8s_functional_test_dataset">k8s_functional_test_dataset</a>**  | Defines whether dataset uses for pre-fill cluster in functional test. Defined in sdcm.utils.sstable.load_inventory. Expected values: BIG_SSTABLE_MULTI_COLUMNS_DATA, MULTI_COLUMNS_DATA| N/A | SCT_K8S_FUNCTIONAL_TEST_DATASET
+| **<a href="#user-content-k8s_functional_test_dataset" name="k8s_functional_test_dataset">k8s_functional_test_dataset</a>**  | Defines whether dataset uses for pre-fill cluster in functional test. Defined in sdcm.utils.sstable.load_inventory. Expected values: BIG_SSTABLE_MULTI_COLUMNS_DATA, MULTI_COLUMNS_DATA | N/A | SCT_K8S_FUNCTIONAL_TEST_DATASET
 | **<a href="#user-content-k8s_scylla_datacenter" name="k8s_scylla_datacenter">k8s_scylla_datacenter</a>**  |  | N/A | SCT_K8S_SCYLLA_DATACENTER
 | **<a href="#user-content-k8s_scylla_rack" name="k8s_scylla_rack">k8s_scylla_rack</a>**  |  | N/A | SCT_K8S_SCYLLA_RACK
 | **<a href="#user-content-k8s_scylla_cluster_name" name="k8s_scylla_cluster_name">k8s_scylla_cluster_name</a>**  |  | N/A | SCT_K8S_SCYLLA_CLUSTER_NAME
@@ -301,6 +299,7 @@
 | **<a href="#user-content-stress_cdc_log_reader_batching_enable" name="stress_cdc_log_reader_batching_enable">stress_cdc_log_reader_batching_enable</a>**  | retrieving data from multiple streams in one poll | True | SCT_STRESS_CDC_LOG_READER_BATCHING_ENABLE
 | **<a href="#user-content-use_legacy_cluster_init" name="use_legacy_cluster_init">use_legacy_cluster_init</a>**  | Use legacy cluster initialization with autobootsrap disabled and parallel node setup | N/A | SCT_USE_LEGACY_CLUSTER_INIT
 | **<a href="#user-content-availability_zone" name="availability_zone">availability_zone</a>**  | Availability zone to use. Same for multi-region scenario. | N/A | SCT_AVAILABILITY_ZONE
+| **<a href="#user-content-aws_fallback_to_next_availability_zone" name="aws_fallback_to_next_availability_zone">aws_fallback_to_next_availability_zone</a>**  | Try all availability zones one by one in order to maximize the chances of getting<br>the requested instance capacity. | N/A | SCT_AWS_FALLBACK_TO_NEXT_AVAILABILITY_ZONE
 | **<a href="#user-content-num_nodes_to_rollback" name="num_nodes_to_rollback">num_nodes_to_rollback</a>**  | Number of nodes to upgrade and rollback in test_generic_cluster_upgrade | N/A | SCT_NUM_NODES_TO_ROLLBACK
 | **<a href="#user-content-upgrade_sstables" name="upgrade_sstables">upgrade_sstables</a>**  | Whether to upgrade sstables as part of upgrade_node or not | N/A | SCT_UPGRADE_SSTABLES
 | **<a href="#user-content-stress_before_upgrade" name="stress_before_upgrade">stress_before_upgrade</a>**  | Stress command to be run before upgrade (preapre stage) | N/A | SCT_STRESS_BEFORE_UPGRADE
@@ -319,7 +318,9 @@
 | **<a href="#user-content-data_volume_disk_iops" name="data_volume_disk_iops">data_volume_disk_iops</a>**  | Number of iops for ebs type io2|io3|gp3 | N/A | SCT_DATA_VOLUME_DISK_IOPS
 | **<a href="#user-content-run_db_node_benchmarks" name="run_db_node_benchmarks">run_db_node_benchmarks</a>**  | Flag for running db node benchmarks before the tests | N/A | SCT_RUN_DB_NODE_BENCHMARKS
 | **<a href="#user-content-nemesis_selector" name="nemesis_selector">nemesis_selector</a>**  | nemesis_selector gets a list of "nemesis properties" and filters IN all the nemesis that has<br>ALL the properties in that list which are set to true (the intersection of all properties).<br>(In other words filters out all nemesis that doesn't ONE of these properties set to true)<br>IMPORTANT: If a property doesn't exist, ALL the nemesis will be included. | N/A | SCT_NEMESIS_SELECTOR
+| **<a href="#user-content-nemesis_exclude_disabled" name="nemesis_exclude_disabled">nemesis_exclude_disabled</a>**  | nemesis_exclude_disabled determines whether 'disabled' nemeses are filtered out from list<br>or are allowed to be used. This allows to easily disable too 'risky' or 'extreme' nemeses by default,<br>for all longevities. For example: it is unwanted to run the ToggleGcModeMonkey in standard longevities<br>that runs a stress with data validation. | True | SCT_NEMESIS_EXCLUDE_DISABLED
 | **<a href="#user-content-nemesis_multiply_factor" name="nemesis_multiply_factor">nemesis_multiply_factor</a>**  | Multiply the list of nemesis to execute by the specified factor | 6 | SCT_NEMESIS_MULTIPLY_FACTOR
 | **<a href="#user-content-raid_level" name="raid_level">raid_level</a>**  | Number of of raid level: 0 - RAID0, 5 - RAID5 | N/A | SCT_RAID_LEVEL
 | **<a href="#user-content-bare_loaders" name="bare_loaders">bare_loaders</a>**  | Don't install anything but collectd to the loaders during cluster setup | N/A | SCT_BARE_LOADERS
-[0m
+| **<a href="#user-content-stress_image" name="stress_image">stress_image</a>**  | Dict of the images to use for the stress tools | {'ndbench': 'scylladb/hydra-loaders:ndbench-jdk8-20210720', 'ycsb': 'scylladb/hydra-loaders:ycsb-jdk8-20211104', 'nosqlbench': 'scylladb/hydra-loaders:nosqlbench-4.15.49', 'cassandra-stress': '', 'scylla-bench': 'scylladb/hydra-loaders:scylla-bench-v0.1.8', 'gemini': 'scylladb/hydra-loaders:gemini-1.7.6', 'alternator-dns': 'scylladb/hydra-loaders:alternator-dns-0.1', 'cdc-stresser': 'scylladb/hydra-loaders:cdc-stresser-20210630', 'kcl': 'scylladb/hydra-loaders:kcl-jdk8-20210526-ShardSyncStrategyType-PERIODIC'} | SCT_STRESS_IMAGE
+| **<a href="#user-content-enable_argus" name="enable_argus">enable_argus</a>**  | Control reporting to argus | True | SCT_ENABLE_ARGUS

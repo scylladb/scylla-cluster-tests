@@ -521,7 +521,7 @@ FAQ
 
 **A:** Like that ::
 
-    SCT_CLUSTER_BACKEND=aws hydra conf-docs -o markdown > docs/configuration_options.md
+    hydra update-conf-docs
 
 
 Run a functional test
