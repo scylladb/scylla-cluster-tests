@@ -780,6 +780,19 @@ def conf_docs(output_format):
         click.secho(SCTConfiguration().dump_help_config_yaml())
 
 
+@cli.command('update-conf-docs', help="Update the docs configuration markdown")
+def update_conf_docs():
+    add_file_logger()
+
+    os.environ['SCT_CLUSTER_BACKEND'] = "aws"  # just to pass SCTConfiguration() verification.
+
+    config_logger = logging.getLogger('sdcm.sct_config')
+    config_logger.setLevel(logging.ERROR)
+    markdown_file = Path(__name__).parent / 'docs' / 'configuration_options.md'
+    markdown_file.write_text(SCTConfiguration().dump_help_config_markdown())
+    click.secho("dos writen {markdown_file}")
+
+
 @cli.command("perf-regression-report", help="Generate and send performance regression report")
 @click.option("-i", "--es-id", required=True, type=str, help="Id of the run in Elastic Search")
 @click.option("-e", "--emails", required=True, type=str, help="Comma separated list of emails. Example a@b.com,c@d.com")
