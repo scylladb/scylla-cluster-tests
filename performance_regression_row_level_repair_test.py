@@ -147,7 +147,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
         self.log.info('Updating cluster data only for {}'.format(node.name))
         self.log.info("Run stress command of: {}".format(stress_cmd))
         stress_queue = self.run_stress_thread_bench(stress_cmd=stress_cmd, stats_aggregate_cmds=False,
-                                                    use_single_loader=True)
+                                                    round_robin=True)
         self.get_stress_results_bench(queue=stress_queue)
         self.start_all_nodes()
 
@@ -272,7 +272,7 @@ class PerformanceRegressionRowLevelRepairTest(ClusterTester):
                 [base_cmd, str_additional_args, str_offset])
             self.log.debug('Scylla-bench stress command to execute: {}'.format(stress_cmd))
             write_queue.append(self.run_stress_thread_bench(stress_cmd=stress_cmd, stats_aggregate_cmds=False,
-                                                            use_single_loader=True))
+                                                            round_robin=True))
             offset += partitions_per_loader
             time.sleep(0.2)
 

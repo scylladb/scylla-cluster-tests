@@ -16,22 +16,22 @@ import re
 import uuid
 import time
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from enum import Enum
 
 from sdcm.loader import ScyllaBenchStressExporter
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events import Severity
 from sdcm.sct_events.loaders import ScyllaBenchEvent, SCYLLA_BENCH_ERROR_EVENTS_PATTERNS
-from sdcm.utils.common import FileFollowerThread, generate_random_string, convert_metric_to_ms
-from sdcm.stress_thread import format_stress_cmd_error
+from sdcm.utils.common import FileFollowerThread, convert_metric_to_ms
+from sdcm.stress_thread import format_stress_cmd_error, DockerBasedStressThread
+from sdcm.utils.docker_remote import RemoteDocker
 from sdcm.wait import wait_for
 
 
 LOGGER = logging.getLogger(__name__)
 
 
-class ScyllaBenchModes(Enum):
+class ScyllaBenchModes(str, Enum):
     WRITE = "write"
     READ = "read"
     COUNTER_UPDATE = "counter_update"
@@ -39,7 +39,7 @@ class ScyllaBenchModes(Enum):
     SCAN = "scan"
 
 
-class ScyllaBenchWorkloads(Enum):
+class ScyllaBenchWorkloads(str, Enum):
     UNIFORM = "uniform"
     TIMESERIES = "timeseries"
     SEQUENTIAL = "sequential"
@@ -72,7 +72,7 @@ class ScyllaBenchStressEventsPublisher(FileFollowerThread):
                         event.add_info(node=self.node, line=line, line_number=line_number).publish()
 
 
-class ScyllaBenchThread:  # pylint: disable=too-many-instance-attributes
+class ScyllaBenchThread(DockerBasedStressThread):  # pylint: disable=too-many-instance-attributes
     _SB_STATS_MAPPING = {
         # Mapping for scylla-bench statistic and configuration keys to db stats keys
         'Mode': 'Mode',
@@ -102,26 +102,14 @@ class ScyllaBenchThread:  # pylint: disable=too-many-instance-attributes
     }
 
     # pylint: disable=too-many-arguments
-    def __init__(self, stress_cmd, loader_set, timeout, node_list=None, round_robin=False, use_single_loader=False,
-                 stop_test_on_failure=False, stress_num=1, credentials=None):
-        if not node_list:
-            node_list = []
-        self.loader_set = loader_set
-        self.stress_cmd = stress_cmd
-        self.timeout = timeout
-        self.use_single_loader = use_single_loader
-        self.round_robin = round_robin
-        self.node_list = node_list
-        self.stress_num = stress_num
+    def __init__(self, stress_cmd, loader_set, timeout, node_list=None, round_robin=False,
+                 stop_test_on_failure=False, stress_num=1, credentials=None, params=None):
+        super().__init__(loader_set=loader_set, stress_cmd=stress_cmd, timeout=timeout, stress_num=stress_num,
+                         node_list=node_list, round_robin=round_robin, params=params,
+                         stop_test_on_failure=stop_test_on_failure)
         if credentials and 'username=' not in self.stress_cmd:
             self.stress_cmd += " -username {} -password {}".format(*credentials)
         self.stress_cmd += ' -error-at-row-limit 1000'  # make it fail after having 1000 errors at row
-        self.stop_test_on_failure = stop_test_on_failure
-
-        self.executor = None
-        self.results_futures = []
-        self.shell_marker = generate_random_string(20)
-        self.max_workers = 0
         # Find stress mode:
         #    "scylla-bench -workload=sequential -mode=write -replication-factor=3 -partition-count=100"
         #    "scylla-bench -workload=uniform -mode=read -replication-factor=3 -partition-count=100"
@@ -131,12 +119,9 @@ class ScyllaBenchThread:  # pylint: disable=too-many-instance-attributes
 
     def verify_results(self):
         sb_summary = []
-        results = []
         errors = []
 
-        LOGGER.debug('Wait for stress threads results')
-        for future in as_completed(self.results_futures, timeout=self.timeout):
-            results.append(future.result())
+        results = self.get_results()
 
         for _, result in results:
             if not result:
@@ -152,44 +137,54 @@ class ScyllaBenchThread:  # pylint: disable=too-many-instance-attributes
 
         return sb_summary, errors
 
-    def _run_stress_bench(self, node, loader_idx, stress_cmd, node_list):
+    def _run_stress(self, loader, loader_idx, cpu_idx):
+        cpu_options = ""
+
+        if self.stress_num > 1:
+            cpu_options = f'--cpuset-cpus="{cpu_idx}"'
+
+        docker = RemoteDocker(loader, "scylladb/hydra-loaders:scylla-bench-v0.1.8",
+                              extra_docker_opts=f'{cpu_options} --label shell_marker={self.shell_marker} --network=host')
+
         if self.sb_mode == ScyllaBenchModes.WRITE and self.sb_workload == ScyllaBenchWorkloads.TIMESERIES:
-            node.parent_cluster.sb_write_timeseries_ts = write_timestamp = time.time_ns()
+            loader.parent_cluster.sb_write_timeseries_ts = write_timestamp = time.time_ns()
             LOGGER.debug("Set start-time: %s", write_timestamp)
-            stress_cmd = re.sub(r"SET_WRITE_TIMESTAMP", f"{write_timestamp}", stress_cmd)
+            stress_cmd = re.sub(r"SET_WRITE_TIMESTAMP", f"{write_timestamp}", self.stress_cmd)
             LOGGER.debug("Replaced stress command: %s", stress_cmd)
 
         elif self.sb_mode == ScyllaBenchModes.READ and self.sb_workload == ScyllaBenchWorkloads.TIMESERIES:
-            write_timestamp = wait_for(lambda: node.parent_cluster.sb_write_timeseries_ts,
+            write_timestamp = wait_for(lambda: loader.parent_cluster.sb_write_timeseries_ts,
                                        step=5,
                                        timeout=30,
                                        text='Waiting for "scylla-bench -workload=timeseries -mode=write" been started, to pick up timestamp'
                                        )
             LOGGER.debug("Found write timestamp %s", write_timestamp)
-            stress_cmd = re.sub(r"GET_WRITE_TIMESTAMP", f"{write_timestamp}", stress_cmd)
+            stress_cmd = re.sub(r"GET_WRITE_TIMESTAMP", f"{write_timestamp}", self.stress_cmd)
             LOGGER.debug("replaced stress command %s", stress_cmd)
         else:
-            LOGGER.debug("Scylla bench command: %s", stress_cmd)
+            stress_cmd = self.stress_cmd
+            LOGGER.debug("Scylla bench command: %s", self.stress_cmd)
 
-        os.makedirs(node.logdir, exist_ok=True)
+        if not os.path.exists(loader.logdir):
+            os.makedirs(loader.logdir, exist_ok=True)
 
-        log_file_name = os.path.join(node.logdir, f'scylla-bench-l{loader_idx}-{uuid.uuid4()}.log')
+        log_file_name = os.path.join(loader.logdir, f'scylla-bench-l{loader_idx}-{uuid.uuid4()}.log')
         # Select first seed node to send the scylla-bench cmds
-        ips = ",".join([n.cql_ip_address for n in node_list])
+        ips = ",".join([n.cql_ip_address for n in self.node_list])
 
-        with ScyllaBenchStressExporter(instance_name=node.cql_ip_address,
+        with ScyllaBenchStressExporter(instance_name=loader.ip_address,
                                        metrics=nemesis_metrics_obj(),
                                        stress_operation=self.sb_mode,
                                        stress_log_filename=log_file_name,
                                        loader_idx=loader_idx), \
-                ScyllaBenchStressEventsPublisher(node=node, sb_log_filename=log_file_name) as publisher, \
-                ScyllaBenchEvent(node=node, stress_cmd=stress_cmd,
+                ScyllaBenchStressEventsPublisher(node=loader, sb_log_filename=log_file_name) as publisher, \
+                ScyllaBenchEvent(node=loader, stress_cmd=stress_cmd,
                                  log_file_name=log_file_name) as scylla_bench_event:
             publisher.event_id = scylla_bench_event.event_id
             result = None
             try:
-                result = node.remoter.run(
-                    cmd="/$HOME/go/bin/{name} -nodes {ips}".format(name=stress_cmd.strip(), ips=ips),
+                result = docker.run(
+                    cmd="{name} -nodes {ips}".format(name=stress_cmd.strip(), ips=ips),
                     timeout=self.timeout,
                     log_file=log_file_name)
             except Exception as exc:  # pylint: disable=broad-except
@@ -203,29 +198,7 @@ class ScyllaBenchThread:  # pylint: disable=too-many-instance-attributes
 
                 scylla_bench_event.add_error([errors_str])
 
-        return node, result
-
-    def run(self):
-        if self.round_robin:
-            loaders = [self.loader_set.get_loader()]
-        else:
-            loaders = self.loader_set.nodes if not self.use_single_loader else [self.loader_set.nodes[0]]
-        LOGGER.debug("Round-Robin through loaders, Selected loader is {} ".format(loaders))
-
-        for loader in loaders:
-            if not loader.is_scylla_bench_installed:
-                loader.install_scylla_bench()
-
-        self.max_workers = (os.cpu_count() or 1) * 5
-        LOGGER.debug("Starting %d scylla-bench Worker threads", self.max_workers)
-        self.executor = ThreadPoolExecutor(max_workers=self.max_workers)  # pylint: disable=consider-using-with
-
-        for loader_idx, loader in enumerate(loaders):
-            self.results_futures += [self.executor.submit(self._run_stress_bench,
-                                                          *(loader, loader_idx, self.stress_cmd, self.node_list))]
-            time.sleep(60)
-
-        return self
+        return loader, result
 
     @classmethod
     def _parse_bench_summary(cls, lines):
