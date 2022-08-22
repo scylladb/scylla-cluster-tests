@@ -228,7 +228,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
         self.is_seed = False
 
         self.remoter: Optional[RemoteCmdRunnerBase] = None
-        self.is_scylla_bench_installed = False
 
         self._spot_monitoring_thread = None
         self._journal_thread = None
@@ -465,36 +464,6 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
     @property
     def continuous_events_registry(self) -> ContinuousEventsRegistry:
         return self._continuous_events_registry
-
-    @retrying(n=5)
-    def install_scylla_bench(self):
-        sb_version = self.parent_cluster.params.get('scylla_bench_version')
-        if sb_version.startswith('v') and '.' in sb_version:
-            sb_version = f'tags/{sb_version}'
-        else:
-            sb_version = f'heads/{sb_version}'
-
-        if self.distro.is_rhel_like:
-            self.remoter.sudo("yum install -y unzip")
-        else:
-            self.remoter.sudo("apt-get install -y unzip")
-
-        self.remoter.sudo(shell_script_cmd(f"""\
-            rm -rf /usr/local/go || true
-            rm -rf /tmp/sb_install || true
-            mkdir /tmp/sb_install
-            cd /tmp/sb_install
-            curl -Lo go.tar.gz https://storage.googleapis.com/golang/go1.17.4.linux-amd64.tar.gz
-            tar -C /usr/local -xvzf go.tar.gz
-            echo 'export GOPATH=$HOME/go' >> $HOME/.bash_profile
-            echo 'export PATH=$PATH:/usr/local/go/bin' >> $HOME/.bash_profile
-            source $HOME/.bash_profile
-            curl -Lo sb.zip https://github.com/scylladb/scylla-bench/archive/refs/{sb_version}.zip
-            unzip sb.zip
-            cd ./scylla-bench-*
-            GO111MODULE=on go install .
-        """))
-        self.is_scylla_bench_installed = True
 
     @property
     def cassandra_stress_version(self):
@@ -4493,11 +4462,6 @@ class BaseLoaderSet():
         if self.params.get('client_encrypt'):
             node.config_client_encrypt()
 
-        if 'scylla-bench' in self.params.list_of_stress_tools:
-            # Update existing scylla-bench to latest
-            if not node.is_scylla_bench_installed:
-                node.install_scylla_bench()
-
         result = node.remoter.run('test -e ~/PREPARED-LOADER', ignore_status=True)
         node.remoter.sudo("bash -cxe \"echo '*\t\thard\tcore\t\tunlimited\n*\t\tsoft\tcore\t\tunlimited' "
                           ">> /etc/security/limits.d/20-coredump.conf\"")
@@ -4552,10 +4516,6 @@ class BaseLoaderSet():
             node.remoter.run("echo 'export DB_ADDRESS=%s' >> $HOME/.bashrc" % db_node_address)
 
         node.wait_cs_installed(verbose=verbose)
-
-        if 'scylla-bench' in self.params.list_of_stress_tools:
-            if not node.is_scylla_bench_installed:
-                node.install_scylla_bench()
 
         # install docker
         docker_install = dedent("""

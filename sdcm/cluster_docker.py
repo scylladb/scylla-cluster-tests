@@ -352,10 +352,6 @@ class LoaderSetDocker(cluster.BaseLoaderSet, DockerCluster):
 
     def node_setup(self, node, verbose=False, db_node_address=None, **kwargs):
 
-        if 'scylla-bench' in self.params.list_of_stress_tools:
-            if not node.is_scylla_bench_installed:
-                node.install_scylla_bench()
-
         if self.params.get('client_encrypt'):
             node.config_client_encrypt()
 
