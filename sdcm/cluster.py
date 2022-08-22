@@ -1243,8 +1243,18 @@ class BaseNode(AutoSshContainerMixin, WebDriverContainerMixin):  # pylint: disab
             self.log.error('Error running tcpdump on lo, tcp port 10000: %s',
                            str(details))
 
+    def _is_storage_virtualized(self):
+        return self.is_docker()
+
     def fstrim_scylla_disks(self):
-        self.remoter.sudo("fstrim -v /var/lib/scylla")
+        if not self._is_storage_virtualized():
+            self.remoter.sudo("fstrim -v /var/lib/scylla")
+        else:
+            TestFrameworkEvent(
+                source=self.__class__.__name__,
+                source_method='fstrim_scylla_disks',
+                message="fstrim'ming of Scylla disks was skipped",
+                severity=Severity.WARNING, ).publish_or_dump()
 
     def get_cfstats(self, keyspace, tcpdump=False):
         def keyspace_available():
