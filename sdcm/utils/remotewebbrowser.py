@@ -43,7 +43,8 @@ class WebDriverContainerMixin:
 
     @property
     def web_driver_docker_client(self) -> Optional[DockerClient]:
-        if not self.ssh_login_info:
+        if not self.ssh_login_info or self.ssh_login_info["key_file"] is None:
+            # running with docker backend, no real monitor node, fallback to use local docker
             return None
         SSHAgent.add_keys((self.ssh_login_info["key_file"], ))
         # since a bug in docker package https://github.com/docker-library/python/issues/517 that need to explicitly
