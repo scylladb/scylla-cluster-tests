@@ -1,5 +1,6 @@
 import logging
 import shlex
+from functools import cached_property
 
 from sdcm.cluster import BaseNode
 
@@ -13,7 +14,7 @@ class RemoteDocker(BaseNode):
         self.log = LOGGER
         ports = " ".join([f'-p {port}:{port}' for port in ports]) if ports else ""
         res = self.node.remoter.run(
-            f'docker run {extra_docker_opts} -d {ports} {image_name} {command_line}', verbose=True)
+            f'{self.sudo_needed} docker run {extra_docker_opts} -d {ports} {image_name} {command_line}', verbose=True)
         self.docker_id = res.stdout.strip()
         self.image_name = image_name
         super().__init__(name=image_name, parent_cluster=node.parent_cluster)
@@ -41,6 +42,16 @@ class RemoteDocker(BaseNode):
     def cql_ip_address(self):
         return self.internal_ip_address
 
+    @cached_property
+    def running_in_docker(self):
+        ok = self.node.remoter.run("test /.dockerenv", ignore_status=True).ok
+        ok |= 'docker' in self.node.remoter.run('ls /proc/self/cgroup', ignore_status=True).stdout
+        return ok
+
+    @cached_property
+    def sudo_needed(self):
+        return 'sudo ' if self.running_in_docker else ''
+
     def get_port(self, internal_port):
         """
         get specific port mapping
@@ -52,24 +63,24 @@ class RemoteDocker(BaseNode):
         return external_port.splitlines()[0]
 
     def get_log(self):
-        return self.node.remoter.run(f"docker logs {self.docker_id}").stdout.strip()
+        return self.node.remoter.run(f"{self.sudo_needed} docker logs {self.docker_id}").stdout.strip()
 
     def run(self, cmd, *args, **kwargs):
-        return self.node.remoter.run(f'docker exec {self.docker_id} /bin/sh -c {shlex.quote(cmd)}', *args, **kwargs)
+        return self.node.remoter.run(f'{self.sudo_needed} docker exec {self.docker_id} /bin/sh -c {shlex.quote(cmd)}', *args, **kwargs)
 
     def kill(self):
-        return self.node.remoter.run(f"docker rm -f {self.docker_id}", verbose=False, ignore_status=True)
+        return self.node.remoter.run(f"{self.sudo_needed} docker rm -f {self.docker_id}", verbose=False, ignore_status=True)
 
     def send_files(self, src, dst, **kwargs):
         result = self.node.remoter.send_files(src, src, **kwargs)
-        result &= self.node.remoter.run(f"docker cp {src} {self.docker_id}:{dst}",
+        result &= self.node.remoter.run(f"{self.sudo_needed} docker cp {src} {self.docker_id}:{dst}",
                                         verbose=kwargs.get('verbose'), ignore_status=True).ok
         return result
 
     def receive_files(self, src, dst, **kwargs):  # pylint: disable=unused-argument
         remote_tempfile = self.node.remoter.run("mktemp").stdout.strip()
 
-        result = self.node.remoter.run(f"docker cp {self.docker_id}:{src} {remote_tempfile}",
+        result = self.node.remoter.run(f"{self.sudo_needed} docker cp {self.docker_id}:{src} {remote_tempfile}",
                                        verbose=kwargs.get('verbose'), ignore_status=True).ok
         result &= self.node.remoter.receive_files(remote_tempfile, dst, **kwargs)
         return result

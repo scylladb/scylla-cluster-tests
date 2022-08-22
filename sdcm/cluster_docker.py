@@ -49,9 +49,13 @@ class NodeContainerMixin:
                     labels=self.parent_cluster.tags)
 
     def node_container_run_args(self, seed_ip):
+        volumes = {
+            '/var/run/docker.sock': {"bind": '/var/run/docker.sock', "mode": "rw"},
+        }
         return dict(name=self.name,
                     image=self.node_container_image_tag,
                     command=f'--seeds="{seed_ip}"' if seed_ip else None,
+                    volumes=volumes,
                     nano_cpus=10**9)  # Same as `docker run --cpus=1 ...' CLI command.
 
 
@@ -87,6 +91,11 @@ class DockerNode(cluster.BaseNode, NodeContainerMixin):  # pylint: disable=abstr
 
     def _get_private_ip_address(self) -> Optional[str]:
         return self.public_ip_address
+
+    def _refresh_instance_state(self):
+        public_ipv4_addresses = [self._get_public_ip_address()]
+        private_ipv4_addresses = [self._get_private_ip_address()]
+        return public_ipv4_addresses, private_ipv4_addresses
 
     def _get_ipv6_ip_address(self):
         self.log.warning("We don't support IPv6 for Docker backend")
