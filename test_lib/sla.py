@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field, fields
 
+from sdcm.utils.decorators import retrying
 
 LOGGER = logging.getLogger(__name__)
 
@@ -217,9 +218,13 @@ class UserRoleBase:
     def attached_service_level_name(self):
         return self._attached_service_level.name
 
-    def attach_service_level(self, service_level):
+    # By Eliran:
+    # If a cluster is greater than 3 nodes, the information might not have been propagated to the node that
+    # does the attachment. We have to wait until all nodes have added the service level
+    @retrying(n=6, sleep_time=5, message="Waiting until all nodes have added the service level")
+    def attach_service_level(self, service_level: ServiceLevel):
         """
-        :param auth_name: it may be role name or user name
+        :param service_level: service level object
         """
         query = f'ATTACH SERVICE_LEVEL {service_level.name} TO {self.name}'
         if self.verbose:
