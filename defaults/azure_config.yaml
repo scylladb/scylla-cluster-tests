@@ -10,8 +10,8 @@ azure_instance_type_db: 'Standard_L8s_v2'
 azure_instance_type_loader: 'Standard_F4s_v2'
 azure_instance_type_monitor: 'Standard_D2_v5'
 # get images urn's by running: `az vm image list --output table --all --offer CentOS --publisher OpenLogic`
-azure_image_loader: 'OpenLogic:CentOS:7_9:latest'
-azure_image_monitor: 'OpenLogic:CentOS:7_9:latest'
+azure_image_loader: 'Canonical:0001-com-ubuntu-server-focal:20_04-lts-gen2:20.04.202208100'
+azure_image_monitor: 'Canonical:0001-com-ubuntu-server-focal:20_04-lts-gen2:20.04.202208100'
 
 availability_zone: 'a'
 root_disk_size_monitor: 50  # GB, remove this field if default disk size should be used
@@ -20,9 +20,10 @@ root_disk_size_loader: 30  # GB, Increase loader disk in order to have extra spa
 loader_swap_size: 10240  #10GB SWAP space
 azure_image_username: 'scyllaadm'
 # used prepared centos7 AMI for loader
-ami_loader_user: 'centos'
+ami_loader_user: 'ubuntu'
+scylla_repo_loader: 'https://s3.amazonaws.com/downloads.scylladb.com/deb/debian/scylla-4.6-buster.list'
 # centos7 is used for monitor
-ami_monitor_user: 'centos'
+ami_monitor_user: 'ubuntu'
 aws_instance_profile_name: 'qa-scylla-manager-backup-instance-profile'
 
 ami_id_db_scylla: ''
