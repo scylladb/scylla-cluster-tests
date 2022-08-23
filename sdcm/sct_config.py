@@ -392,6 +392,10 @@ class SCTConfiguration(dict):
         dict(name="system_auth_rf", env="SCT_SYSTEM_AUTH_RF", type=int,
              help="Replication factor will be set to system_auth"),
 
+        dict(name="service_level_shares", env="SCT_SERVICE_LEVEL_SHARES", type=list,
+             help="List if service level shares - how many server levels to create and test. Uses in SLA test."
+                  "list of int, like: [100, 200]"),
+
         dict(name="alternator_port", env="SCT_ALTERNATOR_PORT", type=int,
              help="Port to configure for alternator in scylla.yaml"),
         dict(name="dynamodb_primarykey_type", env="SCT_DYNAMODB_PRIMARYKEY_TYPE", type=str,

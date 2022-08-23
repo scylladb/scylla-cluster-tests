@@ -157,3 +157,5 @@ k8s_deploy_monitoring: false
 
 scylla_rsyslog_setup: false
 scylla_bench_version: v0.1.3
+
+service_level_shares: [1000]
