@@ -1254,7 +1254,7 @@ def get_scylla_ami_versions(region_name: str, arch: AwsArchType = 'x86_64', vers
     name_filter = "ScyllaDB *"
 
     if version and version != "all":
-        name_filter = f"ScyllaDB {version.replace('enterprise', 'Enterprise').replace('-', ' ')}*"
+        name_filter = f"ScyllaDB *{version.replace('enterprise-', 'Enterprise ')}*"
 
     if _SCYLLA_AMI_CACHE[region_name]:
         return _SCYLLA_AMI_CACHE[region_name]
@@ -1287,7 +1287,7 @@ def get_scylla_gce_images_versions(project: str = SCYLLA_GCE_IMAGES_PROJECT, ver
         filters = "(family eq 'scylla(-enterprise)?')(name ne .+-build-.+)"
 
         if version and version != "all":
-            filters += f"(name eq .*scylla-{version.replace('.', '-')}.*)"
+            filters += f"(name eq '.*scylla(-enterprise)?-{version.replace('.', '-')}.*')"
 
         compute_engine = get_gce_driver()
         _SCYLLA_GCE_IMAGE_CACHE.extend(sorted(
