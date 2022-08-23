@@ -194,3 +194,5 @@ scylla_apt_keys:
 raid_level: 0
 
 bare_loaders: false
+
+service_level_shares: [1000]

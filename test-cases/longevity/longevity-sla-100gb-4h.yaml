@@ -1,0 +1,36 @@
+test_duration: 360
+
+prepare_write_cmd:  "cassandra-stress write cl=QUORUM n=20971520 -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native -rate threads=80 -pop seq=1..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+
+# option <sla credentials 0> - where "0" is first element of "service_level_shares" test parameter. This option will be replaced with user and password of the role name that assigned to service level with shares=service_level_shares[0]
+# option <sla credentials 1> - where "1" is second element of "service_level_shares" test parameter. This option will be replaced with user and password of the role name that assigned to service level with shares=service_level_shares[1]
+stress_cmd: ["cassandra-stress read cl=QUORUM duration=240m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native <sla credentials 0> -rate threads=40 -pop seq=1..10485760 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5",
+             "cassandra-stress read  cl=QUORUM duration=240m -schema 'replication(factor=3) compaction(strategy=SizeTieredCompactionStrategy)' -mode cql3 native <sla credentials 1> -rate threads=40 -pop seq=10485761..20971520 -col 'n=FIXED(10) size=FIXED(512)' -log interval=5"
+             ]
+
+n_db_nodes: 6
+n_loaders: 2
+n_monitor_nodes: 1
+seeds_num: 3
+round_robin: true
+
+instance_type_db: 'i3.4xlarge'
+
+nemesis_class_name: 'SisyphusMonkey'
+nemesis_seed: '032'
+nemesis_interval: 5
+nemesis_filter_seeds: false
+nemesis_during_prepare: false
+
+user_prefix: 'longevity-sla-100gb-4h'
+space_node_threshold: 64424
+
+pre_create_schema: True
+sstable_size: 100
+
+authenticator: 'PasswordAuthenticator'
+authenticator_user: cassandra
+authenticator_password: cassandra
+authorizer: 'ScyllaAuthorizer'
+
+service_level_shares: [200, 800]
