@@ -39,10 +39,10 @@ def get_scylla_images(  # pylint: disable=too-many-branches,too-many-locals
     if len(version_bucket) == 1:
         if '.' in scylla_version:
             # Plain version, like 4.5.0
-            tags_to_search['ScyllaVersion'] = lambda ver: ver and ver.startswith(scylla_version)
+            tags_to_search['scylla_version'] = lambda ver: ver and ver.replace("~", "-").startswith(scylla_version)
         else:
             # commit id
-            tags_to_search['ScyllaVersion'] = lambda ver: ver and scylla_version[:9] in ver
+            tags_to_search['scylla_version'] = lambda ver: ver and scylla_version[:9] in ver
     else:
         # Branched version, like master:latest
         branch, build_id = version_bucket
@@ -67,6 +67,7 @@ def get_scylla_images(  # pylint: disable=too-many-branches,too-many-locals
             except (ValueError, TypeError):
                 # skip images with invalid build_id (e.g. created manually)
                 continue
+            image.tags["scylla_version"] = image.tags.get('scylla_version', image.tags.get('ScyllaVersion'))
             # Filter by tags
             for tag_name, expected_value in tags_to_search.items():
                 actual_value = image.tags.get(tag_name)
@@ -76,16 +77,15 @@ def get_scylla_images(  # pylint: disable=too-many-branches,too-many-locals
                 elif expected_value != actual_value:
                     break
             else:
-                # example image name: ScyllaDB-5.1.dev-0.20220603.72f629c2b6e8-1-build-157
-                if SCYLLA_VERSION_GROUPED_RE.match(image.name.split("ScyllaDB-", 1)[-1]):
+                if SCYLLA_VERSION_GROUPED_RE.match(image.tags.get("scylla_version")):
                     output.append(image)
                 else:
-                    unparsable_scylla_versions.append(image.name)
+                    unparsable_scylla_versions.append(f"{image.name}: {image.tags.get('scylla_version')}")
     if unparsable_scylla_versions:
         LOGGER.warning("Couldn't parse scylla version from images: %s", str(unparsable_scylla_versions))
     output.sort(key=lambda img: int(img.tags.get('build_id', "0")))
     output.sort(key=lambda img: int(SCYLLA_VERSION_GROUPED_RE.match(
-        img.name.split("ScyllaDB-", 1)[-1]).group("date")))
+        img.tags.get('scylla_version')).group("date")))
 
     if only_latest:
         return output[-1:]

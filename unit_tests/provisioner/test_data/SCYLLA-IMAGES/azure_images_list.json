@@ -272,7 +272,7 @@
       "ScyllaMachineImageVersion": "ScyllaDB-5.1.dev0",
       "ScyllaPython3Version": "ScyllaDB-5.1.dev0",
       "ScyllaToolsVersion": "ScyllaDB-5.1.dev0",
-      "ScyllaVersion": "ScyllaDB-5.1.dev0",
+      "ScyllaVersion": "ScyllaDB-5.",
       "arch": "x86_64",
       "branch": "unparsable",
       "build_id": "155",
