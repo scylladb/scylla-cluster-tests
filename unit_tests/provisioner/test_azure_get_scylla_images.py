@@ -49,7 +49,7 @@ def test_can_get_scylla_images_based_on_revision_id(azure_service):
 def test_unparsable_scylla_versions_are_logged(azure_service, caplog):
     with caplog.at_level(logging.WARNING):
         get_scylla_images("unparsable:latest", "eastus", azure_service=azure_service)
-    assert "Couldn't parse scylla version from images: ['ScyllaDB-5.-98ad.1.dev_0']" in caplog.text
+    assert "Couldn't parse scylla version from images: ['ScyllaDB-5.-98ad.1.dev_0: ScyllaDB-5.']" in caplog.text
 
 
 def generate_images_json_file():
