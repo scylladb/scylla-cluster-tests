@@ -18,6 +18,7 @@ import uuid
 import tempfile
 import logging
 from textwrap import dedent
+from pathlib import Path
 
 from sdcm.prometheus import nemesis_metrics_obj
 from sdcm.sct_events.loaders import YcsbStressEvent
@@ -117,22 +118,21 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
     def copy_template(self, docker):
         if self.params.get('alternator_use_dns_routing'):
             target_address = 'alternator'
-        else:
+        elif self.node_list:
             if hasattr(self.node_list[0], 'parent_cluster'):
                 target_address = self.node_list[0].parent_cluster.get_node().cql_ip_address
             else:
                 target_address = self.node_list[0].cql_ip_address
+        else:
+            target_address = None
 
         if 'dynamodb' in self.stress_cmd:
             dynamodb_teample = dedent('''
                 measurementtype=hdrhistogram
-                dynamodb.awsCredentialsFile = /tmp/aws_empty_file
-                dynamodb.endpoint = http://{0}:{1}
                 dynamodb.connectMax = 200
                 requestdistribution = uniform
                 dynamodb.consistentReads = true
-            '''.format(target_address,
-                       self.params.get('alternator_port')))
+            ''')
 
             dynamodb_primarykey_type = self.params.get('dynamodb_primarykey_type')
             if isinstance(dynamodb_primarykey_type, alternator.enums.YCSBSchemaTypes):
@@ -150,20 +150,31 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                     dynamodb.primaryKeyType = {alternator.enums.YCSBSchemaTypes.HASH_SCHEMA.value}
                 ''')
 
-            aws_empty_file = dedent(f""""
-                accessKey = {self.params.get('alternator_access_key_id')}
-                secretKey = {self.params.get('alternator_secret_access_key')}
-            """)
+            if target_address:
+                dynamodb_teample += dedent(f'''
+                    dynamodb.endpoint = http://{target_address}:{self.params.get('alternator_port')}
+                ''')
+
+                access_key = self.params.get('alternator_access_key_id') or 'dummy'
+                secret_key = self.params.get('alternator_secret_access_key') or 'dummy'
+
+                aws_credentials_content = dedent(f"""
+                    [default]
+                    aws_access_key_id = {access_key}
+                    aws_secret_access_key = {secret_key}
+                """)
+                credentials_path = Path('/root') / '.aws' / 'credentials'
+                if not docker.run(f"test -f {credentials_path}", ignore_status=True).ok:
+                    with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8') as tmp_file:
+                        tmp_file.write(aws_credentials_content)
+                        tmp_file.flush()
+                        docker.run(f"mkdir -p {credentials_path.parent}")
+                        docker.send_files(tmp_file.name, credentials_path)
 
             with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8') as tmp_file:
                 tmp_file.write(dynamodb_teample)
                 tmp_file.flush()
                 docker.send_files(tmp_file.name, os.path.join('/tmp', 'dynamodb.properties'))
-
-            with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8') as tmp_file:
-                tmp_file.write(aws_empty_file)
-                tmp_file.flush()
-                docker.send_files(tmp_file.name, os.path.join('/tmp', 'aws_empty_file'))
 
     def build_stress_cmd(self):
         hosts = ",".join([i.cql_ip_address for i in self.node_list])
@@ -224,13 +235,16 @@ class YcsbStressThread(DockerBasedStressThread):  # pylint: disable=too-many-ins
                                command_line=f'python3 /dns_server.py {self.db_node_to_query(loader)} '
                                             f'{self.params.get("alternator_port")}',
                                extra_docker_opts=f'--label shell_marker={self.shell_marker}')
+
             dns_options += f'--dns {dns.internal_ip_address} --dns-option use-vc'
 
         if self.stress_num > 1:
             cpu_options = f'--cpuset-cpus="{cpu_idx}"'
 
         docker = RemoteDocker(loader, self.params.get('stress_image.ycsb'),
-                              extra_docker_opts=f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker}')
+                              extra_docker_opts=f'{dns_options} {cpu_options} --label shell_marker={self.shell_marker}'
+                                                f' -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY'
+                                                f' -v {os.environ["HOME"]}/.aws:/root/.aws:ro')
         self.copy_template(docker)
         stress_cmd = self.build_stress_cmd()
 

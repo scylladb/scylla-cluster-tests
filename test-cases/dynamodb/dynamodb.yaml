@@ -1,0 +1,10 @@
+n_db_nodes: 0
+n_loaders: 1
+n_monitor_nodes: 0
+
+stress_cmd: [
+  "bin/ycsb run dynamodb -P workloads/workloadc -threads 20 -p readproportion=0.5 -p updateproportion=0.5 -p recordcount=6990500 -p fieldcount=10 -p fieldlength=512 -p operationcount=200200300 -p dataintegrity=true -p maxexecutiontime=10800",
+]
+
+db_type: "dynamodb"
+aws_instance_profile_name: 'qa-dynamodb-access-profile'

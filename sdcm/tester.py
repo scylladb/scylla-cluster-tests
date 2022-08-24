@@ -801,8 +801,8 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @cache
     def pre_create_alternator_tables(self):
-        node = self.db_cluster.nodes[0]
         if self.params.get('alternator_port'):
+            node = self.db_cluster.nodes[0]
             self.log.info("Going to create alternator tables")
             if self.params.get('alternator_enforce_authorization'):
                 with self.db_cluster.cql_connection_patient(self.db_cluster.nodes[0]) as session:
@@ -1165,6 +1165,11 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.cs_db_cluster = create_cluster('mixed_scylla')
         elif db_type == 'cloud_scylla':
             self.db_cluster = create_cluster('cloud_scylla')
+        elif db_type == 'dynamodb':
+            params = dict(n_nodes=self.params.get("n_db_nodes"),
+                          user_prefix=self.params.get('user_prefix'),
+                          params=self.params)
+            self.db_cluster = cluster_docker.ScyllaDockerCluster(**params)
         else:
             self.log.error('Incorrect parameter db_type: %s',
                            self.params.get('db_type'))
@@ -1665,9 +1670,10 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
     def run_stress_thread(self, stress_cmd, duration=None, stress_num=1, keyspace_num=1, profile=None, prefix='',
                           round_robin=False, stats_aggregate_cmds=True, keyspace_name=None,
                           stop_test_on_failure=True):
-        # We want to prevent situation when stress command starts on not ready cluster (no all nodes are UP).
-        # It may cause to stress failure and as result the test will be stopped and failed
-        self.db_cluster.wait_for_nodes_up_and_normal(iterations=0, timeout=MAX_TIME_WAIT_FOR_ALL_NODES_UP)
+        if self.db_cluster.nodes:
+            # We want to prevent situation when stress command starts on not ready cluster (no all nodes are UP).
+            # It may cause to stress failure and as result the test will be stopped and failed
+            self.db_cluster.wait_for_nodes_up_and_normal(iterations=0, timeout=MAX_TIME_WAIT_FOR_ALL_NODES_UP)
 
         params = dict(stress_cmd=stress_cmd, duration=duration, stress_num=stress_num, keyspace_num=keyspace_num,
                       keyspace_name=keyspace_name, profile=profile, prefix=prefix, round_robin=round_robin,
@@ -2540,17 +2546,17 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
             self.kill_stress_thread()
 
         # Stopping nemesis, using timeout of 30 minutes, since replace/decommission node can take time
-        if self.db_cluster:
+        if self.db_cluster and self.db_cluster.nodes:
             self.get_nemesis_report(self.db_cluster)
             self.stop_nemesis(self.db_cluster)
             self.stop_resources_stop_tasks_threads(self.db_cluster)
             self.get_backtraces(self.db_cluster)
 
-        if self.loaders:
+        if self.loaders and self.loaders.nodes:
             self.get_backtraces(self.loaders)
             self.stop_resources_stop_tasks_threads(self.loaders)
 
-        if self.monitors:
+        if self.monitors and self.monitors.nodes:
             self.get_backtraces(self.monitors)
             self.stop_resources_stop_tasks_threads(self.monitors)
 
