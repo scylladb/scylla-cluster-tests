@@ -1,0 +1,23 @@
+# UDF script: returns the string length of the provided text var
+
+name: 'plus'
+args: '(input1 tinyint, input2 tinyint)'
+called_on_null_input_returns: 'NULL'
+return_type: 'tinyint'
+language: 'xwasm'
+script: |-
+  (module
+  (type (;0;) (func (param i32 i32) (result i32)))
+  (func ${plus_name} (type 0) (param i32 i32) (result i32)
+    local.get 1
+    local.get 0
+    i32.add)
+  (table (;0;) 1 1 funcref)
+  (table (;1;) 32 externref)
+  (memory (;0;) 17)
+  (export "memory" (memory 0))
+  (export "{plus_name}" (func ${plus_name}))
+  (elem (;0;) (i32.const 0) func)
+  (global (;0;) i32 (i32.const 1024))
+  (export "_scylla_abi" (global 0))
+  (data $.rodata (i32.const 1024) "\\01"))
