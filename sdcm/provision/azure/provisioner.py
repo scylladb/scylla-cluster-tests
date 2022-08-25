@@ -12,10 +12,12 @@
 # Copyright (c) 2022 ScyllaDB
 
 import logging
+import string
 from datetime import datetime
 from typing import Dict, List
 
 from azure.mgmt.compute.models import VirtualMachine, VirtualMachinePriorityTypes
+from azure.mgmt.resource.resources.models import ResourceGroup
 
 from sdcm.provision.azure.ip_provider import IpAddressProvider
 from sdcm.provision.azure.network_interface_provider import NetworkInterfaceProvider
@@ -34,22 +36,47 @@ LOGGER = logging.getLogger(__name__)
 class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attributes
     """Provides api for VM provisioning in Azure cloud, tuned for Scylla QA. """
 
-    def __init__(self, test_id: str, region: str,  # pylint: disable=unused-argument
-                 azure_service: AzureService = AzureService(), **kwargs):
-        super().__init__(test_id, region)
+    def __init__(self, test_id: str, region: str, availability_zone: str,
+                 azure_service: AzureService = AzureService(), **_):
+        availability_zone = self._convert_az_to_zone(availability_zone)
+        super().__init__(test_id, region, availability_zone)
         self._azure_service: AzureService = azure_service
         self._cache: Dict[str, VmInstance] = {}
         LOGGER.debug("getting resources for %s...", self._resource_group_name)
-        self._rg_provider = ResourceGroupProvider(self._resource_group_name, self._region, self._azure_service)
+        self._rg_provider = ResourceGroupProvider(
+            self._resource_group_name, self._region, self._az, self._azure_service)
         self._network_sec_group_provider = NetworkSecurityGroupProvider(self._resource_group_name, self._region,
                                                                         self._azure_service)
-        self._vnet_provider = VirtualNetworkProvider(self._resource_group_name, self._region, self._azure_service)
+        self._vnet_provider = VirtualNetworkProvider(
+            self._resource_group_name, self._region, self._az, self._azure_service)
         self._subnet_provider = SubnetProvider(self._resource_group_name, self._azure_service)
-        self._ip_provider = IpAddressProvider(self._resource_group_name, self._region, self._azure_service)
+        self._ip_provider = IpAddressProvider(self._resource_group_name, self._region, self._az, self._azure_service)
         self._nic_provider = NetworkInterfaceProvider(self._resource_group_name, self._region, self._azure_service)
-        self._vm_provider = VirtualMachineProvider(self._resource_group_name, self._region, self._azure_service)
+        self._vm_provider = VirtualMachineProvider(
+            self._resource_group_name, self._region, self._az, self._azure_service)
         for v_m in self._vm_provider.list():
             self._cache[v_m.name] = self._vm_to_instance(v_m)
+
+    @staticmethod
+    def _convert_az_to_zone(availability_zone: str) -> str:
+        """Azure uses numbers for availiability zones, while in tests we use letters.
+        In case user provides letter instead of zone number, convert it to number.
+
+        E.g.:
+        a -> 1, b -> 2
+        """
+        if availability_zone and availability_zone in (chars := string.ascii_lowercase):
+            return str(chars.find(availability_zone) + 1)
+        return availability_zone
+
+    @staticmethod
+    def _get_az_from_name(resource_group: ResourceGroup) -> str:
+        """Gets availability zone from name or return empty string if no az was used."""
+        # this method should be removed when all supported branches support az
+        if resource_group.name[-2] == "-":
+            return resource_group.name[-1]
+        else:
+            return ""
 
     @classmethod
     def discover_regions(cls, test_id: str = "", azure_service: AzureService = AzureService(), **kwargs) -> List["AzureProvisioner"]:
@@ -57,15 +84,15 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
         """Discovers provisioners for in each region for given test id.
 
         If test_id is not provided, it discovers all related to SCT provisioners."""
-        all_resource_groups = [rg for rg in azure_service.resource.resource_groups.list()
-                               if rg.name.startswith("SCT-")]
+        all_resource_groups: List[ResourceGroup] = [rg for rg in azure_service.resource.resource_groups.list()
+                                                    if rg.name.startswith("SCT-")]
         if test_id:
-            provisioner_params = [(test_id, rg.location, azure_service)
+            provisioner_params = [(test_id, rg.location, cls._get_az_from_name(rg), azure_service)
                                   for rg in all_resource_groups if test_id in rg.name]
         else:
-            # extract test_id from rg names where rg.name format is: SCT-<test_id>-<region>
-            provisioner_params = [(test_id, rg.location, azure_service) for rg in all_resource_groups
-                                  if (test_id := "-".join(rg.name.split("-")[1:-1]))]
+            # extract test_id from rg names where rg.name format is: SCT-<test_id>-<region>-<az>
+            provisioner_params = [(test_id, rg.location, cls._get_az_from_name(rg), azure_service) for rg in all_resource_groups
+                                  if (test_id := rg.name.split("SCT-")[-1][:36])]
         return [cls(*params) for params in provisioner_params]
 
     def get_or_create_instance(self, definition: InstanceDefinition,
@@ -149,15 +176,18 @@ class AzureProvisioner(Provisioner):  # pylint: disable=too-many-instance-attrib
 
     @property
     def _resource_group_name(self):
-        return f"SCT-{self._test_id}-{self._region}"
+        name = f"SCT-{self._test_id}-{self._region}"
+        if self._az:
+            name += f"-{self._az}"
+        return name
 
     def _vm_to_instance(self, v_m: VirtualMachine) -> VmInstance:
         pub_address = self._ip_provider.get(v_m.name).ip_address
         nic = self._nic_provider.get(v_m.name)
         priv_address = nic.ip_configurations[0].private_ip_address
         tags = v_m.tags.copy()
-        ssh_user = tags.pop("ssh_user")
-        ssh_key = tags.pop("ssh_key")
+        ssh_user = tags.pop("ssh_user", "")
+        ssh_key = tags.pop("ssh_key", "")
         creation_time = datetime.fromisoformat(tags.pop("creation_time")) if 'creation_time' in tags else None
         image = str(v_m.storage_profile.image_reference)
         pricing_model = self._get_pricing_model(v_m)

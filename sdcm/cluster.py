@@ -3860,7 +3860,7 @@ class BaseScyllaCluster:  # pylint: disable=too-many-public-methods, too-many-in
         status = {}
         res = verification_node.run_nodetool('status', publish_event=False)
 
-        data_centers = res.stdout.strip().split("Datacenter: ")
+        data_centers = res.stdout.split("Datacenter: ")
         # see TestNodetoolStatus test in test_cluster.py
         pattern = re.compile(
             r"(?P<state>\w{2})\s+"

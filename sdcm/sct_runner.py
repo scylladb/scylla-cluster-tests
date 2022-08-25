@@ -842,15 +842,15 @@ class AzureSctRunner(SctRunner):
     REGULAR_TEST_INSTANCE_TYPE = "Standard_D2s_v3"  # 2 vcpus, 8G, recommended by Ubuntu 20.04 LTS image publisher
     LONGTERM_TEST_INSTANCE_TYPE = "Standard_E2s_v3"  # 2 vcpus, 16G, recommended by Ubuntu 20.04 LTS image publisher
 
-    def __init__(self, region_name: str):
-        super().__init__(region_name=region_name)
+    def __init__(self, region_name: str, availability_zone: str):
+        super().__init__(region_name=region_name, availability_zone=availability_zone)
         self.azure_region = AzureRegion(region_name=region_name)
         self.azure_region_source = AzureRegion(region_name=self.SOURCE_IMAGE_REGION)
         self.azure_service = self.azure_region.azure_service
         self._instance = None
 
     def region_az(self, region_name: str, availability_zone: str) -> str:
-        return region_name
+        return f"{region_name}-{availability_zone}"
 
     @property
     def instance(self) -> VmInstance | VirtualMachine:
@@ -911,7 +911,8 @@ class AzureSctRunner(SctRunner):
         else:
             test_id = tags["TestId"]
             provisioner = provisioner_factory.create_provisioner(backend="azure", test_id=test_id,
-                                                                 region=self.azure_region.location)
+                                                                 region=self.azure_region.location,
+                                                                 availability_zone=self.availability_zone)
             vm_params = InstanceDefinition(name=instance_name,
                                            image_id=base_image["id"],
                                            type=instance_type,
@@ -982,7 +983,7 @@ class AzureSctRunner(SctRunner):
             sct_runners.append(SctRunnerInfo(
                 sct_runner_class=cls,
                 cloud_service_instance=azure_service,
-                region_az=instance.location,
+                region_az=f"{instance.location}-{instance.zones[0]}",
                 instance=instance,
                 instance_name=instance.name,
                 public_ips=[azure_service.get_virtual_machine_ips(virtual_machine=instance).public_ip],
@@ -1022,7 +1023,7 @@ def get_sct_runner(cloud_provider: str, region_name: str, availability_zone: str
     if cloud_provider == "gce":
         return GceSctRunner(region_name=region_name, availability_zone=availability_zone)
     if cloud_provider == "azure":
-        return AzureSctRunner(region_name=region_name)
+        return AzureSctRunner(region_name=region_name, availability_zone=availability_zone)
     raise Exception(f'Unsupported Cloud provider: `{cloud_provider}')
 
 

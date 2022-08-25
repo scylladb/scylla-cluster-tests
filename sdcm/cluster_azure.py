@@ -70,7 +70,7 @@ class AzureNode(cluster.BaseNode):
         return super()._set_keep_alive()
 
     def _refresh_instance_state(self):
-        ip_tuple = (self._instance.public_ip_address, self._instance.private_ip_address)
+        ip_tuple = ([self._instance.public_ip_address], [self._instance.private_ip_address])
         return ip_tuple
 
     @property

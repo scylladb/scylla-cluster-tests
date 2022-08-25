@@ -80,7 +80,7 @@ def definition(image_id, image_type):
 
 @pytest.fixture(scope='module')
 def provisioner_params(test_id, region, azure_service):
-    return {"test_id": test_id, "region": region, "azure_service": azure_service}
+    return {"test_id": test_id, "region": region, "availability_zone": "a", "azure_service": azure_service}
 
 
 @pytest.fixture(scope="function")

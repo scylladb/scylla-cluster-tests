@@ -487,8 +487,9 @@ class TestNodetoolStatus(unittest.TestCase):
                           "|/ State=Normal/Leaving/Joining/Moving",
                           "--  Address   Load       Tokens       Owns    Host ID                               Rack",
                           "UN  10.0.0.4  431 KB     256          ?       ed6af9a0-8c22-4813-ac9b-6fbeb462b687  ",
-                          "UN  10.0.0.5  612 KB     256          ?       caa15869-cfb4-4229-85d7-0f4832986237  ",
-                          "UN  10.0.0.6  806 KB     256          ?       3046ded9-ce17-4a3a-ac44-a3ada6916972  "
+                          "UN  10.0.0.5  612 KB     256          ?       caa15869-cfb4-4229-85d7-0f4832986237  1",
+                          "UN  10.0.0.6  806 KB     256          ?       3046ded9-ce17-4a3a-ac44-a3ada6916972  ",
+                          ""
                           ]
                          )
         node = NodetoolDummyNode(resp=resp)
@@ -505,6 +506,14 @@ class TestNodetoolStatus(unittest.TestCase):
                                      '10.0.0.5': {'host_id': 'caa15869-cfb4-4229-85d7-0f4832986237',
                                                   'load': '612KB',
                                                   'owns': '?',
+                                                  'rack': '1',
+                                                  'state': 'UN',
+                                                  'tokens': '256'},
+                                     '10.0.0.6': {'host_id': '3046ded9-ce17-4a3a-ac44-a3ada6916972',
+                                                  'load': '806KB',
+                                                  'owns': '?',
                                                   'rack': '',
                                                   'state': 'UN',
-                                                  'tokens': '256'}}}
+                                                  'tokens': '256'}
+                                     }
+                          }

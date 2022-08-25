@@ -957,7 +957,7 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
         provisioners: List[AzureProvisioner] = []
         for region in regions:
             provisioners.append(provisioner_factory.create_provisioner(backend="azure", test_id=test_id,
-                                region=region))
+                                region=region, availability_zone=self.params.get('availability_zone')))
         if db_info['n_nodes'] is None:
             n_db_nodes = self.params.get('n_db_nodes')
             if isinstance(n_db_nodes, int):  # legacy type

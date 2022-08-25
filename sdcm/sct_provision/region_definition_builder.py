@@ -35,6 +35,7 @@ class RegionDefinition:
     backend: str
     test_id: str
     region: str
+    availability_zone: str
     definitions: List[InstanceDefinition]
 
 
@@ -88,7 +89,8 @@ class DefinitionBuilder(abc.ABC):
                                   user_data=user_data
                                   )
 
-    def build_region_definition(self, region: str, n_db_nodes: int, n_loader_nodes: int, n_monitor_nodes: int) -> RegionDefinition:
+    def build_region_definition(self, region: str, availability_zone: str, n_db_nodes: int,  # pylint: disable=too-many-arguments
+                                n_loader_nodes: int, n_monitor_nodes: int) -> RegionDefinition:
         """Builds instances definitions for given region"""
         definitions = []
         for idx in range(n_db_nodes):
@@ -103,17 +105,19 @@ class DefinitionBuilder(abc.ABC):
             definitions.append(
                 self.build_instance_definition(region=region, node_type="monitor", index=idx + 1)
             )
-        return RegionDefinition(backend=self.BACKEND, test_id=self.test_id, region=region, definitions=definitions)
+        return RegionDefinition(backend=self.BACKEND, test_id=self.test_id, region=region,
+                                availability_zone=availability_zone, definitions=definitions)
 
     def build_all_region_definitions(self) -> List[RegionDefinition]:
         """Builds all instances definitions in all regions based on SCT test configuration."""
         region_definitions = []
+        availability_zone = self.params.get("availability_zone")
         n_db_nodes = self._get_node_count_for_each_region(str(self.params.get("n_db_nodes")))
         n_loader_nodes = self._get_node_count_for_each_region(str(self.params.get("n_loaders")))
         n_monitor_nodes = self._get_node_count_for_each_region(str(self.params.get("n_monitor_nodes")))
         for region, db_nodes, loader_nodes, monitor_nodes in zip(self.regions, n_db_nodes, n_loader_nodes, n_monitor_nodes):
             region_definitions.append(
-                self.build_region_definition(region=region, n_db_nodes=db_nodes,
+                self.build_region_definition(region=region, availability_zone=availability_zone, n_db_nodes=db_nodes,
                                              n_loader_nodes=loader_nodes, n_monitor_nodes=monitor_nodes)
             )
         return region_definitions

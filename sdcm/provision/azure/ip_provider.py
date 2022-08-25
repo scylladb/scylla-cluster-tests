@@ -28,6 +28,7 @@ LOGGER = logging.getLogger(__name__)
 class IpAddressProvider:
     _resource_group_name: str
     _region: str
+    _az: str
     _azure_service: AzureService = AzureService()
     _cache: Dict[str, PublicIPAddress] = field(default_factory=dict)
 
@@ -55,6 +56,7 @@ class IpAddressProvider:
                 public_ip_address_name=ip_name,
                 parameters={
                     "location": self._region,
+                    "zones": [self._az],
                     "sku": {
                         "name": "Standard",
                     },

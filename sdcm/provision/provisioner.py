@@ -97,14 +97,19 @@ class VmInstance:  # pylint: disable=too-many-instance-attributes
         self._provisioner.add_instance_tags(self.name, tags)
         self.tags.update(tags)
 
+    @property
+    def availability_zone(self) -> str:
+        return self._provisioner.availability_zone
+
 
 class Provisioner(ABC):
     """Abstract class for instance (virtual machines) provisioner, cloud-provider and sct agnostic.
     Limits only to machines related to provided test_id. """
 
-    def __init__(self, test_id: str, region: str) -> None:
+    def __init__(self, test_id: str, region: str, availability_zone: str) -> None:
         self._test_id = test_id
         self._region = region
+        self._az = availability_zone
 
     @property
     def test_id(self) -> str:
@@ -113,6 +118,10 @@ class Provisioner(ABC):
     @property
     def region(self) -> str:
         return self._region
+
+    @property
+    def availability_zone(self) -> str:
+        return self._az
 
     @classmethod
     def discover_regions(cls, test_id: str) -> List["Provisioner"]:
@@ -164,13 +173,13 @@ class ProvisionerFactory:
     def register_provisioner(self, backend: str, provisioner_class: Provisioner) -> None:
         self._classes[backend] = provisioner_class
 
-    def create_provisioner(self, backend: str, test_id: str, region: str, **config) -> Provisioner:
+    def create_provisioner(self, backend: str, test_id: str, region: str, availability_zone: str, **config) -> Provisioner:
         """Creates provisioner for given backend, test_id and region and returns it."""
         provisioner = self._classes.get(backend)
         if not provisioner:
             raise ProvisionerError(f"No provisioner found for backend '{backend}'. "
                                    f"Register it with provisioner_factory.register_provisioner method.")
-        return provisioner(test_id, region, **config)
+        return provisioner(test_id, region, availability_zone, **config)
 
     def discover_provisioners(self, backend: str, test_id: str, **config) -> List[Provisioner]:
         """Discovers regions where resources for given test_id are created.

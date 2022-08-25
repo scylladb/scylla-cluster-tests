@@ -29,6 +29,7 @@ class ResourceGroupProvider:
     """Class for providing resource groups and taking care about discovery existing ones."""
     _name: str
     _region: str
+    _az: str
     _azure_service: AzureService = AzureService()
     _cache: Optional[ResourceGroup] = field(default=None)
 
@@ -51,7 +52,7 @@ class ResourceGroupProvider:
             resource_group_name=self._name,
             parameters={
                 "location": self._region,
-                "tags": {"creation_time": datetime.now().isoformat(sep=" ", timespec="seconds")}
+                "tags": {"creation_time": datetime.now().isoformat(sep=" ", timespec="seconds"), "_az": self._az}
             },
         )
         LOGGER.info("Provisioned resource group %s in the %s region", resource_group.name, resource_group.location)
