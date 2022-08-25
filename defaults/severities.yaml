@@ -7,7 +7,7 @@ ClusterHealthValidatorEvent.ScyllaCloudClusterServerDiagnostic: CRITICAL
 ClusterHealthValidatorEvent: NORMAL
 DataValidatorEvent.DataValidator: ERROR
 DataValidatorEvent.ImmutableRowsValidator: ERROR
-DataValidatorEvent.UpdatedRowsValidator: WARNING
+DataValidatorEvent.UpdatedRowsValidator: CRITICAL
 DataValidatorEvent.DeletedRowsValidator: ERROR
 ScyllaHelpErrorEvent.duplicate: WARNING
 ScyllaHelpErrorEvent.filtered: WARNING
