@@ -33,6 +33,7 @@ LOGGER = logging.getLogger(__name__)
 class VirtualMachineProvider:
     _resource_group_name: str
     _region: str
+    _az: str
     _azure_service: AzureService = AzureService()
     _cache: Dict[str, VirtualMachine] = field(default_factory=dict)
 
@@ -61,6 +62,7 @@ class VirtualMachineProvider:
             LOGGER.info("Instance params: %s", definition)
             params = {
                 "location": self._region,
+                "zones": [self._az],
                 "tags": definition.tags | {"ssh_user": definition.user_name, "ssh_key": definition.ssh_key.name,
                                            "creation_time": datetime.now().isoformat(sep=" ", timespec="seconds")},
                 "hardware_profile": {

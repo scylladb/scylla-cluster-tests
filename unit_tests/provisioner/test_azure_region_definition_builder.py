@@ -35,7 +35,8 @@ def test_can_create_basic_scylla_instance_definition_from_sct_config():
         SCT_AZURE_REGION_NAME="['eastus', 'easteu']",
         SCT_N_DB_NODES="3 1",
         SCT_USER_PREFIX="unit-test",
-        SCT_AZURE_IMAGE_DB="some_image_id",
+        SCT_AZURE_IMAGE_DB="/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers/"
+                           "Microsoft.Compute/images/scylla-5.2.0-dev-x86_64-2022-08-22T04-18-36Z",
         SCT_N_LOADERS="2 0",
         SCT_N_MONITORS_NODES="1"
     )

@@ -28,6 +28,7 @@ LOGGER = logging.getLogger(__name__)
 class VirtualNetworkProvider:
     _resource_group_name: str
     _region: str
+    _az: str
     _azure_service: AzureService = AzureService()
     _cache: Dict[str, VirtualNetwork] = field(default_factory=dict)
 
@@ -50,6 +51,7 @@ class VirtualNetworkProvider:
             virtual_network_name=name,
             parameters={
                 "location": self._region,
+                "zones": [self._az],
                 "address_space": {
                     "address_prefixes": ["10.0.0.0/16"],
                 }

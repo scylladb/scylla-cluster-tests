@@ -24,7 +24,7 @@ def test_can_provision_instances_according_to_sct_configuration(params, test_con
     tags = TestConfig.common_tags()
     provision_sct_resources(params=params, test_config=test_config, azure_service=azure_service)
     provisioner_eastus = provisioner_factory.create_provisioner(
-        backend="azure", test_id=params.get("test_id"), region="eastus", azure_service=azure_service)
+        backend="azure", test_id=params.get("test_id"), region="eastus", availability_zone="1", azure_service=azure_service)
     eastus_instances = provisioner_eastus.list_instances()
     db_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "scylla-db"]
     loader_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "loader"]
@@ -39,7 +39,7 @@ def test_can_provision_instances_according_to_sct_configuration(params, test_con
     assert db_node.pricing_model == PricingModel.SPOT
 
     provisioner_easteu = provisioner_factory.create_provisioner(backend="azure", test_id=params.get("test_id"),
-                                                                region="easteu", azure_service=azure_service)
+                                                                region="easteu", availability_zone="1", azure_service=azure_service)
     easteu_instances = provisioner_easteu.list_instances()
     db_nodes = [node for node in easteu_instances if node.tags['NodeType'] == "scylla-db"]
     loader_nodes = [node for node in easteu_instances if node.tags['NodeType'] == "loader"]
@@ -60,7 +60,7 @@ def test_fallback_on_demand_when_spot_fails(fallback_on_demand, params, test_con
                                r"ls /tmp/cloud-init": Result(stdout="done", exited=0)}
     provision_sct_resources(params=params, test_config=test_config, azure_service=azure_service)
     provisioner_eastus = provisioner_factory.create_provisioner(
-        backend="azure", test_id=params.get("test_id"), region="eastus", azure_service=azure_service)
+        backend="azure", test_id=params.get("test_id"), region="eastus", availability_zone="1", azure_service=azure_service)
     eastus_instances = provisioner_eastus.list_instances()
     db_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "scylla-db"]
     loader_nodes = [node for node in eastus_instances if node.tags['NodeType'] == "loader"]

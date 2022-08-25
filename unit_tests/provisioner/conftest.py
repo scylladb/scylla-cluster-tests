@@ -48,16 +48,18 @@ def params():
     EnvConfig = namedtuple('EnvConfig',
                            ["SCT_CLUSTER_BACKEND", "SCT_TEST_ID", "SCT_CONFIG_FILES", "SCT_AZURE_REGION_NAME",
                             "SCT_N_DB_NODES",
-                            "SCT_AZURE_IMAGE_DB", "SCT_N_LOADERS", "SCT_N_MONITORS_NODES"])
+                            "SCT_AZURE_IMAGE_DB", "SCT_N_LOADERS", "SCT_N_MONITORS_NODES", "SCT_AVAILABILITY_ZONE"])
     env_config = EnvConfig(
         SCT_CLUSTER_BACKEND="azure",
         SCT_TEST_ID=f"unit-test-{str(uuid.uuid4())}",
         SCT_CONFIG_FILES=f'["{Path(__file__).parent.absolute()}/azure_default_config.yaml"]',
         SCT_AZURE_REGION_NAME="['eastus', 'easteu']",
         SCT_N_DB_NODES="3 1",
-        SCT_AZURE_IMAGE_DB="/subscriptions/some_image_id",
+        SCT_AZURE_IMAGE_DB="/subscriptions/6c268694-47ab-43ab-b306-3c5514bc4112/resourceGroups/scylla-images/providers/"
+                           "Microsoft.Compute/images/scylla-5.2.0-dev-x86_64-2022-08-22T04-18-36Z",
         SCT_N_LOADERS="2 0",
-        SCT_N_MONITORS_NODES="1"
+        SCT_N_MONITORS_NODES="1",
+        SCT_AVAILABILITY_ZONE="a"
     )
     os.environ.update(env_config._asdict())
     return SCTConfiguration()

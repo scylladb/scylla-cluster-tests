@@ -66,6 +66,7 @@ def provision_sct_resources(params: SCTConfiguration, test_config: TestConfig, *
         provisioner = provisioner_factory.create_provisioner(backend=request.backend,
                                                              test_id=request.test_id,
                                                              region=request.region,
+                                                             availability_zone=request.availability_zone,
                                                              **provisioner_config)
         provision_instances_with_fallback(provisioner=provisioner,
                                           definitions=request.definitions,
