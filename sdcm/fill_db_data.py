@@ -3141,7 +3141,7 @@ class FillDatabaseData(ClusterTester):
 
     @property
     def parsed_scylla_version(self):
-        return parse_version(self.db_cluster.nodes[0].scylla_version)
+        return parse_version(self.db_cluster.nodes[0].scylla_version.replace('~', '-'))
 
     @property
     def is_enterprise(self) -> bool:
