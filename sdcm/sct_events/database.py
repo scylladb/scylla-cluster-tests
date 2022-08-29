@@ -23,7 +23,7 @@ from sdcm.sct_events.base import SctEvent, LogEvent, LogEventProtocol, T_log_eve
 from sdcm.sct_events.continuous_event import ContinuousEventsRegistry, ContinuousEvent
 from sdcm.sct_events.system import TestFrameworkEvent
 
-TOLERABLE_REACTOR_STALL: int = 1000  # ms
+TOLERABLE_REACTOR_STALL: int = 500  # ms
 
 LOGGER = logging.getLogger(__name__)
 
