@@ -1596,7 +1596,7 @@ class Nemesis:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             disrupt_method()
         except Exception as exc:  # pylint: disable=broad-except
             error_msg = "Exception in random_disrupt_method %s: %s", disrupt_method_name, exc
-            self.log.error(error_msg)
+            self.log.error(error_msg, exc_info=True)
             self.error_list.append(error_msg)
             raise
         else:
