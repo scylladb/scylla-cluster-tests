@@ -13,7 +13,7 @@
 
 import enum
 import logging
-
+from sdcm.utils.decorators import static_init  # pylint: disable=unused-import
 
 LOGGER = logging.getLogger(__name__)
 
@@ -22,30 +22,94 @@ class DistroError(Exception):
     pass
 
 
-# pylint: disable=too-many-public-methods
 @enum.unique
-class Distro(enum.Enum):
-    UNKNOWN = (None, None)
-    CENTOS7 = ("centos", "7")
-    CENTOS8 = ("centos", "8")
-    RHEL7 = ("rhel", "7")
-    RHEL8 = ("rhel", "8")
-    OEL7 = ("ol", "7")
-    OEL8 = ("ol", "8")
-    AMAZON2 = ("amzn", "2")
-    ROCKY8 = ("rocky", "8")
-    DEBIAN8 = ("debian", "8")
-    DEBIAN9 = ("debian", "9")
-    DEBIAN10 = ("debian", "10")
-    DEBIAN11 = ("debian", "11")
-    UBUNTU14 = ("ubuntu", "14.04")
-    UBUNTU16 = ("ubuntu", "16.04")
-    UBUNTU18 = ("ubuntu", "18.04")
-    UBUNTU20 = ("ubuntu", "20.04")
-    UBUNTU21 = ("ubuntu", "21.04")
-    UBUNTU21_10 = ("ubuntu", "21.10")
-    UBUNTU22 = ("ubuntu", "22.04")
-    SLES15 = ("sles", "15")
+class DistroBase(enum.Enum):
+    RHEL = enum.auto()
+    DEBIAN = enum.auto()
+    UNKNOWN = enum.auto()
+
+
+# A tuple of tuples of the form:
+# (enum_prefix, os name, versions list (format is either "major.minor" or "major"), boolean - debian_like == True else rhel_like)
+KNOWN_OS = (
+    ("CENTOS", "centos", ["7", "8"], DistroBase.RHEL),
+    ("RHEL", "rhel", ["7", "8"], DistroBase.RHEL),
+    ("OEL", "ol", ["7", "8"], DistroBase.RHEL),
+    ("AMAZON", "amzn", ["2"], DistroBase.RHEL),
+    ("ROCKY", "rocky", ["8"], DistroBase.RHEL),
+    ("DEBIAN", "debian", ["8", "9", "10", "11"], DistroBase.DEBIAN),
+    ("UBUNTU", "ubuntu", ["14.04", "16.04", "18.04", "20.04", "21.04", "21.10", "22.04"], DistroBase.DEBIAN),
+    ("SLES", "sles", ["15"], DistroBase.UNKNOWN),
+    ("FEDORA", "fedora", ["34", "35", "36"], DistroBase.RHEL),
+)
+
+
+enum_data = {}
+
+DistroBase_mapping = {}
+
+for enum_prefix, os, versions, DistroBase in KNOWN_OS:
+    if DistroBase not in DistroBase_mapping:
+        DistroBase_mapping[DistroBase] = []
+    DistroBase_mapping[DistroBase].append(os)
+    versions_by_major = {}
+    for version in versions:
+        version_major = version.split(".", maxsplit=1)[0]
+        if version_major not in versions_by_major:
+            versions_by_major[version_major] = []
+        versions_by_major[version_major].append(version)
+    for version_major, versions_with_same_major in versions_by_major.items():
+        versions_with_same_major.sort()
+        enum_data[enum_prefix + version_major] = (os, versions_with_same_major[0])
+        for version in versions_with_same_major[1:]:
+            version_for_member_names = version.replace(".", "_")
+            enum_data[enum_prefix + version_for_member_names] = (os, version)
+
+
+@static_init
+class EnumFunctionalMixin:
+    @classmethod
+    def static_init(cls):
+        def get_os_name_for_prop(name):
+            p_name = next(filter(lambda x: x[1] == name, KNOWN_OS), None)
+            if p_name is not None:
+                return p_name[0].lower()
+            else:
+                return name
+        properties_mapping = {}
+        for enum_name, data in enum_data.items():
+            version_for_prop = data[1].replace(".", "_")
+            version_prefix = version_for_prop.split('_')[0]
+            os_name_for_prop = get_os_name_for_prop(data[0])
+            prop_name = f'is_{os_name_for_prop}'
+            prop_name_with_version = f'{prop_name}{version_prefix}'
+            if prop_name not in properties_mapping:
+                properties_mapping[prop_name] = []
+            if prop_name_with_version not in properties_mapping:
+                properties_mapping[prop_name_with_version] = []
+            properties_mapping[prop_name].append(enum_name)
+            properties_mapping[prop_name_with_version].append(enum_name)
+            if version_for_prop != version_prefix:
+                prop_name_with_version = f'{prop_name}{version_prefix}'
+                if prop_name_with_version not in properties_mapping:
+                    properties_mapping[prop_name_with_version] = []
+                properties_mapping[prop_name_with_version].append(enum_name)
+        setattr(cls, 'properties_mapping', properties_mapping)
+        for prop_name, enum_names in properties_mapping.items():
+            setattr(cls, prop_name, property(lambda self, enum_names=enum_names: self.name in enum_names))
+        enum_data['UNKNOWN'] = (None, None)
+
+    @property
+    def is_unknown(self):
+        return self.name == 'UNKNOWN'
+
+    @property
+    def is_debian_like(self):
+        return self.value[0] in DistroBase_mapping[DistroBase.DEBIAN]
+
+    @property
+    def is_rhel_like(self):
+        return self.value[0] in DistroBase_mapping[DistroBase.RHEL]
 
     @classmethod
     def _missing_(cls, value):
@@ -96,106 +160,9 @@ class Distro(enum.Enum):
         return distro
 
     @property
-    def is_unknown(self):
-        return self == self.UNKNOWN
-
-    @property
-    def is_centos7(self):
-        return self == self.CENTOS7
-
-    @property
-    def is_centos8(self):
-        return self == self.CENTOS8
-
-    @property
-    def is_rhel7(self):
-        return self == self.RHEL7
-
-    @property
-    def is_rhel8(self):
-        return self == self.RHEL8
-
-    @property
-    def is_oel7(self):
-        return self == self.OEL7
-
-    @property
-    def is_oel8(self):
-        return self == self.OEL8
-
-    @property
-    def is_amazon2(self):
-        return self == self.AMAZON2
-
-    @property
-    def is_rocky8(self):
-        return self == self.ROCKY8
-
-    @property
-    def is_rhel_like(self):
-        return self.value[0] in ("centos", "rhel", "ol", "amzn", "rocky", )  # pylint: disable=unsubscriptable-object
-
-    @property
-    def is_ubuntu14(self):
-        return self == self.UBUNTU14
-
-    @property
-    def is_ubuntu16(self):
-        return self == self.UBUNTU16
-
-    @property
-    def is_ubuntu18(self):
-        return self == self.UBUNTU18
-
-    @property
-    def is_ubuntu20(self):
-        return self == self.UBUNTU20
-
-    @property
-    def is_ubuntu21(self):
-        return self in (self.UBUNTU21, self.UBUNTU21_10)
-
-    @property
-    def is_ubuntu22(self):
-        return self == self.UBUNTU22
-
-    @property
-    def is_ubuntu(self):
-        return self.value[0] == "ubuntu"  # pylint: disable=unsubscriptable-object
-
-    @property
-    def is_sles(self):
-        return self.value[0] == "sles"  # pylint: disable=unsubscriptable-object
-
-    @property
-    def is_sles15(self):
-        return self == self.SLES15
-
-    @property
-    def is_debian8(self):
-        return self == self.DEBIAN8
-
-    @property
-    def is_debian9(self):
-        return self == self.DEBIAN9
-
-    @property
-    def is_debian10(self):
-        return self == self.DEBIAN10
-
-    @property
-    def is_debian11(self):
-        return self == self.DEBIAN11
-
-    @property
-    def is_debian(self):
-        return self.value[0] == "debian"  # pylint: disable=unsubscriptable-object
-
-    @property
-    def is_debian_like(self):
-        return self.value[0].lower() in ("debian", "ubuntu")  # pylint: disable=unsubscriptable-object
-
-    @property
     def uses_systemd(self):
         # Debian uses systemd as a default init system since 8.0, Ubuntu since 15.04, and RedHat-based since 7.0
         return self not in (self.UNKNOWN, self.UBUNTU14, )
+
+
+Distro: enum.Enum = enum.Enum('Distro', enum_data, module=__name__, type=EnumFunctionalMixin)
