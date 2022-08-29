@@ -1097,13 +1097,6 @@ def _manage_runner_keep_tag_value(utc_now: datetime,
             sct_runner_info.keep = new_keep_value
         return sct_runner_info
 
-    if test_status is not None and test_status != "RUNNING" and not sct_runner_info.logs_collected:
-        if not dry_run:
-            sct_runner_info.sct_runner_class.set_tags(sct_runner_info, {"keep": "alive", "keep_action": "keep"})
-        sct_runner_info.keep = "alive"
-        sct_runner_info.keep_action = "keep"
-        return sct_runner_info
-
     LOGGER.info("No changes to make to runner tags.")
     return sct_runner_info
 
