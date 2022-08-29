@@ -238,3 +238,15 @@ class optional_cached_property(cached_property):  # pylint: disable=invalid-name
             return super().__get__(instance=instance, owner=owner)
         except NoValue:
             return None
+
+
+def static_init(cls):
+    """A decorator for classes that make sure to call 'static_init' method if
+    such a method exists.
+
+    Returns:
+        The class that was initialized.
+    """
+    if hasattr(cls, "static_init"):
+        cls.static_init()
+    return cls
