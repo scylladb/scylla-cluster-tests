@@ -202,3 +202,5 @@ bare_loaders: false
 nemesis_exclude_disabled: true
 
 aws_fallback_to_next_availability_zone: false
+
+enable_argus: true

@@ -356,14 +356,23 @@ class ClusterTester(db_stats.TestStatsMixin, unittest.TestCase):  # pylint: disa
 
     @cached_property
     def argus_test_run(self):
-        try:
-            argus_test_run = ArgusTestRun.from_sct_config(test_id=UUID(self.test_id),
-                                                          sct_config=self.params)
-            argus_test_run.save()
-            return argus_test_run
-        except Exception as exc:  # pylint: disable=broad-except
-            self.log.warning("Unable to set up Argus connection: %s", exc.args[0])
-            self.log.debug("Error details: ", exc_info=True)
+        if self.params.get("enable_argus"):
+            try:
+                argus_test_run = ArgusTestRun.from_sct_config(test_id=UUID(self.test_id),
+                                                              sct_config=self.params)
+                argus_test_run.save()
+                return argus_test_run
+            except Exception as exc:  # pylint: disable=broad-except
+                self.log.warning("Unable to set up Argus connection: %s", exc.args[0])
+                self.log.debug("Error details: ", exc_info=True)
+                return unittest.mock.MagicMock()
+        else:
+            TestFrameworkEvent(
+                source=self.__class__.__name__,
+                source_method='argus_test_run',
+                message="Argus is disabled by configuration",
+                severity=Severity.WARNING,
+            ).publish_or_dump()
             return unittest.mock.MagicMock()
 
     def argus_update_status(self, status: TestStatus):
