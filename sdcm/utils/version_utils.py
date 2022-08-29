@@ -101,7 +101,7 @@ class ScyllaFileType(Enum):
 
 FILE_REGEX_DICT = {
     ScyllaFileType.DEBIAN: [
-        (re.compile(r"deb\s+\[arch=(?P<arch>.*?)\]\s(?P<url>http.*?)\s(?P<version_code_name>.*?)\s(?P<component>.*?)$"),
+        (re.compile(r"deb\s+\[arch=(?P<arch>[^\s]*).*?\].*\s(?P<url>http.*?)\s(?P<version_code_name>.*?)\s(?P<component>.*?)$"),
          "{url}/dists/{version_code_name}/{component}/binary-{arch}/Packages"),
     ],
     ScyllaFileType.YUM:
