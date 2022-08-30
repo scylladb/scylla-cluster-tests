@@ -980,10 +980,11 @@ class AzureSctRunner(SctRunner):
                 except ValueError as exc:
                     LOGGER.warning("Value of `launch_time' tag is invalid: %s", exc)
                     launch_time = None
+            region_az = instance.location + "" if not instance.zones else instance.zones[0]
             sct_runners.append(SctRunnerInfo(
                 sct_runner_class=cls,
                 cloud_service_instance=azure_service,
-                region_az=f"{instance.location}-{instance.zones[0]}",
+                region_az=region_az,
                 instance=instance,
                 instance_name=instance.name,
                 public_ips=[azure_service.get_virtual_machine_ips(virtual_machine=instance).public_ip],
