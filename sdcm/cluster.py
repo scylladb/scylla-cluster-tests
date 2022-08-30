@@ -4709,6 +4709,7 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
         self.local_metrics_addr = start_metrics_server()  # start prometheus metrics server locally and return local ip
         self.sct_ip_port = self.set_local_sct_ip()
         self.grafana_port = 3000
+        self.prometheus_retention = "365d"
         self.monitor_branch = self.params.get('monitor_branch')
         self._monitor_install_path_base = None
         self.phantomjs_installed = False
@@ -5124,7 +5125,8 @@ class BaseMonitorSet:  # pylint: disable=too-many-public-methods,too-many-instan
             -s `realpath "{self.monitoring_conf_dir}/scylla_servers.yml"` \
             -n `realpath "{self.monitoring_conf_dir}/node_exporter_servers.yml"` \
             {scylla_manager_servers_arg} \
-            -d `realpath "{self.monitoring_data_dir}"` -l -v master,{self.monitoring_version} -b "-web.enable-admin-api" \
+            -d `realpath "{self.monitoring_data_dir}"` -l -v master,{self.monitoring_version} \
+            -b "-web.enable-admin-api -storage.tsdb.retention.time={self.prometheus_retention}" \
             -c 'GF_USERS_DEFAULT_THEME=dark'
         """)
         node.remoter.run("bash -ce '%s'" % run_script, verbose=True)
