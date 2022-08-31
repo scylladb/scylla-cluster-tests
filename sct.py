@@ -1422,9 +1422,10 @@ def set_runner_tags(runner_ip, tags):
 @click.option("-ip", "--runner-ip", required=False, type=str, default="")
 @click.option("-ts", "--test-status", type=str, help="The result of the test run")
 @click.option('--dry-run', is_flag=True, default=False, help='dry run')
-def clean_runner_instances(runner_ip, test_status, dry_run):
+@click.option("--force", is_flag=True, default=False, help="Skip cleaning logic and terminate the instance")
+def clean_runner_instances(runner_ip, test_status, dry_run, force):
     add_file_logger()
-    clean_sct_runners(test_runner_ip=runner_ip, test_status=test_status, dry_run=dry_run)
+    clean_sct_runners(test_runner_ip=runner_ip, test_status=test_status, dry_run=dry_run, force=force)
 
 
 @cli.command("run-aws-mock", help="Start AWS Mock server Docker container")
