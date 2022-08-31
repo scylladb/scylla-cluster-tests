@@ -1170,7 +1170,7 @@
                       "steppedLine": false,
                       "targets": [
                         {
-                          "expr": "avg(irate(scylla_scheduler_runtime_ms{group=~\"service_level_.*\"} [30s] )) by (group, instance)",
+                          "expr": "avg(irate(scylla_scheduler_runtime_ms{group=~\"sl:.*\"} [30s] )) by (group, instance)",
                           "format": "time_series",
                           "interval": "15s",
                           "intervalFactor": 1,
