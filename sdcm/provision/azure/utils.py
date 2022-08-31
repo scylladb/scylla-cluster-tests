@@ -10,19 +10,25 @@
 # See LICENSE for more details.
 #
 # Copyright (c) 2022 ScyllaDB
-
+import logging
 from contextlib import suppress
 
 from azure.core.exceptions import ResourceNotFoundError as AzureResourceNotFoundError
 from azure.mgmt.compute.models import GalleryImageVersion
+
 from sdcm.provision.provisioner import VmArch
 from sdcm.utils.azure_utils import AzureService
+from sdcm.utils.version_utils import SCYLLA_VERSION_GROUPED_RE
 
 
-def get_scylla_images(  # pylint: disable=too-many-branches
+LOGGER = logging.getLogger(__name__)
+
+
+def get_scylla_images(  # pylint: disable=too-many-branches,too-many-locals
         scylla_version: str,
         region_name: str,
-        arch: VmArch = VmArch.X86
+        arch: VmArch = VmArch.X86,
+        azure_service: AzureService = AzureService()
 ) -> list[GalleryImageVersion]:
     version_bucket = scylla_version.split(":", 1)
     only_latest = False
@@ -32,10 +38,10 @@ def get_scylla_images(  # pylint: disable=too-many-branches
     if len(version_bucket) == 1:
         if '.' in scylla_version:
             # Plain version, like 4.5.0
-            tags_to_search['ScyllaVersion'] = lambda ver: ver and ver.startswith(scylla_version)
+            tags_to_search['scylla_version'] = lambda ver: ver and ver.replace("~", "-").startswith(scylla_version)
         else:
-            # Commit id d28c3ee75183a6de3e9b474127b8c0b4d01bbac2
-            tags_to_search['scylla-git-commit'] = scylla_version
+            # commit id
+            tags_to_search['scylla_version'] = lambda ver: ver and scylla_version[:9] in ver
     else:
         # Branched version, like master:latest
         branch, build_id = version_bucket
@@ -47,15 +53,20 @@ def get_scylla_images(  # pylint: disable=too-many-branches
         else:
             tags_to_search['build-id'] = build_id
     output = []
+    unparsable_scylla_versions = []
     with suppress(AzureResourceNotFoundError):
-        gallery_image_versions = AzureService().compute.images.list_by_resource_group(
+        gallery_image_versions = azure_service.compute.images.list_by_resource_group(
             resource_group_name="SCYLLA-IMAGES",
         )
         for image in gallery_image_versions:
-            # Filter by region
-            if image.location != region_name:
+            if image.location != region_name or image.name.startswith('debug-'):
                 continue
-
+            try:
+                int(image.tags.get("build_id"))
+            except (ValueError, TypeError):
+                # skip images with invalid build_id (e.g. created manually)
+                continue
+            image.tags["scylla_version"] = image.tags.get('scylla_version', image.tags.get('ScyllaVersion'))
             # Filter by tags
             for tag_name, expected_value in tags_to_search.items():
                 actual_value = image.tags.get(tag_name)
@@ -65,9 +76,16 @@ def get_scylla_images(  # pylint: disable=too-many-branches
                 elif expected_value != actual_value:
                     break
             else:
-                output.append(image)
+                if SCYLLA_VERSION_GROUPED_RE.match(image.tags.get("scylla_version")):
+                    output.append(image)
+                else:
+                    unparsable_scylla_versions.append(f"{image.name}: {image.tags.get('scylla_version')}")
+    if unparsable_scylla_versions:
+        LOGGER.warning("Couldn't parse scylla version from images: %s", str(unparsable_scylla_versions))
+    output.sort(key=lambda img: int(img.tags.get('build_id', "0")))
+    output.sort(key=lambda img: int(SCYLLA_VERSION_GROUPED_RE.match(
+        img.tags.get('scylla_version')).group("date")))
 
-    output = sorted(output, key=lambda img: img.tags.get('build_id'))
     if only_latest:
         return output[-1:]
     return output
