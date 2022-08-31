@@ -1105,12 +1105,19 @@ def _manage_runner_keep_tag_value(utc_now: datetime,
 
 def clean_sct_runners(test_status: str,
                       test_runner_ip: str = None,
-                      dry_run: bool = False) -> None:
+                      dry_run: bool = False,
+                      force: bool = False) -> None:
     # pylint: disable=too-many-branches
     sct_runners_list = list_sct_runners(test_runner_ip=test_runner_ip)
     timeout_flag = False
     runners_terminated = 0
     end_message = ""
+
+    if not dry_run and test_runner_ip and force:
+        sct_runner_info = sct_runners_list[0]
+        sct_runner_info.terminate()
+        LOGGER.info("Forcibly terminated runner: %s", sct_runner_info)
+        return
 
     for sct_runner_info in sct_runners_list:
         LOGGER.info("Managing SCT runner: %s in region: %s",
