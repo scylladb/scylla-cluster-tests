@@ -57,7 +57,6 @@ class GkeNodePool(CloudK8sNodePool):
             labels: dict = None,
             local_ssd_count: int = None,
             gce_project: str = None,
-            gce_zone: str = None,
             is_deployed: bool = False
     ):
         super().__init__(
@@ -73,13 +72,15 @@ class GkeNodePool(CloudK8sNodePool):
         )
         self.local_ssd_count = local_ssd_count
         self.gce_project = self.k8s_cluster.gce_project if gce_project is None else gce_project
-        self.gce_zone = self.k8s_cluster.gce_zone if gce_zone is None else gce_zone
+        self.gce_region = self.k8s_cluster.gce_region
+        self.gce_zone = self.k8s_cluster.gce_zone
 
     @property
     def _deploy_cmd(self) -> str:
         # NOTE: '/tmp/system_config.yaml' file gets created on the gcloud container start up.
         cmd = [f"beta container --project {self.gce_project} node-pools create {self.name}",
-               f"--zone {self.gce_zone}",
+               f"--region {self.gce_region}",
+               f"--node-locations {self.gce_zone}",
                f"--cluster {self.k8s_cluster.short_cluster_name}",
                f"--num-nodes {self.num_nodes}",
                f"--machine-type {self.instance_type}",
@@ -110,14 +111,16 @@ class GkeNodePool(CloudK8sNodePool):
     def resize(self, num_nodes: int):
         self.k8s_cluster.gcloud.run(
             f"container clusters resize {self.k8s_cluster.short_cluster_name} --project {self.gce_project} "
-            f"--zone {self.gce_zone} --node-pool {self.name} --num-nodes {num_nodes} --quiet")
+            f"--region {self.gce_region} "
+            f"--node-pool {self.name} --num-nodes {num_nodes} --quiet")
         self.num_nodes = int(num_nodes)
         self.wait_for_nodes_readiness()
 
     def undeploy(self):
         self.k8s_cluster.gcloud.run(
             f"beta container --project {self.gce_project} node-pools delete {self.name} "
-            f"--cluster {self.k8s_cluster.short_cluster_name} --zone {self.gce_zone} --quiet")
+            f"--cluster {self.k8s_cluster.short_cluster_name} "
+            f"--region {self.gce_region} --quiet")
 
     @property
     def instance_group_name(self) -> str:
@@ -125,7 +128,8 @@ class GkeNodePool(CloudK8sNodePool):
             group_link = yaml.safe_load(
                 self.k8s_cluster.gcloud.run(
                     f'container node-pools describe {self.name} '
-                    f'--zone {self.gce_zone} --project {self.gce_project} '
+                    f'--region {self.gce_region} '
+                    f'--project {self.gce_project} '
                     f'--cluster {self.k8s_cluster.short_cluster_name}')
             ).get('instanceGroupUrls')[0]
             return group_link.split('/')[-1]
@@ -135,7 +139,9 @@ class GkeNodePool(CloudK8sNodePool):
     def remove_instance(self, instance_name: str):
         self.k8s_cluster.gcloud.run(
             f'compute instance-groups managed delete-instances {self.instance_group_name} '
-            f'--zone={self.gce_zone} --instances={instance_name}')
+            f'--region={self.gce_region} '
+            f'--node-locations={self.gce_zone} '
+            f'--instances={instance_name}')
 
 
 class GcloudTokenUpdateThread(TokenUpdateThread):
@@ -186,7 +192,12 @@ class GkeCluster(KubernetesCluster):
         self.n_nodes = n_nodes
         self.gce_project = services[0].project
         self.gce_user = services[0].key
-        self.gce_zone = gce_datacenter[0]
+
+        dc_parts = gce_datacenter[0].split("-")[:3]
+        self.gce_region = "-".join(dc_parts[:2])
+        self.gce_zone = f"{self.gce_region}-"
+        self.gce_zone += dc_parts[2] if len(dc_parts) == 3 else 'b'
+
         self.gke_cluster_created = False
         self.api_call_rate_limiter = ApiCallRateLimiter(
             rate_limit=GKE_API_CALL_RATE_LIMIT,
@@ -218,7 +229,7 @@ class GkeCluster(KubernetesCluster):
         return allowed_labels_on_scylla_node
 
     def __str__(self):
-        return f"{type(self).__name__} {self.name} | Zone: {self.gce_zone} | Version: {self.gke_cluster_version}"
+        return f"{type(self).__name__} {self.name} | Region: {self.gce_region} | Version: {self.gke_cluster_version}"
 
     def deploy(self):
         LOGGER.info("Create GKE cluster `%s' with %d node(s) in %s",
@@ -228,7 +239,8 @@ class GkeCluster(KubernetesCluster):
             # NOTE: only static K8S release channel supports disabling of autoupgrade
             gcloud.run(f"container --project {self.gce_project} clusters create {self.short_cluster_name}"
                        f" --no-enable-basic-auth"
-                       f" --zone {self.gce_zone}"
+                       f" --region {self.gce_region}"
+                       f" --node-locations {self.gce_zone}"
                        f" --cluster-version {self.gke_cluster_version}"
                        f"{' --release-channel ' + self.gke_k8s_release_channel if self.gke_k8s_release_channel else ''}"
                        f" --network {self.gce_network}"
@@ -282,29 +294,13 @@ class GkeCluster(KubernetesCluster):
             self.pools[name].resize(num_nodes)
             self.api_call_rate_limiter.wait_till_api_become_stable(self)
 
-    def get_instance_group_name_for_pool(self, pool_name: str, default=None) -> str:
-        try:
-            group_link = yaml.safe_load(
-                self.gcloud.run(
-                    f'container node-pools describe {pool_name} '
-                    f'--zone {self.gce_zone} --project {self.gce_project} '
-                    f'--cluster {self.short_cluster_name}')
-            ).get('instanceGroupUrls')[0]
-            return group_link.split('/')[-1]
-        except Exception as exc:
-            if default is not None:
-                return default
-            raise RuntimeError(f"Can't get instance group name due to the: {exc}") from exc
-
-    def delete_instance_that_belong_to_instance_group(self, group_name: str, instance_name: str):
-        self.gcloud.run(f'compute instance-groups managed delete-instances {group_name} '
-                        f'--zone={self.gce_zone} --instances={instance_name}')
-
     def create_token_update_thread(self):
         return GcloudTokenUpdateThread(self.gcloud, self.kubectl_token_path)
 
     def create_kubectl_config(self):
-        self.gcloud.run(f"container clusters get-credentials {self.short_cluster_name} --zone {self.gce_zone}")
+        self.gcloud.run(
+            f"container clusters get-credentials {self.short_cluster_name}"
+            f" --region {self.gce_region}")
 
     def destroy(self):
         self.api_call_rate_limiter.stop()
@@ -323,7 +319,8 @@ class GkeCluster(KubernetesCluster):
             # Upgrade control plane (API, scheduler, manager and so on ...)
             LOGGER.info("Upgrading K8S control plane to the '%s' version", upgrade_version)
             gcloud.run(f"container clusters upgrade {self.short_cluster_name} "
-                       f"--master --quiet --project {self.gce_project} --zone {self.gce_zone} "
+                       f"--master --quiet --project {self.gce_project} "
+                       f"--region {self.gce_region} "
                        f"--cluster-version {upgrade_version}")
             self.gke_cluster_version = upgrade_version
 
@@ -335,9 +332,10 @@ class GkeCluster(KubernetesCluster):
                     continue
                 LOGGER.info("Upgrading '%s' node pool to the '%s' version",
                             node_pool, upgrade_version)
-                # NOTE: one node upgrade takes about 10 minutes
+                # NOTE: one node upgrade takes about 10 minutes if no load and preloaded data exist
                 gcloud.run(f"container clusters upgrade {self.short_cluster_name} "
-                           f"--quiet --project {self.gce_project} --zone {self.gce_zone} "
+                           f"--quiet --project {self.gce_project} "
+                           f"--region {self.gce_region} "
                            f"--node-pool={node_pool}")
 
         if use_additional_scylla_nodepool:
